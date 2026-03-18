@@ -1,0 +1,517 @@
+/* ═══════════════════════════════════════
+   ANALYTICS COMMAND CENTER — analytics.css
+   Prefix: an-
+   Palette: Navy #0f3057, Mustard #d97706, Cardinals Red #C41E3A
+   ═══════════════════════════════════════ */
+
+.an-page {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Hero ── */
+.an-hero {
+  background: #0f3057;
+  border-radius: 16px;
+  padding: 20px 28px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.an-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.an-hero-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(217, 119, 6, 0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.an-hero-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: #d97706;
+  fill: none;
+  stroke-width: 2;
+}
+
+.an-hero h1 {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.an-hero p {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.an-hero-badge {
+  background: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Period pills ── */
+.an-period {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.an-pill {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.an-pill:hover {
+  border-color: #0f3057;
+  color: #0f3057;
+}
+
+.an-pill--active {
+  background: #0f3057;
+  color: #fff;
+  border-color: #0f3057;
+}
+
+/* ── Metric cards ── */
+.an-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.an-metric {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.an-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.an-metric-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f3057;
+  letter-spacing: -1px;
+}
+
+.an-metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.an-metric-sub .an-up {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.an-metric-sub .an-down {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.an-metric-sub .an-flat {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* ── Grid rows ── */
+.an-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.an-row--wide {
+  grid-template-columns: 1fr;
+  margin-bottom: 12px;
+}
+
+/* ── Cards ── */
+.an-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  overflow: hidden;
+}
+
+.an-card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f3057;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.an-card h3 span {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* ── Charts ── */
+.an-chart-area {
+  position: relative;
+  height: 200px;
+}
+
+/* ── Tables ── */
+.an-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.an-table th {
+  text-align: left;
+  font-weight: 700;
+  color: #94a3b8;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 8px;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+
+.an-table td {
+  padding: 8px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.an-table tr:last-child td {
+  border-bottom: none;
+}
+
+.an-table td.an-bold {
+  font-weight: 700;
+}
+
+.an-table td.an-navy {
+  color: #0f3057;
+  font-weight: 700;
+}
+
+.an-table td.an-red {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.an-table td.an-muted {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ── Score bars ── */
+.an-score {
+  display: inline-block;
+  width: 32px;
+  height: 6px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.an-score--high { background: #16a34a; }
+.an-score--mid  { background: #d97706; }
+.an-score--low  { background: #dc2626; }
+
+/* ── Funnel bars ── */
+.an-funnel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.an-funnel-row:last-child {
+  border-bottom: none;
+}
+
+.an-funnel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  min-width: 70px;
+}
+
+.an-funnel-bar-wrap {
+  flex: 1;
+  height: 24px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.an-funnel-bar {
+  height: 100%;
+  border-radius: 6px;
+  background: #0f3057;
+  transition: width 0.5s ease;
+}
+
+.an-funnel-pct {
+  font-size: 11px;
+  color: #64748b;
+  min-width: 36px;
+  text-align: right;
+  font-weight: 600;
+}
+
+/* ── Ghost users ── */
+.an-ghost {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.an-ghost:last-child {
+  border-bottom: none;
+}
+
+.an-ghost-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.an-ghost-info { flex: 1; }
+
+.an-ghost-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.an-ghost-detail {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ── AI Pulse ── */
+.an-pulse {
+  background: #0f3057;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border: none;
+}
+
+.an-pulse h3 {
+  color: #d97706;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.an-pulse p {
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.an-pulse-date {
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 10px;
+}
+
+/* ── Heatmap ── */
+.an-heatmap {
+  display: grid;
+  grid-template-columns: 36px repeat(7, 1fr);
+  gap: 3px;
+}
+
+.an-heatmap-label {
+  color: #94a3b8;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+}
+
+.an-heatmap-header {
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 0;
+  font-size: 10px;
+}
+
+.an-heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  min-height: 18px;
+}
+
+.an-h0 { background: #f1f5f9; }
+.an-h1 { background: #dbeafe; }
+.an-h2 { background: #93c5fd; }
+.an-h3 { background: #3b82f6; }
+.an-h4 { background: #1d4ed8; }
+
+.an-heatmap-legend {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 10px;
+  color: #94a3b8;
+  align-items: center;
+}
+
+.an-heatmap-legend-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* ── Empty state ── */
+.an-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.an-empty svg {
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+/* ── Card hint text ── */
+.an-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 10px;
+}
+
+/* ── Loading skeleton ── */
+.an-skeleton {
+  border-radius: 12px;
+  height: 120px;
+  background: linear-gradient(90deg, #f0f4f8 25%, #e2e8f0 50%, #f0f4f8 75%);
+  background-size: 200% 100%;
+  animation: an-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes an-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Forbidden ── */
+.an-forbidden {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.an-forbidden h2 {
+  font-size: 20px;
+  color: #0f3057;
+  margin: 16px 0 8px;
+}
+
+.an-forbidden p {
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .an-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .an-row {
+    grid-template-columns: 1fr;
+  }
+
+  .an-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .an-metric-value {
+    font-size: 22px;
+  }
+
+  .an-period {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .an-page {
+    padding: 16px 12px 40px;
+  }
+
+  .an-metrics {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .an-metric {
+    padding: 12px 14px;
+  }
+}

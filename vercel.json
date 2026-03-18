@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/analytics",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/people?action=generate-report&period=weekly",
+      "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/people?action=generate-report&period=monthly",
+      "schedule": "0 13 1 * *"
+    }
+  ]
+}
