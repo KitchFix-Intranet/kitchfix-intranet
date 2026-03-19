@@ -93,7 +93,7 @@ function statusMatch(status, filter) {
   if (filter === "all") return true;
   if (filter === "action") return /Rejected|Action/i.test(status);
   if (filter === "pending") return /Pending/i.test(status);
-  if (filter === "done") return /Complete|Approved/i.test(status);
+  if (filter === "done") return /Complete|Approved|Withdrawn/i.test(status);
   return true;
 }
 
@@ -103,6 +103,7 @@ function StatusChip({ status }) {
   let label = status;
   if (/complete|approved/i.test(s)) { cls = "pp-chip-success"; label = "Complete"; }
   if (/rejected|action/i.test(s)) { cls = "pp-chip-danger"; label = "Action Required"; }
+  if (/withdrawn/i.test(s)) { cls = "pp-chip-withdrawn"; label = "Withdrawn"; }
   return <span className={`pp-status-chip ${cls}`}>{label}</span>;
 }
 
@@ -113,10 +114,12 @@ function getBorderClass(status) {
   return "pp-ac-item--done";
 }
 
-export default function ActionCenter({ history, onResumeEdit, Formatter }) {
+export default function ActionCenter({ history, onResumeEdit, onRefresh, userEmail, Formatter, showToast }) {
   const [filter, setFilter] = useState("action");
   const [selectedId, setSelectedId] = useState(null);
   const [mobileDetail, setMobileDetail] = useState(false);
+  const [withdrawConfirm, setWithdrawConfirm] = useState(null); // item to withdraw
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const filtered = useMemo(
     () => history.filter((h) => h.status !== "Archived" && statusMatch(h.status, filter)),
@@ -129,7 +132,7 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
       if (h.status === "Archived") return;
       if (/Rejected|Action/i.test(h.status)) c.action++;
       else if (/Pending/i.test(h.status)) c.pending++;
-      else if (/Complete|Approved/i.test(h.status)) c.done++;
+      else if (/Complete|Approved|Withdrawn/i.test(h.status)) c.done++;
     });
     return c;
   }, [history]);
@@ -140,6 +143,34 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
     // defer to avoid setState during render
     setTimeout(() => setSelectedId(filtered[0].id), 0);
   }
+
+  // ── Withdraw handler ──
+  const handleWithdraw = async () => {
+    if (!withdrawConfirm) return;
+    setWithdrawing(true);
+    try {
+      const res = await fetch("/api/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "withdraw-submission",
+          itemId: withdrawConfirm.id,
+          email: userEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (showToast) showToast(`${withdrawConfirm.title} withdrawn`, "success");
+        setWithdrawConfirm(null);
+        setSelectedId(null);
+        if (onRefresh) onRefresh();
+      }
+    } catch (e) {
+      console.error("[ActionCenter] Withdraw failed:", e);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   // ── Parse payload ──
   const parsePayload = (item) => {
@@ -172,6 +203,7 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
     const payload = parsePayload(selectedItem);
     const isNH = selectedItem.module === "newhire";
     const isRejected = /Rejected|Action/i.test(selectedItem.status);
+    const isWithdrawn = /Withdrawn/i.test(selectedItem.status);
 
     return (
       <div className="pp-adm-detail-inner" style={{ animation: "pp-slideUp 0.2s ease" }}>
@@ -227,9 +259,17 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
           </div>
         )}
 
-        {/* Fix & Resubmit */}
+        {/* Withdrawn note */}
+        {isWithdrawn && (
+          <div style={{ marginTop: 16, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Withdrawn</div>
+            <div style={{ fontSize: 13, color: "#64748b" }}>This item was withdrawn and no further action is needed.</div>
+          </div>
+        )}
+
+        {/* Action buttons — only for rejected items */}
         {isRejected && (
-          <div className="pp-adm-detail-actions">
+          <div className="pp-adm-detail-actions" style={{ display: "flex", gap: 10 }}>
             <button
               className="pp-btn"
               style={{
@@ -246,6 +286,23 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
               onClick={() => onResumeEdit(selectedItem)}
             >
               Fix & Resubmit
+            </button>
+            <button
+              className="pp-btn"
+              style={{
+                background: "white",
+                color: "#64748b",
+                border: "1.5px solid #e2e8f0",
+                borderRadius: 50,
+                padding: "10px 20px",
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: "center",
+                cursor: "pointer",
+              }}
+              onClick={() => setWithdrawConfirm(selectedItem)}
+            >
+              Withdraw
             </button>
           </div>
         )}
@@ -342,6 +399,60 @@ export default function ActionCenter({ history, onResumeEdit, Formatter }) {
           </div>
         </div>
       </div>
+
+      {/* ═══ Withdraw Confirmation Modal ═══ */}
+      {withdrawConfirm && (
+        <div className="pp-modal-overlay" onClick={() => !withdrawing && setWithdrawConfirm(null)}>
+          <div className="pp-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, textAlign: "center", padding: "32px 28px" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "#0f3057" }}>
+              Withdraw this request?
+            </h3>
+            <p style={{ margin: "0 0 24px", fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
+              <strong>{withdrawConfirm.title}</strong> ({Formatter.toTitleCase(withdrawConfirm.subtitle)}) will be moved to Done and no further action will be taken.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                className="pp-btn"
+                style={{
+                  flex: 1,
+                  background: "white",
+                  color: "#475569",
+                  border: "1.5px solid #e2e8f0",
+                  borderRadius: 50,
+                  padding: "10px 20px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                onClick={() => setWithdrawConfirm(null)}
+                disabled={withdrawing}
+              >
+                Cancel
+              </button>
+              <button
+                className="pp-btn"
+                style={{
+                  flex: 1,
+                  background: "#64748b",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 50,
+                  padding: "10px 20px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: withdrawing ? "wait" : "pointer",
+                  opacity: withdrawing ? 0.7 : 1,
+                }}
+                onClick={handleWithdraw}
+                disabled={withdrawing}
+              >
+                {withdrawing ? "Withdrawing..." : "Yes, Withdraw"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

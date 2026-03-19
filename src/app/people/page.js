@@ -321,12 +321,16 @@ export default function PeoplePage() {
         )}
 
         {view === "activity" && (
-          <ActionCenter
+<ActionCenter
             history={history}
             onResumeEdit={resumeEdit}
+            onRefresh={refreshHistory}
+            userEmail={userEmail.current}
             Formatter={Formatter}
+            showToast={showToast}
           />
-        )}
+)}
+
 
         {view === "newhire" && (
           <NewHireWizard
