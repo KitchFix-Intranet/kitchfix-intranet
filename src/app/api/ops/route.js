@@ -751,26 +751,33 @@ if (action === "bootstrap") {
         const food = Number(r[5]) || 0;
         const pack = Number(r[6]) || 0;
         if (!key || !period) continue;
-        if (revenue > 0 || hourly > 0 || food > 0 || pack > 0) {
-          if (!activePeriodMap[key]) activePeriodMap[key] = [];
+const salary = Number(r[3]) || 0;
+        if (revenue > 0 || hourly > 0 || salary > 0 || food > 0 || pack > 0) {
+                    if (!activePeriodMap[key]) activePeriodMap[key] = [];
           activePeriodMap[key].push(period);
         }
       }
 
-      const accounts = accountsRaw.rows
+const accounts = accountsRaw.rows
         .filter((r) => r[0])
         .map((r) => {
           const key = String(r[0]).trim();
+          const level = r[2] ? String(r[2]).trim().toUpperCase() : "";
           const activePeriods = activePeriodMap[key] || [];
+          // MLB/MiLB: include P3 for opening inventory even if no labor budget exists
+          if ((level === "MLB" || level === "MILB" || level === "AAA") && !activePeriods.includes("P3")) {
+            activePeriods.push("P3");
+            activePeriods.sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+          }
           return {
             key,
             name: r[1] ? String(r[1]).trim() : "",
             label: r[1] ? `${key} - ${String(r[1]).trim()}` : key,
-            level: r[2] ? String(r[2]).trim().toUpperCase() : "",
+            level,
             activePeriods,
           };
         });
-
+        
       const now = new Date();
       const periods = periodsRaw.rows
         .filter((r) => r[0])
