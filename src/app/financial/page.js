@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import FinancialTool from "./FinancialTool";
-import "@/app/ops/ops.css"; // re-uses the full oh-* design system
+import "@/app/ops/css/ops-shared.css";
 
 export default function FinancialPage() {
   const [heroImage, setHeroImage] = useState("");
