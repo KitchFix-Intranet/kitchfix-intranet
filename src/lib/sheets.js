@@ -25,6 +25,22 @@ export function getSheetsClient(accessToken) {
 }
 
 /**
+ * Service Account client — writes on behalf of the app, not the user.
+ * Used for operations where any authenticated user should be able to write.
+ * Requires GOOGLE_SERVICE_ACCOUNT_KEY env var (JSON string).
+ */
+export function getServiceAccountSheetsClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+  return google.sheets({ version: "v4", auth });
+}
+
+/**
  * Read all data from a sheet tab (100x Rule: one batch call)
  */
 export async function readSheet(accessToken, spreadsheetId, tabName) {
@@ -44,7 +60,7 @@ export async function readSheet(accessToken, spreadsheetId, tabName) {
 }
 
 /**
- * Append a row to a sheet tab
+ * Append a row to a sheet tab (uses user's OAuth token)
  */
 export async function appendRow(accessToken, spreadsheetId, tabName, rowData) {
   const sheets = getSheetsClient(accessToken);
@@ -58,6 +74,27 @@ export async function appendRow(accessToken, spreadsheetId, tabName, rowData) {
     return { success: true, updatedRange: response.data.updates?.updatedRange };
   } catch (error) {
     console.error(`Error writing to ${tabName}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Append a row using the service account (no user token needed).
+ * Any authenticated intranet user can trigger this — the service account
+ * does the actual write. User identity is captured in the row data itself.
+ */
+export async function appendRowSA(spreadsheetId, tabName, rowData) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: tabName,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [rowData] },
+    });
+    return { success: true, updatedRange: response.data.updates?.updatedRange };
+  } catch (error) {
+    console.error(`[SA] Error writing to ${tabName}:`, error.message);
     return { success: false, error: error.message };
   }
 }

@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { readSheet, appendRow, appendRows, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheet, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
 import {
   handleInvoiceGet,
   handleInvoicePost,
@@ -777,7 +777,7 @@ const accounts = accountsRaw.rows
             activePeriods,
           };
         });
-        
+
       const now = new Date();
       const periods = periodsRaw.rows
         .filter((r) => r[0])
@@ -1031,7 +1031,7 @@ export async function POST(request) {
         Number(snacks) || 0, Number(beverages) || 0, Number(total) || 0,
         String(notes || ""),
       ];
-const result = await appendRow(token, SHEET_IDS.COLLECTION, "inventory_submissions", row);
+const result = await appendRowSA(SHEET_IDS.COLLECTION, "inventory_submissions", row);
 
        logEvent(token, { email, userName, category: "ops", action: "submit_inventory", page: "/ops", detail: { account, period, total: Number(total) || 0 } });
 
