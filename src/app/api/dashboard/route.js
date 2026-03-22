@@ -11,9 +11,7 @@ export async function GET(request) {
   }
 
   const token = session.accessToken;
-  if (!token) {
-    return NextResponse.json({ error: "No access token" }, { status: 400 });
-  }
+// token kept for appendRow login log — guard removed for SA reads
 
   // ── Action routing ──
   const { searchParams } = new URL(request.url);
