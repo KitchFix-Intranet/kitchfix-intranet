@@ -825,7 +825,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
     if (action === "inventory-history") {
       const { rows } = await safeRead(SHEET_IDS.COLLECTION, "inventory_submissions");
 const history = rows
-        .filter((r) => String(r[2] || "").toLowerCase().trim() === email)
+.filter(() => true)
         .map((r, i) => ({
           id: i, account: String(r[3] || ""), period: String(r[4] || ""),
           date: r[5] || "", food: parseNum(r[6]), packaging: parseNum(r[7]),
