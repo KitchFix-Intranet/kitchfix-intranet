@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { readSheet, appendRow, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheet, readSheetSA, appendRow, updateCell, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/analytics";
 
@@ -28,7 +28,7 @@ export async function GET(request) {
       const today = new Date().toISOString().split("T")[0];
 
       // Read posts from HUB
-      const postsRaw = await readSheet(token, SHEET_IDS.HUB, "news_posts");
+const postsRaw = await readSheetSA(SHEET_IDS.HUB, "news_posts");
       const posts = postsRaw.rows
         .filter(r => String(r[11] || "") === "TRUE" && (!r[7] || r[7] >= today))
         .map(r => ({
@@ -48,7 +48,7 @@ export async function GET(request) {
         .sort((a, b) => (b.publishDate || "").localeCompare(a.publishDate || ""));
 
       // Read interactions from COLLECTION (all users for this is fine — small table)
-      const ixRaw = await readSheet(token, SHEET_IDS.COLLECTION, "news_interactions");
+const ixRaw = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
 
       // Filter to current user
       const interactions = ixRaw.rows
@@ -81,11 +81,11 @@ export async function GET(request) {
     // BATCH FETCH (100x Rule: all at once)
     // Each read is wrapped to prevent one failure from killing everything
     // ═══════════════════════════════════════
-    const safeRead = async (id, tab) => {
+const safeRead = async (id, tab) => {
       try {
-        return await readSheet(token, id, tab);
+        return await readSheetSA(id, tab);
       } catch (e) {
-        console.warn(`[Dashboard] Sheet "${tab}" not found or error:`, e.message);
+                console.warn(`[Dashboard] Sheet "${tab}" not found or error:`, e.message);
         return { headers: [], rows: [] };
       }
     };
@@ -93,7 +93,7 @@ export async function GET(request) {
     // Internal fetch for People Portal metrics (uses service account, separate sheet)
     const safePeopleFetch = async () => {
       try {
-        const subs = await readSheet(token, SHEET_IDS.COLLECTION, "submissions");
+       const subs = await readSheetSA(SHEET_IDS.COLLECTION, "submissions");
         const metrics = { pending: 0, rejected: 0, completedTotal: 0 };
         for (const row of subs.rows) {
           if (row.length < 9) continue;

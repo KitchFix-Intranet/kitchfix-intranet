@@ -1112,11 +1112,11 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
 
       const variance = Math.round(budgetEnvelope - actualSpent);
 
-      const safeRead = async (id, tab) => {
-        try { return await readSheet(token, id, tab); }
+const safeRead = async (id, tab) => {
+        try { return await readSheetSA(id, tab); }
         catch { return { headers: [], rows: [] }; }
       };
-      const { rows: existingPlans } = await safeRead(SHEET_IDS.COLLECTION, "labor_plans");
+            const { rows: existingPlans } = await safeRead(SHEET_IDS.COLLECTION, "labor_plans");
       const acctPlans = existingPlans
         .filter((r) => String(r[3]).trim() === account)
         .map((r) => ({
