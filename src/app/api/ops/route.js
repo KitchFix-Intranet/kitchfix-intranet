@@ -788,14 +788,17 @@ const accounts = accountsRaw.rows
           due: r[3] || null,
         }));
 
-      let currentPeriod = null;
+let currentPeriod = null;
       for (const p of periods) {
         if (!p.start || !p.end) continue;
         const start = new Date(p.start);
         const end = new Date(p.end);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
         if (now >= start && now <= end) { currentPeriod = p; break; }
       }
-
+      
       const heroUrls = heroRaw.rows.flat().filter((u) => u && String(u).includes("http"));
       const heroImage = heroUrls.length ? heroUrls[Math.floor(Math.random() * heroUrls.length)] : "";
 
