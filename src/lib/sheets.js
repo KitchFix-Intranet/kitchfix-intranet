@@ -41,6 +41,25 @@ export function getServiceAccountSheetsClient() {
 }
 
 /**
+ * Read a sheet using the service account (no user token needed).
+ */
+export async function readSheetSA(spreadsheetId, tabName) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: tabName,
+    });
+    const data = response.data.values || [];
+    if (data.length === 0) return { headers: [], rows: [] };
+    return { headers: data[0], rows: data.slice(1) };
+  } catch (error) {
+    console.error(`[SA] Error reading ${tabName}:`, error.message);
+    return { headers: [], rows: [] };
+  }
+}
+
+/**
  * Read all data from a sheet tab (100x Rule: one batch call)
  */
 export async function readSheet(accessToken, spreadsheetId, tabName) {

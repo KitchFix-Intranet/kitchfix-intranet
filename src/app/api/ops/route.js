@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { readSheet, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheet, readSheetSA, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
 import {
   handleInvoiceGet,
   handleInvoicePost,
@@ -726,7 +726,7 @@ export async function GET(request) {
   const email = session.user?.email?.toLowerCase().trim();
 
   const safeRead = async (id, tab) => {
-    try { return await readSheet(token, id, tab); }
+try { return await readSheetSA(id, tab); }
     catch (e) { console.warn(`[OpsHub] Sheet "${tab}" error:`, e.message); return { headers: [], rows: [] }; }
   };
 
