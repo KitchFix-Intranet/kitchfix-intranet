@@ -1075,18 +1075,18 @@ rows.forEach((row, i) => {
       return NextResponse.json({ success: true });
     }
 
-// ─── Withdraw: submitter removes their rejected item ───
-    if (action === "withdraw-submission") {
+// ─── Withdraw / Cancel: submitter removes their own item ───
+    if (action === "withdraw-submission" || action === "cancel-submission") {
       const { itemId, email } = body;
       const rowIndex = parseInt(itemId.split("-")[1]);
-      logEventSA({ email, category: "people", action: "withdraw_submission", page: "/people", detail: { itemId } });
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, "Withdrawn");
-      const noteText = `[Withdrawn by ${email}]`;
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, noteText);
+      const newStatus = action === "cancel-submission" ? "Cancelled" : "Withdrawn";
+      logEventSA({ email, category: "people", action: action.replace("-", "_"), page: "/people", detail: { itemId } });
+      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
+      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, `[${newStatus} by ${email}]`);
       await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
       return NextResponse.json({ success: true });
     }
-
+    
     if (action === "admin-process") {
       const { itemId, adminAction, reason, adminEmail } = body;
       // Unified format: sub-{rowIndex}

@@ -93,7 +93,7 @@ function statusMatch(status, filter) {
   if (filter === "all") return true;
   if (filter === "action") return /Rejected|Action/i.test(status);
   if (filter === "pending") return /Pending/i.test(status);
-  if (filter === "done") return /Complete|Approved|Withdrawn/i.test(status);
+  if (filter === "done") return /Complete|Approved|Withdrawn|Cancelled/i.test(status);
   return true;
 }
 
@@ -104,6 +104,7 @@ function StatusChip({ status }) {
   if (/complete|approved/i.test(s)) { cls = "pp-chip-success"; label = "Complete"; }
   if (/rejected|action/i.test(s)) { cls = "pp-chip-danger"; label = "Action Required"; }
   if (/withdrawn/i.test(s)) { cls = "pp-chip-withdrawn"; label = "Withdrawn"; }
+  if (/cancelled/i.test(s)) { cls = "pp-chip-withdrawn"; label = "Cancelled"; }
   return <span className={`pp-status-chip ${cls}`}>{label}</span>;
 }
 
@@ -118,8 +119,8 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
   const [filter, setFilter] = useState("action");
   const [selectedId, setSelectedId] = useState(null);
   const [mobileDetail, setMobileDetail] = useState(false);
-  const [withdrawConfirm, setWithdrawConfirm] = useState(null); // item to withdraw
-  const [withdrawing, setWithdrawing] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null); // { item, type: "withdraw" | "cancel" }
+  const [processing, setProcessing] = useState(false);
 
   const filtered = useMemo(
     () => history.filter((h) => h.status !== "Archived" && statusMatch(h.status, filter)),
@@ -132,7 +133,7 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
       if (h.status === "Archived") return;
       if (/Rejected|Action/i.test(h.status)) c.action++;
       else if (/Pending/i.test(h.status)) c.pending++;
-      else if (/Complete|Approved|Withdrawn/i.test(h.status)) c.done++;
+      else if (/Complete|Approved|Withdrawn|Cancelled/i.test(h.status)) c.done++;
     });
     return c;
   }, [history]);
@@ -140,35 +141,37 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
   // Auto-select first item
   const selectedItem = filtered.find((i) => i.id === selectedId) || null;
   if (filtered.length > 0 && !selectedItem && !mobileDetail) {
-    // defer to avoid setState during render
     setTimeout(() => setSelectedId(filtered[0].id), 0);
   }
 
-  // ── Withdraw handler ──
-  const handleWithdraw = async () => {
-    if (!withdrawConfirm) return;
-    setWithdrawing(true);
+  // ── Withdraw / Cancel handler ──
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    setProcessing(true);
+    const { item, type } = confirmModal;
+    const apiAction = type === "cancel" ? "cancel-submission" : "withdraw-submission";
+    const label = type === "cancel" ? "cancelled" : "withdrawn";
     try {
       const res = await fetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "withdraw-submission",
-          itemId: withdrawConfirm.id,
+          action: apiAction,
+          itemId: item.id,
           email: userEmail,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        if (showToast) showToast(`${withdrawConfirm.title} withdrawn`, "success");
-        setWithdrawConfirm(null);
+        if (showToast) showToast(`${item.title} ${label}`, "success");
+        setConfirmModal(null);
         setSelectedId(null);
         if (onRefresh) onRefresh();
       }
     } catch (e) {
-      console.error("[ActionCenter] Withdraw failed:", e);
+      console.error(`[ActionCenter] ${type} failed:`, e);
     } finally {
-      setWithdrawing(false);
+      setProcessing(false);
     }
   };
 
@@ -203,7 +206,9 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
     const payload = parsePayload(selectedItem);
     const isNH = selectedItem.module === "newhire";
     const isRejected = /Rejected|Action/i.test(selectedItem.status);
+    const isPending = /Pending/i.test(selectedItem.status);
     const isWithdrawn = /Withdrawn/i.test(selectedItem.status);
+    const isCancelled = /Cancelled/i.test(selectedItem.status);
 
     return (
       <div className="pp-adm-detail-inner" style={{ animation: "pp-slideUp 0.2s ease" }}>
@@ -259,15 +264,19 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
           </div>
         )}
 
-        {/* Withdrawn note */}
-        {isWithdrawn && (
+        {/* Withdrawn / Cancelled note */}
+        {(isWithdrawn || isCancelled) && (
           <div style={{ marginTop: 16, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Withdrawn</div>
-            <div style={{ fontSize: 13, color: "#64748b" }}>This item was withdrawn and no further action is needed.</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+              {isCancelled ? "Cancelled" : "Withdrawn"}
+            </div>
+            <div style={{ fontSize: 13, color: "#64748b" }}>
+              This request was {isCancelled ? "cancelled" : "withdrawn"} and no further action is needed.
+            </div>
           </div>
         )}
 
-        {/* Action buttons — only for rejected items */}
+        {/* Action buttons — rejected items: Fix & Resubmit + Withdraw */}
         {isRejected && (
           <div className="pp-adm-detail-actions" style={{ display: "flex", gap: 10 }}>
             <button
@@ -300,15 +309,57 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
                 textAlign: "center",
                 cursor: "pointer",
               }}
-              onClick={() => setWithdrawConfirm(selectedItem)}
+              onClick={() => setConfirmModal({ item: selectedItem, type: "withdraw" })}
             >
               Withdraw
+            </button>
+          </div>
+        )}
+
+        {/* Action button — pending items: Cancel Request */}
+        {isPending && (
+          <div className="pp-adm-detail-actions" style={{ display: "flex", gap: 10 }}>
+            <button
+              className="pp-btn"
+              style={{
+                background: "white",
+                color: "#64748b",
+                border: "1.5px solid #e2e8f0",
+                borderRadius: 50,
+                padding: "10px 20px",
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: "center",
+                cursor: "pointer",
+                flex: 1,
+              }}
+              onClick={() => setConfirmModal({ item: selectedItem, type: "cancel" })}
+            >
+              Cancel Request
             </button>
           </div>
         )}
       </div>
     );
   };
+
+  // ── Modal config by type ──
+  const modalConfig = confirmModal ? {
+    withdraw: {
+      icon: "🗑️",
+      title: "Withdraw this request?",
+      description: `will be moved to Done and no further action will be taken.`,
+      confirmLabel: "Yes, Withdraw",
+      confirmBg: "#64748b",
+    },
+    cancel: {
+      icon: "✕",
+      title: "Cancel this request?",
+      description: `will be cancelled. The admin will not see it in their queue.`,
+      confirmLabel: "Yes, Cancel Request",
+      confirmBg: "#dc2626",
+    },
+  }[confirmModal.type] : null;
 
   return (
     <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
@@ -400,16 +451,22 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
         </div>
       </div>
 
-      {/* ═══ Withdraw Confirmation Modal ═══ */}
-      {withdrawConfirm && (
-        <div className="pp-modal-overlay" onClick={() => !withdrawing && setWithdrawConfirm(null)}>
+      {/* ═══ Confirm Modal (Withdraw + Cancel) ═══ */}
+      {confirmModal && modalConfig && (
+        <div className="pp-modal-overlay" onClick={() => !processing && setConfirmModal(null)}>
           <div className="pp-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, textAlign: "center", padding: "32px 28px" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: confirmModal.type === "cancel" ? "#fef2f2" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: confirmModal.type === "cancel" ? 20 : 24 }}>
+              {confirmModal.type === "cancel" ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              ) : (
+                "🗑️"
+              )}
+            </div>
             <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "#0f3057" }}>
-              Withdraw this request?
+              {modalConfig.title}
             </h3>
             <p style={{ margin: "0 0 24px", fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
-              <strong>{withdrawConfirm.title}</strong> ({Formatter.toTitleCase(withdrawConfirm.subtitle)}) will be moved to Done and no further action will be taken.
+              <strong>{confirmModal.item.title}</strong> ({Formatter.toTitleCase(confirmModal.item.subtitle)}) {modalConfig.description}
             </p>
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -425,29 +482,29 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
-                onClick={() => setWithdrawConfirm(null)}
-                disabled={withdrawing}
+                onClick={() => setConfirmModal(null)}
+                disabled={processing}
               >
-                Cancel
+                Go Back
               </button>
               <button
                 className="pp-btn"
                 style={{
                   flex: 1,
-                  background: "#64748b",
+                  background: modalConfig.confirmBg,
                   color: "white",
                   border: "none",
                   borderRadius: 50,
                   padding: "10px 20px",
                   fontSize: 13,
                   fontWeight: 700,
-                  cursor: withdrawing ? "wait" : "pointer",
-                  opacity: withdrawing ? 0.7 : 1,
+                  cursor: processing ? "wait" : "pointer",
+                  opacity: processing ? 0.7 : 1,
                 }}
-                onClick={handleWithdraw}
-                disabled={withdrawing}
+                onClick={handleConfirmAction}
+                disabled={processing}
               >
-                {withdrawing ? "Withdrawing..." : "Yes, Withdraw"}
+                {processing ? "Processing..." : modalConfig.confirmLabel}
               </button>
             </div>
           </div>

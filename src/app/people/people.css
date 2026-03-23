@@ -1961,3 +1961,6 @@ body:has(.pp-app) {
   background: #fee2e2;
   color: #dc2626;
 }
+
+/* ── Withdrawn / Cancelled status chip ── */
+.pp-chip-withdrawn { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }

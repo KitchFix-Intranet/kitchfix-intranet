@@ -329,7 +329,7 @@ export default function PeoplePage() {
             Formatter={Formatter}
             showToast={showToast}
           />
-)}
+          )}
 
 
         {view === "newhire" && (
