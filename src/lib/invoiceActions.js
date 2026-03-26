@@ -112,6 +112,59 @@ const GL_TAB_MAP = {
   "TXR - TX - V": "TXR - Vistor",
 };
 
+// ─── Line Item Tab Auto-Creation ───
+const LINE_ITEM_HEADERS = [
+  "Invoice UUID", "Timestamp", "Account", "Vendor", "Invoice #",
+  "Invoice Date", "Line #", "Item Description", "Quantity", "Unit",
+  "Unit Price", "Extended Price", "Category", "Confidence", "Raw JSON",
+];
+
+async function ensureLineItemTab(token, tabName) {
+  const spreadsheetId = SHEET_IDS.AI_LINE_ITEMS;
+  try {
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!metaRes.ok) {
+      console.warn(`[ensureLineItemTab] Metadata fetch failed: ${metaRes.status}`);
+      return false;
+    }
+    const meta = await metaRes.json();
+    const exists = (meta.sheets || []).some(s => s.properties.title === tabName);
+    if (exists) return true;
+
+    const createRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] }),
+      }
+    );
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      console.error(`[ensureLineItemTab] Tab creation failed for "${tabName}":`, errText);
+      return false;
+    }
+
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${tabName}'!A1`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: [LINE_ITEM_HEADERS] }),
+      }
+    );
+
+    console.log(`[ensureLineItemTab] Created new tab: "${tabName}"`);
+    return true;
+  } catch (error) {
+    console.error(`[ensureLineItemTab] Error:`, error.message);
+    return false;
+  }
+}
+
 function getGLTabName(accountKey) {
   if (GL_TAB_MAP[accountKey]) return GL_TAB_MAP[accountKey];
   const parts = accountKey.split(" - ");
@@ -1093,8 +1146,15 @@ Rules:
         item.category || "other", "high", JSON.stringify(item),
       ]);
 
-      await appendRows(token, SHEET_IDS.AI_LINE_ITEMS, "Invoice Uploads", lineRows);
-    }
+const accountTab = metadata.account || "Uncategorized";
+      const tabReady = await ensureLineItemTab(token, accountTab);
+      if (tabReady) {
+        await appendRows(token, SHEET_IDS.AI_LINE_ITEMS, accountTab, lineRows);
+      } else {
+        console.warn(`[AI Scan] Tab "${accountTab}" not ready, falling back`);
+        await appendRows(token, SHEET_IDS.AI_LINE_ITEMS, "Invoice Uploads", lineRows);
+      }
+        }
 
     await updateScanStatus(token, invoiceUuid, "complete");
     console.log(`[AI Scan] ${invoiceUuid}: Extracted ${parsed.lineItems?.length || 0} line items`);
