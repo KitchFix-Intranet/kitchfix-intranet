@@ -715,7 +715,7 @@ const payload = {
   const isFirstStep = step === 0;
 
 return (
-    <div className="oh-inv-vs-overlay" onClick={onClose}>
+<div className="oh-inv-vs-overlay">
       <div className="oh-inv-vs-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
