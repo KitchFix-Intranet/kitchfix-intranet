@@ -21,7 +21,8 @@ function GLCodePicker({ value, glCodes, codeLookup, favorites, allCodesFlat, dis
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [dropdownStyle, setDropdownStyle] = useState({});
-  const containerRef = useRef(null);
+const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
   const searchRef = useRef(null);
   const listRef = useRef(null);
 
@@ -51,11 +52,13 @@ function GLCodePicker({ value, glCodes, codeLookup, favorites, allCodesFlat, dis
     }
   }, []);
 
-  // Close on outside click
+// Close on outside click — must check both trigger AND portaled dropdown
   useEffect(() => {
     if (!open) return;
     function handleClick(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      const inTrigger = containerRef.current && containerRef.current.contains(e.target);
+      const inDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!inTrigger && !inDropdown) {
         setOpen(false);
         setSearch("");
       }
@@ -156,8 +159,8 @@ function GLCodePicker({ value, glCodes, codeLookup, favorites, allCodesFlat, dis
 
       {/* Dropdown panel — portaled to body to escape overflow clip */}
       {open && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div className="oh-inv-gl-dropdown" style={dropdownStyle} role="listbox">
-          {/* Search input */}
+<div className="oh-inv-gl-dropdown" ref={dropdownRef} style={dropdownStyle} role="listbox">
+            {/* Search input */}
           <div className="oh-inv-gl-search-wrap">
             <svg className="oh-inv-gl-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />

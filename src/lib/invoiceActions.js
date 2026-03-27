@@ -494,6 +494,9 @@ pageNumberConfidence:
   "low"   = you found a number that might be a page number but you are not fully certain
   "none"  = no page number indicator detected anywhere on the document
 
+BLANK TRAILING PAGES:
+A mostly-blank page with only a URL, page number, or footer text at the bottom is a NORMAL artifact from browser PDF printing. This is NOT a quality failure and NOT a non-document. Set isDocument: true, quality: "pass", documentType to match the rest of the invoice (usually "vendor_invoice"), and message: "". These pages are harmless overflow — do not flag them.
+
 QUALITY FAIL — only these specific problems:
 ✗ "too_blurry": Text is genuinely illegible — you cannot make out the totals or vendor name at all
 ✗ "too_dark": So underexposed that key financial data is completely unreadable
@@ -606,7 +609,7 @@ If quality passes, "message" should be empty string "".`;
       const base64 = image.includes(",") ? image.split(",")[1] : image;
       const mediaType = image.startsWith("data:image/png") ? "image/png" : "image/jpeg";
 
-      const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Analyze this invoice image.
+const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Analyze this invoice image.
 
 STEP 1 — IMAGE QUALITY CHECK:
 If the image is too blurry, too dark, severely cropped, upside down, not an invoice, or otherwise unreadable, respond ONLY with:
@@ -615,6 +618,8 @@ If the image is too blurry, too dark, severely cropped, upside down, not an invo
   "reason": "brief specific reason",
   "suggestion": "specific advice for retaking the photo"
 }
+
+IMPORTANT: A mostly-blank page with only a URL or footer text is a normal trailing page from a browser PDF print. It is NOT an error. Treat it as readable and extract what you can (likely null for all fields). Do NOT reject it.
 
 Reason examples: "Image is too blurry — text is not legible", "Photo is too dark to read", "Invoice is cut off — key details are missing", "This doesn't appear to be an invoice"
 Suggestion examples: "Hold your phone steady and tap to focus before shooting", "Move to a brighter area or turn on the flash", "Back up to capture the full page including all edges", "Please photograph the invoice document"
@@ -633,7 +638,20 @@ Rules:
 - Return ONLY valid JSON. No markdown, no explanation, no backticks.
 - For dates, always convert to YYYY-MM-DD.
 - For amounts, return a plain number (no $, no commas). Use the INVOICE TOTAL / grand total from the summary section — this is the final amount due at the bottom of the last page. NEVER use subtotals, group totals, or per-category totals.
-- vendorName = the company that issued the invoice (usually in the header/logo area).
+
+VENDOR NAME RULES:
+- vendorName = the company that ISSUED the invoice, NOT the ordering platform.
+- IGNORE browser chrome, page headers/footers, and platform names like "Cut+Dry", "cutanddry.com", "BlueCart", "Orderve", "ChefSheet". These are ordering platforms, not vendors.
+- Look for a "Vendor:" label, company logo, or letterhead INSIDE the document body.
+- Common KitchFix vendors: What Chefs Want, Fresh Point, Sysco, US Foods, Fortune Fish, Samuels Seafood, Performance Foodservice.
+
+INVOICE NUMBER RULES:
+- Look first for a field explicitly labeled "Invoice #" or "Invoice Number".
+- If no "Invoice #" field exists, use "Order #" as the invoice number.
+- If neither exists, use "Reference #".
+- NEVER use "Customer ID" as the invoice number.
+- Return only the number value, not the label (e.g. "906637520" not "Order #: 906637520").
+
 - confidence: "high" = all 4 fields clearly extracted, "medium" = 2-3 fields extracted, "low" = only 1 field or uncertain.
 - If a field cannot be determined, use null — never guess.`;
 
