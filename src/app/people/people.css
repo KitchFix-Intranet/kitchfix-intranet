@@ -1964,3 +1964,20 @@ body:has(.pp-app) {
 
 /* ── Withdrawn / Cancelled status chip ── */
 .pp-chip-withdrawn { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+/* ── Fix: stepper circles should never compress ── */
+.pp-step { flex-shrink: 0; }
+.pp-step-line { flex-shrink: 1; min-width: 20px; }
+
+/* ── Fix: admin queue header — stack filter + dropdown on mobile ── */
+@media (max-width: 768px) {
+  .pp-adm-header-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100%;
+  }
+  .pp-adm-header-controls > select {
+    width: 100% !important;
+  }
+}
