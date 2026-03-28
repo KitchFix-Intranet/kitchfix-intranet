@@ -115,10 +115,14 @@ export default function VendorCard({
 
   return (
     <div className="oh-vp-card" style={{ animation: "oh-fadeInSlide 0.2s ease" }}>
-      {/* ── Header ── */}
+{/* ── Header ── */}
       <div className="oh-vp-card-head">
         <div className="oh-vp-card-head-left">
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="oh-vp-card-back" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            Back
+          </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <h3 className="oh-vp-card-name">{vendor.name}</h3>
             {loadingDetail && <span className="oh-spinner oh-vp-detail-spinner" />}
           </div>

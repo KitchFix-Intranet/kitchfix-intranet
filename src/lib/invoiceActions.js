@@ -200,11 +200,12 @@ function fuzzyMatchVendor(detectedName, vendorRows) {
   const detectedNorm = normalize(detected);
   const detectedWords = detectedNorm.split(/\s+/);
 
-  const candidates = vendorRows
+const candidates = vendorRows
     .map((r) => ({
       vendorId: String(r[0] || "").trim(),
       name: String(r[1] || "").trim(),
       category: String(r[2] || "").trim(),
+      aliases: String(r[8] || "").trim(),
     }))
     .filter((v) => v.vendorId && v.name)
     .map((v) => {
@@ -213,20 +214,41 @@ function fuzzyMatchVendor(detectedName, vendorRows) {
       const nameWords = nameNorm.split(/\s+/);
       let score = 0;
 
-      if (name === detected || nameNorm === detectedNorm) {
-        score = 100;
-      } else if (name.includes(detected) || detected.includes(name)) {
-        score = 85;
-      } else if (nameNorm.includes(detectedNorm) || detectedNorm.includes(nameNorm)) {
-        score = 80;
-      } else {
-        const matchedWords = detectedWords.filter((dw) =>
-          nameWords.some((nw) => nw === dw || (nw.length >= 4 && dw.length >= 4 && (nw.includes(dw) || dw.includes(nw))))
-        );
-        if (matchedWords.length > 0) {
-          score = Math.round((matchedWords.length / Math.max(detectedWords.length, nameWords.length)) * 70);
-          if (detectedWords[0] && nameWords[0] && (detectedWords[0] === nameWords[0] || detectedWords[0].includes(nameWords[0]) || nameWords[0].includes(detectedWords[0]))) {
-            score += 15;
+      // Check aliases first — exact alias match = 100
+      if (v.aliases) {
+        const aliasList = v.aliases.split("|").map((a) => a.trim().toLowerCase()).filter(Boolean);
+        for (const alias of aliasList) {
+          const aliasNorm = normalize(alias);
+          if (alias === detected || aliasNorm === detectedNorm) {
+            score = 100;
+            break;
+          }
+          if (alias.includes(detected) || detected.includes(alias)) {
+            score = Math.max(score, 90);
+          }
+          if (aliasNorm.includes(detectedNorm) || detectedNorm.includes(aliasNorm)) {
+            score = Math.max(score, 85);
+          }
+        }
+      }
+
+      // If alias didn't match, check primary name
+      if (score === 0) {
+        if (name === detected || nameNorm === detectedNorm) {
+          score = 100;
+        } else if (name.includes(detected) || detected.includes(name)) {
+          score = 85;
+        } else if (nameNorm.includes(detectedNorm) || detectedNorm.includes(nameNorm)) {
+          score = 80;
+        } else {
+          const matchedWords = detectedWords.filter((dw) =>
+            nameWords.some((nw) => nw === dw || (nw.length >= 4 && dw.length >= 4 && (nw.includes(dw) || dw.includes(nw))))
+          );
+          if (matchedWords.length > 0) {
+            score = Math.round((matchedWords.length / Math.max(detectedWords.length, nameWords.length)) * 70);
+            if (detectedWords[0] && nameWords[0] && (detectedWords[0] === nameWords[0] || detectedWords[0].includes(nameWords[0]) || nameWords[0].includes(detectedWords[0]))) {
+              score += 15;
+            }
           }
         }
       }
@@ -1032,6 +1054,13 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
         }).catch(() => {});
       }
 
+// Auto-learn vendor alias from OCR detection
+      if (body.ocrVendorName && vendorId) {
+        learnVendorAlias(vendorId, body.ocrVendorName, token).catch((err) => {
+          console.warn("[Invoice] Alias learning failed (non-blocking):", err.message);
+        });
+      }
+
       return { success: true, uuid, driveUrls, emailSent, pageCount: pages.length, stampedPdf: !!pdfBuffer };
 
     } catch (error) {
@@ -1051,15 +1080,18 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
     };
 
     const { rows } = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+// Normalize invoice numbers: strip #, leading/trailing spaces, leading zeros
+    const normalizeInvNum = (n) => String(n || "").trim().replace(/^[#\s]+/, "").replace(/^0+/, "") || "0";
+    const inputInvNorm = normalizeInvNum(invoiceNumber);
+
     const match = rows.find((r) => {
       const v = String(r[4] || "").trim();
-      const inv = String(r[6] || "").trim();
+      const inv = normalizeInvNum(r[6]);
       const d = String(r[7] || "").trim();
       const amt = Number(r[8]) || 0;
-      return v === vendor && inv === invoiceNumber && d === invoiceDate && Math.abs(amt - Number(totalAmount)) < 0.01;
+      return v === vendor && inv === inputInvNorm && d === invoiceDate && Math.abs(amt - Number(totalAmount)) < 0.01;
     });
-
-    return {
+        return {
       success: true,
       isDuplicate: !!match,
       existingInvoice: match
@@ -1081,16 +1113,18 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   if (!apiKey) { console.warn("[AI Scan] No API key configured, skipping"); return; }
 
   try {
+const getPageData = (p) => typeof p === "string" ? p : p.data;
     const resizeForScan = (dataUrl) => {
       return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
     };
 
     const imageBlocks = pages.slice(0, 3).map((page) => {
-      const base64 = resizeForScan(page);
-      const mediaType = page.startsWith("data:image/png") ? "image/png" : "image/jpeg";
+      const data = getPageData(page);
+      const base64 = resizeForScan(data);
+      const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
-
+    
     const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice.
 
 Return ONLY valid JSON with this structure:
@@ -1491,6 +1525,38 @@ async function setVendorActive(vendorId, accountKey, active, token) {
   }
 
   return { success: true };
+}
+
+// ── Helper: auto-learn vendor alias from OCR detection ───────────────────
+async function learnVendorAlias(vendorId, ocrName, token) {
+  if (!vendorId || !ocrName) return;
+  try {
+    const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+    const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
+    if (rowIndex === -1) return;
+
+    const primaryName = String(rows[rowIndex][1] || "").trim().toLowerCase();
+    const ocrClean = ocrName.trim();
+    const ocrLower = ocrClean.toLowerCase();
+
+    // Don't save if it matches the primary name
+    if (ocrLower === primaryName) return;
+
+    // Check existing aliases
+    const existingAliases = String(rows[rowIndex][8] || "").trim();
+    const aliasList = existingAliases ? existingAliases.split("|").map((a) => a.trim()) : [];
+
+    // Don't save if alias already exists (case-insensitive)
+    if (aliasList.some((a) => a.toLowerCase() === ocrLower)) return;
+
+    // Append new alias
+    const updated = aliasList.length > 0 ? `${existingAliases}|${ocrClean}` : ocrClean;
+    const sheetRow = rowIndex + 2;
+    await updateCell(token, SHEET_IDS.HUB, `vendor_master!I${sheetRow}`, updated);
+    console.log(`[Vendor Alias] Learned: "${ocrClean}" → ${vendorId} (${primaryName})`);
+  } catch (e) {
+    console.warn("[Vendor Alias] Non-fatal:", e.message);
+  }
 }
 
 // ── Helper: update lastInvoiceDate after invoice submission ───────────────────

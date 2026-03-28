@@ -84,12 +84,12 @@ const PAYMENT_TERMS = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "
 
 /* ── Default form state ───────────────────────────── */
 const emptyForm = () => ({
-  // Step 1 — Basics
+// Step 1 — Basics
   vendorName: "",
-  category: "",
+  category: [],
   categoryOther: "",
   existingVendorId: null,
-  // Step 2 — Portal & Ordering
+    // Step 2 — Portal & Ordering
   website: "",
   portalUrl: "",
   portalUsername: "",
@@ -159,7 +159,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
       ...f,
       existingVendorId: v.vendorId,
       vendorName: v.name,
-      category: v.category || f.category,
+category: v.category ? v.category.split(", ").filter(Boolean) : f.category,
       website: v.website || f.website,
     }));
     setSearch("");
@@ -168,7 +168,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   };
 
   const clearVendor = () => {
-    setForm((f) => ({ ...f, existingVendorId: null, vendorName: "", category: "" }));
+setForm((f) => ({ ...f, existingVendorId: null, vendorName: "", category: [] }));
     setStep(0);
   };
 
@@ -206,10 +206,10 @@ const payload = {
         action: "vendor-add",
         account,
         vendorName: form.vendorName.trim(),
-        category: form.category === "Other"
-          ? (form.categoryOther?.trim() || "Other")
-          : form.category,
-        deliveryMethod: "",
+category: form.category
+          .map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c)
+          .join(", "),
+                  deliveryMethod: "",
         existingVendorId: form.existingVendorId || undefined,
       };
                         const res = await fetch("/api/ops", {
@@ -222,7 +222,7 @@ const payload = {
         onCreated({
           vendorId: data.vendorId,
           name: form.vendorName.trim(),
-          category: form.category,
+category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", "),
         });
       } else {
         alert(data.error || "Failed to save vendor");
@@ -244,10 +244,10 @@ const payload = {
         action: "vendor-add",
         account,
         vendorName: form.vendorName.trim(),
-        category: form.category === "Other"
-          ? (form.categoryOther?.trim() || "Other")
-          : form.category,
-        website: form.website.trim(),
+category: form.category
+          .map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c)
+          .join(", "),
+                  website: form.website.trim(),
                 notes: form.notes.trim(),
         accountNotes: form.accountNotes.trim(),
         customerAccountNum: form.customerAccountNum.trim(),
@@ -276,7 +276,7 @@ const payload = {
         onCreated({
           vendorId: data.vendorId,
           name: form.vendorName.trim(),
-          category: form.category,
+category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", "),
           deliveryDays: form.deliveryDays.join(", "),
           deliveryMethod: form.deliveryMethod,
           paymentTerms: form.paymentTerms,
@@ -378,7 +378,7 @@ const payload = {
         <div className="oh-inv-vs-selected">
           <div>
             <span className="oh-inv-vs-selected-name">{form.vendorName}</span>
-            {form.category && <span className="oh-inv-vs-selected-cat">{form.category}</span>}
+{form.category.length > 0 && <span className="oh-inv-vs-selected-cat">{form.category.join(", ")}</span>}
           </div>
           <button type="button" className="oh-inv-vs-change" onClick={clearVendor}>Change</button>
         </div>
@@ -456,21 +456,27 @@ const payload = {
               </button>
             </div>
           )}
-  {renderField("Category", "category", { children: (
-            <select
-              value={form.category}
-              onChange={(e) => {
-                set("category", e.target.value);
-                set("categoryOther", ""); // clear any prior custom text
-              }}
-            >
-              <option value="">Select category…</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )})}
-          {form.category === "Other" && (
+<div className="oh-inv-vs-field oh-inv-vs-field--full">
+            <label>Category</label>
+            <div className="oh-inv-vs-day-chips">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c} type="button"
+                  className={`oh-inv-vs-day-chip ${form.category.includes(c) ? "oh-inv-vs-day-chip--active" : ""}`}
+                  onClick={() => {
+                    if (c === "Other") {
+                      set("category", form.category.includes(c) ? form.category.filter((x) => x !== c) : [...form.category, c]);
+                    } else {
+                      set("category", form.category.includes(c) ? form.category.filter((x) => x !== c) : [...form.category, c]);
+                    }
+                  }}
+                >{c}</button>
+              ))}
+            </div>
+          </div>
+          {form.category.includes("Other") && (
             <div className="oh-inv-vs-field oh-inv-vs-field--full" style={{ marginTop: 8 }}>
-              <label>Specify category</label>
+              <label>Specify other category</label>
               <input
                 type="text"
                 placeholder="e.g. Linen, Pest Control, Uniforms…"
@@ -612,8 +618,7 @@ const payload = {
         title: "Vendor",
         items: [
           { label: "Name", value: form.vendorName },
-          { label: "Category", value: form.category },
-          form.existingVendorId && { label: "Type", value: "Existing vendor (new account link)" },
+{ label: "Category", value: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", ") },          form.existingVendorId && { label: "Type", value: "Existing vendor (new account link)" },
         ].filter(Boolean),
       },
       {

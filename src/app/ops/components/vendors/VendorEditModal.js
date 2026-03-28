@@ -543,17 +543,28 @@ export default function VendorEditModal({
                       onChange={e => setMaster("name", e.target.value)}
                     />
                   </Field>
-                  <Field label="Category">
-                    <select
-                      className={cx("oh-select", "category", masterEdited)}
-                      value={master.category}
-                      onChange={e => setMaster("category", e.target.value)}
-                    >
-                      <option value="">— Select —</option>
-                      {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                    </select>
+<Field label="Category">
+                    <div className="oh-vp-day-row">
+                      {CATEGORIES.map(c => {
+                        const selected = (master.category || "").split(", ").filter(Boolean).includes(c);
+                        return (
+                          <label key={c} className="oh-vp-day-toggle">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => {
+                                const current = (master.category || "").split(", ").filter(Boolean);
+                                const updated = selected ? current.filter(x => x !== c) : [...current, c];
+                                setMaster("category", updated.join(", "));
+                              }}
+                            />
+                            <span>{c}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </Field>
-                </FieldRow>
+                                  </FieldRow>
                 <Field label="Website">
                   <input
                     type="url"

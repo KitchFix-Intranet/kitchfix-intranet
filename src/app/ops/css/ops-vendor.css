@@ -309,10 +309,11 @@
   flex: 0 0 320px;
 }
 @media (max-width: 768px) {
-  .oh-vp-layout--split { flex-direction: column; }
-  .oh-vp-layout--split .oh-vp-list { flex: none; }
+  .oh-vp-layout--split .oh-vp-list { display: none; }
+  .oh-vp-layout--split > .oh-vp-card {
+    flex: 1; width: 100%; max-width: none;
+  }
 }
-
 
 
 
@@ -2123,4 +2124,23 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
   width: auto;
   max-width: none;
   min-width: 0;
+}
+
+/* ── Mobile back button (VendorCard) ── */
+.oh-vp-card-back {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 8px;
+}
+.oh-vp-card-back:hover { color: #0f3057; }
+@media (max-width: 768px) {
+  .oh-vp-card-back { display: flex; }
 }

@@ -47,14 +47,17 @@ export async function createStampedInvoicePDF(pages, meta) {
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // ── 1. Add each invoice image as a page ──
+// ── 1. Add each invoice image as a page ──
   for (let i = 0; i < pages.length; i++) {
-    const raw = pages[i].includes(",") ? pages[i].split(",")[1] : pages[i];
+    // Support both string (legacy) and object (with rotation) page formats
+    const pageData = typeof pages[i] === "string" ? pages[i] : pages[i].data;
+    const rotation = typeof pages[i] === "object" ? (pages[i].rotation || 0) : 0;
+
+    const raw = pageData.includes(",") ? pageData.split(",")[1] : pageData;
     const imgBytes = Uint8Array.from(Buffer.from(raw, "base64"));
 
     let image;
     try {
-      // Try JPEG first (most common from camera)
       image = await pdfDoc.embedJpg(imgBytes);
     } catch {
       try {
@@ -65,27 +68,54 @@ export async function createStampedInvoicePDF(pages, meta) {
       }
     }
 
-    // Scale image to fit letter-size page (612 x 792 pts) with margins
     const pageWidth = 612;
     const pageHeight = 792;
     const margin = 24;
     const maxW = pageWidth - margin * 2;
     const maxH = pageHeight - margin * 2;
 
-    const imgW = image.width;
-    const imgH = image.height;
-    const scale = Math.min(maxW / imgW, maxH / imgH, 1); // don't upscale
-    const drawW = imgW * scale;
-    const drawH = imgH * scale;
+    // For 90/270 rotation, swap effective image dimensions for scaling
+    const isRotated = rotation === 90 || rotation === 270;
+    const effectiveW = isRotated ? image.height : image.width;
+    const effectiveH = isRotated ? image.width : image.height;
+    const scale = Math.min(maxW / effectiveW, maxH / effectiveH, 1);
+    const drawW = image.width * scale;
+    const drawH = image.height * scale;
 
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
-    // Center image on page
-    const x = (pageWidth - drawW) / 2;
-    const y = (pageHeight - drawH) / 2;
+    if (rotation === 0) {
+      // No rotation — simple centered draw
+      const x = (pageWidth - drawW) / 2;
+      const y = (pageHeight - drawH) / 2;
+      page.drawImage(image, { x, y, width: drawW, height: drawH });
+    } else {
+      // Apply rotation around center of page
+      // pdf-lib rotation is counter-clockwise in radians
+      const radians = (rotation * Math.PI) / 180;
+      const cx = pageWidth / 2;
+      const cy = pageHeight / 2;
 
-    page.drawImage(image, { x, y, width: drawW, height: drawH });
+      // Calculate the draw origin based on rotation
+      // After rotation, we need to position so the image is centered
+      let x, y;
+      if (rotation === 90) {
+        x = cx - drawH / 2;
+        y = cy - drawW / 2;
+      } else if (rotation === 180) {
+        x = cx + drawW / 2;
+        y = cy + drawH / 2;
+      } else if (rotation === 270) {
+        x = cx + drawH / 2;
+        y = cy + drawW / 2;
+      }
 
+      page.drawImage(image, {
+        x, y, width: drawW, height: drawH,
+        rotate: { type: "degrees", angle: -rotation },
+      });
+    }
+    
     // ── Thin reference strip at bottom of first page only ──
     if (i === 0) {
       const stripH = 22;

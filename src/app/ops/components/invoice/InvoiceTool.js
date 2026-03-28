@@ -66,19 +66,27 @@ function VendorTypeAhead({ vendors, value, onChange, onAddNew, hasError, disable
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return vendors;
     return vendors.filter((v) => v.name.toLowerCase().includes(query.toLowerCase()));
   }, [vendors, query]);
 
-  useEffect(() => {
-    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+useEffect(() => {
+    const handler = (e) => {
+      const inWrap = wrapRef.current && wrapRef.current.contains(e.target);
+      const inDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!inWrap && !inDropdown) setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
-
-  return (
+    return (
     <div className={`oh-inv-typeahead${hasError ? " oh-inv-error" : ""}`} ref={wrapRef}>
       <div className="oh-inv-typeahead-input-row">
         <input type="text" className="oh-inv-typeahead-input" value={open ? query : (value?.name || "")}
@@ -90,8 +98,8 @@ function VendorTypeAhead({ vendors, value, onChange, onAddNew, hasError, disable
         </button>
       </div>
       {open && !disabled && (
-        <div className="oh-inv-typeahead-dropdown">
-          {filtered.length > 0 ? filtered.map((v) => (
+<div className="oh-inv-typeahead-dropdown" ref={dropdownRef}>
+            {filtered.length > 0 ? filtered.map((v) => (
             <button key={v.vendorId} className={`oh-inv-typeahead-option${value?.vendorId === v.vendorId ? " oh-inv-typeahead-option--selected" : ""}`}
               onClick={() => { onChange(v); setOpen(false); setQuery(""); }}>
               <span>{v.name}</span>
@@ -233,9 +241,11 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
   const gateAllCleared = hasPhotos && pages.every((p) => p.gate === "pass" || p.gate === "warn");
   const photosReady = hasPhotos && gateAllCleared && !gateScanning;
 
-  const glTotal = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-  const glBalanceDiff = Number(totalAmount) > 0 ? Number(totalAmount) - glTotal : 0;
-  const hasDetails = !!(invoiceDate && Number(totalAmount) > 0 && invoiceNumber);
+const glTotalRaw = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const glTotal = Math.round(glTotalRaw * 100) / 100;
+  const invoiceTotal = Math.round(Number(totalAmount) * 100) / 100;
+  const glBalanceDiff = invoiceTotal > 0 ? invoiceTotal - glTotal : 0;
+    const hasDetails = !!(invoiceDate && Number(totalAmount) > 0 && invoiceNumber);
   const glBalanced = Number(totalAmount) > 0 && glRows.some((r) => r.code && Number(r.amount) > 0) && Math.abs(glBalanceDiff) <= 0.01;
 
   const hasUnsavedChanges = useMemo(() => {
@@ -294,7 +304,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
   const originalOnNavigate = onNavigate;
   const guardedNavigate = useCallback((target) => {
     if (hasUnsavedChanges && activeTab === "form") {
-      openConfirm("Unsaved Changes", "You have an invoice in progress. Discard changes?", "Discard", () => { resetForm(false); originalOnNavigate(target); });
+      openConfirm("Unsaved Changes", "You have an invoice in progress. Discard changes?", "Discard", () => { resetForm(); originalOnNavigate(target); });
     } else {
       originalOnNavigate(target);
     }
@@ -363,8 +373,15 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
       if (d.invoiceDate) setInvoiceDate(d.invoiceDate);
       if (d.totalAmount) setTotalAmount(d.totalAmount);
       if (d.glRows?.length) setGlRows(d.glRows);
-      if (d.pages?.length) setPages(d.pages.map((p, i) => ({ ...p, pid: p.pid || `draft_${i}`, gate: "pass", gateResult: null })));
-      if (d.apNote) { setApNote(d.apNote); setShowNoteField(true); }
+if (d.pages?.length) {
+        const restoredPages = d.pages.map((p, i) => ({ ...p, pid: p.pid || `draft_${i}`, gate: "scanning", gateResult: null, pageNumber: null, totalPages: null, pageNumberConfidence: "none" }));
+        setPages(restoredPages);
+        // Re-run photo gate on each restored page (non-blocking)
+        restoredPages.forEach((p) => {
+          if (p.data) runPhotoGate(p.pid, p.data);
+        });
+      }
+            if (d.apNote) { setApNote(d.apNote); setShowNoteField(true); }
       if (d.formType && d.formType !== "cc_receipt") setFormType(d.formType);
     } catch {}
   }, []);
@@ -500,15 +517,13 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
         canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         const pid = makePid();
-        const isFirstPage = pages.length === 0;
-        setPages((prev) => [...prev, {
+setPages((prev) => [...prev, {
           data: dataUrl, rotation: 0, type: "image", pid,
           gate: "scanning", gateResult: null,
           pageNumber: null, totalPages: null, pageNumberConfidence: "none",
         }]);
         runPhotoGate(pid, dataUrl);
-        if (isFirstPage && !invoiceNumber) tryOCRScanRef.current?.(dataUrl);
-      };
+            };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -532,7 +547,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const totalPdfPages = pdf.numPages;
-      const availableSlots = 10 - pages.length;
+const availableSlots = 15 - pages.length;
       const pagesToRender = Math.min(totalPdfPages, availableSlots);
       if (totalPdfPages > availableSlots) showToast(`PDF has ${totalPdfPages} pages — importing first ${pagesToRender} (${availableSlots} slots left)`, "info");
       let lastPageDataUrl = null;
@@ -561,8 +576,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
           pageNumber: i, totalPages: totalPdfPages, pageNumberConfidence: "high",
         }]);
       }
-      showToast(`${pagesToRender} page${pagesToRender > 1 ? "s" : ""} imported from PDF`, "success");
-      if (!invoiceNumber && lastPageDataUrl) tryOCRScanRef.current?.(lastPageDataUrl);
+showToast(`${pagesToRender} page${pagesToRender > 1 ? "s" : ""} imported from PDF`, "success");
     } catch (err) {
       console.error("[PDF] Processing error:", err);
       showToast("Couldn't read PDF — try a photo instead", "error");
@@ -571,7 +585,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
 
   const processFiles = useCallback((files) => {
     const fileArr = Array.from(files);
-    if (pages.length + fileArr.length > 10) { showToast("Maximum 10 pages per invoice", "error"); return; }
+if (pages.length + fileArr.length > 15) { showToast("Maximum 15 pages per invoice", "error"); return; }
     fileArr.forEach((file) => {
       if (file.type === "application/pdf") processPDFFile(file); else processImageFile(file);
     });
@@ -581,8 +595,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
   // OCR Scan
   // ═══════════════════════════════════════
   const tryOCRScan = useCallback(async (imageData) => {
-    setOcrStatus("scanning");
-    setOcrResult(null);
+setOcrStatus("scanning");
     try {
       const downsample = (dataUrl) => new Promise((resolve) => {
         const img = new Image();
@@ -603,20 +616,67 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
       });
       const data = await res.json();
       if (data.rejected) { setOcrStatus("rejected"); setOcrResult(data); showToast("Photo couldn't be read — see suggestions below", "error"); return; }
-      if (data.success) {
-        setOcrStatus("success"); setOcrResult(data);
+if (data.success) {
+        setOcrStatus("success");
+        setOcrResult((prev) => {
+          // Merge: keep prior detections, add new ones
+          if (!prev) return data;
+          return {
+            ...prev,
+            ...data,
+            invoiceNumber: prev.invoiceNumber || data.invoiceNumber,
+            invoiceDate: prev.invoiceDate || data.invoiceDate,
+            totalAmount: prev.totalAmount || data.totalAmount,
+            vendorName: prev.vendorName || data.vendorName,
+            vendorMatch: prev.vendorMatch || data.vendorMatch,
+            confidence: data.confidence,
+          };
+        });
         const filled = [];
         if (data.invoiceNumber && !invoiceNumber) { setInvoiceNumber(data.invoiceNumber); filled.push("invoice #"); }
-        if (data.invoiceDate) { setInvoiceDate(data.invoiceDate); filled.push("date"); }
-        if (data.totalAmount) { setTotalAmount(String(data.totalAmount)); filled.push("total"); }
+if (data.invoiceDate) { setInvoiceDate(data.invoiceDate); filled.push("date"); }
+        if (data.totalAmount && !totalAmount) { setTotalAmount(String(data.totalAmount)); filled.push("total"); }
         if (data.vendorMatch?.bestMatch && !vendor) {
           const matchedVendor = vendors.find((v) => v.vendorId === data.vendorMatch.bestMatch.vendorId);
           if (matchedVendor && data.vendorMatch.confidence !== "low") { setVendor(matchedVendor); trackRecentVendor(matchedVendor.vendorId); filled.push("vendor"); }
         }
         if (filled.length > 0) showToast(`Auto-detected: ${filled.join(", ")} ${data.confidence === "high" ? "✓" : "(verify)"}`, "info");
       } else { setOcrStatus("idle"); }
-    } catch { setOcrStatus("idle"); }
+        } catch { setOcrStatus("idle"); }
   }, [account, invoiceNumber, vendors, vendor, showToast, trackRecentVendor]);
+
+// ═══ Progressive OCR: scan each new page for missing fields ═══
+  const prevPageCountRef = useRef(0);
+  const pdfBatchScanRef = useRef(false);
+  useEffect(() => {
+    const prevCount = prevPageCountRef.current;
+    prevPageCountRef.current = pages.length;
+
+    // No new page was added (or pages were removed) — skip
+    if (pages.length <= prevCount || pages.length === 0) return;
+
+    // First page: always scan (ocrStatus will be "idle")
+    if (prevCount === 0 && ocrStatus === "idle") {
+      const newestPage = pages[pages.length - 1];
+      if (!newestPage?.data) return;
+      // If a multi-page PDF was added all at once, scan second-to-last page
+      // (last page is often blank trailing page from browser print)
+      if (pages.length > 2 && pages[pages.length - 1].type === "pdf") {
+        pdfBatchScanRef.current = true;
+        tryOCRScanRef.current?.(pages[pages.length - 2].data);
+      } else {
+        tryOCRScanRef.current?.(newestPage.data);
+      }
+      return;
+    }
+
+    // Subsequent pages: only re-scan if total is still missing
+    if (prevCount > 0 && !totalAmount && ocrStatus !== "scanning") {
+      const newestPage = pages[pages.length - 1];
+      if (!newestPage?.data) return;
+      tryOCRScanRef.current?.(newestPage.data);
+    }
+  }, [pages, ocrStatus, totalAmount]);
 
   const handlePhotoCapture = useCallback((e) => { processFiles(e.target.files || []); if (fileInputRef.current) fileInputRef.current.value = ""; }, [processFiles]);
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true); }, []);
@@ -645,12 +705,12 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
     setPages((prev) => prev.map((p, i) => i === idx ? { ...p, rotation: (p.rotation + 90) % 360 } : p));
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (glRows.length === 1 && glRows[0].code && !glRows[0].amount && totalAmount && Number(totalAmount) > 0) {
       setGlRows([{ ...glRows[0], amount: totalAmount }]);
     }
-  }, [totalAmount]);
-
+  }, [totalAmount, glRows]);
+  
   // ——— Validation ———
   const validate = useCallback(() => {
     const errs = {};
@@ -662,8 +722,10 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
     if (pages.length === 0) errs.pages = true;
     if (!glRows.some((r) => r.code && Number(r.amount) > 0)) errs.glRows = true;
     const glT = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    if (Math.abs(glT - Number(totalAmount)) > 0.01 && Number(totalAmount) > 0) errs.glBalance = true;
-    setErrors(errs);
+const roundedGlT = Math.round(glT * 100) / 100;
+    const roundedTotal = Math.round(Number(totalAmount) * 100) / 100;
+    if (Math.abs(roundedGlT - roundedTotal) > 0.01 && roundedTotal > 0) errs.glBalance = true;
+        setErrors(errs);
     if (Object.keys(errs).length > 0) {
       const el = document.querySelector(`[data-field="${Object.keys(errs)[0]}"]`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -689,22 +751,23 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
     setSubmitting(true);
     glRows.filter((r) => r.code).forEach((r) => trackGLUsage(r.code));
     if (vendor?.vendorId) trackRecentVendor(vendor.vendorId);
-    const payload = {
+const payload = {
       action: "invoice-submit", formType, account,
       vendor: vendor.name, vendorId: vendor.vendorId || "",
       invoiceNumber, invoiceDate,
       totalAmount: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount),
       glRows: glRows.filter((r) => r.code && Number(r.amount) > 0),
-      pages: pages.map((p) => p.data),
+pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0 })),
       isCreditMemo, apNote: apNote.trim() || null,
+      ocrVendorName: ocrResult?.vendorName || null,
     };
-    if (!navigator.onLine) {
+        if (!navigator.onLine) {
       const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
       queue.push({ ...payload, queuedAt: Date.now() });
       localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
       setOfflineQueue(queue); setSubmitting(false);
       showToast("📡 Saved offline — will submit when connected", "info");
-      resetForm(true); return;
+resetForm(); return;
     }
     try {
       const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -714,7 +777,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
         setShowSuccess(true); setStepComplete(true); setSessionCount((c) => c + 1);
         setTimeout(() => setShowSuccess(false), 3200);
         setTimeout(() => setStepComplete(false), 2400);
-        loadBootstrap(account); resetForm(true);
+loadBootstrap(account); resetForm();
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
     finally { setSubmitting(false); }
@@ -740,18 +803,18 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
   useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
   useEffect(() => { tryOCRScanRef.current = tryOCRScan; }, [tryOCRScan]);
 
-  const resetForm = useCallback((keepContext = false) => {
-    setInvoiceNumber(""); setInvoiceDate(new Date().toISOString().split("T")[0]);
+const resetForm = useCallback(() => {
+      setInvoiceNumber(""); setInvoiceDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
     setPages([]); setApNote(""); setShowNoteField(false);
     setErrors({}); setDraftSavedAgo(null); localStorage.removeItem(DRAFT_KEY);
     setOcrStatus("idle"); setOcrResult(null);
-    setReorderMode(false); setSelectedPageIdx(null);
+setReorderMode(false); setSelectedPageIdx(null);
     setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (galleryInputRef.current) galleryInputRef.current.value = "";
-    if (!keepContext) { setVendor(null); setFormType("invoice"); }
-  }, []);
+    setVendor(null); setFormType("invoice");
+    }, []);
 
   const filteredSubmissions = useMemo(() => {
     let list = recentSubmissions;
@@ -862,8 +925,8 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
           </div>
           <div className="oh-inv-header-right">
             {hasUnsavedChanges && (
-              <button className="oh-inv-reset-btn" onClick={() => openConfirm("Reset Form", "Clear all fields and start over?", "Reset", () => resetForm(false))} title="Clear form">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+<button className="oh-inv-reset-btn" onClick={() => openConfirm("Reset Form", "Clear all fields and start over?", "Reset", () => resetForm())} title="Clear form">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
                 Reset
               </button>
             )}
@@ -1015,7 +1078,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
                   <div className="oh-inv-label-row">
                     <label className="oh-inv-label">
                       Invoice Photo{pages.length > 1 ? "s" : ""} / PDF <span className="oh-inv-req">*</span>
-                      {pages.length > 0 && <span className="oh-inv-label-hint">{pages.length}/10 pages {gateScanning ? "⏳" : gateAllCleared ? "✓" : ""}</span>}
+{pages.length > 0 && <span className="oh-inv-label-hint">{pages.length}/15 pages {gateScanning ? "⏳" : gateAllCleared ? "✓" : ""}</span>}
                     </label>
                     {pages.length >= 2 && (
                       <button
@@ -1125,8 +1188,8 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
                       );
                     })}
 
-                    {pages.length < 10 && !reorderMode && (
-                      <>
+{pages.length < 15 && !reorderMode && (
+                        <>
                         {pages.length === 0 ? (
                           <div className={`oh-inv-add-card oh-inv-add-card--first${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                             <div className="oh-inv-add-card-icon">
@@ -1382,9 +1445,10 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
                           <button className="oh-inv-vendor-card-clear" onClick={() => setVendor(null)} title="Change vendor"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
                         </div>
                       </div>
-                      <div className="oh-inv-vendor-card-details">
+<div className="oh-inv-vendor-card-details">
+                        {vendor.customerAccountNum && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="18" rx="2" /><line x1="2" y1="9" x2="22" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>Acct# {vendor.customerAccountNum}</span>}
                         {vendor.deliveryDays && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="3" width="15" height="13" rx="2" /><path d="M16 8h4l3 3v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>{vendor.deliveryDays}</span>}
-                        {vendor.paymentTerms && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg>{vendor.paymentTerms}</span>}
+                                                {vendor.paymentTerms && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg>{vendor.paymentTerms}</span>}
                         {vendor.salesRepName && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>{vendor.salesRepName}</span>}
                         {vendor.deliveryMethod && <span className="oh-inv-vendor-detail"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>{vendor.deliveryMethod}</span>}
                       </div>
