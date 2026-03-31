@@ -663,9 +663,10 @@ Rules:
 
 VENDOR NAME RULES:
 - vendorName = the company that ISSUED the invoice, NOT the ordering platform.
+- Always extract the COMPLETE vendor/company name exactly as it appears on the invoice header, logo, or letterhead. Never abbreviate or use only part of the name. Examples: "Ben E. Keith" not "Keith", "What Chefs Want" not "Chefs Want", "Fortune Fish & Gourmet" not "Fortune Fish".
 - IGNORE browser chrome, page headers/footers, and platform names like "Cut+Dry", "cutanddry.com", "BlueCart", "Orderve", "ChefSheet". These are ordering platforms, not vendors.
 - Look for a "Vendor:" label, company logo, or letterhead INSIDE the document body.
-- Common KitchFix vendors: What Chefs Want, Fresh Point, Sysco, US Foods, Fortune Fish, Samuels Seafood, Performance Foodservice.
+- Common KitchFix vendors: Ben E. Keith, What Chefs Want, Fresh Point, Sysco, US Foods, Fortune Fish & Gourmet, Samuels Seafood, Performance Foodservice, Kuna Foodservice, Rolling Lawn Farms, City Seafood, Lohr Distribution, Truly Good Foods.
 
 INVOICE NUMBER RULES:
 - Look first for a field explicitly labeled "Invoice #" or "Invoice Number".
@@ -792,13 +793,15 @@ INVOICE NUMBER RULES:
 
 ${pageList.length} page images are attached in order (page 1 first).
 
-For each page, check whether it belongs to the same invoice as the majority of pages. Look for mismatches in:
+For each page, check whether it belongs to the same invoice as the majority of pages. Compare pages AGAINST EACH OTHER — look for mismatches in:
 - Invoice number (most reliable signal)
 - Vendor / company name
 - Invoice date
 - Document type (e.g. one page is clearly from a different vendor or a completely different document)
 
-IMPORTANT: Be conservative. Only flag a page if you are reasonably confident it does not belong. "Page 2 of 3" text on continuation pages does NOT indicate a different invoice — those are the same invoice. Only flag genuine mismatches.
+CRITICAL DATE RULE: The "Date" in the known invoice details above may be today's default and has NOT been verified from the document. Do NOT flag pages because their date differs from the known date. ONLY flag a page if its date differs from the OTHER PAGES in the set. If all pages show the same date, they are consistent — regardless of what the known date says.
+
+IMPORTANT: Be conservative. Only flag a page if you are reasonably confident it does not belong. "Page 2 of 3" text on continuation pages does NOT indicate a different invoice — those are the same invoice. Continuation pages, blank trailing pages, and summary pages from the same vendor are all normal. Only flag genuine mismatches where one page is clearly from a different invoice or vendor than the others.
 
 Respond ONLY with valid JSON, no markdown:
 {
@@ -1124,7 +1127,7 @@ const getPageData = (p) => typeof p === "string" ? p : p.data;
       const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
-    
+
     const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice.
 
 Return ONLY valid JSON with this structure:
