@@ -704,12 +704,6 @@ if (data.invoiceDate) { setInvoiceDate(data.invoiceDate); filled.push("date"); }
   const rotatePage = useCallback((idx) => {
     setPages((prev) => prev.map((p, i) => i === idx ? { ...p, rotation: (p.rotation + 90) % 360 } : p));
   }, []);
-
-useEffect(() => {
-    if (glRows.length === 1 && glRows[0].code && !glRows[0].amount && totalAmount && Number(totalAmount) > 0) {
-      setGlRows([{ ...glRows[0], amount: totalAmount }]);
-    }
-  }, [totalAmount, glRows]);
   
   // ——— Validation ———
   const validate = useCallback(() => {
