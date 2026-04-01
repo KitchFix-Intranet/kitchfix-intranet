@@ -119,9 +119,71 @@ export async function appendRowSA(spreadsheetId, tabName, rowData) {
 }
 
 /**
+ * Append multiple rows at once using the service account.
+ * Used by Service Calendar (audit logs, batch writes).
+ */
+export async function appendRowsSA(spreadsheetId, tabName, rowsData) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: tabName,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: rowsData },
+    });
+    return { success: true, updatedRange: response.data.updates?.updatedRange };
+  } catch (error) {
+    console.error(`[SA] Error batch writing to ${tabName}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update a specific range using the service account.
+ * Used by Service Calendar to write actuals/clickers to Drive sheets.
+ * `range` is A1 notation, e.g. "'Actuals - 2026'!F10:N10"
+ * `values` is a 2D array, e.g. [[45, 50, 30, ...]]
+ */
+export async function updateRangeSA(spreadsheetId, range, values) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[SA] Error updating range ${range}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Read a specific range using the service account.
+ * Returns raw 2D array (no header parsing).
+ * Used by Service Calendar to read specific months from large Drive sheets.
+ */
+export async function readRangeSA(spreadsheetId, range) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+    return { success: true, values: response.data.values || [] };
+  } catch (error) {
+    console.error(`[SA] Error reading range ${range}:`, error.message);
+    return { success: false, values: [], error: error.message };
+  }
+}
+
+/**
  * Append multiple rows at once (batch write — used by AI scanner)
  */
 export async function appendRows(accessToken, spreadsheetId, tabName, rowsData) {
+  
   const sheets = getSheetsClient(accessToken);
   try {
     const response = await sheets.spreadsheets.values.append({

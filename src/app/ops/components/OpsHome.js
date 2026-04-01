@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import F from "@/app/ops/components/shared/F";
 import {
   ClipboardIcon,
@@ -132,7 +133,7 @@ export default function OpsHome({ config, onNavigate }) {
               🏪 Vendor Directory
             </div>
           </div>
-          <button
+<button
             className="oh-card-cta oh-card-cta--primary"
             onClick={(e) => { e.stopPropagation(); onNavigate("vendors"); }}
           >
@@ -141,7 +142,34 @@ export default function OpsHome({ config, onNavigate }) {
           </button>
         </div>
 
+        {/* ── Service Calendar Card ── */}
+        <Link href="/service-calendar" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="oh-card oh-card--interactive" style={{ height: "100%" }}>
+            <div className="oh-card-header-row">
+              <div className="oh-icon-box oh-icon-mustard">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20V10" />
+                  <path d="M18 20V4" />
+                  <path d="M6 20v-4" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="oh-card-title">Service Calendar</h3>
+            <p className="oh-card-desc">Track meal projections &amp; enter daily actuals.</p>
+            <div className="oh-action-chips">
+              <div className="oh-chip oh-chip-mustard" style={{ width: "100%", textAlign: "center" }}>
+                🍽️ Covers &amp; Revenue
+              </div>
+            </div>
+            <div className="oh-card-cta oh-card-cta--primary">
+              <span>Open Calendar</span>
+              <ArrowRight />
+            </div>
+          </div>
+        </Link>
+
         {/* ── Current Period Info Card ── */}
+        
         <div className="oh-card">
           <div className="oh-card-header-row">
             <div className="oh-icon-box oh-icon-navy">
