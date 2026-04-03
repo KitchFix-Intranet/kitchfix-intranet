@@ -1115,8 +1115,18 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) { console.warn("[AI Scan] No API key configured, skipping"); return; }
 
+  // Skip line item extraction for photo-only submissions — phone photos produce
+  // unreliable line item data. Only run extraction when at least one page is a
+  // digital PDF upload (clean text, reliable parsing).
+  const hasDigitalPDF = pages.some((p) => (typeof p === "object" ? p.type : null) === "pdf");
+  if (!hasDigitalPDF) {
+    console.log(`[AI Scan] ${invoiceUuid}: Photo-only submission — skipping line item extraction`);
+    await updateScanStatus(token, invoiceUuid, "photo-only");
+    return;
+  }
+
   try {
-const getPageData = (p) => typeof p === "string" ? p : p.data;
+    const getPageData = (p) => typeof p === "string" ? p : p.data;
     const resizeForScan = (dataUrl) => {
       return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
     };

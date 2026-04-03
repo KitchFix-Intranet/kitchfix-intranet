@@ -751,7 +751,7 @@ const payload = {
       invoiceNumber, invoiceDate,
       totalAmount: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount),
       glRows: glRows.filter((r) => r.code && Number(r.amount) > 0),
-pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0 })),
+pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0, type: p.type || "image" })),
       isCreditMemo, apNote: apNote.trim() || null,
       ocrVendorName: ocrResult?.vendorName || null,
     };
