@@ -4,17 +4,22 @@ import { useSession } from "next-auth/react";
 import OpsNav from "@/app/ops/components/OpsNav";
 import OpsHome from "@/app/ops/components/OpsHome";
 import InventoryTool from "@/app/ops/components/inventory/InventoryTool";
+import InventoryManager from "@/app/ops/components/inventory-manager/InventoryManager";
 import LaborTool from "@/app/ops/components/labor/LaborTool";
 import InvoiceTool from "@/app/ops/components/invoice/InvoiceTool";
 import VendorPortal from "@/app/ops/components/vendors/VendorPortal";
 import './css/ops-shared.css';
 import './css/ops-inventory.css';
+import './css/ops-inv-mgmt.css';
 import './css/ops-labor.css';
 import './css/ops-invoice.css';
 import './css/ops-vendor.css';
 // import './css/ops-executive.css';  // PARKED
 // 
 // ops-executive.css — parked, will move to /executive page
+
+// ── Inventory Manager Dev Gate ──
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
 
 export default function OpsHub() {
   const { data: session, status } = useSession();
@@ -23,6 +28,9 @@ export default function OpsHub() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null);
+
+  const userEmail = session?.user?.email || "";
+  const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
 
   const showToast = useCallback((msg, type = "success") => {
     setToast({ msg, type });
@@ -86,13 +94,16 @@ export default function OpsHub() {
       </div>
 
       <div className="oh-bound">
-        <OpsNav view={view} onNavigate={setView} />
+        <OpsNav view={view} onNavigate={setView} userEmail={userEmail} />
       </div>
 
       <div className="oh-bound">
-        {view === "home" && <OpsHome config={config} onNavigate={setView} />}
+        {view === "home" && <OpsHome config={config} onNavigate={setView} userEmail={userEmail} />}
         {view === "inventory" && (
           <InventoryTool config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} refreshConfig={refreshConfig} />
+        )}
+        {view === "inv-manager" && isInvManagerEnabled && (
+          <InventoryManager config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} />
         )}
         {view === "labor" && (
           <LaborTool config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} />

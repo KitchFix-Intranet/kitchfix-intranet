@@ -1,9 +1,14 @@
 "use client";
 
-export default function OpsNav({ view, onNavigate }) {
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+
+export default function OpsNav({ view, onNavigate, userEmail = "" }) {
+  const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
+
   const tabs = [
     { key: "home",     label: "Home" },
     { key: "inventory", label: "Inventory" },
+    ...(isInvManagerEnabled ? [{ key: "inv-manager", label: "Inv Manager" }] : []),
     { key: "invoices", label: "Invoices" },
     { key: "labor",    label: "Season Tracker" },
     { key: "vendors",  label: "Vendors" },

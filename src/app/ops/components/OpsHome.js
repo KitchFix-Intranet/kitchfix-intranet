@@ -10,7 +10,19 @@ import {
   ArrowRight,
 } from "@/app/ops/components/shared/Icons";
 
-export default function OpsHome({ config, onNavigate }) {
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+
+// Box icon (Lucide) for Smart Inventory
+const BoxIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+    <path d="M3.27 6.96L12 12.01l8.73-5.05" />
+    <path d="M12 22.08V12" />
+  </svg>
+);
+
+export default function OpsHome({ config, onNavigate, userEmail = "" }) {
+  const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
   const cp     = config?.currentPeriod;
   const ap     = cp?.name || "P1";
   const days   = F.daysUntil(cp?.due);
@@ -23,6 +35,36 @@ export default function OpsHome({ config, onNavigate }) {
   return (
     <div className="oh-view" style={{ animation: "oh-slideUp 0.4s ease" }}>
       <div className="oh-grid oh-grid--dashboard">
+
+        {/* ── Smart Inventory Card (Dev-Gated) ── */}
+        {isInvManagerEnabled && (
+          <div
+            className="oh-card oh-card--interactive"
+            onClick={() => onNavigate("inv-manager")}
+            style={{ borderLeft: "3px solid #d97706" }}
+          >
+            <div className="oh-card-header-row">
+              <div className="oh-icon-box oh-icon-mustard"><BoxIcon /></div>
+            </div>
+            <h3 className="oh-card-title">Smart Inventory</h3>
+            <p className="oh-card-desc">AI-powered count sheets from invoices.</p>
+            <div className="oh-action-chips">
+              <div
+                className="oh-chip oh-chip-mustard"
+                style={{ flex: 1, textAlign: "center" }}
+              >
+                {days !== null && days <= 7 ? "⚡" : "📦"} {days !== null ? F.daysLabel(days) : "DEV MODE"}
+              </div>
+            </div>
+            <button
+              className="oh-card-cta oh-card-cta--primary"
+              onClick={(e) => { e.stopPropagation(); onNavigate("inv-manager"); }}
+            >
+              <span>Launch Tool</span>
+              <ArrowRight />
+            </button>
+          </div>
+        )}
 
         {/* ── Inventory Card ── */}
         <div

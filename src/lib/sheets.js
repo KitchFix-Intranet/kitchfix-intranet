@@ -15,7 +15,8 @@ export const SHEET_IDS = {
   COLLECTION: "1itJh5x1YFBdyHTBr-dyKD_r_nRBfjwIBiR_bWiOyCzQ",
   GAME: "1BFEGUIjmU56iRsu0Dbnn-x-jF2Bnw8K4BmUZrq6pghs",
   GL_CODES: "1Gs7ToEvrsraBt81DctgwImKK-ck2Ch6V2ifvF8VndeY",
-  AI_LINE_ITEMS: "18mTWaeodOpFVmDSNRkGpNZvCrNWqHxVv3qN8r1b2REo",
+AI_LINE_ITEMS: "18mTWaeodOpFVmDSNRkGpNZvCrNWqHxVv3qN8r1b2REo",
+  INVENTORY: process.env.INVENTORY_SHEET_ID || "",
 };
 
 export function getSheetsClient(accessToken) {
@@ -183,7 +184,7 @@ export async function readRangeSA(spreadsheetId, range) {
  * Append multiple rows at once (batch write — used by AI scanner)
  */
 export async function appendRows(accessToken, spreadsheetId, tabName, rowsData) {
-  
+
   const sheets = getSheetsClient(accessToken);
   try {
     const response = await sheets.spreadsheets.values.append({

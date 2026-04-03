@@ -1,0 +1,490 @@
+/* ═══════════════════════════════════════════════════════════
+   ops-inv-mgmt.css — Inventory Manager Styles
+   Prefix: oh-inv-mgmt-
+   Design: Navy #0f3057 · Amber #d97706 · Green #16A34A
+   Mobile-first, max-width 480px, scales to tablet/desktop
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── App Shell ── */
+.oh-inv-mgmt-app {
+  max-width: 480px;
+  margin: 0 auto;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  animation: oh-slideUp 0.35s ease;
+}
+
+.oh-inv-mgmt-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  gap: 12px;
+}
+.oh-inv-mgmt-loading p {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oh-inv-mgmt-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 30vh;
+  gap: 16px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ── Header (Navy Bar) ── */
+.oh-inv-mgmt-header {
+  background: #0f3057;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 10px 10px 0 0;
+  position: relative;
+}
+.oh-inv-mgmt-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oh-inv-mgmt-header-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+.oh-inv-mgmt-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.oh-inv-mgmt-header-sep {
+  color: rgba(255,255,255,0.15);
+  font-size: 11px;
+}
+.oh-inv-mgmt-back {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+/* Account dropdown */
+.oh-inv-mgmt-account-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.oh-inv-mgmt-account-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+.oh-inv-mgmt-account-btn span {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.oh-inv-mgmt-account-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 40px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 100;
+  min-width: 180px;
+  overflow: hidden;
+  animation: oh-inv-mgmt-fadeIn 0.15s ease;
+}
+.oh-inv-mgmt-account-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #0f3057;
+  font-weight: 500;
+  transition: background 0.12s;
+}
+.oh-inv-mgmt-account-option:hover {
+  background: #f8fafc;
+}
+.oh-inv-mgmt-account-option.active {
+  background: #fffbeb;
+  color: #d97706;
+  font-weight: 600;
+}
+.oh-inv-mgmt-account-option + .oh-inv-mgmt-account-option {
+  border-top: 1px solid #f1f5f9;
+}
+
+/* Gear button + badge */
+.oh-inv-mgmt-gear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.oh-inv-mgmt-gear-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  background: #d97706;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #0f3057;
+}
+
+/* ── Landing Screen ── */
+.oh-inv-mgmt-landing {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* CTA Card */
+.oh-inv-mgmt-cta-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 24px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.oh-inv-mgmt-cta-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #fffbeb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.oh-inv-mgmt-cta-icon--success {
+  background: #f0fdf4;
+}
+.oh-inv-mgmt-cta-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f3057;
+  margin: 0;
+}
+.oh-inv-mgmt-cta-sub {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+.oh-inv-mgmt-cta-btn {
+  margin-top: 8px;
+  background: #0f3057;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 32px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  max-width: 320px;
+  transition: opacity 0.15s;
+  letter-spacing: 0.2px;
+}
+.oh-inv-mgmt-cta-btn:hover {
+  opacity: 0.92;
+}
+.oh-inv-mgmt-cta-btn:active {
+  opacity: 0.85;
+  transform: scale(0.99);
+}
+
+/* Submitted totals */
+.oh-inv-mgmt-cta-totals {
+  width: 100%;
+  max-width: 280px;
+  margin-top: 8px;
+}
+.oh-inv-mgmt-cta-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #64748b;
+}
+.oh-inv-mgmt-cta-total-row--grand {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 4px;
+  padding-top: 8px;
+  font-weight: 700;
+  color: #0f3057;
+  font-size: 15px;
+}
+
+/* Completeness warning */
+.oh-inv-mgmt-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
+.oh-inv-mgmt-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.oh-inv-mgmt-link {
+  background: none;
+  border: none;
+  color: #d97706;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+/* Stats cards */
+.oh-inv-mgmt-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.oh-inv-mgmt-stat-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+}
+.oh-inv-mgmt-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.oh-inv-mgmt-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f3057;
+  line-height: 1.2;
+}
+.oh-inv-mgmt-stat-value--urgent {
+  color: #d97706;
+}
+.oh-inv-mgmt-stat-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Section (collapsible) */
+.oh-inv-mgmt-section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.oh-inv-mgmt-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.oh-inv-mgmt-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f3057;
+}
+
+/* Price movers */
+.oh-inv-mgmt-movers {
+  border-top: 1px solid #f1f5f9;
+}
+.oh-inv-mgmt-mover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+.oh-inv-mgmt-mover-row + .oh-inv-mgmt-mover-row {
+  border-top: 1px solid #f8fafc;
+}
+.oh-inv-mgmt-mover-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.oh-inv-mgmt-mover-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.oh-inv-mgmt-mover-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f3057;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oh-inv-mgmt-mover-vendor {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.oh-inv-mgmt-mover-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.oh-inv-mgmt-mover-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f3057;
+}
+.oh-inv-mgmt-mover-change {
+  font-size: 11px;
+  font-weight: 600;
+}
+.oh-inv-mgmt-mover-change.up { color: #d97706; }
+.oh-inv-mgmt-mover-change.down { color: #16A34A; }
+
+/* Empty state */
+.oh-inv-mgmt-empty {
+  text-align: center;
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.oh-inv-mgmt-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f3057;
+  margin: 8px 0 0;
+}
+.oh-inv-mgmt-empty-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0;
+}
+
+/* ── Manage Screen ── */
+.oh-inv-mgmt-manage {
+  padding: 16px;
+}
+.oh-inv-mgmt-manage-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oh-inv-mgmt-manage-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 40px 14px 14px;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.oh-inv-mgmt-manage-card:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+.oh-inv-mgmt-manage-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oh-inv-mgmt-manage-card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f3057;
+}
+.oh-inv-mgmt-manage-badge {
+  background: #d97706;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  line-height: 1.5;
+}
+.oh-inv-mgmt-manage-card-desc {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* ── Animations ── */
+@keyframes oh-inv-mgmt-fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive: tablet/desktop ── */
+@media (min-width: 640px) {
+  .oh-inv-mgmt-app {
+    max-width: 600px;
+  }
+  .oh-inv-mgmt-stats {
+    gap: 14px;
+  }
+  .oh-inv-mgmt-stat-card {
+    padding: 16px 14px;
+  }
+  .oh-inv-mgmt-stat-value {
+    font-size: 26px;
+  }
+}
