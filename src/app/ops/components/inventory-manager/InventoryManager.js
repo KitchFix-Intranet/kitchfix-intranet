@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import CountSheet from "./CountSheet";
+import LocationSetup from "./LocationSetup";
 
 /**
  * InventoryManager.js — Main Wrapper (Two-Mode)
@@ -51,6 +52,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const [accountOpen, setAccountOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(true);
   const [sessionId, setSessionId] = useState(null);
+  const [manageView, setManageView] = useState(null); // null | "locations" | "health" | etc.
 
   // ── Bootstrap ──
   const loadBootstrap = useCallback(async (acct) => {
@@ -130,6 +132,26 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     }
   };
 
+  // ── Save Storage Locations (called from LocationSetup) ──
+  const handleSaveLocations = async (locationsList) => {
+    try {
+      const res = await fetch("/api/ops/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save-locations", account, locations: locationsList }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        // Reload bootstrap to get updated locations
+        await loadBootstrap(account);
+      } else {
+        showToast(json.error || "Save failed", "error");
+      }
+    } catch {
+      showToast("Network error", "error");
+    }
+  };
+
   // ── Loading ──
   if (loading && !data) {
     return (
@@ -161,7 +183,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     <div className="oh-inv-mgmt-header">
       <div className="oh-inv-mgmt-header-left">
         {screen !== "landing" ? (
-          <button className="oh-inv-mgmt-back" onClick={() => { setScreen("landing"); setSessionId(null); }}>
+          <button className="oh-inv-mgmt-back" onClick={() => { setScreen("landing"); setSessionId(null); setManageView(null); }}>
             <Icon d={icons.arrowLeft} size={18} color="#fff" />
           </button>
         ) : (
@@ -175,7 +197,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
           <Icon d={accountOpen ? icons.chevUp : icons.chevDown} size={12} color="#94a3b8" />
         </button>
         <span className="oh-inv-mgmt-header-sep">|</span>
-        <button className="oh-inv-mgmt-gear-btn" onClick={() => setScreen(screen === "manage" ? "landing" : "manage")}>
+        <button className="oh-inv-mgmt-gear-btn" onClick={() => { setScreen(screen === "manage" ? "landing" : "manage"); setManageView(null); }}>
           <Icon d={icons.gear} size={16} color="#fff" />
           {reviewCount > 0 && <span className="oh-inv-mgmt-gear-badge">{reviewCount}</span>}
         </button>
@@ -193,31 +215,50 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     </div>
   );
 
-  // ── Manage Screen (stubs) ──
-  const ManageScreen = () => (
-    <div className="oh-inv-mgmt-manage">
-      <div className="oh-inv-mgmt-manage-grid">
-        {[
-          { key: "health", label: "Catalog Health", desc: `${reviewCount} items need review`, badge: reviewCount },
-          { key: "history", label: "Count History", desc: "Past counts & drill-down" },
-          { key: "catalog", label: "Item Catalog", desc: `${stats.totalItems} items` },
-          { key: "print", label: "Print Count Sheets", desc: "PDF & Excel with QR codes" },
-          { key: "locations", label: "Storage Locations", desc: `${locations.length} locations` },
-          { key: "prices", label: "Price Dashboard", desc: "Trends & vendor comparison" },
-        ].map((item) => (
-          <button key={item.key} className="oh-inv-mgmt-manage-card"
-            onClick={() => showToast(`${item.label} — coming in Weeks 3-4`, "info")}>
-            <div className="oh-inv-mgmt-manage-card-top">
-              <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
-              {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
-            </div>
-            <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
-            <Icon d={icons.chevRight} size={14} color="#94a3b8" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }} />
-          </button>
-        ))}
+  // ── Manage Screen ──
+  const ManageScreen = () => {
+    // If a sub-view is selected, render it
+    if (manageView === "locations") {
+      return (
+        <LocationSetup
+          locations={locations}
+          account={account}
+          catalogItems={catalogItems}
+          onSave={handleSaveLocations}
+          onBack={() => setManageView(null)}
+          showToast={showToast}
+        />
+      );
+    }
+
+    return (
+      <div className="oh-inv-mgmt-manage">
+        <div className="oh-inv-mgmt-manage-grid">
+          {[
+            { key: "health", label: "Catalog Health", desc: `${reviewCount} items need review`, badge: reviewCount },
+            { key: "history", label: "Count History", desc: "Past counts & drill-down" },
+            { key: "catalog", label: "Item Catalog", desc: `${stats.totalItems} items` },
+            { key: "print", label: "Print Count Sheets", desc: "PDF & Excel with QR codes" },
+            { key: "locations", label: "Storage Locations", desc: `${locations.length} locations` },
+            { key: "prices", label: "Price Dashboard", desc: "Trends & vendor comparison" },
+          ].map((item) => (
+            <button key={item.key} className="oh-inv-mgmt-manage-card"
+              onClick={() => {
+                if (item.key === "locations") { setManageView("locations"); }
+                else { showToast(`${item.label} — coming in Weeks 3-4`, "info"); }
+              }}>
+              <div className="oh-inv-mgmt-manage-card-top">
+                <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
+                {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
+              </div>
+              <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
+              <Icon d={icons.chevRight} size={14} color="#94a3b8" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }} />
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ── Landing Screen ──
   const LandingScreen = () => (

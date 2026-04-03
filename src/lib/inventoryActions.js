@@ -2,7 +2,7 @@
  * inventoryActions.js — Inventory Manager Backend Handlers
  */
 
-import { SHEET_IDS, appendRowSA, appendRowsSA } from "@/lib/sheets";
+import { SHEET_IDS, readSheetSA, appendRowSA, appendRowsSA, updateRangeSA } from "@/lib/sheets";
 import {
   cachedRead, batchRead, invalidateCache,
   getAccountConfigs, getPeriods, getCurrentPeriod,
@@ -240,7 +240,108 @@ export async function handleAddItem(body) { return { success: false, error: "Wee
 export async function handleUpdateItem(body) { return { success: false, error: "Week 3" }; }
 export async function handleMergeItems(body) { return { success: false, error: "Week 3" }; }
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
-export async function handleSaveLocations(body) { return { success: false, error: "Week 3" }; }
+export async function handleSaveLocations({ account, locations, email }) {
+  try {
+    // Read current storage_locations to find row indices
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const existingRows = {};
+    rows.forEach((r, i) => {
+      if (r[1] === account) existingRows[r[0]] = i + 2;
+    });
+
+    const now = new Date().toISOString();
+    const savedIds = new Set();
+    const savedLocations = []; // track {locationId, name} for auto-assignment
+
+    for (const loc of locations) {
+      if (loc.locationId && existingRows[loc.locationId]) {
+        const rowNum = existingRows[loc.locationId];
+        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!A${rowNum}:H${rowNum}`, [[
+          loc.locationId, account, loc.name, "box", loc.sortOrder, "TRUE", email, now,
+        ]]);
+        savedIds.add(loc.locationId);
+        savedLocations.push({ locationId: loc.locationId, name: loc.name });
+      } else {
+        const locationId = generateId("loc");
+        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations", [
+          locationId, account, loc.name, "box", loc.sortOrder, "TRUE", email, now,
+        ]);
+        savedLocations.push({ locationId, name: loc.name });
+      }
+    }
+
+    // Mark removed locations as inactive
+    for (const [locId, rowNum] of Object.entries(existingRows)) {
+      if (!savedIds.has(locId)) {
+        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!F${rowNum}`, [["FALSE"]]);
+      }
+    }
+
+    // ── Auto-assign items with keyword locationIds ──
+    // AI cron stores keywords like "cooler", "freezer", "dry", "beverage", "supplies"
+    // Map those to real locationIds based on location names
+    const KEYWORD_PATTERNS = {
+      cooler:   ["cool", "refrig", "reach-in", "walk-in c"],
+      freezer:  ["freez", "frost"],
+      dry:      ["dry", "pantry", "shelf", "storage room"],
+      beverage: ["bev", "bar", "drink"],
+      supplies: ["supply", "suppli", "clean", "chem", "janitor", "paper"],
+    };
+
+    function matchKeywordToLocation(keyword) {
+      const patterns = KEYWORD_PATTERNS[keyword];
+      if (!patterns) return savedLocations[0]?.locationId || "";
+      const nameLower = savedLocations.map((l) => ({ ...l, lower: l.name.toLowerCase() }));
+      for (const pattern of patterns) {
+        const match = nameLower.find((l) => l.lower.includes(pattern));
+        if (match) return match.locationId;
+      }
+      return savedLocations[0]?.locationId || "";
+    }
+
+    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const catalogRows = catalogData.rows || [];
+    let assigned = 0;
+
+    for (let i = 0; i < catalogRows.length; i++) {
+      const r = catalogRows[i];
+      if (r[1] !== account) continue;
+      const currentLocId = r[5] || "";
+      // Check if locationId is a keyword (not a real loc_ UUID)
+      if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
+        const realLocId = matchKeywordToLocation(currentLocId);
+        if (realLocId) {
+          const rowNum = i + 2;
+          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[realLocId]]);
+          assigned++;
+        }
+      }
+      // Also assign items with empty locationId based on category
+      if (!currentLocId && r[3]) {
+        const cat = (r[3] || "").toLowerCase();
+        let keyword = "dry";
+        if (["food"].includes(cat)) keyword = "cooler"; // default food to cooler
+        if (["beverages"].includes(cat)) keyword = "beverage";
+        if (["packaging", "supplies"].includes(cat)) keyword = "supplies";
+        if (["snacks"].includes(cat)) keyword = "dry";
+        const realLocId = matchKeywordToLocation(keyword);
+        if (realLocId) {
+          const rowNum = i + 2;
+          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[realLocId]]);
+          assigned++;
+        }
+      }
+    }
+
+    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    console.log(`[save-locations] ${account}: ${savedLocations.length} locations saved, ${assigned} items auto-assigned`);
+    return { success: true, count: locations.length, assigned };
+  } catch (error) {
+    console.error("[inventoryActions] save-locations error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
 export async function handleSaveSortOrder(body) { return { success: false, error: "Week 3" }; }
 export async function handleAdminCorrect(body) { return { success: false, error: "Week 4" }; }
 export async function handleScan(body) { return { success: false, error: "Week 3" }; }
