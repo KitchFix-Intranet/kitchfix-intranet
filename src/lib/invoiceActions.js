@@ -1121,8 +1121,8 @@ const getPageData = (p) => typeof p === "string" ? p : p.data;
       return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
     };
 
-    const imageBlocks = pages.slice(0, 3).map((page) => {
-      const data = getPageData(page);
+const imageBlocks = pages.slice(0, 6).map((page) => {
+        const data = getPageData(page);
       const base64 = resizeForScan(data);
       const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
@@ -1156,7 +1156,40 @@ Rules:
 - For quantity and prices, use numbers only (no $ signs)
 - Category should be your best guess based on the item description
 - If a field is unclear, use null
-- Return ONLY the JSON object, no markdown or explanation`;
+- Return ONLY the JSON object, no markdown or explanation
+
+CRITICAL — SKIP THESE ROWS (they are NOT line items):
+- Summary rows: "GRAND TOTAL", "MAJOR CATEGORY SUMMARY", "CONTINUED", "SPLITS", any row that is a subtotal or category rollup
+- Boilerplate/disclaimer text about perishable commodities, restock fees, return policies, credit terms, collection fees
+- Weight notation lines like "Weight: 80.7" or "TOTAL = 37.7 ==>>>> 18.90 18.80" — these are supplementary detail for the line item above them, not separate items
+- Distribution/freight fee lines (e.g., "DISTRIBUTION FEE", "FREIGHT") — extract these as a single line item with category "other", not as multiple items
+- Column headers (ITEM NO, ORDERED, SHIPPED, DESCRIPTION, CASE PACK, UNIT, PRICE, AMOUNT)
+
+CATCH-WEIGHT ITEMS (marked with *CS or *EA on Kuna/distributor invoices):
+- These items are priced PER POUND, not per case. The PRICE column shows $/lb and the AMOUNT column shows the extended price based on actual delivered weight.
+- For catch-weight items: use the AMOUNT column as extendedPrice, use the PRICE column as unitPrice (per lb), and set unit to "lb".
+- quantity for catch-weight items = the weight shown (e.g., "Weight: 80.7" means qty 80.7 lb)
+- If the weight line is not clearly readable, calculate: quantity = extendedPrice / unitPrice
+
+QUANTITY RULES:
+- Use the SHIPPED column, not the ORDERED column (shipped = what was actually delivered)
+- If ordered and shipped differ, always use shipped quantity
+
+UNIT RULES — always use "case" as the default unit for food service invoices unless:
+- Item is marked *EA → use "each"
+- Item is catch-weight *CS → use "lb" (see above)
+- Item is clearly sold per pound with no case pack
+
+Unit disambiguation — price reasonableness check:
+- $15+ per "oz" is likely per "each" or per "jar" or per "bottle"
+- $100+ per "lb" is likely per "case"
+- $50+ per "gal" for a non-bulk item is likely per "case"
+- Use context from other line items to calibrate. If most items are priced per case, a single item at a case-like price is probably per case.
+- Normalize abbreviations: cs = case, ea = each, gal = gallon, bx = box, bg = bag, pk = pack
+
+DUPLICATE DETECTION:
+- Multi-page invoices may show the same header/boilerplate on each page. Do NOT extract the same item twice.
+- If you see identical item numbers or descriptions across pages, include only one entry with the correct quantity.`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

@@ -614,6 +614,85 @@ export async function POST(request) {
       });
     }
 
+    // ── sc-config-update: update prices and deactivate services ──
+    if (action === "sc-config-update") {
+      const { accountKey, changes } = body;
+      if (!accountKey || !changes?.length) {
+        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+      }
+
+      const { headers, rows } = await readSheetSA(SHEET_IDS.HUB, TABS.CONFIG);
+      const h = {};
+      headers.forEach((name, i) => { h[String(name).trim()] = i; });
+
+      let updated = 0;
+      for (const change of changes) {
+        const rowIdx = rows.findIndex(r =>
+          String(r[h["AccountKey"]] || "").trim() === accountKey &&
+          String(r[h["GroupName"]] || "").trim() === change.groupName &&
+          String(r[h["ServiceName"]] || "").trim() === change.serviceName
+        );
+        if (rowIdx === -1) continue;
+        const sheetRow = rowIdx + 2;
+
+        if (change.type === "price") {
+          const priceCol = colLetter(h["PricePerPlate"]);
+          await updateRangeSA(SHEET_IDS.HUB, `'${TABS.CONFIG}'!${priceCol}${sheetRow}`, [[change.to]]);
+          updated++;
+        }
+        if (change.type === "deactivate") {
+          const activeCol = colLetter(h["Active"]);
+          await updateRangeSA(SHEET_IDS.HUB, `'${TABS.CONFIG}'!${activeCol}${sheetRow}`, [["FALSE"]]);
+          updated++;
+        }
+      }
+
+      const auditRow = [new Date().toISOString(), email, userName, accountKey, "config_update", JSON.stringify(changes), "success"];
+      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
+
+      return NextResponse.json({ success: true, updated });
+    }
+
+    // ── sc-config-add: add a new service to an account ──
+    if (action === "sc-config-add") {
+      const { accountKey, groupName, serviceName, price, taxFree } = body;
+      if (!accountKey || !groupName || !serviceName) {
+        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+      }
+
+      const configRows = await loadServiceConfig();
+      const acctRows = configRows.filter(r => r.accountKey === accountKey);
+      if (!acctRows.length) {
+        return NextResponse.json({ success: false, error: "Account not found" }, { status: 404 });
+      }
+
+      const { spreadsheetId, category, metaColCount } = acctRows[0];
+      const maxColIndex = Math.max(...acctRows.map(r => r.serviceColIndex));
+      const nextColIndex = maxColIndex + 1;
+      const maxSortOrder = Math.max(...acctRows.map(r => r.sortOrder), 0);
+
+      const newRow = [accountKey, category, spreadsheetId, groupName, serviceName, price || 0, nextColIndex, metaColCount, taxFree ? "TRUE" : "FALSE", maxSortOrder + 10, "TRUE"];
+      await appendRowSA(SHEET_IDS.HUB, TABS.CONFIG, newRow);
+
+      const auditRow = [new Date().toISOString(), email, userName, accountKey, "config_add", `${groupName}/${serviceName}@${price}`, "success"];
+      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
+
+      return NextResponse.json({ success: true, colIndex: nextColIndex });
+    }
+
+    // ── sc-config-request: site lead submits change request ──
+    if (action === "sc-config-request") {
+      const { accountKey, requestType, groupName, serviceName, newPrice, notes } = body;
+      if (!accountKey || !requestType) {
+        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+      }
+
+      const requestRow = [new Date().toISOString(), email, userName, accountKey, "config_request", `${requestType}: ${groupName || ""}/${serviceName || ""} ${newPrice ? "@" + newPrice : ""} ${notes || ""}`, "pending"];
+      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, requestRow);
+
+      return NextResponse.json({ success: true });
+    }
+
     return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
   } catch (error) {
     console.error("[ServiceCalendar POST]", error.message);

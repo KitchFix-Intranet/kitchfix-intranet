@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import DayDetail from "./DayDetail";
+import ServiceConfig from "./ServiceConfig";
+
+const ADMIN_EMAILS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 
 const GREEN = "#0F6E56";
 const AMBER = "#EF9F27";
@@ -84,6 +87,8 @@ export default function ServiceCalendar({ showToast, session }) {
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [showConfig, setShowConfig] = useState(false);
   const focusRef = useRef(null);
 
   // Bulk mode
@@ -101,17 +106,17 @@ export default function ServiceCalendar({ showToast, session }) {
   }, [showToast]);
 
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
-  const loadData = useCallback(() => {
+  useEffect(() => {
     if (!selectedAccount) return;
+    const controller = new AbortController();
     setLoading(true); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
-    fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`)
+    fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (d.success) setData(d); else { showToast(d.error || "Failed", "error"); setData(null); } })
-      .catch(() => { showToast("Network error", "error"); setData(null); })
-      .finally(() => setLoading(false));
-  }, [selectedAccount, mk, showToast]);
-
-  useEffect(() => { loadData(); }, [loadData]);
+      .catch(e => { if (e.name !== "AbortError") { showToast("Network error", "error"); setData(null); } })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [selectedAccount, mk, showToast, reloadKey]);
 
   useEffect(() => {
     if (viewMode !== "year" || !selectedAccount) return;
@@ -167,10 +172,10 @@ export default function ServiceCalendar({ showToast, session }) {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
       const result = await res.json();
-      if (result.success) { showToast(`Actuals saved for ${day.date}`, "success"); loadData(); }
+      if (result.success) { showToast(`Actuals saved for ${day.date}`, "success"); setReloadKey(k => k + 1); }
       else showToast(result.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); } finally { setSaving(false); }
-  }, [data, showToast, loadData]);
+  }, [data, showToast]);
 
   const handleConfirmAsProjected = useCallback(async (day) => {
     if (!data?.account || !data?.serviceGroups) return;
@@ -180,10 +185,10 @@ export default function ServiceCalendar({ showToast, session }) {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
       const result = await res.json();
-      if (result.success) { showToast("Confirmed as projected", "success"); loadData(); }
+      if (result.success) { showToast("Confirmed as projected", "success"); setReloadKey(k => k + 1); }
       else showToast(result.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); } finally { setSaving(false); }
-  }, [data, showToast, loadData]);
+  }, [data, showToast]);
 
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async () => {
@@ -210,8 +215,8 @@ export default function ServiceCalendar({ showToast, session }) {
     setSaving(false);
     showToast(`Saved actuals for ${successCount} of ${bulkSelected.size} days`, "success");
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
-    loadData();
-  }, [data, dayMap, bulkSelected, bulkValues, showToast, loadData]);
+    setReloadKey(k => k + 1);
+  }, [data, dayMap, bulkSelected, bulkValues, showToast]);
 
   // Bulk confirm as projected for all selected
   const handleBulkConfirm = useCallback(async () => {
@@ -233,8 +238,8 @@ export default function ServiceCalendar({ showToast, session }) {
     setSaving(false);
     showToast(`Confirmed ${successCount} days as projected`, "success");
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
-    loadData();
-  }, [data, dayMap, bulkSelected, showToast, loadData]);
+    setReloadKey(k => k + 1);
+  }, [data, dayMap, bulkSelected, showToast]);
 
   const toggleBulkSelect = useCallback((dk) => {
     setBulkSelected(prev => { const next = new Set(prev); if (next.has(dk)) next.delete(dk); else next.add(dk); return next; });
@@ -278,6 +283,9 @@ export default function ServiceCalendar({ showToast, session }) {
           <div className="sc-header-account">
             <AccountDropdown accounts={accounts} value={selectedAccount} onChange={setSelectedAccount} />
             {category && <span className={`sc-cat sc-cat--${category.toLowerCase()}`}>{category}</span>}
+            <button className="sc-cfg-gear" onClick={() => setShowConfig(true)} title="Service config">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+            </button>
           </div>
           <div className="sc-mode-group">
             {["year","month"].map(v => (
@@ -600,6 +608,22 @@ export default function ServiceCalendar({ showToast, session }) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Service config overlay */}
+      {showConfig && data?.serviceGroups && (
+        <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowConfig(false); }}>
+          <div className="sc-overlay-card">
+            <ServiceConfig
+              account={data.account}
+              serviceGroups={data.serviceGroups}
+              session={session}
+              showToast={showToast}
+              onClose={() => setShowConfig(false)}
+              onConfigChanged={() => { setShowConfig(false); setReloadKey(k => k + 1); }}
+            />
           </div>
         </div>
       )}

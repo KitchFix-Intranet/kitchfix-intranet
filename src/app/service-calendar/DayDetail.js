@@ -147,9 +147,9 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
     return (
       <div key={svc.colIndex} className="sc-day-row">
-        <div className="sc-day-row-left">
+<div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
-          <span className="sc-day-row-proj-label">Proj: {projVal}</span>
+<span className="sc-day-row-proj-label">Proj: {projVal} · {fmtPrice(svc.price)}</span>
         </div>
         <div className="sc-day-row-right">
           <input type="text" inputMode="numeric" pattern="[0-9]*"
@@ -264,7 +264,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
             <div key={group.name} className="sc-day-group">
               <div className="sc-day-group-header">
                 <span className="sc-day-group-name">{group.name}</span>
-                <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}/plate</span>
+<span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}</span>
               </div>
 
               {activeSvcs.map(svc => renderServiceRow(svc))}
