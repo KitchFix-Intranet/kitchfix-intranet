@@ -17,6 +17,7 @@ import {
   handleCountSubmit,
   handleAddItem,
   handleUpdateItem,
+  handleBatchMoveItems,
   handleMergeItems,
   handleResolveQueue,
   handleSaveLocations,
@@ -71,6 +72,7 @@ export async function POST(request) {
       case "submit": return NextResponse.json(await handleCountSubmit(body));
       case "add-item": return NextResponse.json(await handleAddItem(body));
       case "update-item": return NextResponse.json(await handleUpdateItem(body));
+      case "batch-move-items": return NextResponse.json(await handleBatchMoveItems(body));
       case "merge-items": return NextResponse.json(await handleMergeItems(body));
       case "resolve-queue": return NextResponse.json(await handleResolveQueue(body));
       case "save-locations": return NextResponse.json(await handleSaveLocations(body));

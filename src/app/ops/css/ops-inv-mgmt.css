@@ -294,6 +294,190 @@
 .oh-inv-mgmt-count-nav-next:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ═══════════════════════════════════════
+   FIRST-TIME EXPERIENCE
+   ═══════════════════════════════════════ */
+
+.oh-inv-mgmt-ftux-hero {
+  text-align: center; padding: 20px 16px 8px;
+}
+.oh-inv-mgmt-ftux-sparkle {
+  width: 56px; height: 56px; border-radius: 14px; background: #fffbeb;
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;
+}
+.oh-inv-mgmt-ftux-title {
+  font-size: 20px; font-weight: 800; color: #0f3057; margin: 0 0 8px; line-height: 1.3;
+}
+.oh-inv-mgmt-ftux-sub {
+  font-size: 14px; color: #64748b; margin: 0; line-height: 1.6; max-width: 400px;
+  margin-left: auto; margin-right: auto;
+}
+
+.oh-inv-mgmt-ftux-checklist {
+  margin-top: 20px;
+}
+.oh-inv-mgmt-ftux-checklist-label {
+  font-size: 13px; color: #94a3b8; font-weight: 500; margin: 0 0 12px; padding: 0 4px;
+}
+
+.oh-inv-mgmt-ftux-step {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  margin-bottom: 8px; cursor: pointer; text-align: left; width: 100%;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+}
+.oh-inv-mgmt-ftux-step:hover:not(.done):not(:disabled) {
+  border-color: #d97706; background: #fffbeb;
+}
+.oh-inv-mgmt-ftux-step.done {
+  background: #f0fdf4; border-color: #bbf7d0; cursor: default; opacity: 0.8;
+}
+.oh-inv-mgmt-ftux-step:disabled { cursor: default; }
+
+.oh-inv-mgmt-ftux-step-check {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.oh-inv-mgmt-ftux-step-circle {
+  width: 18px; height: 18px; border-radius: 99px; border: 2px solid #e2e8f0;
+  display: block;
+}
+.oh-inv-mgmt-ftux-step.done .oh-inv-mgmt-ftux-step-circle { display: none; }
+
+.oh-inv-mgmt-ftux-step-content { flex: 1; min-width: 0; }
+.oh-inv-mgmt-ftux-step-title {
+  font-size: 14px; font-weight: 600; color: #0f3057; display: block;
+}
+.oh-inv-mgmt-ftux-step-meta {
+  font-size: 12px; color: #94a3b8; display: block; margin-top: 2px; line-height: 1.4;
+}
+
+.oh-inv-mgmt-ftux-skip {
+  display: block; margin: 16px auto 0; background: none; border: none;
+  color: #94a3b8; font-size: 12px; cursor: pointer; font-family: inherit;
+  padding: 8px; transition: color 0.15s;
+}
+.oh-inv-mgmt-ftux-skip:hover { color: #d97706; }
+
+/* ═══════════════════════════════════════
+   ITEM PLACEMENT REVIEW
+   ═══════════════════════════════════════ */
+
+.oh-inv-mgmt-placement { padding: 16px; }
+.oh-inv-mgmt-placement-header { margin-bottom: 16px; }
+.oh-inv-mgmt-placement-title {
+  font-size: 16px; font-weight: 700; color: #0f3057; margin: 0 0 6px; line-height: 1.3;
+}
+.oh-inv-mgmt-placement-sub {
+  font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;
+}
+
+.oh-inv-mgmt-placement-groups { display: flex; flex-direction: column; gap: 8px; }
+
+.oh-inv-mgmt-placement-group {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+}
+.oh-inv-mgmt-placement-group-header {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px; width: 100%;
+  background: none; border: none; cursor: pointer; text-align: left; font-family: inherit;
+}
+.oh-inv-mgmt-placement-group-name { flex: 1; font-size: 14px; font-weight: 600; color: #0f3057; }
+.oh-inv-mgmt-placement-group-count { font-size: 11px; color: #94a3b8; }
+
+.oh-inv-mgmt-placement-items { border-top: 1px solid #f1f5f9; }
+
+.oh-inv-mgmt-placement-item {
+  border-bottom: 1px solid #f8fafc;
+}
+.oh-inv-mgmt-placement-item.moved {
+  background: #f0fdf4;
+}
+.oh-inv-mgmt-placement-item-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer;
+}
+.oh-inv-mgmt-placement-item-row:hover { background: #f8fafc; }
+.oh-inv-mgmt-placement-item-name {
+  flex: 1; font-size: 13px; color: #0f3057; font-weight: 500;
+}
+.oh-inv-mgmt-placement-item-price {
+  font-size: 12px; color: #94a3b8;
+}
+
+.oh-inv-mgmt-placement-picker {
+  padding: 6px 14px 10px; background: #f8fafc;
+}
+.oh-inv-mgmt-placement-picker-label {
+  font-size: 11px; color: #94a3b8; font-weight: 600; display: block; margin-bottom: 6px;
+}
+.oh-inv-mgmt-placement-picker-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.oh-inv-mgmt-placement-picker-chip {
+  padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
+  color: #0f3057; font-size: 11px; font-weight: 500; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.oh-inv-mgmt-placement-picker-chip:hover {
+  border-color: #d97706; background: #fffbeb; color: #d97706;
+}
+
+.oh-inv-mgmt-placement-footer {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+}
+.oh-inv-mgmt-placement-move-count {
+  display: block; text-align: center; font-size: 12px; color: #16A34A;
+  font-weight: 600; margin-bottom: 8px;
+}
+.oh-inv-mgmt-placement-buttons { display: flex; gap: 8px; }
+.oh-inv-mgmt-placement-back {
+  padding: 12px 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+  color: #0f3057; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-mgmt-placement-confirm {
+  flex: 1; padding: 12px; background: #0f3057; color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-mgmt-placement-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════
+   QUICK TOUR
+   ═══════════════════════════════════════ */
+
+.oh-inv-mgmt-tour {
+  padding: 40px 24px 24px; display: flex; flex-direction: column;
+  align-items: center; min-height: 40vh; justify-content: center;
+}
+.oh-inv-mgmt-tour-card {
+  text-align: center; max-width: 320px; animation: oh-inv-mgmt-fadeIn 0.25s ease;
+}
+.oh-inv-mgmt-tour-icon { margin-bottom: 20px; }
+.oh-inv-mgmt-tour-title {
+  font-size: 18px; font-weight: 700; color: #0f3057; margin: 0 0 8px;
+}
+.oh-inv-mgmt-tour-desc {
+  font-size: 14px; color: #64748b; margin: 0; line-height: 1.6;
+}
+
+.oh-inv-mgmt-tour-dots {
+  display: flex; gap: 6px; margin: 24px 0;
+}
+.oh-inv-mgmt-tour-dot {
+  width: 8px; height: 8px; border-radius: 99px; background: #e2e8f0;
+  transition: background 0.2s;
+}
+.oh-inv-mgmt-tour-dot.active { background: #d97706; }
+
+.oh-inv-mgmt-tour-actions { display: flex; gap: 8px; width: 100%; max-width: 320px; }
+.oh-inv-mgmt-tour-back {
+  padding: 12px 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+  color: #0f3057; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-mgmt-tour-next {
+  flex: 1; padding: 12px; background: #0f3057; color: #fff; border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: opacity 0.15s;
+}
+.oh-inv-mgmt-tour-next:hover { opacity: 0.92; }
+
+/* ═══════════════════════════════════════
    LOCATION SETUP
    ═══════════════════════════════════════ */
 
@@ -393,6 +577,36 @@
   font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .oh-inv-mgmt-loc-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════
+   BUSY OVERLAY
+   ═══════════════════════════════════════ */
+
+.oh-inv-mgmt-busy-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+  background: rgba(15, 48, 87, 0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  animation: oh-inv-mgmt-fadeIn 0.2s ease;
+}
+.oh-inv-mgmt-busy-card {
+  background: #fff; border-radius: 16px; padding: 32px 28px; text-align: center;
+  max-width: 300px; width: 90%; box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+}
+.oh-inv-mgmt-busy-spinner {
+  width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: #d97706;
+  border-radius: 50%; margin: 0 auto 16px;
+  animation: oh-inv-mgmt-spin 0.8s linear infinite;
+}
+.oh-inv-mgmt-busy-title {
+  font-size: 16px; font-weight: 700; color: #0f3057; margin: 0 0 6px;
+}
+.oh-inv-mgmt-busy-sub {
+  font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;
+}
+
+@keyframes oh-inv-mgmt-spin {
+  to { transform: rotate(360deg); }
+}
 
 /* ── Animations ── */
 @keyframes oh-inv-mgmt-fadeIn {

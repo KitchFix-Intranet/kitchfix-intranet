@@ -11,6 +11,14 @@ import {
 
 const INVENTORY_SHEET_ID = process.env.INVENTORY_SHEET_ID;
 
+// Account labels in item_catalog may be short ("STL - MO") while bootstrap
+// uses full labels ("STL - MO - St Louis Cardinals"). Match flexibly.
+function accountMatch(rowAccount, activeAccount) {
+  if (!rowAccount || !activeAccount) return false;
+  if (rowAccount === activeAccount) return true;
+  return activeAccount.startsWith(rowAccount + " -");
+}
+
 // ═══════════════════════════════════════
 // BOOTSTRAP
 // ═══════════════════════════════════════
@@ -31,7 +39,7 @@ export async function handleInventoryBootstrap({ account }) {
 
     // Full catalog for this account
     const catalogItems = (inv.item_catalog?.rows || [])
-      .filter((r) => r[1] === activeAccount && r[11] !== "FALSE")
+      .filter((r) => accountMatch(r[1], activeAccount) && r[11] !== "FALSE")
       .map((r) => ({
         itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized",
         unit: r[4] || "EA", locationId: r[5] || "",
@@ -49,7 +57,7 @@ export async function handleInventoryBootstrap({ account }) {
 
     // Storage locations
     const locations = (inv.storage_locations?.rows || [])
-      .filter((r) => r[1] === activeAccount && r[5] !== "FALSE")
+      .filter((r) => accountMatch(r[1], activeAccount) && r[5] !== "FALSE")
       .sort((a, b) => (parseInt(a[4]) || 0) - (parseInt(b[4]) || 0))
       .map((r) => ({
         locationId: r[0], name: r[2] || "", icon: r[3] || "box",
@@ -58,7 +66,7 @@ export async function handleInventoryBootstrap({ account }) {
 
     // Count sessions for this account
     const sessions = (inv.count_sessions?.rows || [])
-      .filter((r) => r[1] === activeAccount)
+      .filter((r) => accountMatch(r[1], activeAccount))
       .sort((a, b) => new Date(b[7] || b[4] || 0) - new Date(a[7] || a[4] || 0));
 
     const lastSubmitted = sessions.find((r) => r[5] === "submitted" || r[5] === "corrected");
@@ -112,11 +120,11 @@ export async function handleInventoryBootstrap({ account }) {
 
     // Review queue count
     const reviewCount = (inv.review_queue?.rows || [])
-      .filter((r) => r[5] === activeAccount && r[9] === "pending").length;
+      .filter((r) => accountMatch(r[5], activeAccount) && r[9] === "pending").length;
 
     // Price movers
     const priceRows = (inv.price_history?.rows || [])
-      .filter((r) => r[1] === activeAccount)
+      .filter((r) => accountMatch(r[1], activeAccount))
       .sort((a, b) => new Date(b[6] || b[4] || 0) - new Date(a[6] || a[4] || 0));
     const priceByItem = {};
     priceRows.forEach((r) => {
@@ -219,7 +227,7 @@ export async function handleCatalogGet({ account }) {
   try {
     const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases"]);
     const items = (inv.item_catalog?.rows || [])
-      .filter((r) => r[1] === account && r[11] !== "FALSE")
+      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE")
       .map((r) => ({
         itemId: r[0], name: r[2], category: r[3], unit: r[4],
         locationId: r[5], primaryVendor: r[6], lastPrice: parseNum(r[7]),
@@ -238,6 +246,31 @@ export async function handleCatalogGet({ account }) {
 
 export async function handleAddItem(body) { return { success: false, error: "Week 3" }; }
 export async function handleUpdateItem(body) { return { success: false, error: "Week 3" }; }
+
+export async function handleBatchMoveItems({ account, items }) {
+  // items: [{itemId, newLocationId}]
+  try {
+    if (!items || items.length === 0) return { success: true, moved: 0 };
+    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const rows = catalogData.rows || [];
+    let moved = 0;
+    for (const move of items) {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i][0] === move.itemId && accountMatch(rows[i][1], account)) {
+          const rowNum = i + 2;
+          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[move.newLocationId]]);
+          moved++;
+          break;
+        }
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true, moved };
+  } catch (error) {
+    console.error("[inventoryActions] batch-move error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
 export async function handleMergeItems(body) { return { success: false, error: "Week 3" }; }
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
 export async function handleSaveLocations({ account, locations, email }) {
@@ -246,7 +279,7 @@ export async function handleSaveLocations({ account, locations, email }) {
     const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
     const existingRows = {};
     rows.forEach((r, i) => {
-      if (r[1] === account) existingRows[r[0]] = i + 2;
+      if (accountMatch(r[1], account)) existingRows[r[0]] = i + 2;
     });
 
     const now = new Date().toISOString();
@@ -305,7 +338,7 @@ export async function handleSaveLocations({ account, locations, email }) {
 
     for (let i = 0; i < catalogRows.length; i++) {
       const r = catalogRows[i];
-      if (r[1] !== account) continue;
+      if (!accountMatch(r[1], account)) continue;
       const currentLocId = r[5] || "";
       // Check if locationId is a keyword (not a real loc_ UUID)
       if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {

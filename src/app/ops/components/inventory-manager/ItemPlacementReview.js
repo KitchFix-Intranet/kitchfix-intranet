@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import CountSheet from "./CountSheet";
 import LocationSetup from "./LocationSetup";
 import ItemPlacementReview from "./ItemPlacementReview";
@@ -57,8 +57,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const [manageView, setManageView] = useState(null);
   const [setupStep, setSetupStep] = useState(null); // null | "layout" | "placement" | "tour"
   const [setupState, setSetupState] = useState({ items: false, layout: false, tour: false });
-  const [busy, setBusy] = useState(null); // null | { title, sub }
-  const initRef = useRef(false);
 
   // ── Bootstrap ──
   const loadBootstrap = useCallback(async (acct) => {
@@ -69,37 +67,30 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       const json = await res.json();
       if (json.success) {
         setData(json);
-        const resolvedAccount = acct || json.account || "";
-        // Only set account if this is the initial load (no account selected yet)
-        if (!acct && json.account && !initRef.current) {
-          setAccount(json.account);
-        }
-        // Auto-check items step (reads fresh from localStorage)
-        if (json.catalogStats?.totalItems > 0) {
-          const currentSetup = getSetupState(resolvedAccount);
-          if (!currentSetup.items) {
-            const next = { ...currentSetup, items: true };
-            setSetupState(next);
-            saveSetupState(resolvedAccount, next);
-          }
-        }
-        initRef.current = true;
+        if (!acct && json.account) setAccount(json.account);
       } else { showToast(json.error || "Failed to load", "error"); }
     } catch { showToast("Network error", "error"); }
     finally { setLoading(false); }
   }, [showToast]);
 
-  // Initial load on mount
-  useEffect(() => { loadBootstrap(""); }, []); // eslint-disable-line
+  useEffect(() => { loadBootstrap(account); }, [account]); // eslint-disable-line
 
-  // Reload when account explicitly changes (not on mount)
+  // Load setup state when account changes
   useEffect(() => {
-    if (account && initRef.current) {
-      loadBootstrap(account);
+    if (account) {
       const ss = getSetupState(account);
       setSetupState(ss);
     }
-  }, [account]); // eslint-disable-line
+  }, [account]);
+
+  // Auto-check items step if catalog has items
+  useEffect(() => {
+    if (data?.catalogStats?.totalItems > 0 && !setupState.items) {
+      const next = { ...setupState, items: true };
+      setSetupState(next);
+      saveSetupState(account, next);
+    }
+  }, [data?.catalogStats?.totalItems]); // eslint-disable-line
 
   const switchAccount = (label) => {
     setAccount(label); setAccountOpen(false); setScreen("landing");
@@ -150,38 +141,22 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   };
 
   const handleSaveLocations = async (locationsList) => {
-    setBusy({ title: "Setting up your kitchen...", sub: "Organizing items into locations — this takes about a minute" });
     try {
       const res = await fetch("/api/ops/inventory", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "save-locations", account, locations: locationsList }),
       });
       const json = await res.json();
-      if (json.success) {
-        const msg = json.assigned > 0 ? `${locationsList.length} locations saved · ${json.assigned} items organized` : `${locationsList.length} locations saved`;
-        showToast(msg, "success");
-        await loadBootstrap(account);
-      } else showToast(json.error || "Save failed", "error");
+      if (json.success) await loadBootstrap(account);
+      else showToast(json.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); }
-    finally { setBusy(null); }
   };
 
   const handleBatchMoveItems = async (movedItems) => {
-    // Mark layout step as complete (reads fresh from localStorage to avoid stale closure)
-    const markLayoutDone = () => {
-      const fresh = getSetupState(account);
-      const next = { ...fresh, layout: true };
-      setSetupState(next);
-      saveSetupState(account, next);
-      setSetupStep(null);
-    };
-
     if (movedItems.length === 0) {
-      markLayoutDone();
-      showToast("Kitchen layout confirmed", "success");
+      completeSetupStep("layout");
       return;
     }
-    setBusy({ title: "Updating item locations...", sub: `Moving ${movedItems.length} item${movedItems.length !== 1 ? "s" : ""} to their new spots` });
     try {
       const res = await fetch("/api/ops/inventory", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -189,12 +164,11 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       });
       const json = await res.json();
       if (json.success) {
-        showToast(`${movedItems.length} item${movedItems.length !== 1 ? "s" : ""} moved`, "success");
+        showToast(`${movedItems.length} item${movedItems.length !== 1 ? "s" : ""} updated`, "success");
         await loadBootstrap(account);
       }
     } catch { showToast("Save failed", "error"); }
-    finally { setBusy(null); }
-    markLayoutDone();
+    completeSetupStep("layout");
   };
 
   // ── Loading ──
@@ -309,11 +283,9 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       return <LocationSetup locations={locations} account={account} catalogItems={catalogItems}
         onSave={async (locs) => {
           await handleSaveLocations(locs);
-          // Mark layout as done and go to placement review
-          const next = { ...getSetupState(account), layout: true };
-          setSetupState(next);
-          saveSetupState(account, next);
-          setSetupStep("placement");
+          completeSetupStep("layout");
+          // If layout done but placement not reviewed, go to placement next
+          if (!setupState.layout) setSetupStep("placement");
         }}
         onBack={() => setSetupStep(null)} showToast={showToast} />;
     }
@@ -525,17 +497,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
           onFinish={() => { showToast("Count Review — coming next session", "info"); setScreen("landing"); }}
           onBack={() => { setScreen("landing"); setSessionId(null); }}
           showToast={showToast} />
-      )}
-
-      {/* ── Busy Overlay ── */}
-      {busy && (
-        <div className="oh-inv-mgmt-busy-overlay">
-          <div className="oh-inv-mgmt-busy-card">
-            <div className="oh-inv-mgmt-busy-spinner" />
-            <h3 className="oh-inv-mgmt-busy-title">{busy.title}</h3>
-            <p className="oh-inv-mgmt-busy-sub">{busy.sub}</p>
-          </div>
-        </div>
       )}
     </div>
   );
