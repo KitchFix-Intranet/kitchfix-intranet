@@ -37,10 +37,11 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
   const account = searchParams.get("account") || "";
+  const fresh = searchParams.get("fresh") === "true";
 
   try {
     switch (action) {
-      case "bootstrap": return NextResponse.json(await handleInventoryBootstrap({ account }));
+      case "bootstrap": return NextResponse.json(await handleInventoryBootstrap({ account, fresh }));
       case "catalog": return NextResponse.json(await handleCatalogGet({ account }));
       case "history": return NextResponse.json(await handleHistoryGet({ account }));
       case "review-queue": return NextResponse.json(await handleReviewQueueGet({ account }));

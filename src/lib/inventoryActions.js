@@ -23,7 +23,7 @@ function accountMatch(rowAccount, activeAccount) {
 // BOOTSTRAP
 // ═══════════════════════════════════════
 
-export async function handleInventoryBootstrap({ account }) {
+export async function handleInventoryBootstrap({ account, fresh = false }) {
   try {
     const [accounts, currentPeriod, allPeriods] = await Promise.all([
       getAccountConfigs(), getCurrentPeriod(), getPeriods(),
@@ -31,11 +31,11 @@ export async function handleInventoryBootstrap({ account }) {
 
     const activeAccount = account || accounts[0]?.label || "";
 
-    // Read inventory tabs in parallel
+    // Read inventory tabs in parallel (fresh=true bypasses cache after save)
     const inv = await batchRead(INVENTORY_SHEET_ID, [
       "item_catalog", "storage_locations", "count_sessions", "count_items",
       "review_queue", "price_history",
-    ]);
+    ], { fresh });
 
     // Full catalog for this account
     const catalogItems = (inv.item_catalog?.rows || [])
@@ -302,7 +302,7 @@ export async function handleSaveLocations({ account, locations, email }) {
       } else {
         const locationId = generateId("loc");
         newIdMap[loc.name] = locationId; // for sub-zone parent resolution
-        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations", [
+        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
           locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, "", loc.color || "",
         ]);
@@ -312,10 +312,12 @@ export async function handleSaveLocations({ account, locations, email }) {
 
     // Second pass: save sub-zones (parentLocationId !== null)
     const subZones = locations.filter((l) => l.parentLocationId);
+    console.log(`[save-locations] ${account}: ${topLevel.length} zones, ${subZones.length} sub-zones to save`);
     for (const loc of subZones) {
       // Resolve parent ID (might be a new zone that just got a real ID)
       let parentId = loc.parentLocationId;
       if (!parentId && loc.parentName) parentId = newIdMap[loc.parentName] || "";
+      console.log(`[save-locations] Sub-zone "${loc.name}" → parent: ${parentId}`);
 
       if (loc.locationId && existingRows[loc.locationId]) {
         const rowNum = existingRows[loc.locationId];
@@ -326,16 +328,20 @@ export async function handleSaveLocations({ account, locations, email }) {
         savedIds.add(loc.locationId);
       } else {
         const locationId = generateId("loc");
-        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations", [
+        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
           locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, parentId, loc.color || "",
         ]);
+        savedIds.add(locationId); // Track new sub-zones too
+        console.log(`[save-locations] Appended sub-zone ${locationId} "${loc.name}" parent=${parentId}`);
       }
     }
 
-    // Mark removed locations as inactive (only if they have no items)
+    // Mark removed locations as inactive
+    // Only deactivate rows that exist in sheet but weren't in our save payload
     for (const [locId, rowNum] of Object.entries(existingRows)) {
       if (!savedIds.has(locId)) {
+        console.log(`[save-locations] Deactivating removed location: ${locId} at row ${rowNum}`);
         await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!F${rowNum}`, [["FALSE"]]);
       }
     }
@@ -363,25 +369,42 @@ export async function handleSaveLocations({ account, locations, email }) {
     const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
     const catalogRows = catalogData.rows || [];
     let assigned = 0;
+    let needsAssignment = false;
 
+    // Quick check: are there any items that need auto-assignment?
     for (let i = 0; i < catalogRows.length; i++) {
       const r = catalogRows[i];
       if (!accountMatch(r[1], account)) continue;
       const currentLocId = r[5] || "";
-      if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
-        const realLocId = matchKeywordToLocation(currentLocId);
-        if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+      if ((currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) || (!currentLocId && r[3])) {
+        needsAssignment = true; break;
       }
-      if (!currentLocId && r[3]) {
-        const cat = (r[3] || "").toLowerCase();
-        let keyword = "dry";
-        if (["food"].includes(cat)) keyword = "cooler";
-        if (["beverages"].includes(cat)) keyword = "beverage";
-        if (["packaging", "supplies"].includes(cat)) keyword = "supplies";
-        if (["snacks"].includes(cat)) keyword = "dry";
-        const realLocId = matchKeywordToLocation(keyword);
-        if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+    }
+
+    if (needsAssignment) {
+      console.log(`[save-locations] Running auto-assign for ${account}...`);
+      for (let i = 0; i < catalogRows.length; i++) {
+        const r = catalogRows[i];
+        if (!accountMatch(r[1], account)) continue;
+        const currentLocId = r[5] || "";
+        if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
+          const realLocId = matchKeywordToLocation(currentLocId);
+          if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+        }
+        if (!currentLocId && r[3]) {
+          const cat = (r[3] || "").toLowerCase();
+          let keyword = "dry";
+          if (["food"].includes(cat)) keyword = "cooler";
+          if (["beverages"].includes(cat)) keyword = "beverage";
+          if (["packaging", "supplies"].includes(cat)) keyword = "supplies";
+          if (["snacks"].includes(cat)) keyword = "dry";
+          const realLocId = matchKeywordToLocation(keyword);
+          if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+        }
       }
+      invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    } else {
+      console.log(`[save-locations] No items need auto-assignment, skipping`);
     }
 
     invalidateCache(INVENTORY_SHEET_ID, "storage_locations");

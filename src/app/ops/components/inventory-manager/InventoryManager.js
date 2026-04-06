@@ -41,11 +41,12 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const didInit = useRef(false);
 
   // ── Bootstrap ──
-  const loadBootstrap = useCallback(async (acct) => {
+  const loadBootstrap = useCallback(async (acct, fresh = false) => {
     setLoading(true);
     try {
       const params = acct ? `&account=${encodeURIComponent(acct)}` : "";
-      const res = await fetch(`/api/ops/inventory?action=bootstrap${params}`);
+      const freshParam = fresh ? "&fresh=true" : "";
+      const res = await fetch(`/api/ops/inventory?action=bootstrap${params}${freshParam}`);
       const json = await res.json();
       if (json.success) {
         setData(json);
@@ -97,7 +98,9 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       const json = await res.json();
       if (json.success) {
         showToast(json.assigned > 0 ? `${locationsList.length} locations saved \u00B7 ${json.assigned} items organized` : `${locationsList.length} locations saved`, "success");
-        await loadBootstrap(account);
+        // Small delay to ensure Google Sheets write propagation before fresh read
+        await new Promise((r) => setTimeout(r, 1000));
+        await loadBootstrap(account, true);
       } else showToast(json.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); }
     finally { setBusy(null); }
