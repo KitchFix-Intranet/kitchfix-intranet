@@ -1373,12 +1373,13 @@ setReorderMode(false); setSelectedPageIdx(null);
                 {/* Vendor */}
                 <div className={`oh-inv-field-group${!hasAccount ? " oh-inv-field--disabled" : ""}${vendor ? " oh-inv-field--done" : ""}`} data-field="vendor">
                   <label className="oh-inv-label">Vendor <span className="oh-inv-req">*</span></label>
-                  {ocrStatus === "success" && ocrResult?.vendorName && !vendor && ocrResult.vendorMatch?.bestMatch && (
+{ocrStatus === "success" && ocrResult?.vendorName && !vendor && ocrResult.vendorMatch?.bestMatch && (
                     <div className="oh-inv-vendor-detected">
                       <div className="oh-inv-vendor-detected-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
                         <span>Match found for <strong>{ocrResult.vendorName}</strong></span>
                       </div>
+                      {vendors.find((v) => v.vendorId === ocrResult.vendorMatch.bestMatch.vendorId) ? (
                       <button className="oh-inv-vendor-detected-confirm" onClick={() => {
                         const mv = vendors.find((v) => v.vendorId === ocrResult.vendorMatch.bestMatch.vendorId);
                         if (mv) { setVendor(mv); trackRecentVendor(mv.vendorId); showToast(`Vendor set: ${mv.name}`, "info"); }
@@ -1386,6 +1387,12 @@ setReorderMode(false); setSelectedPageIdx(null);
                         <span className="oh-inv-vendor-detected-name">{ocrResult.vendorMatch.bestMatch.name}</span>
                         <span className="oh-inv-vendor-detected-action">Tap to confirm →</span>
                       </button>
+                      ) : (
+                      <button className="oh-inv-vendor-detected-confirm oh-inv-vendor-detected-confirm--create" onClick={() => setShowVendorSetup(true)}>
+                        <span className="oh-inv-vendor-detected-name">{ocrResult.vendorMatch.bestMatch.name}</span>
+                        <span className="oh-inv-vendor-detected-action">Link to this account →</span>
+                      </button>
+                      )}
                       {ocrResult.vendorMatch.alternatives?.length > 0 && (
                         <div className="oh-inv-vendor-detected-alts">
                           <span className="oh-inv-vendor-detected-alts-label">Not right?</span>
