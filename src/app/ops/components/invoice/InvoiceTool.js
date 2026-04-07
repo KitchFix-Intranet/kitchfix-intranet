@@ -870,10 +870,28 @@ setReorderMode(false); setSelectedPageIdx(null);
     </div>
   );
 
+const MAINTENANCE_MODE = true;
+  const MAINTENANCE_BYPASS = ["k.fietek@kitchfix.com"];
+  const userEmail = config?.email?.toLowerCase().trim() || "";
+
+  if (MAINTENANCE_MODE && !MAINTENANCE_BYPASS.includes(userEmail)) {
+    return (
+      <div className="oh-view" style={{ animation: "oh-slideUp 0.4s ease" }}>
+        <div className="oh-card" style={{ padding: "48px 24px", textAlign: "center" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🔧</div>
+          <h3 style={{ margin: "0 0 8px", color: "#0f3057", fontSize: "1.2rem" }}>Invoice Capture Under Maintenance</h3>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "0.9rem", lineHeight: 1.6, maxWidth: 360, marginInline: "auto" }}>
+            We're making improvements to the invoice submission system. It will be back online shortly. Contact Kevin if you need to submit an invoice urgently.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="oh-view" style={{ animation: "oh-slideUp 0.4s ease" }}>
       {!isOnline && (
-        <div className="oh-inv-offline-banner">
+                <div className="oh-inv-offline-banner">
           <span>📡 You&apos;re offline — invoices will queue and submit when reconnected</span>
           {offlineQueue.length > 0 && <span className="oh-inv-offline-count">{offlineQueue.length} queued</span>}
         </div>

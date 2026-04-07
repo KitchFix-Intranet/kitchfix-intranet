@@ -278,6 +278,10 @@ export async function handleResolveQueue(body) { return { success: false, error:
 export async function handleSaveLocations({ account, locations, email }) {
   try {
     const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+
+    // Ensure columns I & J headers exist (parentLocationId, color)
+    await updateRangeSA(INVENTORY_SHEET_ID, "storage_locations!I1:J1", [["parentLocationId", "color"]]);
+
     const existingRows = {};
     rows.forEach((r, i) => {
       if (accountMatch(r[1], account)) existingRows[r[0]] = i + 2;
@@ -337,12 +341,12 @@ export async function handleSaveLocations({ account, locations, email }) {
       }
     }
 
-    // Mark removed locations as inactive
+    // Mark removed locations as inactive + clear sortOrder
     // Only deactivate rows that exist in sheet but weren't in our save payload
     for (const [locId, rowNum] of Object.entries(existingRows)) {
       if (!savedIds.has(locId)) {
         console.log(`[save-locations] Deactivating removed location: ${locId} at row ${rowNum}`);
-        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!F${rowNum}`, [["FALSE"]]);
+        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!E${rowNum}:F${rowNum}`, [[999, "FALSE"]]);
       }
     }
 
