@@ -1238,6 +1238,7 @@
 .oh-inv-gl-picker { position: relative; flex: 1; min-width: 0; }
 .oh-inv-gl-picker--disabled { opacity: 0.5; pointer-events: none; }
 .oh-inv-gl-trigger { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 40px; padding: 0 10px; background: #fff; border: 1.5px solid var(--oh-grey-border, #e2e8f0); border-radius: 8px; font-size: 13px; color: #1e293b; cursor: pointer; text-align: left; gap: 6px; transition: border-color 0.15s; }
+.oh-inv-gl-picker--open { z-index: 50; }
 .oh-inv-gl-picker--open .oh-inv-gl-trigger { border-color: var(--oh-mustard, #d97706); box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12); }
 .oh-inv-gl-trigger:hover:not(:disabled) { border-color: #94a3b8; }
 .oh-inv-gl-trigger--placeholder { color: #94a3b8; }
