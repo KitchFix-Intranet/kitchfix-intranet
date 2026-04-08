@@ -155,8 +155,9 @@ const [invoiceDate, setInvoiceDate] = useState("");
   const [activeTab, setActiveTab] = useState("form");
   const [showVendorSetup, setShowVendorSetup] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [historySearch, setHistorySearch] = useState("");
+const [dragOver, setDragOver] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+    const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
 
   // OCR
@@ -635,21 +636,15 @@ const roundedGlT = Math.round(glT * 100) / 100;
   }, [account, vendor, invoiceNumber, invoiceDate, totalAmount, pages, glRows]);
 
   // ——— Submit ———
-const handleSubmit = useCallback(async () => {
+const handleSubmit = useCallback(() => {
     if (!validate()) return;
-    // Submit confirmation — show summary before sending to AP
-    const confirmSubmit = await new Promise((resolve) => {
-      openConfirm(
-        "Confirm Submission",
-        `Submit ${isCreditMemo ? "credit memo" : "invoice"} to AP?\n\nVendor: ${vendor?.name}\nInvoice #: ${invoiceNumber}\nDate: ${invoiceDate}\nTotal: ${isCreditMemo ? "−" : ""}$${fmt$(Math.abs(Number(totalAmount)))}`,
-        "Submit to AP",
-        () => resolve(true)
-      );
-      setTimeout(() => resolve(false), 60000);
-    });
-    if (!confirmSubmit) return;
+    setShowReview(true);
+  }, [validate]);
+
+  const handleConfirmedSubmit = useCallback(async () => {
+    setShowReview(false);
     try {
-            const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+                  const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
       const dupData = await dupRes.json();
       if (dupData.isDuplicate) {
@@ -692,7 +687,7 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
     finally { setSubmitting(false); }
-}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, validate, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
+}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
 
   const drainOfflineQueue = useCallback(async () => {
     const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
@@ -812,8 +807,71 @@ const MAINTENANCE_MODE = true;
         </div>
       )}
 
+{showReview && (
+        <div className="oh-inv-review-overlay" onClick={() => setShowReview(false)}>
+          <div className="oh-inv-review-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="oh-inv-review-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+              <span>Review before submitting</span>
+            </div>
+            <div className="oh-inv-review-body">
+              <table className="oh-inv-review-table">
+                <tbody>
+                  <tr>
+                    <td className="oh-inv-review-label">Vendor</td>
+                    <td className="oh-inv-review-value">{vendor?.name}</td>
+                    <td className="oh-inv-review-edit"><button onClick={() => { setShowReview(false); setTimeout(() => document.querySelector('[data-field="vendor"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button></td>
+                  </tr>
+                  <tr>
+                    <td className="oh-inv-review-label">Invoice #</td>
+                    <td className="oh-inv-review-value oh-inv-review-mono">{invoiceNumber}</td>
+                    <td className="oh-inv-review-edit"><button onClick={() => { setShowReview(false); setTimeout(() => document.querySelector('[data-field="invoiceNumber"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button></td>
+                  </tr>
+                  <tr>
+                    <td className="oh-inv-review-label">Date</td>
+                    <td className="oh-inv-review-value">{invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
+                    <td className="oh-inv-review-edit"><button onClick={() => { setShowReview(false); setTimeout(() => document.querySelector('[data-field="invoiceDate"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button></td>
+                  </tr>
+                  <tr>
+                    <td className="oh-inv-review-label">Total</td>
+                    <td className="oh-inv-review-value oh-inv-review-total">{isCreditMemo ? "−" : ""}${fmt$(Math.abs(Number(totalAmount)))}</td>
+                    <td className="oh-inv-review-edit"><button onClick={() => { setShowReview(false); setTimeout(() => document.querySelector('[data-field="totalAmount"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button></td>
+                  </tr>
+                  <tr>
+                    <td className="oh-inv-review-label">Pages</td>
+                    <td className="oh-inv-review-value">{pages.length} page{pages.length !== 1 ? "s" : ""}</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="oh-inv-review-gl">
+                <div className="oh-inv-review-gl-title">GL breakdown</div>
+                {glRows.filter((r) => r.code && Number(r.amount) > 0).map((r, i) => (
+                  <div key={i} className="oh-inv-review-gl-row">
+                    <span><span className="oh-inv-gl-code-tag">{r.code}</span> {r.name || r.code}</span>
+                    <span className="oh-inv-review-gl-amt">${fmt$(Number(r.amount))}</span>
+                  </div>
+                ))}
+                <div className="oh-inv-review-gl-total">
+                  <span>Total</span>
+                  <span>${fmt$(glTotal)}</span>
+                </div>
+              </div>
+              <div className="oh-inv-review-warn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                <p><strong>Double-check your entries.</strong> If the invoice number, date, total, or GL codes are wrong, Bill.com will reject this submission and AP will need you to reprocess it. Save time by checking once more.</p>
+              </div>
+            </div>
+            <div className="oh-inv-review-footer">
+              <button className="oh-inv-review-back" onClick={() => setShowReview(false)}>Go back</button>
+              <button className="oh-inv-review-submit" onClick={handleConfirmedSubmit}>Submit to AP</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSuccess && lastSubmission && (
-        <div className="oh-inv-success-overlay">
+                <div className="oh-inv-success-overlay">
           <div className="oh-inv-success-check">
             <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={lastSubmission.formType === "credit" ? "#6366f1" : "#10b981"} strokeWidth="2.5">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
