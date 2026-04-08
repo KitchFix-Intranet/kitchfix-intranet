@@ -10,6 +10,7 @@
 import { google } from "googleapis";
 
 const AP_EMAIL = process.env.INVOICE_AP_EMAIL || "k.fietek@kitchfix.com";
+const AP_CC = ["k.fietek@kitchfix.com"];
 
 function getGmailClient(accessToken) {
   const auth = new google.auth.OAuth2();
@@ -49,9 +50,10 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
 
     const subject = buildSubject(data);
     const htmlBody = buildEmailHtml(data, typeLabel, senderEmail);
-    const recipients = [AP_EMAIL];
-    if (data.ccSelf) recipients.push(senderEmail);
-
+const recipients = [AP_EMAIL];
+    AP_CC.forEach((cc) => { if (!recipients.includes(cc)) recipients.push(cc); });
+    if (data.ccSelf && !recipients.includes(senderEmail)) recipients.push(senderEmail);
+        
     // Build MIME message
     let rawMessage;
 

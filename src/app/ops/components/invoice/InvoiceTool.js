@@ -158,7 +158,6 @@ const [invoiceDate, setInvoiceDate] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
-  const [stepComplete, setStepComplete] = useState(false);
 
   // OCR
   const [ocrStatus, setOcrStatus] = useState("idle");
@@ -170,7 +169,6 @@ const [invoiceDate, setInvoiceDate] = useState("");
 
   // Validation
   const [errors, setErrors] = useState({});
-  const fileInputRef = useRef(null);
 const galleryInputRef = useRef(null);
   const vendorRef = useRef(null);
     const formRef = useRef(null);
@@ -195,23 +193,6 @@ const glTotalRaw = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
   const glTotal = Math.round(glTotalRaw * 100) / 100;
   const invoiceTotal = Math.round(Number(totalAmount) * 100) / 100;
   const glBalanceDiff = invoiceTotal > 0 ? invoiceTotal - glTotal : 0;
-const hasDetails = !!(invoiceDate && Number(totalAmount) > 0 && invoiceNumber);
-
-  // Smart Scan verification — compares user-entered values against AI detections
-const smartScan = useMemo(() => {
-    if (!ocrResult || ocrStatus !== "success") return { inv: null, total: null };
-    const invAI = ocrResult.invoiceNumber?.trim() || null;
-    const totalAI = ocrResult.totalAmount ? Number(ocrResult.totalAmount) : null;
-    const confidence = ocrResult.confidence || "low";
-
-    return {
-      inv: invAI && invoiceNumber.trim() ? (invoiceNumber.trim() === invAI ? "match" : "mismatch") : null,
-      total: totalAI && totalAmount && Number(totalAmount) > 0 ? (Math.abs(Number(totalAmount) - totalAI) < 0.02 ? "match" : "mismatch") : null,
-      invAI,
-      totalAI,
-      confidence,
-    };
-  }, [ocrResult, ocrStatus, invoiceNumber, totalAmount]);
 
   const glBalanced = Number(totalAmount) > 0 && glRows.some((r) => r.code && Number(r.amount) > 0) && Math.abs(glBalanceDiff) <= 0.01;
 
@@ -314,8 +295,7 @@ setOcrStatus("idle"); setOcrResult(null);
       setErrors({});
       setReorderMode(false); setSelectedPageIdx(null);
       setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      if (galleryInputRef.current) galleryInputRef.current.value = "";
+if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
   }, [account, loadBootstrap]);
 
@@ -460,7 +440,7 @@ setPages((prev) => [...prev, {
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
-  }, [invoiceNumber, runPhotoGate]);
+}, [runPhotoGate]);
 
   const processPDFFile = useCallback(async (file) => {
     try {
@@ -483,7 +463,7 @@ setPages((prev) => [...prev, {
 const availableSlots = 15 - pages.length;
       const pagesToRender = Math.min(totalPdfPages, availableSlots);
       if (totalPdfPages > availableSlots) showToast(`PDF has ${totalPdfPages} pages — importing first ${pagesToRender} (${availableSlots} slots left)`, "info");
-      let lastPageDataUrl = null;
+lastPageDataUrl = dataUrl;
       for (let i = 1; i <= pagesToRender; i++) {
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 2.0 });
@@ -577,10 +557,9 @@ if (data.vendorMatch?.bestMatch && !vendorRef.current) {
   }, [account, invoiceNumber, vendors, vendor, showToast, trackRecentVendor]);
 
 // ═══ Progressive OCR: scan each new page for missing fields ═══
-  const prevPageCountRef = useRef(0);
-  const pdfBatchScanRef = useRef(false);
+const prevPageCountRef = useRef(0);
   useEffect(() => {
-    const prevCount = prevPageCountRef.current;
+        const prevCount = prevPageCountRef.current;
     prevPageCountRef.current = pages.length;
 
     // No new page was added (or pages were removed) — skip
@@ -609,7 +588,7 @@ if (data.vendorMatch?.bestMatch && !vendorRef.current) {
     }
   }, [pages, ocrStatus, totalAmount]);
 
-  const handlePhotoCapture = useCallback((e) => { processFiles(e.target.files || []); if (fileInputRef.current) fileInputRef.current.value = ""; }, [processFiles]);
+const handlePhotoCapture = useCallback((e) => { processFiles(e.target.files || []); }, [processFiles]);
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true); }, []);
   const handleDragLeave = useCallback(() => setDragOver(false), []);
   const handleDrop = useCallback((e) => { e.preventDefault(); setDragOver(false); processFiles(e.dataTransfer.files); }, [processFiles]);
@@ -710,14 +689,13 @@ resetForm(); return;
       const data = await res.json();
       if (data.success) {
         setLastSubmission({ vendor: vendor?.name, invoiceNumber, total: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount), formType });
-        setShowSuccess(true); setStepComplete(true); setSessionCount((c) => c + 1);
+setShowSuccess(true); setSessionCount((c) => c + 1);
         setTimeout(() => setShowSuccess(false), 3200);
-        setTimeout(() => setStepComplete(false), 2400);
-loadBootstrap(account); resetForm();
+        loadBootstrap(account); resetForm();
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
     finally { setSubmitting(false); }
-  }, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, apNote, formType, isCreditMemo, validate, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
+}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, validate, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
 
   const drainOfflineQueue = useCallback(async () => {
     const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
@@ -742,13 +720,12 @@ loadBootstrap(account); resetForm();
 const resetForm = useCallback(() => {
 setInvoiceNumber(""); setInvoiceDate("");
     setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
-    setPages([]); setApNote(""); setShowNoteField(false);
+setPages([]);
 setErrors({});
     setOcrStatus("idle"); setOcrResult(null);
 setReorderMode(false); setSelectedPageIdx(null);
     setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (galleryInputRef.current) galleryInputRef.current.value = "";
+if (galleryInputRef.current) galleryInputRef.current.value = "";
     setVendor(null); setFormType("invoice");
     }, []);
 
@@ -799,7 +776,6 @@ setReorderMode(false); setSelectedPageIdx(null);
   const SkeletonLoader = () => (
     <div className="oh-inv-skeleton" aria-hidden="true">
       <div className="oh-inv-skeleton-tabs"><div className="oh-inv-skeleton-pill oh-inv-skeleton-pill--active" /><div className="oh-inv-skeleton-pill" /></div>
-      <div className="oh-inv-skeleton-steps">{[1,2,3,4].map(i => (<React.Fragment key={i}>{i > 1 && <div className="oh-inv-skeleton-line" />}<div className="oh-inv-skeleton-circle" /></React.Fragment>))}</div>
       <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" /><div className="oh-inv-skeleton-input" /></div>
       <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"40%"}} /><div className="oh-inv-skeleton-photo-zone" /></div>
       <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"25%"}} /><div className="oh-inv-skeleton-input" /></div>
