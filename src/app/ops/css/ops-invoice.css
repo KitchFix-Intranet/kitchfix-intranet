@@ -2044,3 +2044,74 @@
 .oh-inv-notice-action--remove:hover {
   background: #fde68a;
 }
+
+/* ── Smart Scan Verification ── */
+.oh-inv-ocr-result--verify {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.oh-inv-ocr-verify-prompt {
+  font-size: 0.82rem;
+  color: #92400e;
+  margin: 6px 0 0;
+  padding: 0 6px;
+  line-height: 1.5;
+}
+.oh-inv-input--verified {
+  border-color: #10b981 !important;
+}
+.oh-inv-input--mismatch {
+  border-color: #d97706 !important;
+}
+.oh-inv-verify-badge {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.oh-inv-verify-badge--match {
+  background: #ecfdf5;
+  color: #10b981;
+  border: 1.5px solid #10b981;
+}
+.oh-inv-verify-badge--warn {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1.5px solid #d97706;
+}
+.oh-inv-verify-badge--money {
+  right: 40px;
+}
+.oh-inv-smart-warn {
+  font-size: 0.78rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.oh-inv-smart-warn strong {
+  color: #0f3057;
+}
+
+.oh-inv-smart-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-style: italic;
+}
+.oh-inv-smart-warn--match {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #065f46;
+}

@@ -481,77 +481,127 @@
    STORAGE LOCATIONS (Zone / Sub-Zone)
    ═══════════════════════════════════════ */
 
+
+/* ═══════════════════════════════════════
+   STORAGE LOCATIONS v2
+   ═══════════════════════════════════════ */
+
 .oh-inv-loc-setup { padding: 16px; }
-.oh-inv-loc-head { margin-bottom: 16px; }
-.oh-inv-loc-title { font-size: 16px; font-weight: 700; color: #0f3057; margin: 0; }
-.oh-inv-loc-sub { font-size: 12px; color: #94a3b8; margin: 4px 0 0; }
 
-/* ── Educational blurb ── */
+/* -- Contained card wrapper (4) -- */
+.oh-inv-loc-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  overflow: hidden;
+}
+
+/* -- Header with summary bar (5.1) -- */
+.oh-inv-loc-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 16px 20px 12px; border-bottom: 1px solid #f1f5f9;
+}
+.oh-inv-loc-header-left { flex: 1; min-width: 0; }
+.oh-inv-loc-title {
+  font-size: 16px; font-weight: 700; color: #0f3057; margin: 0;
+  display: flex; align-items: center; gap: 6px;
+}
+.oh-inv-loc-unsaved-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #d97706;
+  display: inline-block; flex-shrink: 0;
+}
+.oh-inv-loc-summary { font-size: 12px; color: #94a3b8; margin: 3px 0 0; }
+
+/* -- Reorder mode toggle (2C) -- */
+.oh-inv-loc-reorder-btn {
+  padding: 5px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
+  color: #64748b; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+  transition: all 0.15s; flex-shrink: 0; margin-top: 2px;
+}
+.oh-inv-loc-reorder-btn:hover { border-color: #cbd5e1; color: #0f3057; }
+.oh-inv-loc-reorder-btn.active { background: #0f3057; color: #fff; border-color: #0f3057; }
+
+/* -- Blurb (5.2: only for empty) -- */
 .oh-inv-loc-blurb {
-  font-size: 13px; color: #64748b; line-height: 1.5; padding: 10px 14px;
-  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
-  margin-bottom: 16px;
+  font-size: 13px; color: #64748b; line-height: 1.5; padding: 10px 16px;
+  background: #f8fafc; border-bottom: 1px solid #f1f5f9;
 }
 
-.oh-inv-loc-zones { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+/* -- Zone list -- */
+.oh-inv-loc-zones { display: flex; flex-direction: column; gap: 0; }
+.oh-inv-loc-zone { border-bottom: 1px solid #f1f5f9; }
+.oh-inv-loc-zone:last-child { border-bottom: none; }
 
-/* ── Zone card ── */
-.oh-inv-loc-zone { }
+/* -- Zone card (1C: tap to expand) -- */
 .oh-inv-loc-zone-card {
-  background: #fff; border: 1px solid #e2e8f0; border-left: 3px solid #d97706;
-  border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; transition: background 0.12s; border-left: 3px solid transparent;
 }
-.oh-inv-loc-zone-card:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.oh-inv-loc-zone-card:hover { background: #fafbfc; }
+.oh-inv-loc-zone-card--expanded { background: #fafbfc; }
 
+/* 5.10: Empty zone highlight */
+.oh-inv-loc-zone-card--empty {
+  border-left-style: dashed !important;
+}
+.oh-inv-loc-zone-card--empty .oh-inv-loc-zone-name { color: #94a3b8; }
+
+/* -- Reorder controls (2C) -- */
+.oh-inv-loc-reorder-controls {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+.oh-inv-loc-position-badge {
+  width: 22px; height: 22px; border-radius: 50%; background: #f1f5f9;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: #64748b;
+}
+.oh-inv-loc-move {
+  width: 24px; height: 24px; border-radius: 6px; border: 1px solid #e2e8f0;
+  background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.oh-inv-loc-move:hover:not(:disabled) { border-color: #0f3057; background: #f1f5f9; }
+.oh-inv-loc-move:disabled { opacity: 0.2; cursor: default; }
+
+/* -- Icon button -- */
 .oh-inv-loc-icon-btn {
   width: 36px; height: 36px; border-radius: 8px; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   transition: transform 0.15s;
 }
 .oh-inv-loc-icon-btn:hover { transform: scale(1.08); }
-.oh-inv-loc-icon-btn--sm { width: 28px; height: 28px; border-radius: 6px; }
 
+/* -- Zone info -- */
 .oh-inv-loc-zone-info { flex: 1; min-width: 0; }
 .oh-inv-loc-zone-name { font-size: 14px; font-weight: 600; color: #0f3057; display: block; }
-
-/* ── Pills ── */
-.oh-inv-loc-pills { display: flex; gap: 6px; margin-top: 3px; }
+.oh-inv-loc-pills { display: flex; gap: 6px; margin-top: 2px; }
 .oh-inv-loc-pill {
-  font-size: 10px; font-weight: 600; color: #64748b; background: #f1f5f9;
-  padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+  font-size: 11px; font-weight: 500; color: #64748b; white-space: nowrap;
 }
-.oh-inv-loc-pill--sub { background: #fffbeb; color: #d97706; }
-.oh-inv-loc-pill--sm { font-size: 9px; padding: 1px 6px; margin-top: 2px; }
+.oh-inv-loc-pill--sub { color: #d97706; }
 
-.oh-inv-loc-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-
-/* ── Move arrows (distinct from action buttons) ── */
-.oh-inv-loc-move {
-  width: 26px; height: 26px; border-radius: 6px; border: 1px solid #e2e8f0;
-  background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: border-color 0.15s, background 0.15s;
-}
-.oh-inv-loc-move:hover:not(:disabled) { border-color: #0f3057; background: #f1f5f9; }
-.oh-inv-loc-move:disabled { opacity: 0.25; cursor: default; border-color: #f1f5f9; }
-.oh-inv-loc-move--sm { width: 22px; height: 22px; border-radius: 4px; }
-
-/* ── Expand/collapse button ── */
-.oh-inv-loc-expand-btn {
-  padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; background: #fff;
-  color: #64748b; font-size: 10px; font-weight: 600; cursor: pointer; font-family: inherit;
-  text-transform: uppercase; letter-spacing: 0.5px; transition: border-color 0.15s, color 0.15s;
-}
-.oh-inv-loc-expand-btn:hover { border-color: #d97706; color: #d97706; }
-.oh-inv-loc-act {
-  background: none; border: none; cursor: pointer; padding: 5px; border-radius: 4px;
+/* -- Zone right: dots menu + chevron -- */
+.oh-inv-loc-zone-right { display: flex; align-items: center; gap: 0; flex-shrink: 0; position: relative; }
+.oh-inv-loc-dots-btn {
+  background: none; border: none; cursor: pointer; padding: 6px; border-radius: 6px;
   display: flex; align-items: center; transition: background 0.12s;
 }
-.oh-inv-loc-act:hover { background: #f1f5f9; }
-.oh-inv-loc-act:disabled { opacity: 0.25; cursor: default; }
-.oh-inv-loc-act:disabled:hover { background: none; }
+.oh-inv-loc-dots-btn:hover { background: #f1f5f9; }
 
-/* ── Edit inline ── */
+/* -- Three-dot menu (5.5) -- */
+.oh-inv-loc-menu {
+  position: absolute; top: 100%; right: 0; z-index: 50; min-width: 160px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 4px; margin-top: 2px;
+}
+.oh-inv-loc-menu button {
+  display: block; width: 100%; text-align: left; padding: 8px 12px;
+  border: none; background: none; font-size: 13px; color: #0f3057;
+  cursor: pointer; font-family: inherit; border-radius: 4px;
+}
+.oh-inv-loc-menu button:hover { background: #f1f5f9; }
+.oh-inv-loc-menu-danger { color: #dc2626 !important; }
+.oh-inv-loc-menu-danger:hover { background: #fef2f2 !important; }
+
+/* -- Edit inline -- */
 .oh-inv-loc-edit-row { display: flex; align-items: center; gap: 6px; width: 100%; }
 .oh-inv-loc-edit-input {
   flex: 1; padding: 5px 8px; border: 1px solid #d97706; border-radius: 5px;
@@ -561,21 +611,29 @@
   background: none; border: none; cursor: pointer; padding: 3px; display: flex;
 }
 
-/* ── Icon / Color picker ── */
+/* -- Picker with live preview (5.7) -- */
 .oh-inv-loc-picker {
-  background: #f8fafc; border: 1px solid #e2e8f0; border-top: none;
-  border-radius: 0 0 8px 8px; padding: 10px 12px;
+  background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 16px;
 }
-.oh-inv-loc-picker--sub { margin-left: 28px; border-radius: 0 0 6px 6px; }
 .oh-inv-loc-picker-head {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
 }
 .oh-inv-loc-picker-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
 .oh-inv-loc-picker-done {
   padding: 4px 12px; background: #0f3057; color: #fff; border: none; border-radius: 4px;
   font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
-.oh-inv-loc-picker-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.oh-inv-loc-picker-preview {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid #e2e8f0; border-left: 3px solid #d97706; border-radius: 6px;
+  background: #fff; margin-bottom: 10px;
+}
+.oh-inv-loc-picker-preview-icon {
+  width: 28px; height: 28px; border-radius: 6px; display: flex;
+  align-items: center; justify-content: center; font-size: 15px;
+}
+.oh-inv-loc-picker-preview-label { font-size: 12px; color: #94a3b8; font-weight: 500; }
+.oh-inv-loc-picker-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
 .oh-inv-loc-picker-icon {
   width: 36px; height: 36px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -591,70 +649,124 @@
 .oh-inv-loc-picker-color:hover { transform: scale(1.15); }
 .oh-inv-loc-picker-color.active { border-color: #0f3057; }
 
-/* ── Sub-zones ── */
+/* -- Sub-zones: inline rows (3A) -- */
 .oh-inv-loc-subzones {
-  margin-left: 20px; padding-left: 12px; border-left: 2px solid #e2e8f0;
-  display: flex; flex-direction: column; gap: 4px; padding-top: 6px; padding-bottom: 4px;
+  padding: 4px 16px 8px 28px; border-left: 2px solid #e2e8f0; margin-left: 34px;
+  display: flex; flex-direction: column; gap: 0;
 }
-.oh-inv-loc-sub-card {
-  background: #fff; border: 1px solid #f1f5f9; border-radius: 6px;
-  padding: 8px 10px; display: flex; align-items: center; gap: 8px;
-  transition: border-color 0.15s;
+.oh-inv-loc-sub-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 6px; transition: background 0.12s;
 }
-.oh-inv-loc-sub-card:hover { border-color: #e2e8f0; }
-.oh-inv-loc-sub-name { font-size: 13px; font-weight: 500; color: #0f3057; display: block; }
-.oh-inv-loc-sub-meta { font-size: 10px; color: #94a3b8; display: block; margin-top: 1px; }
+.oh-inv-loc-sub-row:hover { background: #f8fafc; }
+.oh-inv-loc-sub-row:hover .oh-inv-loc-sub-actions { opacity: 1; }
+.oh-inv-loc-sub-icon {
+  width: 24px; height: 24px; border-radius: 6px; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.oh-inv-loc-sub-name { font-size: 13px; font-weight: 500; color: #0f3057; flex: 1; min-width: 0; }
+.oh-inv-loc-sub-count { font-size: 11px; flex-shrink: 0; }
+.oh-inv-loc-sub-actions { display: flex; gap: 0; flex-shrink: 0; opacity: 0.3; transition: opacity 0.15s; }
+.oh-inv-loc-act {
+  background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px;
+  display: flex; align-items: center; transition: background 0.12s;
+}
+.oh-inv-loc-act:hover { background: #f1f5f9; }
 
-.oh-inv-loc-add-sub-btn {
-  display: flex; align-items: center; gap: 5px; padding: 6px 10px;
-  background: none; border: 1px dashed #e2e8f0; border-radius: 6px;
-  color: #d97706; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
-  margin-top: 2px; transition: border-color 0.15s, background 0.15s;
+/* 5.12: Sub-zone add button + inline input */
+.oh-inv-loc-sub-add-btn {
+  display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+  background: none; border: none; color: #d97706; font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit; border-radius: 6px; transition: background 0.12s;
 }
-.oh-inv-loc-add-sub-btn:hover { border-color: #d97706; background: #fffbeb; }
+.oh-inv-loc-sub-add-btn:hover { background: #fffbeb; }
+.oh-inv-loc-sub-add-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+.oh-inv-loc-sub-add-input {
+  flex: 1; padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 5px;
+  font-size: 12px; font-family: inherit; outline: none; color: #0f3057;
+}
+.oh-inv-loc-sub-add-input:focus { border-color: #d97706; }
+.oh-inv-loc-sub-add-ok {
+  padding: 5px 10px; background: #0f3057; color: #fff; border: none; border-radius: 5px;
+  font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-loc-sub-add-ok:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ── Add zone / inline form ── */
-.oh-inv-loc-add-inline { display: flex; gap: 6px; align-items: center; }
-.oh-inv-loc-add-zone { margin-bottom: 8px; }
-.oh-inv-loc-add-input {
-  flex: 1; padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+/* -- 5.3: Ghost add-zone input -- */
+.oh-inv-loc-add-ghost {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+}
+.oh-inv-loc-add-ghost-input {
+  flex: 1; padding: 8px 10px; border: 1px dashed #e2e8f0; border-radius: 6px;
   font-size: 13px; font-family: inherit; outline: none; color: #0f3057;
+  background: transparent; transition: border-color 0.15s;
 }
-.oh-inv-loc-add-input:focus { border-color: #d97706; }
-.oh-inv-loc-add-ok {
-  padding: 9px 14px; background: #0f3057; color: #fff; border: none; border-radius: 6px;
-  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
-}
-.oh-inv-loc-add-ok:disabled { opacity: 0.4; cursor: not-allowed; }
-.oh-inv-loc-add-cancel {
-  padding: 9px 10px; background: none; color: #64748b; border: 1px solid #e2e8f0;
-  border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit;
+.oh-inv-loc-add-ghost-input::placeholder { color: #d97706; font-weight: 500; }
+.oh-inv-loc-add-ghost-input:focus { border-color: #d97706; border-style: solid; background: #fff; }
+.oh-inv-loc-add-ghost-btn {
+  padding: 8px 14px; background: #0f3057; color: #fff; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; flex-shrink: 0;
 }
 
-.oh-inv-loc-add-zone-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
-  padding: 12px; border: 2px dashed #e2e8f0; border-radius: 8px; background: none;
-  color: #d97706; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-}
-.oh-inv-loc-add-zone-btn:hover { border-color: #d97706; background: #fffbeb; }
-
-/* ── Empty / Suggest ── */
-.oh-inv-loc-empty {
-  text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 13px;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-}
-.oh-inv-loc-suggest { margin: 12px 0; }
+/* -- Suggestions -- */
+.oh-inv-loc-suggest { padding: 8px 16px; }
 .oh-inv-loc-suggest-label { font-size: 11px; color: #94a3b8; font-weight: 600; display: block; margin-bottom: 6px; }
 .oh-inv-loc-suggest-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .oh-inv-loc-suggest-chip {
-  padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
+  padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
   color: #0f3057; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
   transition: border-color 0.15s, background 0.15s;
 }
 .oh-inv-loc-suggest-chip:hover { border-color: #d97706; background: #fffbeb; color: #d97706; }
 
-/* ── Delete confirmation ── */
+/* -- Empty state -- */
+.oh-inv-loc-empty {
+  text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+
+/* -- 5.8: Footer (sticky when unsaved) -- */
+.oh-inv-loc-footer {
+  display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #e2e8f0;
+}
+.oh-inv-loc-footer--sticky {
+  position: sticky; bottom: 0; background: #fff; z-index: 10;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+}
+.oh-inv-loc-back {
+  padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+  color: #0f3057; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-loc-save {
+  flex: 1; padding: 10px; background: #0f3057; color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.oh-inv-loc-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* -- Post-save feedback -- */
+.oh-inv-loc-postsave {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  background: #f0fdf4; border-top: 1px solid #bbf7d0;
+}
+.oh-inv-loc-postsave-text { flex: 1; font-size: 13px; font-weight: 500; color: #16a34a; }
+.oh-inv-loc-postsave-cta {
+  display: flex; align-items: center; gap: 5px; padding: 6px 12px;
+  background: #0f3057; color: #fff; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+
+/* -- View items link -- */
+.oh-inv-loc-view-items {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  padding: 10px; background: none; border: none; border-top: 1px solid #f1f5f9;
+  color: #d97706; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+  transition: background 0.12s;
+}
+.oh-inv-loc-view-items:hover { background: #fffbeb; }
+.oh-inv-loc-unsaved-text { color: #94a3b8; font-weight: 400; font-size: 11px; }
+
+/* -- Delete confirmation -- */
 .oh-inv-loc-confirm-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
   background: rgba(15, 48, 87, 0.5); backdrop-filter: blur(3px);
@@ -678,41 +790,10 @@
 }
 .oh-inv-loc-confirm-delete:hover { background: #b91c1c; }
 
-/* ── Footer ── */
-.oh-inv-loc-footer {
-  display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;
+/* -- Mobile: always show sub-zone actions -- */
+@media (max-width: 640px) {
+  .oh-inv-loc-sub-actions { opacity: 1 !important; }
 }
-.oh-inv-loc-back {
-  padding: 12px 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
-  color: #0f3057; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
-}
-.oh-inv-loc-save {
-  flex: 1; padding: 12px; background: #0f3057; color: #fff; border: none; border-radius: 8px;
-  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
-}
-.oh-inv-loc-save:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ── Post-save CTA ── */
-.oh-inv-loc-postsave {
-  display: flex; align-items: center; gap: 8px; padding: 12px 14px;
-  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-top: 12px;
-}
-.oh-inv-loc-postsave-text { flex: 1; font-size: 13px; font-weight: 500; color: #16a34a; }
-.oh-inv-loc-postsave-cta {
-  display: flex; align-items: center; gap: 5px; padding: 8px 14px;
-  background: #0f3057; color: #fff; border: none; border-radius: 6px;
-  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
-}
-
-/* ── View items button ── */
-.oh-inv-loc-view-items {
-  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
-  padding: 10px; margin-top: 10px; background: none; border: 1px solid #e2e8f0; border-radius: 8px;
-  color: #d97706; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-}
-.oh-inv-loc-view-items:hover { border-color: #d97706; background: #fffbeb; }
-.oh-inv-loc-unsaved { color: #94a3b8; font-weight: 400; font-size: 11px; }
 
 /* ═══════════════════════════════════════
    BUSY OVERLAY
@@ -743,14 +824,11 @@
 @keyframes oh-inv-mgmt-spin {
   to { transform: rotate(360deg); }
 }
-
-/* ── Animations ── */
 @keyframes oh-inv-mgmt-fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Responsive ── */
 @media (min-width: 640px) {
   .oh-inv-mgmt-app { max-width: 600px; }
   .oh-inv-mgmt-count-nav { max-width: 600px; }

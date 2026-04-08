@@ -173,7 +173,7 @@ export default function InvoiceTool({ config, showToast, openConfirm, onNavigate
   const [account, setAccount] = useState(() => typeof window !== "undefined" ? localStorage.getItem(LAST_ACCT_KEY) || "" : "");
   const [vendor, setVendor] = useState(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
+const [invoiceDate, setInvoiceDate] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [glRows, setGlRows] = useState([{ code: "", name: "", amount: "" }]);
   const [pages, setPages] = useState([]);
@@ -245,7 +245,24 @@ const glTotalRaw = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
   const glTotal = Math.round(glTotalRaw * 100) / 100;
   const invoiceTotal = Math.round(Number(totalAmount) * 100) / 100;
   const glBalanceDiff = invoiceTotal > 0 ? invoiceTotal - glTotal : 0;
-    const hasDetails = !!(invoiceDate && Number(totalAmount) > 0 && invoiceNumber);
+const hasDetails = !!(invoiceDate && Number(totalAmount) > 0 && invoiceNumber);
+
+  // Smart Scan verification — compares user-entered values against AI detections
+const smartScan = useMemo(() => {
+    if (!ocrResult || ocrStatus !== "success") return { inv: null, total: null };
+    const invAI = ocrResult.invoiceNumber?.trim() || null;
+    const totalAI = ocrResult.totalAmount ? Number(ocrResult.totalAmount) : null;
+    const confidence = ocrResult.confidence || "low";
+
+    return {
+      inv: invAI && invoiceNumber.trim() ? (invoiceNumber.trim() === invAI ? "match" : "mismatch") : null,
+      total: totalAI && totalAmount && Number(totalAmount) > 0 ? (Math.abs(Number(totalAmount) - totalAI) < 0.02 ? "match" : "mismatch") : null,
+      invAI,
+      totalAI,
+      confidence,
+    };
+  }, [ocrResult, ocrStatus, invoiceNumber, totalAmount]);
+
   const glBalanced = Number(totalAmount) > 0 && glRows.some((r) => r.code && Number(r.amount) > 0) && Math.abs(glBalanceDiff) <= 0.01;
 
   const hasUnsavedChanges = useMemo(() => {
@@ -632,16 +649,14 @@ if (data.success) {
             confidence: data.confidence,
           };
         });
-        const filled = [];
-        if (data.invoiceNumber && !invoiceNumber) { setInvoiceNumber(data.invoiceNumber); filled.push("invoice #"); }
-if (data.invoiceDate) { setInvoiceDate(data.invoiceDate); filled.push("date"); }
-        if (data.totalAmount && !totalAmount) { setTotalAmount(String(data.totalAmount)); filled.push("total"); }
+// Vendor auto-detect still fills (low risk for AP matching)
         if (data.vendorMatch?.bestMatch && !vendor) {
           const matchedVendor = vendors.find((v) => v.vendorId === data.vendorMatch.bestMatch.vendorId);
-          if (matchedVendor && data.vendorMatch.confidence !== "low") { setVendor(matchedVendor); trackRecentVendor(matchedVendor.vendorId); filled.push("vendor"); }
+          if (matchedVendor && data.vendorMatch.confidence !== "low") { setVendor(matchedVendor); trackRecentVendor(matchedVendor.vendorId); }
         }
-        if (filled.length > 0) showToast(`Auto-detected: ${filled.join(", ")} ${data.confidence === "high" ? "✓" : "(verify)"}`, "info");
-      } else { setOcrStatus("idle"); }
+        // Invoice #, date, total are NOT auto-filled — chef enters manually, Smart Scan verifies
+        showToast("Smart Scan complete - enter invoice details to verify", "info");
+            } else { setOcrStatus("idle"); }
         } catch { setOcrStatus("idle"); }
   }, [account, invoiceNumber, vendors, vendor, showToast, trackRecentVendor]);
 
@@ -728,10 +743,21 @@ const roundedGlT = Math.round(glT * 100) / 100;
   }, [account, vendor, invoiceNumber, invoiceDate, totalAmount, pages, glRows]);
 
   // ——— Submit ———
-  const handleSubmit = useCallback(async () => {
+const handleSubmit = useCallback(async () => {
     if (!validate()) return;
+    // Submit confirmation — show summary before sending to AP
+    const confirmSubmit = await new Promise((resolve) => {
+      openConfirm(
+        "Confirm Submission",
+        `Submit ${isCreditMemo ? "credit memo" : "invoice"} to AP?\n\nVendor: ${vendor?.name}\nInvoice #: ${invoiceNumber}\nDate: ${invoiceDate}\nTotal: ${isCreditMemo ? "−" : ""}$${fmt$(Math.abs(Number(totalAmount)))}`,
+        "Submit to AP",
+        () => resolve(true)
+      );
+      setTimeout(() => resolve(false), 60000);
+    });
+    if (!confirmSubmit) return;
     try {
-      const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+            const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
       const dupData = await dupRes.json();
       if (dupData.isDuplicate) {
@@ -1360,25 +1386,19 @@ const MAINTENANCE_MODE = true;
                   {ocrStatus === "scanning" && (
                     <div className="oh-inv-ocr-scanning">
                       <div className="oh-spinner-sm" style={{ width: 16, height: 16 }} />
-                      <span>Scanning invoice for auto-fill...</span>
+<span>Reading invoice, please wait...</span>
                     </div>
                   )}
 
-                  {ocrStatus === "success" && ocrResult && (
-                    <div className="oh-inv-ocr-result">
+{ocrStatus === "success" && ocrResult && (
+                    <div className="oh-inv-ocr-result oh-inv-ocr-result--verify">
                       <div className="oh-inv-ocr-result-header">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                        <span className="oh-inv-ocr-result-title">Auto-detected from scan</span>
-                        {ocrResult.confidence !== "high" && <span className="oh-inv-ocr-verify">verify below</span>}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M12 2a10 10 0 1 0 10 10" /><polyline points="12 6 12 12 16 14" /></svg>
+<span className="oh-inv-ocr-result-title">Invoice Loaded</span>
                       </div>
-                      <div className="oh-inv-ocr-pills">
-                        {ocrResult.invoiceNumber && <div className="oh-inv-ocr-pill"><span className="oh-inv-ocr-pill-label">Invoice #</span><span className="oh-inv-ocr-pill-value">{ocrResult.invoiceNumber}</span></div>}
-                        {ocrResult.totalAmount && <div className="oh-inv-ocr-pill oh-inv-ocr-pill--money"><span className="oh-inv-ocr-pill-label">Total</span><span className="oh-inv-ocr-pill-value">${Number(ocrResult.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></div>}
-                        {ocrResult.vendorName && <div className="oh-inv-ocr-pill"><span className="oh-inv-ocr-pill-label">Vendor</span><span className="oh-inv-ocr-pill-value">{ocrResult.vendorName}</span></div>}
-                      </div>
-                    </div>
+                      <p className="oh-inv-ocr-verify-prompt">Enter the invoice #, date, and total from your document below.</p>                    </div>
                   )}
-                </div>
+                                  </div>
               </div>{/* end SECTION 2 */}
 
               {/* ══ SECTION 3: DETAILS ══ */}
@@ -1477,31 +1497,32 @@ const MAINTENANCE_MODE = true;
 
                 {/* Invoice # + Date */}
                 <div className={`oh-inv-row-2col${!hasVendor ? " oh-inv-field--disabled" : ""}`}>
-                  <div className="oh-inv-field-group" data-field="invoiceNumber">
+<div className="oh-inv-field-group" data-field="invoiceNumber">
                     <label className="oh-inv-label">{isCreditMemo ? "Credit Memo #" : "Invoice #"} <span className="oh-inv-req">*</span></label>
-                    <div className="oh-inv-input-wrap">
-                      <input type="text" className={`oh-inv-input${errors.invoiceNumber ? " oh-inv-error" : ""}${ocrStatus === "success" && ocrResult?.invoiceNumber && invoiceNumber === ocrResult.invoiceNumber ? " oh-inv-input--autofilled" : ""}`} value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder={isCreditMemo ? "CM-001" : "INV-001"} disabled={!hasVendor} />
-                      {ocrStatus === "success" && ocrResult?.invoiceNumber && invoiceNumber === ocrResult.invoiceNumber && <span className="oh-inv-autofill-badge">AI</span>}
+                <div className="oh-inv-input-wrap">
+                      <input type="text" className={`oh-inv-input${errors.invoiceNumber ? " oh-inv-error" : ""}`} value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder={isCreditMemo ? "CM-001" : "INV-001"} disabled={!hasVendor} />
                     </div>
-                  </div>
-                  <div className="oh-inv-field-group" data-field="invoiceDate">
+                    <div className="oh-inv-smart-hint">Please verify the invoice # matches your document</div>
+                                                          </div>
+<div className="oh-inv-field-group" data-field="invoiceDate">
                     <label className="oh-inv-label">Date <span className="oh-inv-req">*</span></label>
                     <input type="date" className={`oh-inv-input${errors.invoiceDate ? " oh-inv-error" : ""}`} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={!hasVendor} />
+                    <div className="oh-inv-smart-hint">Please verify the date matches your invoice</div>
                   </div>
-                </div>
+                                                    </div>
 
                 {/* Total */}
                 <div className={`oh-inv-field-group${!hasVendor ? " oh-inv-field--disabled" : ""}${Number(totalAmount) > 0 ? " oh-inv-field--done" : ""}`} data-field="totalAmount">
                   <label className="oh-inv-label">{isCreditMemo ? "Credit Amount" : "Invoice Total"} <span className="oh-inv-req">*</span></label>
                   <div className="oh-inv-money-input">
                     <span className={`oh-inv-money-prefix${isCreditMemo ? " oh-inv-money-prefix--credit" : ""}`}>{isCreditMemo ? "−$" : "$"}</span>
-                    <input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}${ocrStatus === "success" && ocrResult?.totalAmount && totalAmount === ocrResult.totalAmount ? " oh-inv-input--autofilled" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
-                    {ocrStatus === "success" && ocrResult?.totalAmount && totalAmount === ocrResult.totalAmount && <span className="oh-inv-autofill-badge oh-inv-autofill-badge--money">AI</span>}
+<input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
                   </div>
-                </div>
+                  <div className="oh-inv-smart-hint">Please verify the total matches your invoice</div>
+                                  </div>
 
                 {/* GL Coding */}
-                <div className={`oh-inv-field-group${!hasVendor ? " oh-inv-field--disabled" : ""}${glRows.some(r => r.code && Number(r.amount) > 0) ? " oh-inv-field--done" : ""}`} data-field="glRows">
+                                <div className={`oh-inv-field-group${!hasVendor ? " oh-inv-field--disabled" : ""}${glRows.some(r => r.code && Number(r.amount) > 0) ? " oh-inv-field--done" : ""}`} data-field="glRows">
                   <label className="oh-inv-label">GL Coding <span className="oh-inv-req">*</span></label>
                   <div className="oh-inv-gl-container">
                     <GLCodeTable glCodes={glCodes} rows={glRows} onChange={setGlRows} hasError={errors.glRows} disabled={!hasVendor} />
