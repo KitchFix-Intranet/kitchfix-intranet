@@ -10,9 +10,9 @@
 /* ── Desktop Width Constraint ── */
 .oh-inv-card {
   padding: 0 !important;
-  overflow: hidden;
+  overflow: visible;
   max-width: 680px;
-  margin-left: auto;
+    margin-left: auto;
   margin-right: auto;
 }
 
@@ -456,6 +456,7 @@
   border-radius: 12px;
   padding: 14px;
   margin-top: 4px;
+  overflow: visible;
 }
 .oh-inv-field--disabled {
   opacity: 0.45;
@@ -1205,7 +1206,7 @@
 /* ══════════════════════════════════════════════════════════════
    GL CODE TABLE + PICKER
    ══════════════════════════════════════════════════════════════ */
-.oh-inv-gl-table { border: 1.5px solid var(--oh-grey-border); border-radius: 14px; overflow: hidden; }
+.oh-inv-gl-table { border: 1.5px solid var(--oh-grey-border); border-radius: 14px; overflow: visible; }
 .oh-inv-gl-row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
 .oh-inv-gl-row:last-of-type { border-bottom: none; }
 .oh-inv-gl-amount-wrap { position: relative; flex: 1; min-width: 100px; }

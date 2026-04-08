@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import ReactDOM from "react-dom";
 
 const GL_USAGE_KEY = "kf_inv_gl_usage";
 const MAX_FAVORITES = 5;
@@ -20,45 +19,17 @@ const MAX_FAVORITES = 5;
 function GLCodePicker({ value, glCodes, codeLookup, favorites, allCodesFlat, disabled, onChange, onUsage, onAfterSelect }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [dropdownStyle, setDropdownStyle] = useState({});
-const containerRef = useRef(null);
-  const dropdownRef = useRef(null);
+  const containerRef = useRef(null);
   const searchRef = useRef(null);
   const listRef = useRef(null);
 
   const selected = value ? codeLookup[value] : null;
 
-  // Calculate fixed position from trigger bounding rect
-  const updatePosition = useCallback(() => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < 280) {
-      setDropdownStyle({
-        position: "fixed",
-        left: rect.left,
-        bottom: window.innerHeight - rect.top,
-        width: rect.width,
-        zIndex: 9999,
-      });
-    } else {
-      setDropdownStyle({
-        position: "fixed",
-        left: rect.left,
-        top: rect.bottom + 2,
-        width: rect.width,
-        zIndex: 9999,
-      });
-    }
-  }, []);
-
-// Close on outside click — must check both trigger AND portaled dropdown
+  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handleClick(e) {
-      const inTrigger = containerRef.current && containerRef.current.contains(e.target);
-      const inDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
-      if (!inTrigger && !inDropdown) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
         setOpen(false);
         setSearch("");
       }
@@ -71,17 +42,6 @@ const containerRef = useRef(null);
     };
   }, [open]);
 
-// Recalculate position on scroll or resize while open
-  useEffect(() => {
-    if (!open) return;
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [open, updatePosition]);
-  
   // Focus search when opened
   useEffect(() => {
     if (open && searchRef.current) {
@@ -121,12 +81,12 @@ const containerRef = useRef(null);
       ref={containerRef}
     >
       {/* Trigger button */}
-<button
+      <button
         type="button"
         className={`oh-inv-gl-trigger${!value ? " oh-inv-gl-trigger--placeholder" : ""}`}
-        onClick={() => { if (!disabled) { if (!open) updatePosition(); setOpen((o) => !o); } }}
+        onClick={() => { if (!disabled) setOpen((o) => !o); }}
         disabled={disabled}
-                aria-haspopup="listbox"
+        aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="oh-inv-gl-trigger-text">
@@ -156,10 +116,10 @@ const containerRef = useRef(null);
         </span>
       </button>
 
-      {/* Dropdown panel — portaled to body to escape overflow clip */}
-      {open && typeof document !== "undefined" && ReactDOM.createPortal(
-<div className="oh-inv-gl-dropdown" ref={dropdownRef} style={dropdownStyle} role="listbox">
-            {/* Search input */}
+      {/* Dropdown panel */}
+      {open && (
+        <div className="oh-inv-gl-dropdown" role="listbox">
+          {/* Search input */}
           <div className="oh-inv-gl-search-wrap">
             <svg className="oh-inv-gl-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -186,7 +146,7 @@ const containerRef = useRef(null);
             {filtered !== null ? (
               /* Search results — flat list */
               filtered.length === 0 ? (
-                <div className="oh-inv-gl-empty">No codes match "{search}"</div>
+                <div className="oh-inv-gl-empty">No codes match &ldquo;{search}&rdquo;</div>
               ) : (
                 <div className="oh-inv-gl-group">
                   {filtered.map((item) => (
@@ -201,14 +161,14 @@ const containerRef = useRef(null);
                 </div>
               )
             ) : (
-/* Full grouped list */
+              /* Full grouped list */
               <>
                 {allCodesFlat.length === 0 && (
                   <div className="oh-inv-gl-empty"><div className="oh-spinner-sm" style={{ width: 14, height: 14, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} />Loading GL codes...</div>
                 )}
                 {/* Frequently Used */}
                 {favorites.length > 0 && (
-                                    <div className="oh-inv-gl-group">
+                  <div className="oh-inv-gl-group">
                     <div className="oh-inv-gl-group-label oh-inv-gl-group-label--fav">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="#d97706" stroke="#d97706" strokeWidth="1">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -244,8 +204,7 @@ const containerRef = useRef(null);
               </>
             )}
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
@@ -371,11 +330,11 @@ export default function GLCodeTable({ glCodes = [], rows, onChange, hasError, di
               className="oh-inv-gl-amount"
               placeholder="0.00"
               value={row.amount}
-onChange={(e) => updateRowAmount(idx, e.target.value)}
+              onChange={(e) => updateRowAmount(idx, e.target.value)}
               onWheel={(e) => e.currentTarget.blur()}
               disabled={disabled}
               step="0.01"
-                            min="0"
+              min="0"
             />
           </div>
 
