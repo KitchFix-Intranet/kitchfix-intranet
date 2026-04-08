@@ -6,58 +6,10 @@ import InvoicePreview from "@/app/ops/components/invoice/InvoicePreview";
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const DRAFT_KEY = "kf_invoice_draft";
 const LAST_ACCT_KEY = "kf_inv_last_account";
 const QUEUE_KEY = "kf_invoice_offline_queue";
 const RECENT_VENDORS_KEY = "kf_inv_recent_vendors";
 const GL_USAGE_KEY = "kf_inv_gl_usage";
-
-// ═══════════════════════════════════════
-// CompletionBar
-// ═══════════════════════════════════════
-function CompletionBar({ account, photosReady, hasVendor, hasDetails, glBalanced, done }) {
-  const steps = [
-    { label: "Account", done: !!account },
-    { label: "Photo",   done: photosReady },
-    { label: "Vendor",  done: hasVendor },
-    { label: "Details", done: hasDetails },
-    { label: "GL",      done: glBalanced },
-  ];
-  const completed = steps.filter((s) => s.done).length;
-  const pct = Math.round((completed / steps.length) * 100);
-
-  if (done) {
-    return (
-      <div className="oh-inv-progress oh-inv-progress--submitted">
-        <div className="oh-inv-progress-bar">
-          <div className="oh-inv-progress-fill oh-inv-progress-fill--complete" style={{ width: "100%" }} />
-        </div>
-        <div className="oh-inv-progress-meta">
-          <span className="oh-inv-progress-label oh-inv-progress-label--done">✓ Submitted!</span>
-          <span className="oh-inv-progress-pct">100%</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="oh-inv-progress">
-      <div className="oh-inv-progress-bar">
-        <div className="oh-inv-progress-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="oh-inv-progress-steps">
-        {steps.map((s, i) => (
-          <div key={i} className={`oh-inv-progress-step${s.done ? " oh-inv-progress-step--done" : i === completed ? " oh-inv-progress-step--next" : ""}`}>
-            <div className="oh-inv-progress-dot">
-              {s.done && <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>}
-            </div>
-            <span className="oh-inv-progress-step-label">{s.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════
 // VendorTypeAhead
@@ -206,7 +158,6 @@ const [invoiceDate, setInvoiceDate] = useState("");
   const [activeTab, setActiveTab] = useState("form");
   const [showVendorSetup, setShowVendorSetup] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState(null);
-  const [draftSavedAgo, setDraftSavedAgo] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
@@ -356,52 +307,6 @@ const smartScan = useMemo(() => {
       setVendor(null);
     }
   }, [account, loadBootstrap]);
-
-  // ——— Draft save/restore ———
-  const saveDraft = useCallback(() => {
-    if (!account) return;
-    const draft = { account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, apNote, formType, ts: Date.now() };
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); setDraftSavedAgo(0); } catch {}
-  }, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, apNote, formType]);
-
-  useEffect(() => { saveDraft(); }, [saveDraft]);
-
-  useEffect(() => {
-    if (draftSavedAgo === null) return;
-    const timer = setInterval(() => setDraftSavedAgo((p) => (p !== null ? p + 1 : null)), 1000);
-    return () => clearInterval(timer);
-  }, [draftSavedAgo !== null]);
-
-  const draftLabel = useMemo(() => {
-    if (draftSavedAgo === null || !hasAccount) return null;
-    if (draftSavedAgo < 3) return "Draft saved just now";
-    if (draftSavedAgo < 60) return `Draft saved ${draftSavedAgo}s ago`;
-    return `Draft saved ${Math.floor(draftSavedAgo / 60)}m ago`;
-  }, [draftSavedAgo, hasAccount]);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
-      if (Date.now() - d.ts > 86400000) { localStorage.removeItem(DRAFT_KEY); return; }
-      if (d.vendor) setVendor(d.vendor);
-      if (d.invoiceNumber) setInvoiceNumber(d.invoiceNumber);
-      if (d.invoiceDate) setInvoiceDate(d.invoiceDate);
-      if (d.totalAmount) setTotalAmount(d.totalAmount);
-      if (d.glRows?.length) setGlRows(d.glRows);
-if (d.pages?.length) {
-        const restoredPages = d.pages.map((p, i) => ({ ...p, pid: p.pid || `draft_${i}`, gate: "scanning", gateResult: null, pageNumber: null, totalPages: null, pageNumberConfidence: "none" }));
-        setPages(restoredPages);
-        // Re-run photo gate on each restored page (non-blocking)
-        restoredPages.forEach((p) => {
-          if (p.data) runPhotoGate(p.pid, p.data);
-        });
-      }
-            if (d.apNote) { setApNote(d.apNote); setShowNoteField(true); }
-      if (d.formType && d.formType !== "cc_receipt") setFormType(d.formType);
-    } catch {}
-  }, []);
 
   // ═══════════════════════════════════════
   // PHOTO GATE
@@ -827,7 +732,7 @@ const resetForm = useCallback(() => {
       setInvoiceNumber(""); setInvoiceDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
     setPages([]); setApNote(""); setShowNoteField(false);
-    setErrors({}); setDraftSavedAgo(null); localStorage.removeItem(DRAFT_KEY);
+setErrors({});
     setOcrStatus("idle"); setOcrResult(null);
 setReorderMode(false); setSelectedPageIdx(null);
     setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
@@ -956,8 +861,7 @@ const MAINTENANCE_MODE = true;
             <div>
               <h3 className="oh-card-title" style={{ margin: 0 }}>Invoice Capture</h3>
               <p className="oh-card-desc" style={{ margin: 0 }}>
-                Snap, code &amp; submit to AP.
-                {draftLabel && <span className="oh-inv-draft-label"> · {draftLabel}</span>}
+Upload, code &amp; submit to AP.
               </p>
             </div>
           </div>
@@ -1057,7 +961,6 @@ const MAINTENANCE_MODE = true;
           {/* ════ FORM TAB ════ */}
           {activeTab === "form" && (
             <div className={`oh-inv-form${formType === "invoice" ? " oh-inv-form--invoice" : ""}${isCreditMemo ? " oh-inv-form--credit" : ""}`}>
-              <CompletionBar account={account} photosReady={photosReady} hasVendor={hasVendor} hasDetails={hasDetails} glBalanced={glBalanced} done={stepComplete} />
 
               {/* Two-way type toggle */}
               <div className="oh-inv-type-toggle">
@@ -1107,18 +1010,20 @@ const MAINTENANCE_MODE = true;
               <div className="oh-inv-section">
                 <div className="oh-inv-section-head">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                  <span>Evidence</span>
+<span>Invoice</span>
                 </div>
 
                 <div className={`oh-inv-field-group${!hasAccount ? " oh-inv-field--disabled" : ""}${photosReady ? " oh-inv-field--done" : ""}`} data-field="pages">
 
                   {/* ─── Label row: label left, reorder button right ─── */}
                   <div className="oh-inv-label-row">
-                    <label className="oh-inv-label">
-                      Invoice Photo{pages.length > 1 ? "s" : ""} / PDF <span className="oh-inv-req">*</span>
+<label className="oh-inv-label">
+Invoice PDF / Scan <span className="oh-inv-req">*</span>
+<button type="button" className="oh-inv-help-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); const tip = e.currentTarget.nextElementSibling; const show = tip.style.display !== "block"; tip.style.display = show ? "block" : "none"; if (show) { const close = (ev) => { if (!tip.contains(ev.target) && ev.target !== e.currentTarget) { tip.style.display = "none"; document.removeEventListener("click", close); } }; setTimeout(() => document.addEventListener("click", close), 0); } }}>?</button>
+<div className="oh-inv-help-tip">Upload a digital PDF or <strong>clean, readable, full-page</strong> scan from your vendor portal or email. No digital copy? Email to <strong>ap@kitchfix.com</strong> with the account, vendor name, GL breakdown, and total.</div>
 {pages.length > 0 && <span className="oh-inv-label-hint">{pages.length}/15 pages {gateScanning ? "⏳" : gateAllCleared ? "✓" : ""}</span>}
                     </label>
-                    {pages.length >= 2 && (
+                                        {pages.length >= 2 && (
                       <button
                         className={`oh-inv-reorder-btn${reorderMode ? " oh-inv-reorder-btn--active" : ""}`}
                         onClick={() => { setReorderMode(!reorderMode); setSelectedPageIdx(null); }}
@@ -1229,23 +1134,19 @@ const MAINTENANCE_MODE = true;
 {pages.length < 15 && !reorderMode && (
                         <>
                         {pages.length === 0 ? (
-                          <div className={`oh-inv-add-card oh-inv-add-card--first${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+<div className={`oh-inv-add-card oh-inv-add-card--first${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                             <div className="oh-inv-add-card-icon">
-                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                             </div>
-                            <span className="oh-inv-add-card-text">{dragOver ? "Drop here" : "Capture or upload invoice"}</span>
+                            <span className="oh-inv-add-card-text">{dragOver ? "Drop here" : "Upload digital invoice or scan"}</span>
+                            <span className="oh-inv-add-card-hint">PDF, JPG, or PNG</span>
                             <div className="oh-inv-capture-btns">
-                              <button className="oh-inv-capture-btn oh-inv-capture-btn--camera" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && fileInputRef.current?.click(); }} type="button">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-                                Take Photo
-                              </button>
-                              <button className="oh-inv-capture-btn oh-inv-capture-btn--gallery" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && galleryInputRef.current?.click(); }} type="button">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                                Upload / PDF
+                              <button className="oh-inv-capture-btn oh-inv-capture-btn--camera" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && galleryInputRef.current?.click(); }} type="button">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                                Upload file
                               </button>
                             </div>
-                          </div>
-) : (
+                          </div>                          ) : (
   <div
     className={`oh-inv-add-card${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`}
     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
@@ -1256,13 +1157,13 @@ const MAINTENANCE_MODE = true;
   </div>                        )}
                       </>
                     )}
-                    <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} style={{ display: "none" }} />
                     <input ref={galleryInputRef} type="file" accept="image/*,application/pdf" multiple onChange={handlePhotoCapture} style={{ display: "none" }} />
-                  </div>
+                                      </div>
 
-                  {/* ═══ NOTICES (priority order) ═══ */}
+{/* ═══ NOTICES (priority order) ═══ */}
                   {(() => {
-                    // PRIORITY 1: Rogue page detected
+                    if (pages.length === 0) return null;
+                    // PRIORITY 1: Rogue page detected                    
                     if (consistencyIssues.length > 0) {
                       return (
                         <div className="oh-inv-notice oh-inv-notice--warn">
@@ -1335,24 +1236,24 @@ const MAINTENANCE_MODE = true;
                       );
                     }
 
-                    // PRIORITY 4: Hard block — non-document
+// PRIORITY 4: Hard block — non-document
                     if (gateFailedPages.length > 0 && ocrStatus !== "scanning") {
                       const p = gateFailedPages[0];
                       const isNotDoc = p.gateResult?.documentType === "not_document";
                       const isObstructed = p.gateResult?.documentType === "obstructed";
-                      const msg = p.gateResult?.message || (isNotDoc ? "This doesn't look like a financial document — please photograph an invoice or credit memo." : isObstructed ? "Something is blocking the document. Remove any objects covering the page and retake." : "The document couldn't be read clearly. Lay it flat on a solid surface, ensure good lighting, and retake.");
+                      const msg = p.gateResult?.message || (isNotDoc ? "This doesn't appear to be a financial document. Please upload an invoice, receipt, or credit memo." : isObstructed ? "Something is blocking the document. Please remove it and re-upload." : "The document couldn't be read clearly. Please re-upload a clean copy.");
                       return (
                         <div className="oh-inv-notice oh-inv-notice--block">
                           <div className="oh-inv-notice-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg></div>
                           <div className="oh-inv-notice-body"><p className="oh-inv-notice-msg">{msg}</p></div>
-                          <button className="oh-inv-notice-action" onClick={() => { removePage(pages.indexOf(p)); setTimeout(() => fileInputRef.current?.click(), 100); }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-                            Retake
+                          <button className="oh-inv-notice-action" onClick={() => { removePage(pages.indexOf(p)); setTimeout(() => galleryInputRef.current?.click(), 100); }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                            Re-upload
                           </button>
                         </div>
                       );
                     }
-
+                    
                     // PRIORITY 5: Quality warning
                     if (gateWarnPages.length > 0) {
                       const msg = gateWarnPages[0].gateResult?.message || "Photo quality could be better — AP may ask for a clearer copy.";
@@ -1364,22 +1265,7 @@ const MAINTENANCE_MODE = true;
                       );
                     }
 
-                    // PRIORITY 6: OCR rejection
-                    if (ocrStatus === "rejected" && ocrResult) {
-                      return (
-                        <div className="oh-inv-notice oh-inv-notice--block">
-                          <div className="oh-inv-notice-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg></div>
-                          <div className="oh-inv-notice-body">
-                            <p className="oh-inv-notice-msg">{ocrResult.reason}</p>
-                            {ocrResult.suggestion && <p className="oh-inv-notice-hint">{ocrResult.suggestion}</p>}
-                          </div>
-                          <button className="oh-inv-notice-action" onClick={() => { setPages([]); setOcrStatus("idle"); setOcrResult(null); setTimeout(() => fileInputRef.current?.click(), 100); }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-                            Retake
-                          </button>
-                        </div>
-                      );
-                    }
+
                     return null;
                   })()}
 
