@@ -320,9 +320,9 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
           pageNumberConfidence: data.pageNumberConfidence || "none",
         } : p
       ));
-      if (!data.pass) showToast(data.message || "Photo didn't pass quality check", "error");
-      else if (data.isWarning) showToast(data.message || "Photo has quality issues — you can still proceed", "info");
-    } catch {
+if (!data.pass) showToast(data.message || "Document didn't pass quality check", "error");
+      else if (data.isWarning) showToast(data.message || "Document has quality issues — you can still proceed", "info");
+        } catch {
       setPages((prev) => prev.map((p) =>
         p.pid === pageId ? { ...p, gate: "pass", gateResult: null, pageNumber: null, totalPages: null, pageNumberConfidence: "none" } : p
       ));
@@ -1240,8 +1240,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                     
                     // PRIORITY 5: Quality warning
                     if (gateWarnPages.length > 0) {
-                      const msg = gateWarnPages[0].gateResult?.message || "Photo quality could be better — AP may ask for a clearer copy.";
-                      return (
+const msg = gateWarnPages[0].gateResult?.message || "Document quality could be better — AP may ask for a clearer copy.";                      return (
                         <div className="oh-inv-notice oh-inv-notice--warn">
                           <div className="oh-inv-notice-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg></div>
                           <div className="oh-inv-notice-body"><p className="oh-inv-notice-msg">{msg}</p></div>
@@ -1443,7 +1442,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
 <div className="oh-inv-submit-footer">
                   <button
                   className={`oh-inv-submit-btn${submitting ? " oh-inv-submitting" : ""}${isCreditMemo ? " oh-inv-submit-btn--credit" : ""}`}
-                  onClick={handleSubmit} disabled={submitting || !hasVendor}
+onClick={handleSubmit} disabled={submitting || !hasVendor || gateScanning || gateFailedPages.length > 0}
                 >
                   {submitting ? (
                     <><div className="oh-spinner-sm" />Uploading {pages.length} page{pages.length !== 1 ? "s" : ""}...</>
