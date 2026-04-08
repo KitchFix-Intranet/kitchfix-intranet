@@ -39,6 +39,21 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const [manageView, setManageView] = useState(null);
   const [busy, setBusy] = useState(null);
   const didInit = useRef(false);
+  const childDirty = useRef(false);
+
+  // Guard navigation when child has unsaved changes
+  const guardNav = (fn) => {
+    if (childDirty.current) {
+      openConfirm?.(
+        "Unsaved Changes",
+        "You have unsaved changes to storage locations. Discard and leave?",
+        "Discard",
+        () => { childDirty.current = false; fn(); }
+      );
+      return;
+    }
+    fn();
+  };
 
   // ── Bootstrap ──
   const loadBootstrap = useCallback(async (acct, fresh = false) => {
@@ -138,7 +153,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       onBack={() => { setScreen("landing"); setSessionId(null); }} showToast={showToast} />;
   } else if (screen === "manage" && manageView === "locations") {
     content = <LocationSetup locations={locations} account={account} catalogItems={catalogItems}
-      onSave={handleSaveLocations} onBack={() => setManageView(null)} showToast={showToast} />;
+      onSave={handleSaveLocations} onBack={() => guardNav(() => setManageView(null))} onDirtyChange={(d) => { childDirty.current = d; }} showToast={showToast} />;
   } else if (screen === "manage") {
     content = (
       <div className="oh-inv-mgmt-manage"><div className="oh-inv-mgmt-manage-grid">
@@ -219,7 +234,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       <div className="oh-inv-mgmt-header">
         <div className="oh-inv-mgmt-header-left">
           {showBack ? (
-            <button className="oh-inv-mgmt-back" onClick={() => { setScreen("landing"); setSessionId(null); setManageView(null); }}>
+            <button className="oh-inv-mgmt-back" onClick={() => guardNav(() => { setScreen("landing"); setSessionId(null); setManageView(null); })}>
               <Icon d={icons.arrowLeft} size={18} color="#fff" />
             </button>
           ) : <Icon d={icons.box} size={15} color="#fff" />}
@@ -231,13 +246,13 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
             <Icon d={accountOpen ? icons.chevUp : icons.chevDown} size={12} color="#94a3b8" />
           </button>
           <span className="oh-inv-mgmt-header-sep">|</span>
-          <button className="oh-inv-mgmt-gear-btn" onClick={() => { setScreen(screen === "manage" ? "landing" : "manage"); setManageView(null); }}>
+          <button className="oh-inv-mgmt-gear-btn" onClick={() => guardNav(() => { setScreen(screen === "manage" ? "landing" : "manage"); setManageView(null); })}>
             <Icon d={icons.gear} size={16} color="#fff" />
             {reviewCount > 0 && <span className="oh-inv-mgmt-gear-badge">{reviewCount}</span>}
           </button>
         </div>
         {accountOpen && <div className="oh-inv-mgmt-account-dropdown">
-          {accounts.map((a) => <button key={a.label} className={`oh-inv-mgmt-account-option${a.label === account ? " active" : ""}`} onClick={() => switchAccount(a.label)}>{a.label}</button>)}
+          {accounts.map((a) => <button key={a.label} className={`oh-inv-mgmt-account-option${a.label === account ? " active" : ""}`} onClick={() => guardNav(() => switchAccount(a.label))}>{a.label}</button>)}
         </div>}
       </div>
       {content}

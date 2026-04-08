@@ -82,7 +82,7 @@ const ic = {
 };
 const SUGGESTED = ["Walk-in Cooler", "Walk-in Freezer", "Dry Storage", "Beverage Station", "Prep Area", "Supply Closet", "Bar", "FOH Storage"];
 
-export default function LocationSetup({ locations: initial = [], account, catalogItems = [], onSave, onBack, onViewItems, showToast }) {
+export default function LocationSetup({ locations: initial = [], account, catalogItems = [], onSave, onBack, onViewItems, onDirtyChange, showToast }) {
   const [zones, setZones] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [editingId, setEditingId] = useState(null);
@@ -98,8 +98,11 @@ export default function LocationSetup({ locations: initial = [], account, catalo
   const [hasChanges, setHasChanges] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [menuOpen, setMenuOpen] = useState(null);
-  const [reorderMode, setReorderMode] = useState(false);
   const menuRef = useRef(null);
+
+  // Notify parent of dirty state (+ cleanup on unmount)
+  useEffect(() => { onDirtyChange?.(hasChanges); }, [hasChanges]);
+  useEffect(() => { return () => onDirtyChange?.(false); }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -144,16 +147,11 @@ export default function LocationSetup({ locations: initial = [], account, catalo
   const handleSave = async () => {
     setSaving(true);
     const flat = []; zones.forEach((z, i) => { flat.push({ locationId: z.isNew ? null : z.locationId, name: z.name, icon: z.icon, color: z.color, sortOrder: i, parentLocationId: null }); z.subZones.forEach((s, j) => { flat.push({ locationId: s.isNew ? null : s.locationId, name: s.name, icon: s.icon, color: s.color, sortOrder: j, parentLocationId: z.isNew ? null : z.locationId, parentName: z.name }); }); });
-    try { await onSave?.(flat); setHasChanges(false); setJustSaved(true); setReorderMode(false); } catch { showToast?.("Save failed", "error"); } finally { setSaving(false); }
+    try { await onSave?.(flat); setHasChanges(false); setJustSaved(true); } catch { showToast?.("Save failed", "error"); } finally { setSaving(false); }
   };
 
-  // 5.11: Confirm on Back with unsaved changes
-  const handleBack = () => {
-    if (hasChanges) {
-      if (!window.confirm("You have unsaved changes. Discard and go back?")) return;
-    }
-    onBack?.();
-  };
+  // Back is guarded by parent via onDirtyChange + guardNav
+  const handleBack = () => { onBack?.(); };
 
   const handleViewItems = () => { if (hasChanges) { showToast?.("Save your changes first", "error"); return; } onViewItems?.(); };
 
@@ -191,11 +189,13 @@ export default function LocationSetup({ locations: initial = [], account, catalo
   };
 
   // -- Three-dot menu (5.5) --
-  const renderMenu = (zoneId, zoneName, zoneIcon, zoneColor, hasSubs) => (
+  const renderMenu = (zoneId, zoneName, zoneIcon, zoneColor, hasSubs, zIdx) => (
     <div className="oh-inv-loc-menu" ref={menuRef}>
+      {zIdx > 0 && <button onClick={(e) => { e.stopPropagation(); moveZ(zIdx, -1); setMenuOpen(null); }}>Move up</button>}
+      {zIdx < zones.length - 1 && <button onClick={(e) => { e.stopPropagation(); moveZ(zIdx, 1); setMenuOpen(null); }}>Move down</button>}
       <button onClick={(e) => { e.stopPropagation(); startEdit(zoneId, zoneName); }}>Rename</button>
       <button onClick={(e) => { e.stopPropagation(); openPicker(zoneId, zoneIcon, zoneColor); }}>Change icon</button>
-      {!hasSubs && <button onClick={(e) => { e.stopPropagation(); setAddingSubTo(zoneId); setNewSubName(""); setMenuOpen(null); setExpanded((p) => ({ ...p, [zoneId]: true })); }}>Add sub-zone</button>}
+      <button onClick={(e) => { e.stopPropagation(); setAddingSubTo(zoneId); setNewSubName(""); setMenuOpen(null); setExpanded((p) => ({ ...p, [zoneId]: true })); }}>Add sub-zone</button>
       <button className="oh-inv-loc-menu-danger" onClick={(e) => { e.stopPropagation(); reqDelZ(zoneId); }}>Delete</button>
     </div>
   );
@@ -217,12 +217,6 @@ export default function LocationSetup({ locations: initial = [], account, catalo
               {totalItems > 0 ? ` \u00B7 ${totalItems} item${totalItems !== 1 ? "s" : ""}` : ""}
             </p>
           </div>
-          {/* Reorder mode toggle (2C) */}
-          {zones.length > 1 && (
-            <button className={`oh-inv-loc-reorder-btn${reorderMode ? " active" : ""}`} onClick={() => setReorderMode(!reorderMode)}>
-              {reorderMode ? "Done" : "Reorder"}
-            </button>
-          )}
         </div>
 
         {/* 5.2: Educational blurb only for empty state */}
@@ -246,21 +240,12 @@ export default function LocationSetup({ locations: initial = [], account, catalo
               <div key={zone.locationId} className="oh-inv-loc-zone">
                 {/* Zone card - tap to expand (1C) */}
                 <div
-                  className={`oh-inv-loc-zone-card${isEmpty && !reorderMode ? " oh-inv-loc-zone-card--empty" : ""}${isExp ? " oh-inv-loc-zone-card--expanded" : ""}`}
+                  className={`oh-inv-loc-zone-card${isEmpty ? " oh-inv-loc-zone-card--empty" : ""}${isExp ? " oh-inv-loc-zone-card--expanded" : ""}`}
                   style={{ borderLeftColor: col.fg }}
-                  onClick={() => { if (!isEdit && !reorderMode && zone.subZones.length > 0) setExpanded((p) => ({ ...p, [zone.locationId]: !p[zone.locationId] })); }}
+                  onClick={() => { if (!isEdit) setExpanded((p) => ({ ...p, [zone.locationId]: !p[zone.locationId] })); }}
                 >
-                  {/* Reorder mode: position badge + arrows */}
-                  {reorderMode && (
-                    <div className="oh-inv-loc-reorder-controls" onClick={(e) => e.stopPropagation()}>
-                      <span className="oh-inv-loc-position-badge">{zIdx + 1}</span>
-                      <button className="oh-inv-loc-move" onClick={() => moveZ(zIdx, -1)} disabled={zIdx === 0}><I d={ic.arrowUp} size={11} color={zIdx === 0 ? "#e2e8f0" : "#0f3057"} sw={2.5} /></button>
-                      <button className="oh-inv-loc-move" onClick={() => moveZ(zIdx, 1)} disabled={zIdx === zones.length - 1}><I d={ic.arrowDown} size={11} color={zIdx === zones.length - 1 ? "#e2e8f0" : "#0f3057"} sw={2.5} /></button>
-                    </div>
-                  )}
-
                   <button className="oh-inv-loc-icon-btn" style={{ background: col.bg }}
-                    onClick={(e) => { e.stopPropagation(); if (!reorderMode) openPicker(zone.locationId, zone.icon, zone.color); }}>
+                    onClick={(e) => { e.stopPropagation(); openPicker(zone.locationId, zone.icon, zone.color); }}>
                     <span style={{ fontSize: 18, lineHeight: 1 }}>{getIcon(zone.icon).emoji}</span>
                   </button>
 
@@ -274,23 +259,21 @@ export default function LocationSetup({ locations: initial = [], account, catalo
                     ) : (<>
                       <span className="oh-inv-loc-zone-name">{zone.name}</span>
                       <div className="oh-inv-loc-pills">
-                        <span className="oh-inv-loc-pill" style={{ color: col.fg }}>{total} item{total !== 1 ? "s" : ""}</span>
+                        <span className="oh-inv-loc-pill" style={{ color: total > 0 ? col.fg : "#94a3b8" }}>{total} item{total !== 1 ? "s" : ""}</span>
                         {zone.subZones.length > 0 && <span className="oh-inv-loc-pill oh-inv-loc-pill--sub">{zone.subZones.length} sub-zone{zone.subZones.length !== 1 ? "s" : ""}</span>}
                       </div>
                     </>)}
                   </div>
 
-                  {!isEdit && !reorderMode && (
+                  {!isEdit && (
                     <div className="oh-inv-loc-zone-right" onClick={(e) => e.stopPropagation()}>
                       {/* Three-dot menu (5.5) */}
                       <button className="oh-inv-loc-dots-btn" onClick={() => setMenuOpen(isMenuOpen ? null : zone.locationId)}>
                         <I d={ic.dots} size={16} color="#94a3b8" sw={3} />
                       </button>
-                      {isMenuOpen && renderMenu(zone.locationId, zone.name, zone.icon, zone.color, zone.subZones.length > 0)}
+                      {isMenuOpen && renderMenu(zone.locationId, zone.name, zone.icon, zone.color, zone.subZones.length > 0, zIdx)}
                       {/* Chevron for expandable zones */}
-                      {zone.subZones.length > 0 && (
-                        <I d={isExp ? ic.chevUp : ic.chevDown} size={14} color="#94a3b8" style={{ marginLeft: 2 }} />
-                      )}
+                      <I d={isExp ? ic.chevUp : ic.chevDown} size={14} color="#94a3b8" style={{ marginLeft: 2 }} />
                     </div>
                   )}
                 </div>
@@ -298,7 +281,7 @@ export default function LocationSetup({ locations: initial = [], account, catalo
                 {iconPicker === zone.locationId && renderPicker(zone.locationId)}
 
                 {/* Sub-zones: inline rows (3A) */}
-                {isExp && !reorderMode && (
+                {isExp && (
                   <div className="oh-inv-loc-subzones">
                     {zone.subZones.map((sub, sIdx) => {
                       const sc = gc(sub.color); const sC = itemCounts[sub.locationId] || 0; const sE = editingId === sub.locationId;
@@ -316,10 +299,20 @@ export default function LocationSetup({ locations: initial = [], account, catalo
                             </div>
                           ) : (<>
                             <span className="oh-inv-loc-sub-name">{sub.name}</span>
-                            <span className="oh-inv-loc-sub-count" style={{ color: sc.fg }}>{sC} item{sC !== 1 ? "s" : ""}</span>
-                            <div className="oh-inv-loc-sub-actions">
-                              <button className="oh-inv-loc-act" onClick={() => startEdit(sub.locationId, sub.name)} title="Rename"><I d={ic.edit} size={11} color="#94a3b8" /></button>
-                              <button className="oh-inv-loc-act" onClick={() => reqDelS(zone.locationId, sub.locationId)} title="Delete"><I d={ic.trash} size={11} color="#94a3b8" /></button>
+                            <span className="oh-inv-loc-sub-count" style={{ color: sC > 0 ? sc.fg : "#94a3b8" }}>{sC} item{sC !== 1 ? "s" : ""}</span>
+                            <div className="oh-inv-loc-zone-right">
+                              <button className="oh-inv-loc-dots-btn" onClick={() => setMenuOpen(menuOpen === sub.locationId ? null : sub.locationId)}>
+                                <I d={ic.dots} size={14} color="#94a3b8" sw={3} />
+                              </button>
+                              {menuOpen === sub.locationId && (
+                                <div className="oh-inv-loc-menu" ref={menuRef}>
+                                  {sIdx > 0 && <button onClick={() => { moveS(zone.locationId, sIdx, -1); setMenuOpen(null); }}>Move up</button>}
+                                  {sIdx < zone.subZones.length - 1 && <button onClick={() => { moveS(zone.locationId, sIdx, 1); setMenuOpen(null); }}>Move down</button>}
+                                  <button onClick={() => startEdit(sub.locationId, sub.name)}>Rename</button>
+                                  <button onClick={() => openPicker(sub.locationId, sub.icon, sub.color)}>Change icon</button>
+                                  <button className="oh-inv-loc-menu-danger" onClick={() => reqDelS(zone.locationId, sub.locationId)}>Delete</button>
+                                </div>
+                              )}
                             </div>
                           </>)}
                           {iconPicker === sub.locationId && renderPicker(sub.locationId)}

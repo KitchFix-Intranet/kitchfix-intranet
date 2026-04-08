@@ -10,6 +10,11 @@
   margin: 0 auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   animation: oh-slideUp 0.35s ease;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(15, 48, 87, 0.08);
+  overflow: hidden;
 }
 .oh-inv-mgmt-loading {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -24,7 +29,7 @@
 /* ── Header ── */
 .oh-inv-mgmt-header {
   background: #0f3057; padding: 10px 16px; display: flex; align-items: center;
-  justify-content: space-between; border-radius: 10px 10px 0 0; position: relative;
+  justify-content: space-between; position: relative;
 }
 .oh-inv-mgmt-header-left { display: flex; align-items: center; gap: 8px; }
 .oh-inv-mgmt-header-title { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
@@ -526,22 +531,21 @@
 }
 
 /* -- Zone list -- */
-.oh-inv-loc-zones { display: flex; flex-direction: column; gap: 0; }
-.oh-inv-loc-zone { border-bottom: 1px solid #f1f5f9; }
-.oh-inv-loc-zone:last-child { border-bottom: none; }
+.oh-inv-loc-zones { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
 
 /* -- Zone card (1C: tap to expand) -- */
 .oh-inv-loc-zone-card {
-  padding: 12px 16px; display: flex; align-items: center; gap: 10px;
-  cursor: pointer; transition: background 0.12s; border-left: 3px solid transparent;
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; transition: background 0.12s, box-shadow 0.12s;
+  border-radius: 10px;
+  background: #fff; border: 1px solid #f1f5f9; border-left-width: 3px;
 }
-.oh-inv-loc-zone-card:hover { background: #fafbfc; }
-.oh-inv-loc-zone-card--expanded { background: #fafbfc; }
+.oh-inv-loc-zone-card:hover { background: #fafbfc; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.oh-inv-loc-zone-card--expanded { background: #fafbfc; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 
 /* 5.10: Empty zone highlight */
-.oh-inv-loc-zone-card--empty {
-  border-left-style: dashed !important;
-}
+.oh-inv-loc-zone-card--empty { opacity: 0.65; }
+.oh-inv-loc-zone-card--empty:hover { opacity: 1; }
 .oh-inv-loc-zone-card--empty .oh-inv-loc-zone-name { color: #94a3b8; }
 
 /* -- Reorder controls (2C) -- */
@@ -649,16 +653,19 @@
 .oh-inv-loc-picker-color:hover { transform: scale(1.15); }
 .oh-inv-loc-picker-color.active { border-color: #0f3057; }
 
-/* -- Sub-zones: inline rows (3A) -- */
+/* -- Sub-zones: contained mini-cards (3A) -- */
 .oh-inv-loc-subzones {
-  padding: 4px 16px 8px 28px; border-left: 2px solid #e2e8f0; margin-left: 34px;
-  display: flex; flex-direction: column; gap: 0;
+  margin: 0 12px 6px; padding: 8px 10px 10px;
+  background: #f8fafc; border: 1px solid #f1f5f9;
+  border-top: none; border-radius: 0 0 10px 10px;
+  display: flex; flex-direction: column; gap: 4px;
 }
 .oh-inv-loc-sub-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-  border-radius: 6px; transition: background 0.12s;
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; background: #fff; border: 1px solid #edf0f4;
+  transition: border-color 0.12s;
 }
-.oh-inv-loc-sub-row:hover { background: #f8fafc; }
+.oh-inv-loc-sub-row:hover { border-color: #dde2e8; }
 .oh-inv-loc-sub-row:hover .oh-inv-loc-sub-actions { opacity: 1; }
 .oh-inv-loc-sub-icon {
   width: 24px; height: 24px; border-radius: 6px; border: none; cursor: pointer;
@@ -694,8 +701,7 @@
 
 /* -- 5.3: Ghost add-zone input -- */
 .oh-inv-loc-add-ghost {
-  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
-  border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px;
 }
 .oh-inv-loc-add-ghost-input {
   flex: 1; padding: 8px 10px; border: 1px dashed #e2e8f0; border-radius: 6px;
