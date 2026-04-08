@@ -128,8 +128,6 @@ const [invoiceDate, setInvoiceDate] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [glRows, setGlRows] = useState([{ code: "", name: "", amount: "" }]);
   const [pages, setPages] = useState([]);
-  const [apNote, setApNote] = useState("");
-  const [showNoteField, setShowNoteField] = useState(false);
   const [formType, setFormType] = useState("invoice");
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -312,8 +310,7 @@ useEffect(() => {
       setInvoiceDate("");
       setTotalAmount("");
       setGlRows([{ code: "", name: "", amount: "" }]);
-      setApNote(""); setShowNoteField(false);
-      setOcrStatus("idle"); setOcrResult(null);
+setOcrStatus("idle"); setOcrResult(null);
       setErrors({});
       setReorderMode(false); setSelectedPageIdx(null);
       setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
@@ -551,7 +548,7 @@ setOcrStatus("scanning");
         body: JSON.stringify({ action: "invoice-ocr", image: scanImage, account }),
       });
       const data = await res.json();
-      if (data.rejected) { setOcrStatus("rejected"); setOcrResult(data); showToast("Photo couldn't be read — see suggestions below", "error"); return; }
+if (data.rejected) { setOcrStatus("idle"); showToast("Document couldn't be read - please verify your upload", "error"); return; }
 if (data.success) {
         setOcrStatus("success");
         setOcrResult((prev) => {
@@ -624,10 +621,10 @@ if (data.vendorMatch?.bestMatch && !vendorRef.current) {
       if (removedPid) setConsistencyIssues((ci) => ci.filter((i) => i.pid !== removedPid));
       if (next.length === 0) {
         setOcrStatus("idle"); setOcrResult(null);
-        setInvoiceNumber(""); setInvoiceDate(new Date().toISOString().split("T")[0]);
+setInvoiceNumber(""); setInvoiceDate("");
         setTotalAmount(""); setVendor(null);
         setGlRows([{ code: "", name: "", amount: "" }]);
-        setApNote(""); setShowNoteField(false); setErrors({});
+setErrors({});
         setReorderMode(false); setSelectedPageIdx(null);
         consistencyCheckKeyRef.current = "";
       } else if (idx === 0) { setOcrStatus("idle"); setOcrResult(null); }
@@ -697,7 +694,7 @@ const payload = {
       totalAmount: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount),
       glRows: glRows.filter((r) => r.code && Number(r.amount) > 0),
 pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0, type: p.type || "image" })),
-      isCreditMemo, apNote: apNote.trim() || null,
+isCreditMemo,
       ocrVendorName: ocrResult?.vendorName || null,
     };
         if (!navigator.onLine) {
@@ -743,7 +740,7 @@ loadBootstrap(account); resetForm();
   useEffect(() => { tryOCRScanRef.current = tryOCRScan; }, [tryOCRScan]);
 
 const resetForm = useCallback(() => {
-      setInvoiceNumber(""); setInvoiceDate(new Date().toISOString().split("T")[0]);
+setInvoiceNumber(""); setInvoiceDate("");
     setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
     setPages([]); setApNote(""); setShowNoteField(false);
 setErrors({});
@@ -1457,7 +1454,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                     <strong>Fix before submitting:</strong>
                     <ul>
                       {errors.account      && <li>No account selected</li>}
-                      {errors.pages        && <li>No invoice photo or PDF attached</li>}
+{errors.pages        && <li>No invoice PDF or scan attached</li>}
                       {errors.vendor       && <li>No vendor selected</li>}
                       {errors.invoiceNumber && <li>Invoice # is required</li>}
                       {errors.invoiceDate  && <li>Invoice date is required</li>}
@@ -1470,20 +1467,8 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
               )}
 
               {/* Submit Footer */}
-              <div className="oh-inv-submit-footer">
-                {showNoteField && (
-                  <div className="oh-inv-note-field">
-                    <textarea className="oh-inv-textarea" value={apNote} onChange={(e) => setApNote(e.target.value)} placeholder="Note for AP — rush, credit memo context, etc." rows={2} />
-                  </div>
-                )}
-                <div className="oh-inv-submit-options">
-                  <button className={`oh-inv-option-toggle${showNoteField ? " oh-inv-option-toggle--active" : ""}`} onClick={() => { setShowNoteField(!showNoteField); if (showNoteField) setApNote(""); }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    Note
-                  </button>
-                  <span className="oh-inv-shortcut-hint">⌘ Enter</span>
-                </div>
-                <button
+<div className="oh-inv-submit-footer">
+                  <button
                   className={`oh-inv-submit-btn${submitting ? " oh-inv-submitting" : ""}${isCreditMemo ? " oh-inv-submit-btn--credit" : ""}`}
                   onClick={handleSubmit} disabled={submitting || !hasVendor}
                 >

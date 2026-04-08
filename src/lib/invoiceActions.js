@@ -942,7 +942,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
 
   // ── Invoice Submit ──
   if (action === "invoice-submit") {
-    const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, ccSelf, apNote } = body;
+const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, ccSelf } = body;
 
     if (!account || !vendor || !invoiceDate || !totalAmount || !pages || pages.length === 0) {
       return { success: false, error: "Missing required fields" };
@@ -1008,7 +1008,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
         uuid, now.toISOString(), email, account, vendor,
         vendorId || "", invoiceNumber || "", invoiceDate,
         Number(totalAmount) || 0, JSON.stringify(glRows), JSON.stringify(driveUrls),
-        pages.length, "FALSE", "pending", "", type,
+pages.length, "FALSE", "pending", "", type,
       ];
 
       const sheetResult = await appendRow(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", row);
@@ -1022,7 +1022,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
           glRows: enrichedGlRows, driveUrls, pageCount: pages.length, formType: type,
           ccSelf: ccSelf || false, pdfBase64: pdfBase64 || null,
           pdfFilename: pdfBuffer ? buildPdfFilename(vendor, invoiceDate, invoiceNumber) : null,
-        }, pdfBase64 ? null : pages[0]);
+}, pdfBase64 ? null : (pages[0]?.data || null));
 
         emailSent = emailResult.success;
         if (emailSent) {
