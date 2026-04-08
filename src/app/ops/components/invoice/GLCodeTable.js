@@ -71,10 +71,9 @@ const containerRef = useRef(null);
     };
   }, [open]);
 
-  // Recalculate position on scroll or resize while open
+// Recalculate position on scroll or resize while open
   useEffect(() => {
     if (!open) return;
-    updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
     return () => {
@@ -82,7 +81,7 @@ const containerRef = useRef(null);
       window.removeEventListener("resize", updatePosition);
     };
   }, [open, updatePosition]);
-
+  
   // Focus search when opened
   useEffect(() => {
     if (open && searchRef.current) {
@@ -122,12 +121,12 @@ const containerRef = useRef(null);
       ref={containerRef}
     >
       {/* Trigger button */}
-      <button
+<button
         type="button"
         className={`oh-inv-gl-trigger${!value ? " oh-inv-gl-trigger--placeholder" : ""}`}
-        onClick={() => { if (!disabled) setOpen((o) => !o); }}
+        onClick={() => { if (!disabled) { if (!open) updatePosition(); setOpen((o) => !o); } }}
         disabled={disabled}
-        aria-haspopup="listbox"
+                aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="oh-inv-gl-trigger-text">

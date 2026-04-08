@@ -1381,8 +1381,7 @@ const msg = gateWarnPages[0].gateResult?.message || "Document quality could be b
                                                     </div>
 
                 {/* Total */}
-                <div className={`oh-inv-field-group${!hasVendor ? " oh-inv-field--disabled" : ""}${Number(totalAmount) > 0 ? " oh-inv-field--done" : ""}`} data-field="totalAmount">
-                  <label className="oh-inv-label">{isCreditMemo ? "Credit Amount" : "Invoice Total"} <span className="oh-inv-req">*</span></label>
+<div className={`oh-inv-field-group${!hasVendor ? " oh-inv-field--disabled" : ""}`} data-field="totalAmount">                  <label className="oh-inv-label">{isCreditMemo ? "Credit Amount" : "Invoice Total"} <span className="oh-inv-req">*</span></label>
                   <div className="oh-inv-money-input">
                     <span className={`oh-inv-money-prefix${isCreditMemo ? " oh-inv-money-prefix--credit" : ""}`}>{isCreditMemo ? "−$" : "$"}</span>
 <input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} onWheel={(e) => e.currentTarget.blur()} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
