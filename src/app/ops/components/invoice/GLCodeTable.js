@@ -202,11 +202,14 @@ const containerRef = useRef(null);
                 </div>
               )
             ) : (
-              /* Full grouped list */
+/* Full grouped list */
               <>
+                {allCodesFlat.length === 0 && (
+                  <div className="oh-inv-gl-empty"><div className="oh-spinner-sm" style={{ width: 14, height: 14, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} />Loading GL codes...</div>
+                )}
                 {/* Frequently Used */}
                 {favorites.length > 0 && (
-                  <div className="oh-inv-gl-group">
+                                    <div className="oh-inv-gl-group">
                     <div className="oh-inv-gl-group-label oh-inv-gl-group-label--fav">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="#d97706" stroke="#d97706" strokeWidth="1">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -369,10 +372,11 @@ export default function GLCodeTable({ glCodes = [], rows, onChange, hasError, di
               className="oh-inv-gl-amount"
               placeholder="0.00"
               value={row.amount}
-              onChange={(e) => updateRowAmount(idx, e.target.value)}
+onChange={(e) => updateRowAmount(idx, e.target.value)}
+              onWheel={(e) => e.currentTarget.blur()}
               disabled={disabled}
               step="0.01"
-              min="0"
+                            min="0"
             />
           </div>
 

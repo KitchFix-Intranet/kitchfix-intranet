@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import GLCodeTable from "@/app/ops/components/invoice/GLCodeTable";
 import VendorSetup from "@/app/ops/components/invoice/VendorSetup";
-import InvoicePreview from "@/app/ops/components/invoice/InvoicePreview";
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -174,11 +173,13 @@ const [invoiceDate, setInvoiceDate] = useState("");
   // Validation
   const [errors, setErrors] = useState({});
   const fileInputRef = useRef(null);
-  const galleryInputRef = useRef(null);
-  const formRef = useRef(null);
+const galleryInputRef = useRef(null);
+  const vendorRef = useRef(null);
+    const formRef = useRef(null);
   const consistencyCheckKeyRef = useRef("");
 
-  const accounts = config?.accounts || [];
+const accounts = config?.accounts || [];
+  useEffect(() => { vendorRef.current = vendor; }, [vendor]);
 
   // ——— Derived state ———
   const isCreditMemo = formType === "credit";
@@ -300,11 +301,24 @@ const smartScan = useMemo(() => {
     finally { setBootstrapLoading(false); setInitialReady(true); }
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (account) {
       localStorage.setItem(LAST_ACCT_KEY, account);
       loadBootstrap(account);
+      // Full reset on account change — prevents stale pages, GL codes, OCR data from prior account
       setVendor(null);
+      setPages([]);
+      setInvoiceNumber("");
+      setInvoiceDate("");
+      setTotalAmount("");
+      setGlRows([{ code: "", name: "", amount: "" }]);
+      setApNote(""); setShowNoteField(false);
+      setOcrStatus("idle"); setOcrResult(null);
+      setErrors({});
+      setReorderMode(false); setSelectedPageIdx(null);
+      setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
   }, [account, loadBootstrap]);
 
@@ -555,11 +569,11 @@ if (data.success) {
           };
         });
 // Vendor auto-detect still fills (low risk for AP matching)
-        if (data.vendorMatch?.bestMatch && !vendor) {
+if (data.vendorMatch?.bestMatch && !vendorRef.current) {
           const matchedVendor = vendors.find((v) => v.vendorId === data.vendorMatch.bestMatch.vendorId);
           if (matchedVendor && data.vendorMatch.confidence !== "low") { setVendor(matchedVendor); trackRecentVendor(matchedVendor.vendorId); }
         }
-        // Invoice #, date, total are NOT auto-filled — chef enters manually, Smart Scan verifies
+                // Invoice #, date, total are NOT auto-filled — chef enters manually, Smart Scan verifies
         showToast("Smart Scan complete - enter invoice details to verify", "info");
             } else { setOcrStatus("idle"); }
         } catch { setOcrStatus("idle"); }
@@ -1402,7 +1416,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                   <label className="oh-inv-label">{isCreditMemo ? "Credit Amount" : "Invoice Total"} <span className="oh-inv-req">*</span></label>
                   <div className="oh-inv-money-input">
                     <span className={`oh-inv-money-prefix${isCreditMemo ? " oh-inv-money-prefix--credit" : ""}`}>{isCreditMemo ? "−$" : "$"}</span>
-<input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
+<input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} onWheel={(e) => e.currentTarget.blur()} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
                   </div>
                   <div className="oh-inv-smart-hint">Please verify the total matches your invoice</div>
                                   </div>
@@ -1433,12 +1447,6 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                   </div>
                 </div>
 
-                {/* Stamp Preview */}
-                {pages.length > 0 && hasVendor && invoiceNumber && (
-                  <div className="oh-inv-field-group">
-                    <InvoicePreview page={pages[0].data} account={account} vendor={vendor?.name || ""} invoiceNumber={invoiceNumber} invoiceDate={invoiceDate} totalAmount={totalAmount} glRows={glRows} />
-                  </div>
-                )}
               </div>{/* end SECTION 3 */}
 
               {/* Validation Summary */}
