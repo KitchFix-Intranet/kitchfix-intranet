@@ -463,9 +463,8 @@ setPages((prev) => [...prev, {
 const availableSlots = 15 - pages.length;
       const pagesToRender = Math.min(totalPdfPages, availableSlots);
       if (totalPdfPages > availableSlots) showToast(`PDF has ${totalPdfPages} pages — importing first ${pagesToRender} (${availableSlots} slots left)`, "info");
-lastPageDataUrl = dataUrl;
-      for (let i = 1; i <= pagesToRender; i++) {
-        const page = await pdf.getPage(i);
+for (let i = 1; i <= pagesToRender; i++) {
+          const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width; canvas.height = viewport.height;
@@ -481,8 +480,7 @@ lastPageDataUrl = dataUrl;
         } else {
           dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         }
-        lastPageDataUrl = dataUrl;
-        const pid = makePid();
+const pid = makePid();
         setPages((prev) => [...prev, {
           data: dataUrl, rotation: 0, type: "pdf", pid,
           gate: "pass", gateResult: null,
@@ -572,8 +570,7 @@ const prevPageCountRef = useRef(0);
       // If a multi-page PDF was added all at once, scan second-to-last page
       // (last page is often blank trailing page from browser print)
       if (pages.length > 2 && pages[pages.length - 1].type === "pdf") {
-        pdfBatchScanRef.current = true;
-        tryOCRScanRef.current?.(pages[pages.length - 2].data);
+tryOCRScanRef.current?.(pages[pages.length - 2].data);
       } else {
         tryOCRScanRef.current?.(newestPage.data);
       }
