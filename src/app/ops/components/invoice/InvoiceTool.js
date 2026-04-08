@@ -780,7 +780,7 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     </div>
   );
 
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
   const MAINTENANCE_BYPASS = ["k.fietek@kitchfix.com"];
   const userEmail = config?.email?.toLowerCase().trim() || "";
 
