@@ -807,8 +807,18 @@ const MAINTENANCE_MODE = true;
         </div>
       )}
 
-{showReview && (
-        <div className="oh-inv-review-overlay" onClick={() => setShowReview(false)}>
+{submitting && (
+        <div className="oh-inv-sending-overlay">
+          <div className="oh-inv-sending-card">
+            <div className="oh-inv-sending-spinner" />
+            <p className="oh-inv-sending-title">Submitting to AP...</p>
+            <p className="oh-inv-sending-detail">{pages.length} page{pages.length !== 1 ? "s" : ""} · {vendor?.name} · ${fmt$(Math.abs(Number(totalAmount)))}</p>
+          </div>
+        </div>
+      )}
+
+      {showReview && (
+                <div className="oh-inv-review-overlay" onClick={() => setShowReview(false)}>
           <div className="oh-inv-review-modal" onClick={(e) => e.stopPropagation()}>
             <div className="oh-inv-review-header">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
@@ -1063,42 +1073,8 @@ Upload, code &amp; submit to AP.
 Invoice PDF / Scan <span className="oh-inv-req">*</span>
 <button type="button" className="oh-inv-help-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); const tip = e.currentTarget.nextElementSibling; const show = tip.style.display !== "block"; tip.style.display = show ? "block" : "none"; if (show) { const close = (ev) => { if (!tip.contains(ev.target) && ev.target !== e.currentTarget) { tip.style.display = "none"; document.removeEventListener("click", close); } }; setTimeout(() => document.addEventListener("click", close), 0); } }}>?</button>
 <div className="oh-inv-help-tip">Upload a digital PDF or <strong>clean, readable, full-page</strong> scan from your vendor portal or email. No digital copy? Email to <strong>ap@kitchfix.com</strong> with the account, vendor name, GL breakdown, and total.</div>
-{pages.length > 0 && <span className="oh-inv-label-hint">{pages.length}/15 pages {gateScanning ? "⏳" : gateAllCleared ? "✓" : ""}</span>}
-                    </label>
-                                        {pages.length >= 2 && (
-                      <button
-                        className={`oh-inv-reorder-btn${reorderMode ? " oh-inv-reorder-btn--active" : ""}`}
-                        onClick={() => { setReorderMode(!reorderMode); setSelectedPageIdx(null); }}
-                        title={reorderMode ? "Done reordering" : "Reorder pages"}
-                      >
-                        {reorderMode ? (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
-                            Done
-                          </>
-                        ) : (
-                          <>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="5" x2="21" y2="5" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="19" x2="21" y2="19" /></svg>
-                            Reorder
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Fixed-height hint strip — reserves space, prevents layout shift */}
-                  <div className="oh-inv-reorder-hint-strip">
-                    {reorderMode && (
-                      <span className={`oh-inv-reorder-hint${selectedPageIdx !== null ? " oh-inv-reorder-hint--active" : ""}`}>
-                        {selectedPageIdx !== null ? "Tap another page to place it there" : "Tap a page to pick it up"}
-                      </span>
-                    )}
-                    {consistencyChecking && !reorderMode && (
-                      <span className="oh-inv-consistency-indicator">
-                        <div className="oh-spinner-sm" style={{ width: 11, height: 11 }} />
-                        Checking pages...
-                      </span>
-                    )}
+{pages.length > 0 && <span className="oh-inv-label-hint">{pages.length}/15 pages {gateScanning ? "⏳" : ""}</span>}
+</label>
                   </div>
 
                   <div className={`oh-inv-page-strip${pages.length === 0 ? " oh-inv-page-strip--empty" : ""}${reorderMode ? " oh-inv-page-strip--reorder" : ""}`}>

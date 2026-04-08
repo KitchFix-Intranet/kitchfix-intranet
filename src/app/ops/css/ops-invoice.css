@@ -1792,3 +1792,13 @@
 @media (max-width: 600px) {
   .oh-inv-review-modal { max-width: 100%; border-radius: 16px 16px 0 0; margin-top: auto; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SUBMITTING OVERLAY
+   ══════════════════════════════════════════════════════════════ */
+.oh-inv-sending-overlay { position: fixed; inset: 0; background: rgba(255, 255, 255, 0.96); z-index: 1000; display: flex; align-items: center; justify-content: center; animation: oh-fadeInSimple 0.2s ease; }
+.oh-inv-sending-card { text-align: center; padding: 40px 32px; }
+.oh-inv-sending-spinner { width: 40px; height: 40px; border: 3.5px solid #e2e8f0; border-top-color: #d97706; border-radius: 50%; animation: oh-spin 0.8s linear infinite; margin: 0 auto 16px; }
+.oh-inv-sending-title { font-family: var(--oh-font-head); font-size: 18px; font-weight: 800; color: var(--oh-navy); margin: 0 0 6px; }
+.oh-inv-sending-detail { font-size: 13px; color: #64748b; font-weight: 600; margin: 0; }
+
