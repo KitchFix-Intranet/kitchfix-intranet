@@ -530,6 +530,27 @@
   background: #f8fafc; border-bottom: 1px solid #f1f5f9;
 }
 
+/* -- Unassigned items banner -- */
+.oh-inv-loc-assign-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; margin: 0;
+  background: #fffbeb; border-bottom: 1px solid #fde68a;
+}
+.oh-inv-loc-assign-info { display: flex; align-items: center; gap: 8px; }
+.oh-inv-loc-assign-count {
+  width: 28px; height: 28px; border-radius: 50%; background: #d97706; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.oh-inv-loc-assign-text { font-size: 13px; color: #92400e; font-weight: 500; }
+.oh-inv-loc-assign-btn {
+  padding: 8px 16px; background: #d97706; color: #fff; border: none; border-radius: 8px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+  white-space: nowrap; flex-shrink: 0; transition: background 0.15s;
+}
+.oh-inv-loc-assign-btn:hover { background: #b45309; }
+.oh-inv-loc-assign-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* -- Zone list -- */
 .oh-inv-loc-zones { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
 

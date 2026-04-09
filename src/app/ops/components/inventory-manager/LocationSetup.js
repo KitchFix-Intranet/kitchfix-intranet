@@ -170,6 +170,8 @@ export default function LocationSetup({ locations: initial = [], account, catalo
   const zt = (z) => { let t = itemCounts[z.locationId] || 0; (z.subZones || []).forEach((s) => { t += itemCounts[s.locationId] || 0; }); return t; };
   const totalItems = useMemo(() => { let t = 0; zones.forEach((z) => { t += zt(z); }); return t; }, [zones, itemCounts]);
   const totalSubs = useMemo(() => zones.reduce((t, z) => t + z.subZones.length, 0), [zones]);
+  const activeLocIds = useMemo(() => { const s = new Set(); zones.forEach((z) => { s.add(z.locationId); z.subZones.forEach((sub) => s.add(sub.locationId)); }); return s; }, [zones]);
+  const unassignedCount = useMemo(() => catalogItems.filter((i) => !i.locationId || !activeLocIds.has(i.locationId)).length, [catalogItems, activeLocIds]);
   const mark = () => { setHasChanges(true); setJustSaved(false); };
   const gc = (k) => COLORS.find((c) => c.key === k) || COLORS[4];
 
@@ -268,6 +270,19 @@ export default function LocationSetup({ locations: initial = [], account, catalo
         {zones.length === 0 && (
           <div className="oh-inv-loc-blurb">
             Define the storage areas in your kitchen. Add zones for each major area, then optionally create sub-zones for more detailed organization during counts.
+          </div>
+        )}
+
+        {/* Unassigned items banner */}
+        {unassignedCount > 0 && zones.length > 0 && (
+          <div className="oh-inv-loc-assign-banner">
+            <div className="oh-inv-loc-assign-info">
+              <span className="oh-inv-loc-assign-count">{unassignedCount}</span>
+              <span className="oh-inv-loc-assign-text">item{unassignedCount !== 1 ? "s" : ""} waiting to be assigned to locations</span>
+            </div>
+            <button className="oh-inv-loc-assign-btn" onClick={handleSave} disabled={saving}>
+              {saving ? "Assigning..." : "Assign Items"}
+            </button>
           </div>
         )}
 

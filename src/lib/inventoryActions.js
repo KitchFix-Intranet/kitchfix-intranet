@@ -373,14 +373,22 @@ export async function handleSaveLocations({ account, locations, email }) {
     const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
     const catalogRows = catalogData.rows || [];
     let assigned = 0;
-    let needsAssignment = false;
 
-    // Quick check: are there any items that need auto-assignment?
+    // Build set of all active location IDs for this account
+    const activeLocIds = new Set();
+    rows.forEach((r) => {
+      if (accountMatch(r[1], account) && r[5] !== "FALSE" && r[0]) activeLocIds.add(r[0]);
+    });
+    // Also include newly saved locations
+    savedLocations.forEach((l) => activeLocIds.add(l.locationId));
+
+    // Check if any items need assignment (keyword, empty, or orphaned loc_ ID)
+    let needsAssignment = false;
     for (let i = 0; i < catalogRows.length; i++) {
       const r = catalogRows[i];
       if (!accountMatch(r[1], account)) continue;
       const currentLocId = r[5] || "";
-      if ((currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) || (!currentLocId && r[3])) {
+      if (!currentLocId || (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) || (currentLocId.startsWith("loc_") && !activeLocIds.has(currentLocId))) {
         needsAssignment = true; break;
       }
     }
@@ -391,11 +399,15 @@ export async function handleSaveLocations({ account, locations, email }) {
         const r = catalogRows[i];
         if (!accountMatch(r[1], account)) continue;
         const currentLocId = r[5] || "";
+        const isOrphaned = currentLocId.startsWith("loc_") && !activeLocIds.has(currentLocId);
+
+        // Keyword locationId → map to real location
         if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
           const realLocId = matchKeywordToLocation(currentLocId);
           if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
         }
-        if (!currentLocId && r[3]) {
+        // Empty or orphaned → assign by category
+        if (!currentLocId || isOrphaned) {
           const cat = (r[3] || "").toLowerCase();
           let keyword = "dry";
           if (["food"].includes(cat)) keyword = "cooler";
