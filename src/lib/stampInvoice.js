@@ -6,12 +6,17 @@
  * (not rasterized) so downstream AP systems (Bill.com, Rippling) can
  * parse account codes, amounts, and vendor data via text extraction.
  *
+ * Also exports createRawInvoicePDF() which assembles pages into a clean
+ * PDF with no stamp or GL summary — used as an archive copy so AP can
+ * reprocess if the operator made an input error.
+ *
  * Dependency: pdf-lib (pure JS, no native deps — Vercel-safe)
  *   npm install pdf-lib
  *
  * Usage:
- *   import { createStampedInvoicePDF } from "@/lib/stampInvoice";
+ *   import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
  *   const { pdfBase64, pdfBuffer } = await createStampedInvoicePDF(pages, metadata);
+ *   const { pdfBuffer: rawBuffer } = await createRawInvoicePDF(pages);
  */
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -302,6 +307,84 @@ export async function createStampedInvoicePDF(pages, meta) {
 
   return { pdfBase64, pdfBuffer };
 }
+
+
+/**
+ * createRawInvoicePDF — assembles pages into a clean PDF with no stamp or GL summary.
+ * Used as an archive copy so AP can reprocess if the operator made an input error.
+ *
+ * @param {Array<string|{data:string, rotation?:number}>} pages - Same format as createStampedInvoicePDF
+ * @returns {Promise<{ pdfBase64: string, pdfBuffer: Buffer }>}
+ */
+export async function createRawInvoicePDF(pages) {
+  const pdfDoc = await PDFDocument.create();
+
+  for (let i = 0; i < pages.length; i++) {
+    const pageData = typeof pages[i] === "string" ? pages[i] : pages[i].data;
+    const rotation = typeof pages[i] === "object" ? (pages[i].rotation || 0) : 0;
+    const raw = pageData.includes(",") ? pageData.split(",")[1] : pageData;
+    const imgBytes = Uint8Array.from(Buffer.from(raw, "base64"));
+
+    let image;
+    try {
+      image = await pdfDoc.embedJpg(imgBytes);
+    } catch {
+      try {
+        image = await pdfDoc.embedPng(imgBytes);
+      } catch {
+        continue;
+      }
+    }
+
+    const pageWidth = 612;
+    const pageHeight = 792;
+    const margin = 24;
+    const maxW = pageWidth - margin * 2;
+    const maxH = pageHeight - margin * 2;
+
+    const isRotated = rotation === 90 || rotation === 270;
+    const effectiveW = isRotated ? image.height : image.width;
+    const effectiveH = isRotated ? image.width : image.height;
+    const scale = Math.min(maxW / effectiveW, maxH / effectiveH, 1);
+    const drawW = image.width * scale;
+    const drawH = image.height * scale;
+
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+
+    if (rotation === 0) {
+      const x = (pageWidth - drawW) / 2;
+      const y = (pageHeight - drawH) / 2;
+      page.drawImage(image, { x, y, width: drawW, height: drawH });
+    } else {
+      const cx = pageWidth / 2;
+      const cy = pageHeight / 2;
+
+      let x, y;
+      if (rotation === 90) {
+        x = cx - drawH / 2;
+        y = cy - drawW / 2;
+      } else if (rotation === 180) {
+        x = cx + drawW / 2;
+        y = cy + drawH / 2;
+      } else if (rotation === 270) {
+        x = cx + drawH / 2;
+        y = cy + drawW / 2;
+      }
+
+      page.drawImage(image, {
+        x, y, width: drawW, height: drawH,
+        rotate: { type: "degrees", angle: -rotation },
+      });
+    }
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  const pdfBuffer = Buffer.from(pdfBytes);
+  const pdfBase64 = pdfBuffer.toString("base64");
+
+  return { pdfBase64, pdfBuffer };
+}
+
 
 // ── Helpers ──
 function truncate(str, max) {

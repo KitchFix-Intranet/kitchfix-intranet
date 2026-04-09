@@ -9,7 +9,7 @@
 import { readSheet, appendRow, appendRows, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail } from "@/lib/gmail";
-import { createStampedInvoicePDF } from "@/lib/stampInvoice";
+import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 
 // ─── Document Type Labels (Photo Gate) ───
 const DOC_TYPE_LABELS = {
@@ -989,9 +989,18 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         console.error("[Invoice] PDF stamp generation failed:", stampErr.message);
       }
 
+// 1b. Generate Raw (unstamped) PDF archive
+      let rawPdfBuffer = null;
+      try {
+        const rawResult = await createRawInvoicePDF(pages);
+        rawPdfBuffer = rawResult.pdfBuffer;
+      } catch (rawErr) {
+        console.error("[Invoice] Raw PDF generation failed:", rawErr.message);
+      }
+
       // 2. Upload to Drive
       let driveUrls = [];
-      try {
+            try {
         if (pdfBuffer) {
           const pdfResult = await uploadStampedPDF(token, pdfBuffer, vendor, account, invoiceDate, invoiceNumber);
           if (pdfResult.fileUrl) driveUrls = [pdfResult.fileUrl];
@@ -999,8 +1008,19 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           const driveResults = await uploadInvoicePages(token, pages, vendor, account, invoiceDate);
           driveUrls = driveResults.filter((r) => r.fileUrl).map((r) => r.fileUrl);
         }
-      } catch (driveErr) {
+} catch (driveErr) {
         console.error("[Invoice] Drive upload failed:", driveErr.message);
+      }
+
+      // 2b. Upload raw PDF archive
+      let rawDriveUrl = "";
+      try {
+        if (rawPdfBuffer) {
+          const rawResult = await uploadStampedPDF(token, rawPdfBuffer, vendor, account, invoiceDate, invoiceNumber, "RAW_");
+          if (rawResult.fileUrl) rawDriveUrl = rawResult.fileUrl;
+        }
+      } catch (rawUpErr) {
+        console.error("[Invoice] Raw PDF upload failed (non-blocking):", rawUpErr.message);
       }
 
       // 3. Log to sheet
@@ -1008,7 +1028,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         uuid, now.toISOString(), email, account, vendor,
         vendorId || "", invoiceNumber || "", invoiceDate,
         Number(totalAmount) || 0, JSON.stringify(glRows), JSON.stringify(driveUrls),
-pages.length, "FALSE", "pending", "", type,
+pages.length, "FALSE", "pending", "", type, rawDriveUrl,
       ];
 
       const sheetResult = await appendRow(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", row);

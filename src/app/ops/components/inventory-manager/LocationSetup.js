@@ -23,24 +23,57 @@ const I = ({ d, size = 16, color = "#64748b", sw = 2, fill = "none", style = {} 
   </svg>
 );
 
-// -- Emoji icons --
+// -- Emoji icons (41) --
 const ICONS = {
-  snowflake: { label: "Cooler", emoji: "\u2744\uFE0F" },
-  ice:       { label: "Freezer", emoji: "\uD83E\uDDCA" },
-  drumstick: { label: "Meat", emoji: "\uD83C\uDF56" },
-  carrot:    { label: "Veggie", emoji: "\uD83E\uDD55" },
-  leaf:      { label: "Herbs", emoji: "\uD83C\uDF3F" },
-  cup:       { label: "Beverage", emoji: "\u2615" },
-  tag:       { label: "Tag", emoji: "\uD83C\uDFF7\uFE0F" },
-  box:       { label: "Storage", emoji: "\uD83D\uDCE6" },
-  paper:     { label: "Paper", emoji: "\uD83D\uDCCB" },
-  star:      { label: "Star", emoji: "\u2B50" },
-  apple:     { label: "Produce", emoji: "\uD83C\uDF4E" },
-  flame:     { label: "Hot Line", emoji: "\uD83D\uDD25" },
-  plate:     { label: "Plating", emoji: "\uD83C\uDF7D\uFE0F" },
-  fish:      { label: "Seafood", emoji: "\uD83D\uDC1F" },
-  wrench:    { label: "Tools", emoji: "\uD83D\uDD27" },
-  broom:     { label: "Cleaning", emoji: "\uD83E\uDDF9" },
+  // Cold storage
+  snowflake:  { label: "Cooler", emoji: "\u2744\uFE0F" },
+  ice:        { label: "Freezer", emoji: "\uD83E\uDDCA" },
+  thermometer:{ label: "Temp", emoji: "\uD83C\uDF21\uFE0F" },
+  // Proteins
+  drumstick:  { label: "Meat", emoji: "\uD83C\uDF56" },
+  fish:       { label: "Seafood", emoji: "\uD83D\uDC1F" },
+  steak:      { label: "Steak", emoji: "\uD83E\uDD69" },
+  shrimp:     { label: "Shrimp", emoji: "\uD83E\uDD90" },
+  poultry:    { label: "Poultry", emoji: "\uD83C\uDF57" },
+  egg:        { label: "Eggs", emoji: "\uD83E\uDD5A" },
+  bacon:      { label: "Bacon", emoji: "\uD83E\uDD53" },
+  // Produce
+  carrot:     { label: "Veggie", emoji: "\uD83E\uDD55" },
+  leaf:       { label: "Herbs", emoji: "\uD83C\uDF3F" },
+  apple:      { label: "Fruit", emoji: "\uD83C\uDF4E" },
+  greens:     { label: "Greens", emoji: "\uD83E\uDD6C" },
+  tomato:     { label: "Tomato", emoji: "\uD83C\uDF45" },
+  lemon:      { label: "Citrus", emoji: "\uD83C\uDF4B" },
+  onion:      { label: "Onion", emoji: "\uD83E\uDDC5" },
+  corn:       { label: "Corn", emoji: "\uD83C\uDF3D" },
+  avocado:    { label: "Avocado", emoji: "\uD83E\uDD51" },
+  pepper:     { label: "Pepper", emoji: "\uD83C\uDF36\uFE0F" },
+  // Dairy & bakery
+  cheese:     { label: "Cheese", emoji: "\uD83E\uDDC0" },
+  butter:     { label: "Butter", emoji: "\uD83E\uDDC8" },
+  milk:       { label: "Milk", emoji: "\uD83E\uDD5B" },
+  bread:      { label: "Bread", emoji: "\uD83C\uDF5E" },
+  // Beverages
+  cup:        { label: "Coffee", emoji: "\u2615" },
+  juice:      { label: "Juice", emoji: "\uD83E\uDDC3" },
+  water:      { label: "Water", emoji: "\uD83D\uDCA7" },
+  wine:       { label: "Wine", emoji: "\uD83C\uDF77" },
+  // Snacks & prepared
+  flame:      { label: "Hot Line", emoji: "\uD83D\uDD25" },
+  plate:      { label: "Plating", emoji: "\uD83C\uDF7D\uFE0F" },
+  cookie:     { label: "Snack", emoji: "\uD83C\uDF6A" },
+  sandwich:   { label: "Sandwich", emoji: "\uD83E\uDD6A" },
+  // Packaging & supplies
+  box:        { label: "Storage", emoji: "\uD83D\uDCE6" },
+  paper:      { label: "Paper", emoji: "\uD83D\uDCCB" },
+  tag:        { label: "Tag", emoji: "\uD83C\uDFF7\uFE0F" },
+  wrench:     { label: "Tools", emoji: "\uD83D\uDD27" },
+  broom:      { label: "Cleaning", emoji: "\uD83E\uDDF9" },
+  gloves:     { label: "Gloves", emoji: "\uD83E\uDDE4" },
+  // General
+  star:       { label: "Star", emoji: "\u2B50" },
+  can:        { label: "Canned", emoji: "\uD83E\uDD6B" },
+  salt:       { label: "Salt", emoji: "\uD83E\uDDC2" },
 };
 const ICON_FALLBACK = { mapPin: "box", grid: "broom" };
 function getIcon(key) { return ICONS[key] || ICONS[ICON_FALLBACK[key]] || ICONS.box; }
@@ -55,17 +88,29 @@ const COLORS = [
   { key: "green", bg: "#dcfce7", fg: "#16a34a" },
   { key: "rose", bg: "#ffe4e6", fg: "#e11d48" },
   { key: "purple", bg: "#ede9fe", fg: "#7c3aed" },
+  { key: "orange", bg: "#fff7ed", fg: "#ea580c" },
+  { key: "gold", bg: "#fefce8", fg: "#ca8a04" },
+  { key: "brown", bg: "#fef3c7", fg: "#78350f" },
+  { key: "cyan", bg: "#e0f2fe", fg: "#0891b2" },
+  { key: "pink", bg: "#fce7f3", fg: "#db2777" },
+  { key: "emerald", bg: "#d1fae5", fg: "#059669" },
 ];
 const AUTO_RULES = [
   { p: ["cool", "fridge", "refrig", "reach-in"], icon: "snowflake", color: "blue" },
   { p: ["freez", "frost"], icon: "ice", color: "indigo" },
   { p: ["dry", "pantry", "shelf", "storage"], icon: "box", color: "amber" },
-  { p: ["bev", "drink", "bar"], icon: "cup", color: "teal" },
-  { p: ["supply", "suppli", "clean", "chem"], icon: "broom", color: "slate" },
-  { p: ["prep", "line", "hot"], icon: "flame", color: "amber" },
-  { p: ["spice", "herb", "season"], icon: "leaf", color: "green" },
-  { p: ["protein", "meat"], icon: "drumstick", color: "rose" },
-  { p: ["produce", "veg", "fruit"], icon: "carrot", color: "green" },
+  { p: ["bev", "drink", "bar", "juice", "soda"], icon: "cup", color: "cyan" },
+  { p: ["supply", "suppli", "clean", "chem", "sanit"], icon: "broom", color: "slate" },
+  { p: ["prep", "line", "hot", "grill"], icon: "flame", color: "orange" },
+  { p: ["spice", "herb", "season", "salt"], icon: "salt", color: "gold" },
+  { p: ["protein", "meat", "butcher"], icon: "steak", color: "rose" },
+  { p: ["produce", "veg", "fruit", "fresh"], icon: "carrot", color: "emerald" },
+  { p: ["dairy", "milk", "cheese"], icon: "milk", color: "blue" },
+  { p: ["bread", "bake", "pastry"], icon: "bread", color: "brown" },
+  { p: ["snack", "chip", "candy", "cookie"], icon: "cookie", color: "purple" },
+  { p: ["wine", "beer", "liquor", "alcohol"], icon: "wine", color: "pink" },
+  { p: ["can", "canned", "preserve"], icon: "can", color: "slate" },
+  { p: ["seafood", "fish", "shrimp"], icon: "shrimp", color: "teal" },
 ];
 function autoIC(n) { const l = (n || "").toLowerCase(); for (const r of AUTO_RULES) { if (r.p.some((x) => l.includes(x))) return { icon: r.icon, color: r.color }; } return { icon: "box", color: "slate" }; }
 

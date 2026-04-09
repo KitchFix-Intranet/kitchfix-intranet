@@ -114,15 +114,15 @@ export async function uploadInvoiceImage(accessToken, base64Data, filename, acco
 }
 
 // ── Upload: Stamped PDF ──
-export async function uploadStampedPDF(accessToken, pdfBuffer, vendor, account, invoiceDate, invoiceNumber) {
+export async function uploadStampedPDF(accessToken, pdfBuffer, vendor, account, invoiceDate, invoiceNumber, filenamePrefix = "") {
   const drive = getServiceAccountDriveClient();
   const folderId = await ensureInvoiceFolder(drive, account);
 
   const dateStr = invoiceDate.replace(/-/g, "");
   const vendorClean = vendor.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_");
   const invNum = invoiceNumber ? `_${invoiceNumber}` : "";
-  const filename = `${vendorClean}${invNum}_${dateStr}.pdf`;
-
+  const filename = `${filenamePrefix}${vendorClean}${invNum}_${dateStr}.pdf`;
+  
   const { Readable } = await import("stream");
   const stream = Readable.from(pdfBuffer);
 
