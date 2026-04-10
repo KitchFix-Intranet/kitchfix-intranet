@@ -1,7 +1,6 @@
 "use client";
 import { useState, useMemo, useCallback, useEffect } from "react";
 
-/* ── Inline SVG icon ── */
 const I = ({ d, size = 16, color = "#64748b", sw = 2, style }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
     strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"
@@ -22,54 +21,110 @@ const ico = {
 };
 const fmt = n => "$" + Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 
-/* ── Legacy icon fallback ── */
-const IE = {snowflake:"❄️",ice:"🧊",thermometer:"🌡️",drumstick:"🍖",fish:"🐟",steak:"🥩",shrimp:"🦐",poultry:"🍗",egg:"🥚",bacon:"🥓",carrot:"🥕",leaf:"🍃",apple:"🍎",greens:"🥬",tomato:"🍅",lemon:"🍋",onion:"🧅",corn:"🌽",avocado:"🥑",pepper:"🌶️",cheese:"🧀",butter:"🧈",milk:"🥛",bread:"🍞",cup:"☕",juice:"🧃",water:"💧",wine:"🍷",flame:"🔥",plate:"🍽️",cookie:"🍪",sandwich:"🥪",box:"📦",paper:"📋",tag:"🏷️",wrench:"🔧",broom:"🧹",gloves:"🧤",star:"⭐",can:"🥫",salt:"🧂"};
+const IE = {
+  // Cold storage
+  snowflake:"❄️",ice:"🧊",thermometer:"🌡️",
+  // Proteins
+  drumstick:"🍖",steak:"🥩",poultry:"🍗",bacon:"🥓",turkey:"🦃",
+  // Seafood
+  fish:"🐟",shrimp:"🦐",lobster:"🦞",crab:"🦀",oyster:"🦪",squid:"🦑",octopus:"🐙",
+  // Produce
+  carrot:"🥕",leaf:"🍃",greens:"🥬",broccoli:"🥦",lettuce:"🥗",tomato:"🍅",pepper:"🌶️",bellpepper:"🫑",corn:"🌽",mushroom:"🍄",onion:"🧅",garlic:"🧄",potato:"🥔",avocado:"🥑",cucumber:"🥒",eggplant:"🍆",peas:"🫛",olive:"🫒",beans:"🫘",
+  // Fruit
+  apple:"🍎",lemon:"🍋",orange:"🍊",banana:"🍌",grape:"🍇",strawberry:"🍓",blueberry:"🫐",cherry:"🍒",peach:"🍑",watermelon:"🍉",pineapple:"🍍",mango:"🥭",kiwi:"🥝",pear:"🍐",coconut:"🥥",
+  // Dairy
+  egg:"🥚",cheese:"🧀",butter:"🧈",milk:"🥛",
+  // Bakery & grains
+  bread:"🍞",croissant:"🥐",bagel:"🥯",baguette:"🥖",flatbread:"🫓",pretzel:"🥨",pancakes:"🥞",waffle:"🧇",rice:"🍚",noodles:"🍜",
+  // Prepared & hot line
+  flame:"🔥",plate:"🍽️",stew:"🍲",casserole:"🥘",curry:"🍛",fondue:"🫕",taco:"🌮",burrito:"🌯",pizza:"🍕",hotdog:"🌭",sandwich:"🥪",pita:"🥙",falafel:"🧆",dumpling:"🥟",sushi:"🍣",bento:"🍱",
+  // Snacks & sweets
+  cookie:"🍪",cupcake:"🧁",donut:"🍩",pie:"🥧",chocolate:"🍫",candy:"🍬",icecream:"🍦",popcorn:"🍿",honey:"🍯",peanut:"🥜",chestnut:"🌰",
+  // Beverages
+  cup:"☕",tea:"🍵",boba:"🧋",juice:"🧃",soda:"🥤",water:"💧",wine:"🍷",beer:"🍺",cocktail:"🍸",
+  // Spices & condiments
+  salt:"🧂",jar:"🫙",
+  // Equipment & supplies
+  knife:"🔪",sponge:"🧽",bucket:"🪣",broom:"🧹",gloves:"🧤",wrench:"🔧",extinguisher:"🧯",trash:"🗑️",
+  // Storage & packaging
+  box:"📦",paper:"📋",tag:"🏷️",cabinet:"🗄️",
+  // Stadium & ops
+  stadium:"🏟️",truck:"🚛",chart:"📊",star:"⭐",can:"🥫"
+};
 const ri = ic => { if(!ic) return "📦"; if(ic.codePointAt(0)>127) return ic; return IE[ic]||"📦"; };
 
-/* ── Colors ── */
 const CC = {"FOOD":"#16A34A","Food":"#16A34A","BEVERAGES":"#8b5cf6","Beverages":"#8b5cf6","SNACKS":"#f59e0b","Snacks":"#f59e0b","PACKAGING":"#64748b","Packaging":"#64748b","SUPPLIES":"#94a3b8","Supplies":"#94a3b8","PROTEIN":"#dc2626","Protein":"#dc2626","PRODUCE":"#22c55e","Produce":"#22c55e","DAIRY":"#3b82f6","Dairy":"#3b82f6","DRY GOODS":"#d97706","Dry Goods":"#d97706","SEAFOOD":"#0891b2","Seafood":"#0891b2","BAKERY":"#ea580c","Bakery":"#ea580c","FROZEN":"#6366f1","Frozen":"#6366f1"};
 const cc = c => CC[c]||"#64748b";
 const ZC = {blue:{bg:"#dbeafe",fg:"#2563eb"},indigo:{bg:"#e0e7ff",fg:"#4f46e5"},amber:{bg:"#fef3c7",fg:"#d97706"},green:{bg:"#dcfce7",fg:"#16a34a"},red:{bg:"#fee2e2",fg:"#dc2626"},purple:{bg:"#f3e8ff",fg:"#9333ea"},slate:{bg:"#f1f5f9",fg:"#475569"},teal:{bg:"#ccfbf1",fg:"#0d9488"},orange:{bg:"#ffedd5",fg:"#ea580c"},gold:{bg:"#fef9c3",fg:"#ca8a04"},brown:{bg:"#f5e6d3",fg:"#92400e"},cyan:{bg:"#cffafe",fg:"#0891b2"},pink:{bg:"#fce7f3",fg:"#db2777"},emerald:{bg:"#d1fae5",fg:"#059669"}};
 const zc = c => ZC[c]||ZC.blue;
 
-/* ════════════════════════════════════ */
-export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, showToast }) {
-  // Accordion
+const ICON_KEYS = Object.keys(IE);
+const ZONE_COLORS = [
+  {key:"blue",bg:"#dbeafe",fg:"#2563eb"},{key:"indigo",bg:"#e0e7ff",fg:"#4f46e5"},
+  {key:"amber",bg:"#fef3c7",fg:"#d97706"},{key:"teal",bg:"#ccfbf1",fg:"#0d9488"},
+  {key:"slate",bg:"#e2e8f0",fg:"#475569"},{key:"green",bg:"#dcfce7",fg:"#16a34a"},
+  {key:"orange",bg:"#fff7ed",fg:"#ea580c"},{key:"gold",bg:"#fefce8",fg:"#ca8a04"},
+  {key:"brown",bg:"#fef3c7",fg:"#78350f"},{key:"cyan",bg:"#e0f2fe",fg:"#0891b2"},
+  {key:"pink",bg:"#fce7f3",fg:"#db2777"},{key:"emerald",bg:"#d1fae5",fg:"#059669"},
+{key:"purple",bg:"#ede9fe",fg:"#7c3aed"},{key:"red",bg:"#fee2e2",fg:"#dc2626"},
+  {key:"rose",bg:"#ffe4e6",fg:"#e11d48"},{key:"lime",bg:"#ecfccb",fg:"#65a30d"},
+];
+
+/* ── Auto icon/color from zone name ── */
+const AUTO_RULES = [
+  { p:["cool","fridge","refrig","reach-in","walk-in c"], icon:"snowflake", color:"blue" },
+  { p:["freez","frost"], icon:"ice", color:"indigo" },
+  { p:["dry","pantry","shelf","storage room"], icon:"box", color:"amber" },
+  { p:["bev","drink","bar","juice","soda"], icon:"cup", color:"cyan" },
+  { p:["supply","suppli","clean","chem","sanit"], icon:"broom", color:"slate" },
+  { p:["prep","line","hot","grill"], icon:"flame", color:"orange" },
+  { p:["snack","chip","candy","cookie","foh s"], icon:"cookie", color:"purple" },
+  { p:["protein","meat","butcher"], icon:"steak", color:"red" },
+  { p:["produce","veg","fruit","fresh"], icon:"carrot", color:"emerald" },
+  { p:["dairy","milk","cheese"], icon:"milk", color:"blue" },
+  { p:["seafood","fish","shrimp"], icon:"shrimp", color:"teal" },
+];
+function autoIC(n) { const l = (n||"").toLowerCase(); for (const r of AUTO_RULES) { if (r.p.some(x => l.includes(x))) return { icon: r.icon, color: r.color }; } return { icon: "box", color: "slate" }; }
+const SUGGESTED = ["Walk-in Cooler","Walk-in Freezer","Dry Storage","FOH Snacks","FOH Beverages","Supply Closet"];
+
+export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, onAddSubZone, onDeactivateLocation, onSaveSortOrder, showToast }) {
+  const [locs, setLocs] = useState(locations);
+  useEffect(() => { setLocs(locations); }, [locations]);
+
   const [openZone, setOpenZone] = useState(null);
   const [openSubs, setOpenSubs] = useState(new Set());
   const [uaOpen, setUaOpen] = useState(false);
-  // Tray
   const [picked, setPicked] = useState(new Set());
-  // Placed (pending save)
   const [moves, setMoves] = useState({});
-  // UI
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState("");
   const [searchOn, setSearchOn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dropped, setDropped] = useState(new Set());
-  // Zone management
-  const [menuLoc, setMenuLoc] = useState(null); // locationId of open menu
-  const [addingShelf, setAddingShelf] = useState(null); // zoneId where adding shelf
-  const [shelfName, setShelfName] = useState("");
+  const [menuLoc, setMenuLoc] = useState(null);
+  const [addingSub, setAddingSub] = useState(null);
+  const [subName, setSubName] = useState("");
   const [renamingLoc, setRenamingLoc] = useState(null);
   const [renameVal, setRenameVal] = useState("");
+  const [pickerLoc, setPickerLoc] = useState(null);
+  const [pickerIcon, setPickerIcon] = useState(null);
+  const [pickerColor, setPickerColor] = useState(null);
+  // Zone creation
+const [addingZone, setAddingZone] = useState(false);
+  const [newZoneName, setNewZoneName] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const pendingCount = Object.keys(moves).length;
   const hasPicked = picked.size > 0;
-
-  // Notify parent dirty state
   useEffect(() => { onDirtyChange?.(pendingCount > 0); }, [pendingCount]); // eslint-disable-line
 
-  /* ── Memos ── */
-  const locMap = useMemo(() => { const m = {}; locations.forEach(l => { m[l.locationId] = l; }); return m; }, [locations]);
-  const topZones = useMemo(() => locations.filter(l => !l.parentLocationId), [locations]);
-  const activeIds = useMemo(() => new Set(locations.map(l => l.locationId)), [locations]);
+  const locMap = useMemo(() => { const m = {}; locs.forEach(l => { m[l.locationId] = l; }); return m; }, [locs]);
+  const topZones = useMemo(() => locs.filter(l => !l.parentLocationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0)), [locs]);
+  const activeIds = useMemo(() => new Set(locs.map(l => l.locationId)), [locs]);
 
-  // Items grouped by exact location (not rolled up to parent)
   const byLoc = useMemo(() => {
     const m = { __ua: [] };
-    locations.forEach(l => { m[l.locationId] = []; });
+    locs.forEach(l => { m[l.locationId] = []; });
     catalogItems.forEach(item => {
       const eLoc = moves[item.itemId] !== undefined ? moves[item.itemId] : item.locationId;
       if (!eLoc || !activeIds.has(eLoc)) m.__ua.push(item);
@@ -77,79 +132,50 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
     });
     Object.values(m).forEach(a => a.sort((x,y) => x.name.localeCompare(y.name)));
     return m;
-  }, [catalogItems, locations, moves, activeIds]);
+  }, [catalogItems, locs, moves, activeIds]);
 
-  // Total items in a zone (including sub-zones)
   const zoneCount = useCallback((zid) => {
     let n = (byLoc[zid]||[]).length;
-    locations.filter(l => l.parentLocationId === zid).forEach(s => { n += (byLoc[s.locationId]||[]).length; });
+    locs.filter(l => l.parentLocationId === zid).forEach(s => { n += (byLoc[s.locationId]||[]).length; });
     return n;
-  }, [byLoc, locations]);
+  }, [byLoc, locs]);
 
   const uaItems = byLoc.__ua || [];
   const uaCount = uaItems.length;
-
-  // Search filter
   const matchSearch = useCallback((item) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q) || (item.primaryVendor||"").toLowerCase().includes(q);
   }, [search]);
 
-  /* ── Actions ── */
-  const toggleZone = (zid) => {
-    setOpenZone(prev => prev === zid ? null : zid);
-    setOpenSubs(new Set());
-    setDetail(null);
-  };
-  const toggleSub = (sid) => {
-    setOpenSubs(prev => { const s = new Set(prev); s.has(sid) ? s.delete(sid) : s.add(sid); return s; });
-    setDetail(null);
-  };
-  const togglePick = (itemId) => {
-    setPicked(prev => { const s = new Set(prev); s.has(itemId) ? s.delete(itemId) : s.add(itemId); return s; });
-    setDetail(null);
-  };
+  const toggleZone = (zid) => { setOpenZone(prev => prev === zid ? null : zid); setOpenSubs(new Set()); setDetail(null); };
+  const toggleSub = (sid) => { setOpenSubs(prev => { const s = new Set(prev); s.has(sid) ? s.delete(sid) : s.add(sid); return s; }); setDetail(null); };
+  const togglePick = (itemId) => { setPicked(prev => { const s = new Set(prev); s.has(itemId) ? s.delete(itemId) : s.add(itemId); return s; }); setDetail(null); };
 
   const dropInto = (targetId) => {
     if (picked.size === 0) return;
     const newMoves = {};
-    picked.forEach(id => {
-      const orig = catalogItems.find(i => i.itemId === id);
-      const origLoc = orig?.locationId || "";
-      const target = targetId === "__ua" ? "" : targetId;
-      if (target !== origLoc) newMoves[id] = target;
-    });
+    picked.forEach(id => { const orig = catalogItems.find(i => i.itemId === id); const origLoc = orig?.locationId || ""; const target = targetId === "__ua" ? "" : targetId; if (target !== origLoc) newMoves[id] = target; });
     setMoves(prev => ({ ...prev, ...newMoves }));
     const ids = new Set(Object.keys(newMoves));
-    setDropped(ids);
-    setTimeout(() => setDropped(new Set()), 500);
-    setPicked(new Set());
+    setDropped(ids); setTimeout(() => setDropped(new Set()), 500); setPicked(new Set());
     const dest = targetId === "__ua" ? "Unassigned" : (locMap[targetId]?.name || "Unknown");
-    const cnt = ids.size;
-    if (cnt > 0) showToast?.(`${cnt} item${cnt!==1?"s":""} placed in ${dest}`, "success");
+    if (ids.size > 0) showToast?.(`${ids.size} item${ids.size!==1?"s":""} placed in ${dest}`, "success");
   };
 
   const handleSave = async () => {
     if (pendingCount === 0) return;
     setSaving(true);
     const items = Object.entries(moves).map(([itemId, loc]) => ({ itemId, newLocationId: loc }));
-    try {
-      await onBatchMove(items);
-      setMoves({});
-      showToast?.(`${items.length} item${items.length!==1?"s":""} saved`, "success");
-    } catch { showToast?.("Save failed", "error"); }
+    try { await onBatchMove(items); setMoves({}); showToast?.(`${items.length} item${items.length!==1?"s":""} saved`, "success"); }
+    catch { showToast?.("Save failed", "error"); }
     finally { setSaving(false); }
   };
 
-  /* ── Item row ── */
   const renderItem = (item, showCat = false) => {
-    const isPicked = picked.has(item.itemId);
-    const isMoved = item.itemId in moves;
-    const isJustDropped = dropped.has(item.itemId);
-    const isDetail = detail === item.itemId;
+    const isPicked = picked.has(item.itemId); const isMoved = item.itemId in moves;
+    const isJustDropped = dropped.has(item.itemId); const isDetail = detail === item.itemId;
     if (!matchSearch(item)) return null;
-
     return (
       <div key={item.itemId} className={`pp-item${isPicked?" picked":""}${isMoved?" moved":""}${isJustDropped?" just-dropped":""}`}>
         <div className="pp-item-row" onClick={() => togglePick(item.itemId)}>
@@ -163,100 +189,123 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
           </div>
           <div className="pp-item-right">
             {item.lastPrice > 0 && <span className="pp-item-price">{fmt(item.lastPrice)}</span>}
-            <button className="pp-item-info" onClick={e => { e.stopPropagation(); setDetail(isDetail ? null : item.itemId); }}
-              aria-label="Item details">
+            <button className="pp-item-info" onClick={e => { e.stopPropagation(); setDetail(isDetail ? null : item.itemId); }} aria-label="Item details">
               <I d={ico.info} size={15} color={isDetail?"#2563eb":"#cbd5e1"} sw={1.5}/>
             </button>
           </div>
         </div>
-        {isDetail && (
-          <div className="pp-item-detail">
-            <div className="pp-detail-card">
-              <div className="pp-detail-row"><span>Category</span><span style={{color:cc(item.category)}}>{item.category}</span></div>
-              <div className="pp-detail-row"><span>Unit</span><span>{item.unit}</span></div>
-              {item.lastPrice > 0 && <div className="pp-detail-row"><span>Last Price</span><span>{fmt(item.lastPrice)}{item.lastPriceVendor?` · ${item.lastPriceVendor}`:""}</span></div>}
-              {item.lastPriceDate && <div className="pp-detail-row"><span>Price Date</span><span>{item.lastPriceDate}</span></div>}
-            </div>
-          </div>
-        )}
+        {isDetail && (<div className="pp-item-detail"><div className="pp-detail-card">
+          <div className="pp-detail-row"><span>Category</span><span style={{color:cc(item.category)}}>{item.category}</span></div>
+          <div className="pp-detail-row"><span>Unit</span><span>{item.unit}</span></div>
+          {item.lastPrice > 0 && <div className="pp-detail-row"><span>Last Price</span><span>{fmt(item.lastPrice)}{item.lastPriceVendor?` · ${item.lastPriceVendor}`:""}</span></div>}
+          {item.lastPriceDate && <div className="pp-detail-row"><span>Price Date</span><span>{item.lastPriceDate}</span></div>}
+        </div></div>)}
       </div>
     );
   };
 
-  /* ── Drop target button ── */
-  const DropBtn = ({ targetId, label }) => {
+  const DropBtn = ({ targetId }) => {
     if (!hasPicked) return null;
-    return (
-      <button className="pp-drop-btn" onClick={e => { e.stopPropagation(); dropInto(targetId); }}>
-        <I d={ico.download} size={13} color="#2563eb" sw={2.5}/> Drop {picked.size} item{picked.size!==1?"s":""}
-      </button>
-    );
+    return (<button className="pp-drop-btn" onClick={e => { e.stopPropagation(); dropInto(targetId); }}>
+      <I d={ico.download} size={13} color="#2563eb" sw={2.5}/> Drop {picked.size} item{picked.size!==1?"s":""}
+    </button>);
   };
 
-  /* ── Zone management ── */
+  /* ═══════════════════════════════════
+     OPTIMISTIC ZONE MANAGEMENT
+     ═══════════════════════════════════ */
   const closeMenu = () => { setMenuLoc(null); };
 
-  const startAddShelf = (zoneId) => {
-    closeMenu();
-    setAddingShelf(zoneId);
-    setShelfName("");
-    if (openZone !== zoneId) setOpenZone(zoneId);
+  // ── Add top-level zone ──
+  const addZone = (name) => {
+    const n = (name || "").trim();
+    if (!n) return;
+    if (locs.some(l => !l.parentLocationId && l.name.toLowerCase() === n.toLowerCase())) { showToast?.("Zone already exists", "error"); return; }
+    const { icon, color } = autoIC(n);
+    const tempId = `loc_temp_${Date.now()}`;
+    setLocs(prev => [...prev, { locationId: tempId, name: n, icon, color, sortOrder: topZones.length, parentLocationId: "" }]);
+    setNewZoneName(""); setAddingZone(false);
+    showToast?.(`"${n}" zone added`, "success");
+    onAddSubZone?.("", n, icon);
   };
 
-  const saveNewShelf = async (parentZoneId) => {
-    const name = shelfName.trim();
-    if (!name) { setAddingShelf(null); return; }
-    const updated = locations.map(l => ({
-      locationId: l.locationId, name: l.name, icon: l.icon,
-      sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.color || "",
-    }));
-    const parentSubs = locations.filter(l => l.parentLocationId === parentZoneId);
-    updated.push({
-      name, icon: "box", sortOrder: parentSubs.length,
-      parentLocationId: parentZoneId, color: "",
-    });
-    const ok = await onSaveLocations?.(updated);
-    if (ok !== false) showToast?.(`"${name}" shelf added`, "success");
-    setAddingShelf(null); setShelfName("");
+  // ── Add sub-zone ──
+  const startAddSub = (zoneId) => { closeMenu(); setAddingSub(zoneId); setSubName(""); if (openZone !== zoneId) setOpenZone(zoneId); };
+  const saveNewSub = (parentZoneId) => {
+    const name = subName.trim();
+    if (!name) { setAddingSub(null); return; }
+    const tempId = `loc_temp_${Date.now()}`;
+    const parentSubs = locs.filter(l => l.parentLocationId === parentZoneId);
+    setLocs(prev => [...prev, { locationId: tempId, name, icon: "box", color: "", sortOrder: parentSubs.length, parentLocationId: parentZoneId }]);
+    setAddingSub(null); setSubName("");
+    showToast?.(`"${name}" added`, "success");
+    onAddSubZone?.(parentZoneId, name, "box");
   };
 
-  const startRename = (loc) => {
-    closeMenu();
-    setRenamingLoc(loc.locationId);
-    setRenameVal(loc.name);
-  };
-
-  const saveRename = async (locId) => {
+  // ── Rename ──
+  const startRename = (loc) => { closeMenu(); setRenamingLoc(loc.locationId); setRenameVal(loc.name); };
+  const saveRename = (locId) => {
     const name = renameVal.trim();
     if (!name || name === locMap[locId]?.name) { setRenamingLoc(null); return; }
-    const updated = locations.map(l => ({
-      locationId: l.locationId, name: l.locationId === locId ? name : l.name,
-      icon: l.icon, sortOrder: l.sortOrder,
-      parentLocationId: l.parentLocationId || null, color: l.color || "",
-    }));
-    const ok = await onSaveLocations?.(updated);
-    if (ok !== false) showToast?.(`Renamed to "${name}"`, "success");
+    setLocs(prev => prev.map(l => l.locationId === locId ? { ...l, name } : l));
     setRenamingLoc(null); setRenameVal("");
+    showToast?.(`Renamed to "${name}"`, "success");
+    const updated = locs.map(l => ({ locationId: l.locationId, name: l.locationId === locId ? name : l.name, icon: l.icon, sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.color || "" }));
+    onSaveLocations?.(updated);
   };
 
-  const removeSubZone = async (sub) => {
-    const items = byLoc[sub.locationId] || [];
-    if (items.length > 0) {
-      showToast?.(`Move ${items.length} item${items.length!==1?"s":""} out first`, "error");
-      return;
+  // ── Remove (sub-zone or zone) ──
+const requestDelete = (loc) => {
+    const total = zoneCount(loc.locationId);
+    if (total > 0) { showToast?.(`Move ${total} item${total!==1?"s":""} out first`, "error"); return; }
+    const subs = locs.filter(l => l.parentLocationId === loc.locationId);
+    if (subs.length > 0 && subs.some(s => (byLoc[s.locationId]||[]).length > 0)) {
+      showToast?.("Move items out of sub-zones first", "error"); return;
     }
-    const updated = locations
-      .filter(l => l.locationId !== sub.locationId)
-      .map(l => ({
-        locationId: l.locationId, name: l.name, icon: l.icon,
-        sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.color || "",
-      }));
-    const ok = await onSaveLocations?.(updated);
-    if (ok !== false) showToast?.(`"${sub.name}" removed`, "success");
     closeMenu();
+    setConfirmDelete(loc);
+  };
+  const executeDelete = () => {
+    if (!confirmDelete) return;
+    const loc = confirmDelete;
+    const subs = locs.filter(l => l.parentLocationId === loc.locationId);
+    if (subs.length > 0) {
+      setLocs(prev => prev.filter(l => l.locationId !== loc.locationId && l.parentLocationId !== loc.locationId));
+      subs.forEach(s => onDeactivateLocation?.(s.locationId));
+    } else {
+      setLocs(prev => prev.filter(l => l.locationId !== loc.locationId));
+    }
+    showToast?.(`"${loc.name}" removed`, "success");
+    onDeactivateLocation?.(loc.locationId);
+    setConfirmDelete(null);
   };
 
-  // Close menu on outside click
+  // ── Icon/color picker ──
+  const openPicker = (loc) => { closeMenu(); setPickerLoc(loc.locationId); setPickerIcon(loc.icon || "box"); setPickerColor(loc.color || "blue"); };
+  const savePicker = () => {
+    if (!pickerLoc) return;
+    setLocs(prev => prev.map(l => l.locationId === pickerLoc ? { ...l, icon: pickerIcon, color: pickerColor } : l));
+    showToast?.("Icon & color updated", "success");
+    const updated = locs.map(l => ({ locationId: l.locationId, name: l.name, icon: l.locationId === pickerLoc ? pickerIcon : l.icon, sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.locationId === pickerLoc ? pickerColor : (l.color || "") }));
+    setPickerLoc(null);
+    onSaveLocations?.(updated);
+  };
+
+  // ── Move up/down ──
+  const moveLocation = (loc, direction) => {
+    closeMenu();
+    const siblings = loc.parentLocationId
+      ? locs.filter(l => l.parentLocationId === loc.parentLocationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0))
+      : topZones;
+    const idx = siblings.findIndex(s => s.locationId === loc.locationId);
+    const swapIdx = idx + direction;
+    if (swapIdx < 0 || swapIdx >= siblings.length) return;
+    const a = siblings[idx], b = siblings[swapIdx];
+    const updates = [{ locationId: a.locationId, sortOrder: b.sortOrder }, { locationId: b.locationId, sortOrder: a.sortOrder }];
+    setLocs(prev => prev.map(l => { const u = updates.find(u => u.locationId === l.locationId); return u ? { ...l, sortOrder: u.sortOrder } : l; }));
+    onSaveSortOrder?.(updates);
+  };
+
   useEffect(() => {
     if (!menuLoc) return;
     const handler = () => setMenuLoc(null);
@@ -267,50 +316,43 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
   /* ── Three-dot menu ── */
   const ThreeDot = ({ loc, isSub = false }) => {
     const isOpen = menuLoc === loc.locationId;
+    const siblings = loc.parentLocationId
+      ? locs.filter(l => l.parentLocationId === loc.parentLocationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0))
+      : topZones;
+    const idx = siblings.findIndex(s => s.locationId === loc.locationId);
+    const canUp = idx > 0; const canDown = idx < siblings.length - 1;
     return (
       <div className="pp-dots-wrap">
-        <button className="pp-dots-btn" onClick={e => { e.stopPropagation(); setMenuLoc(isOpen ? null : loc.locationId); }}>
-          <I d={ico.dots} size={16} color="#94a3b8"/>
-        </button>
+        <button className="pp-dots-btn" onClick={e => { e.stopPropagation(); setMenuLoc(isOpen ? null : loc.locationId); }}><I d={ico.dots} size={16} color="#94a3b8"/></button>
         {isOpen && (
           <div className="pp-dots-menu" onClick={e => e.stopPropagation()}>
-            {!isSub && <button onClick={() => startAddShelf(loc.locationId)}><I d={ico.plus} size={13} color="#64748b"/> Add shelf</button>}
+            {!isSub && <button onClick={() => startAddSub(loc.locationId)}><I d={ico.plus} size={13} color="#64748b"/> Add sub-zone</button>}
             <button onClick={() => startRename(loc)}><I d={ico.edit} size={13} color="#64748b"/> Rename</button>
-            {isSub && <button className="pp-dots-menu-danger" onClick={() => removeSubZone(loc)}><I d={ico.trash} size={13} color="#dc2626"/> Remove</button>}
+            <button onClick={() => openPicker(loc)}><span style={{fontSize:13}}>🎨</span> Change icon</button>
+            {canUp && <button onClick={() => moveLocation(loc, -1)}><I d={ico.chevUp} size={13} color="#64748b"/> Move up</button>}
+            {canDown && <button onClick={() => moveLocation(loc, 1)}><I d={ico.chevDown} size={13} color="#64748b"/> Move down</button>}
+<button className="pp-dots-menu-danger" onClick={() => requestDelete(loc)}><I d={ico.trash} size={13} color="#dc2626"/> Delete</button>
           </div>
         )}
       </div>
     );
   };
 
-  /* ── Sub-zone row ── */
-  // Helper: did items just drop into this location?
-  const isDrop = (locId) => {
-    return [...dropped].some(id => {
-      const eLoc = moves[id];
-      return eLoc === locId;
-    });
-  };
+  const isDrop = (locId) => [...dropped].some(id => moves[id] === locId);
 
   const renderSubZone = (sub) => {
-    const items = byLoc[sub.locationId] || [];
-    const isOpen = openSubs.has(sub.locationId);
+    const items = byLoc[sub.locationId] || []; const isOpen = openSubs.has(sub.locationId);
     const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
-
     return (
       <div key={sub.locationId} className="pp-sub">
         <div className={`pp-sub-header${isOpen?" open":""}${hasPicked?" droppable":""}`}>
           <button className="pp-sub-toggle" onClick={() => toggleSub(sub.locationId)}>
             <span className="pp-sub-icon" style={{background:sc.bg}}>{ri(sub.icon)}</span>
             {renamingLoc === sub.locationId ? (
-              <input className="pp-rename-input pp-rename-input--sm" value={renameVal}
-                onChange={e => setRenameVal(e.target.value)}
+              <input className="pp-rename-input pp-rename-input--sm" value={renameVal} onChange={e => setRenameVal(e.target.value)}
                 onKeyDown={e => { if(e.key==="Enter") saveRename(sub.locationId); if(e.key==="Escape") setRenamingLoc(null); }}
-                onBlur={() => saveRename(sub.locationId)} autoFocus
-                onClick={e => e.stopPropagation()}/>
-            ) : (
-              <span className="pp-sub-name">{sub.name}</span>
-            )}
+                onBlur={() => saveRename(sub.locationId)} autoFocus onClick={e => e.stopPropagation()}/>
+            ) : (<span className="pp-sub-name">{sub.name}</span>)}
             <span className={`pp-sub-count${isDrop(sub.locationId)?" bounce":""}`}>{items.length}</span>
             <I d={isOpen?ico.chevUp:ico.chevDown} size={14} color="#94a3b8"/>
           </button>
@@ -319,47 +361,61 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
         </div>
         <div className={`pp-accordion${isOpen?" open":""}`}>
           <div className="pp-accordion-inner">
-            {items.length === 0
-              ? <div className="pp-empty-sub">No items on this shelf yet</div>
-              : items.map(i => renderItem(i))}
+            {items.length === 0 ? <div className="pp-empty-sub">No items on this shelf yet</div> : items.map(i => renderItem(i))}
           </div>
         </div>
       </div>
     );
   };
 
-  /* ══════════════════════════════════ */
-  /* RENDER                             */
-  /* ══════════════════════════════════ */
+  /* ── Suggested zones (when few zones) ── */
+  const usedNames = new Set(topZones.map(z => z.name.toLowerCase()));
+  const suggestions = SUGGESTED.filter(s => !usedNames.has(s.toLowerCase()));
+
   return (
     <div className="pp-root">
       <div className="pp-card">
-
-        {/* ── Header ── */}
         <div className="pp-header">
           <div className="pp-header-left">
             <h3 className="pp-title">Product Placement</h3>
-            <p className="pp-subtitle">{catalogItems.length} items · {topZones.length} locations</p>
+            <p className="pp-subtitle">{catalogItems.length} items · {topZones.length} zone{topZones.length!==1?"s":""}</p>
           </div>
           <div className="pp-header-right">
             {searchOn ? (
               <div className="pp-search-bar">
-                <input className="pp-search-input" placeholder="Search..." value={search}
-                  onChange={e => setSearch(e.target.value)} autoFocus/>
-                <button className="pp-search-x" onClick={() => { setSearchOn(false); setSearch(""); }}>
-                  <I d={ico.x} size={14} color="#64748b"/>
-                </button>
+                <input className="pp-search-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} autoFocus/>
+                <button className="pp-search-x" onClick={() => { setSearchOn(false); setSearch(""); }}><I d={ico.x} size={14} color="#64748b"/></button>
               </div>
             ) : (
-              <button className="pp-search-btn" onClick={() => setSearchOn(true)}>
-                <I d={ico.search} size={16} color="#64748b"/>
-              </button>
+              <button className="pp-search-btn" onClick={() => setSearchOn(true)}><I d={ico.search} size={16} color="#64748b"/></button>
             )}
           </div>
         </div>
 
-        {/* ── Unassigned section ── */}
-        {uaCount > 0 && (
+        {/* ── Empty state ── */}
+        {topZones.length === 0 && !addingZone && (
+          <div className="pp-empty-state">
+            <span style={{fontSize:32}}>📦</span>
+            <h3 className="pp-empty-title">Set up your storage zones</h3>
+            <p className="pp-empty-desc">Add zones for your walk-ins, dry storage, and other areas. Then organize items into each zone.</p>
+            {suggestions.length > 0 && (
+              <div className="pp-suggest">
+                <span className="pp-suggest-label">Quick add:</span>
+                <div className="pp-suggest-chips">
+                  {suggestions.slice(0,4).map(s => (
+                    <button key={s} className="pp-suggest-chip" onClick={() => addZone(s)}>+ {s}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button className="pp-add-zone-btn" onClick={() => setAddingZone(true)}>
+              <I d={ico.plus} size={14} color="#fff"/> Add Zone
+            </button>
+          </div>
+        )}
+
+        {/* ── Unassigned ── */}
+        {uaCount > 0 && topZones.length > 0 && (
           <div className={`pp-ua${uaOpen?" open":""}`}>
             <div className={`pp-ua-header${hasPicked?" droppable":""}`}>
               <button className="pp-ua-toggle" onClick={() => setUaOpen(!uaOpen)}>
@@ -367,11 +423,9 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
                 <span className="pp-ua-text">items waiting to be placed</span>
                 <I d={uaOpen?ico.chevUp:ico.chevDown} size={16} color="#92400e"/>
               </button>
-              {hasPicked && (
-                <button className="pp-drop-btn pp-drop-btn--amber" onClick={e => { e.stopPropagation(); dropInto("__ua"); }}>
-                  <I d={ico.download} size={13} color="#92400e" sw={2.5}/> Unassign {picked.size}
-                </button>
-              )}
+              {hasPicked && (<button className="pp-drop-btn pp-drop-btn--amber" onClick={e => { e.stopPropagation(); dropInto("__ua"); }}>
+                <I d={ico.download} size={13} color="#92400e" sw={2.5}/> Unassign {picked.size}
+              </button>)}
             </div>
             <div className={`pp-accordion${uaOpen?" open":""}`}>
               <div className="pp-accordion-inner pp-ua-items">
@@ -380,9 +434,7 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
                   uaItems.forEach(i => { const c = i.category||"Other"; if(!groups[c])groups[c]=[]; groups[c].push(i); });
                   return Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([cat, items]) => (
                     <div key={cat} className="pp-ua-group">
-                      <div className="pp-ua-group-header">
-                        <span className="pp-ua-dot" style={{background:cc(cat)}}/> {cat} <span className="pp-ua-group-ct">{items.length}</span>
-                      </div>
+                      <div className="pp-ua-group-header"><span className="pp-ua-dot" style={{background:cc(cat)}}/> {cat} <span className="pp-ua-group-ct">{items.length}</span></div>
                       {items.map(i => renderItem(i, true))}
                     </div>
                   ));
@@ -397,13 +449,11 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
           {topZones.map(zone => {
             const isOpen = openZone === zone.locationId;
             const total = zoneCount(zone.locationId);
-            const zoneItems = byLoc[zone.locationId] || []; // direct items (not in sub-zone)
-            const subs = locations.filter(l => l.parentLocationId === zone.locationId);
+            const zoneItems = byLoc[zone.locationId] || [];
+            const subs = locs.filter(l => l.parentLocationId === zone.locationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
             const zcol = zc(zone.color);
-
             return (
               <div key={zone.locationId} className={`pp-zone${isOpen?" open":""}`}>
-                {/* Zone header */}
                 <div className={`pp-zone-header${hasPicked?" droppable":""}`} style={{borderLeftColor:zcol.fg}}>
                   <button className="pp-zone-toggle" onClick={() => toggleZone(zone.locationId)}>
                     <div className="pp-zone-icon" style={{background:zcol.bg}}>{ri(zone.icon)}</div>
@@ -411,14 +461,11 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
                       {renamingLoc === zone.locationId ? (
                         <input className="pp-rename-input" value={renameVal} onChange={e => setRenameVal(e.target.value)}
                           onKeyDown={e => { if(e.key==="Enter") saveRename(zone.locationId); if(e.key==="Escape") setRenamingLoc(null); }}
-                          onBlur={() => saveRename(zone.locationId)} autoFocus
-                          onClick={e => e.stopPropagation()}/>
-                      ) : (
-                        <span className="pp-zone-name">{zone.name}</span>
-                      )}
+                          onBlur={() => saveRename(zone.locationId)} autoFocus onClick={e => e.stopPropagation()}/>
+                      ) : (<span className="pp-zone-name">{zone.name}</span>)}
                       <span className="pp-zone-meta">
                         <span className={`pp-zone-ct${isDrop(zone.locationId)?" bounce":""}`}>{total} item{total!==1?"s":""}</span>
-                        {subs.length > 0 && <span className="pp-zone-subs"> · {subs.length} shelf{subs.length!==1?"ves":""}</span>}
+                        {subs.length > 0 && <span className="pp-zone-subs"> · {subs.length} {subs.length !== 1 ? "sub-zones" : "sub-zone"}</span>}
                       </span>
                     </div>
                     <I d={isOpen?ico.chevUp:ico.chevDown} size={16} color="#94a3b8"/>
@@ -426,72 +473,121 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
                   {!hasPicked && <ThreeDot loc={zone}/>}
                   <DropBtn targetId={zone.locationId}/>
                 </div>
-
-                {/* Zone body (accordion) */}
                 <div className={`pp-accordion${isOpen?" open":""}`}>
                   <div className="pp-accordion-inner">
                     {subs.length > 0 ? (<>
-                      {/* Items directly in zone (not in a sub-zone) */}
-                      {zoneItems.length > 0 && (
-                        <div className="pp-general">
-                          <div className="pp-general-label">General</div>
-                          {zoneItems.map(i => renderItem(i))}
-                        </div>
-                      )}
-                      {/* Sub-zones */}
+                      {zoneItems.length > 0 && (<div className="pp-general"><div className="pp-general-label">General</div>{zoneItems.map(i => renderItem(i))}</div>)}
                       {subs.map(renderSubZone)}
-                      {/* Add shelf input */}
-                      {addingShelf === zone.locationId ? (
+                      {addingSub === zone.locationId ? (
                         <div className="pp-add-shelf">
                           <I d={ico.plus} size={14} color="#d97706"/>
-                          <input className="pp-add-shelf-input" placeholder="Shelf name..." value={shelfName}
-                            onChange={e => setShelfName(e.target.value)} autoFocus
-                            onKeyDown={e => { if(e.key==="Enter") saveNewShelf(zone.locationId); if(e.key==="Escape") setAddingShelf(null); }}
-                            onBlur={() => { if(shelfName.trim()) saveNewShelf(zone.locationId); else setAddingShelf(null); }}/>
+                          <input className="pp-add-shelf-input" placeholder="Sub-zone name..." value={subName}
+                            onChange={e => setSubName(e.target.value)} autoFocus
+                            onKeyDown={e => { if(e.key==="Enter") saveNewSub(zone.locationId); if(e.key==="Escape") setAddingSub(null); }}
+onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId); else setAddingSub(null); }, 150); }}/>
                         </div>
                       ) : (
-                        <button className="pp-add-shelf-btn" onClick={() => startAddShelf(zone.locationId)}>
-                          <I d={ico.plus} size={13} color="#d97706"/> Add shelf
+                        <button className="pp-add-shelf-btn" onClick={() => startAddSub(zone.locationId)}>
+                          <I d={ico.plus} size={13} color="#d97706"/> Add sub-zone
                         </button>
                       )}
-                    </>) : (<>
-                      {/* No sub-zones: items directly */}
-                      {total === 0
-                        ? <div className="pp-empty-zone">No items here yet. Pick up items and drop them in this zone.</div>
-                        : zoneItems.map(i => renderItem(i))}
+</>) : (<>
+                      {total === 0 && addingSub !== zone.locationId && <div className="pp-empty-zone">No items here yet. Pick up items and drop them in this zone.</div>}
+                      {total > 0 && zoneItems.map(i => renderItem(i))}
+                      {addingSub === zone.locationId ? (
+                        <div className="pp-add-shelf">
+                          <I d={ico.plus} size={14} color="#d97706"/>
+                          <input className="pp-add-shelf-input" placeholder="Sub-zone name..." value={subName}
+                            onChange={e => setSubName(e.target.value)} autoFocus
+                            onKeyDown={e => { if(e.key==="Enter") saveNewSub(zone.locationId); if(e.key==="Escape") setAddingSub(null); }}
+                            onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId); else setAddingSub(null); }, 150); }}/>
+                        </div>
+                      ) : (
+                        <button className="pp-add-shelf-btn" onClick={() => startAddSub(zone.locationId)}>
+                          <I d={ico.plus} size={13} color="#d97706"/> Add sub-zone
+                        </button>
+                      )}
                     </>)}
-                  </div>
+                                      </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* ── Add zone (ghost input) ── */}
+        {topZones.length > 0 && (
+          <div className="pp-add-zone-row">
+            {addingZone ? (
+              <div className="pp-add-zone-input-wrap">
+                <input className="pp-add-zone-input" placeholder="Zone name..." value={newZoneName}
+                  onChange={e => setNewZoneName(e.target.value)} autoFocus
+                  onKeyDown={e => { if(e.key==="Enter") addZone(newZoneName); if(e.key==="Escape") { setAddingZone(false); setNewZoneName(""); } }}
+                  onBlur={() => { if(newZoneName.trim()) addZone(newZoneName); else { setAddingZone(false); setNewZoneName(""); } }}/>
+              </div>
+            ) : (
+              <button className="pp-add-zone-ghost" onClick={() => setAddingZone(true)}>
+                <I d={ico.plus} size={13} color="#d97706"/> Add zone
+              </button>
+            )}
+            {suggestions.length > 0 && topZones.length < 4 && !addingZone && (
+              <div className="pp-suggest-inline">
+                {suggestions.slice(0,3).map(s => (
+                  <button key={s} className="pp-suggest-chip-sm" onClick={() => addZone(s)}>+ {s}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Pickup Tray / Save Bar ── */}
       {(hasPicked || pendingCount > 0) && (
         <div className={`pp-tray${hasPicked?" pp-tray--pickup":" pp-tray--save"}`}>
           <div className="pp-tray-inner">
             {hasPicked ? (<>
-              <div className="pp-tray-left">
-                <span className="pp-tray-count">{picked.size}</span>
-                <span className="pp-tray-text">item{picked.size!==1?"s":""} picked up · tap a zone to place</span>
-              </div>
-              <div className="pp-tray-right">
-                {pendingCount > 0 && <span className="pp-tray-badge">{pendingCount} unsaved</span>}
-                <button className="pp-tray-clear" onClick={() => setPicked(new Set())}>Put back</button>
-              </div>
+              <div className="pp-tray-left"><span className="pp-tray-count">{picked.size}</span><span className="pp-tray-text">item{picked.size!==1?"s":""} picked up · tap a zone to place</span></div>
+              <div className="pp-tray-right">{pendingCount > 0 && <span className="pp-tray-badge">{pendingCount} unsaved</span>}<button className="pp-tray-clear" onClick={() => setPicked(new Set())}>Put back</button></div>
             </>) : (<>
-              <div className="pp-tray-left">
-                <span className="pp-tray-count">{pendingCount}</span>
-                <span className="pp-tray-text">change{pendingCount!==1?"s":""}</span>
-                <button className="pp-tray-clear" onClick={() => { setMoves({}); showToast?.("Cleared","info"); }}>clear</button>
-              </div>
+              <div className="pp-tray-left"><span className="pp-tray-count">{pendingCount}</span><span className="pp-tray-text">change{pendingCount!==1?"s":""}</span><button className="pp-tray-clear" onClick={() => { setMoves({}); showToast?.("Cleared","info"); }}>clear</button></div>
               <button className="pp-tray-save" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Changes"}</button>
             </>)}
           </div>
         </div>
       )}
+
+      {pickerLoc && (
+        <div className="pp-save-overlay" onClick={() => setPickerLoc(null)}>
+          <div className="pp-picker-card" onClick={e => e.stopPropagation()}>
+            <div className="pp-picker-head">
+              <span className="pp-picker-preview" style={{background: zc(pickerColor).bg}}>{ri(pickerIcon)}</span>
+              <span className="pp-picker-label">Choose icon & color</span>
+              <button className="pp-picker-done" onClick={savePicker}>Done</button>
+            </div>
+            <div className="pp-picker-icons">{ICON_KEYS.map(k => (
+              <button key={k} className={`pp-picker-icon${pickerIcon===k?" active":""}`} onClick={() => setPickerIcon(k)}>{IE[k]}</button>
+            ))}</div>
+            <div className="pp-picker-colors">{ZONE_COLORS.map(c => (
+              <button key={c.key} className={`pp-picker-color${pickerColor===c.key?" active":""}`} style={{background: c.fg}} onClick={() => setPickerColor(c.key)}/>
+            ))}</div>
+          </div>
+        </div>
+      )}
+
+{confirmDelete && (
+        <div className="pp-save-overlay" onClick={() => setConfirmDelete(null)}>
+<div className="pp-confirm-card" onClick={e => e.stopPropagation()}>
+            <div className="pp-confirm-icon"><I d={ico.trash} size={22} color="#dc2626" sw={2}/></div>
+            <h4 className="pp-confirm-title">Delete "{confirmDelete.name}"?</h4>
+                        <p className="pp-confirm-desc">This cannot be undone.{locs.filter(l => l.parentLocationId === confirmDelete.locationId).length > 0 ? " All empty sub-zones will also be removed." : ""}</p>
+            <div className="pp-confirm-btns">
+              <button className="pp-confirm-cancel" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="pp-confirm-delete" onClick={executeDelete}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saving && (<div className="pp-save-overlay"><div className="pp-save-overlay-card"><div className="pp-save-spinner"/><p>Saving {pendingCount} change{pendingCount!==1?"s":""}…</p></div></div>)}
     </div>
   );
 }

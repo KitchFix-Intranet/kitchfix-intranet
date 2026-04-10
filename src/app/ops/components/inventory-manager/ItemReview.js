@@ -13,6 +13,7 @@ const ico = {
   sparkle:["M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"],
   clock:["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M12 6v6l4 2"],
   refresh:["M23 4v6h-6","M1 20v-6h6","M3.51 9a9 9 0 0114.85-3.36L23 10","M1 14l4.64 4.36A9 9 0 0020.49 15"],
+  gear:["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
 };
 const fmt = n => "$" + Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 
@@ -28,7 +29,7 @@ const TIPS = [
   "Consistent item names help track price changes across vendors.",
 ];
 
-export default function ItemReview({ catalogItems, locations, account, onComplete, showToast }) {
+export default function ItemReview({ catalogItems, locations, account, onComplete, onGoToPlacement, showToast }) {
   const [phase, setPhase] = useState("idle");
   const [groups, setGroups] = useState([]);
   const [resolvedGroups, setResolvedGroups] = useState(new Set());
@@ -85,8 +86,7 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
         setPhase("flags");
       } else if (data.success) {
         setGroups([]);
-        setPhase(pendingItems.length > 0 ? "queue" : "done");
-        if (data.groups?.length === 0) showToast?.("No duplicates found — catalog looks clean!", "success");
+        setPhase("done");
       } else {
         showToast?.(data.error || "Scan failed", "error");
         setPhase("idle");
@@ -298,13 +298,15 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
 
           {activeGroups.length === 0 ? (
             <div className="ir-all-done">
-              <I d={ico.check} size={32} color="#16A34A" sw={2.5}/>
+              <div className="ir-check-anim"><I d={ico.check} size={32} color="#fff" sw={3}/></div>
               <h3>All groups reviewed!</h3>
               {totalItemsMerged > 0 && <p className="ir-done-stat">{totalItemsMerged} duplicate{totalItemsMerged !== 1 ? "s" : ""} merged</p>}
               <div className="ir-done-actions">
-                <button className="ir-rescan-btn" onClick={runScan}><I d={ico.refresh} size={14} color="#64748b"/> Scan Again</button>
-                <button className="ir-next-btn" onClick={() => setPhase(pendingItems.length > 0 ? "queue" : "done")}>
-                  {pendingItems.length > 0 ? `Review ${pendingItems.length} New Items →` : "Finish Review"}
+                <button className="ir-rescan-btn" onClick={() => onComplete?.()}>
+                  <I d={ico.gear} size={14} color="#64748b"/> Back to Manage
+                </button>
+                <button className="ir-next-btn" onClick={() => onGoToPlacement?.()}>
+                  Product Placement →
                 </button>
               </div>
             </div>
@@ -464,20 +466,25 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
       <div className="ir-root">
         <div className="ir-card">
           <div className="ir-all-done">
-            <I d={ico.check} size={40} color="#16A34A" sw={2.5}/>
-            <h3>Review Complete</h3>
-            {delta > 0 ? (
+            <div className="ir-check-anim"><I d={ico.check} size={32} color="#fff" sw={3}/></div>
+            {delta > 0 ? (<>
+              <h3>Review Complete</h3>
               <p className="ir-done-delta">
                 Started with {startCount.current} items → now {startCount.current - delta} items.
                 <br/><strong>{delta} duplicate{delta !== 1 ? "s" : ""} merged.</strong>
               </p>
-            ) : (
-              <p>Catalog is up to date — no duplicates found.</p>
-            )}
+            </>) : (<>
+              <h3>Catalog is Clean</h3>
+              <p className="ir-done-desc">No duplicates found. The system syncs your purchases nightly, so new items from invoices will appear here automatically. Check back weekly — or before you take inventory — to catch any duplicates early.</p>
+            </>)}
             {resolvedCount > 0 && <p className="ir-done-stat">{resolvedCount} group{resolvedCount !== 1 ? "s" : ""} reviewed</p>}
             <div className="ir-done-actions">
-              <button className="ir-rescan-btn" onClick={runScan}><I d={ico.refresh} size={14} color="#64748b"/> Scan Again</button>
-              <button className="ir-next-btn" onClick={() => onComplete?.()}>Back to Manage</button>
+              <button className="ir-rescan-btn" onClick={() => onComplete?.()}>
+                <I d={ico.gear} size={14} color="#64748b"/> Back to Manage
+              </button>
+              <button className="ir-next-btn" onClick={() => onGoToPlacement?.()}>
+                Product Placement →
+              </button>
             </div>
             {mergeLog.length > 0 && (
               <div className="ir-history-section ir-history-section--done">

@@ -23,6 +23,11 @@ const icons = {
   check: "M20 6L9 17l-5-5",
   clipboard: ["M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2","M8 2h8a1 1 0 011 1v2a1 1 0 01-1 1H8a1 1 0 01-1-1V3a1 1 0 011-1z"],
   play: "M5 3l14 9-14 9V3z",
+  sparkle: ["M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"],
+  grid: ["M3 3h7v7H3z","M14 3h7v7h-7z","M14 14h7v7h-7z","M3 14h7v7H3z"],
+  mapPin: ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z","M12 13a3 3 0 100-6 3 3 0 000 6z"],
+  list: ["M8 6h13","M8 12h13","M8 18h13","M3 6h.01","M3 12h.01","M3 18h.01"],
+  dollarSign: ["M12 1v22","M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"],
 };
 
 const fmt = (n) => "$" + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -43,21 +48,14 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const didInit = useRef(false);
   const childDirty = useRef(false);
 
-  // Guard navigation when child has unsaved changes
   const guardNav = (fn) => {
     if (childDirty.current) {
-      openConfirm?.(
-        "Unsaved Changes",
-        "You have unsaved changes to storage locations. Discard and leave?",
-        "Discard",
-        () => { childDirty.current = false; fn(); }
-      );
+      openConfirm?.("Unsaved Changes", "You have unsaved changes to storage locations. Discard and leave?", "Discard", () => { childDirty.current = false; fn(); });
       return;
     }
     fn();
   };
 
-  // ── Bootstrap ──
   const loadBootstrap = useCallback(async (acct, fresh = false) => {
     setLoading(true);
     try {
@@ -82,7 +80,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     loadBootstrap(label);
   };
 
-  // ── Start Count ──
   const startCount = async () => {
     const cp = data?.currentPeriod;
     if (!cp?.name) { showToast("No active period", "error"); return; }
@@ -96,7 +93,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     } catch { showToast("Network error", "error"); }
   };
 
-  // ── Handlers ──
   const handleSaveLocation = async (locationId, items) => {
     if (!sessionId) return;
     try {
@@ -115,7 +111,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
       const json = await res.json();
       if (json.success) {
         showToast(json.assigned > 0 ? `${locationsList.length} locations saved \u00B7 ${json.assigned} items organized` : `${locationsList.length} locations saved`, "success");
-        // Small delay to ensure Google Sheets write propagation before fresh read
         await new Promise((r) => setTimeout(r, 1000));
         await loadBootstrap(account, true);
       } else showToast(json.error || "Save failed", "error");
@@ -131,14 +126,12 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     await loadBootstrap(account, true);
   };
 
-  // ── Loading gate ──
   if (loading && !data) return (
     <div className="oh-inv-mgmt-app">
       <div className="oh-inv-mgmt-loading"><div className="oh-spinner" /><p>Loading Inventory Manager...</p></div>
     </div>
   );
 
-  // ── Derived ──
   const cp = data?.currentPeriod;
   const days = daysUntil(cp?.due);
   const stats = data?.catalogStats || { totalItems: 0, byCategory: {} };
@@ -153,7 +146,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const lastCountItems = data?.lastCountItems || {};
   const showBack = screen !== "landing";
 
-  // ── Build content ──
   let content = null;
 
   if (screen === "counting") {
@@ -168,19 +160,35 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     content = <ProductPlacement catalogItems={catalogItems} locations={locations}
       onBatchMove={handleBatchMoveItems}
       onDirtyChange={(d) => { childDirty.current = d; }}
-      onSaveLocations={async (locs) => {
-        try {
-          const res = await fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "save-locations", account, locations: locs }) });
-          const json = await res.json();
-          if (json.success) { await loadBootstrap(account, true); return true; }
-          else { showToast(json.error || "Save failed", "error"); return false; }
-        } catch { showToast("Network error", "error"); return false; }
+      onSaveLocations={(locs) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "save-locations", account, locations: locs }) })
+          .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Save failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+onAddSubZone={(parentLocationId, name, icon) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add-subzone", account, parentLocationId, name, icon }) })
+          .then(r => r.json()).then(j => { if (j.success) setTimeout(() => loadBootstrap(account, true), 1500); else showToast(j.error || "Add failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+            onDeactivateLocation={(locationId) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "deactivate-location", account, locationId }) })
+          .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Remove failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onSaveSortOrder={(updates) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "save-sort-order", account, updates }) })
+          .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Reorder failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
       }}
       showToast={showToast} />;
   } else if (screen === "manage" && manageView === "review") {
     content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
       onComplete={async () => { setManageView(null); await loadBootstrap(account, true); }}
+      onGoToPlacement={async () => { await loadBootstrap(account, true); setManageView("placement"); }}
       showToast={showToast} />;
   } else if (screen === "manage") {
     const unassigned = catalogItems.filter((i) => {
@@ -189,34 +197,35 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     }).length;
     content = (
       <div className="oh-inv-mgmt-manage"><div className="oh-inv-mgmt-manage-grid">
-        {[{ key:"review",label:"Item Review",desc:"AI duplicate check + new item review",badge:reviewCount },
-          { key:"placement",label:"Product Placement",desc:unassigned > 0 ? `${unassigned} items need a home` : "Organize items into zones",badge:unassigned },
-          { key:"locations",label:"Storage Locations",desc:`${locations.length} locations` },
-          { key:"catalog",label:"Item Catalog",desc:`${stats.totalItems} items` },
-          { key:"history",label:"Count History",desc:"Past counts & drill-down" },
-          { key:"prices",label:"Price Dashboard",desc:"Trends & vendor comparison" },
+        {[{ key:"review",label:"Item Review",desc:"Scan for duplicates and clean up your catalog",badge:reviewCount,icon:icons.sparkle,color:"#d97706" },
+          { key:"placement",label:"Product Placement",desc:unassigned > 0 ? `${unassigned} items not yet assigned to a location` : "Manage zones, shelves, and organize items",badge:unassigned,icon:icons.grid,color:"#2563eb" },
+          { key:"catalog",label:"Item Catalog",desc:`View all ${stats.totalItems} items tracked across your vendors`,icon:icons.list,color:"#8b5cf6" },
+          { key:"history",label:"Count History",desc:"Review past counts and compare periods",icon:icons.clipboard,color:"#0891b2" },
+          { key:"prices",label:"Price Dashboard",desc:"Track price changes across vendors over time",icon:icons.dollarSign,color:"#ea580c" },
         ].map((item) => (
           <button key={item.key} className="oh-inv-mgmt-manage-card"
-            onClick={() => (item.key === "locations" || item.key === "placement" || item.key === "review") ? setManageView(item.key) : showToast(`${item.label} \u2014 coming soon`, "info")}>
-            <div className="oh-inv-mgmt-manage-card-top">
-              <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
-              {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
+            onClick={() => (item.key === "placement" || item.key === "review") ? setManageView(item.key) : showToast(`${item.label} \u2014 coming soon`, "info")}>
+            <span className="oh-inv-mgmt-manage-card-icon" style={{background:item.color+"30",color:item.color}}><Icon d={item.icon} size={16} color={item.color} sw={2}/></span>
+            <div className="oh-inv-mgmt-manage-card-body">
+              <div className="oh-inv-mgmt-manage-card-top">
+                <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
+                {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
+              </div>
+              <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
             </div>
-            <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
-            <Icon d={icons.chevRight} size={14} color="#94a3b8" style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)"}} />
+            <Icon d={icons.chevRight} size={14} color="#cbd5e1" style={{flexShrink:0}} />
           </button>
         ))}
       </div></div>
     );
   } else {
-    // ── Normal Landing ──
     content = (
       <div className="oh-inv-mgmt-landing">
         <div className="oh-inv-mgmt-cta-card">
           {submitted ? (<>
             <div className="oh-inv-mgmt-cta-icon oh-inv-mgmt-cta-icon--success"><Icon d={icons.check} size={28} color="#16A34A" sw={3} /></div>
             <h2 className="oh-inv-mgmt-cta-title">{cp?.name || "P?"} Submitted</h2>
-            <p className="oh-inv-mgmt-cta-sub">{lastCount?.submittedBy || ""}{lastCount?.submittedAt ? ` \u00B7 ${dateFull(lastCount.submittedAt)}` : ""}</p>
+            <p className="oh-inv-mgmt-cta-sub">{lastCount?.submittedBy || ""}{lastCount?.submittedAt ? ` · ${dateFull(lastCount.submittedAt)}` : ""}</p>
             {lastCount && <div className="oh-inv-mgmt-cta-totals">
               {["Food","Packaging","Supplies","Snacks","Beverages"].map((cat) => { const v = lastCount[`total${cat}`] || 0; return v > 0 ? <div key={cat} className="oh-inv-mgmt-cta-total-row"><span>{cat}</span><span>{fmt(v)}</span></div> : null; })}
               <div className="oh-inv-mgmt-cta-total-row oh-inv-mgmt-cta-total-row--grand"><span>Total</span><span>{fmt(lastCount.grandTotal)}</span></div>
@@ -224,7 +233,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
           </>) : draft ? (<>
             <div className="oh-inv-mgmt-cta-icon"><Icon d={icons.play} size={28} color="#d97706" sw={2.5} /></div>
             <h2 className="oh-inv-mgmt-cta-title">Resume Count</h2>
-            <p className="oh-inv-mgmt-cta-sub">{cp?.name} draft \u00B7 {dateShort(draft.startedAt)}</p>
+            <p className="oh-inv-mgmt-cta-sub">{cp?.name} draft · {dateShort(draft.startedAt)}</p>
             <button className="oh-inv-mgmt-cta-btn" onClick={startCount}>Resume Count</button>
           </>) : (<>
             <div className="oh-inv-mgmt-cta-icon"><Icon d={icons.clipboard} size={28} color="#d97706" sw={2} /></div>
@@ -260,7 +269,6 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     );
   }
 
-  // ── Single return ──
   return (
     <div className="oh-inv-mgmt-app">
       <div className="oh-inv-mgmt-header">

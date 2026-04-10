@@ -162,6 +162,27 @@ export async function updateRangeSA(spreadsheetId, range, values) {
 }
 
 /**
+ * Batch-update multiple ranges in one API call (service account).
+ * data: [{ range: "tab!A2:F2", values: [[...]] }, ...]
+ */
+export async function batchUpdateRangesSA(spreadsheetId, data) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data,
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[SA] Error batch updating:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Read a specific range using the service account.
  * Returns raw 2D array (no header parsing).
  * Used by Service Calendar to read specific months from large Drive sheets.

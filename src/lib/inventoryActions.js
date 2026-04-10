@@ -2,7 +2,7 @@
  * inventoryActions.js — Inventory Manager Backend Handlers
  */
 
-import { SHEET_IDS, readSheetSA, appendRowSA, appendRowsSA, updateRangeSA } from "@/lib/sheets";
+import { SHEET_IDS, readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, batchUpdateRangesSA } from "@/lib/sheets";
 import {
   cachedRead, batchRead, invalidateCache,
   getAccountConfigs, getPeriods, getCurrentPeriod,
@@ -255,17 +255,33 @@ export async function handleBatchMoveItems({ account, items }) {
     if (!items || items.length === 0) return { success: true, moved: 0 };
     const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
     const rows = catalogData.rows || [];
-    let moved = 0;
+
+    // Build batch of range updates
+    const data = [];
     for (const move of items) {
       for (let i = 0; i < rows.length; i++) {
         if (rows[i][0] === move.itemId && accountMatch(rows[i][1], account)) {
-          const rowNum = i + 2;
-          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[move.newLocationId]]);
-          moved++;
+          data.push({ range: `item_catalog!F${i + 2}`, values: [[move.newLocationId]] });
           break;
         }
       }
     }
+
+    if (data.length === 0) return { success: true, moved: 0 };
+
+    // Sheets batchUpdate handles up to 100k cells — chunk at 500 to be safe
+    const CHUNK = 500;
+    let moved = 0;
+    for (let c = 0; c < data.length; c += CHUNK) {
+      const chunk = data.slice(c, c + CHUNK);
+      const result = await batchUpdateRangesSA(INVENTORY_SHEET_ID, chunk);
+      if (!result.success) {
+        console.error(`[batch-move] Chunk failed at offset ${c}:`, result.error);
+        return { success: false, moved, error: result.error };
+      }
+      moved += chunk.length;
+    }
+
     invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
     return { success: true, moved };
   } catch (error) {
@@ -734,7 +750,70 @@ export async function handleSaveLocations({ account, locations, email }) {
     return { success: false, error: error.message };
   }
 }
-export async function handleSaveSortOrder(body) { return { success: false, error: "Week 3" }; }
+export async function handleSaveSortOrder({ account, updates }) {
+  // updates: [{ locationId, sortOrder }]
+  try {
+    if (!updates || updates.length === 0) return { success: true };
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const data = [];
+    for (const u of updates) {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i][0] === u.locationId && accountMatch(rows[i][1], account)) {
+          data.push({ range: `storage_locations!E${i + 2}`, values: [[u.sortOrder]] });
+          break;
+        }
+      }
+    }
+    if (data.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, data);
+    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    return { success: true, updated: data.length };
+  } catch (error) {
+    console.error("[inventoryActions] save-sort-order error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleAddSubZone({ account, parentLocationId, name, icon, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    // Count existing sub-zones for sortOrder
+    let maxSort = -1;
+    rows.forEach(r => {
+      if (accountMatch(r[1], account) && r[8] === parentLocationId && r[5] !== "FALSE") {
+        const s = Number(r[4] || 0);
+        if (s > maxSort) maxSort = s;
+      }
+    });
+    const locationId = generateId("loc");
+    const now = new Date().toISOString();
+    await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
+      locationId, account, name, icon || "box",
+      maxSort + 1, "TRUE", email, now, parentLocationId, "",
+    ]);
+    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    return { success: true, locationId, name };
+  } catch (error) {
+    console.error("[inventoryActions] add-subzone error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleDeactivateLocation({ account, locationId }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === locationId && accountMatch(rows[i][1], account)) {
+        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!E${i + 2}:F${i + 2}`, [[999, "FALSE"]]);
+        invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+        return { success: true };
+      }
+    }
+    return { success: false, error: "Location not found" };
+  } catch (error) {
+    console.error("[inventoryActions] deactivate-location error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
 export async function handleAdminCorrect(body) { return { success: false, error: "Week 4" }; }
 export async function handleScan(body) { return { success: false, error: "Week 3" }; }
 export async function handleHistoryGet({ account }) { return { success: true, sessions: [] }; }
