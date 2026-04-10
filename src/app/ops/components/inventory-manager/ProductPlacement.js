@@ -194,7 +194,7 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
     );
   };
 
-  const DropBtn = ({ targetId }) => {
+  const renderDropBtn = (targetId) => {
     if (!hasPicked) return null;
     return (<button className="pp-drop-btn" onClick={e => { e.stopPropagation(); dropInto(targetId); }}>
       <I d={ico.download} size={13} color="#2563eb" sw={2.5}/> Drop {picked.size} item{picked.size!==1?"s":""}
@@ -297,7 +297,7 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
     return () => document.removeEventListener("click", handler);
   }, [menuLoc]);
 
-  const ThreeDot = ({ loc, isSub = false }) => {
+  const renderThreeDot = (loc, isSub = false) => {
     const isOpen = menuLoc === loc.locationId;
     const siblings = loc.parentLocationId
       ? locs.filter(l => l.parentLocationId === loc.parentLocationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0))
@@ -340,8 +340,8 @@ const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
             <span className={`pp-sub-count${isDrop(sub.locationId)?" bounce":""}`}>{items.length}</span>
             <I d={isOpen?ico.chevUp:ico.chevDown} size={14} color="#94a3b8"/>
           </button>
-          {!hasPicked && <ThreeDot loc={sub} isSub/>}
-          <DropBtn targetId={sub.locationId}/>
+          {!hasPicked && renderThreeDot(sub, true)}
+          {renderDropBtn(sub.locationId)}
         </div>
         <div className={`pp-accordion${isOpen?" open":""}`}>
           <div className="pp-accordion-inner">
@@ -396,7 +396,7 @@ const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
           </div>
         )}
 
-        {uaCount > 0 && topZones.length > 0 && (
+        {uaCount > 0 && topZones.length > 0 && (!search.trim() || uaItems.some(i => matchSearch(i))) && (
           <div className={`pp-ua${uaOpen?" open":""}`}>
             <div className={`pp-ua-header${hasPicked?" droppable":""}`}>
               <button className="pp-ua-toggle" onClick={() => setUaOpen(!uaOpen)}>
@@ -408,7 +408,7 @@ const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
                 <I d={ico.download} size={13} color="#92400e" sw={2.5}/> Unassign {picked.size}
               </button>)}
             </div>
-            <div className={`pp-accordion${uaOpen?" open":""}`}>
+            <div className={`pp-accordion${uaOpen || search.trim()?" open":""}`}>
               <div className="pp-accordion-inner pp-ua-items">
                 {(() => {
                   const groups = {};
@@ -455,8 +455,8 @@ const zcol = zc(zone.color);
                     </div>
                     <I d={isOpen?ico.chevUp:ico.chevDown} size={16} color="#94a3b8"/>
                   </button>
-                  {!hasPicked && <ThreeDot loc={zone}/>}
-                  <DropBtn targetId={zone.locationId}/>
+                  {!hasPicked && renderThreeDot(zone)}
+                  {renderDropBtn(zone.locationId)}
                 </div>
                 <div className={`pp-accordion${isOpen?" open":""}`}>
                   <div className="pp-accordion-inner">

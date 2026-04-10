@@ -39,7 +39,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
 
     // Full catalog for this account
     const catalogItems = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && r[11] !== "FALSE")
+      .filter((r) => accountMatch(r[1], activeAccount) && r[11] !== "FALSE" && r[11] !== false)
       .map((r) => ({
         itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized",
         unit: r[4] || "EA", locationId: r[5] || "",
@@ -57,7 +57,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
 
     // Storage locations
     const locations = (inv.storage_locations?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && r[5] !== "FALSE")
+      .filter((r) => accountMatch(r[1], activeAccount) && r[5] !== "FALSE" && r[5] !== false)
       .sort((a, b) => (parseInt(a[4]) || 0) - (parseInt(b[4]) || 0))
       .map((r) => ({
         locationId: r[0], name: r[2] || "", icon: r[3] || "box",
@@ -229,7 +229,7 @@ export async function handleCatalogGet({ account }) {
   try {
     const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases"]);
     const items = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE")
+      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false)
       .map((r) => ({
         itemId: r[0], name: r[2], category: r[3], unit: r[4],
         locationId: r[5], primaryVendor: r[6], lastPrice: parseNum(r[7]),
@@ -327,7 +327,7 @@ export async function handleAISimilarityCheck({ account }) {
   try {
     const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases", "merge_history"], { fresh: true });
     const items = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[0] && r[2])
+      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false && r[0] && r[2])
       .map((r) => ({ itemId: r[0], name: r[2], category: r[3] || "Food", unit: r[4] || "EA", vendor: r[6] || "", price: r[7] || "" }));
 
     if (items.length === 0) return { success: true, groups: [] };
@@ -604,8 +604,8 @@ export async function handleExcludeItem({ account, itemId, email }) {
         ]);
         // Log to merge_history for cron exclusion reference
         await appendRowSA(INVENTORY_SHEET_ID, "merge_history!A:A", [
-          new Date().toISOString(), account, "exclude", itemId,
-          rows[i][2] || "", "", email, "Item excluded from inventory",
+          generateId("mrg"), account, new Date().toISOString(), email,
+          itemId, rows[i][2] || "", "", "", "exclude", "",
         ]);
         break;
       }
@@ -720,7 +720,7 @@ export async function handleSaveLocations({ account, locations, email }) {
     // Build set of all active location IDs for this account
     const activeLocIds = new Set();
     rows.forEach((r) => {
-      if (accountMatch(r[1], account) && r[5] !== "FALSE" && r[0]) activeLocIds.add(r[0]);
+      if (accountMatch(r[1], account) && r[5] !== "FALSE" && r[5] !== false && r[0]) activeLocIds.add(r[0]);
     });
     // Also include newly saved locations
     savedLocations.forEach((l) => activeLocIds.add(l.locationId));
@@ -804,7 +804,7 @@ export async function handleAddSubZone({ account, parentLocationId, name, icon, 
     // Count existing sub-zones for sortOrder
     let maxSort = -1;
     rows.forEach(r => {
-      if (accountMatch(r[1], account) && r[8] === parentLocationId && r[5] !== "FALSE") {
+      if (accountMatch(r[1], account) && (r[8] || "") === (parentLocationId || "") && r[5] !== "FALSE" && r[5] !== false) {
         const s = Number(r[4] || 0);
         if (s > maxSort) maxSort = s;
       }
