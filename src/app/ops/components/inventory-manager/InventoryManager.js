@@ -184,9 +184,15 @@ onAddSubZone={(parentLocationId, name, icon) => {
           .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Reorder failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
+onExcludeItem={(itemId) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "exclude-item", account, itemId }) })
+          .then(r => r.json()).then(j => { if (j.success) loadBootstrap(account, true); else showToast(j.error || "Exclude failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
       showToast={showToast} />;
   } else if (screen === "manage" && manageView === "review") {
-    content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
+        content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
       onComplete={async () => { setManageView(null); await loadBootstrap(account, true); }}
       onGoToPlacement={async () => { await loadBootstrap(account, true); setManageView("placement"); }}
       showToast={showToast} />;

@@ -22,33 +22,19 @@ const ico = {
 const fmt = n => "$" + Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 
 const IE = {
-  // Cold storage
   snowflake:"❄️",ice:"🧊",thermometer:"🌡️",
-  // Proteins
   drumstick:"🍖",steak:"🥩",poultry:"🍗",bacon:"🥓",turkey:"🦃",
-  // Seafood
   fish:"🐟",shrimp:"🦐",lobster:"🦞",crab:"🦀",oyster:"🦪",squid:"🦑",octopus:"🐙",
-  // Produce
   carrot:"🥕",leaf:"🍃",greens:"🥬",broccoli:"🥦",lettuce:"🥗",tomato:"🍅",pepper:"🌶️",bellpepper:"🫑",corn:"🌽",mushroom:"🍄",onion:"🧅",garlic:"🧄",potato:"🥔",avocado:"🥑",cucumber:"🥒",eggplant:"🍆",peas:"🫛",olive:"🫒",beans:"🫘",
-  // Fruit
   apple:"🍎",lemon:"🍋",orange:"🍊",banana:"🍌",grape:"🍇",strawberry:"🍓",blueberry:"🫐",cherry:"🍒",peach:"🍑",watermelon:"🍉",pineapple:"🍍",mango:"🥭",kiwi:"🥝",pear:"🍐",coconut:"🥥",
-  // Dairy
   egg:"🥚",cheese:"🧀",butter:"🧈",milk:"🥛",
-  // Bakery & grains
   bread:"🍞",croissant:"🥐",bagel:"🥯",baguette:"🥖",flatbread:"🫓",pretzel:"🥨",pancakes:"🥞",waffle:"🧇",rice:"🍚",noodles:"🍜",
-  // Prepared & hot line
   flame:"🔥",plate:"🍽️",stew:"🍲",casserole:"🥘",curry:"🍛",fondue:"🫕",taco:"🌮",burrito:"🌯",pizza:"🍕",hotdog:"🌭",sandwich:"🥪",pita:"🥙",falafel:"🧆",dumpling:"🥟",sushi:"🍣",bento:"🍱",
-  // Snacks & sweets
   cookie:"🍪",cupcake:"🧁",donut:"🍩",pie:"🥧",chocolate:"🍫",candy:"🍬",icecream:"🍦",popcorn:"🍿",honey:"🍯",peanut:"🥜",chestnut:"🌰",
-  // Beverages
   cup:"☕",tea:"🍵",boba:"🧋",juice:"🧃",soda:"🥤",water:"💧",wine:"🍷",beer:"🍺",cocktail:"🍸",
-  // Spices & condiments
   salt:"🧂",jar:"🫙",
-  // Equipment & supplies
   knife:"🔪",sponge:"🧽",bucket:"🪣",broom:"🧹",gloves:"🧤",wrench:"🔧",extinguisher:"🧯",trash:"🗑️",
-  // Storage & packaging
   box:"📦",paper:"📋",tag:"🏷️",cabinet:"🗄️",
-  // Stadium & ops
   stadium:"🏟️",truck:"🚛",chart:"📊",star:"⭐",can:"🥫"
 };
 const ri = ic => { if(!ic) return "📦"; if(ic.codePointAt(0)>127) return ic; return IE[ic]||"📦"; };
@@ -66,11 +52,10 @@ const ZONE_COLORS = [
   {key:"orange",bg:"#fff7ed",fg:"#ea580c"},{key:"gold",bg:"#fefce8",fg:"#ca8a04"},
   {key:"brown",bg:"#fef3c7",fg:"#78350f"},{key:"cyan",bg:"#e0f2fe",fg:"#0891b2"},
   {key:"pink",bg:"#fce7f3",fg:"#db2777"},{key:"emerald",bg:"#d1fae5",fg:"#059669"},
-{key:"purple",bg:"#ede9fe",fg:"#7c3aed"},{key:"red",bg:"#fee2e2",fg:"#dc2626"},
+  {key:"purple",bg:"#ede9fe",fg:"#7c3aed"},{key:"red",bg:"#fee2e2",fg:"#dc2626"},
   {key:"rose",bg:"#ffe4e6",fg:"#e11d48"},{key:"lime",bg:"#ecfccb",fg:"#65a30d"},
 ];
 
-/* ── Auto icon/color from zone name ── */
 const AUTO_RULES = [
   { p:["cool","fridge","refrig","reach-in","walk-in c"], icon:"snowflake", color:"blue" },
   { p:["freez","frost"], icon:"ice", color:"indigo" },
@@ -87,7 +72,7 @@ const AUTO_RULES = [
 function autoIC(n) { const l = (n||"").toLowerCase(); for (const r of AUTO_RULES) { if (r.p.some(x => l.includes(x))) return { icon: r.icon, color: r.color }; } return { icon: "box", color: "slate" }; }
 const SUGGESTED = ["Walk-in Cooler","Walk-in Freezer","Dry Storage","FOH Snacks","FOH Beverages","Supply Closet"];
 
-export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, onAddSubZone, onDeactivateLocation, onSaveSortOrder, showToast }) {
+export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, onAddSubZone, onDeactivateLocation, onSaveSortOrder, onExcludeItem, showToast }) {
   const [locs, setLocs] = useState(locations);
   useEffect(() => { setLocs(locations); }, [locations]);
 
@@ -109,15 +94,17 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
   const [pickerLoc, setPickerLoc] = useState(null);
   const [pickerIcon, setPickerIcon] = useState(null);
   const [pickerColor, setPickerColor] = useState(null);
-  // Zone creation
-const [addingZone, setAddingZone] = useState(false);
+  const [addingZone, setAddingZone] = useState(false);
   const [newZoneName, setNewZoneName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmExclude, setConfirmExclude] = useState(null);
+  const [excludedIds, setExcludedIds] = useState(new Set());
 
   const pendingCount = Object.keys(moves).length;
   const hasPicked = picked.size > 0;
   useEffect(() => { onDirtyChange?.(pendingCount > 0); }, [pendingCount]); // eslint-disable-line
 
+  const visibleItems = useMemo(() => catalogItems.filter(i => !excludedIds.has(i.itemId)), [catalogItems, excludedIds]);
   const locMap = useMemo(() => { const m = {}; locs.forEach(l => { m[l.locationId] = l; }); return m; }, [locs]);
   const topZones = useMemo(() => locs.filter(l => !l.parentLocationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0)), [locs]);
   const activeIds = useMemo(() => new Set(locs.map(l => l.locationId)), [locs]);
@@ -125,14 +112,14 @@ const [addingZone, setAddingZone] = useState(false);
   const byLoc = useMemo(() => {
     const m = { __ua: [] };
     locs.forEach(l => { m[l.locationId] = []; });
-    catalogItems.forEach(item => {
+    visibleItems.forEach(item => {
       const eLoc = moves[item.itemId] !== undefined ? moves[item.itemId] : item.locationId;
       if (!eLoc || !activeIds.has(eLoc)) m.__ua.push(item);
       else { if (!m[eLoc]) m[eLoc] = []; m[eLoc].push(item); }
     });
     Object.values(m).forEach(a => a.sort((x,y) => x.name.localeCompare(y.name)));
     return m;
-  }, [catalogItems, locs, moves, activeIds]);
+  }, [visibleItems, locs, moves, activeIds]);
 
   const zoneCount = useCallback((zid) => {
     let n = (byLoc[zid]||[]).length;
@@ -155,7 +142,7 @@ const [addingZone, setAddingZone] = useState(false);
   const dropInto = (targetId) => {
     if (picked.size === 0) return;
     const newMoves = {};
-    picked.forEach(id => { const orig = catalogItems.find(i => i.itemId === id); const origLoc = orig?.locationId || ""; const target = targetId === "__ua" ? "" : targetId; if (target !== origLoc) newMoves[id] = target; });
+    picked.forEach(id => { const orig = visibleItems.find(i => i.itemId === id); const origLoc = orig?.locationId || ""; const target = targetId === "__ua" ? "" : targetId; if (target !== origLoc) newMoves[id] = target; });
     setMoves(prev => ({ ...prev, ...newMoves }));
     const ids = new Set(Object.keys(newMoves));
     setDropped(ids); setTimeout(() => setDropped(new Set()), 500); setPicked(new Set());
@@ -199,6 +186,9 @@ const [addingZone, setAddingZone] = useState(false);
           <div className="pp-detail-row"><span>Unit</span><span>{item.unit}</span></div>
           {item.lastPrice > 0 && <div className="pp-detail-row"><span>Last Price</span><span>{fmt(item.lastPrice)}{item.lastPriceVendor?` · ${item.lastPriceVendor}`:""}</span></div>}
           {item.lastPriceDate && <div className="pp-detail-row"><span>Price Date</span><span>{item.lastPriceDate}</span></div>}
+          <button className="pp-exclude-btn" onClick={e => { e.stopPropagation(); setConfirmExclude(item); }}>
+            <I d={ico.trash} size={12} color="#dc2626" sw={2}/> Remove from inventory
+          </button>
         </div></div>)}
       </div>
     );
@@ -216,7 +206,6 @@ const [addingZone, setAddingZone] = useState(false);
      ═══════════════════════════════════ */
   const closeMenu = () => { setMenuLoc(null); };
 
-  // ── Add top-level zone ──
   const addZone = (name) => {
     const n = (name || "").trim();
     if (!n) return;
@@ -229,7 +218,6 @@ const [addingZone, setAddingZone] = useState(false);
     onAddSubZone?.("", n, icon);
   };
 
-  // ── Add sub-zone ──
   const startAddSub = (zoneId) => { closeMenu(); setAddingSub(zoneId); setSubName(""); if (openZone !== zoneId) setOpenZone(zoneId); };
   const saveNewSub = (parentZoneId) => {
     const name = subName.trim();
@@ -242,7 +230,6 @@ const [addingZone, setAddingZone] = useState(false);
     onAddSubZone?.(parentZoneId, name, "box");
   };
 
-  // ── Rename ──
   const startRename = (loc) => { closeMenu(); setRenamingLoc(loc.locationId); setRenameVal(loc.name); };
   const saveRename = (locId) => {
     const name = renameVal.trim();
@@ -254,8 +241,7 @@ const [addingZone, setAddingZone] = useState(false);
     onSaveLocations?.(updated);
   };
 
-  // ── Remove (sub-zone or zone) ──
-const requestDelete = (loc) => {
+  const requestDelete = (loc) => {
     const total = zoneCount(loc.locationId);
     if (total > 0) { showToast?.(`Move ${total} item${total!==1?"s":""} out first`, "error"); return; }
     const subs = locs.filter(l => l.parentLocationId === loc.locationId);
@@ -280,7 +266,6 @@ const requestDelete = (loc) => {
     setConfirmDelete(null);
   };
 
-  // ── Icon/color picker ──
   const openPicker = (loc) => { closeMenu(); setPickerLoc(loc.locationId); setPickerIcon(loc.icon || "box"); setPickerColor(loc.color || "blue"); };
   const savePicker = () => {
     if (!pickerLoc) return;
@@ -291,7 +276,6 @@ const requestDelete = (loc) => {
     onSaveLocations?.(updated);
   };
 
-  // ── Move up/down ──
   const moveLocation = (loc, direction) => {
     closeMenu();
     const siblings = loc.parentLocationId
@@ -313,7 +297,6 @@ const requestDelete = (loc) => {
     return () => document.removeEventListener("click", handler);
   }, [menuLoc]);
 
-  /* ── Three-dot menu ── */
   const ThreeDot = ({ loc, isSub = false }) => {
     const isOpen = menuLoc === loc.locationId;
     const siblings = loc.parentLocationId
@@ -331,7 +314,7 @@ const requestDelete = (loc) => {
             <button onClick={() => openPicker(loc)}><span style={{fontSize:13}}>🎨</span> Change icon</button>
             {canUp && <button onClick={() => moveLocation(loc, -1)}><I d={ico.chevUp} size={13} color="#64748b"/> Move up</button>}
             {canDown && <button onClick={() => moveLocation(loc, 1)}><I d={ico.chevDown} size={13} color="#64748b"/> Move down</button>}
-<button className="pp-dots-menu-danger" onClick={() => requestDelete(loc)}><I d={ico.trash} size={13} color="#dc2626"/> Delete</button>
+            <button className="pp-dots-menu-danger" onClick={() => requestDelete(loc)}><I d={ico.trash} size={13} color="#dc2626"/> Delete</button>
           </div>
         )}
       </div>
@@ -341,8 +324,9 @@ const requestDelete = (loc) => {
   const isDrop = (locId) => [...dropped].some(id => moves[id] === locId);
 
   const renderSubZone = (sub) => {
-    const items = byLoc[sub.locationId] || []; const isOpen = openSubs.has(sub.locationId);
-    const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
+const items = byLoc[sub.locationId] || []; const isOpen = openSubs.has(sub.locationId) || (search.trim().length > 0);
+const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
+    if (search.trim() && !items.some(i => matchSearch(i))) return null;
     return (
       <div key={sub.locationId} className="pp-sub">
         <div className={`pp-sub-header${isOpen?" open":""}${hasPicked?" droppable":""}`}>
@@ -368,7 +352,6 @@ const requestDelete = (loc) => {
     );
   };
 
-  /* ── Suggested zones (when few zones) ── */
   const usedNames = new Set(topZones.map(z => z.name.toLowerCase()));
   const suggestions = SUGGESTED.filter(s => !usedNames.has(s.toLowerCase()));
 
@@ -378,7 +361,7 @@ const requestDelete = (loc) => {
         <div className="pp-header">
           <div className="pp-header-left">
             <h3 className="pp-title">Product Placement</h3>
-            <p className="pp-subtitle">{catalogItems.length} items · {topZones.length} zone{topZones.length!==1?"s":""}</p>
+            <p className="pp-subtitle">{visibleItems.length} items · {topZones.length} zone{topZones.length!==1?"s":""}</p>
           </div>
           <div className="pp-header-right">
             {searchOn ? (
@@ -392,7 +375,6 @@ const requestDelete = (loc) => {
           </div>
         </div>
 
-        {/* ── Empty state ── */}
         {topZones.length === 0 && !addingZone && (
           <div className="pp-empty-state">
             <span style={{fontSize:32}}>📦</span>
@@ -414,7 +396,6 @@ const requestDelete = (loc) => {
           </div>
         )}
 
-        {/* ── Unassigned ── */}
         {uaCount > 0 && topZones.length > 0 && (
           <div className={`pp-ua${uaOpen?" open":""}`}>
             <div className={`pp-ua-header${hasPicked?" droppable":""}`}>
@@ -444,16 +425,20 @@ const requestDelete = (loc) => {
           </div>
         )}
 
-        {/* ── Zones ── */}
         <div className="pp-zones">
-          {topZones.map(zone => {
-            const isOpen = openZone === zone.locationId;
-            const total = zoneCount(zone.locationId);
+{topZones.map(zone => {
+            const isOpen = openZone === zone.locationId || (search.trim().length > 0);
+                        const total = zoneCount(zone.locationId);
             const zoneItems = byLoc[zone.locationId] || [];
             const subs = locs.filter(l => l.parentLocationId === zone.locationId).sort((a,b) => (a.sortOrder||0) - (b.sortOrder||0));
-            const zcol = zc(zone.color);
+const zcol = zc(zone.color);
+            // Hide zones with no matching items when searching
+            if (search.trim()) {
+              const allZoneItems = [...zoneItems, ...subs.flatMap(s => byLoc[s.locationId] || [])];
+              if (!allZoneItems.some(i => matchSearch(i))) return null;
+            }
             return (
-              <div key={zone.locationId} className={`pp-zone${isOpen?" open":""}`}>
+                                              <div key={zone.locationId} className={`pp-zone${isOpen?" open":""}`}>
                 <div className={`pp-zone-header${hasPicked?" droppable":""}`} style={{borderLeftColor:zcol.fg}}>
                   <button className="pp-zone-toggle" onClick={() => toggleZone(zone.locationId)}>
                     <div className="pp-zone-icon" style={{background:zcol.bg}}>{ri(zone.icon)}</div>
@@ -484,14 +469,14 @@ const requestDelete = (loc) => {
                           <input className="pp-add-shelf-input" placeholder="Sub-zone name..." value={subName}
                             onChange={e => setSubName(e.target.value)} autoFocus
                             onKeyDown={e => { if(e.key==="Enter") saveNewSub(zone.locationId); if(e.key==="Escape") setAddingSub(null); }}
-onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId); else setAddingSub(null); }, 150); }}/>
+                            onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId); else setAddingSub(null); }, 150); }}/>
                         </div>
                       ) : (
                         <button className="pp-add-shelf-btn" onClick={() => startAddSub(zone.locationId)}>
                           <I d={ico.plus} size={13} color="#d97706"/> Add sub-zone
                         </button>
                       )}
-</>) : (<>
+                    </>) : (<>
                       {total === 0 && addingSub !== zone.locationId && <div className="pp-empty-zone">No items here yet. Pick up items and drop them in this zone.</div>}
                       {total > 0 && zoneItems.map(i => renderItem(i))}
                       {addingSub === zone.locationId ? (
@@ -508,14 +493,13 @@ onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId
                         </button>
                       )}
                     </>)}
-                                      </div>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* ── Add zone (ghost input) ── */}
         {topZones.length > 0 && (
           <div className="pp-add-zone-row">
             {addingZone ? (
@@ -573,12 +557,33 @@ onBlur={() => { setTimeout(() => { if(subName.trim()) saveNewSub(zone.locationId
         </div>
       )}
 
-{confirmDelete && (
+      {confirmExclude && (
+        <div className="pp-save-overlay" onClick={() => setConfirmExclude(null)}>
+          <div className="pp-confirm-card" onClick={e => e.stopPropagation()}>
+            <div className="pp-confirm-icon"><I d={ico.x} size={22} color="#dc2626" sw={2.5}/></div>
+            <h4 className="pp-confirm-title">Remove &quot;{confirmExclude.name}&quot;?</h4>
+            <p className="pp-confirm-desc">This item will be removed from your catalog and won&apos;t be imported again from future invoices.</p>
+            <div className="pp-confirm-btns">
+              <button className="pp-confirm-cancel" onClick={() => setConfirmExclude(null)}>Cancel</button>
+              <button className="pp-confirm-delete" onClick={() => {
+                const item = confirmExclude;
+                setExcludedIds(prev => new Set(prev).add(item.itemId));
+                onExcludeItem?.(item.itemId);
+                showToast?.(`"${item.name}" removed from inventory`, "success");
+                setConfirmExclude(null);
+                setDetail(null);
+              }}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
         <div className="pp-save-overlay" onClick={() => setConfirmDelete(null)}>
-<div className="pp-confirm-card" onClick={e => e.stopPropagation()}>
+          <div className="pp-confirm-card" onClick={e => e.stopPropagation()}>
             <div className="pp-confirm-icon"><I d={ico.trash} size={22} color="#dc2626" sw={2}/></div>
-            <h4 className="pp-confirm-title">Delete "{confirmDelete.name}"?</h4>
-                        <p className="pp-confirm-desc">This cannot be undone.{locs.filter(l => l.parentLocationId === confirmDelete.locationId).length > 0 ? " All empty sub-zones will also be removed." : ""}</p>
+            <h4 className="pp-confirm-title">Delete &quot;{confirmDelete.name}&quot;?</h4>
+            <p className="pp-confirm-desc">This cannot be undone.{locs.filter(l => l.parentLocationId === confirmDelete.locationId).length > 0 ? " All empty sub-zones will also be removed." : ""}</p>
             <div className="pp-confirm-btns">
               <button className="pp-confirm-cancel" onClick={() => setConfirmDelete(null)}>Cancel</button>
               <button className="pp-confirm-delete" onClick={executeDelete}>Delete</button>

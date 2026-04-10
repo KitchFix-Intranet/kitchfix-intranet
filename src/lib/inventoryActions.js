@@ -592,6 +592,31 @@ export async function handleReviewDelete({ account, itemId, reason, email }) {
   }
 }
 
+export async function handleExcludeItem({ account, itemId, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        // Set active=FALSE (col L) and reviewStatus=excluded (col Q)
+        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
+          { range: `item_catalog!Q${i + 2}`, values: [["excluded"]] },
+        ]);
+        // Log to merge_history for cron exclusion reference
+        await appendRowSA(INVENTORY_SHEET_ID, "merge_history!A:A", [
+          new Date().toISOString(), account, "exclude", itemId,
+          rows[i][2] || "", "", email, "Item excluded from inventory",
+        ]);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
 export async function handleSaveLocations({ account, locations, email }) {
   try {
