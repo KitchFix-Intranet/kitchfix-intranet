@@ -24,6 +24,11 @@ import {
   handleSaveSortOrder,
   handleAdminCorrect,
   handleScan,
+  handleDedupCatalog,
+  handleAISimilarityCheck,
+  handleKeepSeparate,
+  handleReviewAccept,
+  handleReviewDelete,
 } from "@/lib/inventoryActions";
 
 const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
@@ -84,6 +89,11 @@ export async function POST(request) {
         }
         return NextResponse.json(await handleAdminCorrect(body));
       case "scan": return NextResponse.json(await handleScan(body));
+      case "dedup-catalog": return NextResponse.json(await handleDedupCatalog(body));
+      case "ai-similarity-check": return NextResponse.json(await handleAISimilarityCheck(body));
+      case "keep-separate": return NextResponse.json(await handleKeepSeparate(body));
+      case "review-accept": return NextResponse.json(await handleReviewAccept(body));
+      case "review-delete": return NextResponse.json(await handleReviewDelete(body));
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
   } catch (error) {

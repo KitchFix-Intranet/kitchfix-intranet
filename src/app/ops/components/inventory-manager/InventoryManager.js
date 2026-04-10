@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import CountSheet from "./CountSheet";
 import LocationSetup from "./LocationSetup";
+import ProductPlacement from "./ProductPlacement";
+import ItemReview from "./ItemReview";
 
 const Icon = ({ d, size = 16, color = "#64748b", sw = 2, style = {} }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
@@ -121,6 +123,14 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
     finally { setBusy(null); }
   };
 
+  const handleBatchMoveItems = async (items) => {
+    const res = await fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "batch-move-items", account, items }) });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || "Save failed");
+    await loadBootstrap(account, true);
+  };
+
   // ── Loading gate ──
   if (loading && !data) return (
     <div className="oh-inv-mgmt-app">
@@ -154,18 +164,40 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   } else if (screen === "manage" && manageView === "locations") {
     content = <LocationSetup locations={locations} account={account} catalogItems={catalogItems}
       onSave={handleSaveLocations} onBack={() => guardNav(() => setManageView(null))} onDirtyChange={(d) => { childDirty.current = d; }} showToast={showToast} />;
+  } else if (screen === "manage" && manageView === "placement") {
+    content = <ProductPlacement catalogItems={catalogItems} locations={locations}
+      onBatchMove={handleBatchMoveItems}
+      onDirtyChange={(d) => { childDirty.current = d; }}
+      onSaveLocations={async (locs) => {
+        try {
+          const res = await fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "save-locations", account, locations: locs }) });
+          const json = await res.json();
+          if (json.success) { await loadBootstrap(account, true); return true; }
+          else { showToast(json.error || "Save failed", "error"); return false; }
+        } catch { showToast("Network error", "error"); return false; }
+      }}
+      showToast={showToast} />;
+  } else if (screen === "manage" && manageView === "review") {
+    content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
+      onComplete={async () => { setManageView(null); await loadBootstrap(account, true); }}
+      showToast={showToast} />;
   } else if (screen === "manage") {
+    const unassigned = catalogItems.filter((i) => {
+      const locIds = new Set(locations.map((l) => l.locationId));
+      return !i.locationId || !locIds.has(i.locationId);
+    }).length;
     content = (
       <div className="oh-inv-mgmt-manage"><div className="oh-inv-mgmt-manage-grid">
-        {[{ key:"health",label:"Catalog Health",desc:`${reviewCount} items need review`,badge:reviewCount },
-          { key:"history",label:"Count History",desc:"Past counts & drill-down" },
-          { key:"catalog",label:"Item Catalog",desc:`${stats.totalItems} items` },
-          { key:"print",label:"Print Count Sheets",desc:"PDF & Excel with QR codes" },
+        {[{ key:"review",label:"Item Review",desc:"AI duplicate check + new item review",badge:reviewCount },
+          { key:"placement",label:"Product Placement",desc:unassigned > 0 ? `${unassigned} items need a home` : "Organize items into zones",badge:unassigned },
           { key:"locations",label:"Storage Locations",desc:`${locations.length} locations` },
+          { key:"catalog",label:"Item Catalog",desc:`${stats.totalItems} items` },
+          { key:"history",label:"Count History",desc:"Past counts & drill-down" },
           { key:"prices",label:"Price Dashboard",desc:"Trends & vendor comparison" },
         ].map((item) => (
           <button key={item.key} className="oh-inv-mgmt-manage-card"
-            onClick={() => item.key === "locations" ? setManageView("locations") : showToast(`${item.label} \u2014 coming soon`, "info")}>
+            onClick={() => (item.key === "locations" || item.key === "placement" || item.key === "review") ? setManageView(item.key) : showToast(`${item.label} \u2014 coming soon`, "info")}>
             <div className="oh-inv-mgmt-manage-card-top">
               <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
               {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}

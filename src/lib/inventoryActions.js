@@ -273,7 +273,309 @@ export async function handleBatchMoveItems({ account, items }) {
     return { success: false, error: error.message };
   }
 }
-export async function handleMergeItems(body) { return { success: false, error: "Week 3" }; }
+// ═══════════════════════════════════════
+// ITEM REVIEW — AI Similarity + Merge
+// ═══════════════════════════════════════
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+async function callClaude(prompt, maxTokens = 8192, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: maxTokens,
+          system: "You are a JSON API. Respond with ONLY valid JSON. No prose, no markdown, no explanation, no preamble. Start your response with { and end with }.",
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      if (res.status === 529 || res.status === 429) {
+        const wait = attempt * 3000;
+        console.warn(`[Claude] ${res.status} on attempt ${attempt}/${retries}, retrying in ${wait}ms...`);
+        if (attempt < retries) { await new Promise(r => setTimeout(r, wait)); continue; }
+      }
+      if (!res.ok) throw new Error(`Claude ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      return data.content?.[0]?.text || "";
+    } catch (e) {
+      if (attempt === retries) throw e;
+      console.warn(`[Claude] Attempt ${attempt} error: ${e.message}, retrying...`);
+      await new Promise(r => setTimeout(r, attempt * 2000));
+    }
+  }
+}
+
+export async function handleAISimilarityCheck({ account }) {
+  try {
+    const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases", "merge_history"], { fresh: true });
+    const items = (inv.item_catalog?.rows || [])
+      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[0] && r[2])
+      .map((r) => ({ itemId: r[0], name: r[2], category: r[3] || "Food", unit: r[4] || "EA", vendor: r[6] || "", price: r[7] || "" }));
+
+    if (items.length === 0) return { success: true, groups: [] };
+
+    const aliases = (inv.item_aliases?.rows || [])
+      .filter((r) => items.some((i) => i.itemId === r[2]))
+      .map((r) => ({ alias: r[1], itemId: r[2], vendor: r[3] }));
+
+    // Recent merge decisions for learning
+    const mergeRows = (inv.merge_history?.rows || [])
+      .filter((r) => accountMatch(r[1], account))
+      .slice(-50);
+
+    // Build separate lists for merged vs keep-separate
+    const mergedContext = [];
+    const keepSeparateContext = [];
+    mergeRows.forEach((r) => {
+      if (r[8] === "keep_separate") {
+        try {
+          const names = JSON.parse(r[7] || "[]");
+          if (names.length > 0) keepSeparateContext.push(`  - "${names.join('" AND "')}"`);
+        } catch { /* skip malformed */ }
+      } else {
+        mergedContext.push(`  - MERGED: "${r[5]}" ← ${r[7] || ""}`);
+      }
+    });
+
+    const mergeContext = mergedContext.length > 0 ? mergedContext.join("\n") : "  (none)";
+    const keepSepContext = keepSeparateContext.length > 0 ? keepSeparateContext.join("\n") : "  (none)";
+
+    const catalogList = items.map((i) => `  ID:${i.itemId} | "${i.name}" | ${i.category} | ${i.unit} | vendor:${i.vendor} | price:${i.price}`).join("\n");
+    const aliasList = aliases.length > 0
+      ? aliases.map((a) => `  "${a.alias}" → ${a.itemId} (${a.vendor})`).join("\n")
+      : "  (none)";
+
+    const prompt = `You are a food service inventory dedup engine. Scan this catalog for items that are likely the same product listed multiple times.
+
+CATALOG (${items.length} items):
+${catalogList}
+
+EXISTING ALIASES:
+${aliasList}
+
+RECENT MERGE DECISIONS BY THIS KITCHEN (learn from these patterns):
+${mergeContext}
+
+ITEMS EXPLICITLY MARKED AS DIFFERENT (NEVER flag these pairs again):
+${keepSepContext}
+
+FIND GROUPS OF DUPLICATE/SIMILAR ITEMS. Look for:
+- Same product with different spelling/abbreviation: "Chicken Breast Bnls" vs "Chc Brst cs" vs "Breast Chicken 5oz"
+- Same product from different vendors: vendor descriptions vary but it's the same item
+- Same product with different size notations: "30 Pack" vs "30pk" vs "30ct"
+- Missing/extra hyphens, spaces, abbreviations
+- Same brand, same pack size, slightly different wording
+
+DO NOT flag as duplicates:
+- ANY pair listed in "ITEMS EXPLICITLY MARKED AS DIFFERENT" above — this is a hard rule, the kitchen has confirmed these are separate items
+- Different sizes of the same product (5oz vs 8oz = different items)
+- Items that share a word but are clearly different (e.g., "Chicken Breast" vs "Chicken Wings")
+
+For each group, suggest the best canonical name (clean, professional, includes key details like size/count).
+
+RESPOND WITH ONLY valid JSON (no markdown, no backticks):
+{
+  "groups": [
+    {
+      "groupId": "g_001",
+      "confidence": 92,
+      "suggestedName": "Clean Canonical Name",
+      "suggestedCategory": "Food",
+      "suggestedUnit": "case",
+      "reason": "Brief explanation",
+      "items": [
+        { "itemId": "item_abc", "name": "Original Name", "vendor": "Vendor Name" }
+      ]
+    }
+  ]
+}
+
+IMPORTANT: Each group MUST contain at least 2 items. A single item is NOT a group. Only return groups where you found 2 or more items that appear to be the same product.
+
+If no duplicates found, return: { "groups": [] }`;
+
+    const raw = await callClaude(prompt, 8192);
+    // Robust JSON extraction — find first { and last }
+    const cleaned = raw.replace(/```json\s*|```/g, "").trim();
+    const jsonStart = cleaned.indexOf("{");
+    const jsonEnd = cleaned.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON found in Claude response");
+    const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
+    const parsed = JSON.parse(jsonStr);
+
+    // Code-level safety: filter out groups that contain keep-separate pairs
+    const keepSepSets = mergeRows
+      .filter((r) => r[8] === "keep_separate")
+      .map((r) => { try { return new Set(JSON.parse(r[6] || "[]")); } catch { return new Set(); } })
+      .filter((s) => s.size > 0);
+
+    const filtered = (parsed.groups || [])
+      // Must have 2+ items to be a similarity group
+      .filter((group) => group.items && group.items.length >= 2)
+      // Filter out keep-separate pairs
+      .filter((group) => {
+      const groupIds = new Set(group.items.map((i) => i.itemId));
+      // Reject group if ALL its items appear in a single keep-separate entry
+      return !keepSepSets.some((sepSet) => {
+        let overlap = 0;
+        groupIds.forEach((id) => { if (sepSet.has(id)) overlap++; });
+        return overlap >= 2; // at least 2 items from this group were kept separate before
+      });
+    });
+
+    return { success: true, groups: filtered };
+  } catch (error) {
+    console.error("[inventoryActions] ai-similarity error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleMergeItems({ account, keeperItemId, mergedItemIds, canonicalName, category, unit, email }) {
+  try {
+    const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases", "price_history"], { fresh: true });
+    const catalogRows = inv.item_catalog?.rows || [];
+    const aliasRows = inv.item_aliases?.rows || [];
+    const priceRows = inv.price_history?.rows || [];
+    const now = new Date().toISOString();
+
+    // Find keeper row
+    let keeperRowNum = null;
+    let keeperRow = null;
+    for (let i = 0; i < catalogRows.length; i++) {
+      if (catalogRows[i][0] === keeperItemId) { keeperRowNum = i + 2; keeperRow = catalogRows[i]; break; }
+    }
+    if (!keeperRowNum) return { success: false, error: "Keeper item not found" };
+
+    // Update keeper name/category/unit
+    await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!C${keeperRowNum}:E${keeperRowNum}`, [[canonicalName || keeperRow[2], category || keeperRow[3], unit || keeperRow[4]]]);
+
+    const mergedNames = [];
+
+    for (const mergedId of mergedItemIds) {
+      // Find merged row
+      for (let i = 0; i < catalogRows.length; i++) {
+        if (catalogRows[i][0] === mergedId) {
+          const rowNum = i + 2;
+          mergedNames.push(catalogRows[i][2] || mergedId);
+
+          // Deactivate merged item
+          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!L${rowNum}`, [["FALSE"]]);
+
+          // Create alias from merged name → keeper
+          await appendRowSA(INVENTORY_SHEET_ID, "item_aliases", [
+            generateId("alias"), catalogRows[i][2] || "", keeperItemId,
+            catalogRows[i][6] || "", 100, email || "item_review", now, "item_review",
+          ]);
+
+          // Remap aliases pointing to merged → keeper
+          aliasRows.forEach(async (a, ai) => {
+            if (a[2] === mergedId) {
+              await updateRangeSA(INVENTORY_SHEET_ID, `item_aliases!C${ai + 2}`, [[keeperItemId]]);
+            }
+          });
+
+          // Remap price_history
+          priceRows.forEach(async (p, pi) => {
+            if (p[0] === mergedId) {
+              await updateRangeSA(INVENTORY_SHEET_ID, `price_history!A${pi + 2}`, [[keeperItemId]]);
+            }
+          });
+
+          // Copy locationId if keeper has none
+          if (catalogRows[i][5] && !keeperRow[5]) {
+            await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${keeperRowNum}`, [[catalogRows[i][5]]]);
+            keeperRow[5] = catalogRows[i][5];
+          }
+          break;
+        }
+      }
+    }
+
+    // Log merge decision
+    await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+      generateId("mrg"), account, now, email || "",
+      keeperItemId, canonicalName || keeperRow[2],
+      JSON.stringify(mergedItemIds), JSON.stringify(mergedNames),
+      "merge", "",
+    ]);
+
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(INVENTORY_SHEET_ID, "item_aliases");
+    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+
+    return { success: true, merged: mergedItemIds.length };
+  } catch (error) {
+    console.error("[inventoryActions] merge error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleKeepSeparate({ account, itemIds, itemNames, email }) {
+  try {
+    const now = new Date().toISOString();
+    await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+      generateId("mrg"), account, now, email || "",
+      "", "",
+      JSON.stringify(itemIds),
+      JSON.stringify(itemNames || itemIds),
+      "keep_separate", "",
+    ]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleReviewAccept({ account, itemId, name, category, unit, locationId, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        const rowNum = i + 2;
+        // Update name, category, unit, locationId
+        const updates = [name || rows[i][2], category || rows[i][3], unit || rows[i][4]];
+        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!C${rowNum}:E${rowNum}`, [updates]);
+        if (locationId) {
+          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[locationId]]);
+          // Log zone correction if different from AI suggestion
+          const aiSuggested = rows[i][5] || "";
+          if (aiSuggested && aiSuggested !== locationId) {
+            await appendRowSA(INVENTORY_SHEET_ID, "zone_corrections", [
+              generateId("zc"), account, new Date().toISOString(), email || "",
+              itemId, name || rows[i][2], aiSuggested, locationId, category || rows[i][3],
+            ]);
+          }
+        }
+        // Set reviewStatus (column Q, index 16)
+        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!Q${rowNum}`, [["reviewed"]]);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleReviewDelete({ account, itemId, reason, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!L${i + 2}`, [["FALSE"]]);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
 export async function handleSaveLocations({ account, locations, email }) {
   try {
@@ -437,4 +739,95 @@ export async function handleAdminCorrect(body) { return { success: false, error:
 export async function handleScan(body) { return { success: false, error: "Week 3" }; }
 export async function handleHistoryGet({ account }) { return { success: true, sessions: [] }; }
 export async function handleReviewQueueGet({ account }) { return { success: true, items: [] }; }
+
+// ── One-time catalog dedup ──
+function normalizeCatalogName(name) {
+  return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
+export async function handleDedupCatalog({ dryRun = true }) {
+  try {
+    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const aliasData = await readSheetSA(INVENTORY_SHEET_ID, "item_aliases");
+    const priceData = await readSheetSA(INVENTORY_SHEET_ID, "price_history");
+    const catalogRows = catalogData.rows || [];
+    const aliasRows = aliasData.rows || [];
+    const priceRows = priceData.rows || [];
+
+    // Group active items by normalized name + account
+    const groups = {};
+    catalogRows.forEach((r, i) => {
+      if (r[11] === "FALSE") return;
+      if (!r[0] || !r[2]) return; // skip header/empty rows
+      const account = r[1] || "";
+      const name = normalizeCatalogName(r[2]);
+      if (!name) return; // skip if name normalizes to empty
+      const key = `${account}::${name}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ rowNum: i + 2, itemId: r[0], name: r[2], lastPriceDate: r[8] || "", locationId: r[5] || "" });
+    });
+
+    let deactivated = 0;
+    const ops = [];
+    const log = [];
+
+    for (const [key, items] of Object.entries(groups)) {
+      if (items.length <= 1) continue;
+
+      // Keep item with locationId, then most recent price date
+      items.sort((a, b) => {
+        if (a.locationId && !b.locationId) return -1;
+        if (!a.locationId && b.locationId) return 1;
+        return (b.lastPriceDate || "").localeCompare(a.lastPriceDate || "");
+      });
+      const keeper = items[0];
+      const dupes = items.slice(1);
+
+      log.push(`"${keeper.name}" — keep ${keeper.itemId}, deactivate ${dupes.map(d => d.itemId).join(", ")}`);
+
+      for (const dupe of dupes) {
+        ops.push({ range: `item_catalog!L${dupe.rowNum}`, values: [["FALSE"]] });
+
+        aliasRows.forEach((a, ai) => {
+          if (a[2] === dupe.itemId) {
+            ops.push({ range: `item_aliases!C${ai + 2}`, values: [[keeper.itemId]] });
+          }
+        });
+
+        priceRows.forEach((p, pi) => {
+          if (p[0] === dupe.itemId) {
+            ops.push({ range: `price_history!A${pi + 2}`, values: [[keeper.itemId]] });
+          }
+        });
+
+        if (dupe.locationId && !keeper.locationId) {
+          ops.push({ range: `item_catalog!F${keeper.rowNum}`, values: [[dupe.locationId]] });
+          keeper.locationId = dupe.locationId;
+        }
+
+        deactivated++;
+      }
+    }
+
+    if (!dryRun && ops.length > 0) {
+      for (const op of ops) {
+        await updateRangeSA(INVENTORY_SHEET_ID, op.range, op.values);
+      }
+      invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+      invalidateCache(INVENTORY_SHEET_ID, "item_aliases");
+      invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    }
+
+    return {
+      success: true,
+      dryRun,
+      deactivated,
+      operations: ops.length,
+      log,
+    };
+  } catch (error) {
+    console.error("[inventoryActions] dedup error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
 export async function handlePrint({ account }) { return { success: false, error: "Week 3" }; }
