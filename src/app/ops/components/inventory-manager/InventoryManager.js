@@ -14,18 +14,15 @@ const Icon = ({ d, size = 16, color = "#64748b", sw = 2, style = {} }) => (
 );
 const icons = {
   box: ["M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z","M3.27 6.96L12 12.01l8.73-5.05","M12 22.08V12"],
-  gear: ["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
   chevDown: "M6 9l6 6 6-6", chevUp: "M18 15l-6-6-6 6", chevRight: "M9 18l6-6-6-6",
   arrowLeft: ["M19 12H5","M12 19l-7-7 7-7"],
   trendUp: ["M23 6l-9.5 9.5-5-5L1 18","M17 6h6v6"],
   trendDown: ["M23 18l-9.5-9.5-5 5L1 6","M17 18h6v-6"],
-  alert: ["M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z","M12 9v4","M12 17h.01"],
   check: "M20 6L9 17l-5-5",
   clipboard: ["M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2","M8 2h8a1 1 0 011 1v2a1 1 0 01-1 1H8a1 1 0 01-1-1V3a1 1 0 011-1z"],
   play: "M5 3l14 9-14 9V3z",
   sparkle: ["M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"],
   grid: ["M3 3h7v7H3z","M14 3h7v7h-7z","M14 14h7v7h-7z","M3 14h7v7H3z"],
-  mapPin: ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z","M12 13a3 3 0 100-6 3 3 0 000 6z"],
   list: ["M8 6h13","M8 12h13","M8 18h13","M3 6h.01","M3 12h.01","M3 18h.01"],
   dollarSign: ["M12 1v22","M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"],
 };
@@ -36,7 +33,7 @@ const dateShort = (v) => { if (!v) return "\u2013"; try { return new Date(v).toL
 const dateFull = (v) => { if (!v) return "\u2013"; try { return new Date(v).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); } catch { return "\u2013"; } };
 
 export default function InventoryManager({ config, showToast, openConfirm, onNavigate }) {
-  const [screen, setScreen] = useState("landing");
+  const [screen, setScreen] = useState("home");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState("");
@@ -50,7 +47,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
 
   const guardNav = (fn) => {
     if (childDirty.current) {
-      openConfirm?.("Unsaved Changes", "You have unsaved changes to storage locations. Discard and leave?", "Discard", () => { childDirty.current = false; fn(); });
+      openConfirm?.("Unsaved Changes", "You have unsaved changes. Discard and leave?", "Discard", () => { childDirty.current = false; fn(); });
       return;
     }
     fn();
@@ -75,7 +72,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   useEffect(() => { if (!didInit.current) loadBootstrap(""); }, []); // eslint-disable-line
 
   const switchAccount = (label) => {
-    setAccountOpen(false); setScreen("landing"); setSessionId(null); setManageView(null);
+    setAccountOpen(false); setScreen("home"); setSessionId(null); setManageView(null);
     setAccount(label);
     loadBootstrap(label);
   };
@@ -144,19 +141,25 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const accounts = data?.accounts || [];
   const catalogItems = data?.catalogItems || [];
   const lastCountItems = data?.lastCountItems || {};
-  const showBack = screen !== "landing";
+
+  const unassigned = catalogItems.filter((i) => {
+    const locIds = new Set(locations.map((l) => l.locationId));
+    return !i.locationId || !locIds.has(i.locationId);
+  }).length;
+
+  const showBack = screen !== "home";
 
   let content = null;
 
   if (screen === "counting") {
     content = <CountSheet catalogItems={catalogItems} locations={locations} lastCountItems={lastCountItems}
       sessionId={sessionId} account={account} period={cp?.name} onSaveLocation={handleSaveLocation}
-      onFinish={() => { showToast("Count Review \u2014 coming next session", "info"); setScreen("landing"); }}
-      onBack={() => { setScreen("landing"); setSessionId(null); }} showToast={showToast} />;
-  } else if (screen === "manage" && manageView === "locations") {
+      onFinish={() => { showToast("Count Review \u2014 coming next session", "info"); setScreen("home"); }}
+      onBack={() => { setScreen("home"); setSessionId(null); }} showToast={showToast} />;
+  } else if (screen === "locations") {
     content = <LocationSetup locations={locations} account={account} catalogItems={catalogItems}
-      onSave={handleSaveLocations} onBack={() => guardNav(() => setManageView(null))} onDirtyChange={(d) => { childDirty.current = d; }} showToast={showToast} />;
-  } else if (screen === "manage" && manageView === "placement") {
+      onSave={handleSaveLocations} onBack={() => guardNav(() => setScreen("home"))} onDirtyChange={(d) => { childDirty.current = d; }} showToast={showToast} />;
+  } else if (screen === "placement") {
     content = <ProductPlacement catalogItems={catalogItems} locations={locations}
       onBatchMove={handleBatchMoveItems}
       onDirtyChange={(d) => { childDirty.current = d; }}
@@ -166,13 +169,13 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
           .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Save failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
-onAddSubZone={(parentLocationId, name, icon) => {
+onAddSubZone={(parentLocationId, name, icon, color) => {
         fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "add-subzone", account, parentLocationId, name, icon }) })
-          .then(r => r.json()).then(j => { if (j.success) setTimeout(() => loadBootstrap(account, true), 1500); else showToast(j.error || "Add failed", "error"); })
+          body: JSON.stringify({ action: "add-subzone", account, parentLocationId, name, icon, color }) })
+                    .then(r => r.json()).then(j => { if (j.success) setTimeout(() => loadBootstrap(account, true), 1500); else showToast(j.error || "Add failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
-            onDeactivateLocation={(locationId) => {
+      onDeactivateLocation={(locationId) => {
         fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "deactivate-location", account, locationId }) })
           .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Remove failed", "error"); })
@@ -184,89 +187,92 @@ onAddSubZone={(parentLocationId, name, icon) => {
           .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Reorder failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
-onExcludeItem={(itemId) => {
+      onUpdateLocation={(locationId, fields) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update-location", account, locationId, fields }) })
+          .then(r => r.json()).then(j => { if (!j.success) showToast(j.error || "Update failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onExcludeItem={(itemId) => {
         fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "exclude-item", account, itemId }) })
           .then(r => r.json()).then(j => { if (j.success) loadBootstrap(account, true); else showToast(j.error || "Exclude failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
       showToast={showToast} />;
-  } else if (screen === "manage" && manageView === "review") {
-        content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
-      onComplete={async () => { setManageView(null); await loadBootstrap(account, true); }}
-      onGoToPlacement={async () => { await loadBootstrap(account, true); setManageView("placement"); }}
+  } else if (screen === "review") {
+    content = <ItemReview catalogItems={catalogItems} locations={locations} account={account}
+      onComplete={async () => { setScreen("home"); await loadBootstrap(account, true); }}
+      onGoToPlacement={async () => { await loadBootstrap(account, true); setScreen("placement"); }}
       showToast={showToast} />;
-  } else if (screen === "manage") {
-    const unassigned = catalogItems.filter((i) => {
-      const locIds = new Set(locations.map((l) => l.locationId));
-      return !i.locationId || !locIds.has(i.locationId);
-    }).length;
-    content = (
-      <div className="oh-inv-mgmt-manage"><div className="oh-inv-mgmt-manage-grid">
-        {[{ key:"review",label:"Item Review",desc:"Scan for duplicates and clean up your catalog",badge:reviewCount,icon:icons.sparkle,color:"#d97706" },
-          { key:"placement",label:"Product Placement",desc:unassigned > 0 ? `${unassigned} items not yet assigned to a location` : "Manage zones, shelves, and organize items",badge:unassigned,icon:icons.grid,color:"#2563eb" },
-          { key:"catalog",label:"Item Catalog",desc:`View all ${stats.totalItems} items tracked across your vendors`,icon:icons.list,color:"#8b5cf6" },
-          { key:"history",label:"Count History",desc:"Review past counts and compare periods",icon:icons.clipboard,color:"#0891b2" },
-          { key:"prices",label:"Price Dashboard",desc:"Track price changes across vendors over time",icon:icons.dollarSign,color:"#ea580c" },
-        ].map((item) => (
-          <button key={item.key} className="oh-inv-mgmt-manage-card"
-            onClick={() => (item.key === "placement" || item.key === "review") ? setManageView(item.key) : showToast(`${item.label} \u2014 coming soon`, "info")}>
-            <span className="oh-inv-mgmt-manage-card-icon" style={{background:item.color+"30",color:item.color}}><Icon d={item.icon} size={16} color={item.color} sw={2}/></span>
-            <div className="oh-inv-mgmt-manage-card-body">
-              <div className="oh-inv-mgmt-manage-card-top">
-                <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
-                {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
-              </div>
-              <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
-            </div>
-            <Icon d={icons.chevRight} size={14} color="#cbd5e1" style={{flexShrink:0}} />
-          </button>
-        ))}
-      </div></div>
-    );
   } else {
+    /* ═══════════════════════════════════
+       UNIFIED HOME SCREEN
+       ═══════════════════════════════════ */
+    const toolItems = [
+      { key:"review", label:"Item review", desc:"Scan for duplicates and clean up your catalog", icon:icons.sparkle, color:"#d97706", active:true },
+      { key:"placement", label:"Product placement", desc: unassigned > 0 ? `${unassigned} items not yet assigned to a location` : "Manage zones, shelves, and organize items", badge:unassigned, icon:icons.grid, color:"#2563eb", active:true },
+      { key:"catalog", label:"Item catalog", desc:`View all ${stats.totalItems} items across your vendors`, icon:icons.list, color:"#8b5cf6", active:false },
+      { key:"history", label:"Count history", desc:"Review past counts and compare periods", icon:icons.clipboard, color:"#0891b2", active:false },
+      { key:"prices", label:"Price dashboard", desc:"Track price changes across vendors", icon:icons.dollarSign, color:"#ea580c", active:false },
+    ];
+
     content = (
       <div className="oh-inv-mgmt-landing">
-        <div className="oh-inv-mgmt-cta-card">
-          {submitted ? (<>
-            <div className="oh-inv-mgmt-cta-icon oh-inv-mgmt-cta-icon--success"><Icon d={icons.check} size={28} color="#16A34A" sw={3} /></div>
-            <h2 className="oh-inv-mgmt-cta-title">{cp?.name || "P?"} Submitted</h2>
-            <p className="oh-inv-mgmt-cta-sub">{lastCount?.submittedBy || ""}{lastCount?.submittedAt ? ` · ${dateFull(lastCount.submittedAt)}` : ""}</p>
-            {lastCount && <div className="oh-inv-mgmt-cta-totals">
-              {["Food","Packaging","Supplies","Snacks","Beverages"].map((cat) => { const v = lastCount[`total${cat}`] || 0; return v > 0 ? <div key={cat} className="oh-inv-mgmt-cta-total-row"><span>{cat}</span><span>{fmt(v)}</span></div> : null; })}
-              <div className="oh-inv-mgmt-cta-total-row oh-inv-mgmt-cta-total-row--grand"><span>Total</span><span>{fmt(lastCount.grandTotal)}</span></div>
-            </div>}
-          </>) : draft ? (<>
-            <div className="oh-inv-mgmt-cta-icon"><Icon d={icons.play} size={28} color="#d97706" sw={2.5} /></div>
-            <h2 className="oh-inv-mgmt-cta-title">Resume Count</h2>
-            <p className="oh-inv-mgmt-cta-sub">{cp?.name} draft · {dateShort(draft.startedAt)}</p>
-            <button className="oh-inv-mgmt-cta-btn" onClick={startCount}>Resume Count</button>
-          </>) : (<>
-            <div className="oh-inv-mgmt-cta-icon"><Icon d={icons.clipboard} size={28} color="#d97706" sw={2} /></div>
-            <h2 className="oh-inv-mgmt-cta-title">Start Inventory Count</h2>
-            <p className="oh-inv-mgmt-cta-sub">Count your inventory for this period</p>
-            <button className="oh-inv-mgmt-cta-btn" onClick={startCount}>Start Count</button>
-          </>)}
-        </div>
-
-        {reviewCount > 0 && <div className="oh-inv-mgmt-warning"><Icon d={icons.alert} size={16} color="#d97706" /><span>{reviewCount} item{reviewCount !== 1 ? "s" : ""} need review \u2014 <button className="oh-inv-mgmt-link" onClick={() => setScreen("manage")}>review in Manage</button></span></div>}
-
+        {/* Stats row */}
         <div className="oh-inv-mgmt-stats">
-          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Current Period</span><span className="oh-inv-mgmt-stat-value">{cp?.name || "\u2013"}</span><span className="oh-inv-mgmt-stat-sub">{cp?.start && cp?.end ? `${dateShort(cp.start)} \u2014 ${dateShort(cp.end)}` : "\u2013"}</span></div>
-          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Days Until Due</span><span className={`oh-inv-mgmt-stat-value${days !== null && days <= 7 ? " oh-inv-mgmt-stat-value--urgent" : ""}`}>{days ?? "\u2013"}</span><span className="oh-inv-mgmt-stat-sub">Due {dateFull(cp?.due)}</span></div>
-          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Items in Catalog</span><span className="oh-inv-mgmt-stat-value">{stats.totalItems}</span><span className="oh-inv-mgmt-stat-sub">{locations.length} location{locations.length !== 1 ? "s" : ""}</span></div>
+          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Period</span><span className="oh-inv-mgmt-stat-value">{cp?.name || "\u2013"}</span><span className="oh-inv-mgmt-stat-sub">{cp?.start && cp?.end ? `${dateShort(cp.start)} \u2014 ${dateShort(cp.end)}` : "\u2013"}</span></div>
+          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Due in</span><span className={`oh-inv-mgmt-stat-value${days !== null && days <= 7 ? " oh-inv-mgmt-stat-value--urgent" : ""}`}>{days !== null ? `${days} days` : "\u2013"}</span><span className="oh-inv-mgmt-stat-sub">{dateFull(cp?.due)}</span></div>
+          <div className="oh-inv-mgmt-stat-card"><span className="oh-inv-mgmt-stat-label">Catalog</span><span className="oh-inv-mgmt-stat-value">{stats.totalItems}</span><span className="oh-inv-mgmt-stat-sub">{locations.length} location{locations.length !== 1 ? "s" : ""}</span></div>
         </div>
 
-        {stats.totalItems === 0 && (
-          <div className="oh-inv-mgmt-empty-state">
-            <Icon d={icons.box} size={32} color="#e2e8f0" sw={1.5} />
-            <h3>No catalog items yet</h3>
-            <p>Items will appear automatically as invoices are processed through Invoice Capture.</p>
+        {/* Start count CTA */}
+        {submitted ? (
+          <div className="oh-inv-mgmt-count-cta oh-inv-mgmt-count-cta--done" onClick={() => {}}>
+            <div className="oh-inv-mgmt-count-cta-icon" style={{background:"rgba(22,163,74,0.12)"}}><Icon d={icons.check} size={18} color="#16A34A" sw={2.5}/></div>
+            <div className="oh-inv-mgmt-count-cta-body">
+              <span className="oh-inv-mgmt-count-cta-label">{cp?.name} submitted</span>
+              <span className="oh-inv-mgmt-count-cta-sub">{lastCount?.submittedBy ? `by ${lastCount.submittedBy}` : ""}{lastCount?.grandTotal ? ` \u00B7 ${fmt(lastCount.grandTotal)}` : ""}</span>
+            </div>
+            <Icon d={icons.chevRight} size={14} color="#94a3b8"/>
           </div>
+        ) : (
+          <button className="oh-inv-mgmt-count-cta" onClick={startCount}>
+            <div className="oh-inv-mgmt-count-cta-icon"><Icon d={draft ? icons.play : icons.clipboard} size={18} color="#fff" sw={2}/></div>
+            <div className="oh-inv-mgmt-count-cta-body">
+              <span className="oh-inv-mgmt-count-cta-label">{draft ? "Resume inventory count" : "Start inventory count"}</span>
+              <span className="oh-inv-mgmt-count-cta-sub">{cp?.name}{draft ? ` draft \u00B7 ${dateShort(draft.startedAt)}` : ` \u00B7 due ${dateFull(cp?.due)}`}</span>
+            </div>
+            <Icon d={icons.chevRight} size={14} color="rgba(255,255,255,0.5)"/>
+          </button>
         )}
 
+        {/* Tools */}
+        <div className="oh-inv-mgmt-tools-label">Tools</div>
+        <div className="oh-inv-mgmt-manage-grid">
+          {toolItems.map((item) => (
+            <button key={item.key} className={`oh-inv-mgmt-manage-card${!item.active ? " oh-inv-mgmt-manage-card--soon" : ""}`}
+              onClick={() => {
+                if (!item.active) { showToast(`${item.label} \u2014 coming soon`, "info"); return; }
+                if (item.key === "placement") setScreen("placement");
+                else if (item.key === "review") setScreen("review");
+              }}>
+              <span className="oh-inv-mgmt-manage-card-icon" style={{background:item.color+"20"}}><Icon d={item.icon} size={16} color={item.color} sw={2}/></span>
+              <div className="oh-inv-mgmt-manage-card-body">
+                <div className="oh-inv-mgmt-manage-card-top">
+                  <span className="oh-inv-mgmt-manage-card-label">{item.label}</span>
+                  {item.badge > 0 && <span className="oh-inv-mgmt-manage-badge">{item.badge}</span>}
+                </div>
+                <span className="oh-inv-mgmt-manage-card-desc">{item.desc}</span>
+              </div>
+              {item.active ? <Icon d={icons.chevRight} size={14} color="#cbd5e1" style={{flexShrink:0}} /> : <span className="oh-inv-mgmt-soon-tag">Soon</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Price movement */}
         {movers.length > 0 && <div className="oh-inv-mgmt-section">
-          <button className="oh-inv-mgmt-section-header" onClick={() => setPriceOpen(!priceOpen)}><span className="oh-inv-mgmt-section-title">Price Movement</span><Icon d={priceOpen ? icons.chevUp : icons.chevDown} size={16} color="#64748b" /></button>
+          <button className="oh-inv-mgmt-section-header" onClick={() => setPriceOpen(!priceOpen)}><span className="oh-inv-mgmt-section-title">Price movement</span><Icon d={priceOpen ? icons.chevUp : icons.chevDown} size={16} color="#64748b" /></button>
           {priceOpen && <div className="oh-inv-mgmt-movers">{movers.map((m, i) => (
             <div key={i} className="oh-inv-mgmt-mover-row"><div className="oh-inv-mgmt-mover-left"><Icon d={m.direction==="up"?icons.trendUp:icons.trendDown} size={14} color={m.direction==="up"?"#d97706":"#16A34A"} /><div className="oh-inv-mgmt-mover-info"><span className="oh-inv-mgmt-mover-name">{m.name}</span><span className="oh-inv-mgmt-mover-vendor">{m.vendor}</span></div></div><div className="oh-inv-mgmt-mover-right"><span className="oh-inv-mgmt-mover-price">{fmt(m.currentPrice)}</span><span className={`oh-inv-mgmt-mover-change${m.direction==="up"?" up":" down"}`}>{m.direction==="up"?"+":""}{m.pctChange}%</span></div></div>
           ))}</div>}
@@ -280,7 +286,7 @@ onExcludeItem={(itemId) => {
       <div className="oh-inv-mgmt-header">
         <div className="oh-inv-mgmt-header-left">
           {showBack ? (
-            <button className="oh-inv-mgmt-back" onClick={() => guardNav(() => { setScreen("landing"); setSessionId(null); setManageView(null); })}>
+            <button className="oh-inv-mgmt-back" onClick={() => guardNav(() => { setScreen("home"); setSessionId(null); setManageView(null); })}>
               <Icon d={icons.arrowLeft} size={18} color="#fff" />
             </button>
           ) : <Icon d={icons.box} size={15} color="#fff" />}
@@ -290,11 +296,6 @@ onExcludeItem={(itemId) => {
           <button className="oh-inv-mgmt-account-btn" onClick={() => setAccountOpen(!accountOpen)}>
             <span>{account || "Select"}</span>
             <Icon d={accountOpen ? icons.chevUp : icons.chevDown} size={12} color="#94a3b8" />
-          </button>
-          <span className="oh-inv-mgmt-header-sep">|</span>
-          <button className="oh-inv-mgmt-gear-btn" onClick={() => guardNav(() => { setScreen(screen === "manage" ? "landing" : "manage"); setManageView(null); })}>
-            <Icon d={icons.gear} size={16} color="#fff" />
-            {reviewCount > 0 && <span className="oh-inv-mgmt-gear-badge">{reviewCount}</span>}
           </button>
         </div>
         {accountOpen && <div className="oh-inv-mgmt-account-dropdown">

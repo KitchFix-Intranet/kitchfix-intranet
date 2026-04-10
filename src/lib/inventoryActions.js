@@ -408,11 +408,11 @@ RESPOND WITH ONLY valid JSON (no markdown, no backticks):
   ]
 }
 
-IMPORTANT: Each group MUST contain at least 2 items. A single item is NOT a group. Only return groups where you found 2 or more items that appear to be the same product.
+IMPORTANT: Be EXHAUSTIVE — scan EVERY item against EVERY other item. Do NOT stop after finding a few groups. Check all ${items.length} items systematically. Missing a duplicate is worse than flagging a false positive. Each group MUST contain at least 2 items. Only return groups where you found 2 or more items that appear to be the same product.
 
 If no duplicates found, return: { "groups": [] }`;
 
-    const raw = await callClaude(prompt, 8192);
+const raw = await callClaude(prompt, 16384);
     // Robust JSON extraction — find first { and last }
     const cleaned = raw.replace(/```json\s*|```/g, "").trim();
     const jsonStart = cleaned.indexOf("{");
@@ -798,8 +798,8 @@ export async function handleSaveSortOrder({ account, updates }) {
   }
 }
 
-export async function handleAddSubZone({ account, parentLocationId, name, icon, email }) {
-  try {
+export async function handleAddSubZone({ account, parentLocationId, name, icon, color, email }) {
+      try {
     const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
     // Count existing sub-zones for sortOrder
     let maxSort = -1;
@@ -812,13 +812,33 @@ export async function handleAddSubZone({ account, parentLocationId, name, icon, 
     const locationId = generateId("loc");
     const now = new Date().toISOString();
     await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
-      locationId, account, name, icon || "box",
-      maxSort + 1, "TRUE", email, now, parentLocationId, "",
-    ]);
+locationId, account, name, icon || "box",
+      maxSort + 1, "TRUE", email, now, parentLocationId, color || "",
+        ]);
     invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
     return { success: true, locationId, name };
   } catch (error) {
     console.error("[inventoryActions] add-subzone error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleUpdateLocation({ account, locationId, fields }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === locationId && accountMatch(rows[i][1], account) && rows[i][5] !== "FALSE" && rows[i][5] !== false) {
+        const updates = [];
+        if (fields.name !== undefined) updates.push({ range: `storage_locations!C${i + 2}`, values: [[fields.name]] });
+        if (fields.icon !== undefined) updates.push({ range: `storage_locations!D${i + 2}`, values: [[fields.icon]] });
+        if (fields.color !== undefined) updates.push({ range: `storage_locations!J${i + 2}`, values: [[fields.color]] });
+        if (updates.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, updates);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    return { success: true };
+  } catch (error) {
     return { success: false, error: error.message };
   }
 }

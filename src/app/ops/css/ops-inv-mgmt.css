@@ -1432,3 +1432,39 @@
   transition: border-color 0.15s;
 }
 .ir-separate-name-input:focus { border-color: #3b82f6; background: #f8fafc; }
+/* ═══════════════════════════════════════
+   UNIFIED HOME — Count CTA + Tools
+   ═══════════════════════════════════════ */
+.oh-inv-mgmt-count-cta {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; background: #0f3057; border: none; border-radius: 10px;
+  cursor: pointer; font-family: inherit; text-align: left;
+  transition: opacity 0.15s;
+}
+.oh-inv-mgmt-count-cta:hover { opacity: 0.92; }
+.oh-inv-mgmt-count-cta--done {
+  background: #fff; border: 1px solid #e2e8f0; cursor: default;
+}
+.oh-inv-mgmt-count-cta--done:hover { opacity: 1; }
+.oh-inv-mgmt-count-cta-icon {
+  width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.oh-inv-mgmt-count-cta--done .oh-inv-mgmt-count-cta-icon { background: #f0fdf4; }
+.oh-inv-mgmt-count-cta-body { flex: 1; min-width: 0; }
+.oh-inv-mgmt-count-cta-label {
+  font-size: 14px; font-weight: 600; color: #fff; display: block;
+}
+.oh-inv-mgmt-count-cta--done .oh-inv-mgmt-count-cta-label { color: #0f3057; }
+.oh-inv-mgmt-count-cta-sub {
+  font-size: 11px; color: #94a3b8; display: block; margin-top: 1px;
+}
+.oh-inv-mgmt-tools-label {
+  font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 4px 0 2px;
+}
+.oh-inv-mgmt-manage-card--soon { opacity: 0.5; cursor: default; }
+.oh-inv-mgmt-manage-card--soon:hover { background: #fff; }
+.oh-inv-mgmt-soon-tag {
+  font-size: 10px; color: #94a3b8; font-style: italic; flex-shrink: 0;
+}

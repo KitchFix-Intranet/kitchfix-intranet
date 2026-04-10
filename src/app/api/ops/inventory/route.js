@@ -31,7 +31,8 @@ import {
   handleReviewDelete,
 handleAddSubZone,
   handleDeactivateLocation,
-  handleExcludeItem,
+handleExcludeItem,
+  handleUpdateLocation,
 } from "@/lib/inventoryActions";
 
 const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
@@ -89,6 +90,7 @@ export async function POST(request) {
       case "add-subzone": return NextResponse.json(await handleAddSubZone(body));
       case "deactivate-location": return NextResponse.json(await handleDeactivateLocation(body));
       case "exclude-item": return NextResponse.json(await handleExcludeItem(body));
+      case "update-location": return NextResponse.json(await handleUpdateLocation(body));
       case "admin-correct":
         if (session.user.email !== "k.fietek@kitchfix.com") {
           return NextResponse.json({ success: false, error: "Admin only" }, { status: 403 });

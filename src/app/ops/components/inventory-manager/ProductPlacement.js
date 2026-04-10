@@ -72,8 +72,8 @@ const AUTO_RULES = [
 function autoIC(n) { const l = (n||"").toLowerCase(); for (const r of AUTO_RULES) { if (r.p.some(x => l.includes(x))) return { icon: r.icon, color: r.color }; } return { icon: "box", color: "slate" }; }
 const SUGGESTED = ["Walk-in Cooler","Walk-in Freezer","Dry Storage","FOH Snacks","FOH Beverages","Supply Closet"];
 
-export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, onAddSubZone, onDeactivateLocation, onSaveSortOrder, onExcludeItem, showToast }) {
-  const [locs, setLocs] = useState(locations);
+export default function ProductPlacement({ catalogItems, locations, onBatchMove, onDirtyChange, onSaveLocations, onAddSubZone, onDeactivateLocation, onSaveSortOrder, onUpdateLocation, onExcludeItem, showToast }) {
+      const [locs, setLocs] = useState(locations);
   useEffect(() => { setLocs(locations); }, [locations]);
 
   const [openZone, setOpenZone] = useState(null);
@@ -215,7 +215,7 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
     setLocs(prev => [...prev, { locationId: tempId, name: n, icon, color, sortOrder: topZones.length, parentLocationId: "" }]);
     setNewZoneName(""); setAddingZone(false);
     showToast?.(`"${n}" zone added`, "success");
-    onAddSubZone?.("", n, icon);
+onAddSubZone?.("", n, icon, color);
   };
 
   const startAddSub = (zoneId) => { closeMenu(); setAddingSub(zoneId); setSubName(""); if (openZone !== zoneId) setOpenZone(zoneId); };
@@ -224,23 +224,23 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
     if (!name) { setAddingSub(null); return; }
     const tempId = `loc_temp_${Date.now()}`;
     const parentSubs = locs.filter(l => l.parentLocationId === parentZoneId);
-    setLocs(prev => [...prev, { locationId: tempId, name, icon: "box", color: "", sortOrder: parentSubs.length, parentLocationId: parentZoneId }]);
-    setAddingSub(null); setSubName("");
+const { icon: subIcon, color: subColor } = autoIC(name);
+    setLocs(prev => [...prev, { locationId: tempId, name, icon: subIcon, color: subColor, sortOrder: parentSubs.length, parentLocationId: parentZoneId }]);
+        setAddingSub(null); setSubName("");
     showToast?.(`"${name}" added`, "success");
-    onAddSubZone?.(parentZoneId, name, "box");
+onAddSubZone?.(parentZoneId, name, subIcon);
   };
 
   const startRename = (loc) => { closeMenu(); setRenamingLoc(loc.locationId); setRenameVal(loc.name); };
-  const saveRename = (locId) => {
+const saveRename = (locId) => {
     const name = renameVal.trim();
     if (!name || name === locMap[locId]?.name) { setRenamingLoc(null); return; }
     setLocs(prev => prev.map(l => l.locationId === locId ? { ...l, name } : l));
     setRenamingLoc(null); setRenameVal("");
     showToast?.(`Renamed to "${name}"`, "success");
-    const updated = locs.map(l => ({ locationId: l.locationId, name: l.locationId === locId ? name : l.name, icon: l.icon, sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.color || "" }));
-    onSaveLocations?.(updated);
+    onUpdateLocation?.(locId, { name });
   };
-
+  
   const requestDelete = (loc) => {
     const total = zoneCount(loc.locationId);
     if (total > 0) { showToast?.(`Move ${total} item${total!==1?"s":""} out first`, "error"); return; }
@@ -267,13 +267,12 @@ export default function ProductPlacement({ catalogItems, locations, onBatchMove,
   };
 
   const openPicker = (loc) => { closeMenu(); setPickerLoc(loc.locationId); setPickerIcon(loc.icon || "box"); setPickerColor(loc.color || "blue"); };
-  const savePicker = () => {
+const savePicker = () => {
     if (!pickerLoc) return;
     setLocs(prev => prev.map(l => l.locationId === pickerLoc ? { ...l, icon: pickerIcon, color: pickerColor } : l));
     showToast?.("Icon & color updated", "success");
-    const updated = locs.map(l => ({ locationId: l.locationId, name: l.name, icon: l.locationId === pickerLoc ? pickerIcon : l.icon, sortOrder: l.sortOrder, parentLocationId: l.parentLocationId || null, color: l.locationId === pickerLoc ? pickerColor : (l.color || "") }));
     setPickerLoc(null);
-    onSaveLocations?.(updated);
+    onUpdateLocation?.(pickerLoc, { icon: pickerIcon, color: pickerColor });
   };
 
   const moveLocation = (loc, direction) => {
@@ -415,9 +414,11 @@ const sc = zc(sub.color || locMap[sub.parentLocationId]?.color);
                   uaItems.forEach(i => { const c = i.category||"Other"; if(!groups[c])groups[c]=[]; groups[c].push(i); });
                   return Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([cat, items]) => (
                     <div key={cat} className="pp-ua-group">
-                      <div className="pp-ua-group-header"><span className="pp-ua-dot" style={{background:cc(cat)}}/> {cat} <span className="pp-ua-group-ct">{items.length}</span></div>
-                      {items.map(i => renderItem(i, true))}
-                    </div>
+{(() => { const filtered = items.filter(matchSearch); if (search.trim() && filtered.length === 0) return null; return (<>
+                        <div className="pp-ua-group-header"><span className="pp-ua-dot" style={{background:cc(cat)}}/> {cat} <span className="pp-ua-group-ct">{search.trim() ? filtered.length : items.length}</span></div>
+                        {items.map(i => renderItem(i, true))}
+                      </>); })()}
+                                          </div>
                   ));
                 })()}
               </div>
@@ -499,6 +500,17 @@ const zcol = zc(zone.color);
             );
           })}
         </div>
+
+        {search.trim() && !uaItems.some(i => matchSearch(i)) && topZones.every(zone => {
+          const zoneItems = byLoc[zone.locationId] || [];
+          const subs = locs.filter(l => l.parentLocationId === zone.locationId);
+          const allZoneItems = [...zoneItems, ...subs.flatMap(s => byLoc[s.locationId] || [])];
+          return !allZoneItems.some(i => matchSearch(i));
+        }) && (
+          <div style={{textAlign:"center", padding:"32px 16px", color:"#94a3b8", fontSize:"13px"}}>
+            No items match &ldquo;{search}&rdquo;
+          </div>
+        )}
 
         {topZones.length > 0 && (
           <div className="pp-add-zone-row">
