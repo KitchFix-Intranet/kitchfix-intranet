@@ -105,10 +105,12 @@ export async function appendRow(accessToken, spreadsheetId, tabName, rowData) {
  */
 export async function appendRowSA(spreadsheetId, tabName, rowData) {
   const sheets = getServiceAccountSheetsClient();
+  // Auto-add !A:A if bare tab name — prevents offset column writes
+  const range = tabName.includes("!") ? tabName : `${tabName}!A:A`;
   try {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: tabName,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [rowData] },
     });
@@ -125,10 +127,11 @@ export async function appendRowSA(spreadsheetId, tabName, rowData) {
  */
 export async function appendRowsSA(spreadsheetId, tabName, rowsData) {
   const sheets = getServiceAccountSheetsClient();
+  const range = tabName.includes("!") ? tabName : `${tabName}!A:A`;
   try {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: tabName,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: rowsData },
     });
