@@ -142,6 +142,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const accounts = data?.accounts || [];
   const catalogItems = data?.catalogItems || [];
   const excludedItems = data?.excludedItems || [];
+  const archivedItems = data?.archivedItems || [];
   const aliases = data?.aliases || [];
   const itemPrices = data?.itemPrices || {};
   const lastCountItems = data?.lastCountItems || {};
@@ -210,13 +211,44 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
       onGoToPlacement={async () => { await loadBootstrap(account, true); setScreen("placement"); }}
       showToast={showToast} />;
   } else if (screen === "catalog") {
-    content = <ItemCatalog catalogItems={catalogItems} locations={locations} excludedItems={excludedItems} aliases={aliases} itemPrices={itemPrices}
+    content = <ItemCatalog catalogItems={catalogItems} locations={locations} excludedItems={excludedItems} archivedItems={archivedItems} aliases={aliases} itemPrices={itemPrices}
       onUpdateCatalogItem={(itemId, fields) => {
         fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update-catalog-item", account, itemId, fields }) })
           .then(r => r.json()).then(j => { if (j.success) loadBootstrap(account, true); else showToast(j.error || "Update failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
+      onArchiveItem={(itemId) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "archive-item", account, itemId }) })
+          .then(r => r.json()).then(j => { if (j.success) { showToast("Item archived", "success"); loadBootstrap(account, true); } else showToast(j.error || "Archive failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onReactivateItem={(itemId) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "reactivate-item", account, itemId }) })
+          .then(r => r.json()).then(j => { if (j.success) { showToast("Item reactivated", "success"); loadBootstrap(account, true); } else showToast(j.error || "Reactivate failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onMergeItems={(keeperItemId, mergedItemIds) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "merge-items", account, keeperItemId, mergedItemIds }) })
+          .then(r => r.json()).then(j => { if (j.success) { showToast("Items merged", "success"); loadBootstrap(account, true); } else showToast(j.error || "Merge failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onAddManualItem={(item) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add-item", account, ...item }) })
+          .then(r => r.json()).then(j => { if (j.success) { showToast("Item added to catalog", "success"); loadBootstrap(account, true); } else showToast(j.error || "Add failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onVerifyPrice={(itemId, price) => {
+        fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "verify-price", account, itemId, price }) })
+          .then(r => r.json()).then(j => { if (j.success) { showToast("Price verified", "success"); loadBootstrap(account, true); } else showToast(j.error || "Verify failed", "error"); })
+          .catch(() => showToast("Network error", "error"));
+      }}
+      onGoToPlacement={() => setScreen("placement")}
       showToast={showToast} />;
   } else {
     /* ═══════════════════════════════════

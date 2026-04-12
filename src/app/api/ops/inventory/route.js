@@ -34,6 +34,9 @@ handleAddSubZone,
 handleExcludeItem,
   handleUpdateLocation,
   handleUpdateCatalogItem,
+  handleArchiveItem,
+  handleReactivateItem,
+  handleVerifyPrice,
 } from "@/lib/inventoryActions";
 
 const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
@@ -91,6 +94,9 @@ export async function POST(request) {
       case "add-subzone": return NextResponse.json(await handleAddSubZone(body));
       case "deactivate-location": return NextResponse.json(await handleDeactivateLocation(body));
       case "exclude-item": return NextResponse.json(await handleExcludeItem(body));
+      case "archive-item": return NextResponse.json(await handleArchiveItem(body));
+      case "reactivate-item": return NextResponse.json(await handleReactivateItem(body));
+      case "verify-price": return NextResponse.json(await handleVerifyPrice(body));
       case "update-catalog-item": return NextResponse.json(await handleUpdateCatalogItem(body));
       case "update-location": return NextResponse.json(await handleUpdateLocation(body));
       case "admin-correct":

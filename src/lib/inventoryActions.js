@@ -48,7 +48,9 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
         priceAtLastCount: parseNum(r[10]),
         linkedToInvoice: r[12] === "TRUE",
         isVarietyGroup: r[13] === "TRUE",
+        createdBy: r[14] || "",
         notes: r[17] || "",
+        lastVerified: r[18] || "",
       }));
 
     const catalogStats = { totalItems: catalogItems.length, byCategory: {} };
@@ -59,6 +61,16 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     const excludedItems = (inv.item_catalog?.rows || [])
       .filter((r) => accountMatch(r[1], activeAccount) && (r[11] === "FALSE" || r[11] === false) && r[16] === "excluded")
       .map((r) => ({ itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized", unit: r[4] || "EA", primaryVendor: r[6] || "", lastPrice: parseNum(r[7]) }));
+
+    const archivedItems = (inv.item_catalog?.rows || [])
+      .filter((r) => accountMatch(r[1], activeAccount) && (r[11] === "FALSE" || r[11] === false) && r[16] === "archived")
+      .map((r) => ({
+        itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized",
+        unit: r[4] || "EA", locationId: r[5] || "",
+        primaryVendor: r[6] || "", lastPrice: parseNum(r[7]),
+        lastPriceDate: r[8] || "", lastPriceVendor: r[9] || "",
+        notes: r[17] || "",
+      }));
 
     const catalogItemIds = new Set(catalogItems.map(i => i.itemId));
     const aliases = (inv.item_aliases?.rows || []).filter((r) => catalogItemIds.has(r[2])).map((r) => ({ aliasText: r[1], itemId: r[2], vendor: r[3] }));
@@ -165,7 +177,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
       account: activeAccount,
       accounts: accounts.map((a) => ({ key: a.key, label: a.label, level: a.level })),
       currentPeriod, allPeriods,
-      catalogItems, catalogStats, locations, excludedItems, aliases,
+      catalogItems, catalogStats, locations, excludedItems, archivedItems, aliases,
       lastCount, lastCountItems,
       activeDraft: activeDraft ? { sessionId: activeDraft[0], period: activeDraft[2], startedAt: activeDraft[4] } : null,
       reviewQueueCount: reviewCount,
@@ -255,7 +267,60 @@ export async function handleCatalogGet({ account }) {
 // STUBS — built in later sessions
 // ═══════════════════════════════════════
 
-export async function handleAddItem(body) { return { success: false, error: "Week 3" }; }
+export async function handleAddItem({ account, name, vendor, category, unit, price, locationId, email }) {
+  try {
+    if (!name || !vendor) return { success: false, error: "Name and vendor are required" };
+    const itemId = generateId("inv");
+    const now = new Date().toISOString();
+    const priceNum = parseNum(price);
+    await appendRowSA(INVENTORY_SHEET_ID, "item_catalog", [
+      itemId, account, name, category || "Uncategorized", unit || "each",
+      locationId || "", vendor, priceNum || "", priceNum ? now.slice(0, 10) : "",
+      priceNum ? vendor : "", 0, "TRUE", "FALSE", "FALSE",
+      email || "manual", now, "", "", priceNum ? now.slice(0, 10) : "",
+    ]);
+    if (priceNum > 0) {
+      await appendRowSA(INVENTORY_SHEET_ID, "price_history", [
+        itemId, account, vendor, priceNum, now.slice(0, 10), "manual-add", now,
+      ]);
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    return { success: true, itemId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleVerifyPrice({ account, itemId, price, email }) {
+  try {
+    const priceNum = parseNum(price);
+    if (!priceNum || priceNum <= 0) return { success: false, error: "Valid price required" };
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        const now = new Date().toISOString();
+        const vendor = rows[i][6] || "";
+        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+          { range: `item_catalog!H${i + 2}`, values: [[priceNum]] },
+          { range: `item_catalog!I${i + 2}`, values: [[now.slice(0, 10)]] },
+          { range: `item_catalog!J${i + 2}`, values: [[vendor]] },
+          { range: `item_catalog!S${i + 2}`, values: [[now.slice(0, 10)]] },
+        ]);
+        await appendRowSA(INVENTORY_SHEET_ID, "price_history", [
+          itemId, account, vendor, priceNum, now.slice(0, 10), "manual-verify", now,
+        ]);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function handleUpdateItem(body) { return { success: false, error: "Week 3" }; }
 
 export async function handleBatchMoveItems({ account, items }) {
@@ -973,6 +1038,51 @@ export async function handleUpdateCatalogItem({ account, itemId, fields, email }
         if (fields.category !== undefined) updates.push({ range: `item_catalog!D${i + 2}`, values: [[fields.category]] });
         if (fields.notes !== undefined) updates.push({ range: `item_catalog!R${i + 2}`, values: [[fields.notes]] });
         if (updates.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, updates);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+export async function handleArchiveItem({ account, itemId, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
+          { range: `item_catalog!Q${i + 2}`, values: [["archived"]] },
+        ]);
+        await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+          generateId("mrg"), account, new Date().toISOString(), email || "",
+          itemId, rows[i][2] || "", "", "", "archive", "",
+        ]);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleReactivateItem({ account, itemId, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+          { range: `item_catalog!L${i + 2}`, values: [["TRUE"]] },
+          { range: `item_catalog!Q${i + 2}`, values: [[""]] },
+        ]);
+        await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+          generateId("mrg"), account, new Date().toISOString(), email || "",
+          itemId, rows[i][2] || "", "", "", "reactivate", "",
+        ]);
         break;
       }
     }
