@@ -69,7 +69,9 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
         unit: r[4] || "EA", locationId: r[5] || "",
         primaryVendor: r[6] || "", lastPrice: parseNum(r[7]),
         lastPriceDate: r[8] || "", lastPriceVendor: r[9] || "",
+        createdBy: r[14] || "",
         notes: r[17] || "",
+        lastVerified: r[18] || "",
       }));
 
     const catalogItemIds = new Set(catalogItems.map(i => i.itemId));
@@ -181,7 +183,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
       lastCount, lastCountItems,
       activeDraft: activeDraft ? { sessionId: activeDraft[0], period: activeDraft[2], startedAt: activeDraft[4] } : null,
       reviewQueueCount: reviewCount,
-      priceMovers: movers.slice(0, 4),
+      priceMovers: movers.filter(m => Math.abs(parseFloat(m.pctChange)) >= 5).slice(0, 10),
       itemPrices: Object.fromEntries(Object.entries(priceByItem).map(([id, prices]) => [id, prices.slice(0, 6)])),
       currentPeriodSubmitted,
     };
@@ -577,6 +579,17 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
           if (catalogRows[i][5] && !keeperRow[5]) {
             await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${keeperRowNum}`, [[catalogRows[i][5]]]);
             keeperRow[5] = catalogRows[i][5];
+          }
+
+          // Append merged item's notes to keeper (locked decision: preserve notes)
+          const mergedNotes = catalogRows[i][17] || "";
+          if (mergedNotes.trim()) {
+            const keeperNotes = keeperRow[17] || "";
+            const combined = keeperNotes
+              ? `${keeperNotes}\n[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`
+              : `[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`;
+            await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!R${keeperRowNum}`, [[combined.slice(0, 500)]]);
+            keeperRow[17] = combined.slice(0, 500);
           }
           break;
         }

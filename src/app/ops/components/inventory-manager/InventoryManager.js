@@ -259,7 +259,6 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
       { key:"placement", label:"Product placement", desc: unassigned > 0 ? `${unassigned} items not yet assigned to a location` : "Manage zones, shelves, and organize items", badge:unassigned, icon:icons.grid, color:"#2563eb", active:true },
       { key:"catalog", label:"Item catalog", desc:`View all ${stats.totalItems} items across your vendors`, icon:icons.list, color:"#8b5cf6", active:true },
       { key:"history", label:"Count history", desc:"Review past counts and compare periods", icon:icons.clipboard, color:"#0891b2", active:false },
-      { key:"prices", label:"Price dashboard", desc:"Track price changes across vendors", icon:icons.dollarSign, color:"#ea580c", active:false },
     ];
 
     content = (
@@ -316,13 +315,13 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
           ))}
         </div>
 
-        {/* Price movement */}
-        {movers.length > 0 && <div className="oh-inv-mgmt-section">
-          <button className="oh-inv-mgmt-section-header" onClick={() => setPriceOpen(!priceOpen)}><span className="oh-inv-mgmt-section-title">Price movement</span><Icon d={priceOpen ? icons.chevUp : icons.chevDown} size={16} color="#64748b" /></button>
-          {priceOpen && <div className="oh-inv-mgmt-movers">{movers.map((m, i) => (
+        {/* Price alerts */}
+        <div className="oh-inv-mgmt-section">
+          <button className="oh-inv-mgmt-section-header" onClick={() => setPriceOpen(!priceOpen)}><span className="oh-inv-mgmt-section-title">Price alerts</span>{movers.length > 0 && <span className="oh-inv-mgmt-mover-count">{movers.length}</span>}<Icon d={priceOpen ? icons.chevUp : icons.chevDown} size={16} color="#64748b" /></button>
+          {priceOpen && (movers.length > 0 ? <div className="oh-inv-mgmt-movers">{movers.map((m, i) => (
             <div key={i} className="oh-inv-mgmt-mover-row"><div className="oh-inv-mgmt-mover-left"><Icon d={m.direction==="up"?icons.trendUp:icons.trendDown} size={14} color={m.direction==="up"?"#d97706":"#16A34A"} /><div className="oh-inv-mgmt-mover-info"><span className="oh-inv-mgmt-mover-name">{m.name}</span><span className="oh-inv-mgmt-mover-vendor">{m.vendor}</span></div></div><div className="oh-inv-mgmt-mover-right"><span className="oh-inv-mgmt-mover-price">{fmt(m.currentPrice)}</span><span className={`oh-inv-mgmt-mover-change${m.direction==="up"?" up":" down"}`}>{m.direction==="up"?"+":""}{m.pctChange}%</span></div></div>
-          ))}</div>}
-        </div>}
+          ))}<button className="oh-inv-mgmt-mover-link" onClick={() => setScreen("catalog")}>View all prices in catalog →</button></div> : <div className="oh-inv-mgmt-movers-empty">No significant price changes this period (5%+ threshold)</div>)}
+        </div>
       </div>
     );
   }
