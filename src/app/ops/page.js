@@ -19,7 +19,7 @@ import './css/ops-vendor.css';
 // ops-executive.css — parked, will move to /executive page
 
 // ── Inventory Manager Dev Gate ──
-const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 
 export default function OpsHub() {
   const { data: session, status } = useSession();

@@ -1,6 +1,6 @@
 "use client";
 
-const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 
 export default function OpsNav({ view, onNavigate, userEmail = "" }) {
   const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);

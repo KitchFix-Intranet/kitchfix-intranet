@@ -39,7 +39,7 @@ handleExcludeItem,
   handleVerifyPrice,
 } from "@/lib/inventoryActions";
 
-const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 function isAuthorized(email) { return INV_MANAGER_DEV_USERS.includes(email); }
 
 export async function GET(request) {

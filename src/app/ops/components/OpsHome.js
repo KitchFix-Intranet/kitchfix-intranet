@@ -10,7 +10,7 @@ import {
   ArrowRight,
 } from "@/app/ops/components/shared/Icons";
 
-const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com"];
+const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 
 // Box icon (Lucide) for Smart Inventory
 const BoxIcon = () => (
