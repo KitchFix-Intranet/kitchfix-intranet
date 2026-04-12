@@ -217,6 +217,7 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
           .then(r => r.json()).then(j => { if (j.success) loadBootstrap(account, true); else showToast(j.error || "Update failed", "error"); })
           .catch(() => showToast("Network error", "error"));
       }}
+      onGoToPlacement={() => setScreen("placement")}
       showToast={showToast} />;
   } else {
     /* ═══════════════════════════════════

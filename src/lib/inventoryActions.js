@@ -34,7 +34,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     // Read inventory tabs in parallel (fresh=true bypasses cache after save)
     const inv = await batchRead(INVENTORY_SHEET_ID, [
       "item_catalog", "storage_locations", "count_sessions", "count_items",
-      "review_queue", "price_history",
+      "review_queue", "price_history", "item_aliases",
     ], { fresh });
 
     // Full catalog for this account
@@ -48,12 +48,20 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
         priceAtLastCount: parseNum(r[10]),
         linkedToInvoice: r[12] === "TRUE",
         isVarietyGroup: r[13] === "TRUE",
+        notes: r[17] || "",
       }));
 
     const catalogStats = { totalItems: catalogItems.length, byCategory: {} };
     catalogItems.forEach((i) => {
       catalogStats.byCategory[i.category] = (catalogStats.byCategory[i.category] || 0) + 1;
     });
+
+    const excludedItems = (inv.item_catalog?.rows || [])
+      .filter((r) => accountMatch(r[1], activeAccount) && (r[11] === "FALSE" || r[11] === false) && r[16] === "excluded")
+      .map((r) => ({ itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized", unit: r[4] || "EA", primaryVendor: r[6] || "", lastPrice: parseNum(r[7]) }));
+
+    const catalogItemIds = new Set(catalogItems.map(i => i.itemId));
+    const aliases = (inv.item_aliases?.rows || []).filter((r) => catalogItemIds.has(r[2])).map((r) => ({ aliasText: r[1], itemId: r[2], vendor: r[3] }));
 
     // Storage locations
     const locations = (inv.storage_locations?.rows || [])
@@ -131,7 +139,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     const priceByItem = {};
     priceRows.forEach((r) => {
       if (!priceByItem[r[0]]) priceByItem[r[0]] = [];
-      if (priceByItem[r[0]].length < 2) priceByItem[r[0]].push({ price: parseNum(r[3]), vendor: r[2] });
+      if (priceByItem[r[0]].length < 8) priceByItem[r[0]].push({ price: parseNum(r[3]), vendor: r[2], date: r[4] || "" });
     });
     const movers = [];
     for (const [itemId, prices] of Object.entries(priceByItem)) {
@@ -157,11 +165,12 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
       account: activeAccount,
       accounts: accounts.map((a) => ({ key: a.key, label: a.label, level: a.level })),
       currentPeriod, allPeriods,
-      catalogItems, catalogStats, locations,
+      catalogItems, catalogStats, locations, excludedItems, aliases,
       lastCount, lastCountItems,
       activeDraft: activeDraft ? { sessionId: activeDraft[0], period: activeDraft[2], startedAt: activeDraft[4] } : null,
       reviewQueueCount: reviewCount,
       priceMovers: movers.slice(0, 4),
+      itemPrices: Object.fromEntries(Object.entries(priceByItem).map(([id, prices]) => [id, prices.slice(0, 6)])),
       currentPeriodSubmitted,
     };
   } catch (error) {
@@ -955,3 +964,21 @@ export async function handleDedupCatalog({ dryRun = true }) {
   }
 }
 export async function handlePrint({ account }) { return { success: false, error: "Week 3" }; }
+export async function handleUpdateCatalogItem({ account, itemId, fields, email }) {
+  try {
+    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
+        const updates = [];
+        if (fields.category !== undefined) updates.push({ range: `item_catalog!D${i + 2}`, values: [[fields.category]] });
+        if (fields.notes !== undefined) updates.push({ range: `item_catalog!R${i + 2}`, values: [[fields.notes]] });
+        if (updates.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, updates);
+        break;
+      }
+    }
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
