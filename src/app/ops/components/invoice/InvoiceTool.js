@@ -161,6 +161,10 @@ const [dragOver, setDragOver] = useState(false);
   const [resubmitSource, setResubmitSource] = useState(null);
     const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
+  const [historyAccount, setHistoryAccount] = useState("__current__");
+  const [historyData, setHistoryData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedUuid, setExpandedUuid] = useState(null);
 
   // OCR
   const [ocrStatus, setOcrStatus] = useState("idle");
@@ -723,10 +727,32 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     setVendor(null); setFormType("invoice");
     }, []);
 
+  const loadHistoryForAccount = useCallback(async (acctKey) => {
+    if (acctKey === "__current__") { setHistoryData(null); return; }
+    setHistoryLoading(true);
+    try {
+      const url = acctKey === "__all__"
+        ? "/api/ops?action=invoice-history"
+        : `/api/ops?action=invoice-history&account=${encodeURIComponent(acctKey)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) setHistoryData(data.history || []);
+    } catch (err) { console.error("[History] Load error:", err); }
+    finally { setHistoryLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "history" && historyAccount !== "__current__") {
+      loadHistoryForAccount(historyAccount);
+    }
+  }, [activeTab, historyAccount, loadHistoryForAccount]);
+
   const returnedCount = useMemo(() => recentSubmissions.filter((s) => s.status === "returned").length, [recentSubmissions]);
 
+    const historySource = historyData !== null ? historyData : recentSubmissions;
+
   const filteredSubmissions = useMemo(() => {
-    let list = recentSubmissions;
+    let list = historySource;
     if (historySearch.trim()) {
       const q = historySearch.toLowerCase();
       list = list.filter((s) => s.vendor.toLowerCase().includes(q) || (s.invoiceNumber || "").toLowerCase().includes(q));
@@ -736,13 +762,17 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     else if (historyPeriod === "needsfix") list = list.filter((s) => s.status === "returned");
     list = [...list].sort((a, b) => (a.status === "returned" ? 0 : 1) - (b.status === "returned" ? 0 : 1));
     return list;
-  }, [recentSubmissions, historySearch, historyPeriod]);
+  }, [historySource, historySearch, historyPeriod]);
 
-  const weeklySummary = useMemo(() => {
+  const periodSummary = useMemo(() => {
+    const src = historySource;
     const weekAgo = new Date(Date.now() - 7 * 86400000);
-    const thisWeek = recentSubmissions.filter((s) => new Date(s.timestamp) >= weekAgo);
-    return { count: thisWeek.length, total: thisWeek.reduce((sum, s) => sum + Math.abs(Number(s.totalAmount || 0)), 0) };
-  }, [recentSubmissions]);
+    const monthAgo = new Date(Date.now() - 30 * 86400000);
+    const weekItems = src.filter((s) => new Date(s.timestamp) >= weekAgo);
+    const monthItems = src.filter((s) => new Date(s.timestamp) >= monthAgo);
+    const calc = (items) => ({ count: items.length, total: items.reduce((sum, s) => sum + Math.abs(Number(s.totalAmount || 0)), 0) });
+    return { week: calc(weekItems), month: calc(monthItems), all: calc(src) };
+  }, [historySource]);
 
   const exportReceipt = useCallback((submission) => {
     const html = generateReceiptHTML(submission);
@@ -954,8 +984,21 @@ Upload, code &amp; submit to AP.
           </div>
 
           {/* ════ HISTORY TAB ════ */}
+          {/* ════ HISTORY TAB ════ */}
           {activeTab === "history" && (
             <div className="oh-inv-history-panel">
+              <div className="oh-inv-hist-acct-bar">
+                <label className="oh-inv-hist-acct-label">Account</label>
+                <select className="oh-inv-hist-acct-select" value={historyAccount}
+                  onChange={(e) => { setHistoryAccount(e.target.value); setExpandedUuid(null); }}>
+                  <option value="__all__">All Accounts</option>
+                  <option value="__current__">{accounts.find((a) => a.key === account)?.label || account || "Current Account"}</option>
+                  {accounts.filter((a) => a.key !== account).map((a) => (
+                    <option key={a.key} value={a.key}>{a.label || a.key}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="oh-inv-history-controls">
                 <div className="oh-inv-history-search-wrap">
                   <svg className="oh-inv-history-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -968,85 +1011,141 @@ Upload, code &amp; submit to AP.
                   ))}
                 </div>
               </div>
-              {weeklySummary.count > 0 && historyPeriod === "all" && (
-                <div className="oh-inv-weekly-summary">
-                  <span>This week:</span>
-                  <strong>{weeklySummary.count} invoice{weeklySummary.count > 1 ? "s" : ""}</strong>
-                  <span>·</span>
-                  <strong>${weeklySummary.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
-                </div>
-              )}
-              {returnedCount > 0 && historyPeriod !== "needsfix" && (
-                <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                  <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
-                  <button style={{ marginLeft: "auto", padding: "4px 12px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff", color: "#991b1b", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)" }} onClick={() => setHistoryPeriod("needsfix")}>View</button>
-                </div>
-              )}
-              {recentSubmissions.length === 0 ? (
-                <div className="oh-inv-empty-state">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                  <p className="oh-inv-empty-title">No Submissions Yet</p>
-                  <p className="oh-inv-empty-desc">Invoices you submit will appear here.</p>
-                  <button className="oh-inv-empty-cta" onClick={() => setActiveTab("form")}>Submit Your First Invoice →</button>
-                </div>
-              ) : filteredSubmissions.length === 0 ? (
-                <div className="oh-inv-empty-state oh-inv-empty-state--search">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-                  <p className="oh-inv-empty-title">No results</p>
-                  <p className="oh-inv-empty-desc">Try a different search or time period.</p>
-                  <button className="oh-inv-empty-cta" onClick={() => { setHistorySearch(""); setHistoryPeriod("all"); }}>Clear filters</button>
-                </div>
+
+              {historyLoading ? (
+                <div className="oh-inv-loading-pill" style={{ margin: "24px 0" }}><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} /> Loading history...</div>
               ) : (
-                <div className="oh-inv-history-list">
-                  {filteredSubmissions.map((s) => (
-                    <div key={s.uuid} className="oh-inv-history-row" style={s.status === "returned" ? { border: "2px solid #fca5a5", borderRadius: 12, padding: 0, overflow: "hidden", flexDirection: "column", alignItems: "stretch" } : {}}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: s.status === "returned" ? "12px 14px" : undefined }}>
-                        <div className="oh-inv-history-left">
-                          <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {s.vendor}
-                            {s.status === "returned" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#fef2f2", color: "#991b1b" }}>Needs fix</span>}
-                            {s.status === "corrected" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#ecfdf5", color: "#065f46" }}>Corrected</span>}
-                            {(s.status === "sent" || s.status === "pending") && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#eff6ff", color: "#1e40af" }}>Sent</span>}
-                          </span>
-                          <span className="oh-inv-history-meta">{s.invoiceNumber ? `#${s.invoiceNumber} · ` : ""}{s.invoiceDate}{s.type === "credit" ? " · Credit" : ""} · {s.pageCount} page{s.pageCount !== 1 ? "s" : ""}</span>
-                        </div>
-                        <div className="oh-inv-history-right">
-                          <span className={`oh-inv-history-amount${Number(s.totalAmount) < 0 ? " oh-inv-credit" : ""}`}>
-                            {Number(s.totalAmount) < 0 ? "−" : ""}${Math.abs(Number(s.totalAmount)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                <>
+                  {(() => {
+                    const ps = historyPeriod === "month" ? periodSummary.month : historyPeriod === "week" ? periodSummary.week : periodSummary.week;
+                    const label = historyPeriod === "month" ? "30 days" : historyPeriod === "week" ? "7 days" : "This week";
+                    if (ps.count === 0) return null;
+                    return (
+                      <div className="oh-inv-weekly-summary">
+                        <span>{label}:</span>
+                        <strong>{ps.count} invoice{ps.count > 1 ? "s" : ""}</strong>
+                        <span>·</span>
+                        <strong>${ps.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
                       </div>
-                      {s.status === "returned" && s.rejectionNote && (
-                        <div style={{ background: "#fef2f2", padding: "10px 14px", borderTop: "1px solid #fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: "#991b1b", marginBottom: 2 }}>AP note: {s.rejectionNote}</div>
-                            <div style={{ fontSize: 10, color: "#b91c1c" }}>Returned by {s.rejectedBy?.split("@")[0] || "AP"} · {s.rejectedAt ? new Date(s.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</div>
+                    );
+                  })()}
+                  {returnedCount > 0 && historyPeriod !== "needsfix" && (
+                    <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                      <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
+                      <button style={{ marginLeft: "auto", padding: "4px 12px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff", color: "#991b1b", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)" }} onClick={() => setHistoryPeriod("needsfix")}>View</button>
+                    </div>
+                  )}
+                  {filteredSubmissions.length === 0 && historySource.length === 0 ? (
+                    <div className="oh-inv-empty-state">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                      <p className="oh-inv-empty-title">No Submissions Yet</p>
+                      <p className="oh-inv-empty-desc">Invoices you submit will appear here.</p>
+                      <button className="oh-inv-empty-cta" onClick={() => setActiveTab("form")}>Submit Your First Invoice →</button>
+                    </div>
+                  ) : filteredSubmissions.length === 0 ? (
+                    <div className="oh-inv-empty-state oh-inv-empty-state--search">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                      <p className="oh-inv-empty-title">No results</p>
+                      <p className="oh-inv-empty-desc">Try a different search or time period.</p>
+                      <button className="oh-inv-empty-cta" onClick={() => { setHistorySearch(""); setHistoryPeriod("all"); }}>Clear filters</button>
+                    </div>
+                  ) : (
+                    <div className="oh-inv-history-list">
+                      {filteredSubmissions.map((s) => {
+                        const isExpanded = expandedUuid === s.uuid;
+                        let glRows = [];
+                        try { glRows = JSON.parse(s.glBreakdown || "[]"); } catch {}
+                        const driveUrls = (() => { try { return JSON.parse(s.driveUrls || "[]"); } catch { return []; } })();
+                        const statusLabel = s.status === "returned" ? "Needs fix" : s.status === "corrected" ? "Corrected" : "Sent";
+                        const statusColor = s.status === "returned" ? { bg: "#fef2f2", color: "#991b1b" } : s.status === "corrected" ? { bg: "#ecfdf5", color: "#065f46" } : { bg: "#eff6ff", color: "#1e40af" };
+
+                        return (
+                          <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}`}>
+                            <div className="oh-inv-hist-summary" onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)}>
+                              <div className="oh-inv-history-left">
+                                <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  {s.vendor}
+                                  <span className="oh-inv-hist-status" style={{ background: statusColor.bg, color: statusColor.color }}>{statusLabel}</span>
+                                </span>
+                                <span className="oh-inv-history-meta">
+                                  {s.invoiceNumber ? `#${s.invoiceNumber} · ` : ""}{s.invoiceDate ? new Date(s.invoiceDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}{s.type === "credit" ? " · Credit" : ""} · {s.pageCount} pg{historyAccount !== "__current__" ? ` · ${s.account}` : ""}
+                                </span>
+                              </div>
+                              <div className="oh-inv-history-right">
+                                <span className={`oh-inv-history-amount${Number(s.totalAmount) < 0 ? " oh-inv-credit" : ""}`}>
+                                  {Number(s.totalAmount) < 0 ? "−" : ""}${Math.abs(Number(s.totalAmount)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                </span>
+                                <svg className={`oh-inv-hist-chevron${isExpanded ? " oh-inv-hist-chevron--open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="oh-inv-hist-detail">
+                                {s.status === "returned" && s.rejectionNote && (
+                                  <div className="oh-inv-hist-reject-banner">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                    <div>
+                                      <div style={{ fontWeight: 700, marginBottom: 2 }}>AP: {s.rejectionNote}</div>
+                                      {s.rejectionReason && <div style={{ fontSize: 10, color: "#b91c1c" }}>Reason: {s.rejectionReason}</div>}
+                                      <div style={{ fontSize: 10, color: "#b91c1c" }}>Returned by {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${new Date(s.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="oh-inv-hist-info-grid">
+                                  <div className="oh-inv-hist-info-item"><span className="oh-inv-hist-info-label">Submitted</span><span className="oh-inv-hist-info-value">{new Date(s.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>
+                                  <div className="oh-inv-hist-info-item"><span className="oh-inv-hist-info-label">By</span><span className="oh-inv-hist-info-value">{s.userEmail?.split("@")[0] || "—"}</span></div>
+                                  <div className="oh-inv-hist-info-item"><span className="oh-inv-hist-info-label">Pages</span><span className="oh-inv-hist-info-value">{s.pageCount}</span></div>
+                                  <div className="oh-inv-hist-info-item"><span className="oh-inv-hist-info-label">Email</span><span className="oh-inv-hist-info-value">{s.emailSent ? "✓ Sent" : "Pending"}</span></div>
+                                </div>
+
+                                {glRows.length > 0 && (
+                                  <div className="oh-inv-hist-gl">
+                                    <div className="oh-inv-hist-gl-title">GL Breakdown</div>
+                                    {glRows.filter((g) => g.code && Number(g.amount) > 0).map((g, i) => (
+                                      <div key={i} className="oh-inv-hist-gl-row">
+                                        <span><span className="oh-inv-gl-code-tag">{g.code}</span> {g.name || g.code}</span>
+                                        <span className="oh-inv-hist-gl-amt">${Number(g.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="oh-inv-hist-actions">
+                                  {driveUrls.length > 0 && <a href={typeof driveUrls[0] === "string" ? driveUrls[0] : driveUrls[0]} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Stamped PDF</a>}
+                                  {s.rawDriveUrl && <a href={s.rawDriveUrl} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Raw PDF</a>}
+                                  <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); exportReceipt(s); }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>Export</button>
+                                  {s.status === "returned" && (
+                                    <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--fix" onClick={() => {
+                                      try {
+                                        const gl = JSON.parse(s.glBreakdown || "[]");
+                                        setVendor({ name: s.vendor, vendorId: s.vendorId });
+                                        setInvoiceNumber(s.invoiceNumber || "");
+                                        setInvoiceDate(s.invoiceDate || "");
+                                        setTotalAmount(String(Math.abs(s.totalAmount)));
+                                        if (gl.length > 0) setGlRows(gl.map((g) => ({ code: g.code || "", name: g.name || "", amount: String(g.amount || "") })));
+                                        setFormType(s.type || "invoice");
+                                        setResubmitSource(s);
+                                        setActiveTab("form");
+                                        showToast("Original data loaded — fix the issue and resubmit", "info");
+                                      } catch { showToast("Could not load original data", "error"); }
+                                    }}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>Fix &amp; Resubmit
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <button style={{ padding: "8px 18px", border: "none", borderRadius: 8, background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)", whiteSpace: "nowrap", flexShrink: 0, marginLeft: 10 }}
-                            onClick={() => {
-                              try {
-                                const gl = JSON.parse(s.glBreakdown || "[]");
-                                setVendor({ name: s.vendor, vendorId: s.vendorId });
-                                setInvoiceNumber(s.invoiceNumber || "");
-                                setInvoiceDate(s.invoiceDate || "");
-                                setTotalAmount(String(Math.abs(s.totalAmount)));
-                                if (gl.length > 0) setGlRows(gl.map((g) => ({ code: g.code || "", name: g.name || "", amount: String(g.amount || "") })));
-                                setFormType(s.type || "invoice");
-                                setResubmitSource(s);
-                                setActiveTab("form");
-                                showToast("Original data loaded — fix the issue and resubmit", "info");
-                              } catch { showToast("Could not load original data", "error"); }
-                            }}
-                          >Fix &amp; resubmit</button>
-                        </div>
+                        );
+                      })}
+                      {filteredSubmissions.length > 0 && (
+                        <div className="oh-inv-history-footer">{filteredSubmissions.length} result{filteredSubmissions.length !== 1 ? "s" : ""}{historySearch || historyPeriod !== "all" ? " (filtered)" : ""}</div>
                       )}
                     </div>
-                  ))}
-                  {filteredSubmissions.length > 0 && (
-                    <div className="oh-inv-history-footer">{filteredSubmissions.length} result{filteredSubmissions.length !== 1 ? "s" : ""}{historySearch || historyPeriod !== "all" ? " (filtered)" : ""}</div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}
