@@ -908,7 +908,6 @@ Add to end of ops.css (after v1 additions)
 ═══════════════════════════════════════════ */
 
 /* ── Remove old tab styles (override) ── */
-.oh-inv-tabs { display: none !important; }
 
 /* ═══════════════════════════════════════
    SEGMENTED CONTROL

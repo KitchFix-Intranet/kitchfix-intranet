@@ -991,7 +991,7 @@ const history = rows
     }
 
     // ── Invoice Actions (GET) ──
-    if (["invoice-bootstrap", "vendor-search", "invoice-history"].includes(action)) {
+    if (["invoice-bootstrap", "vendor-search", "invoice-history", "invoice-admin-list"].includes(action)) {
       const result = await handleInvoiceGet(action, searchParams, token, email);
       if (result) return NextResponse.json(result);
     }
@@ -1382,7 +1382,7 @@ Rules:
 
 
 // ── Invoice Actions (POST) ──
-if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check"].includes(action)) {
+if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject"].includes(action)) {
             const result = await handleInvoicePost(action, body, token, email, userName);
           if (result) {
               // Analytics — log invoice-related actions

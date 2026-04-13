@@ -273,6 +273,33 @@ const candidates = vendorRows
 // GET HANDLERS
 // ═══════════════════════════════════════
 
+function parseSubmissionRow(r) {
+  return {
+    uuid: String(r[0] || ""),
+    timestamp: String(r[1] || ""),
+    userEmail: String(r[2] || ""),
+    account: String(r[3] || ""),
+    vendor: String(r[4] || ""),
+    vendorId: String(r[5] || ""),
+    invoiceNumber: String(r[6] || ""),
+    invoiceDate: String(r[7] || ""),
+    totalAmount: Number(r[8]) || 0,
+    glBreakdown: String(r[9] || ""),
+    driveUrls: String(r[10] || ""),
+    pageCount: Number(r[11]) || 1,
+    emailSent: String(r[12] || "") === "TRUE",
+    status: String(r[13] || "sent"),
+    statusUpdatedAt: String(r[14] || ""),
+    type: String(r[15] || "invoice"),
+    rawDriveUrl: String(r[16] || ""),
+    rejectionReason: String(r[17] || ""),
+    rejectionNote: String(r[18] || ""),
+    rejectedBy: String(r[19] || ""),
+    rejectedAt: String(r[20] || ""),
+    correctedFromUuid: String(r[21] || ""),
+  };
+}
+
 export async function handleInvoiceGet(action, searchParams, token, email) {
 
   const safeRead = async (id, tab) => {
@@ -349,24 +376,9 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       const subRaw = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
       recentSubmissions = subRaw.rows
         .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
-        .map((r) => ({
-          uuid: String(r[0] || ""),
-          timestamp: String(r[1] || ""),
-          userEmail: String(r[2] || ""),
-          account: String(r[3] || ""),
-          vendor: String(r[4] || ""),
-          vendorId: String(r[5] || ""),
-          invoiceNumber: String(r[6] || ""),
-          invoiceDate: String(r[7] || ""),
-          totalAmount: Number(r[8]) || 0,
-          glBreakdown: String(r[9] || ""),
-          driveUrls: String(r[10] || ""),
-          pageCount: Number(r[11]) || 1,
-          emailSent: String(r[12] || "") === "TRUE",
-          aiScanStatus: String(r[13] || "pending"),
-        }))
+        .map(parseSubmissionRow)
         .reverse()
-        .slice(0, 20);
+        .slice(0, 50);
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
     }
@@ -391,25 +403,27 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
     const subRaw = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
     const history = subRaw.rows
       .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
-      .map((r) => ({
-        uuid: String(r[0] || ""),
-        timestamp: String(r[1] || ""),
-        userEmail: String(r[2] || ""),
-        account: String(r[3] || ""),
-        vendor: String(r[4] || ""),
-        vendorId: String(r[5] || ""),
-        invoiceNumber: String(r[6] || ""),
-        invoiceDate: String(r[7] || ""),
-        totalAmount: Number(r[8]) || 0,
-        glBreakdown: String(r[9] || ""),
-        driveUrls: String(r[10] || ""),
-        pageCount: Number(r[11]) || 1,
-        emailSent: String(r[12] || "") === "TRUE",
-        aiScanStatus: String(r[13] || "pending"),
-      }))
+      .map(parseSubmissionRow)
       .reverse()
-      .slice(0, 20);
+      .slice(0, 50);
     return { success: true, history };
+  }
+
+  // ── Admin: All Submissions ──
+  if (action === "invoice-admin-list") {
+    const periodParam = searchParams.get("period") || "week";
+    const subRaw = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+    let rows = subRaw.rows.map(parseSubmissionRow).reverse();
+
+    if (periodParam === "week") {
+      const cutoff = new Date(Date.now() - 7 * 86400000);
+      rows = rows.filter((r) => new Date(r.timestamp) >= cutoff);
+    } else if (periodParam === "month") {
+      const cutoff = new Date(Date.now() - 30 * 86400000);
+      rows = rows.filter((r) => new Date(r.timestamp) >= cutoff);
+    }
+
+    return { success: true, submissions: rows };
   }
 
   return null;
@@ -1028,7 +1042,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         uuid, now.toISOString(), email, account, vendor,
         vendorId || "", invoiceNumber || "", invoiceDate,
         Number(totalAmount) || 0, JSON.stringify(glRows), JSON.stringify(driveUrls),
-pages.length, "FALSE", "pending", "", type, rawDriveUrl,
+pages.length, "FALSE", "sent", "", type, rawDriveUrl,
       ];
 
       const sheetResult = await appendRow(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", row);
@@ -1121,6 +1135,26 @@ pages.length, "FALSE", "pending", "", type, rawDriveUrl,
         ? { uuid: String(match[0] || ""), timestamp: String(match[1] || ""), userEmail: String(match[2] || "") }
         : null,
     };
+  }
+
+  // ── Reject / Return Invoice ──
+  if (action === "invoice-reject") {
+    const { uuid, reasons, note } = body;
+    if (!uuid || !note) return { success: false, error: "Missing uuid or note" };
+
+    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    if (!rowNum) return { success: false, error: "Submission not found" };
+
+    await Promise.all([
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, "returned"),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${rowNum}`, new Date().toISOString()),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!R${rowNum}`, (reasons || []).join(", ")),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!S${rowNum}`, note),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!T${rowNum}`, email),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!U${rowNum}`, new Date().toISOString()),
+    ]);
+
+    return { success: true };
   }
 
   return null;
@@ -1284,19 +1318,10 @@ const accountTab = metadata.account || "Uncategorized";
 }
 
 async function updateScanStatus(token, uuid, status) {
-  try {
-    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
-    if (rowNum) {
-      await updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, status);
-      if (status === "complete") {
-        await updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${rowNum}`, new Date().toISOString());
-      }
-    }
-  } catch (e) {
-    console.warn("[AI Scan] Status update failed:", e.message);
-  }
+  // AI scan status is logged but no longer written to column N,
+  // which is now reserved for submission status (sent/returned/corrected).
+  console.log(`[AI Scan] ${uuid}: scan status = ${status}`);
 }
-
 
 // =============================================================================
 // VENDOR PORTAL — API HANDLERS v2

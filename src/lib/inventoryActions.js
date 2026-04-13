@@ -240,8 +240,82 @@ export async function handleCountSave({ sessionId, locationId, items, email }) {
 // SUBMIT — finalize count, lock period
 // ═══════════════════════════════════════
 
-export async function handleCountSubmit(body) {
-  return { success: false, error: "Not yet implemented — Week 2 Session 8" };
+export async function handleCountSubmit({ sessionId, account, period, summary, email }) {
+  try {
+    const inv = await batchRead(INVENTORY_SHEET_ID, ["count_sessions", "count_items", "item_catalog"], { fresh: true });
+    const sessions = inv.count_sessions?.rows || [];
+    const now = new Date().toISOString();
+
+    // Find session row
+    let sessionRowNum = null;
+    for (let i = 0; i < sessions.length; i++) {
+      if (sessions[i][0] === sessionId) { sessionRowNum = i + 2; break; }
+    }
+    if (!sessionRowNum) return { success: false, error: "Session not found" };
+
+    // Calculate category totals from count_items
+    const countItems = (inv.count_items?.rows || []).filter(r => r[0] === sessionId);
+    const catTotals = { Food: 0, Packaging: 0, Supplies: 0, Snacks: 0, Beverages: 0 };
+    const catalogRows = inv.item_catalog?.rows || [];
+    const catMap = {};
+    catalogRows.forEach(r => { catMap[r[0]] = r[3] || "Food"; });
+
+    let grandTotal = 0;
+    countItems.forEach(r => {
+      const ext = parseNum(r[7]);
+      const cat = catMap[r[2]] || "Food";
+      if (catTotals[cat] !== undefined) catTotals[cat] += ext;
+      else catTotals.Food += ext;
+      grandTotal += ext;
+    });
+
+    // Update session row: status, submittedBy, submittedAt, category totals, grandTotal
+    await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+      { range: `count_sessions!F${sessionRowNum}`, values: [["submitted"]] },
+      { range: `count_sessions!G${sessionRowNum}`, values: [[email || ""]] },
+      { range: `count_sessions!H${sessionRowNum}`, values: [[now]] },
+      { range: `count_sessions!I${sessionRowNum}`, values: [[catTotals.Food.toFixed(2)]] },
+      { range: `count_sessions!J${sessionRowNum}`, values: [[catTotals.Packaging.toFixed(2)]] },
+      { range: `count_sessions!K${sessionRowNum}`, values: [[catTotals.Supplies.toFixed(2)]] },
+      { range: `count_sessions!L${sessionRowNum}`, values: [[catTotals.Snacks.toFixed(2)]] },
+      { range: `count_sessions!M${sessionRowNum}`, values: [[catTotals.Beverages.toFixed(2)]] },
+      { range: `count_sessions!N${sessionRowNum}`, values: [[grandTotal.toFixed(2)]] },
+    ]);
+
+    // Update priceAtLastCount on catalog items (col K)
+    const priceUpdates = [];
+    countItems.forEach(r => {
+      const itemId = r[2];
+      const priceAtCount = parseNum(r[5]);
+      if (priceAtCount > 0) {
+        for (let i = 0; i < catalogRows.length; i++) {
+          if (catalogRows[i][0] === itemId && accountMatch(catalogRows[i][1], account)) {
+            priceUpdates.push({ range: `item_catalog!K${i + 2}`, values: [[priceAtCount]] });
+            break;
+          }
+        }
+      }
+    });
+    if (priceUpdates.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < priceUpdates.length; i += CHUNK) {
+        await batchUpdateRangesSA(INVENTORY_SHEET_ID, priceUpdates.slice(i, i + CHUNK));
+      }
+    }
+
+    // Slack notification
+    const slackUrl = process.env.SLACK_INVENTORY_WEBHOOK;
+    if (slackUrl) {
+      const text = `*Inventory Count Submitted*\n• Account: ${account}\n• Period: ${period}\n• By: ${email}\n• Grand Total: $${grandTotal.toFixed(2)}\n• Food: $${catTotals.Food.toFixed(2)} | Snacks: $${catTotals.Snacks.toFixed(2)} | Beverages: $${catTotals.Beverages.toFixed(2)}\n• Supplies: $${catTotals.Supplies.toFixed(2)} | Packaging: $${catTotals.Packaging.toFixed(2)}\n• Items counted: ${countItems.length}`;
+      try { await fetch(slackUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); } catch {}
+    }
+
+    invalidateCache(INVENTORY_SHEET_ID, "count_sessions");
+    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    return { success: true, grandTotal, catTotals, itemsCounted: countItems.length };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 // ═══════════════════════════════════════

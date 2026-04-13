@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import GLCodeTable from "@/app/ops/components/invoice/GLCodeTable";
 import VendorSetup from "@/app/ops/components/invoice/VendorSetup";
+import InvoiceAdmin, { isInvoiceAdmin } from "@/app/ops/components/invoice/InvoiceAdmin";
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -157,6 +158,7 @@ const [invoiceDate, setInvoiceDate] = useState("");
   const [lightboxIdx, setLightboxIdx] = useState(null);
 const [dragOver, setDragOver] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [resubmitSource, setResubmitSource] = useState(null);
     const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
 
@@ -721,6 +723,8 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     setVendor(null); setFormType("invoice");
     }, []);
 
+  const returnedCount = useMemo(() => recentSubmissions.filter((s) => s.status === "returned").length, [recentSubmissions]);
+
   const filteredSubmissions = useMemo(() => {
     let list = recentSubmissions;
     if (historySearch.trim()) {
@@ -729,6 +733,8 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
     if (historyPeriod === "week") list = list.filter((s) => new Date(s.timestamp) >= new Date(Date.now() - 7 * 86400000));
     else if (historyPeriod === "month") list = list.filter((s) => new Date(s.timestamp) >= new Date(Date.now() - 30 * 86400000));
+    else if (historyPeriod === "needsfix") list = list.filter((s) => s.status === "returned");
+    list = [...list].sort((a, b) => (a.status === "returned" ? 0 : 1) - (b.status === "returned" ? 0 : 1));
     return list;
   }, [recentSubmissions, historySearch, historyPeriod]);
 
@@ -937,8 +943,14 @@ Upload, code &amp; submit to AP.
             <button className={`oh-inv-tab${activeTab === "history" ? " oh-inv-tab--active" : ""}`} onClick={() => setActiveTab("history")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
               History
-              {recentSubmissions.length > 0 && <span className="oh-inv-tab-count">{recentSubmissions.length}</span>}
+              {returnedCount > 0 && <span className="oh-inv-tab-count" style={{ background: "#ef4444" }}>{returnedCount}</span>}
             </button>
+            {isInvoiceAdmin(config?.email) && (
+              <button className={`oh-inv-tab${activeTab === "admin" ? " oh-inv-tab--active" : ""}`} onClick={() => setActiveTab("admin")}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                AP Review
+              </button>
+            )}
           </div>
 
           {/* ════ HISTORY TAB ════ */}
@@ -951,7 +963,7 @@ Upload, code &amp; submit to AP.
                   {historySearch && <button className="oh-inv-history-search-clear" onClick={() => setHistorySearch("")}>×</button>}
                 </div>
                 <div className="oh-inv-history-periods">
-                  {[["all","All"],["week","7 Days"],["month","30 Days"]].map(([val, label]) => (
+                  {[["all","All"],["week","7 Days"],["month","30 Days"],["needsfix","Needs fix"]].map(([val, label]) => (
                     <button key={val} className={`oh-inv-period-pill${historyPeriod === val ? " oh-inv-period-pill--active" : ""}`} onClick={() => setHistoryPeriod(val)}>{label}</button>
                   ))}
                 </div>
@@ -962,6 +974,13 @@ Upload, code &amp; submit to AP.
                   <strong>{weeklySummary.count} invoice{weeklySummary.count > 1 ? "s" : ""}</strong>
                   <span>·</span>
                   <strong>${weeklySummary.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                </div>
+              )}
+              {returnedCount > 0 && historyPeriod !== "needsfix" && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
+                  <button style={{ marginLeft: "auto", padding: "4px 12px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff", color: "#991b1b", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)" }} onClick={() => setHistoryPeriod("needsfix")}>View</button>
                 </div>
               )}
               {recentSubmissions.length === 0 ? (
@@ -981,25 +1000,47 @@ Upload, code &amp; submit to AP.
               ) : (
                 <div className="oh-inv-history-list">
                   {filteredSubmissions.map((s) => (
-                    <div key={s.uuid} className="oh-inv-history-row">
-                      <div className="oh-inv-history-left">
-                        <span className="oh-inv-history-vendor">{s.vendor}</span>
-                        <span className="oh-inv-history-meta">{s.invoiceNumber ? `#${s.invoiceNumber} · ` : ""}{s.invoiceDate}{s.formType === "credit" ? " · Credit" : ""}</span>
-                      </div>
-                      <div className="oh-inv-history-right">
-                        <span className={`oh-inv-history-amount${Number(s.totalAmount) < 0 ? " oh-inv-credit" : ""}`}>
-                          {Number(s.totalAmount) < 0 ? "−" : ""}${Math.abs(Number(s.totalAmount)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </span>
-                        <div className="oh-inv-history-badges">
-                          {s.emailSent && <span className="oh-inv-status-chip oh-inv-status-chip--green"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 7l-10 7L2 7" /></svg>Sent</span>}
-                          {s.aiScanStatus === "complete" && <span className="oh-inv-status-chip oh-inv-status-chip--blue"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3" /><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>AI Scan</span>}
-                          {s.aiScanStatus === "pending" && <span className="oh-inv-status-chip oh-inv-status-chip--grey"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>Scanning</span>}
-                          <button className="oh-inv-status-chip oh-inv-status-chip--export" onClick={(e) => { e.stopPropagation(); exportReceipt(s); }} title="Export receipt">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                            Export
-                          </button>
+                    <div key={s.uuid} className="oh-inv-history-row" style={s.status === "returned" ? { border: "2px solid #fca5a5", borderRadius: 12, padding: 0, overflow: "hidden", flexDirection: "column", alignItems: "stretch" } : {}}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: s.status === "returned" ? "12px 14px" : undefined }}>
+                        <div className="oh-inv-history-left">
+                          <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {s.vendor}
+                            {s.status === "returned" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#fef2f2", color: "#991b1b" }}>Needs fix</span>}
+                            {s.status === "corrected" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#ecfdf5", color: "#065f46" }}>Corrected</span>}
+                            {(s.status === "sent" || s.status === "pending") && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#eff6ff", color: "#1e40af" }}>Sent</span>}
+                          </span>
+                          <span className="oh-inv-history-meta">{s.invoiceNumber ? `#${s.invoiceNumber} · ` : ""}{s.invoiceDate}{s.type === "credit" ? " · Credit" : ""} · {s.pageCount} page{s.pageCount !== 1 ? "s" : ""}</span>
+                        </div>
+                        <div className="oh-inv-history-right">
+                          <span className={`oh-inv-history-amount${Number(s.totalAmount) < 0 ? " oh-inv-credit" : ""}`}>
+                            {Number(s.totalAmount) < 0 ? "−" : ""}${Math.abs(Number(s.totalAmount)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       </div>
+                      {s.status === "returned" && s.rejectionNote && (
+                        <div style={{ background: "#fef2f2", padding: "10px 14px", borderTop: "1px solid #fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "#991b1b", marginBottom: 2 }}>AP note: {s.rejectionNote}</div>
+                            <div style={{ fontSize: 10, color: "#b91c1c" }}>Returned by {s.rejectedBy?.split("@")[0] || "AP"} · {s.rejectedAt ? new Date(s.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</div>
+                          </div>
+                          <button style={{ padding: "8px 18px", border: "none", borderRadius: 8, background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)", whiteSpace: "nowrap", flexShrink: 0, marginLeft: 10 }}
+                            onClick={() => {
+                              try {
+                                const gl = JSON.parse(s.glBreakdown || "[]");
+                                setVendor({ name: s.vendor, vendorId: s.vendorId });
+                                setInvoiceNumber(s.invoiceNumber || "");
+                                setInvoiceDate(s.invoiceDate || "");
+                                setTotalAmount(String(Math.abs(s.totalAmount)));
+                                if (gl.length > 0) setGlRows(gl.map((g) => ({ code: g.code || "", name: g.name || "", amount: String(g.amount || "") })));
+                                setFormType(s.type || "invoice");
+                                setResubmitSource(s);
+                                setActiveTab("form");
+                                showToast("Original data loaded — fix the issue and resubmit", "info");
+                              } catch { showToast("Could not load original data", "error"); }
+                            }}
+                          >Fix &amp; resubmit</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {filteredSubmissions.length > 0 && (
@@ -1010,10 +1051,22 @@ Upload, code &amp; submit to AP.
             </div>
           )}
 
+          {/* ════ ADMIN TAB ════ */}
+          {activeTab === "admin" && isInvoiceAdmin(config?.email) && (
+            <InvoiceAdmin config={{ ...config, userEmail: config?.email }} showToast={showToast} />
+          )}
+
           {/* ════ FORM TAB ════ */}
           {activeTab === "form" && (
             <div className={`oh-inv-form${formType === "invoice" ? " oh-inv-form--invoice" : ""}${isCreditMemo ? " oh-inv-form--credit" : ""}`}>
 
+              {resubmitSource && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", marginBottom: 16, background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" style={{ flexShrink: 0 }}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+                  <span><strong>Correcting:</strong> {resubmitSource.vendor} #{resubmitSource.invoiceNumber} — {resubmitSource.rejectionNote || "fix and resubmit"}</span>
+                  <button style={{ marginLeft: "auto", background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16, padding: 4 }} onClick={() => setResubmitSource(null)}>×</button>
+                </div>
+              )}
               {/* Two-way type toggle */}
               <div className="oh-inv-type-toggle">
                 <button

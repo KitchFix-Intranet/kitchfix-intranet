@@ -159,7 +159,14 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   if (screen === "counting") {
     content = <CountSheet catalogItems={catalogItems} locations={locations} lastCountItems={lastCountItems}
       sessionId={sessionId} account={account} period={cp?.name} onSaveLocation={handleSaveLocation}
-      onFinish={() => { showToast("Count Review \u2014 coming next session", "info"); setScreen("home"); }}
+      onSubmit={async ({ sessionId: sid, account: acct, period: per }) => {
+        const res = await fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "submit", sessionId: sid, account: acct, period: per }) });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+        showToast(`Count submitted — ${json.grandTotal ? "$" + Number(json.grandTotal).toFixed(2) : "done"}`, "success");
+      }}
+      onFinish={() => { setScreen("home"); setSessionId(null); loadBootstrap(account, true); }}
       onBack={() => { setScreen("home"); setSessionId(null); }} showToast={showToast} />;
   } else if (screen === "locations") {
     content = <LocationSetup locations={locations} account={account} catalogItems={catalogItems}

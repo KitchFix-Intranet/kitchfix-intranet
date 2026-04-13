@@ -1733,3 +1733,133 @@
 .ic-vendor-suggest { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); z-index: 30; overflow: hidden; }
 .ic-vendor-suggest button { display: block; width: 100%; padding: 8px 12px; border: none; background: none; font-size: 13px; color: #0f3057; font-family: inherit; cursor: pointer; text-align: left; }
 .ic-vendor-suggest button:hover { background: #f0f5ff; }
+/* ═══ COUNT REVIEW ═══ */
+.oh-inv-mgmt-count-review { padding: 16px; }
+.oh-inv-mgmt-review-title { font-size: 16px; font-weight: 600; color: #0f3057; margin: 0 0 2px; }
+.oh-inv-mgmt-review-sub { font-size: 12px; color: #94a3b8; margin: 0 0 16px; }
+.oh-inv-mgmt-review-grand { display: flex; justify-content: space-between; align-items: baseline; padding: 16px; background: #0f3057; border-radius: 10px; margin-bottom: 12px; }
+.oh-inv-mgmt-review-grand-label { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 500; }
+.oh-inv-mgmt-review-grand-value { font-size: 22px; font-weight: 600; color: #fff; }
+.oh-inv-mgmt-review-cats { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.oh-inv-mgmt-review-cat-row { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+.oh-inv-mgmt-review-cat-row:last-child { border-bottom: none; }
+.oh-inv-mgmt-review-cat-row span:first-child { color: #64748b; }
+.oh-inv-mgmt-review-cat-row span:last-child { color: #0f3057; font-weight: 500; }
+.oh-inv-mgmt-review-section-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.oh-inv-mgmt-review-locs { display: flex; flex-direction: column; gap: 0; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.oh-inv-mgmt-review-loc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+.oh-inv-mgmt-review-loc-row:last-child { border-bottom: none; }
+.oh-inv-mgmt-review-loc-left { display: flex; flex-direction: column; }
+.oh-inv-mgmt-review-loc-name { font-size: 13px; color: #0f3057; font-weight: 500; }
+.oh-inv-mgmt-review-loc-sub { font-size: 11px; color: #94a3b8; }
+.oh-inv-mgmt-review-loc-total { font-size: 13px; color: #0f3057; font-weight: 500; }
+.oh-inv-mgmt-review-warning { padding: 8px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12px; color: #92400e; margin-bottom: 8px; }
+.oh-inv-mgmt-review-none { padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; color: #64748b; margin-bottom: 12px; }
+.oh-inv-mgmt-review-actions { display: flex; gap: 8px; margin-top: 8px; }
+.oh-inv-mgmt-review-back { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 13px; color: #0f3057; font-weight: 500; font-family: inherit; cursor: pointer; }
+.oh-inv-mgmt-review-submit { flex: 2; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: none; border-radius: 8px; background: #16A34A; font-size: 13px; color: #fff; font-weight: 600; font-family: inherit; cursor: pointer; transition: background 0.12s; }
+.oh-inv-mgmt-review-submit:hover { background: #15803d; }
+.oh-inv-mgmt-review-submit:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════
+   COUNT SHEET v2 — Redesigned
+   ═══════════════════════════════════════ */
+.cs-root { padding-bottom: 80px; }
+.cs-empty { text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 13px; }
+.cs-empty-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.cs-back-btn { margin-top: 12px; padding: 8px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 13px; color: #0f3057; cursor: pointer; font-family: inherit; }
+
+/* Zone header */
+.cs-zone-hdr { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+.cs-zone-ico { width: 32px; height: 32px; border-radius: 8px; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.cs-zone-body { flex: 1; min-width: 0; }
+.cs-zone-name { font-size: 14px; font-weight: 600; color: #0f3057; display: block; }
+.cs-zone-sub { font-size: 11px; color: #94a3b8; }
+.cs-zone-right { text-align: right; flex-shrink: 0; }
+.cs-zone-total { font-size: 15px; font-weight: 600; color: #d97706; display: block; }
+.cs-zone-progress { font-size: 10px; color: #94a3b8; }
+.cs-pbar { height: 3px; background: #f1f5f9; margin: 0 16px; border-radius: 2px; }
+.cs-pfill { height: 100%; background: #d97706; border-radius: 2px; transition: width 0.3s; }
+
+/* Search */
+.cs-search { display: flex; align-items: center; gap: 6px; margin: 8px 16px; padding: 7px 10px; background: #f1f5f9; border-radius: 8px; position: relative; }
+.cs-search input { border: none; background: none; outline: none; font-size: 12px; color: #0f3057; width: 100%; font-family: inherit; }
+.cs-search input::placeholder { color: #94a3b8; }
+.cs-search-x { position: absolute; right: 8px; border: none; background: none; cursor: pointer; padding: 2px; display: flex; }
+
+/* Item rows — shared base */
+.cs-items { }
+.cs-row { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #f8fafc; cursor: pointer; min-height: 44px; transition: background 0.1s; }
+.cs-row:active { background: #f1f5f9; }
+.cs-row-name { font-size: 13px; font-weight: 500; color: #0f3057; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Uncounted row */
+.cs-row--uncounted { }
+.cs-row--uncounted:hover { background: #fafbfc; }
+.cs-row-price { font-size: 11px; color: #94a3b8; flex-shrink: 0; white-space: nowrap; }
+
+/* Counted row — compressed */
+.cs-row--counted { background: #f8fafc; }
+.cs-row--counted .cs-row-name { color: #64748b; }
+.cs-check { width: 18px; height: 18px; border-radius: 50%; background: #16A34A; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cs-row-qty { font-size: 12px; font-weight: 500; color: #0f3057; flex-shrink: 0; white-space: nowrap; }
+.cs-row-ext { font-size: 12px; font-weight: 500; color: #0f3057; flex-shrink: 0; min-width: 54px; text-align: right; }
+
+/* None row */
+.cs-row--none { background: #fef2f2; opacity: 0.6; }
+.cs-row-name--struck { text-decoration: line-through; color: #94a3b8 !important; }
+.cs-none-badge { font-size: 9px; font-weight: 600; color: #dc2626; background: #fecaca; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
+
+/* Active row — expanded stepper */
+.cs-row--active { flex-direction: column; align-items: stretch; background: #fffbeb; border-left: 3px solid #d97706; border-radius: 0; padding: 10px 13px 10px 13px; cursor: default; }
+.cs-active-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.cs-active-name { font-size: 13px; font-weight: 500; color: #0f3057; }
+.cs-active-price { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
+.cs-active-controls { display: flex; align-items: center; gap: 8px; }
+.cs-stepper { display: flex; align-items: center; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #fff; }
+.cs-stepper-btn { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border: none; background: #fff; cursor: pointer; }
+.cs-stepper-btn:active { background: #f1f5f9; }
+.cs-stepper-input { width: 52px; height: 44px; text-align: center; font-size: 17px; font-weight: 500; border: none; border-left: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; background: #fff; color: #0f3057; font-family: inherit; outline: none; }
+.cs-stepper-unit { font-size: 12px; color: #94a3b8; }
+.cs-active-chips { display: flex; gap: 6px; margin-left: auto; }
+.cs-chip-last { padding: 6px 12px; border-radius: 6px; border: 1px solid #2563eb; background: #eff6ff; color: #1d4ed8; font-size: 11px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.cs-chip-none { padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 11px; cursor: pointer; font-family: inherit; }
+.cs-chip-done { width: 32px; height: 32px; border-radius: 50%; border: none; background: #16A34A; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.cs-chip-done:active { background: #15803d; }
+
+/* No results */
+.cs-no-results { text-align: center; padding: 24px 16px; color: #94a3b8; font-size: 13px; }
+
+/* Bottom nav */
+.cs-nav { display: flex; gap: 8px; padding: 10px 16px; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e2e8f0; z-index: 50; max-width: 100%; }
+.cs-nav-back { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 12px; color: #0f3057; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-nav-next { flex: 2; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px; border: none; border-radius: 8px; background: #0f3057; font-size: 13px; color: #fff; font-weight: 500; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-nav-next:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* Count Review */
+.cs-review { padding: 16px; }
+.cs-review-title { font-size: 16px; font-weight: 600; color: #0f3057; margin: 0 0 2px; }
+.cs-review-sub { font-size: 12px; color: #94a3b8; margin: 0 0 16px; }
+.cs-review-grand { display: flex; justify-content: space-between; align-items: baseline; padding: 16px; background: #0f3057; border-radius: 10px; margin-bottom: 12px; }
+.cs-review-grand-label { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 500; }
+.cs-review-grand-value { font-size: 22px; font-weight: 600; color: #fff; }
+.cs-review-cats { display: flex; flex-direction: column; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.cs-review-cat-row { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+.cs-review-cat-row:last-child { border-bottom: none; }
+.cs-review-cat-row span:first-child { color: #64748b; }
+.cs-review-cat-row span:last-child { color: #0f3057; font-weight: 500; }
+.cs-review-section-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.cs-review-locs { display: flex; flex-direction: column; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.cs-review-loc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+.cs-review-loc-row:last-child { border-bottom: none; }
+.cs-review-loc-left { display: flex; flex-direction: column; }
+.cs-review-loc-name { font-size: 13px; color: #0f3057; font-weight: 500; }
+.cs-review-loc-sub { font-size: 11px; color: #94a3b8; }
+.cs-review-loc-total { font-size: 13px; color: #0f3057; font-weight: 500; }
+.cs-review-warning { padding: 8px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12px; color: #92400e; margin-bottom: 8px; }
+.cs-review-none { padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; color: #64748b; margin-bottom: 12px; }
+.cs-review-actions { display: flex; gap: 8px; margin-top: 8px; }
+.cs-review-back { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 13px; color: #0f3057; font-weight: 500; font-family: inherit; cursor: pointer; }
+.cs-review-submit { flex: 2; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: none; border-radius: 8px; background: #16A34A; font-size: 13px; color: #fff; font-weight: 600; font-family: inherit; cursor: pointer; transition: background 0.12s; }
+.cs-review-submit:hover { background: #15803d; }
+.cs-review-submit:disabled { background: #94a3b8; cursor: not-allowed; }
