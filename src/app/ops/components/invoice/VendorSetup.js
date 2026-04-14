@@ -1,7 +1,7 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 
-/* ── SVG Icons ────────────────────────────────────── */
+/* ── Icons ──────────────────────────────────────── */
 const CloseIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -22,16 +22,6 @@ const CheckIcon = () => (
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
-const PlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
 const GlobeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
@@ -50,25 +40,19 @@ const EyeOffIcon = () => (
     <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
+const LinkIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
 
-/* ── Time formatter ──────────────────────────────── */
-function formatTimeTo12h(val) {
-  if (!val) return "";
-  const m = val.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return val;
-  let h = parseInt(m[1], 10);
-  const min = m[2];
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${h}:${min} ${ampm}`;
-}
-
-/* ── Step config ──────────────────────────────────── */
+/* ── Constants ───────────────────────────────────── */
 const STEPS = [
-  { key: "basics",   label: "Basics",          short: "1" },
-  { key: "portal",   label: "Portal & Ordering", short: "2" },
-  { key: "rep",      label: "Sales Rep",        short: "3" },
-  { key: "review",   label: "Review",           short: "4" },  // ← was "Notes & Review"
+  { key: "basics",   label: "Vendor"           },
+  { key: "ordering", label: "Ordering & Portal" },
+  { key: "rep",      label: "Sales Rep"         },
+  { key: "review",   label: "Review"            },
 ];
 
 const CATEGORIES = [
@@ -77,213 +61,205 @@ const CATEGORIES = [
   "Specialty", "Broadliner", "Other",
 ];
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const CATEGORY_COLORS = {
+  Produce: "#16a34a", Protein: "#dc2626", Dairy: "#2563eb",
+  "Dry Goods": "#d97706", Beverage: "#7c3aed", Packaging: "#0891b2",
+  Cleaning: "#0d9488", Supplies: "#ca8a04", Equipment: "#475569",
+  Linen: "#9d174d", Specialty: "#db2777", Broadliner: "#9333ea",
+  Other: "#64748b",
+};
 
+const DAYS            = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DELIVERY_METHODS = ["Direct Delivery", "Will Call / Pickup", "Shipped (Common Carrier)", "Drop Ship"];
+const PAYMENT_TERMS   = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
 
-const PAYMENT_TERMS = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
-
-/* ── Default form state ───────────────────────────── */
 const emptyForm = () => ({
-// Step 1 — Basics
-  vendorName: "",
-  category: [],
-  categoryOther: "",
-  existingVendorId: null,
-    // Step 2 — Portal & Ordering
-  website: "",
-  portalUrl: "",
-  portalUsername: "",
-  portalPassword: "",
-  deliveryDays: [],
-  cutoffTime: "",
-  deliveryMethod: "",
-  minOrder: "",
-  paymentTerms: "",
+  vendorName:         "",
+  category:           "",   // single string — not array
+  existingVendorId:   null,
+  website:            "",
+  portalUrl:          "",
+  portalUsername:     "",
+  portalPassword:     "",
+  deliveryDays:       [],
+  cutoffTime:         "",
+  deliveryMethod:     "",
+  minOrder:           "",
+  paymentTerms:       "",
   customerAccountNum: "",
-  // Step 3 — Sales Rep
-  salesRepName: "",
-  salesRepPhone: "",
-  salesRepEmail: "",
-  // Step 4 — Notes
-  notes: "",
-  accountNotes: "",  // site-specific → vendor_accounts col W
+  salesRepName:       "",
+  salesRepPhone:      "",
+  salesRepEmail:      "",
+  notes:              "",
+  accountNotes:       "",
 });
 
-/* ═════════════════════════════════════════════════════
-   VendorSetup — 4-Step Stepper
-   ═════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   VendorSetup — Full Setup Only, 4-Step Stepper
+   ═══════════════════════════════════════════════════ */
 export default function VendorSetup({ account, onClose, onCreated }) {
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState(emptyForm());
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [showPw, setShowPw] = useState(false);
-  const [mode, setMode] = useState("quick"); // "quick" | "full"
-  const searchRef = useRef(null);
-  const bodyRef = useRef(null);
-  const didFocusSearch = useRef(false);
-  const searchTimer = useRef(null);
-  const nameCheckTimer = useRef(null);
-  const [dupMatch, setDupMatch] = useState(null); // { vendorId, name, category, exactMatch } | null
+  const [step, setStep]       = useState(0);
+  const [form, setForm]       = useState(emptyForm());
+  const [saving, setSaving]   = useState(false);
+  const [errors, setErrors]   = useState({});
+  const [showPw, setShowPw]   = useState(false);
+
+  // Search-as-you-type state (drives both results + duplicate check)
+  const [searchResults, setSearchResults]   = useState([]);
+  const [searchLoading, setSearchLoading]   = useState(false);
+  const [dupMatch, setDupMatch]             = useState(null);   // { vendorId, name, category, exactMatch }
   const [confirmedDifferent, setConfirmedDifferent] = useState(false);
 
-  // Auto-focus search only on first mount
-  useEffect(() => {
-    if (step === 0 && searchRef.current && !didFocusSearch.current) {
-      searchRef.current.focus();
-      didFocusSearch.current = true;
-    }
-    if (step !== 0) didFocusSearch.current = false; // reset so re-entering step 0 focuses again
-  }, [step]);
+  const nameInputRef   = useRef(null);
+  const bodyRef        = useRef(null);
+  const searchTimer    = useRef(null);
 
-  // Scroll to top on step change
+  // Auto-focus name on mount
+  useEffect(() => { nameInputRef.current?.focus(); }, []);
+
+  // Scroll body to top on step change
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [step]);
+
+  // Single typeahead: vendor name drives both search results AND duplicate detection
   useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = 0;
-  }, [step]);
+    const name = form.vendorName.trim();
+    if (!name || form.existingVendorId) {
+      setSearchResults([]);
+      setDupMatch(null);
+      setConfirmedDifferent(false);
+      return;
+    }
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearchLoading(true);
+      fetch(`/api/ops?action=vendor-search&q=${encodeURIComponent(name)}`)
+        .then(r => r.json())
+        .then(d => {
+          const vendors = d.vendors || [];
+
+          // Normalize for fuzzy comparison
+          const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const qNorm = norm(name);
+          const lev = (a, b) => {
+            const m = a.length, n = b.length;
+            const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++)
+              for (let j = 1; j <= n; j++)
+                dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+            return dp[m][n];
+          };
+
+          // Build duplicate match
+          let match = null;
+          for (const v of vendors) {
+            const vNorm = norm(v.name);
+            if (vNorm === qNorm) { match = { ...v, exactMatch: true }; break; }
+            if (!match && (vNorm.startsWith(qNorm) || qNorm.startsWith(vNorm) || lev(qNorm, vNorm) <= 2)) {
+              match = { ...v, exactMatch: false };
+            }
+          }
+          setDupMatch(match);
+          setConfirmedDifferent(false);
+          setSearchResults(vendors.slice(0, 5));
+        })
+        .catch(() => { setSearchResults([]); setDupMatch(null); })
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [form.vendorName, form.existingVendorId]);
 
   /* ── Helpers ──────────────────────────────────── */
-  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
-  const toggleDay = (d) =>
-    setForm((f) => ({
-      ...f,
-      deliveryDays: f.deliveryDays.includes(d)
-        ? f.deliveryDays.filter((x) => x !== d)
-        : [...f.deliveryDays, d],
-    }));
+  const toggleDay = (d) => setForm(f => ({
+    ...f,
+    deliveryDays: f.deliveryDays.includes(d)
+      ? f.deliveryDays.filter(x => x !== d)
+      : [...f.deliveryDays, d],
+  }));
 
-  const selectExistingVendor = (v) => {
-    setForm((f) => ({
+  const linkExistingVendor = (v) => {
+    setForm(f => ({
       ...f,
       existingVendorId: v.vendorId,
-      vendorName: v.name,
-category: v.category ? v.category.split(", ").filter(Boolean) : f.category,
-      website: v.website || f.website,
+      vendorName:       v.name,
+      category:         v.category || f.category,
+      website:          v.website  || f.website,
     }));
-    setSearch("");
-    setMode("full"); // always full setup when linking existing vendor — quick mode silently drops all fields
-    setStep(1); // jump to step 2
+    setSearchResults([]);
+    setDupMatch(null);
+    setStep(1); // jump straight to ordering
   };
 
   const clearVendor = () => {
-setForm((f) => ({ ...f, existingVendorId: null, vendorName: "", category: [] }));
+    setForm(f => ({ ...f, existingVendorId: null, vendorName: "", category: "" }));
     setStep(0);
+    setTimeout(() => nameInputRef.current?.focus(), 50);
   };
 
-  /* ── Validation per step ─────────────────────── */
+  /* ── Validation ───────────────────────────────── */
   const validateStep = (s) => {
     const e = {};
     if (s === 0) {
-      if (!form.vendorName.trim()) e.vendorName = true;
+      if (!form.vendorName.trim()) e.vendorName = "Vendor name is required";
+      if (!form.category)          e.category   = "Please select a category";
     }
     if (s === 1) {
-      if (!form.deliveryMethod) e.deliveryMethod = true;
+      if (!form.deliveryMethod) e.deliveryMethod = "Delivery method is required";
     }
-    // Steps 2 & 3 — no required fields
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-const goNext = () => {
-    if (!validateStep(step)) return;
-    setStep((s) => Math.min(s + 1, 3));
-  };
-  const goBack = () => setStep((s) => Math.max(s - 1, 0));
-  const skipToReview = () => setStep(3);
+  const goNext = () => { if (validateStep(step)) setStep(s => Math.min(s + 1, 3)); };
+  const goBack = () => setStep(s => Math.max(s - 1, 0));
 
-  // Quick Add — submits with just name + category, skips all other steps
-const handleQuickSubmit = async () => {
-    const e = {};
-    if (!form.vendorName.trim()) e.vendorName = true;
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-    if (saving) return;
-    setSaving(true);
-    try {
-const payload = {
-        action: "vendor-add",
-        account,
-        vendorName: form.vendorName.trim(),
-category: form.category
-          .map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c)
-          .join(", "),
-                  deliveryMethod: "",
-        existingVendorId: form.existingVendorId || undefined,
-      };
-                        const res = await fetch("/api/ops", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success) {
-        onCreated({
-          vendorId: data.vendorId,
-          name: form.vendorName.trim(),
-category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", "),
-        });
-      } else {
-        alert(data.error || "Failed to save vendor");
-      }
-    } catch (err) {
-      console.error("VendorSetup quick submit error:", err);
-      alert("Network error — try again");
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  /* ── Submit ──────────────────────────────────── */
+  // Blocked if exact match and user hasn't confirmed it's different
+  const dupBlocked = !!dupMatch && !form.existingVendorId && (dupMatch.exactMatch || !confirmedDifferent);
+
+  /* ── Submit ───────────────────────────────────── */
   const handleSubmit = async () => {
     if (saving) return;
     setSaving(true);
     try {
-const payload = {
-        action: "vendor-add",
-        account,
-        vendorName: form.vendorName.trim(),
-category: form.category
-          .map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c)
-          .join(", "),
-                  website: form.website.trim(),
-                notes: form.notes.trim(),
-        accountNotes: form.accountNotes.trim(),
-        customerAccountNum: form.customerAccountNum.trim(),
-        salesRepName: form.salesRepName.trim(),
-        salesRepPhone: form.salesRepPhone.trim(),
-        salesRepEmail: form.salesRepEmail.trim(),
-        deliveryDays: form.deliveryDays.join(", "),
-        cutoffTime: form.cutoffTime.trim(),
-        deliveryMethod: form.deliveryMethod,
-        portalUrl: form.portalUrl.trim() || form.website.trim(),
-        portalUsername: form.portalUsername.trim(),
-        portalPassword: form.portalPassword,
-        paymentTerms: form.paymentTerms,
-        minOrder: form.minOrder,
-        existingVendorId: form.existingVendorId || undefined,
-      };
-
       const res = await fetch("/api/ops", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          action:             "vendor-add",
+          account,
+          vendorName:         form.vendorName.trim(),
+          category:           form.category,
+          website:            form.website.trim(),
+          notes:              form.notes.trim(),
+          accountNotes:       form.accountNotes.trim(),
+          customerAccountNum: form.customerAccountNum.trim(),
+          salesRepName:       form.salesRepName.trim(),
+          salesRepPhone:      form.salesRepPhone.trim(),
+          salesRepEmail:      form.salesRepEmail.trim(),
+          deliveryDays:       form.deliveryDays.join(", "),
+          cutoffTime:         form.cutoffTime.trim(),
+          deliveryMethod:     form.deliveryMethod,
+          portalUrl:          form.portalUrl.trim() || form.website.trim(),
+          portalUsername:     form.portalUsername.trim(),
+          portalPassword:     form.portalPassword,
+          paymentTerms:       form.paymentTerms,
+          minOrder:           form.minOrder,
+          existingVendorId:   form.existingVendorId || undefined,
+        }),
       });
       const data = await res.json();
-
       if (data.success) {
         onCreated({
-          vendorId: data.vendorId,
-          name: form.vendorName.trim(),
-category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", "),
+          vendorId:     data.vendorId,
+          name:         form.vendorName.trim(),
+          category:     form.category,
           deliveryDays: form.deliveryDays.join(", "),
           deliveryMethod: form.deliveryMethod,
           paymentTerms: form.paymentTerms,
           salesRepName: form.salesRepName.trim(),
-          portalUrl: form.portalUrl.trim() || form.website.trim(),
+          portalUrl:    form.portalUrl.trim() || form.website.trim(),
         });
       } else {
         alert(data.error || "Failed to save vendor");
@@ -296,73 +272,11 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
     }
   };
 
-  /* ── Duplicate name check — fires when typing in the "create new" name field ── */
-  useEffect(() => {
-    const name = form.vendorName.trim();
-    if (!name || form.existingVendorId) { setDupMatch(null); setConfirmedDifferent(false); return; }
-    clearTimeout(nameCheckTimer.current);
-    nameCheckTimer.current = setTimeout(() => {
-      fetch(`/api/ops?action=vendor-search&q=${encodeURIComponent(name)}`)
-        .then(r => r.json())
-        .then(d => {
-          const vendors = d.vendors || [];
-
-          // Normalize: strip spaces/punctuation for comparison
-          const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-          const qNorm = norm(name);
-
-          // Levenshtein distance for fuzzy matching
-          const lev = (a, b) => {
-            const m = a.length, n = b.length;
-            const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
-            for (let j = 0; j <= n; j++) dp[0][j] = j;
-            for (let i = 1; i <= m; i++)
-              for (let j = 1; j <= n; j++)
-                dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]
-                  : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-            return dp[m][n];
-          };
-
-          // Find best match — exact normalized = hard block, lev ≤ 2 = warning
-          let match = null;
-          for (const v of vendors) {
-            const vNorm = norm(v.name);
-            if (vNorm === qNorm) {
-              match = { ...v, exactMatch: true };
-              break;
-            }
-            if (!match && (vNorm.startsWith(qNorm) || qNorm.startsWith(vNorm) || lev(qNorm, vNorm) <= 2)) {
-              match = { ...v, exactMatch: false };
-            }
-          }
-          setDupMatch(match || null);
-        })
-        .catch(() => setDupMatch(null));
-    }, 400);
-    return () => clearTimeout(nameCheckTimer.current);
-  }, [form.vendorName, form.existingVendorId]);
-
-  /* ── Live vendor search (debounced, hits vendor-search API) ── */
-  useEffect(() => {
-    const q = search.trim();
-    if (q.length < 2) { setSearchResults([]); return; }
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      setSearchLoading(true);
-      fetch(`/api/ops?action=vendor-search&q=${encodeURIComponent(q)}`)
-        .then(r => r.json())
-        .then(d => setSearchResults(d.vendors || []))
-        .catch(() => setSearchResults([]))
-        .finally(() => setSearchLoading(false));
-    }, 250);
-    return () => clearTimeout(searchTimer.current);
-  }, [search]);
-
-  /* ── Step indicator component ────────────────── */
+  /* ── Step bar ─────────────────────────────────── */
   const StepBar = () => (
     <div className="oh-inv-vs-stepper">
       {STEPS.map((s, i) => (
-        <div key={s.key} className={`oh-inv-vs-step ${i < step ? "oh-inv-vs-step--done" : ""} ${i === step ? "oh-inv-vs-step--active" : ""}`}>
+        <div key={s.key} className={`oh-inv-vs-step${i < step ? " oh-inv-vs-step--done" : ""}${i === step ? " oh-inv-vs-step--active" : ""}`}>
           <div className="oh-inv-vs-step-dot">
             {i < step ? <CheckIcon /> : <span>{i + 1}</span>}
           </div>
@@ -373,9 +287,9 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
     </div>
   );
 
-  /* ── Input helper (render fn, NOT a component — avoids remount/focus loss) ── */
+  /* ── Field helper ─────────────────────────────── */
   const renderField = (label, name, { type = "text", required, placeholder, fullWidth, children } = {}) => (
-    <div className={`oh-inv-vs-field ${fullWidth ? "oh-inv-vs-field--full" : ""} ${errors[name] ? "oh-inv-vs-field--error" : ""}`}>
+    <div className={`oh-inv-vs-field${fullWidth ? " oh-inv-vs-field--full" : ""}${errors[name] ? " oh-inv-vs-field--error" : ""}`}>
       <label>
         {label}
         {required && <span className="oh-inv-vs-req">*</span>}
@@ -384,180 +298,196 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
         <input
           type={type}
           value={form[name] || ""}
-          onChange={(e) => { set(name, e.target.value); if (errors[name]) setErrors((p) => ({ ...p, [name]: false })); }}
+          onChange={e => { set(name, e.target.value); if (errors[name]) setErrors(p => ({ ...p, [name]: undefined })); }}
           placeholder={placeholder || ""}
           autoComplete="off"
         />
       )}
+      {errors[name] && <span className="oh-inv-vs-field-error">{errors[name]}</span>}
     </div>
   );
 
-  /* ═══════════════════════════════════════════════
-     STEP RENDERERS
-     ═══════════════════════════════════════════════ */
-
-  /* ── Step 1: Basics ──────────────────────────── */
+  /* ── Step 0: Vendor ───────────────────────────── */
   const renderBasics = () => (
     <div className="oh-inv-vs-step-content" style={{ animation: "oh-fadeInSlide 0.3s ease" }}>
-      {/* If vendor already selected, show selected card */}
+
+      {/* Linked vendor confirmation card */}
       {form.existingVendorId ? (
-        <div className="oh-inv-vs-selected">
-          <div>
-            <span className="oh-inv-vs-selected-name">{form.vendorName}</span>
-{form.category.length > 0 && <span className="oh-inv-vs-selected-cat">{form.category.join(", ")}</span>}
+        <div className="oh-inv-vs-linked-card">
+          <div className="oh-inv-vs-linked-card-info">
+            <LinkIcon />
+            <div>
+              <span className="oh-inv-vs-linked-name">{form.vendorName}</span>
+              {form.category && <span className="oh-inv-vs-linked-cat" style={{ background: (CATEGORY_COLORS[form.category] || "#64748b") + "20", color: CATEGORY_COLORS[form.category] || "#64748b" }}>{form.category}</span>}
+              <p className="oh-inv-vs-linked-hint">Linking existing vendor to this account — global info is already set.</p>
+            </div>
           </div>
           <button type="button" className="oh-inv-vs-change" onClick={clearVendor}>Change</button>
         </div>
       ) : (
         <>
-          {/* Vendor search */}
-          <div className="oh-inv-vs-search-wrap">
-            <SearchIcon />
-            <input
-              ref={searchRef}
-              type="text"
-              className="oh-inv-vs-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search existing vendors…"
-            />
-          </div>
-
-          {/* Search results */}
-          {searchLoading && (
-            <div className="oh-inv-vs-no-results" style={{ color: "#94a3b8" }}>Searching…</div>
-          )}
-
-          {!searchLoading && searchResults.length > 0 && (
-            <div className="oh-inv-vs-vendor-list">
-              {searchResults.map((v) => (
-                <button key={v.vendorId} type="button" className="oh-inv-vs-vendor-item" onClick={() => selectExistingVendor(v)}>
-                  <span className="oh-inv-vs-vendor-name">{v.name}</span>
-                  {v.category && <span className="oh-inv-vs-vendor-cat">{v.category}</span>}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!searchLoading && search.trim().length >= 2 && searchResults.length === 0 && (
-            <div className="oh-inv-vs-no-results">No vendors match "{search}"</div>
-          )}
-
-          {/* Divider */}
-          <div className="oh-inv-vs-divider">
-            <span>or create new vendor</span>
-          </div>
-
-          {/* New vendor fields */}
+          {/* Single name field — drives search + duplicate detection */}
           <div className={`oh-inv-vs-field oh-inv-vs-field--full${errors.vendorName ? " oh-inv-vs-field--error" : ""}`}>
             <label>Vendor Name <span className="oh-inv-vs-req">*</span></label>
             <input
+              ref={nameInputRef}
               type="text"
               value={form.vendorName}
-              onChange={(e) => {
+              onChange={e => {
                 set("vendorName", e.target.value);
-                if (errors.vendorName) setErrors((p) => ({ ...p, vendorName: false }));
+                if (errors.vendorName) setErrors(p => ({ ...p, vendorName: undefined }));
               }}
-              placeholder="e.g. US Foods, Sysco"
+              placeholder="e.g. Sysco, Fresh Point, US Foods"
               autoComplete="off"
             />
+            {errors.vendorName && <span className="oh-inv-vs-field-error">{errors.vendorName}</span>}
           </div>
 
-          {/* Duplicate vendor warning banner */}
-          {dupMatch && !form.existingVendorId && (
-            <div className={`oh-inv-vs-dup-banner${dupMatch.exactMatch ? " oh-inv-vs-dup-banner--hard" : ""}`}>
+          {/* Typeahead results — only show when no dup match is already flagged */}
+          {!dupMatch && form.vendorName.trim().length >= 2 && (searchLoading || searchResults.length > 0) && (
+            <div className="oh-inv-vs-typeahead">
+              {searchLoading && (
+                <div className="oh-inv-vs-typeahead-loading">Searching…</div>
+              )}
+              {!searchLoading && searchResults.length > 0 && (
+                <>
+                  <p className="oh-inv-vs-typeahead-label">Already in the system — link instead of creating a duplicate</p>
+                  {searchResults.map(v => (
+                    <button
+                      key={v.vendorId}
+                      type="button"
+                      className="oh-inv-vs-typeahead-item"
+                      onClick={() => linkExistingVendor(v)}
+                    >
+                      <div className="oh-inv-vs-typeahead-name">{v.name}</div>
+                      {v.category && (
+                        <span className="oh-inv-vs-typeahead-cat" style={{ color: CATEGORY_COLORS[v.category] || "#64748b" }}>
+                          {v.category}
+                        </span>
+                      )}
+                      <span className="oh-inv-vs-typeahead-cta">Link to this account →</span>
+                    </button>
+                  ))}
+                  <p className="oh-inv-vs-typeahead-divider">Not what you're looking for? Continue below to create a new vendor.</p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Exact match hard block */}
+          {dupMatch?.exactMatch && !confirmedDifferent && (
+            <div className="oh-inv-vs-dup-banner oh-inv-vs-dup-banner--hard">
               <div className="oh-inv-vs-dup-banner-text">
-                <div className="oh-inv-vs-dup-name-row">
-                  {dupMatch.exactMatch
-                    ? <span className="oh-inv-vs-dup-exact-label">⛔ Exact match found</span>
-                    : <span className="oh-inv-vs-dup-warn-label">⚠ Similar vendor found</span>
-                  }
-                  <strong>{dupMatch.name}</strong>
-                  {dupMatch.category && <span className="oh-inv-vs-dup-cat">{dupMatch.category}</span>}
-                </div>
-                <span className="oh-inv-vs-dup-hint">
-                  {dupMatch.exactMatch
-                    ? "This vendor already exists. Link it to this account instead of creating a duplicate."
-                    : "Already exists globally — link it to this account instead of creating a duplicate."
-                  }
-                </span>
-                {!dupMatch.exactMatch && (
-                  <label className="oh-inv-vs-dup-confirm-row">
-                    <input
-                      type="checkbox"
-                      checked={confirmedDifferent}
-                      onChange={(e) => setConfirmedDifferent(e.target.checked)}
-                    />
-                    <span>This is a genuinely different vendor — create anyway</span>
-                  </label>
-                )}
+                <p className="oh-inv-vs-dup-exact-label">⛔ Exact match — "{dupMatch.name}" already exists</p>
+                <p className="oh-inv-vs-dup-hint">Link the existing vendor to this account instead of creating a duplicate.</p>
               </div>
-              <button
-                type="button"
-                className="oh-inv-vs-dup-btn"
-                onClick={() => selectExistingVendor(dupMatch)}
-              >
+              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(dupMatch)}>
                 Link Vendor →
               </button>
             </div>
           )}
-<div className="oh-inv-vs-field oh-inv-vs-field--full">
-            <label>Category</label>
+
+          {/* Fuzzy match warning — requires checkbox to proceed */}
+          {dupMatch && !dupMatch.exactMatch && (
+            <div className="oh-inv-vs-dup-banner">
+              <div className="oh-inv-vs-dup-banner-text">
+                <p className="oh-inv-vs-dup-warn-label">⚠ Similar vendor found — "{dupMatch.name}"</p>
+                <p className="oh-inv-vs-dup-hint">Is this the same vendor? If so, link it instead of creating a duplicate.</p>
+                <label className="oh-inv-vs-dup-confirm-row">
+                  <input type="checkbox" checked={confirmedDifferent} onChange={e => setConfirmedDifferent(e.target.checked)} />
+                  <span>This is a different vendor — create new</span>
+                </label>
+              </div>
+              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(dupMatch)}>
+                Link Vendor →
+              </button>
+            </div>
+          )}
+
+          {/* Category — required */}
+          <div className={`oh-inv-vs-field oh-inv-vs-field--full${errors.category ? " oh-inv-vs-field--error" : ""}`} style={{ marginTop: 16 }}>
+            <label>Category <span className="oh-inv-vs-req">*</span></label>
             <div className="oh-inv-vs-day-chips">
-              {CATEGORIES.map((c) => (
+              {CATEGORIES.map(c => (
                 <button
                   key={c} type="button"
-                  className={`oh-inv-vs-day-chip ${form.category.includes(c) ? "oh-inv-vs-day-chip--active" : ""}`}
-                  onClick={() => {
-                    if (c === "Other") {
-                      set("category", form.category.includes(c) ? form.category.filter((x) => x !== c) : [...form.category, c]);
-                    } else {
-                      set("category", form.category.includes(c) ? form.category.filter((x) => x !== c) : [...form.category, c]);
-                    }
-                  }}
+                  className={`oh-inv-vs-day-chip${form.category === c ? " oh-inv-vs-day-chip--active" : ""}`}
+                  style={form.category === c ? { background: (CATEGORY_COLORS[c] || "#64748b") + "20", borderColor: CATEGORY_COLORS[c] || "#64748b", color: CATEGORY_COLORS[c] || "#64748b" } : {}}
+                  onClick={() => { set("category", c); if (errors.category) setErrors(p => ({ ...p, category: undefined })); }}
                 >{c}</button>
               ))}
             </div>
+            {errors.category && <span className="oh-inv-vs-field-error">{errors.category}</span>}
           </div>
-          {form.category.includes("Other") && (
-            <div className="oh-inv-vs-field oh-inv-vs-field--full" style={{ marginTop: 8 }}>
-              <label>Specify other category</label>
-              <input
-                type="text"
-                placeholder="e.g. Linen, Pest Control, Uniforms…"
-                value={form.categoryOther || ""}
-                onChange={(e) => set("categoryOther", e.target.value)}
-                autoFocus
-              />
-            </div>
-          )}                  </>
+        </>
       )}
     </div>
   );
 
-  /* ── Step 2: Portal & Ordering ───────────────── */
-  const renderPortal = () => (
+  /* ── Step 1: Ordering & Portal ────────────────── */
+  const renderOrdering = () => (
     <div className="oh-inv-vs-step-content" style={{ animation: "oh-fadeInSlide 0.3s ease" }}>
-      {/* Portal section */}
       <div className="oh-inv-vs-box">
-        <div className="oh-inv-vs-box-header">
-          <GlobeIcon />
-          <span>Online Portal</span>
-        </div>
+        <div className="oh-inv-vs-box-header"><span>📦</span><span>Ordering Details</span></div>
         <div className="oh-inv-vs-box-body">
-          {renderField("Website", "website", { type: "url", placeholder: "https://www.usfoods.com", fullWidth: true })}
+          <div className="oh-inv-vs-field oh-inv-vs-field--full">
+            <label>Delivery Days</label>
+            <div className="oh-inv-vs-day-chips">
+              {DAYS.map(d => (
+                <button key={d} type="button"
+                  className={`oh-inv-vs-day-chip${form.deliveryDays.includes(d) ? " oh-inv-vs-day-chip--active" : ""}`}
+                  onClick={() => toggleDay(d)}
+                >{d}</button>
+              ))}
+            </div>
+          </div>
           <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
-            {renderField("Portal Username", "portalUsername", { placeholder: "login@kitchfix.com" })}
-            {renderField("Portal Password", "portalPassword", { children: (
+            <div className="oh-inv-vs-field">
+              <label>Order Cutoff</label>
+              <input type="text" value={form.cutoffTime} onChange={e => set("cutoffTime", e.target.value)} placeholder="e.g. 2:00 PM" autoComplete="off" />
+            </div>
+            {renderField("Delivery Method", "deliveryMethod", { required: true, children: (
+              <select
+                value={form.deliveryMethod}
+                onChange={e => { set("deliveryMethod", e.target.value); if (errors.deliveryMethod) setErrors(p => ({ ...p, deliveryMethod: undefined })); }}
+                className={errors.deliveryMethod ? "oh-inv-vs-required" : ""}
+              >
+                <option value="">Select method…</option>
+                {DELIVERY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )})}
+          </div>
+          {errors.deliveryMethod && <span className="oh-inv-vs-field-error" style={{ marginTop: 4 }}>{errors.deliveryMethod}</span>}
+          <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
+            {renderField("Payment Terms", "paymentTerms", { children: (
+              <select value={form.paymentTerms} onChange={e => set("paymentTerms", e.target.value)}>
+                <option value="">Select terms…</option>
+                {PAYMENT_TERMS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )})}
+            {renderField("Min. Order", "minOrder", { children: (
+              <div className="oh-inv-vs-dollar-wrap">
+                <span className="oh-inv-vs-dollar-sign">$</span>
+                <input className="oh-inv-vs-dollar-input" type="text" value={form.minOrder}
+                  onChange={e => set("minOrder", e.target.value.replace(/[^0-9.]/g, ""))} />
+              </div>
+            )})}
+          </div>
+          {renderField("Customer Account #", "customerAccountNum", { placeholder: "e.g. 1234567", fullWidth: true })}
+        </div>
+      </div>
+
+      <div className="oh-inv-vs-box">
+        <div className="oh-inv-vs-box-header"><GlobeIcon /><span>Ordering Portal</span></div>
+        <div className="oh-inv-vs-box-body">
+          {renderField("Portal URL", "portalUrl", { type: "url", placeholder: "https://order.sysco.com", fullWidth: true })}
+          <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
+            {renderField("Username", "portalUsername", { placeholder: "login@kitchfix.com" })}
+            {renderField("Password", "portalPassword", { children: (
               <div className="oh-inv-vs-pw-wrap">
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={form.portalPassword}
-                  onChange={(e) => set("portalPassword", e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="off"
-                />
-                <button type="button" className="oh-inv-vs-pw-toggle" onClick={() => setShowPw(!showPw)}>
+                <input type={showPw ? "text" : "password"} value={form.portalPassword}
+                  onChange={e => set("portalPassword", e.target.value)} placeholder="••••••••" autoComplete="off" />
+                <button type="button" className="oh-inv-vs-pw-toggle" onClick={() => setShowPw(v => !v)}>
                   {showPw ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
@@ -565,210 +495,114 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
           </div>
         </div>
       </div>
-
-      {/* Ordering section */}
-      <div className="oh-inv-vs-box">
-        <div className="oh-inv-vs-box-header">
-          <span>📦</span>
-          <span>Ordering Details</span>
-        </div>
-        <div className="oh-inv-vs-box-body">
-          <div className="oh-inv-vs-field oh-inv-vs-field--full">
-            <label>Delivery Days</label>
-            <div className="oh-inv-vs-day-chips">
-              {DAYS.map((d) => (
-                <button
-                  key={d} type="button"
-                  className={`oh-inv-vs-day-chip ${form.deliveryDays.includes(d) ? "oh-inv-vs-day-chip--active" : ""}`}
-                  onClick={() => toggleDay(d)}
-                >{d}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
-            <div className="oh-inv-vs-field">
-              <label>Order Cutoff</label>
-              <input
-                type="text"
-                value={form.cutoffTime}
-                onChange={(e) => set("cutoffTime", e.target.value)}
-                placeholder="e.g. 2:00 PM"
-                autoComplete="off"
-              />
-            </div>
-            {renderField("Delivery Method", "deliveryMethod", { required: true, children: (
-              <select
-                value={form.deliveryMethod}
-                onChange={(e) => { set("deliveryMethod", e.target.value); if (errors.deliveryMethod) setErrors((p) => ({ ...p, deliveryMethod: false })); }}
-                className={errors.deliveryMethod ? "oh-inv-vs-required" : ""}
-              >
-                <option value="">Select method…</option>
-                {DELIVERY_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            )})}
-          </div>
-          <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
-            {renderField("Payment Terms", "paymentTerms", { children: (
-              <select value={form.paymentTerms} onChange={(e) => set("paymentTerms", e.target.value)}>
-                <option value="">Select terms…</option>
-                {PAYMENT_TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            )})}
-            {renderField("Min. Order", "minOrder", { children: (
-              <div className="oh-inv-vs-dollar-wrap">
-                <span className="oh-inv-vs-dollar-sign">$</span>
-                <input
-                  className="oh-inv-vs-dollar-input"
-                  type="text"
-                  value={form.minOrder}
-                  onChange={(e) => set("minOrder", e.target.value.replace(/[^0-9.]/g, ""))}
-                  placeholder=""  /* ← was "0.00" */
-                />
-              </div>
-            )})}
-          </div>
-          <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
-            {renderField("Customer Account #", "customerAccountNum", { placeholder: "e.g. 1234567", fullWidth: true })}
-          </div>
-        </div>
-      </div>
     </div>
   );
 
-  /* ── Step 3: Sales Rep ───────────────────────── */
+  /* ── Step 2: Sales Rep ────────────────────────── */
   const renderRep = () => (
     <div className="oh-inv-vs-step-content" style={{ animation: "oh-fadeInSlide 0.3s ease" }}>
       <div className="oh-inv-vs-box">
-        <div className="oh-inv-vs-box-header">
-          <span>👤</span>
-          <span>Sales Representative</span>
-        </div>
+        <div className="oh-inv-vs-box-header"><span>👤</span><span>Sales Representative</span></div>
         <div className="oh-inv-vs-box-body">
-          {renderField("Rep Name", "salesRepName", { placeholder: "e.g. John Smith", fullWidth: true })}
+          {renderField("Rep Name", "salesRepName", { placeholder: "e.g. Jane Smith", fullWidth: true })}
           <div className="oh-inv-vs-grid" style={{ marginTop: 10 }}>
             {renderField("Phone", "salesRepPhone", { type: "tel", placeholder: "(555) 123-4567" })}
-            {renderField("Email", "salesRepEmail", { type: "email", placeholder: "john@vendor.com" })}
+            {renderField("Email", "salesRepEmail", { type: "email", placeholder: "jane@vendor.com" })}
           </div>
         </div>
       </div>
-      <p className="oh-inv-vs-hint">All sales rep fields are optional. You can add this later.</p>
+      <p className="oh-inv-vs-hint">Sales rep info is optional but useful for the team when placing orders.</p>
     </div>
   );
 
-  /* ── Step 4: Review ──────────────────────────── */
+  /* ── Step 3: Review ───────────────────────────── */
   const renderReview = () => {
     const sections = [
       {
         title: "Vendor",
         items: [
-          { label: "Name", value: form.vendorName },
-{ label: "Category", value: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() || "Other") : c).join(", ") },          form.existingVendorId && { label: "Type", value: "Existing vendor (new account link)" },
+          { label: "Name",     value: form.vendorName },
+          { label: "Category", value: form.category },
+          form.existingVendorId && { label: "Type", value: "Linking existing vendor to this account" },
         ].filter(Boolean),
       },
       {
-        title: "Portal & Ordering",
+        title: "Ordering",
         items: [
-          { label: "Website", value: form.website },
-          { label: "Portal Login", value: form.portalUsername ? `${form.portalUsername} / ••••` : "" },
-          { label: "Delivery", value: form.deliveryDays.length ? form.deliveryDays.join(", ") : "" },
-          { label: "Cutoff", value: formatTimeTo12h(form.cutoffTime) },
-          { label: "Method", value: form.deliveryMethod },
-          { label: "Terms", value: form.paymentTerms },
+          { label: "Delivery",  value: form.deliveryDays.length ? form.deliveryDays.join(", ") : "" },
+          { label: "Cutoff",    value: form.cutoffTime },
+          { label: "Method",    value: form.deliveryMethod },
+          { label: "Terms",     value: form.paymentTerms },
           { label: "Min Order", value: form.minOrder ? `$${form.minOrder}` : "" },
-          { label: "Acct #", value: form.customerAccountNum },
-        ].filter((i) => i.value),
+          { label: "Acct #",    value: form.customerAccountNum },
+          { label: "Portal",    value: form.portalUsername ? `${form.portalUsername} / ••••` : "" },
+        ].filter(i => i.value),
       },
       {
         title: "Sales Rep",
         items: [
-          { label: "Name", value: form.salesRepName },
+          { label: "Name",  value: form.salesRepName },
           { label: "Phone", value: form.salesRepPhone },
           { label: "Email", value: form.salesRepEmail },
-        ].filter((i) => i.value),
+        ].filter(i => i.value),
       },
     ];
 
     return (
       <div className="oh-inv-vs-step-content" style={{ animation: "oh-fadeInSlide 0.3s ease" }}>
-        {/* Site Notes — account-specific, stored in vendor_accounts */}
-        <div className="oh-inv-vs-field oh-inv-vs-field--full" style={{ marginBottom: 12 }}>
-          <label>
-            Site Notes
-            <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "#94a3b8", marginLeft: 6 }}>
-              only visible for this account
-            </span>
-          </label>
-          <textarea
-            className="oh-inv-vs-textarea"
-            value={form.accountNotes}
-            onChange={(e) => set("accountNotes", e.target.value)}
-            placeholder="e.g. Use back entrance, ask for Sarah, COD only at this location…"
-            rows={3}
-          />
+        <div className="oh-inv-vs-grid">
+          <div className="oh-inv-vs-field">
+            <label>
+              Site Notes
+              <span style={{ fontWeight: 400, fontSize: "0.72rem", color: "#94a3b8", marginLeft: 6 }}>this account only</span>
+            </label>
+            <textarea className="oh-inv-vs-textarea" rows={3} value={form.accountNotes}
+              onChange={e => set("accountNotes", e.target.value)}
+              placeholder="e.g. Use back entrance, ask for Sarah, COD only at this location…" />
+          </div>
+          <div className="oh-inv-vs-field">
+            <label>
+              Global Notes
+              <span style={{ fontWeight: 400, fontSize: "0.72rem", color: "#94a3b8", marginLeft: 6 }}>all accounts</span>
+            </label>
+            <textarea className="oh-inv-vs-textarea" rows={3} value={form.notes}
+              onChange={e => set("notes", e.target.value)}
+              placeholder="Ordering tips, quality notes, contract reminders…" />
+          </div>
         </div>
 
-        {/* Global Notes — stored in vendor_master, visible to all accounts */}
-        <div className="oh-inv-vs-field oh-inv-vs-field--full" style={{ marginBottom: 18 }}>
-          <label>
-            Global Notes
-            <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "#94a3b8", marginLeft: 6 }}>
-              visible to all accounts
-            </span>
-          </label>
-          <textarea
-            className="oh-inv-vs-textarea"
-            value={form.notes}
-            onChange={(e) => set("notes", e.target.value)}
-            placeholder="Ordering tips, quality notes, contract reminders, seasonal availability…"
-            rows={3}
-          />
-        </div>
-
-        {/* Review card */}
-        <div className="oh-inv-vs-review-card">
+        <div className="oh-inv-vs-review-card" style={{ marginTop: 16 }}>
           <div className="oh-inv-vs-review-badge">Review Summary</div>
-          {sections.map((sec) => (
-            sec.items.length > 0 && (
-              <div key={sec.title} className="oh-inv-vs-review-section">
-                <div className="oh-inv-vs-review-title">{sec.title}</div>
-                {sec.items.map((it) => (
-                  <div key={it.label} className="oh-inv-vs-review-row">
-                    <span className="oh-inv-vs-review-label">{it.label}</span>
-                    <span className="oh-inv-vs-review-value">{it.value}</span>
-                  </div>
-                ))}
-              </div>
-            )
+          {sections.map(sec => sec.items.length > 0 && (
+            <div key={sec.title} className="oh-inv-vs-review-section">
+              <div className="oh-inv-vs-review-title">{sec.title}</div>
+              {sec.items.map(it => (
+                <div key={it.label} className="oh-inv-vs-review-row">
+                  <span className="oh-inv-vs-review-label">{it.label}</span>
+                  <span className="oh-inv-vs-review-value">{it.value}</span>
+                </div>
+              ))}
+            </div>
           ))}
-          {sections.every((s) => s.items.length <= 1) && (
-            <p className="oh-inv-vs-review-minimal">Minimal info provided — you can always edit this vendor later.</p>
-          )}
         </div>
       </div>
     );
   };
 
-  /* ── Render step body ────────────────────────── */
   const renderStep = () => {
     switch (step) {
       case 0: return renderBasics();
-      case 1: return renderPortal();
+      case 1: return renderOrdering();
       case 2: return renderRep();
       case 3: return renderReview();
       default: return null;
     }
   };
 
-  /* ── Footer buttons per step ─────────────────── */
-  const isLastStep = step === 3;
-  const isFirstStep = step === 0;
-  // Hard block: exact match always blocks. Fuzzy match blocks until confirmed.
-  const dupBlocked = !!dupMatch && !form.existingVendorId && (dupMatch.exactMatch || !confirmedDifferent);
-
-return (
-<div className="oh-inv-vs-overlay">
-      <div className="oh-inv-vs-modal" onClick={(e) => e.stopPropagation()}>
+  /* ── Render ───────────────────────────────────── */
+  return (
+    <div className="oh-inv-vs-overlay" onClick={onClose}>
+      <div className="oh-inv-vs-modal" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="oh-inv-vs-header">
@@ -778,37 +612,8 @@ return (
           <button type="button" className="oh-inv-vs-close" onClick={onClose}><CloseIcon /></button>
         </div>
 
-        {/* Mode switcher — only show on step 0, and only when not in existing-vendor flow */}
-        {step === 0 && !form.existingVendorId && (
-          <div className="oh-inv-vs-mode-toggle">
-            <button
-              type="button"
-              className={`oh-inv-vs-mode-btn${mode === "quick" ? " oh-inv-vs-mode-btn--active" : ""}`}
-              onClick={() => setMode("quick")}
-            >
-              ⚡ Quick Add
-            </button>
-            <button
-              type="button"
-              className={`oh-inv-vs-mode-btn${mode === "full" ? " oh-inv-vs-mode-btn--active" : ""}`}
-              onClick={() => setMode("full")}
-            >
-              ⚙️ Full Setup
-            </button>
-          </div>
-        )}
-
-        {/* Mode description */}
-        {step === 0 && !form.existingVendorId && (
-          <p className="oh-inv-vs-mode-desc">
-            {mode === "quick"
-              ? "Name and category only — get back to your invoice."
-              : "Add portal login, delivery schedule, payment terms, and rep info."}
-          </p>
-        )}
-
-        {/* Stepper — only show in full setup mode */}
-        {mode === "full" && <StepBar />}
+        {/* Stepper */}
+        <StepBar />
 
         {/* Body */}
         <div className="oh-inv-vs-body" ref={bodyRef}>
@@ -817,63 +622,37 @@ return (
 
         {/* Footer */}
         <div className="oh-inv-vs-footer">
-          {/* Back button — full setup only, not on first step */}
-          {mode === "full" && !isFirstStep && (
+          {step > 0 && (
             <button type="button" className="oh-inv-vs-back-btn" onClick={goBack}>
               <ArrowLeft /> Back
             </button>
           )}
 
-          {mode === "quick" ? (
-            /* ── Quick Add footer: right-aligned button ── */
-            <div className="oh-inv-vs-footer-right">
+          <div className="oh-inv-vs-footer-right">
+            {step < 3 ? (
               <button
                 type="button"
                 className="oh-inv-vs-save-btn"
-                onClick={handleQuickSubmit}
-                disabled={saving || dupBlocked}
+                onClick={goNext}
+                disabled={step === 0 && dupBlocked}
               >
-                {saving ? (
-                  <span className="oh-inv-vs-spinner" />
-                ) : (
-                  <>
-                    <span>{form.existingVendorId ? "Link Vendor" : "Add Vendor"}</span>
-                    <CheckIcon />
-                  </>
-                )}
-              </button>
-            </div>
-          ) : isLastStep ? (
-            /* ── Full Setup: last step — save ── */
-            <button
-              type="button"
-              className="oh-inv-vs-save-btn"
-              onClick={handleSubmit}
-              disabled={saving}
-            >
-              {saving ? (
-                <span className="oh-inv-vs-spinner" />
-              ) : (
-                <>
-                  <span>{form.existingVendorId ? "Link Vendor" : "Create Vendor"}</span>
-                  <CheckIcon />
-                </>
-              )}
-            </button>
-          ) : (
-            /* ── Full Setup: middle steps — continue + optional skip ── */
-            <div className="oh-inv-vs-footer-right">
-              {(step === 1 || step === 2) && (
-                <button type="button" className="oh-inv-vs-skip-btn" onClick={skipToReview}>
-                  Skip — add later
-                </button>
-              )}
-              <button type="button" className="oh-inv-vs-save-btn" onClick={goNext} disabled={dupBlocked && step === 0}>
                 <span>Continue</span>
                 <ArrowRight />
               </button>
-            </div>
-          )}
+            ) : (
+              <button
+                type="button"
+                className="oh-inv-vs-save-btn"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving
+                  ? <span className="oh-inv-vs-spinner" />
+                  : <><span>{form.existingVendorId ? "Link Vendor" : "Create Vendor"}</span><CheckIcon /></>
+                }
+              </button>
+            )}
+          </div>
         </div>
 
       </div>

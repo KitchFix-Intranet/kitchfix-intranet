@@ -2273,3 +2273,145 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
   line-height: 1.5;
 }
 .oh-vp-dup-merge-summary svg { flex-shrink: 0; margin-top: 1px; color: #d97706; }
+
+/* ══════════════════════════════════════════════════════════════
+   VENDOR SETUP — Typeahead + Linked Card (April 2026)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Typeahead results panel ── */
+.oh-inv-vs-typeahead {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+.oh-inv-vs-typeahead-loading {
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.oh-inv-vs-typeahead-label {
+  padding: 8px 14px 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin: 0;
+}
+.oh-inv-vs-typeahead-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: #fff;
+  border: none;
+  border-top: 1px solid #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+  font-family: var(--oh-font-body, inherit);
+}
+.oh-inv-vs-typeahead-item:hover { background: #fffbf0; }
+.oh-inv-vs-typeahead-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--oh-navy, #0f3057);
+  flex: 1;
+}
+.oh-inv-vs-typeahead-cat {
+  font-size: 0.75rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.oh-inv-vs-typeahead-cta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--oh-mustard-dark, #b45309);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.oh-inv-vs-typeahead-divider {
+  padding: 8px 14px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  border-top: 1px solid #f1f5f9;
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── Linked vendor confirmation card ── */
+.oh-inv-vs-linked-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+.oh-inv-vs-linked-card-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #15803d;
+  flex: 1;
+  min-width: 0;
+}
+.oh-inv-vs-linked-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--oh-navy, #0f3057);
+  display: block;
+}
+.oh-inv-vs-linked-cat {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  margin-top: 4px;
+}
+.oh-inv-vs-linked-hint {
+  font-size: 0.78rem;
+  color: #15803d;
+  margin: 4px 0 0;
+}
+
+/* ── Field-level error message ── */
+.oh-inv-vs-field-error {
+  font-size: 0.75rem;
+  color: #dc2626;
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Category chips — color-tinted selected state ── */
+.oh-inv-vs-day-chip {
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+/* ── Dup banner text — ensure block stacking ── */
+.oh-inv-vs-dup-banner-text p {
+  margin: 0 0 4px;
+  line-height: 1.45;
+}
+.oh-inv-vs-dup-banner-text p:last-child { margin-bottom: 0; }
+.oh-inv-vs-dup-exact-label {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: #92400e;
+}
+.oh-inv-vs-dup-warn-label {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: #92400e;
+}
+.oh-inv-vs-dup-hint {
+  font-size: 0.78rem;
+  color: #92400e;
+}
