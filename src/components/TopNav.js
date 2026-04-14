@@ -84,6 +84,7 @@ const NOTIF_ICONS = {
 fallback:             <NIcon><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></NIcon>,
   // Ops & Directory types
   inventory_submitted:  <NIcon><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></NIcon>,
+  invoice_returned:     <NIcon><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></NIcon>,
   inventory_due_3d:     <NIcon><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></NIcon>,
   inventory_due_2d:     <NIcon><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></NIcon>,
   inventory_due_1d:     <NIcon><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></NIcon>,
@@ -171,6 +172,12 @@ function formatNotification(n) {
       desc = "A new accounting period has started.";
       href = "/ops";
       ctaLabel = "View Ops Hub";
+    } else if (n.eventType === "invoice_returned") {
+      tag = "Returned"; tagColor = "#dc2626";
+      title = rest.replace("Invoice returned -", "").trim();
+      desc = "An invoice you submitted has been returned by AP and needs to be corrected.";
+      href = "/ops";
+      ctaLabel = "Fix & Resubmit";
     } else {
       title = rest;
       href = "/ops";

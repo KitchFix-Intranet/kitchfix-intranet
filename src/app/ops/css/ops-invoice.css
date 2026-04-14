@@ -1991,3 +1991,25 @@
   .oh-inv-hist-actions { gap: 4px; }
   .oh-inv-hist-action-btn { padding: 6px 10px; font-size: 11px; }
 }
+/* Show More button */
+.oh-inv-hist-show-more {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px dashed #e2e8f0;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--oh-font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 6px;
+  text-align: center;
+}
+.oh-inv-hist-show-more:hover {
+  border-color: var(--oh-mustard);
+  color: var(--oh-mustard-dark, #b45309);
+  background: #fffbeb;
+}

@@ -1382,7 +1382,7 @@ Rules:
 
 
 // ── Invoice Actions (POST) ──
-if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject"].includes(action)) {
+if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject", "invoice-unreject", "invoice-dismiss-dupe"].includes(action)) {
             const result = await handleInvoicePost(action, body, token, email, userName);
           if (result) {
               // Bell notification for invoice rejection
@@ -1392,6 +1392,15 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
                   recipient: result.origSubmitter,
                   subject: `[OPS] Invoice returned - ${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount} ${totalFmt}`,
                   eventType: "invoice_returned",
+                  relatedInfo: `${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
+                });
+              }
+              // Bell notification for unreject (undo return)
+              if (action === "invoice-unreject" && result.success && result.origSubmitter) {
+                await opsNotify(token, {
+                  recipient: result.origSubmitter,
+                  subject: `[OPS] Invoice return reversed - ${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
+                  eventType: "invoice_unrejected",
                   relatedInfo: `${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
                 });
               }

@@ -19,44 +19,54 @@ export function isInvoiceAdmin(email) {
 }
 
 export default function InvoiceAdmin({ config, showToast }) {
-  const [submissions, setSubmissions] = useState([]);
+  const [allSubmissions, setAllSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("week");
   const [statusFilter, setStatusFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("__all__");
   const [search, setSearch] = useState("");
   const [expandedUuid, setExpandedUuid] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(20);
 
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReasons, setRejectReasons] = useState([]);
   const [rejectNote, setRejectNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
 
+  // Load ALL submissions once, filter client-side for period (no reload flicker)
   const loadSubmissions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/ops?action=invoice-admin-list&period=${period}`);
+      const res = await fetch("/api/ops?action=invoice-admin-list&period=all");
       const data = await res.json();
-      if (data.success) setSubmissions(data.submissions || []);
+      if (data.success) setAllSubmissions(data.submissions || []);
     } catch (err) { console.error("[InvoiceAdmin] Load failed:", err); }
     finally { setLoading(false); }
-  }, [period]);
+  }, []);
 
-  useEffect(() => { setLoading(true); loadSubmissions(); }, [loadSubmissions]);
+  useEffect(() => { loadSubmissions(); }, [loadSubmissions]);
+
+  // Client-side period filter
+  const submissions = useMemo(() => {
+    if (period === "all") return allSubmissions;
+    const cutoff = new Date(Date.now() - (period === "month" ? 30 : 7) * 86400000);
+    return allSubmissions.filter((s) => new Date(s.timestamp) >= cutoff);
+  }, [allSubmissions, period]);
 
   const accountOptions = useMemo(() => {
     return [...new Set(submissions.map((s) => s.account).filter(Boolean))].sort();
   }, [submissions]);
 
+  // Duplicate detection — respects persistent dupeOverride
   const duplicateSet = useMemo(() => {
     const counts = {};
     for (const s of submissions) {
-      if (!s.invoiceNumber) continue;
+      if (!s.invoiceNumber || s.dupeOverride === "not_duplicate") continue;
       const key = `${s.vendor}||${s.invoiceNumber}`;
       counts[key] = (counts[key] || 0) + 1;
     }
     const dupes = new Set();
     for (const s of submissions) {
-      if (!s.invoiceNumber) continue;
+      if (!s.invoiceNumber || s.dupeOverride === "not_duplicate") continue;
       if (counts[`${s.vendor}||${s.invoiceNumber}`] > 1) dupes.add(s.uuid);
     }
     return dupes;
@@ -87,8 +97,13 @@ export default function InvoiceAdmin({ config, showToast }) {
         s.account?.toLowerCase().includes(q) || s.userEmail?.toLowerCase().includes(q)
       );
     }
+    // Returned always on top
+    list = [...list].sort((a, b) => (a.status === "returned" ? 0 : 1) - (b.status === "returned" ? 0 : 1));
     return list;
   }, [accountScoped, statusFilter, search, duplicateSet]);
+
+  // Reset pagination on filter change
+  useEffect(() => { setVisibleCount(20); }, [period, statusFilter, accountFilter, search]);
 
   const handleReject = useCallback(async () => {
     if (!rejectTarget || !rejectNote.trim()) { showToast("Please add a note explaining what needs to be fixed", "error"); return; }
@@ -106,6 +121,31 @@ export default function InvoiceAdmin({ config, showToast }) {
     finally { setRejecting(false); }
   }, [rejectTarget, rejectReasons, rejectNote, showToast, loadSubmissions]);
 
+  const handleUnreject = useCallback(async (s) => {
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-unreject", uuid: s.uuid }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Return undone for ${s.vendor} #${s.invoiceNumber}`, "success");
+        setExpandedUuid(null);
+        loadSubmissions();
+      } else { showToast(data.error || "Failed to undo return", "error"); }
+    } catch { showToast("Network error — try again", "error"); }
+  }, [showToast, loadSubmissions]);
+
+  const handleDismissDupe = useCallback(async (s) => {
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-dismiss-dupe", uuid: s.uuid }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Duplicate flag dismissed", "success");
+        loadSubmissions();
+      } else { showToast(data.error || "Failed to dismiss", "error"); }
+    } catch { showToast("Network error", "error"); }
+  }, [showToast, loadSubmissions]);
+
   function toggleReason(r) { setRejectReasons((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]); }
 
   function formatDate(d) {
@@ -117,6 +157,8 @@ export default function InvoiceAdmin({ config, showToast }) {
     if (!ts) return "";
     try { return new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; }
   }
+
+  const periodLabel = period === "month" ? "30 days" : period === "week" ? "7 days" : "all time";
 
   if (loading) {
     return <div className="oh-inv-history-panel" style={{ padding: "40px 24px" }}><div className="oh-inv-loading-pill"><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} /> Loading submissions...</div></div>;
@@ -141,7 +183,7 @@ export default function InvoiceAdmin({ config, showToast }) {
         <div className="oh-inv-history-periods" style={{ flexWrap: "wrap" }}>
           {[["week","7 Days"],["month","30 Days"],["all","All Time"]].map(([val, label]) => (
             <button key={val} className={`oh-inv-period-pill${period === val ? " oh-inv-period-pill--active" : ""}`}
-              onClick={() => { setPeriod(val); setLoading(true); }}>{label}</button>
+              onClick={() => setPeriod(val)}>{label}</button>
           ))}
           <span style={{ width: 1, height: 20, background: "#e2e8f0", flexShrink: 0 }} />
           <button className={`oh-inv-period-pill${statusFilter === "all" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setStatusFilter("all")}>All</button>
@@ -168,11 +210,11 @@ export default function InvoiceAdmin({ config, showToast }) {
         <div className="oh-inv-empty-state">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <p className="oh-inv-empty-title">No submissions found</p>
-          <p className="oh-inv-empty-desc">Try a different filter or time period.</p>
+          <p className="oh-inv-empty-desc">{statusFilter !== "all" ? `No ${statusFilter} invoices in ${periodLabel}.` : `No submissions in ${periodLabel}.`} Try a different filter or time period.</p>
         </div>
       ) : (
         <div className="oh-inv-history-list">
-          {filtered.map((s) => {
+          {filtered.slice(0, visibleCount).map((s) => {
             const isExpanded = expandedUuid === s.uuid;
             const isDupe = duplicateSet.has(s.uuid);
             let glRows = []; try { glRows = JSON.parse(s.glBreakdown || "[]"); } catch {}
@@ -182,7 +224,9 @@ export default function InvoiceAdmin({ config, showToast }) {
 
             return (
               <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}${isDupe ? " oh-inv-adm-row--dupe" : ""}`}>
-                <div className="oh-inv-hist-summary" onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)}>
+                <div className="oh-inv-hist-summary" role="button" tabIndex={0}
+                  onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedUuid(isExpanded ? null : s.uuid); } }}>
                   <div className="oh-inv-history-left">
                     <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       {s.vendor}
@@ -202,11 +246,15 @@ export default function InvoiceAdmin({ config, showToast }) {
                     {s.status === "returned" && s.rejectionNote && (
                       <div className="oh-inv-hist-reject-banner">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>Returned: {s.rejectionNote}</div>
                           {s.rejectionReason && <div style={{ fontSize: 10, color: "#b91c1c" }}>Reason: {s.rejectionReason}</div>}
                           <div style={{ fontSize: 10, color: "#b91c1c" }}>By {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${formatTimestamp(s.rejectedAt)}` : ""}</div>
                         </div>
+                        <button onClick={(e) => { e.stopPropagation(); handleUnreject(s); }}
+                          style={{ padding: "4px 10px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#64748b", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                          Undo Return
+                        </button>
                       </div>
                     )}
 
@@ -237,13 +285,30 @@ export default function InvoiceAdmin({ config, showToast }) {
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>Return to Operator
                         </button>
                       )}
+                      {isDupe && (
+                        <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); handleDismissDupe(s); }}
+                          style={{ borderColor: "#fde68a", color: "#92400e" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18" /><path d="M6 6l12 12" /></svg>Not a Duplicate
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             );
           })}
-          {filtered.length > 0 && <div className="oh-inv-history-footer">{filtered.length} submission{filtered.length !== 1 ? "s" : ""}{search || statusFilter !== "all" ? " (filtered)" : ""}</div>}
+          {filtered.length > 0 && (
+            <>
+            <div className="oh-inv-history-footer">
+              Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} submission{filtered.length !== 1 ? "s" : ""}{search || statusFilter !== "all" ? " (filtered)" : ""}
+            </div>
+            {visibleCount < filtered.length && (
+              <button className="oh-inv-hist-show-more" onClick={() => setVisibleCount((c) => c + 20)}>
+                Show more ({filtered.length - visibleCount} remaining)
+              </button>
+            )}
+            </>
+          )}
         </div>
       )}
 

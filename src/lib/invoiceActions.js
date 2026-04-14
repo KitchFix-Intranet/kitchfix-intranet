@@ -297,6 +297,7 @@ function parseSubmissionRow(r) {
     rejectedBy: String(r[19] || ""),
     rejectedAt: String(r[20] || ""),
     correctedFromUuid: String(r[21] || ""),
+    dupeOverride: String(r[22] || ""),
   };
 }
 
@@ -378,7 +379,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
         .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
         .map(parseSubmissionRow)
         .reverse()
-        .slice(0, 50);
+        .slice(0, 200);
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
     }
@@ -405,7 +406,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
       .map(parseSubmissionRow)
       .reverse()
-      .slice(0, 50);
+      .slice(0, 200);
     return { success: true, history };
   }
 
@@ -1028,6 +1029,27 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         console.error("[Invoice] Raw PDF upload failed (non-blocking):", rawUpErr.message);
       }
 
+      // 2c. Server-side duplicate guard (prevents race condition from double-tap)
+      if (!correctedFromUuid) {
+        try {
+          const dupRead = await readSheet(token, SHEET_IDS.COLLECTION, "invoice_submissions_26");
+          const normalizeInv = (n) => String(n || "").trim().replace(/^[#\s]+/, "").replace(/^0+/, "") || "0";
+          const inputNorm = normalizeInv(invoiceNumber);
+          const dupFound = dupRead.rows.find((r) => {
+            return String(r[4] || "").trim() === vendor
+              && normalizeInv(r[6]) === inputNorm
+              && String(r[7] || "").trim() === invoiceDate
+              && Math.abs((Number(r[8]) || 0) - (Number(totalAmount) || 0)) < 0.01;
+          });
+          if (dupFound) {
+            console.warn(`[Invoice] Server-side duplicate blocked: ${vendor} #${invoiceNumber} ${invoiceDate}`);
+            return { success: false, error: "Duplicate invoice detected — this invoice was already submitted. Check History for the existing submission." };
+          }
+        } catch (dupErr) {
+          console.warn("[Invoice] Server-side dup check failed (non-blocking):", dupErr.message);
+        }
+      }
+
       // 3. Log to sheet
       const row = [
         uuid, now.toISOString(), email, account, vendor,
@@ -1217,6 +1239,64 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     }
 
     return { success: true, origSubmitter, origVendor, origInvNum, origAccount, origTotal };
+  }
+
+  // ── Unreject / Undo Return ──
+  if (action === "invoice-unreject") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const safeRead = async (id, tab) => {
+      try { return await readSheet(token, id, tab); }
+      catch { return { headers: [], rows: [] }; }
+    };
+
+    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    if (!rowNum) return { success: false, error: "Submission not found" };
+
+    const { rows: allRows } = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+    const origRow = allRows.find((r) => String(r[0] || "") === uuid);
+    const origSubmitter = String(origRow?.[2] || "");
+    const origVendor = String(origRow?.[4] || "Unknown");
+    const origInvNum = String(origRow?.[6] || "");
+    const origAccount = String(origRow?.[3] || "");
+
+    await Promise.all([
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, "sent"),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${rowNum}`, new Date().toISOString()),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!R${rowNum}`, ""),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!S${rowNum}`, ""),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!T${rowNum}`, ""),
+      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!U${rowNum}`, ""),
+    ]);
+
+    if (process.env.SLACK_INVOICE_WEBHOOK) {
+      fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `↩️ Invoice return undone: ${origVendor}`,
+          blocks: [{ type: "section", text: { type: "mrkdwn",
+            text: `*↩️ Invoice Return Undone*\n*Vendor:* ${origVendor}\n*Invoice #:* ${origInvNum || "N/A"}\n*Account:* ${origAccount}\n*Undone by:* ${email}` } }],
+        }),
+      }).catch(() => {});
+    }
+
+    return { success: true, origSubmitter, origVendor, origInvNum, origAccount };
+  }
+
+  // ── Dismiss Duplicate Flag ──
+  if (action === "invoice-dismiss-dupe") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    if (!rowNum) return { success: false, error: "Submission not found" };
+
+    await updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!W${rowNum}`, "not_duplicate");
+    console.log(`[Invoice] Dupe dismissed for ${uuid} by ${email}`);
+
+    return { success: true };
   }
 
   return null;

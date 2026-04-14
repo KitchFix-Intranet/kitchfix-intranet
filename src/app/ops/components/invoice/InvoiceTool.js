@@ -165,6 +165,7 @@ const [dragOver, setDragOver] = useState(false);
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [expandedUuid, setExpandedUuid] = useState(null);
+  const [historyVisible, setHistoryVisible] = useState(20);
 
   // OCR
   const [ocrStatus, setOcrStatus] = useState("idle");
@@ -649,6 +650,7 @@ const handleSubmit = useCallback(() => {
 
   const handleConfirmedSubmit = useCallback(async () => {
     setShowReview(false);
+    setSubmitting(true);
     try {
                   const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
@@ -658,10 +660,9 @@ const handleSubmit = useCallback(() => {
           openConfirm("Possible Duplicate", `This invoice may already have been submitted by ${dupData.existingInvoice?.userEmail}. Submit anyway?`, "Submit Anyway", () => resolve(true));
           setTimeout(() => resolve(false), 30000);
         });
-        if (!proceed) return;
+        if (!proceed) { setSubmitting(false); return; }
       }
     } catch {}
-    setSubmitting(true);
     glRows.filter((r) => r.code).forEach((r) => trackGLUsage(r.code));
     if (vendor?.vendorId) trackRecentVendor(vendor.vendorId);
 const payload = {
@@ -765,6 +766,8 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     list = [...list].sort((a, b) => (a.status === "returned" ? 0 : 1) - (b.status === "returned" ? 0 : 1));
     return list;
   }, [historySource, historySearch, historyPeriod]);
+
+  useEffect(() => { setHistoryVisible(20); }, [historySearch, historyPeriod, historyAccount]);
 
   const periodSummary = useMemo(() => {
     const src = historySource;
@@ -1054,7 +1057,7 @@ Upload, code &amp; submit to AP.
                     </div>
                   ) : (
                     <div className="oh-inv-history-list">
-                      {filteredSubmissions.map((s) => {
+                      {filteredSubmissions.slice(0, historyVisible).map((s) => {
                         const isExpanded = expandedUuid === s.uuid;
                         let glRows = [];
                         try { glRows = JSON.parse(s.glBreakdown || "[]"); } catch {}
@@ -1064,7 +1067,7 @@ Upload, code &amp; submit to AP.
 
                         return (
                           <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}`}>
-                            <div className="oh-inv-hist-summary" onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)}>
+                            <div className="oh-inv-hist-summary" role="button" tabIndex={0} onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedUuid(isExpanded ? null : s.uuid); } }}>
                               <div className="oh-inv-history-left">
                                 <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   {s.vendor}
@@ -1143,7 +1146,16 @@ Upload, code &amp; submit to AP.
                         );
                       })}
                       {filteredSubmissions.length > 0 && (
-                        <div className="oh-inv-history-footer">{filteredSubmissions.length} result{filteredSubmissions.length !== 1 ? "s" : ""}{historySearch || historyPeriod !== "all" ? " (filtered)" : ""}</div>
+                        <>
+                        <div className="oh-inv-history-footer">
+                          Showing {Math.min(historyVisible, filteredSubmissions.length)} of {filteredSubmissions.length} result{filteredSubmissions.length !== 1 ? "s" : ""}{historySearch || historyPeriod !== "all" ? " (filtered)" : ""}
+                        </div>
+                        {historyVisible < filteredSubmissions.length && (
+                          <button className="oh-inv-hist-show-more" onClick={() => setHistoryVisible((c) => c + 20)}>
+                            Show more ({filteredSubmissions.length - historyVisible} remaining)
+                          </button>
+                        )}
+                        </>
                       )}
                     </div>
                   )}
