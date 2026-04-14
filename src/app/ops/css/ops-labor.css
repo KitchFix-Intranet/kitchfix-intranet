@@ -148,15 +148,15 @@
 /* ── Revenue tracker strip (TXR-V) ── */
 .oh-sp-revstrip {
   padding: 12px 16px;
-  background: #f8fafc;
-  border: 0.5px solid #e2e8f0;
+  background: white;
+  border: 1.5px solid #bfdbfe;
   border-radius: 10px;
   margin-top: 8px;
 }
 
 .oh-sp-revstrip--ahead {
   background: #f0fdf4;
-  border-color: #bbf7d0;
+  border-color: #86efac;
 }
 
 .oh-sp-revstrip-top {
@@ -168,8 +168,8 @@
 
 .oh-sp-revstrip-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #475569;
+  font-weight: 700;
+  color: var(--oh-navy);
 }
 
 .oh-sp-revstrip--ahead .oh-sp-revstrip-label {
@@ -178,12 +178,12 @@
 
 .oh-sp-revstrip-count {
   font-size: 11px;
-  color: #94a3b8;
+  color: #2563eb;
+  font-weight: 600;
 }
 
 .oh-sp-revstrip--ahead .oh-sp-revstrip-count {
   color: #16a34a;
-  font-weight: 500;
 }
 
 .oh-sp-revstrip-row {
@@ -199,8 +199,8 @@
 .oh-sp-revstrip-sub {
   display: block;
   font-size: 10px;
-  color: #94a3b8;
-  font-weight: 500;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .oh-sp-revstrip-num {
@@ -213,10 +213,9 @@
 }
 
 .oh-sp-revstrip-num--muted {
-  color: #94a3b8;
+  color: #64748b;
   font-weight: 600;
 }
-
 .oh-sp-revstrip-bar-wrap {
   flex: 1;
   min-width: 0;
@@ -356,13 +355,98 @@
 
 /* ── Completed ── */
 .oh-sp-card--done {
-  opacity: 0.4; padding: 8px 14px; border-color: #f1f5f9;
-  transition: opacity 0.15s ease;
+  opacity: 0.5; padding: 8px 14px; border-color: #f1f5f9;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 
-.oh-sp-card--done:hover { opacity: 0.6; }
+.oh-sp-card--done:hover { opacity: 0.7; }
 
-.oh-sp-card--locked { cursor: default; }
+.oh-sp-card--done-expanded {
+  opacity: 1 !important;
+  padding: 16px 18px;
+  border-color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* Completed detail section */
+.oh-sp-completed-detail {
+  margin-top: 12px;
+}
+
+.oh-sp-completed-summary {
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.oh-sp-completed-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.oh-sp-completed-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oh-sp-completed-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.oh-sp-completed-val {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--oh-navy);
+}
+
+.oh-sp-completed-val--pos { color: #16a34a; }
+.oh-sp-completed-val--neg { color: #dc2626; }
+
+.oh-sp-completed-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid #e2e8f0;
+}
+
+.oh-sp-completed-meta {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.oh-sp-edit-actuals-btn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: white;
+  border: 0.5px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.oh-sp-edit-actuals-btn:hover {
+  border-color: #94a3b8;
+  color: #475569;
+  background: #f8fafc;
+}
+
+.oh-sp-edit-actuals-btn:active {
+  transform: scale(0.97);
+}
 
 
 /* ── Due / Active ── */
@@ -1029,4 +1113,344 @@
   .oh-sp-instruction-top {
     flex-direction: column; gap: 6px;
   }
+}
+
+/* ═══════════════════════════════════
+   TOOLBAR — View Toggle
+   ═══════════════════════════════════ */
+
+.oh-sp-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.oh-sp-view-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.oh-sp-toggle-btn {
+  padding: 5px 14px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--oh-font-body);
+}
+
+.oh-sp-toggle-btn:hover {
+  color: #475569;
+}
+
+.oh-sp-toggle-btn--active {
+  background: white;
+  color: var(--oh-navy);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+
+/* ═══════════════════════════════════
+   ADMIN DASHBOARD — oh-sp-admin-*
+   ═══════════════════════════════════ */
+
+.oh-sp-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Portfolio Summary ── */
+.oh-sp-admin-portfolio {
+  padding: 16px;
+  background: #f8fafc;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.oh-sp-admin-context {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.oh-sp-admin-portfolio-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.oh-sp-admin-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oh-sp-admin-stat--alert {
+  padding: 6px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.oh-sp-admin-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.oh-sp-admin-stat-val {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--oh-navy);
+}
+
+.oh-sp-admin-stat-val--inline {
+  font-size: 15px;
+}
+
+.oh-sp-admin-stat--pos { color: #16a34a; }
+.oh-sp-admin-stat--neg { color: #dc2626; }
+
+.oh-sp-admin-stat-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* ── Account Cards — 2-column (#2) ── */
+.oh-sp-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.oh-sp-admin-card {
+  background: white;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all 0.15s ease;
+}
+
+.oh-sp-admin-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  border-color: #cbd5e1;
+}
+
+.oh-sp-admin-card--alert {
+  border-left: 3px solid #d97706;
+}
+
+.oh-sp-admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.oh-sp-admin-card-title {
+  font-family: var(--oh-font-head);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--oh-navy);
+  margin: 0;
+}
+
+.oh-sp-admin-card-progress {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ── Bar Charts — taller (#3) ── */
+.oh-sp-admin-bar-section {
+  margin-bottom: 8px;
+}
+
+.oh-sp-admin-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+
+.oh-sp-admin-bar-track {
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 0.5px solid #cbd5e1;
+  margin-bottom: 3px;
+}
+
+.oh-sp-admin-bar-fill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.oh-sp-admin-bar-fill--over { background: #dc2626; }
+.oh-sp-admin-bar-fill--rev { background: #16a34a; }
+
+.oh-sp-admin-text--pos { color: #16a34a; font-weight: 600; }
+.oh-sp-admin-text--neg { color: #dc2626; font-weight: 600; }
+
+/* ── Revenue Section ── */
+.oh-sp-admin-rev {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid #f1f5f9;
+}
+
+.oh-sp-admin-rev-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.oh-sp-admin-rev-label { font-size: 11px; font-weight: 600; color: #475569; }
+.oh-sp-admin-rev-count { font-size: 10px; color: #94a3b8; }
+
+/* ── Status Badges ── */
+.oh-sp-admin-card-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.oh-sp-admin-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.oh-sp-admin-badge--due { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.oh-sp-admin-badge--active { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.oh-sp-admin-badge--upcoming { background: #f1f5f9; color: #64748b; }
+
+/* ── Homestand Status Grid ── */
+.oh-sp-admin-section { margin-top: 4px; }
+
+.oh-sp-admin-section-title {
+  font-family: var(--oh-font-head);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--oh-navy);
+  margin: 0 0 8px;
+}
+
+.oh-sp-admin-hs-grid {
+  background: white;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  overflow-x: auto;
+}
+
+.oh-sp-admin-hs-header,
+.oh-sp-admin-hs-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 32px;
+}
+
+.oh-sp-admin-hs-header {
+  border-bottom: 0.5px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.oh-sp-admin-hs-cell {
+  min-width: 36px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.oh-sp-admin-hs-cell--acct {
+  min-width: 90px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--oh-navy);
+}
+
+.oh-sp-admin-hs-cell--link {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.oh-sp-admin-hs-cell--link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.oh-sp-admin-hs-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  display: inline-block;
+}
+
+.oh-sp-admin-hs-dot--done { background: #0f3057; }
+.oh-sp-admin-hs-dot--due { background: #d97706; }
+.oh-sp-admin-hs-dot--active { background: #16a34a; }
+.oh-sp-admin-hs-dot--upcoming { background: #e2e8f0; }
+.oh-sp-admin-hs-dot--empty { background: transparent; border: 1px dashed #e2e8f0; }
+
+.oh-sp-admin-hs-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 0.5px solid #f1f5f9;
+}
+
+.oh-sp-admin-hs-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.oh-sp-admin-hs-legend-item .oh-sp-admin-hs-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* ── Admin Responsive ── */
+@media (max-width: 700px) {
+  .oh-sp-admin-portfolio-row { gap: 12px; }
+  .oh-sp-admin-grid { grid-template-columns: 1fr; }
+  .oh-sp-admin-hs-grid { padding: 8px 10px; }
+  .oh-sp-admin-hs-cell { min-width: 28px; }
+  .oh-sp-admin-hs-dot { width: 20px; height: 20px; }
+  .oh-sp-view-toggle { display: none; }
 }

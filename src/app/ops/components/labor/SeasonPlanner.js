@@ -20,7 +20,7 @@ import F from "@/app/ops/components/shared/F";
  *   - Budget subtext: "forecast · updates with sales" / "adjusted from sales"
  *   - Revenue note on completed flex cards
  */
-export default function SeasonPlanner({ plannerData, account, showToast, openConfirm, onRefresh }) {
+export default function SeasonPlanner({ plannerData, account, showToast, openConfirm, onRefresh, isAdmin }) {
   const homestands = plannerData?.homestands || [];
   const seasonMetrics = plannerData?.seasonMetrics || {};
 
@@ -40,8 +40,7 @@ export default function SeasonPlanner({ plannerData, account, showToast, openCon
 
   const [expandedId, setExpandedId] = useState(autoExpandId);
 
-  const handleToggle = (id, isCompleted) => {
-    if (isCompleted) return;
+  const handleToggle = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
@@ -142,9 +141,10 @@ export default function SeasonPlanner({ plannerData, account, showToast, openCon
               openConfirm={openConfirm}
               onRefresh={onRefresh}
               expanded={expanded}
-              onToggle={() => handleToggle(hs.id, isCompleted)}
+              onToggle={() => handleToggle(hs.id)}
               isFirstUpcoming={hs.id === firstUpcomingId}
               isNext={isNext}
+              isAdmin={isAdmin}
             />
           );
         })}
@@ -158,13 +158,14 @@ export default function SeasonPlanner({ plannerData, account, showToast, openCon
    HomestandCard
    ════════════════════════════════════════════════ */
 
-function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expanded, onToggle, isFirstUpcoming, isNext }) {
+function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expanded, onToggle, isFirstUpcoming, isNext, isAdmin }) {
   const [laborInput, setLaborInput] = useState("");
   const [revenueInput, setRevenueInput] = useState(hs.soldRevenue ? String(hs.soldRevenue) : "");
   const [finalRevenueInput, setFinalRevenueInput] = useState(hs.soldRevenue ? String(hs.soldRevenue) : "");
   const [submitting, setSubmitting] = useState(false);
   const [revSubmitting, setRevSubmitting] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState(false);
+  const [editingActuals, setEditingActuals] = useState(false);
 
   const isRevenueFlex = hs.isRevenueFlex;
   const budget = hs.adjustedEnvelope ?? hs.budgetEnvelope;
@@ -172,11 +173,11 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
   const isCompleted = hs.status === "completed" || !!hs.plan;
   const isDue = hs.status === "actuals_due" && !hs.plan;
   const isActive = hs.status === "in_progress";
-  const canExpand = !isCompleted;
+  const canExpand = true;
   const isHeavy = hs.totalDays >= 10 || budget >= 10000;
 
   const laborRatio = hs.laborRatio || 0;
-  const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(1) : "0";
+const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
 
   // Day breakdown
   const parts = [];
@@ -309,9 +310,9 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
     isActive && "oh-sp-card--active",
     isNext && "oh-sp-card--next",
     isHeavy && !isCompleted && "oh-sp-card--heavy",
-    !expanded && canExpand && "oh-sp-card--collapsed",
-    expanded && canExpand && "oh-sp-card--expanded",
-    !canExpand && "oh-sp-card--locked",
+    !expanded && "oh-sp-card--collapsed",
+    expanded && "oh-sp-card--expanded",
+    expanded && isCompleted && "oh-sp-card--done-expanded",
   ].filter(Boolean).join(" ");
 
   return (
@@ -331,14 +332,17 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
           </h3>
           <p className="oh-sp-card-meta">{dayText}{opponents}</p>
 
-          {/* Mini viz strip — collapsed non-completed cards only */}
-          {!expanded && canExpand && showViz && (
+          {/* Mini viz strip — collapsed cards */}
+          {!expanded && showViz && (
             <MiniViz days={hs.days} weeks={weeks} />
           )}
         </div>
         <div className="oh-sp-card-right">
           <div className="oh-sp-card-budget">
             {isCompleted && hs.plan ? (
+              editingActuals ? (
+                <span className="oh-sp-card-budgetnum" style={{ color: "#94a3b8", fontSize: 13 }}>Editing...</span>
+              ) : (
               <div className="oh-sp-done-budget">
                 <span className="oh-sp-done-budgetnum">${budget.toLocaleString()}</span>
                 {isRevenueFlex && hs.plan.revenueActual > 0 && (
@@ -352,6 +356,7 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
                   </span>
                 </div>
               </div>
+              )
             ) : (
               <>
                 <span className="oh-sp-card-budgetnum">
@@ -379,11 +384,154 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
       </div>
 
       {/* Expanded detail */}
-      {expanded && canExpand && (
+      {expanded && (
         <div className="oh-sp-detail">
 
-          {/* Revenue flex: sold revenue section (before/during homestand) */}
-          {isRevenueFlex && !isDue && (
+          {/* Completed card: actuals summary + edit */}
+          {isCompleted && hs.plan && (
+            <div className="oh-sp-completed-detail">
+              {!editingActuals ? (
+                <div className="oh-sp-completed-summary">
+                  <div className="oh-sp-completed-grid">
+                    <div className="oh-sp-completed-col">
+                      <span className="oh-sp-completed-label">Budget</span>
+                      <span className="oh-sp-completed-val">${budget.toLocaleString()}</span>
+                    </div>
+                    <div className="oh-sp-completed-col">
+                      <span className="oh-sp-completed-label">Spent</span>
+                      <span className="oh-sp-completed-val">${hs.plan.actualSpent.toLocaleString()}</span>
+                    </div>
+                    <div className="oh-sp-completed-col">
+                      <span className="oh-sp-completed-label">Variance</span>
+                      <span className={`oh-sp-completed-val ${hs.plan.variance >= 0 ? "oh-sp-completed-val--pos" : "oh-sp-completed-val--neg"}`}>
+                        {hs.plan.variance >= 0 ? "+" : ""}${Math.abs(hs.plan.variance).toLocaleString()}
+                      </span>
+                    </div>
+                    {isRevenueFlex && hs.plan.revenueActual > 0 && (
+                      <div className="oh-sp-completed-col">
+                        <span className="oh-sp-completed-label">Revenue</span>
+                        <span className="oh-sp-completed-val">${hs.plan.revenueActual.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="oh-sp-completed-footer">
+                    {isAdmin && (
+                      <span className="oh-sp-completed-meta">
+                        Submitted by {hs.plan.email} · {new Date(hs.plan.timestamp).toLocaleDateString()}
+                      </span>
+                    )}
+                    <button className="oh-sp-edit-actuals-btn" onClick={(e) => {
+                      e.stopPropagation();
+                      setLaborInput(String(hs.plan.actualSpent));
+                      if (isRevenueFlex && hs.plan.revenueActual > 0) {
+                        setFinalRevenueInput(String(hs.plan.revenueActual));
+                      }
+                      setEditingActuals(true);
+                    }}>
+                      Edit actuals
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="oh-sp-actuals">
+                  <p className="oh-sp-actuals-prompt">Correct labor actuals for {hs.id}</p>
+                  <p className="oh-sp-actuals-hint">This will replace the previously submitted amount.</p>
+                  {isRevenueFlex ? (
+                    <>
+                      <div className="oh-sp-flex-grid">
+                        <div>
+                          <label className="oh-sp-flex-label">Final revenue</label>
+                          <div className="oh-sp-actuals-wrap">
+                            <span className="oh-sp-actuals-prefix">$</span>
+                            <input
+                              className="oh-sp-actuals-input oh-sp-actuals-input--half"
+                              type="text" inputMode="decimal"
+                              value={finalRevenueInput}
+                              onChange={(e) => setFinalRevenueInput(e.target.value.replace(/[^0-9.,]/g, ""))}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="oh-sp-flex-label">Actual labor (Rippling)</label>
+                          <div className="oh-sp-actuals-wrap">
+                            <span className="oh-sp-actuals-prefix">$</span>
+                            <input
+                              className="oh-sp-actuals-input oh-sp-actuals-input--half"
+                              type="text" inputMode="decimal"
+                              value={laborInput}
+                              onChange={(e) => setLaborInput(e.target.value.replace(/[^0-9.,]/g, ""))}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="oh-sp-actuals-row" style={{ marginTop: 10 }}>
+                        <button
+                          className="oh-btn oh-btn--blue"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const actual = parseFloat(String(laborInput).replace(/[^0-9.]/g, "")) || 0;
+                            if (actual <= 0) { showToast?.("Enter the labor amount", "error"); return; }
+                            const finalRev = parseFloat(String(finalRevenueInput).replace(/[^0-9.]/g, "")) || 0;
+                            const adjBudget = finalRev > 0 && laborRatio > 0 ? Math.round(finalRev * laborRatio) : budget;
+                            openConfirm?.(
+                              "Update Actuals",
+                              `Correct to $${actual.toLocaleString()} labor${finalRev > 0 ? ` against $${finalRev.toLocaleString()} revenue` : ""} for ${hs.id}?`,
+                              "Save correction",
+                              () => { handleSubmitFlex(); setEditingActuals(false); }
+                            );
+                          }}
+                          disabled={submitting || !laborInput}
+                        >
+                          {submitting ? "Saving..." : "Save correction"}
+                        </button>
+                        <button className="oh-sp-rev-cancel-btn" onClick={() => setEditingActuals(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="oh-sp-actuals-row">
+                      <div className="oh-sp-actuals-wrap">
+                        <span className="oh-sp-actuals-prefix">$</span>
+                        <input
+                          className="oh-sp-actuals-input"
+                          type="text" inputMode="decimal"
+                          value={laborInput}
+                          onChange={(e) => setLaborInput(e.target.value.replace(/[^0-9.,]/g, ""))}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <button
+                        className="oh-btn oh-btn--blue"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const actual = parseFloat(String(laborInput).replace(/[^0-9.]/g, "")) || 0;
+                          if (actual <= 0) { showToast?.("Enter the labor amount", "error"); return; }
+                          openConfirm?.(
+                            "Update Actuals",
+                            `Correct to $${actual.toLocaleString()} labor for ${hs.id}?`,
+                            "Save correction",
+                            () => { handleSubmit(); setEditingActuals(false); }
+                          );
+                        }}
+                        disabled={submitting || !laborInput}
+                      >
+                        {submitting ? "Saving..." : "Save correction"}
+                      </button>
+                      <button className="oh-sp-rev-cancel-btn" onClick={() => setEditingActuals(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Revenue flex: sold revenue section (before/during homestand, non-completed only) */}
+          {isRevenueFlex && !isDue && !isCompleted && (
             <div className="oh-sp-rev-section">
               {hasRevenueAdjustment && !editingRevenue ? (
                 <div className="oh-sp-rev-confirmed">
@@ -462,7 +610,7 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
             </div>
           )}
 
-          {showViz && <DayViz days={hs.days} weeks={weeks} />}
+          {showViz && !editingActuals && <DayViz days={hs.days} weeks={weeks} />}
 
           {!isCompleted && (
             <div className="oh-sp-instruction">
