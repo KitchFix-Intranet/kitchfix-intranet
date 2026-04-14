@@ -497,7 +497,7 @@ const pid = makePid();
 showToast(`${pagesToRender} page${pagesToRender > 1 ? "s" : ""} imported from PDF`, "success");
     } catch (err) {
       console.error("[PDF] Processing error:", err);
-      showToast("Couldn't read PDF — try a photo instead", "error");
+      showToast("Couldn't read PDF — try re-exporting or uploading a different file", "error");
     }
   }, [pages, showToast, invoiceNumber]);
 

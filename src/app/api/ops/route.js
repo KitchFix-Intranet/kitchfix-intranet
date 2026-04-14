@@ -1385,6 +1385,16 @@ Rules:
 if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject"].includes(action)) {
             const result = await handleInvoicePost(action, body, token, email, userName);
           if (result) {
+              // Bell notification for invoice rejection
+              if (action === "invoice-reject" && result.success && result.origSubmitter) {
+                const totalFmt = `$${Number(result.origTotal || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+                await opsNotify(token, {
+                  recipient: result.origSubmitter,
+                  subject: `[OPS] Invoice returned - ${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount} ${totalFmt}`,
+                  eventType: "invoice_returned",
+                  relatedInfo: `${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
+                });
+              }
               // Analytics — log invoice-related actions
               const invoiceEvents = {
                   "invoice-submit":     { action: "submit_invoice", detail: { account: body.account, vendor: body.vendor, total: body.total, type: body.type } },

@@ -455,7 +455,7 @@ export async function handleInvoicePost(action, body, token, email, userName) {
       const base64 = image.includes(",") ? image.split(",")[1] : image;
       const mediaType = image.startsWith("data:image/png") ? "image/png" : "image/jpeg";
 
-      const gatePrompt = `You are a document quality gate for KitchFix, a food service company. Chef operators photograph invoices and receipts to submit to accounts payable.
+      const gatePrompt = `You are a document quality gate for KitchFix, a food service company. Operators upload digital invoices and receipts (PDF or scanned images) to submit to accounts payable.
 
 Analyze this image and respond with ONLY a JSON object (no markdown, no backticks):
 
@@ -479,13 +479,12 @@ Set isDocument: false ONLY when the image contains ZERO financial content:
 - Screenshots of apps or websites (not of a financial document)
 
 Set isDocument: TRUE in ALL of these cases — be very generous here:
-✓ A receipt or invoice held in a hand — the hand is irrelevant, the document is the subject
-✓ Any thermal paper receipt, even if it appears small relative to the frame size
-✓ Receipt on a car seat, steering wheel, lap, counter, or desk
-✓ Document photographed from an angle or at a distance
-✓ Blurry or dark photos where you can still make out it is a financial document
-✓ Receipt partially cut off but still clearly identifiable as a receipt
-✓ ANY image where you can read a merchant name, dollar amounts, or transaction details
+✓ Any PDF page showing financial data (invoice, receipt, credit memo)
+✓ Scanned documents, even at slight angles or with minor artifacts
+✓ Any image where you can read a merchant name, dollar amounts, or transaction details
+✓ Thermal paper receipts rendered as images
+✓ Documents with handwriting, stamps, or annotations — operators routinely write GL codes with marker
+✓ A partially visible document that is still clearly identifiable as a financial record
 
 The ONLY question for isDocument is: "Is there a financial document somewhere in this image?"
 If yes → true. Only return false for images that contain NO document whatsoever.
@@ -499,25 +498,29 @@ Classify what type of financial document this is:
 - "purchase_order": Internal ordering document.
 - "statement": Monthly account summary.
 
-═══ STEP 3: PHOTO QUALITY ═══
-Quality should ONLY fail if the document genuinely cannot be processed by AP. Be very practical, not perfectionist.
+═══ STEP 3: DOCUMENT QUALITY ═══
+Quality should ONLY fail if the document genuinely cannot be processed by AP. Most digital uploads will pass. Be very practical, not perfectionist.
 
 QUALITY PASS — all of these are explicitly fine:
 ✓ Handwriting on the document — operators routinely write GL codes with marker. NORMAL and EXPECTED.
-✓ Document at a slight angle or perspective
-✓ Minor shadows that don't obscure text
-✓ Slightly wrinkled, folded, or creased paper
+✓ Document at a slight angle (from scanning)
+✓ Minor shadows or scan artifacts that don't obscure text
+✓ Slightly wrinkled, folded, or creased paper that was scanned
 ✓ Stamps, stickers, staple marks, or tape
 ✓ PDF pages rendered as images (always pass — already digital)
 ✓ Thermal receipt paper, even slightly faded, as long as key text is readable
-✓ A hand or fingers holding the document — this is the most common way field staff photograph receipts. NEVER treat a hand as an obstruction or quality failure.
-✓ Hand visible prominently in frame — still fine
-✓ Finger at the edge of or near the document
-✓ Receipt being held up against any background (car interior, seat, counter, desk)
-✓ Shadows from the hand holding the receipt
-✓ Small receipt relative to overall frame size
-✓ Document on a desk with visible desk surface around edges
-✓ Car interior, steering wheel, or dashboard visible in background
+✓ Low-resolution scans where text is still readable
+
+QUALITY FAIL — only these specific problems:
+✗ "too_blurry": Text is genuinely illegible — you cannot make out the totals or vendor name at all
+✗ "too_dark": So underexposed that key financial data is completely unreadable
+✗ "partial_capture": Critical data cut off — cannot see the total amount or vendor name
+✗ "corrupted": File appears corrupted or renders as garbled content
+
+CRITICAL: Err very strongly toward passing quality. Only fail when a human accountant literally could not read the document to process it.
+
+If quality fails, "message" should be a specific, helpful 1-sentence instruction (e.g. "Document is unreadable - please re-export the PDF or try a different file").
+If quality passes, "message" should be empty string "".
 
 ═══ STEP 4: PAGE NUMBER DETECTION ═══
 Look for page number indicators in headers or footers such as:
@@ -531,19 +534,7 @@ pageNumberConfidence:
   "none"  = no page number indicator detected anywhere on the document
 
 BLANK TRAILING PAGES:
-A mostly-blank page with only a URL, page number, or footer text at the bottom is a NORMAL artifact from browser PDF printing. This is NOT a quality failure and NOT a non-document. Set isDocument: true, quality: "pass", documentType to match the rest of the invoice (usually "vendor_invoice"), and message: "". These pages are harmless overflow — do not flag them.
-
-QUALITY FAIL — only these specific problems:
-✗ "too_blurry": Text is genuinely illegible — you cannot make out the totals or vendor name at all
-✗ "too_dark": So underexposed that key financial data is completely unreadable
-✗ "partial_capture": Critical data cut off — cannot see the total amount or vendor name
-
-"Obstruction" only means an opaque object (pen, phone, piece of tape) physically ON TOP OF and hiding text fields. A hand HOLDING the document is NEVER an obstruction.
-
-CRITICAL: Err very strongly toward passing quality. Only fail when a human accountant literally could not read the document to process it.
-
-If quality fails, "message" should be a specific, helpful 1-sentence instruction for retaking.
-If quality passes, "message" should be empty string "".`;
+A mostly-blank page with only a URL, page number, or footer text at the bottom is a NORMAL artifact from browser PDF printing. This is NOT a quality failure and NOT a non-document. Set isDocument: true, quality: "pass", documentType to match the rest of the invoice (usually "vendor_invoice"), and message: "". These pages are harmless overflow — do not flag them.`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -652,13 +643,13 @@ If the image is too blurry, too dark, severely cropped, upside down, not an invo
 {
   "readable": false,
   "reason": "brief specific reason",
-  "suggestion": "specific advice for retaking the photo"
+  "suggestion": "specific advice for fixing the upload"
 }
 
 IMPORTANT: A mostly-blank page with only a URL or footer text is a normal trailing page from a browser PDF print. It is NOT an error. Treat it as readable and extract what you can (likely null for all fields). Do NOT reject it.
 
-Reason examples: "Image is too blurry — text is not legible", "Photo is too dark to read", "Invoice is cut off — key details are missing", "This doesn't appear to be an invoice"
-Suggestion examples: "Hold your phone steady and tap to focus before shooting", "Move to a brighter area or turn on the flash", "Back up to capture the full page including all edges", "Please photograph the invoice document"
+Reason examples: "Document is too blurry to read", "Document is too dark to read", "Invoice is cut off - key details are missing", "This doesn't appear to be an invoice"
+Suggestion examples: "Please re-export the PDF or try a different file", "Try downloading the invoice again from the vendor portal", "Upload the full invoice including all pages", "Please upload an invoice document"
 
 STEP 2 — If readable, extract fields and respond with:
 {
@@ -736,7 +727,7 @@ INVOICE NUMBER RULES:
           success: false,
           rejected: true,
           reason: parsed.reason || "Image could not be read",
-          suggestion: parsed.suggestion || "Please retake the photo with better lighting and focus",
+          suggestion: parsed.suggestion || "Please try a different file or re-export the PDF from the vendor portal",
         };
       }
 
@@ -1016,7 +1007,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       let driveUrls = [];
             try {
         if (pdfBuffer) {
-          const pdfResult = await uploadStampedPDF(token, pdfBuffer, vendor, account, invoiceDate, invoiceNumber);
+          const pdfResult = await uploadStampedPDF(token, pdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "");
           if (pdfResult.fileUrl) driveUrls = [pdfResult.fileUrl];
         } else {
           const driveResults = await uploadInvoicePages(token, pages, vendor, account, invoiceDate);
@@ -1030,7 +1021,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       let rawDriveUrl = "";
       try {
         if (rawPdfBuffer) {
-          const rawResult = await uploadStampedPDF(token, rawPdfBuffer, vendor, account, invoiceDate, invoiceNumber, "RAW_");
+          const rawResult = await uploadStampedPDF(token, rawPdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_RAW_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "RAW_");
           if (rawResult.fileUrl) rawDriveUrl = rawResult.fileUrl;
         }
       } catch (rawUpErr) {
@@ -1225,7 +1216,7 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
       }
     }
 
-    return { success: true };
+    return { success: true, origSubmitter, origVendor, origInvNum, origAccount, origTotal };
   }
 
   return null;
