@@ -433,18 +433,9 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
       packagingActualTotal += hs.plan.actualPackaging || 0;
       revenueActualTotal += hs.plan.revenueActual || 0;
 
-      let hsVar;
-      const ra = hs.plan.revenueActual || 0;
-      const rf = hs.revenue || 0;
-      if (ra > 0 && rf > 0) {
-        const ratio = ra / rf;
-        const lt = Math.round(hs.hourlyBudget * ratio);
-        const ft = Math.round(hs.foodBudget * ratio);
-        const pt = Math.round(hs.packagingBudget * ratio);
-        hsVar = (lt + ft + pt) - (hs.plan.actualSpent + (hs.plan.actualFood || 0) + (hs.plan.actualPackaging || 0));
-      } else {
-        hsVar = hs.plan.variance;
-      }
+      // Planner view tracks labor only — use per-homestand labor variance
+      // (multi-cost variance with food/packaging belongs in period view)
+      const hsVar = hs.plan.variance;
       cumulativeVariance += hsVar;
 
       if (hsVar >= 0) {

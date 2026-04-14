@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import SeasonPlanner from "@/app/ops/components/labor/SeasonPlanner";
 import SeasonAdmin from "@/app/ops/components/labor/SeasonAdmin";
@@ -17,16 +17,22 @@ const ADMIN_EMAILS = [
 
 export default function LaborTool({ config, showToast, openConfirm, onNavigate }) {
   const { data: session } = useSession();
-  const [account, setAccount]             = useState("");
-  const [mlbAccounts, setMlbAccounts]     = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [plannerData, setPlannerData]     = useState(null);
-  const [plannerLoading, setPlannerLoading] = useState(false);
-  const [adminView, setAdminView]         = useState(false);
+  const [account, setAccount]               = useState("");
+  const [mlbAccounts, setMlbAccounts]       = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [plannerData, setPlannerData]        = useState(null);
+  const [plannerLoading, setPlannerLoading]  = useState(false);
+  const [adminView, setAdminView]           = useState(false);
+
+  // Track which account the current plannerData belongs to
+  const plannerAccountRef = useRef("");
+  // Abort controller for in-flight planner fetches
+  const abortRef = useRef(null);
 
   const userEmail = session?.user?.email || "";
   const isAdmin = ADMIN_EMAILS.includes(userEmail);
 
+  // Initial load — get MLB account list
   useEffect(() => {
     setLoading(true);
     fetch("/api/ops?action=labor-bootstrap")
@@ -36,36 +42,90 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
       .finally(() => setLoading(false));
   }, []);
 
+  // Fetch planner data when account changes (only in chef view)
   useEffect(() => {
-    if (!account || adminView) { setPlannerData(null); return; }
+    // Abort any in-flight fetch
+    if (abortRef.current) abortRef.current.abort();
+
+    if (!account || adminView) return;
+
+    // If we already have data for this account, skip the loading spinner
+    const isStale = plannerAccountRef.current !== account;
+    if (isStale) {
+      setPlannerData(null);
+    }
     setPlannerLoading(true);
-    fetch(`/api/ops?action=labor-bootstrap&account=${encodeURIComponent(account)}&view=planner`)
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    fetch(
+      `/api/ops?action=labor-bootstrap&account=${encodeURIComponent(account)}&view=planner`,
+      { signal: controller.signal }
+    )
       .then((r) => r.json())
-      .then((d) => { if (d.success && d.plannerData) setPlannerData(d.plannerData); })
-      .catch(() => showToast?.("Failed to load planner", "error"))
+      .then((d) => {
+        if (d.success && d.plannerData) {
+          setPlannerData(d.plannerData);
+          plannerAccountRef.current = account;
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          showToast?.("Failed to load planner", "error");
+        }
+      })
       .finally(() => setPlannerLoading(false));
+
+    return () => controller.abort();
   }, [account, adminView]);
 
   const handleRefresh = useCallback(() => {
     if (!account) return;
+    if (abortRef.current) abortRef.current.abort();
+
     setPlannerLoading(true);
-    setPlannerData(null);
-    fetch(`/api/ops?action=labor-bootstrap&account=${encodeURIComponent(account)}&view=planner`)
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    fetch(
+      `/api/ops?action=labor-bootstrap&account=${encodeURIComponent(account)}&view=planner`,
+      { signal: controller.signal }
+    )
       .then((r) => r.json())
-      .then((d) => { if (d.success && d.plannerData) setPlannerData(d.plannerData); })
-      .catch(() => showToast?.("Failed to refresh", "error"))
+      .then((d) => {
+        if (d.success && d.plannerData) {
+          setPlannerData(d.plannerData);
+          plannerAccountRef.current = account;
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          showToast?.("Failed to refresh", "error");
+        }
+      })
       .finally(() => setPlannerLoading(false));
   }, [account]);
 
-  // Click-through from admin dashboard (#7)
+  // Click-through from admin dashboard
   const handleSelectFromAdmin = useCallback((acctKey) => {
-    setAdminView(false);
+    // Clear stale data if switching to a different account
+    if (plannerAccountRef.current !== acctKey) {
+      setPlannerData(null);
+      plannerAccountRef.current = "";
+    }
     setAccount(acctKey);
+    setAdminView(false);
   }, []);
 
   if (loading) {
     return <div className="oh-view" style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>;
   }
+
+  // Determine chef view body content
+  const showPlanner = !adminView && account && plannerData && plannerAccountRef.current === account;
+  const showPlannerLoading = !adminView && account && (plannerLoading || !plannerData || plannerAccountRef.current !== account);
 
   return (
     <div className="oh-view" style={{ animation: "oh-slideUp 0.4s ease" }}>
@@ -133,9 +193,9 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
               <h3 className="oh-tool-empty-title">Select an MLB account</h3>
               <p className="oh-tool-empty-desc">Choose your account to see homestand budgets and track labor spend.</p>
             </div>
-          ) : plannerLoading || !plannerData ? (
+          ) : showPlannerLoading ? (
             <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>
-          ) : (
+          ) : showPlanner ? (
             <SeasonPlanner
               plannerData={plannerData}
               account={account}
@@ -144,6 +204,16 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
               onRefresh={handleRefresh}
               isAdmin={isAdmin}
             />
+          ) : (
+            <div className="oh-tool-empty">
+              <div className="oh-tool-empty-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <h3 className="oh-tool-empty-title">Couldn't load data</h3>
+              <p className="oh-tool-empty-desc">Try refreshing or selecting a different account.</p>
+            </div>
           )}
         </div>
       </div>

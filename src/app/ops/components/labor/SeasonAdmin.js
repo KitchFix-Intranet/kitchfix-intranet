@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 function fmt(n) { return "$" + Math.round(n).toLocaleString(); }
 function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
@@ -7,21 +7,34 @@ function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
 export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount }) {
   const [accountData, setAccountData] = useState({});
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef(null);
 
   useEffect(() => {
     if (!mlbAccounts || mlbAccounts.length === 0) return;
+
+    // Abort any previous batch
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     Promise.all(mlbAccounts.map((a) =>
-      fetch(`/api/ops?action=labor-bootstrap&account=${encodeURIComponent(a.key)}&view=planner`)
+      fetch(`/api/ops?action=labor-bootstrap&account=${encodeURIComponent(a.key)}&view=planner`, { signal: controller.signal })
         .then((r) => r.json())
         .then((d) => ({ key: a.key, label: a.label, data: d.success ? d.plannerData : null }))
-        .catch(() => ({ key: a.key, label: a.label, data: null }))
+        .catch((err) => {
+          if (err.name === "AbortError") return null;
+          return { key: a.key, label: a.label, data: null };
+        })
     )).then((results) => {
+      if (controller.signal.aborted) return;
       const map = {};
-      results.forEach((r) => { map[r.key] = r; });
+      results.filter(Boolean).forEach((r) => { map[r.key] = r; });
       setAccountData(map);
       setLoading(false);
-    });
+    }).catch(() => {});
+
+    return () => controller.abort();
   }, [mlbAccounts]);
 
   if (loading) {
