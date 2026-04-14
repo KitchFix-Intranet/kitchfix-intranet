@@ -58,6 +58,13 @@ export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount })
     };
   }).filter((a) => a.loaded);
 
+  // Fix #4: Sort by urgency — actuals due first, then worst variance, then alphabetical
+  accounts.sort((a, b) => {
+    if (a.dueCount !== b.dueCount) return b.dueCount - a.dueCount;
+    if (a.variance !== b.variance) return a.variance - b.variance;
+    return a.label.localeCompare(b.label);
+  });
+
   const pBudget = accounts.reduce((s, a) => s + a.seasonBudget, 0);
   const pSpent = accounts.reduce((s, a) => s + a.budgetUsed, 0);
   const pVar = accounts.reduce((s, a) => s + a.variance, 0);
@@ -77,36 +84,44 @@ export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount })
 
   return (
     <div className="oh-sp-admin">
+      {/* Portfolio summary — variance is the hero */}
       <div className="oh-sp-admin-portfolio">
         <div className="oh-sp-admin-context">
-          Week {week} of {totalWeeks} · Season {seasonPct}% elapsed
+          <span className="oh-sp-admin-context-text">Week {week} of {totalWeeks} · Season {seasonPct}% elapsed</span>
+          <div className="oh-sp-admin-context-bar">
+            <div className="oh-sp-admin-context-fill" style={{ width: `${seasonPct}%` }} />
+          </div>
         </div>
-        <div className="oh-sp-admin-portfolio-row">
-          <div className="oh-sp-admin-stat">
-            <span className="oh-sp-admin-stat-label">Portfolio Labor Budget</span>
-            <span className="oh-sp-admin-stat-val">{fmt(pBudget)}</span>
-          </div>
-          <div className="oh-sp-admin-stat">
-            <span className="oh-sp-admin-stat-label">Spent</span>
-            <span className="oh-sp-admin-stat-val">{fmt(pSpent)}</span>
-          </div>
-          <div className="oh-sp-admin-stat">
-            <span className="oh-sp-admin-stat-label">Variance</span>
-            <span className={`oh-sp-admin-stat-val ${pVar >= 0 ? "oh-sp-admin-stat--pos" : "oh-sp-admin-stat--neg"}`}>
-              {pVar >= 0 ? "+" : ""}{fmt(pVar)}
-            </span>
-          </div>
-          <div className="oh-sp-admin-stat">
-            <span className="oh-sp-admin-stat-label">Progress</span>
-            <span className="oh-sp-admin-stat-val oh-sp-admin-stat-val--inline">{pDone} of {pTotal} homestands</span>
-          </div>
-          {pDue > 0 && (
-            <div className="oh-sp-admin-stat oh-sp-admin-stat--alert">
-              <span className="oh-sp-admin-stat-label">Action Needed</span>
-              <span className="oh-sp-admin-stat-val">{pDue} actuals due</span>
+
+        <div className="oh-sp-admin-portfolio-main">
+          <div className="oh-sp-admin-portfolio-stats">
+            <div className="oh-sp-admin-stat">
+              <span className="oh-sp-admin-stat-label">Portfolio Labor Budget</span>
+              <span className="oh-sp-admin-stat-val">{fmt(pBudget)}</span>
             </div>
-          )}
+            <div className="oh-sp-admin-stat">
+              <span className="oh-sp-admin-stat-label">Spent</span>
+              <span className="oh-sp-admin-stat-val">{fmt(pSpent)}</span>
+            </div>
+            <div className="oh-sp-admin-stat">
+              <span className="oh-sp-admin-stat-label">Progress</span>
+              <span className="oh-sp-admin-stat-val oh-sp-admin-stat-val--inline">{pDone} of {pTotal} homestands</span>
+            </div>
+          </div>
+          <div className={`oh-sp-admin-variance-hero${pVar >= 0 ? " oh-sp-admin-variance-hero--pos" : " oh-sp-admin-variance-hero--neg"}`}>
+            <span className="oh-sp-admin-variance-val">{pVar >= 0 ? "+" : ""}{fmt(pVar)}</span>
+            <span className="oh-sp-admin-variance-label">{pVar >= 0 ? "under budget" : "over budget"}</span>
+          </div>
         </div>
+
+        {pDue > 0 && (
+          <div className="oh-sp-admin-action-banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{pDue} homestand{pDue > 1 ? "s" : ""} need actuals submitted</span>
+          </div>
+        )}
       </div>
 
       <div className="oh-sp-admin-grid">
@@ -152,32 +167,56 @@ export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount })
 function AccountCard({ account: a, onSelect }) {
   const spentPct = pct(a.budgetUsed, a.seasonBudget);
   const isOver = a.variance < 0;
+
+  // Variance-based card accent
+  const hasData = a.completedCount > 0;
+  const accentClass = a.dueCount > 0 ? " oh-sp-admin-card--alert"
+    : hasData && isOver ? " oh-sp-admin-card--over"
+    : hasData ? " oh-sp-admin-card--healthy"
+    : "";
+
   return (
-    <div className={`oh-sp-admin-card${a.dueCount > 0 ? " oh-sp-admin-card--alert" : ""}`} onClick={onSelect} style={{ cursor: "pointer" }}>
+    <div className={`oh-sp-admin-card${accentClass}`} onClick={onSelect} style={{ cursor: "pointer" }}>
       <div className="oh-sp-admin-card-header">
         <h4 className="oh-sp-admin-card-title">{a.label}</h4>
         <span className="oh-sp-admin-card-progress">{a.completedCount}/{a.totalHomestands}</span>
       </div>
+
       <div className="oh-sp-admin-bar-section">
-        <div className="oh-sp-admin-bar-labels"><span>Budget: {fmt(a.seasonBudget)}</span><span>Spent: {fmt(a.budgetUsed)}</span></div>
-        <div className="oh-sp-admin-bar-track"><div className={`oh-sp-admin-bar-fill${isOver ? " oh-sp-admin-bar-fill--over" : ""}`} style={{ width: `${Math.min(spentPct, 100)}%` }} /></div>
         <div className="oh-sp-admin-bar-labels">
-          <span className={isOver ? "oh-sp-admin-text--neg" : "oh-sp-admin-text--pos"}>{a.variance >= 0 ? "+" : ""}{fmt(a.variance)} variance</span>
-          <span>{fmt(a.budgetRemaining)} remaining</span>
+          <span>Budget: {fmt(a.seasonBudget)}</span>
+          <span>Spent: {fmt(a.budgetUsed)}</span>
+        </div>
+        <div className="oh-sp-admin-bar-track">
+          <div className={`oh-sp-admin-bar-fill${isOver ? " oh-sp-admin-bar-fill--over" : ""}`} style={{ width: `${Math.min(spentPct, 100)}%` }} />
         </div>
       </div>
-      {a.isRevFlex && (
-        <div className="oh-sp-admin-rev">
-          <div className="oh-sp-admin-rev-row"><span className="oh-sp-admin-rev-label">Revenue</span><span className="oh-sp-admin-rev-count">{a.revTrackedCount}/{a.totalHomestands} tracked</span></div>
-          <div className="oh-sp-admin-bar-labels"><span>Forecast: {fmt(a.revForecast)}</span><span>Tracked: {fmt(a.revTracked)}</span></div>
-          <div className="oh-sp-admin-bar-track"><div className="oh-sp-admin-bar-fill oh-sp-admin-bar-fill--rev" style={{ width: `${Math.min(pct(a.revTracked, a.revForecast), 100)}%` }} /></div>
+
+      {/* Variance is the hero metric — remaining is gone */}
+      {hasData && (
+        <div className={`oh-sp-admin-card-variance${isOver ? " oh-sp-admin-card-variance--neg" : ""}`}>
+          <span className="oh-sp-admin-card-variance-val">{a.variance >= 0 ? "+" : ""}{fmt(a.variance)}</span>
+          <span className="oh-sp-admin-card-variance-label">{isOver ? "over budget" : "under budget"}</span>
         </div>
       )}
-      <div className="oh-sp-admin-card-badges">
-        {a.dueCount > 0 && <span className="oh-sp-admin-badge oh-sp-admin-badge--due">{a.dueCount} due</span>}
-        {a.activeCount > 0 && <span className="oh-sp-admin-badge oh-sp-admin-badge--active">{a.activeCount} active</span>}
-        {a.upcomingCount > 0 && <span className="oh-sp-admin-badge oh-sp-admin-badge--upcoming">{a.upcomingCount} upcoming</span>}
-      </div>
+
+      {a.isRevFlex && (
+        <div className="oh-sp-admin-rev">
+          <span className="oh-sp-admin-rev-label">Revenue</span>
+          <span className="oh-sp-admin-rev-inline">
+            {fmt(a.revTracked)} / {fmt(a.revForecast)}
+          </span>
+          <span className="oh-sp-admin-rev-count">{a.revTrackedCount}/{a.totalHomestands} tracked</span>
+        </div>
+      )}
+
+      {/* Only show due and active badges — upcoming is noise */}
+      {(a.dueCount > 0 || a.activeCount > 0) && (
+        <div className="oh-sp-admin-card-badges">
+          {a.dueCount > 0 && <span className="oh-sp-admin-badge oh-sp-admin-badge--due">{a.dueCount} due</span>}
+          {a.activeCount > 0 && <span className="oh-sp-admin-badge oh-sp-admin-badge--active">{a.activeCount} active</span>}
+        </div>
+      )}
     </div>
   );
 }

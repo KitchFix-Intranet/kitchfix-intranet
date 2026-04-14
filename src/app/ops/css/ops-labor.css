@@ -281,7 +281,7 @@
 
 /* ── Card list ── */
 .oh-sp-cards {
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 
 
@@ -355,7 +355,7 @@
 
 /* ── Completed ── */
 .oh-sp-card--done {
-  opacity: 0.5; padding: 8px 14px; border-color: #f1f5f9;
+  opacity: 0.65; padding: 8px 14px; border-color: #f1f5f9;
   transition: opacity 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
 }
@@ -372,6 +372,14 @@
 /* Completed detail section */
 .oh-sp-completed-detail {
   margin-top: 12px;
+  margin-bottom: 16px;
+}
+
+/* Day viz after completed detail: lighter treatment, clear separation */
+.oh-sp-completed-detail + .oh-sp-viz {
+  background: transparent;
+  border: none;
+  padding: 14px 0;
 }
 
 .oh-sp-completed-summary {
@@ -426,22 +434,26 @@
 }
 
 .oh-sp-edit-actuals-btn {
-  padding: 5px 12px;
-  border-radius: 5px;
-  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #475569;
   background: white;
-  border: 0.5px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .oh-sp-edit-actuals-btn:hover {
-  border-color: #94a3b8;
-  color: #475569;
-  background: #f8fafc;
+  border-color: #64748b;
+  color: var(--oh-navy);
+  background: #f1f5f9;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .oh-sp-edit-actuals-btn:active {
@@ -506,7 +518,7 @@
 .oh-sp-pill--next     { background: var(--oh-navy, #0f3057); color: #fff; }
 .oh-sp-pill--active   { background: #f0fdf4; color: #16a34a; }
 .oh-sp-pill--due      { background: #fffbeb; color: #92400e; }
-.oh-sp-pill--done     { background: #f1f5f9; color: #cbd5e1; }
+.oh-sp-pill--done     { background: #dcfce7; color: #166534; }
 
 
 /* ═══════════════════════════════════
@@ -597,7 +609,7 @@
 
 /* Revenue note on completed flex cards */
 .oh-sp-card-rev-note {
-  font-size: 10px; color: #94a3b8; font-weight: 500;
+  font-size: 11px; color: #64748b; font-weight: 600;
 }
 
 
@@ -722,8 +734,14 @@
 }
 
 .oh-sp-wk { font-size: 10.5px; font-weight: 600; color: #94a3b8; }
-.oh-sp-wk--warn { color: #d97706; }
-.oh-sp-wk--danger { color: #dc2626; }
+.oh-sp-wk--warn {
+  color: #92400e; background: #fffbeb; border: 1px solid #fde68a;
+  padding: 2px 8px; border-radius: 5px; font-weight: 700;
+}
+.oh-sp-wk--danger {
+  color: #991b1b; background: #fef2f2; border: 1px solid #fecaca;
+  padding: 2px 8px; border-radius: 5px; font-weight: 700;
+}
 
 
 /* ═══════════════════════════════════
@@ -1100,6 +1118,23 @@
 
   .oh-sp-flex-grid { grid-template-columns: 1fr; }
 
+  .oh-sp-completed-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .oh-sp-completed-meta {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .oh-sp-completed-grid {
+    gap: 16px;
+  }
+
   .oh-sp-rev-entry-row {
     flex-direction: column; align-items: stretch;
   }
@@ -1175,14 +1210,42 @@
   border-radius: 10px;
 }
 
+/* Season context + progress bar */
 .oh-sp-admin-context {
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
-.oh-sp-admin-portfolio-row {
+.oh-sp-admin-context-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.oh-sp-admin-context-bar {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.oh-sp-admin-context-fill {
+  height: 100%;
+  background: var(--oh-navy, #0f3057);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Main row: stats left, variance hero right */
+.oh-sp-admin-portfolio-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.oh-sp-admin-portfolio-stats {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
@@ -1192,13 +1255,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.oh-sp-admin-stat--alert {
-  padding: 6px 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
 }
 
 .oh-sp-admin-stat-label {
@@ -1220,16 +1276,61 @@
   font-size: 15px;
 }
 
-.oh-sp-admin-stat--pos { color: #16a34a; }
-.oh-sp-admin-stat--neg { color: #dc2626; }
-
-.oh-sp-admin-stat-sub {
-  font-size: 10px;
-  color: #94a3b8;
-  font-weight: 500;
+/* Variance hero callout */
+.oh-sp-admin-variance-hero {
+  text-align: right;
+  padding: 10px 16px;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
-/* ── Account Cards — 2-column (#2) ── */
+.oh-sp-admin-variance-hero--pos {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.oh-sp-admin-variance-hero--neg {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.oh-sp-admin-variance-val {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 24px;
+  font-weight: 800;
+  display: block;
+  line-height: 1.1;
+}
+
+.oh-sp-admin-variance-hero--pos .oh-sp-admin-variance-val { color: #16a34a; }
+.oh-sp-admin-variance-hero--neg .oh-sp-admin-variance-val { color: #dc2626; }
+
+.oh-sp-admin-variance-label {
+  font-size: 11px;
+  font-weight: 600;
+  display: block;
+  margin-top: 2px;
+}
+
+.oh-sp-admin-variance-hero--pos .oh-sp-admin-variance-label { color: #166534; }
+.oh-sp-admin-variance-hero--neg .oh-sp-admin-variance-label { color: #991b1b; }
+
+/* Action needed banner */
+.oh-sp-admin-action-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+/* ── Account Cards — 2-column ── */
 .oh-sp-admin-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1242,15 +1343,33 @@
   border-radius: 10px;
   padding: 14px 16px;
   transition: all 0.15s ease;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
 }
 
 .oh-sp-admin-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+  border-color: #94a3b8;
+  transform: translateY(-1px);
 }
 
+.oh-sp-admin-card:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* Variance-based card accents */
 .oh-sp-admin-card--alert {
   border-left: 3px solid #d97706;
+}
+
+.oh-sp-admin-card--healthy {
+  border-left: 3px solid #16a34a;
+}
+
+.oh-sp-admin-card--over {
+  border-left: 3px solid #dc2626;
 }
 
 .oh-sp-admin-card-header {
@@ -1278,9 +1397,9 @@
   border-radius: 4px;
 }
 
-/* ── Bar Charts — taller (#3) ── */
+/* ── Bar Charts ── */
 .oh-sp-admin-bar-section {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .oh-sp-admin-bar-labels {
@@ -1298,7 +1417,6 @@
   border-radius: 6px;
   overflow: hidden;
   border: 0.5px solid #cbd5e1;
-  margin-bottom: 3px;
 }
 
 .oh-sp-admin-bar-fill {
@@ -1311,32 +1429,69 @@
 .oh-sp-admin-bar-fill--over { background: #dc2626; }
 .oh-sp-admin-bar-fill--rev { background: #16a34a; }
 
-.oh-sp-admin-text--pos { color: #16a34a; font-weight: 600; }
-.oh-sp-admin-text--neg { color: #dc2626; font-weight: 600; }
-
-/* ── Revenue Section ── */
-.oh-sp-admin-rev {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 0.5px solid #f1f5f9;
-}
-
-.oh-sp-admin-rev-row {
+/* ── Card Variance Hero ── */
+.oh-sp-admin-card-variance {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
   margin-bottom: 4px;
 }
 
-.oh-sp-admin-rev-label { font-size: 11px; font-weight: 600; color: #475569; }
-.oh-sp-admin-rev-count { font-size: 10px; color: #94a3b8; }
+.oh-sp-admin-card-variance-val {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.oh-sp-admin-card-variance--neg .oh-sp-admin-card-variance-val {
+  color: #dc2626;
+}
+
+.oh-sp-admin-card-variance-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ── Revenue Section (compact) ── */
+.oh-sp-admin-rev {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 0.5px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.oh-sp-admin-rev-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.oh-sp-admin-rev-inline {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.oh-sp-admin-rev-count {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-left: auto;
+}
 
 /* ── Status Badges ── */
 .oh-sp-admin-card-badges {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .oh-sp-admin-badge {
@@ -1348,7 +1503,6 @@
 
 .oh-sp-admin-badge--due { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
 .oh-sp-admin-badge--active { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-.oh-sp-admin-badge--upcoming { background: #f1f5f9; color: #64748b; }
 
 /* ── Homestand Status Grid ── */
 .oh-sp-admin-section { margin-top: 4px; }
@@ -1447,10 +1601,12 @@
 
 /* ── Admin Responsive ── */
 @media (max-width: 700px) {
-  .oh-sp-admin-portfolio-row { gap: 12px; }
+  .oh-sp-admin-portfolio-main { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .oh-sp-admin-portfolio-stats { gap: 12px; }
+  .oh-sp-admin-variance-hero { text-align: left; align-self: stretch; }
   .oh-sp-admin-grid { grid-template-columns: 1fr; }
   .oh-sp-admin-hs-grid { padding: 8px 10px; }
   .oh-sp-admin-hs-cell { min-width: 28px; }
   .oh-sp-admin-hs-dot { width: 20px; height: 20px; }
-  .oh-sp-view-toggle { display: none; }
+  .oh-sp-admin-view-toggle { display: none; }
 }

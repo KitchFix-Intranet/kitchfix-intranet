@@ -342,6 +342,12 @@ const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
             {isCompleted && hs.plan ? (
               editingActuals ? (
                 <span className="oh-sp-card-budgetnum" style={{ color: "#94a3b8", fontSize: 13 }}>Editing...</span>
+              ) : expanded ? (
+              <div className="oh-sp-done-budget">
+                <span className={`oh-sp-done-var${hs.plan.variance >= 0 ? " oh-sp-done-var--pos" : " oh-sp-done-var--neg"}`}>
+                  {hs.plan.variance >= 0 ? "+" : ""}${Math.abs(hs.plan.variance).toLocaleString()}
+                </span>
+              </div>
               ) : (
               <div className="oh-sp-done-budget">
                 <span className="oh-sp-done-budgetnum">${budget.toLocaleString()}</span>
@@ -428,6 +434,10 @@ const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
                       }
                       setEditingActuals(true);
                     }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        <path d="m15 5 4 4" />
+                      </svg>
                       Edit actuals
                     </button>
                   </div>
