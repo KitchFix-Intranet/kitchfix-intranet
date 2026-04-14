@@ -1,24 +1,20 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import F from "@/app/ops/components/shared/F";
 
 /**
- * SeasonPlanner v4.1 — Mini viz fingerprints + Revenue Flex (TXR-V)
+ * SeasonPlanner v5 — Labor tracking + Revenue Flex (TXR-V)
  *
- * v4 features preserved:
+ * Features:
  *   - MiniViz fingerprint strips on collapsed cards
  *   - Expand/collapse with chevron, one-at-a-time
  *   - Auto-expand for active/due, force-open
  *   - "Up next" distinct state with navy border
- *   - Completed as locked slim one-liners
+ *   - Completed cards expandable with edit capability
  *   - Heavy homestand detection
  *   - Keyboard accessibility
- *
- * Added in v4.1:
- *   - Revenue flex detection (TXR-V): sold revenue input adjusts budget
+ *   - Revenue flex (TXR-V): sold revenue input adjusts budget
  *   - Two-field actuals entry for revenue flex (final revenue + labor)
- *   - Budget subtext: "forecast · updates with sales" / "adjusted from sales"
- *   - Revenue note on completed flex cards
  */
 export default function SeasonPlanner({ plannerData, account, showToast, openConfirm, onRefresh, isAdmin }) {
   const homestands = plannerData?.homestands || [];
@@ -39,6 +35,11 @@ export default function SeasonPlanner({ plannerData, account, showToast, openCon
   }, [homestands]);
 
   const [expandedId, setExpandedId] = useState(autoExpandId);
+
+  // Sync expanded card when plannerData changes (e.g., account switch from admin)
+  useEffect(() => {
+    setExpandedId(autoExpandId);
+  }, [autoExpandId]);
 
   const handleToggle = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -177,7 +178,7 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
   const isHeavy = hs.totalDays >= 10 || budget >= 10000;
 
   const laborRatio = hs.laborRatio || 0;
-const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
+  const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
 
   // Day breakdown
   const parts = [];
@@ -226,11 +227,6 @@ const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
     return weekNotes.join(". ") + ". Budget includes OT at 1.5× for hours over 40/wk.";
   })();
 
-  // Rippling note — only first upcoming/active
-  const ripplingNote = isFirstUpcoming
-    ? `Schedule ${hs.totalDays} days in Rippling. Target total: $${budget.toLocaleString()} or less.`
-    : null;
-
   // Budget subtext for revenue flex
   const budgetSubtext = isRevenueFlex
     ? (hasRevenueAdjustment ? "adjusted from sales" : "forecast · updates with sales")
@@ -264,7 +260,7 @@ const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
         body: JSON.stringify({
           action: "submit-labor-actuals", account, homestandId: hs.id,
           budgetEnvelope: budget, carryForward: 0, actualSpent: actual,
-          notes: "", revenueActual: 0, actualFood: 0, actualPackaging: 0,
+          notes: "",
         }),
       });
       const data = await res.json();
@@ -293,7 +289,7 @@ const laborRatioPct = laborRatio > 0 ? (laborRatio * 100).toFixed(2) : "0";
         body: JSON.stringify({
           action: "submit-labor-actuals", account, homestandId: hs.id,
           budgetEnvelope: adjBudget, carryForward: 0, actualSpent: actual,
-          notes: "", revenueActual: finalRev, actualFood: 0, actualPackaging: 0,
+          notes: "", revenueActual: finalRev,
         }),
       });
       const data = await res.json();

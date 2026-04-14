@@ -339,16 +339,12 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
     const hasPayrollRelief = payrollWeekCount > 1 && !allWeeks.every((w) => w.workingDays >= 5);
 
     let hsRevenue = 0;
-    let hsFoodBudget = 0;
-    let hsPackagingBudget = 0;
     for (const day of days) {
       const p = getPeriodForDate(day.date);
       if (p) {
         const budget = budgets.find((b) => b.period === p);
         if (budget && workingDaysPerPeriod[p]) {
           hsRevenue += budget.revenue / workingDaysPerPeriod[p];
-          hsFoodBudget += (budget.foodBudget || 0) / workingDaysPerPeriod[p];
-          hsPackagingBudget += (budget.packagingBudget || 0) / workingDaysPerPeriod[p];
         }
       }
     }
@@ -387,9 +383,6 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
       cleanDays: cleanDaysInHS.length,
       opponents,
       budgetEnvelope,
-      hourlyBudget: budgetEnvelope,
-      foodBudget: Math.round(hsFoodBudget),
-      packagingBudget: Math.round(hsPackagingBudget),
       budgetBreakdown,
       periodsTouched: [...periodsTouched],
       revenue: forecastedRevenue,
@@ -421,16 +414,12 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
   const seasonBudgetTotal = budgets.reduce((sum, b) => sum + b.hourlyBudget, 0);
   let budgetUsed = 0;
   let budgetExpectedAtThisPoint = 0;
-  let foodActualTotal = 0;
-  let packagingActualTotal = 0;
   let revenueActualTotal = 0;
 
   for (const hs of homestands) {
     if (hs.plan) {
       completedCount++;
       budgetUsed += hs.plan.actualSpent;
-      foodActualTotal += hs.plan.actualFood || 0;
-      packagingActualTotal += hs.plan.actualPackaging || 0;
       revenueActualTotal += hs.plan.revenueActual || 0;
 
       // Planner view tracks labor only — use per-homestand labor variance
@@ -455,43 +444,14 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
     completedCount,
     totalHomestands: homestands.length,
     seasonBudgetTotal: Math.round(seasonBudgetTotal),
-    seasonSalaryTotal: Math.round(budgets.reduce((sum, b) => sum + b.salaryBudget, 0)),
     budgetUsed: Math.round(budgetUsed),
     budgetRemaining: Math.round(seasonBudgetTotal - budgetUsed),
     budgetExpectedAtThisPoint: Math.round(budgetExpectedAtThisPoint),
     seasonRevenue: budgets.reduce((sum, b) => sum + b.revenue, 0),
     revenueActualTotal: Math.round(revenueActualTotal),
-    totalFoodBudget: budgets.reduce((sum, b) => sum + b.foodBudget, 0),
-    totalPackagingBudget: budgets.reduce((sum, b) => sum + b.packagingBudget, 0),
-    foodActualTotal: Math.round(foodActualTotal),
-    packagingActualTotal: Math.round(packagingActualTotal),
   };
 
-  const periodSummary = budgets
-    .filter((b) => b.hourlyBudget > 0)
-    .map((b) => {
-      const touchingHS = homestands.filter((hs) => hs.periodsTouched.includes(b.period));
-      const planned = touchingHS.reduce((sum, hs) => {
-        const totalHsDays = hs.totalDays;
-        const daysInThisPeriod = hs.days.filter((d) => d.period === b.period).length;
-        const ratio = totalHsDays > 0 ? daysInThisPeriod / totalHsDays : 0;
-        return sum + (hs.plan ? hs.plan.actualSpent * ratio : 0);
-      }, 0);
-
-      return {
-        period: b.period,
-        budget: b.hourlyBudget,
-        salary: 0,
-        revenue: b.revenue,
-        workingDays: workingDaysPerPeriod[b.period] || 0,
-        dailyRate: Math.round(dailyRates[b.period] || 0),
-        homestands: touchingHS.map((hs) => hs.id),
-        actualAllocated: Math.round(planned),
-        variance: Math.round(b.hourlyBudget - planned),
-      };
-    });
-
-  return { homestands, seasonMetrics, periodSummary, cleanDays, periods, budgets, isRevenueFlex };
+  return { homestands, seasonMetrics, cleanDays, periods, budgets, isRevenueFlex };
 }
 
 
@@ -1102,7 +1062,7 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
     }
 
     if (action === "submit-labor-actuals") {
-      const { account, homestandId, budgetEnvelope, carryForward, actualSpent, notes, revenueActual, actualFood, actualPackaging } = body;
+      const { account, homestandId, budgetEnvelope, carryForward, actualSpent, notes, revenueActual } = body;
 
       const variance = Math.round(budgetEnvelope - actualSpent);
 
@@ -1111,12 +1071,15 @@ const safeRead = async (id, tab) => {
         catch { return { headers: [], rows: [] }; }
       };
             const { rows: existingPlans } = await safeRead(SHEET_IDS.COLLECTION, "labor_plans");
-      const acctPlans = existingPlans
+      // Deduplicate: keep only the latest row per homestandId (append-only, last wins)
+      const latestByHS = {};
+      existingPlans
         .filter((r) => String(r[3]).trim() === account)
-        .map((r) => ({
-          homestandId: String(r[4]).trim(),
-          variance: Number(r[8]) || 0,
-        }));
+        .forEach((r) => {
+          const hsId = String(r[4]).trim();
+          latestByHS[hsId] = { homestandId: hsId, variance: Number(r[8]) || 0 };
+        });
+      const acctPlans = Object.values(latestByHS);
 
       let cumulativeVariance = acctPlans.reduce((sum, p) => sum + p.variance, 0) + variance;
       let streak = 0;
@@ -1143,8 +1106,8 @@ const safeRead = async (id, tab) => {
         streak,
         (notes || "").slice(0, 300),
         Math.round(Number(revenueActual) || 0),
-        Math.round(Number(actualFood) || 0),
-        Math.round(Number(actualPackaging) || 0),
+        0, // actualFood — not tracked in planner
+        0, // actualPackaging — not tracked in planner
       ];
 
 const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_plans", row);

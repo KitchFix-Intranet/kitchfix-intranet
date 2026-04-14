@@ -86,11 +86,15 @@ export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount })
   const pDue = accounts.reduce((s, a) => s + a.dueCount, 0);
   const maxHS = Math.max(...accounts.map((a) => a.totalHomestands), 0);
 
-  const seasonStart = new Date("2026-03-23");
-  const seasonEnd = new Date("2026-09-27");
+  // Derive season timeline from actual schedule data (not hardcoded)
+  const allDates = accounts.flatMap((a) =>
+    a.homestands.flatMap((h) => [h.startDate, h.endDate].filter(Boolean))
+  );
+  const seasonStart = allDates.length > 0 ? new Date(allDates.sort()[0]) : new Date();
+  const seasonEnd = allDates.length > 0 ? new Date(allDates.sort().pop()) : new Date();
   const now = new Date();
   const daysSince = Math.max(0, Math.floor((now - seasonStart) / 86400000));
-  const totalDays = Math.floor((seasonEnd - seasonStart) / 86400000);
+  const totalDays = Math.max(1, Math.floor((seasonEnd - seasonStart) / 86400000));
   const week = Math.floor(daysSince / 7) + 1;
   const totalWeeks = Math.ceil(totalDays / 7);
   const seasonPct = Math.min(100, Math.round((daysSince / totalDays) * 100));
