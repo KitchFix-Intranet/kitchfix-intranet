@@ -267,3 +267,70 @@ function formatDate(dateStr) {
     return dateStr;
   }
 }
+
+// ═══════════════════════════════════════
+// REJECTION NOTIFICATION EMAIL
+// ═══════════════════════════════════════
+
+/**
+ * Send rejection notification email to the original invoice submitter.
+ * Sent FROM the AP reviewer TO the operator.
+ *
+ * @param {string} accessToken - AP reviewer's OAuth token
+ * @param {string} senderEmail - AP reviewer's email
+ * @param {string} recipientEmail - Original submitter's email
+ * @param {Object} data - Rejection details
+ */
+export async function sendRejectionEmail(accessToken, senderEmail, recipientEmail, data) {
+  const gmail = getGmailClient(accessToken);
+
+  try {
+    const totalFmt = `$${Number(data.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const reasonList = (data.reasons || []).length > 0 ? data.reasons.join(", ") : "See note below";
+
+    const subject = `[KitchFix] Invoice Returned - ${data.vendor} #${data.invoiceNumber || "N/A"} ${data.account}`;
+
+    const html = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; color: #0f3057;">
+  <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+    <div style="font-size: 14px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">Invoice Returned - Action Required</div>
+    <div style="font-size: 12px; color: #b91c1c;">An invoice you submitted has been returned by AP and needs to be corrected.</div>
+  </div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
+    <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 100px;">Vendor</td><td style="padding: 6px 0; font-weight: 700;">${data.vendor}</td></tr>
+    <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Invoice #</td><td style="padding: 6px 0;">${data.invoiceNumber || "N/A"}</td></tr>
+    <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Account</td><td style="padding: 6px 0;">${data.account}</td></tr>
+    <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Total</td><td style="padding: 6px 0; font-weight: 700;">${totalFmt}</td></tr>
+    <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Issue</td><td style="padding: 6px 0; color: #dc2626; font-weight: 600;">${reasonList}</td></tr>
+  </table>
+  <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+    <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9a3412; margin-bottom: 4px;">Note from AP</div>
+    <div style="font-size: 13px; color: #0f3057; font-weight: 500;">${data.note}</div>
+  </div>
+  <div style="font-size: 12px; color: #64748b;">
+    <a href="https://kitchfix-intranet.vercel.app/ops" style="color: #d97706; font-weight: 700; text-decoration: none;">Open Invoice Capture</a> to fix and resubmit this invoice.
+  </div>
+  <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8;">
+    Returned by ${data.rejectedBy?.split("@")[0] || "AP"} - KitchFix Ops Hub
+  </div>
+</div>`;
+
+    const rawMessage = buildMimeSimple({
+      from: senderEmail,
+      to: [recipientEmail],
+      subject,
+      html,
+    });
+
+    const result = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw: rawMessage },
+    });
+
+    console.log(`[Gmail] Rejection notification sent to ${recipientEmail}, messageId: ${result.data.id}`);
+    return { success: true, messageId: result.data.id };
+  } catch (error) {
+    console.error("[Gmail] Rejection email failed:", error.message);
+    return { success: false, error: error.message };
+  }
+}

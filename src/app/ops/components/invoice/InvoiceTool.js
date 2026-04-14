@@ -673,6 +673,7 @@ const payload = {
 pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0, type: p.type || "image" })),
 isCreditMemo,
       ocrVendorName: ocrResult?.vendorName || null,
+      correctedFromUuid: resubmitSource?.uuid || null,
     };
         if (!navigator.onLine) {
       const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
@@ -693,7 +694,7 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
     finally { setSubmitting(false); }
-}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
+}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, resubmitSource, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
 
   const drainOfflineQueue = useCallback(async () => {
     const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
@@ -724,7 +725,7 @@ setErrors({});
 setReorderMode(false); setSelectedPageIdx(null);
     setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
 if (galleryInputRef.current) galleryInputRef.current.value = "";
-    setVendor(null); setFormType("invoice");
+    setVendor(null); setFormType("invoice"); setResubmitSource(null);
     }, []);
 
   const loadHistoryForAccount = useCallback(async (acctKey) => {
@@ -751,6 +752,7 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
 
     const historySource = historyData !== null ? historyData : recentSubmissions;
 
+    
   const filteredSubmissions = useMemo(() => {
     let list = historySource;
     if (historySearch.trim()) {
@@ -1310,6 +1312,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                             </div>
                             <span className="oh-inv-add-card-text">{dragOver ? "Drop here" : "Upload digital invoice or scan"}</span>
                             <span className="oh-inv-add-card-hint">PDF, JPG, or PNG</span>
+                            {resubmitSource && <span style={{ fontSize: 11, color: "#b45309", fontWeight: 600, marginTop: 4, textAlign: "center" }}>Re-upload the invoice - your corrected details will be stamped on the new PDF</span>}
                             <div className="oh-inv-capture-btns">
                               <button className="oh-inv-capture-btn oh-inv-capture-btn--camera" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && galleryInputRef.current?.click(); }} type="button">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>

@@ -8,7 +8,7 @@
 
 import { readSheet, appendRow, appendRows, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
-import { sendInvoiceEmail } from "@/lib/gmail";
+import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 
 // ─── Document Type Labels (Photo Gate) ───
@@ -956,7 +956,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
 
   // ── Invoice Submit ──
   if (action === "invoice-submit") {
-const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, ccSelf } = body;
+const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, ccSelf, correctedFromUuid } = body;
 
     if (!account || !vendor || !invoiceDate || !totalAmount || !pages || pages.length === 0) {
       return { success: false, error: "Missing required fields" };
@@ -1043,10 +1043,27 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         vendorId || "", invoiceNumber || "", invoiceDate,
         Number(totalAmount) || 0, JSON.stringify(glRows), JSON.stringify(driveUrls),
 pages.length, "FALSE", "sent", "", type, rawDriveUrl,
+        "", "", "", "", correctedFromUuid || "",
       ];
 
       const sheetResult = await appendRow(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", row);
       if (!sheetResult.success) return { success: false, error: "Failed to log submission: " + sheetResult.error };
+
+      // 3b. If this is a correction, mark the original as "corrected"
+      if (correctedFromUuid) {
+        try {
+          const origRow = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, correctedFromUuid);
+          if (origRow) {
+            await Promise.all([
+              updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${origRow}`, "corrected"),
+              updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${origRow}`, now.toISOString()),
+            ]);
+            console.log(`[Invoice] Marked original ${correctedFromUuid} as corrected`);
+          }
+        } catch (corrErr) {
+          console.warn("[Invoice] Failed to mark original as corrected (non-blocking):", corrErr.message);
+        }
+      }
 
       // 4. Send email to AP
       let emailSent = false;
@@ -1075,16 +1092,20 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
       if (process.env.SLACK_INVOICE_WEBHOOK) {
         const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
         const glSummary = (glRows || []).filter(r => r.code && Number(r.amount) > 0).map(r => `${r.code}: $${Number(r.amount).toFixed(2)}`).join(", ");
+        const isCorrection = !!correctedFromUuid;
+        const headerEmoji = isCorrection ? "🔄" : "📄";
+        const headerText = isCorrection ? "Invoice Corrected & Resubmitted" : "Invoice Submitted";
+        const correctionLine = isCorrection ? `\n*Correction of:* ${correctedFromUuid.slice(0, 8)}...` : "";
         fetch(process.env.SLACK_INVOICE_WEBHOOK, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: `Invoice submitted: ${vendor} ${totalFmt}`,
+            text: `${headerEmoji} ${headerText}: ${vendor} ${totalFmt}`,
             blocks: [{
               type: "section",
               text: {
                 type: "mrkdwn",
-                text: `*Invoice Submitted*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Date:* ${invoiceDate}\n*Total:* ${totalFmt}\n*Type:* ${type}\n*GL:* ${glSummary || "N/A"}\n*Pages:* ${pages.length}\n*Submitted by:* ${email}`,
+                text: `*${headerEmoji} ${headerText}*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Date:* ${invoiceDate}\n*Total:* ${totalFmt}\n*Type:* ${type}\n*GL:* ${glSummary || "N/A"}\n*Pages:* ${pages.length}\n*Submitted by:* ${email}${correctionLine}`,
               },
             }],
           }),
@@ -1142,8 +1163,22 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const { uuid, reasons, note } = body;
     if (!uuid || !note) return { success: false, error: "Missing uuid or note" };
 
+    const safeRead = async (id, tab) => {
+      try { return await readSheet(token, id, tab); }
+      catch { return { headers: [], rows: [] }; }
+    };
+
     const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
     if (!rowNum) return { success: false, error: "Submission not found" };
+
+    // Read original row for notification context
+    const { rows: allRows } = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+    const origRow = allRows.find((r) => String(r[0] || "") === uuid);
+    const origVendor = String(origRow?.[4] || "Unknown");
+    const origInvNum = String(origRow?.[6] || "");
+    const origAccount = String(origRow?.[3] || "");
+    const origTotal = Number(origRow?.[8]) || 0;
+    const origSubmitter = String(origRow?.[2] || "");
 
     await Promise.all([
       updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, "returned"),
@@ -1153,6 +1188,42 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
       updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!T${rowNum}`, email),
       updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!U${rowNum}`, new Date().toISOString()),
     ]);
+
+    // Slack notification for rejection
+    if (process.env.SLACK_INVOICE_WEBHOOK) {
+      const totalFmt = `$${origTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `⚠️ Invoice returned: ${origVendor} ${totalFmt}`,
+          blocks: [{
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*⚠️ Invoice Returned to Operator*\n*Vendor:* ${origVendor}\n*Account:* ${origAccount}\n*Invoice #:* ${origInvNum || "N/A"}\n*Total:* ${totalFmt}\n*Reason:* ${(reasons || []).join(", ") || "N/A"}\n*Note:* ${note}\n*Returned by:* ${email}\n*Original submitter:* ${origSubmitter}`,
+            },
+          }],
+        }),
+      }).catch(() => {});
+    }
+
+    // Email notification to original submitter
+    if (origSubmitter) {
+      try {
+        await sendRejectionEmail(token, email, origSubmitter, {
+          vendor: origVendor,
+          invoiceNumber: origInvNum,
+          account: origAccount,
+          totalAmount: origTotal,
+          reasons: reasons || [],
+          note,
+          rejectedBy: email,
+        });
+      } catch (emailErr) {
+        console.warn("[Invoice Reject] Email notification failed (non-blocking):", emailErr.message);
+      }
+    }
 
     return { success: true };
   }
