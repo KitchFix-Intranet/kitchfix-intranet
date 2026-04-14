@@ -18,7 +18,7 @@ export function isInvoiceAdmin(email) {
   return INVOICE_ADMIN_USERS.includes(email?.toLowerCase());
 }
 
-export default function InvoiceAdmin({ config, showToast }) {
+export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("week");
@@ -33,6 +33,9 @@ export default function InvoiceAdmin({ config, showToast }) {
   const [rejectNote, setRejectNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Load ALL submissions once, filter client-side for period (no reload flicker)
   const loadSubmissions = useCallback(async () => {
     try {
@@ -44,6 +47,15 @@ export default function InvoiceAdmin({ config, showToast }) {
   }, []);
 
   useEffect(() => { loadSubmissions(); }, [loadSubmissions]);
+
+  // Report pending count to parent for tab badge
+  useEffect(() => {
+    if (!onStatsReady || allSubmissions.length === 0) return;
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
+    const weekItems = allSubmissions.filter((s) => new Date(s.timestamp) >= weekAgo);
+    const pending = weekItems.filter((s) => s.status === "sent" || s.status === "pending").length;
+    onStatsReady({ pending });
+  }, [allSubmissions, onStatsReady]);
 
   // Client-side period filter
   const submissions = useMemo(() => {
@@ -146,6 +158,22 @@ export default function InvoiceAdmin({ config, showToast }) {
     } catch { showToast("Network error", "error"); }
   }, [showToast, loadSubmissions]);
 
+  const handleDeleteDupe = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-delete-dupe", uuid: deleteTarget.uuid, vendor: deleteTarget.vendor, invoiceNumber: deleteTarget.invoiceNumber, totalAmount: deleteTarget.totalAmount }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Deleted duplicate: ${deleteTarget.vendor} #${deleteTarget.invoiceNumber}`, "success");
+        setDeleteTarget(null); setExpandedUuid(null);
+        loadSubmissions();
+      } else { showToast(data.error || "Failed to delete", "error"); }
+    } catch { showToast("Network error — try again", "error"); }
+    finally { setDeleting(false); }
+  }, [deleteTarget, showToast, loadSubmissions]);
+
   function toggleReason(r) { setRejectReasons((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]); }
 
   function formatDate(d) {
@@ -185,7 +213,7 @@ export default function InvoiceAdmin({ config, showToast }) {
             <button key={val} className={`oh-inv-period-pill${period === val ? " oh-inv-period-pill--active" : ""}`}
               onClick={() => setPeriod(val)}>{label}</button>
           ))}
-          <span style={{ width: 1, height: 20, background: "#e2e8f0", flexShrink: 0 }} />
+          <span className="oh-inv-pill-divider" />
           <button className={`oh-inv-period-pill${statusFilter === "all" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setStatusFilter("all")}>All</button>
           <button className={`oh-inv-period-pill${statusFilter === "returned" ? " oh-inv-period-pill--active" : ""}`}
             style={statusFilter !== "returned" && stats.returned > 0 ? { borderColor: "#fca5a5", color: "#991b1b" } : {}}
@@ -199,10 +227,10 @@ export default function InvoiceAdmin({ config, showToast }) {
         </div>
       </div>
 
-      <div className="oh-inv-weekly-summary" style={{ background: "#f0f4ff", borderColor: "#c7d2fe", color: "#1e40af" }}>
+      <div className="oh-inv-weekly-summary oh-inv-weekly-summary--admin">
         <strong>{stats.sent}</strong><span>sent</span><span>·</span>
-        <strong style={{ color: stats.returned > 0 ? "#ef4444" : undefined }}>{stats.returned}</strong><span>returned</span><span>·</span>
-        <strong style={{ color: stats.corrected > 0 ? "#10b981" : undefined }}>{stats.corrected}</strong><span>corrected</span><span>·</span>
+        <strong className={stats.returned > 0 ? "oh-inv-stat--returned" : ""}>{stats.returned}</strong><span>returned</span><span>·</span>
+        <strong className={stats.corrected > 0 ? "oh-inv-stat--corrected" : ""}>{stats.corrected}</strong><span>corrected</span><span>·</span>
         <strong>${stats.total >= 1000 ? `${(stats.total / 1000).toFixed(1)}k` : fmt$(stats.total)}</strong>
       </div>
 
@@ -224,14 +252,14 @@ export default function InvoiceAdmin({ config, showToast }) {
 
             return (
               <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}${isDupe ? " oh-inv-adm-row--dupe" : ""}`}>
-                <div className="oh-inv-hist-summary" role="button" tabIndex={0}
+                <div className="oh-inv-hist-summary" role="button" tabIndex={0} aria-expanded={isExpanded}
                   onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedUuid(isExpanded ? null : s.uuid); } }}>
                   <div className="oh-inv-history-left">
                     <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       {s.vendor}
                       <span className="oh-inv-hist-status" style={{ background: statusColor.bg, color: statusColor.color }}>{statusLabel}</span>
-                      {isDupe && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 20, background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a" }}>Dupe?</span>}
+                      {isDupe && <span className="oh-inv-hist-dupe-badge">Dupe?</span>}
                     </span>
                     <span className="oh-inv-history-meta">#{s.invoiceNumber || "—"} · {formatDate(s.invoiceDate)} · {s.pageCount} pg · {s.account} · {s.userEmail?.split("@")[0]}</span>
                   </div>
@@ -251,8 +279,7 @@ export default function InvoiceAdmin({ config, showToast }) {
                           {s.rejectionReason && <div style={{ fontSize: 10, color: "#b91c1c" }}>Reason: {s.rejectionReason}</div>}
                           <div style={{ fontSize: 10, color: "#b91c1c" }}>By {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${formatTimestamp(s.rejectedAt)}` : ""}</div>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); handleUnreject(s); }}
-                          style={{ padding: "4px 10px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", color: "#64748b", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        <button className="oh-inv-hist-undo-btn" onClick={(e) => { e.stopPropagation(); handleUnreject(s); }}>
                           Undo Return
                         </button>
                       </div>
@@ -291,6 +318,11 @@ export default function InvoiceAdmin({ config, showToast }) {
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18" /><path d="M6 6l12 12" /></svg>Not a Duplicate
                         </button>
                       )}
+                      {isDupe && (
+                        <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--delete" onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>Delete Duplicate
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -314,7 +346,7 @@ export default function InvoiceAdmin({ config, showToast }) {
 
       {rejectTarget && (
         <div className="oh-inv-adm-reject-overlay" onClick={() => { if (!rejecting) setRejectTarget(null); }}>
-          <div className="oh-inv-adm-reject-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="oh-inv-adm-reject-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="oh-inv-adm-reject-header">Return to operator</div>
             <div className="oh-inv-adm-reject-body">
               <div className="oh-inv-adm-reject-invoice">
@@ -336,6 +368,30 @@ export default function InvoiceAdmin({ config, showToast }) {
               <button className="oh-inv-adm-reject-cancel" onClick={() => setRejectTarget(null)} disabled={rejecting}>Cancel</button>
               <button className="oh-inv-adm-reject-submit" onClick={handleReject} disabled={rejecting || !rejectNote.trim()}>
                 {rejecting ? <><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} />Returning...</> : "Return to operator"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="oh-inv-adm-reject-overlay" onClick={() => { if (!deleting) setDeleteTarget(null); }}>
+          <div className="oh-inv-adm-reject-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="oh-inv-adm-reject-header" style={{ color: "#991b1b" }}>Delete Duplicate</div>
+            <div className="oh-inv-adm-reject-body">
+              <div className="oh-inv-adm-reject-invoice">
+                <div className="oh-inv-adm-reject-invoice-name">{deleteTarget.vendor} #{deleteTarget.invoiceNumber}</div>
+                <div className="oh-inv-adm-reject-invoice-meta">{deleteTarget.userEmail?.split("@")[0]} · {deleteTarget.account} · ${fmt$(Math.abs(deleteTarget.totalAmount))}</div>
+              </div>
+              <div className="oh-inv-adm-delete-warn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                <span>This permanently deletes the submission from the sheet. This cannot be undone. The stamped and raw PDFs in Drive will remain.</span>
+              </div>
+            </div>
+            <div className="oh-inv-adm-reject-footer">
+              <button className="oh-inv-adm-reject-cancel" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+              <button className="oh-inv-adm-reject-submit" style={{ background: "#dc2626" }} onClick={handleDeleteDupe} disabled={deleting}>
+                {deleting ? <><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} />Deleting...</> : "Delete Permanently"}
               </button>
             </div>
           </div>

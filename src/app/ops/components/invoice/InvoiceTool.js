@@ -159,6 +159,7 @@ const [invoiceDate, setInvoiceDate] = useState("");
 const [dragOver, setDragOver] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [resubmitSource, setResubmitSource] = useState(null);
+  const [adminStats, setAdminStats] = useState(null);
     const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
   const [historyAccount, setHistoryAccount] = useState("__current__");
@@ -177,7 +178,7 @@ const [dragOver, setDragOver] = useState(false);
 
   // Validation
   const [errors, setErrors] = useState({});
-const galleryInputRef = useRef(null);
+const fileInputRef = useRef(null);
   const vendorRef = useRef(null);
     const formRef = useRef(null);
   const consistencyCheckKeyRef = useRef("");
@@ -188,14 +189,14 @@ const accounts = config?.accounts || [];
   // ——— Derived state ———
   const isCreditMemo = formType === "credit";
   const hasAccount = !!account;
-  const hasPhotos = pages.length > 0;
+  const hasPages = pages.length > 0;
   const hasVendor = !!vendor;
 
   const gateScanning = pages.some((p) => p.gate === "scanning");
   const gateFailedPages = pages.filter((p) => p.gate === "fail");
   const gateWarnPages = pages.filter((p) => p.gate === "warn");
-  const gateAllCleared = hasPhotos && pages.every((p) => p.gate === "pass" || p.gate === "warn");
-  const photosReady = hasPhotos && gateAllCleared && !gateScanning;
+  const gateAllCleared = hasPages && pages.every((p) => p.gate === "pass" || p.gate === "warn");
+  const pagesReady = hasPages && gateAllCleared && !gateScanning;
 
 const glTotalRaw = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
   const glTotal = Math.round(glTotalRaw * 100) / 100;
@@ -303,7 +304,7 @@ setOcrStatus("idle"); setOcrResult(null);
       setErrors({});
       setReorderMode(false); setSelectedPageIdx(null);
       setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
-if (galleryInputRef.current) galleryInputRef.current.value = "";
+if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, [account, loadBootstrap]);
 
@@ -593,7 +594,7 @@ tryOCRScanRef.current?.(pages[pages.length - 2].data);
     }
   }, [pages, ocrStatus, totalAmount]);
 
-const handlePhotoCapture = useCallback((e) => { processFiles(e.target.files || []); }, [processFiles]);
+const handleFileInput = useCallback((e) => { processFiles(e.target.files || []); }, [processFiles]);
   const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true); }, []);
   const handleDragLeave = useCallback(() => setDragOver(false), []);
   const handleDrop = useCallback((e) => { e.preventDefault(); setDragOver(false); processFiles(e.dataTransfer.files); }, [processFiles]);
@@ -725,7 +726,7 @@ setErrors({});
     setOcrStatus("idle"); setOcrResult(null);
 setReorderMode(false); setSelectedPageIdx(null);
     setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
-if (galleryInputRef.current) galleryInputRef.current.value = "";
+if (fileInputRef.current) fileInputRef.current.value = "";
     setVendor(null); setFormType("invoice"); setResubmitSource(null);
     }, []);
 
@@ -810,7 +811,7 @@ if (galleryInputRef.current) galleryInputRef.current.value = "";
     <div className="oh-inv-skeleton" aria-hidden="true">
       <div className="oh-inv-skeleton-tabs"><div className="oh-inv-skeleton-pill oh-inv-skeleton-pill--active" /><div className="oh-inv-skeleton-pill" /></div>
       <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" /><div className="oh-inv-skeleton-input" /></div>
-      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"40%"}} /><div className="oh-inv-skeleton-photo-zone" /></div>
+      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"40%"}} /><div className="oh-inv-skeleton-page-zone" /></div>
       <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"25%"}} /><div className="oh-inv-skeleton-input" /></div>
       <div className="oh-inv-skeleton-row-2">
         <div className="oh-inv-skeleton-group" style={{flex:1}}><div className="oh-inv-skeleton-label" style={{width:"50%"}} /><div className="oh-inv-skeleton-input" /></div>
@@ -828,11 +829,11 @@ const MAINTENANCE_MODE = false;
   if (MAINTENANCE_MODE && !MAINTENANCE_BYPASS.includes(userEmail)) {
     return (
       <div className="oh-view" style={{ animation: "oh-slideUp 0.4s ease" }}>
-        <div className="oh-card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🔧</div>
-          <h3 style={{ margin: "0 0 8px", color: "#0f3057", fontSize: "1.2rem" }}>Invoice Capture Under Maintenance</h3>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "0.9rem", lineHeight: 1.6, maxWidth: 360, marginInline: "auto" }}>
-            We're making improvements to the invoice submission system. It will be back online shortly. Contact Kevin if you need to submit an invoice urgently.
+        <div className="oh-card oh-inv-maintenance">
+          <div className="oh-inv-maintenance-emoji">🔧</div>
+          <h3 className="oh-inv-maintenance-title">Invoice Capture Under Maintenance</h3>
+          <p className="oh-inv-maintenance-desc">
+            We&apos;re making improvements to the invoice submission system. It will be back online shortly. Contact Kevin if you need to submit an invoice urgently.
           </p>
         </div>
       </div>
@@ -860,7 +861,7 @@ const MAINTENANCE_MODE = false;
 
       {showReview && (
                 <div className="oh-inv-review-overlay" onClick={() => setShowReview(false)}>
-          <div className="oh-inv-review-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="oh-inv-review-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="oh-inv-review-header">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
               <span>Review before submitting</span>
@@ -984,11 +985,11 @@ Upload, code &amp; submit to AP.
               <button className={`oh-inv-tab${activeTab === "admin" ? " oh-inv-tab--active" : ""}`} onClick={() => setActiveTab("admin")}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
                 AP Review
+                {adminStats?.pending > 0 && <span className="oh-inv-tab-count">{adminStats.pending}</span>}
               </button>
             )}
           </div>
 
-          {/* ════ HISTORY TAB ════ */}
           {/* ════ HISTORY TAB ════ */}
           {activeTab === "history" && (
             <div className="oh-inv-history-panel">
@@ -1022,8 +1023,9 @@ Upload, code &amp; submit to AP.
               ) : (
                 <>
                   {(() => {
-                    const ps = historyPeriod === "month" ? periodSummary.month : historyPeriod === "week" ? periodSummary.week : periodSummary.week;
-                    const label = historyPeriod === "month" ? "30 days" : historyPeriod === "week" ? "7 days" : "This week";
+                    if (historyPeriod === "needsfix") return null;
+                    const ps = historyPeriod === "month" ? periodSummary.month : historyPeriod === "week" ? periodSummary.week : periodSummary.all;
+                    const label = historyPeriod === "month" ? "30 days" : historyPeriod === "week" ? "7 days" : "All time";
                     if (ps.count === 0) return null;
                     return (
                       <div className="oh-inv-weekly-summary">
@@ -1035,10 +1037,10 @@ Upload, code &amp; submit to AP.
                     );
                   })()}
                   {returnedCount > 0 && historyPeriod !== "needsfix" && (
-                    <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="oh-inv-hist-returned-alert">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                      <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
-                      <button style={{ marginLeft: "auto", padding: "4px 12px", border: "1px solid #fca5a5", borderRadius: 6, background: "#fff", color: "#991b1b", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--oh-font-body)" }} onClick={() => setHistoryPeriod("needsfix")}>View</button>
+                      <span className="oh-inv-hist-returned-alert-text">{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
+                      <button className="oh-inv-hist-returned-alert-btn" onClick={() => setHistoryPeriod("needsfix")}>View</button>
                     </div>
                   )}
                   {filteredSubmissions.length === 0 && historySource.length === 0 ? (
@@ -1067,7 +1069,7 @@ Upload, code &amp; submit to AP.
 
                         return (
                           <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}`}>
-                            <div className="oh-inv-hist-summary" role="button" tabIndex={0} onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedUuid(isExpanded ? null : s.uuid); } }}>
+                            <div className="oh-inv-hist-summary" role="button" tabIndex={0} aria-expanded={isExpanded} onClick={() => setExpandedUuid(isExpanded ? null : s.uuid)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedUuid(isExpanded ? null : s.uuid); } }}>
                               <div className="oh-inv-history-left">
                                 <span className="oh-inv-history-vendor" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   {s.vendor}
@@ -1118,7 +1120,7 @@ Upload, code &amp; submit to AP.
                                 )}
 
                                 <div className="oh-inv-hist-actions">
-                                  {driveUrls.length > 0 && <a href={typeof driveUrls[0] === "string" ? driveUrls[0] : driveUrls[0]} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Stamped PDF</a>}
+                                  {driveUrls.length > 0 && <a href={driveUrls[0]} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Stamped PDF</a>}
                                   {s.rawDriveUrl && <a href={s.rawDriveUrl} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Raw PDF</a>}
                                   <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); exportReceipt(s); }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>Export</button>
                                   {s.status === "returned" && (
@@ -1166,7 +1168,7 @@ Upload, code &amp; submit to AP.
 
           {/* ════ ADMIN TAB ════ */}
           {activeTab === "admin" && isInvoiceAdmin(config?.email) && (
-            <InvoiceAdmin config={{ ...config, userEmail: config?.email }} showToast={showToast} />
+            <InvoiceAdmin config={{ ...config, userEmail: config?.email }} showToast={showToast} onStatsReady={setAdminStats} />
           )}
 
           {/* ════ FORM TAB ════ */}
@@ -1174,10 +1176,10 @@ Upload, code &amp; submit to AP.
             <div className={`oh-inv-form${formType === "invoice" ? " oh-inv-form--invoice" : ""}${isCreditMemo ? " oh-inv-form--credit" : ""}`}>
 
               {resubmitSource && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", marginBottom: 16, background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" style={{ flexShrink: 0 }}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+                <div className="oh-inv-resubmit-banner">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
                   <span><strong>Correcting:</strong> {resubmitSource.vendor} #{resubmitSource.invoiceNumber} — {resubmitSource.rejectionNote || "fix and resubmit"}</span>
-                  <button style={{ marginLeft: "auto", background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16, padding: 4 }} onClick={() => setResubmitSource(null)}>×</button>
+                  <button className="oh-inv-resubmit-banner-close" onClick={() => setResubmitSource(null)}>×</button>
                 </div>
               )}
               {/* Two-way type toggle */}
@@ -1231,7 +1233,7 @@ Upload, code &amp; submit to AP.
 <span>Invoice</span>
                 </div>
 
-                <div className={`oh-inv-field-group${!hasAccount ? " oh-inv-field--disabled" : ""}${photosReady ? " oh-inv-field--done" : ""}`} data-field="pages">
+                <div className={`oh-inv-field-group${!hasAccount ? " oh-inv-field--disabled" : ""}${pagesReady ? " oh-inv-field--done" : ""}`} data-field="pages">
 
                   {/* ─── Label row: label left, reorder button right ─── */}
                   <div className="oh-inv-label-row">
@@ -1318,7 +1320,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
 {pages.length < 15 && !reorderMode && (
                         <>
                         {pages.length === 0 ? (
-<div className={`oh-inv-add-card oh-inv-add-card--first${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+<div className={`oh-inv-add-card oh-inv-add-card--first${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`} role="button" aria-label="Upload invoice PDF or scan" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                             <div className="oh-inv-add-card-icon">
                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                             </div>
@@ -1326,7 +1328,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                             <span className="oh-inv-add-card-hint">PDF, JPG, or PNG</span>
                             {resubmitSource && <span style={{ fontSize: 11, color: "#b45309", fontWeight: 600, marginTop: 4, textAlign: "center" }}>Re-upload the invoice - your corrected details will be stamped on the new PDF</span>}
                             <div className="oh-inv-capture-btns">
-                              <button className="oh-inv-capture-btn oh-inv-capture-btn--camera" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && galleryInputRef.current?.click(); }} type="button">
+                              <button className="oh-inv-capture-btn oh-inv-capture-btn--upload" disabled={!hasAccount} onClick={(e) => { e.stopPropagation(); hasAccount && fileInputRef.current?.click(); }} type="button">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                                 Upload file
                               </button>
@@ -1335,14 +1337,14 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
   <div
     className={`oh-inv-add-card${errors.pages ? " oh-inv-error" : ""}${dragOver ? " oh-inv-add-card--drag" : ""}`}
     onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
-    onClick={() => hasAccount && galleryInputRef.current?.click()}
+    onClick={() => hasAccount && fileInputRef.current?.click()}
   >
     <div className="oh-inv-add-card-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg></div>
     <span className="oh-inv-add-card-text">{dragOver ? "Drop here" : "Add page"}</span>
   </div>                        )}
                       </>
                     )}
-                    <input ref={galleryInputRef} type="file" accept="image/*,application/pdf" multiple onChange={handlePhotoCapture} style={{ display: "none" }} />
+                    <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple onChange={handleFileInput} style={{ display: "none" }} />
                                       </div>
 
 {/* ═══ NOTICES (priority order) ═══ */}
@@ -1431,7 +1433,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                         <div className="oh-inv-notice oh-inv-notice--block">
                           <div className="oh-inv-notice-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg></div>
                           <div className="oh-inv-notice-body"><p className="oh-inv-notice-msg">{msg}</p></div>
-                          <button className="oh-inv-notice-action" onClick={() => { removePage(pages.indexOf(p)); setTimeout(() => galleryInputRef.current?.click(), 100); }}>
+                          <button className="oh-inv-notice-action" onClick={() => { removePage(pages.indexOf(p)); setTimeout(() => fileInputRef.current?.click(), 100); }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                             Re-upload
                           </button>

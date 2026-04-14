@@ -948,7 +948,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
 
   // ── Invoice Submit ──
   if (action === "invoice-submit") {
-const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, ccSelf, correctedFromUuid } = body;
+const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, correctedFromUuid } = body;
 
     if (!account || !vendor || !invoiceDate || !totalAmount || !pages || pages.length === 0) {
       return { success: false, error: "Missing required fields" };
@@ -1084,7 +1084,7 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
         const emailResult = await sendInvoiceEmail(token, email, {
           account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount,
           glRows: enrichedGlRows, driveUrls, pageCount: pages.length, formType: type,
-          ccSelf: ccSelf || false, pdfBase64: pdfBase64 || null,
+          pdfBase64: pdfBase64 || null,
           pdfFilename: pdfBuffer ? buildPdfFilename(vendor, invoiceDate, invoiceNumber) : null,
 }, pdfBase64 ? null : (pages[0]?.data || null));
 
@@ -1297,6 +1297,71 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     console.log(`[Invoice] Dupe dismissed for ${uuid} by ${email}`);
 
     return { success: true };
+  }
+
+  // ── Delete Duplicate ──
+  if (action === "invoice-delete-dupe") {
+    const { uuid, vendor, invoiceNumber, totalAmount } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    if (!rowNum) return { success: false, error: "Submission not found" };
+
+    // Get the numeric sheet ID for the tab
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_IDS.COLLECTION}?fields=sheets.properties`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!metaRes.ok) return { success: false, error: "Failed to read sheet metadata" };
+    const meta = await metaRes.json();
+    const tab = (meta.sheets || []).find(s => s.properties.title === "invoice_submissions_26");
+    if (!tab) return { success: false, error: "Submissions tab not found" };
+
+    const sheetId = tab.properties.sheetId;
+
+    // Delete the row (rowNum is 1-based, deleteDimension uses 0-based)
+    const deleteRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_IDS.COLLECTION}:batchUpdate`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: [{
+            deleteDimension: {
+              range: { sheetId, dimension: "ROWS", startIndex: rowNum - 1, endIndex: rowNum }
+            }
+          }]
+        }),
+      }
+    );
+    if (!deleteRes.ok) {
+      const errText = await deleteRes.text();
+      console.error(`[Invoice] Delete failed for ${uuid}:`, errText);
+      return { success: false, error: "Failed to delete row" };
+    }
+
+    console.log(`[Invoice] Duplicate DELETED: ${vendor} #${invoiceNumber} ($${totalAmount}) uuid=${uuid} by ${email}`);
+
+    // Slack audit trail
+    if (process.env.SLACK_INVOICE_WEBHOOK) {
+      const totalFmt = `$${Number(totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🗑️ Duplicate deleted: ${vendor || "?"} #${invoiceNumber || "N/A"} ${totalFmt}`,
+          blocks: [{
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*🗑️ Duplicate Invoice Deleted*\n*Vendor:* ${vendor || "?"}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Deleted by:* ${email}`,
+            },
+          }],
+        }),
+      }).catch(() => {});
+    }
+
+    return { success: true, deleted: true };
   }
 
   return null;
