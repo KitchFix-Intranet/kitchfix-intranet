@@ -678,6 +678,7 @@ INVOICE NUMBER RULES:
 - Look first for a field explicitly labeled "Invoice #" or "Invoice Number".
 - If no "Invoice #" field exists, use "Order #" as the invoice number.
 - If neither exists, use "Reference #".
+- EXCEPTION: For "What Chefs Want" invoices (from Cut+Dry / cutanddry.com), ALWAYS use the "Reference #" as the invoice number, NOT the "Order #". The Reference # is typically a shorter number (e.g. 12524109) compared to the longer Order # (e.g. 928127343).
 - NEVER use "Customer ID" as the invoice number.
 - Return only the number value, not the label (e.g. "906637520" not "Order #: 906637520").
 

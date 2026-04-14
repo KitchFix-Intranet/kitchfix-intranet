@@ -171,6 +171,7 @@ const [dragOver, setDragOver] = useState(false);
   // OCR
   const [ocrStatus, setOcrStatus] = useState("idle");
   const [ocrResult, setOcrResult] = useState(null);
+  const [ocrBannerFading, setOcrBannerFading] = useState(false);
 
   // Offline
   const [isOnline, setIsOnline] = useState(true);
@@ -537,6 +538,7 @@ setOcrStatus("scanning");
       const data = await res.json();
 if (data.rejected) { setOcrStatus("idle"); showToast("Document couldn't be read - please verify your upload", "error"); return; }
 if (data.success) {
+        console.log("[OCR] Result:", { invoiceNumber: data.invoiceNumber, invoiceDate: data.invoiceDate, totalAmount: data.totalAmount, vendorName: data.vendorName, confidence: data.confidence });
         setOcrStatus("success");
         setOcrResult((prev) => {
           // Merge: keep prior detections, add new ones
@@ -717,6 +719,17 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
   useEffect(() => { drainOfflineQueueRef.current = drainOfflineQueue; }, [drainOfflineQueue]);
   useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
   useEffect(() => { tryOCRScanRef.current = tryOCRScan; }, [tryOCRScan]);
+
+  // Fade out "Invoice Loaded" banner after 4 seconds
+  useEffect(() => {
+    if (ocrStatus === "success") {
+      setOcrBannerFading(false);
+      const timer = setTimeout(() => setOcrBannerFading(true), 4000);
+      return () => clearTimeout(timer);
+    } else {
+      setOcrBannerFading(false);
+    }
+  }, [ocrStatus]);
 
 const resetForm = useCallback(() => {
 setInvoiceNumber(""); setInvoiceDate("");
@@ -1463,7 +1476,7 @@ const msg = gateWarnPages[0].gateResult?.message || "Document quality could be b
                   )}
 
 {ocrStatus === "success" && ocrResult && (
-                    <div className="oh-inv-ocr-result oh-inv-ocr-result--verify">
+                    <div className={`oh-inv-ocr-result oh-inv-ocr-result--verify${ocrBannerFading ? " oh-inv-ocr-result--faded" : ""}`}>
                       <div className="oh-inv-ocr-result-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><path d="M12 2a10 10 0 1 0 10 10" /><polyline points="12 6 12 12 16 14" /></svg>
 <span className="oh-inv-ocr-result-title">Invoice Loaded</span>
@@ -1574,12 +1587,32 @@ const msg = gateWarnPages[0].gateResult?.message || "Document quality could be b
                 <div className="oh-inv-input-wrap">
                       <input type="text" className={`oh-inv-input${errors.invoiceNumber ? " oh-inv-error" : ""}`} value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder={isCreditMemo ? "CM-001" : "INV-001"} disabled={!hasVendor} />
                     </div>
-                    <div className="oh-inv-smart-hint">Please verify the invoice # matches your document</div>
+                    <div className="oh-inv-smart-hint">
+                      {ocrResult?.invoiceNumber && !invoiceNumber ? (
+                        <button className="oh-inv-ocr-hint" onClick={() => setInvoiceNumber(ocrResult.invoiceNumber)}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                          Detected: <strong>{ocrResult.invoiceNumber}</strong> — tap to use
+                        </button>
+                      ) : "Please verify the invoice # matches your document"}
+                    </div>
                                                           </div>
 <div className="oh-inv-field-group" data-field="invoiceDate">
                     <label className="oh-inv-label">Date <span className="oh-inv-req">*</span></label>
                     <input type="date" className={`oh-inv-input${errors.invoiceDate ? " oh-inv-error" : ""}`} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={!hasVendor} />
-                    <div className="oh-inv-smart-hint">Please verify the date matches your invoice</div>
+                    <div className="oh-inv-smart-hint">
+                      {ocrResult?.invoiceDate && !invoiceDate ? (
+                        <button className="oh-inv-ocr-hint" onClick={() => {
+                          try {
+                            const d = new Date(ocrResult.invoiceDate + (ocrResult.invoiceDate.includes("T") ? "" : "T00:00:00"));
+                            if (!isNaN(d.getTime())) setInvoiceDate(d.toISOString().split("T")[0]);
+                            else setInvoiceDate(ocrResult.invoiceDate);
+                          } catch { setInvoiceDate(ocrResult.invoiceDate); }
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                          Detected: <strong>{ocrResult.invoiceDate}</strong> — tap to use
+                        </button>
+                      ) : "Please verify the date matches your invoice"}
+                    </div>
                   </div>
                                                     </div>
 
@@ -1589,7 +1622,14 @@ const msg = gateWarnPages[0].gateResult?.message || "Document quality could be b
                     <span className={`oh-inv-money-prefix${isCreditMemo ? " oh-inv-money-prefix--credit" : ""}`}>{isCreditMemo ? "−$" : "$"}</span>
 <input type="number" className={`oh-inv-input oh-inv-input-money${errors.totalAmount ? " oh-inv-error" : ""}${isCreditMemo ? " oh-inv-input--credit" : ""}`} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} onBlur={(e) => { if (e.target.value) setTotalAmount(parseFloat(e.target.value).toFixed(2)); }} onWheel={(e) => e.currentTarget.blur()} placeholder="0.00" step="0.01" min="0" disabled={!hasVendor} style={{ paddingLeft: isCreditMemo ? 36 : 30 }} />
                   </div>
-                  <div className="oh-inv-smart-hint">Please verify the total matches your invoice</div>
+                  <div className="oh-inv-smart-hint">
+                    {ocrResult?.totalAmount && !totalAmount ? (
+                      <button className="oh-inv-ocr-hint" onClick={() => setTotalAmount(String(parseFloat(ocrResult.totalAmount).toFixed(2)))}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                        Detected: <strong>${parseFloat(ocrResult.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong> — tap to use
+                      </button>
+                    ) : "Please verify the total matches your invoice"}
+                  </div>
                                   </div>
 
                 {/* GL Coding */}

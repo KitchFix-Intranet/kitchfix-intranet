@@ -208,7 +208,7 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
           <input type="text" className="oh-inv-history-search" placeholder="Search vendor, invoice #, user..." value={search} onChange={(e) => setSearch(e.target.value)} />
           {search && <button className="oh-inv-history-search-clear" onClick={() => setSearch("")}>×</button>}
         </div>
-        <div className="oh-inv-history-periods" style={{ flexWrap: "wrap" }}>
+        <div className="oh-inv-history-periods">
           {[["week","7 Days"],["month","30 Days"],["all","All Time"]].map(([val, label]) => (
             <button key={val} className={`oh-inv-period-pill${period === val ? " oh-inv-period-pill--active" : ""}`}
               onClick={() => setPeriod(val)}>{label}</button>
