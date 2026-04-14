@@ -73,7 +73,8 @@ const STEPS = [
 
 const CATEGORIES = [
   "Produce", "Protein", "Dairy", "Dry Goods", "Beverage",
-  "Packaging", "Cleaning", "Equipment", "Specialty", "Broadliner", "Other",
+  "Packaging", "Cleaning", "Supplies", "Equipment", "Linen",
+  "Specialty", "Broadliner", "Other",
 ];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -127,7 +128,8 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   const didFocusSearch = useRef(false);
   const searchTimer = useRef(null);
   const nameCheckTimer = useRef(null);
-  const [dupMatch, setDupMatch] = useState(null); // { vendorId, name, category } | null
+  const [dupMatch, setDupMatch] = useState(null); // { vendorId, name, category, exactMatch } | null
+  const [confirmedDifferent, setConfirmedDifferent] = useState(false);
 
   // Auto-focus search only on first mount
   useEffect(() => {
@@ -297,18 +299,42 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
   /* ── Duplicate name check — fires when typing in the "create new" name field ── */
   useEffect(() => {
     const name = form.vendorName.trim();
-    if (!name || form.existingVendorId) { setDupMatch(null); return; }
+    if (!name || form.existingVendorId) { setDupMatch(null); setConfirmedDifferent(false); return; }
     clearTimeout(nameCheckTimer.current);
     nameCheckTimer.current = setTimeout(() => {
       fetch(`/api/ops?action=vendor-search&q=${encodeURIComponent(name)}`)
         .then(r => r.json())
         .then(d => {
           const vendors = d.vendors || [];
-          // Only flag if a result is a close match (name starts with or contains the typed value)
-          const match = vendors.find(v =>
-            v.name.toLowerCase() === name.toLowerCase() ||
-            v.name.toLowerCase().startsWith(name.toLowerCase())
-          );
+
+          // Normalize: strip spaces/punctuation for comparison
+          const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const qNorm = norm(name);
+
+          // Levenshtein distance for fuzzy matching
+          const lev = (a, b) => {
+            const m = a.length, n = b.length;
+            const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++)
+              for (let j = 1; j <= n; j++)
+                dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]
+                  : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+            return dp[m][n];
+          };
+
+          // Find best match — exact normalized = hard block, lev ≤ 2 = warning
+          let match = null;
+          for (const v of vendors) {
+            const vNorm = norm(v.name);
+            if (vNorm === qNorm) {
+              match = { ...v, exactMatch: true };
+              break;
+            }
+            if (!match && (vNorm.startsWith(qNorm) || qNorm.startsWith(vNorm) || lev(qNorm, vNorm) <= 2)) {
+              match = { ...v, exactMatch: false };
+            }
+          }
           setDupMatch(match || null);
         })
         .catch(() => setDupMatch(null));
@@ -439,13 +465,32 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
 
           {/* Duplicate vendor warning banner */}
           {dupMatch && !form.existingVendorId && (
-            <div className="oh-inv-vs-dup-banner">
+            <div className={`oh-inv-vs-dup-banner${dupMatch.exactMatch ? " oh-inv-vs-dup-banner--hard" : ""}`}>
               <div className="oh-inv-vs-dup-banner-text">
                 <div className="oh-inv-vs-dup-name-row">
+                  {dupMatch.exactMatch
+                    ? <span className="oh-inv-vs-dup-exact-label">⛔ Exact match found</span>
+                    : <span className="oh-inv-vs-dup-warn-label">⚠ Similar vendor found</span>
+                  }
                   <strong>{dupMatch.name}</strong>
                   {dupMatch.category && <span className="oh-inv-vs-dup-cat">{dupMatch.category}</span>}
                 </div>
-                <span className="oh-inv-vs-dup-hint">Already exists globally — link it to this account instead of creating a duplicate.</span>
+                <span className="oh-inv-vs-dup-hint">
+                  {dupMatch.exactMatch
+                    ? "This vendor already exists. Link it to this account instead of creating a duplicate."
+                    : "Already exists globally — link it to this account instead of creating a duplicate."
+                  }
+                </span>
+                {!dupMatch.exactMatch && (
+                  <label className="oh-inv-vs-dup-confirm-row">
+                    <input
+                      type="checkbox"
+                      checked={confirmedDifferent}
+                      onChange={(e) => setConfirmedDifferent(e.target.checked)}
+                    />
+                    <span>This is a genuinely different vendor — create anyway</span>
+                  </label>
+                )}
               </div>
               <button
                 type="button"
@@ -718,6 +763,8 @@ category: form.category.map((c) => c === "Other" ? (form.categoryOther?.trim() |
   /* ── Footer buttons per step ─────────────────── */
   const isLastStep = step === 3;
   const isFirstStep = step === 0;
+  // Hard block: exact match always blocks. Fuzzy match blocks until confirmed.
+  const dupBlocked = !!dupMatch && !form.existingVendorId && (dupMatch.exactMatch || !confirmedDifferent);
 
 return (
 <div className="oh-inv-vs-overlay">
@@ -784,7 +831,7 @@ return (
                 type="button"
                 className="oh-inv-vs-save-btn"
                 onClick={handleQuickSubmit}
-                disabled={saving}
+                disabled={saving || dupBlocked}
               >
                 {saving ? (
                   <span className="oh-inv-vs-spinner" />
@@ -821,7 +868,7 @@ return (
                   Skip — add later
                 </button>
               )}
-              <button type="button" className="oh-inv-vs-save-btn" onClick={goNext}>
+              <button type="button" className="oh-inv-vs-save-btn" onClick={goNext} disabled={dupBlocked && step === 0}>
                 <span>Continue</span>
                 <ArrowRight />
               </button>

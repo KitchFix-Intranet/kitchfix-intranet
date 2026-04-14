@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 
-const CATEGORIES    = ["Produce", "Protein", "Dry Goods", "Dairy", "Beverage", "Paper", "Other"];
+const CATEGORIES    = ["Produce", "Protein", "Dry Goods", "Dairy", "Beverage", "Packaging", "Cleaning", "Supplies", "Equipment", "Linen", "Specialty", "Broadliner", "Other"];
 const PAYMENT_TERMS = ["NET30", "NET15", "NET7", "COD", "Prepaid", "Other"];
 const DELIVERY_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -38,7 +38,7 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setCheckingDupe(true);
-      fetch(`/api/ops?action=vendor-search&accountKey=${encodeURIComponent(accountKey)}&search=${encodeURIComponent(name.trim())}`)
+      fetch(`/api/ops?action=vendor-search&q=${encodeURIComponent(name.trim())}`)
         .then((r) => r.json())
         .then((d) => { if (d.success) setDuplicates(d.vendors?.slice(0, 3) || []); })
         .catch(() => {})

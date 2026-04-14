@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-// ── Authoritative 11-category color map ──
+// ── Authoritative 13-category color map ──
 const CATEGORY_COLORS = {
   Produce:     "#16a34a",
   Protein:     "#dc2626",
@@ -10,7 +10,9 @@ const CATEGORY_COLORS = {
   Beverage:    "#7c3aed",
   Packaging:   "#0891b2",
   Cleaning:    "#0d9488",
+  Supplies:    "#ca8a04",
   Equipment:   "#475569",
+  Linen:       "#9d174d",
   Specialty:   "#db2777",
   Broadliner:  "#9333ea",
   Other:       "#64748b",

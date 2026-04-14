@@ -9,6 +9,7 @@ import {
   handleVendorMasterUpdate,
   handleVendorDeactivate,
   handleVendorReactivate,
+  handleVendorMerge,
 } from "@/lib/invoiceActions";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/analytics";
@@ -1390,6 +1391,11 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
       if (action === "vendor-reactivate") {
           const result = await handleVendorReactivate(body, token, email);
           logEvent(token, { email, userName, category: "ops", action: "vendor_update", page: "/ops", detail: { vendorId: body.vendorId, accountKey: body.accountKey, reactivate: true } });
+          return NextResponse.json(result);
+      }
+      if (action === "vendor-merge") {
+          const result = await handleVendorMerge(body, token, email);
+          logEvent(token, { email, userName, category: "ops", action: "vendor_merge", page: "/ops", detail: { keeperId: body.keeperId, dupeIds: body.dupeIds } });
           return NextResponse.json(result);
       }
 

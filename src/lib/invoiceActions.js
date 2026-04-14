@@ -1761,7 +1761,7 @@ export async function handleVendorUpdate(body, token, email) {
 
 // ── POST: vendor-master-update ────────────────────────────────────────────────
 export async function handleVendorMasterUpdate(body, token, email) {
-  const { vendorId, name, category, website, notes } = body;
+  const { vendorId, name, category, website, notes, aliases } = body;
 
   if (!vendorId) return { success: false, error: "vendorId required" };
   if (!name || !name.trim()) return { success: false, error: "Vendor name required" };
@@ -1771,8 +1771,15 @@ export async function handleVendorMasterUpdate(body, token, email) {
   if (rowIndex === -1) return { success: false, error: "Vendor not found" };
 
   const sheetRow = rowIndex + 2;
-  const masterCols = ["B","C","D","E"];
-  const values = [name.trim(), category || "", website?.trim() || "", notes?.trim() || ""];
+  // Cols B–E: name, category, website, notes; Col I: aliases
+  const masterCols = ["B","C","D","E","I"];
+  const values = [
+    name.trim(),
+    category || "",
+    website?.trim() || "",
+    notes?.trim() || "",
+    aliases !== undefined ? String(aliases).trim() : String(rows[rowIndex][8] || "").trim(),
+  ];
   await Promise.all(masterCols.map((col, i) => updateCell(token, SHEET_IDS.HUB, `vendor_master!${col}${sheetRow}`, values[i])));
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
@@ -1876,6 +1883,9 @@ export async function handleVendorMerge(body, token, email) {
   const { keeperId, dupeIds } = body;
   if (!keeperId || !dupeIds?.length) return { success: false, error: "keeperId and dupeIds required" };
 
+  const { rows: masterRows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+
+  // 1. Reassign vendor_accounts rows from dupeIds → keeperId
   const { rows: acctRows } = await readSheet(token, SHEET_IDS.HUB, "vendor_accounts");
   const acctUpdates = [];
   acctRows.forEach((row, i) => {
@@ -1887,12 +1897,16 @@ export async function handleVendorMerge(body, token, email) {
   });
   if (acctUpdates.length > 0) await Promise.all(acctUpdates);
 
-  const { rows: masterRows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+  // 2. Collect dupe names to auto-add as aliases on keeper
+  const dupeNames = [];
   const masterUpdates = [];
   masterRows.forEach((row, i) => {
     if (i === 0) return;
     const rowVendorId = String(row[0] || "").trim();
     if (dupeIds.includes(rowVendorId)) {
+      const dupeName = String(row[1] || "").trim();
+      if (dupeName) dupeNames.push(dupeName);
+      // Soft-delete dupe: blank name/category/website, mark notes as DELETED
       masterUpdates.push(
         updateCell(token, SHEET_IDS.HUB, `vendor_master!B${i + 2}`, ""),
         updateCell(token, SHEET_IDS.HUB, `vendor_master!C${i + 2}`, ""),
@@ -1903,11 +1917,40 @@ export async function handleVendorMerge(body, token, email) {
   });
   if (masterUpdates.length > 0) await Promise.all(masterUpdates);
 
+  // 3. Append dupe names as aliases on the keeper row
+  if (dupeNames.length > 0) {
+    const keeperIndex = masterRows.findIndex((r) => String(r[0] || "").trim() === keeperId);
+    if (keeperIndex !== -1) {
+      const keeperSheetRow = keeperIndex + 2;
+      const existingAliases = String(masterRows[keeperIndex][8] || "").trim();
+      const aliasParts = existingAliases ? existingAliases.split("|").map((a) => a.trim()).filter(Boolean) : [];
+      for (const dn of dupeNames) {
+        if (!aliasParts.some((a) => a.toLowerCase() === dn.toLowerCase())) {
+          aliasParts.push(dn);
+        }
+      }
+      await updateCell(token, SHEET_IDS.HUB, `vendor_master!I${keeperSheetRow}`, aliasParts.join("|"));
+    }
+  }
+
+  if (process.env.SLACK_VENDOR_WEBHOOK) {
+    fetch(process.env.SLACK_VENDOR_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: `Vendors merged: ${dupeIds.join(", ")} → ${keeperId}`,
+        blocks: [{ type: "section", text: { type: "mrkdwn",
+          text: `*Vendors Merged*\n*Kept:* ${keeperId}\n*Removed:* ${dupeIds.join(", ")}\n*Aliases added:* ${dupeNames.join(", ") || "none"}\n*Accounts reassigned:* ${acctUpdates.length}\n*By:* ${email}` } }],
+      }),
+    }).catch(() => {});
+  }
+
   return {
     success: true,
     keeperId,
     dupeIds,
     accountRowsReassigned: acctUpdates.length,
     vendorRowsDeleted: Math.floor(masterUpdates.length / 4),
+    aliasesAdded: dupeNames,
   };
 }
