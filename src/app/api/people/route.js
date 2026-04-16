@@ -443,11 +443,12 @@ const EmailTemplates = {
     if (actionKey === "rate_change") {
       body += this.row("Old Rate", this.money(data.oldRate));
       body += this.row("New Rate", this.money(data.newRate));
-    } else if (actionKey === "separation") {
+} else if (actionKey === "separation") {
       body += this.row("Type", data.actionGroup);
       body += this.row("Reason", data.separationReason);
+      if (data.lastDayWorked) body += this.row("Last Day Worked", data.lastDayWorked);
       body += this.row("Rehire?", data.rehireEligible);
-    } else if (actionKey === "title_change") {
+        } else if (actionKey === "title_change") {
       body += this.row("Old Title", data.oldTitle);
       body += this.row("New Title", data.newTitle);
       if (data.reclassChangeRate === "Yes") body += this.row("New Rate", this.money(data.newRate));
@@ -971,9 +972,11 @@ if (result.success) {
 if (f.actionType === "rate_change") {
           details += `\n*Old Rate:* $${f.oldRate || "0"}\n*New Rate:* $${f.newRate || "0"}`;
           if (f.explanation) details += `\n*Reason:* ${f.explanation}`;
-        } else if (f.actionType === "separation") {
-          details += `\n*Type:* ${f.actionGroup || "N/A"}\n*Reason:* ${f.separationReason || "N/A"}\n*Rehire Eligible:* ${f.rehireEligible || "N/A"}`;
-          if (f.explanation) details += `\n*Notes:* ${f.explanation}`;
+} else if (f.actionType === "separation") {
+          details += `\n*Type:* ${f.actionGroup || "N/A"}\n*Reason:* ${f.separationReason || "N/A"}`;
+          if (f.lastDayWorked) details += `\n*Last Day Worked:* ${f.lastDayWorked}`;
+          details += `\n*Rehire Eligible:* ${f.rehireEligible || "N/A"}`;
+                    if (f.explanation) details += `\n*Notes:* ${f.explanation}`;
         } else if (f.actionType === "title_change") {
           details += `\n*Old Title:* ${f.oldTitle || "N/A"}\n*New Title:* ${f.newTitle || "N/A"}`;
           if (f.reclassChangeRate === "Yes" && f.newRate) details += `\n*New Rate:* $${f.newRate}`;

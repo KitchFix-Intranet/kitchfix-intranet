@@ -27,6 +27,7 @@ import {
   handleDedupCatalog,
   handleAISimilarityCheck,
   handleKeepSeparate,
+  handleLinkItems,
   handleReviewAccept,
   handleReviewDelete,
 handleAddSubZone,
@@ -108,6 +109,7 @@ export async function POST(request) {
       case "dedup-catalog": return NextResponse.json(await handleDedupCatalog(body));
       case "ai-similarity-check": return NextResponse.json(await handleAISimilarityCheck(body));
       case "keep-separate": return NextResponse.json(await handleKeepSeparate(body));
+      case "link-items": return NextResponse.json(await handleLinkItems(body));
       case "review-accept": return NextResponse.json(await handleReviewAccept(body));
       case "review-delete": return NextResponse.json(await handleReviewDelete(body));
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });

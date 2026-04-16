@@ -146,6 +146,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
   const aliases = data?.aliases || [];
   const itemPrices = data?.itemPrices || {};
   const lastCountItems = data?.lastCountItems || {};
+  const linkedItems = data?.linkedItems || {};
 
   const unassigned = catalogItems.filter((i) => {
     const locIds = new Set(locations.map((l) => l.locationId));
@@ -218,7 +219,7 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
       onGoToPlacement={async () => { await loadBootstrap(account, true); setScreen("placement"); }}
       showToast={showToast} />;
   } else if (screen === "catalog") {
-    content = <ItemCatalog catalogItems={catalogItems} locations={locations} excludedItems={excludedItems} archivedItems={archivedItems} aliases={aliases} itemPrices={itemPrices}
+    content = <ItemCatalog catalogItems={catalogItems} locations={locations} excludedItems={excludedItems} archivedItems={archivedItems} aliases={aliases} itemPrices={itemPrices} linkedItems={linkedItems}
       onUpdateCatalogItem={(itemId, fields) => {
         fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update-catalog-item", account, itemId, fields }) })

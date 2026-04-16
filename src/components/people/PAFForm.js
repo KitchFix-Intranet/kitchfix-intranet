@@ -11,7 +11,7 @@ function getLocalISODate() {
 function getDefaults() {
   return {
     effectiveDate: getLocalISODate(), locationKey: "", locationName: "", employeeName: "",
-    actionType: "", actionGroup: "Voluntary", separationReason: "", rehireEligible: "Yes",
+actionType: "", actionGroup: "Voluntary", separationReason: "", rehireEligible: "Yes", lastDayWorked: "",
     statusChangeDirection: "Part-Time to Full-Time",
     reclassFrom: "", reclassTo: "", reclassChangeRate: "No", reclassTitleChange: "No",
     oldTitle: "", newTitle: "", oldRate: "", newRate: "", amount: "",
@@ -28,7 +28,7 @@ function getDefaults() {
 
 // Fix #12: Fields to reset when switching action types
 const ACTION_SPECIFIC_FIELDS = {
-  separation: ["actionGroup", "separationReason", "rehireEligible"],
+separation: ["actionGroup", "separationReason", "rehireEligible", "lastDayWorked"],
   rate_change: ["oldRate", "newRate"],
   title_change: ["oldTitle", "newTitle", "reclassChangeRate"],
   status_change: ["statusChangeDirection"],
@@ -95,12 +95,14 @@ function ActionDetails({ form, update, errors, Formatter, bootstrapData, showTra
         )}
         <label className="pp-label">Additional Details (optional)</label>
         <textarea className="pp-textarea" value={form.explanation} onChange={(e) => update("explanation", e.target.value)} placeholder="Any additional context about this separation..." rows={3} />
+<label className="pp-label">Last Day Worked</label>
+        <input type="date" className="pp-input" value={form.lastDayWorked || ""} onChange={(e) => update("lastDayWorked", e.target.value)} />
         <label className="pp-label">Eligible for Rehire?</label>
         <div className="pp-pill-group">
           <button type="button" className={`pp-pill-option${form.rehireEligible === "Yes" ? " pp-pill-option--active" : ""}`} onClick={() => update("rehireEligible", "Yes")}>Yes</button>
           <button type="button" className={`pp-pill-option${form.rehireEligible === "No" ? " pp-pill-option--active" : ""}`} onClick={() => update("rehireEligible", "No")}>No</button>
         </div>
-      </>
+              </>
     );
   }
 
@@ -802,12 +804,12 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                   ["Action", actionLabel, 1],
                   ["Effective", Formatter.toDate(form.effectiveDate), 1],
 
-                  // Separation
+// Separation
                   form.actionType === "separation" && ["Type", form.actionGroup, 2],
                   form.actionType === "separation" && ["Reason", form.separationReason, 2],
+                  form.actionType === "separation" && form.lastDayWorked && ["Last Day Worked", Formatter.toDate(form.lastDayWorked), 2],
                   form.actionType === "separation" && ["Rehire Eligible", form.rehireEligible, 2],
-
-                  // Status Change
+                                    // Status Change
                   form.actionType === "status_change" && ["Direction", form.statusChangeDirection, 2],
 
                   // Reclassification

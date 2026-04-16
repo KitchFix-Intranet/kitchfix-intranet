@@ -53,7 +53,7 @@ function daysAgoNum(d) { if(!d) return 999; try { return Math.floor((new Date()-
 function parsePackSize(n) { const m=n.match(/(\d+)\s*[\/x×]\s*(\d+\.?\d*)\s*(oz|lb|ct|pk|gal|ml|l|kg|g)\b/i); if(m) return `${m[1]}/${m[2]}${m[3]}`; const m2=n.match(/(\d+\.?\d*)\s*(oz|lb|gal|ct|pk|ml|l|kg|g)\b/i); if(m2) return `${m2[1]}${m2[2]}`; return null; }
 function isManual(item) { return item.createdBy && item.createdBy !== "ai_cron"; }
 
-export default function ItemCatalog({ catalogItems, locations, excludedItems, archivedItems, aliases, itemPrices, onUpdateCatalogItem, onArchiveItem, onReactivateItem, onMergeItems, onAddManualItem, onVerifyPrice, onGoToPlacement, showToast }) {
+export default function ItemCatalog({ catalogItems, locations, excludedItems, archivedItems, aliases, itemPrices, linkedItems, onUpdateCatalogItem, onArchiveItem, onReactivateItem, onMergeItems, onAddManualItem, onVerifyPrice, onGoToPlacement, showToast }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [vendorFilter, setVendorFilter] = useState(null);
@@ -252,6 +252,8 @@ export default function ItemCatalog({ catalogItems, locations, excludedItems, ar
                 </div>
 
                 {itemAliases.length>0&&(<div className="ic-detail-section"><span className="ic-detail-section-label">Also known as</span>{itemAliases.slice(0,5).map((a,i)=><span key={i} className="ic-detail-alias">{a.aliasText}</span>)}{itemAliases.length>5&&<span className="ic-detail-alias ic-detail-alias--more">+{itemAliases.length-5} more</span>}</div>)}
+
+                {(linkedItems||{})[item.itemId]&&(linkedItems[item.itemId]).length>0&&(<div className="ic-detail-section"><span className="ic-detail-section-label">Also ordered as</span>{linkedItems[item.itemId].map((l,li)=>(<div key={li} className="ic-linked-row"><span className="ic-linked-name">{l.name}</span><span className="ic-linked-meta">{l.vendor}{l.price?` · ${fmt(l.price)}/${l.unit||"ea"}`:""}</span></div>))}</div>)}
 
                 {/* Actions: merge + archive */}
                 <div className="ic-detail-section ic-detail-actions">

@@ -16,8 +16,26 @@ const ic = {
   chevR: "M9 18l6-6-6-6",
   search: ["M11 17.25a6.25 6.25 0 110-12.5 6.25 6.25 0 010 12.5z", "M16 16l4.5 4.5"],
   x: "M18 6L6 18M6 6l12 12",
+  download: ["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"],
 };
 const fmt = (n) => "$" + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\\d))/g, ",");
+
+// Icon + color system (shared with ProductPlacement)
+const IE = {
+  snowflake:"❄️",ice:"🧊",thermometer:"🌡️",drumstick:"🍖",steak:"🥩",poultry:"🍗",bacon:"🥓",turkey:"🦃",
+  fish:"🐟",shrimp:"🦐",lobster:"🦞",crab:"🦀",oyster:"🦪",squid:"🦑",octopus:"🐙",
+  carrot:"🥕",leaf:"🍃",greens:"🥬",broccoli:"🥦",lettuce:"🥗",tomato:"🍅",pepper:"🌶️",corn:"🌽",mushroom:"🍄",onion:"🧅",garlic:"🧄",potato:"🥔",avocado:"🥑",
+  apple:"🍎",lemon:"🍋",orange:"🍊",banana:"🍌",grape:"🍇",strawberry:"🍓",blueberry:"🫐",cherry:"🍒",peach:"🍑",watermelon:"🍉",pineapple:"🍍",mango:"🥭",
+  egg:"🥚",cheese:"🧀",butter:"🧈",milk:"🥛",
+  bread:"🍞",croissant:"🥐",bagel:"🥯",rice:"🍚",noodles:"🍜",
+  flame:"🔥",plate:"🍽️",stew:"🍲",cookie:"🍪",cupcake:"🧁",donut:"🍩",pie:"🥧",chocolate:"🍫",candy:"🍬",icecream:"🍦",popcorn:"🍿",honey:"🍯",peanut:"🥜",
+  cup:"☕",tea:"🍵",boba:"🧋",juice:"🧃",soda:"🥤",water:"💧",wine:"🍷",beer:"🍺",cocktail:"🍸",
+  salt:"🧂",jar:"🫙",knife:"🔪",sponge:"🧽",bucket:"🪣",broom:"🧹",gloves:"🧤",wrench:"🔧",trash:"🗑️",
+  box:"📦",paper:"📋",tag:"🏷️",cabinet:"🗄️",stadium:"🏟️",truck:"🚛",can:"🥫",
+};
+const ri = i => { if(!i) return "📦"; if(i.codePointAt(0)>127) return i; return IE[i]||"📦"; };
+const ZC = {blue:{bg:"#dbeafe",fg:"#2563eb"},indigo:{bg:"#e0e7ff",fg:"#4f46e5"},amber:{bg:"#fef3c7",fg:"#d97706"},green:{bg:"#dcfce7",fg:"#16a34a"},red:{bg:"#fee2e2",fg:"#dc2626"},purple:{bg:"#f3e8ff",fg:"#9333ea"},slate:{bg:"#f1f5f9",fg:"#475569"},teal:{bg:"#ccfbf1",fg:"#0d9488"},orange:{bg:"#ffedd5",fg:"#ea580c"},gold:{bg:"#fef9c3",fg:"#ca8a04"},cyan:{bg:"#cffafe",fg:"#0891b2"},pink:{bg:"#fce7f3",fg:"#db2777"},emerald:{bg:"#d1fae5",fg:"#059669"},brown:{bg:"#f5e6d3",fg:"#92400e"}};
+const zc = c => ZC[c]||ZC.blue;
 
 export default function CountSheet({
   catalogItems = [], locations = [], lastCountItems = {},
@@ -105,6 +123,28 @@ export default function CountSheet({
 
   const confirmQty = (itemId) => { const c = getCount(itemId); if (c.qty !== null && c.qty >= 0) setActiveItem(null); };
 
+  const exportCount = () => {
+    const header = "Location,Item,Category,Vendor,Unit,Unit Price,Qty,Extended Total,None on Hand,Last Ordered\n";
+    const rows = [];
+    allLocs.forEach(loc => {
+      const items = itemsByLocation[loc.locationId] || [];
+      items.forEach(item => {
+        const c = counts[item.itemId] || { qty: null, none: false };
+        const qty = c.none ? 0 : (c.qty || 0);
+        const ext = c.none ? 0 : (qty * (item.lastPrice || 0));
+        const vendor = item.primaryVendor || item.lastPriceVendor || "";
+        const lastDate = item.lastPriceDate || "";
+        rows.push(`"${locDisplayName(loc)}","${(item.name||"").replace(/"/g,'""')}","${item.category||""}","${vendor.replace(/"/g,'""')}","${item.unit||"ea"}","${(item.lastPrice||0).toFixed(2)}","${qty}","${ext.toFixed(2)}","${c.none?"Yes":""}","${lastDate}"`);
+      });
+    });
+    const blob = new Blob([header + rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `Count_${period}_${account}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    showToast?.("Count exported", "success");
+  };
+
   if (allLocs.length === 0) {
     return (<div className="cs-empty"><p>No storage locations set up.</p><p className="cs-empty-sub">Set up zones in Product Placement first.</p><button className="cs-back-btn" onClick={onBack}>Back</button></div>);
   }
@@ -136,8 +176,7 @@ export default function CountSheet({
     return (
       <div className="cs-root">
         <div className="cs-review">
-          <h3 className="cs-review-title">Count review</h3>
-          <p className="cs-review-sub">{period} · {account} · {totalCounted} items counted</p>
+          <div className="cs-review-hdr"><div><h3 className="cs-review-title">Count review</h3><p className="cs-review-sub">{period} · {account} · {totalCounted} items counted</p></div><button className="cs-export-btn" onClick={exportCount}><I d={ic.download} size={14} color="#2563eb" /> Export</button></div>
           <div className="cs-review-grand"><span className="cs-review-grand-label">Grand total</span><span className="cs-review-grand-value">{fmt(grandTotal)}</span></div>
           <div className="cs-review-cats">{Object.entries(catTotals).filter(([,v]) => v > 0).map(([cat, val]) => (<div key={cat} className="cs-review-cat-row"><span>{cat}</span><span>{fmt(val)}</span></div>))}</div>
           <div className="cs-review-section-label">By location</div>
@@ -157,12 +196,13 @@ export default function CountSheet({
 
   /* ═══ COUNT SCREEN ═══ */
   const parentZone = locParent[currentLoc?.locationId];
+  const locColor = zc(currentLoc?.color || parentZone?.color || "blue");
 
   return (
     <div className="cs-root">
       {/* Zone header — PP style */}
       <div className="cs-zone-hdr">
-        <div className="cs-zone-ico">{currentLoc?.icon === "box" ? "📦" : parentZone?.icon === "snowflake" ? "❄️" : parentZone?.icon === "flame" ? "🔥" : "📋"}</div>
+        <div className="cs-zone-ico" style={{background: locColor.bg}}>{ri(currentLoc?.icon)}</div>
         <div className="cs-zone-body">
           <span className="cs-zone-name">{currentLoc?.name || "Unknown"}</span>
           <span className="cs-zone-sub">{parentZone ? parentZone.name + " · " : ""}{locTotal} items</span>
@@ -171,8 +211,9 @@ export default function CountSheet({
           <span className="cs-zone-total">{fmt(locDollarTotal)}</span>
           <span className="cs-zone-progress">{locItemsCounted}/{locTotal} · {locIdx + 1}/{allLocs.length}</span>
         </div>
+        <button className="cs-export-ico" onClick={exportCount} title="Export count"><I d={ic.download} size={15} color="#94a3b8" /></button>
       </div>
-      <div className="cs-pbar"><div className="cs-pfill" style={{ width: `${locProgress}%` }} /></div>
+      <div className="cs-pbar"><div className="cs-pfill" style={{ width: `${locProgress}%`, background: locColor.fg }} /></div>
 
       {/* Search */}
       <div className="cs-search">

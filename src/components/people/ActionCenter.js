@@ -24,6 +24,7 @@ const LABEL_MAP = {
   needsLaptop: "Laptop",
   needsCell: "Cell Phone",
   effectiveDate: "Effective Date",
+  lastDayWorked: "Last Day Worked",
   separationReason: "Separation Reason",
   rehireEligible: "Rehire Eligible",
   explanation: "Notes",
@@ -60,7 +61,7 @@ const NH_SECTIONS = [
 
 // ── PAF: fields relevant to each action type ──
 const PAF_DISPLAY_FIELDS = {
-  separation: ["effectiveDate", "employeeName", "actionGroup", "separationReason", "rehireEligible", "explanation"],
+  separation: ["effectiveDate", "lastDayWorked", "employeeName", "actionGroup", "separationReason", "rehireEligible", "explanation"],
   rate_change: ["effectiveDate", "employeeName", "oldRate", "newRate", "explanation"],
   title_change: ["effectiveDate", "employeeName", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],
   status_change: ["effectiveDate", "employeeName", "statusChangeDirection"],
