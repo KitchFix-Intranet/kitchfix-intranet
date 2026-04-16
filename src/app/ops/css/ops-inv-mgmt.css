@@ -1733,33 +1733,6 @@
 .ic-vendor-suggest { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); z-index: 30; overflow: hidden; }
 .ic-vendor-suggest button { display: block; width: 100%; padding: 8px 12px; border: none; background: none; font-size: 13px; color: #0f3057; font-family: inherit; cursor: pointer; text-align: left; }
 .ic-vendor-suggest button:hover { background: #f0f5ff; }
-/* ═══ COUNT REVIEW ═══ */
-.oh-inv-mgmt-count-review { padding: 16px; }
-.oh-inv-mgmt-review-title { font-size: 16px; font-weight: 600; color: #0f3057; margin: 0 0 2px; }
-.oh-inv-mgmt-review-sub { font-size: 12px; color: #94a3b8; margin: 0 0 16px; }
-.oh-inv-mgmt-review-grand { display: flex; justify-content: space-between; align-items: baseline; padding: 16px; background: #0f3057; border-radius: 10px; margin-bottom: 12px; }
-.oh-inv-mgmt-review-grand-label { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 500; }
-.oh-inv-mgmt-review-grand-value { font-size: 22px; font-weight: 600; color: #fff; }
-.oh-inv-mgmt-review-cats { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.oh-inv-mgmt-review-cat-row { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
-.oh-inv-mgmt-review-cat-row:last-child { border-bottom: none; }
-.oh-inv-mgmt-review-cat-row span:first-child { color: #64748b; }
-.oh-inv-mgmt-review-cat-row span:last-child { color: #0f3057; font-weight: 500; }
-.oh-inv-mgmt-review-section-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.oh-inv-mgmt-review-locs { display: flex; flex-direction: column; gap: 0; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-.oh-inv-mgmt-review-loc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
-.oh-inv-mgmt-review-loc-row:last-child { border-bottom: none; }
-.oh-inv-mgmt-review-loc-left { display: flex; flex-direction: column; }
-.oh-inv-mgmt-review-loc-name { font-size: 13px; color: #0f3057; font-weight: 500; }
-.oh-inv-mgmt-review-loc-sub { font-size: 11px; color: #94a3b8; }
-.oh-inv-mgmt-review-loc-total { font-size: 13px; color: #0f3057; font-weight: 500; }
-.oh-inv-mgmt-review-warning { padding: 8px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12px; color: #92400e; margin-bottom: 8px; }
-.oh-inv-mgmt-review-none { padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; color: #64748b; margin-bottom: 12px; }
-.oh-inv-mgmt-review-actions { display: flex; gap: 8px; margin-top: 8px; }
-.oh-inv-mgmt-review-back { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 13px; color: #0f3057; font-weight: 500; font-family: inherit; cursor: pointer; }
-.oh-inv-mgmt-review-submit { flex: 2; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: none; border-radius: 8px; background: #16A34A; font-size: 13px; color: #fff; font-weight: 600; font-family: inherit; cursor: pointer; transition: background 0.12s; }
-.oh-inv-mgmt-review-submit:hover { background: #15803d; }
-.oh-inv-mgmt-review-submit:disabled { background: #94a3b8; cursor: not-allowed; }
 
 /* ═══════════════════════════════════════
    COUNT SHEET v2 — Redesigned
@@ -1866,12 +1839,6 @@
 .cs-review-submit:disabled { background: #94a3b8; cursor: not-allowed; }
 
 /* ═══ LINKED ITEMS ═══ */
-.ic-linked-row { display: flex; flex-direction: column; padding: 6px 10px; background: #f0f5ff; border-radius: 6px; margin-bottom: 4px; }
-.ic-linked-name { font-size: 12px; font-weight: 500; color: #0f3057; }
-.ic-linked-meta { font-size: 11px; color: #64748b; }
-.ir-btn--link { padding: 8px 16px; border: none; border-radius: 8px; background: #2563eb; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: background 0.12s; }
-.ir-btn--link:hover { background: #1d4ed8; }
-.ir-btn--link:disabled { background: #94a3b8; cursor: not-allowed; }
 
 /* Count export */
 .cs-export-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border: 0.5px solid #2563eb; border-radius: 6px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; flex-shrink: 0; }
@@ -1879,3 +1846,6 @@
 .cs-export-ico { border: none; background: none; cursor: pointer; padding: 4px; flex-shrink: 0; opacity: 0.6; }
 .cs-export-ico:active { opacity: 1; }
 .cs-review-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+
+/* Merge warning */
+.ic-merge-warning { padding: 8px 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 11px; color: #92400e; line-height: 1.5; margin: 6px 0; }

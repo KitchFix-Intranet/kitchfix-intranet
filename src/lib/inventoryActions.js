@@ -34,7 +34,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     // Read inventory tabs in parallel (fresh=true bypasses cache after save)
     const inv = await batchRead(INVENTORY_SHEET_ID, [
       "item_catalog", "storage_locations", "count_sessions", "count_items",
-      "review_queue", "price_history", "item_aliases", "merge_history",
+      "review_queue", "price_history", "item_aliases",
     ], { fresh });
 
     // Full catalog for this account
@@ -174,32 +174,6 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
       (r) => r[2] === currentPeriod?.name && (r[5] === "submitted" || r[5] === "corrected")
     );
 
-    // Build linked items map from merge_history "link" entries
-    const linkedItems = {};
-    (inv.merge_history?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && r[8] === "link")
-      .forEach((r) => {
-        try {
-          const ids = JSON.parse(r[6] || "[]");
-          const names = JSON.parse(r[7] || "[]");
-          ids.forEach((id, i) => {
-            if (!linkedItems[id]) linkedItems[id] = [];
-            ids.forEach((otherId, j) => {
-              if (i !== j && !linkedItems[id].some(l => l.itemId === otherId)) {
-                const cat = catalogItems.find(c => c.itemId === otherId);
-                linkedItems[id].push({
-                  itemId: otherId,
-                  name: cat?.name || names[j] || otherId,
-                  unit: cat?.unit || "",
-                  price: cat?.lastPrice || 0,
-                  vendor: cat?.primaryVendor || "",
-                });
-              }
-            });
-          });
-        } catch { /* skip malformed */ }
-      });
-
     return {
       success: true,
       account: activeAccount,
@@ -212,7 +186,6 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
       priceMovers: movers.filter(m => Math.abs(parseFloat(m.pctChange)) >= 5).slice(0, 10),
       itemPrices: Object.fromEntries(Object.entries(priceByItem).map(([id, prices]) => [id, prices.slice(0, 6)])),
       currentPeriodSubmitted,
-      linkedItems,
     };
   } catch (error) {
     console.error("[inventoryActions] bootstrap error:", error);
@@ -562,9 +535,9 @@ FIND GROUPS OF DUPLICATE/SIMILAR ITEMS. Look for:
 - Same brand, same pack size, slightly different wording
 
 CRITICAL — DIFFERENT PACK SIZES:
-When two items have similar names but DIFFERENT UNITS (each vs case, pound vs case, etc.) AND a large price gap (>50% difference), these are the SAME PRODUCT in DIFFERENT PACK SIZES. Do NOT suggest merging them.
-Instead, flag them as type "link" — related items that should stay separate but be linked for reference.
-Example: "Herb Cilantro Fresh" ($0.80/each) and "Cilantro Bunched" ($29.50/case) = same herb, different formats = type "link".
+When two items have similar names but DIFFERENT UNITS (each vs case, pound vs case, etc.) AND a large price gap (>50% difference), these are the SAME PRODUCT in DIFFERENT PACK SIZES. Do NOT suggest merging them — they must stay separate.
+Flag them as type "keep_separate" with a reason like "Same product, different pack size — keep separate."
+Example: "Herb Cilantro Fresh" ($0.80/each) and "Cilantro Bunched" ($29.50/case) = same herb, different formats = type "keep_separate".
 Example: "Chicken Breast 10lb" ($35.00/case) and "Chicken Breast 10 LB" ($35.50/case) = same product same unit = type "merge".
 
 DO NOT flag as duplicates:
@@ -594,7 +567,7 @@ RESPOND WITH ONLY valid JSON (no markdown, no backticks):
 
 TYPE MUST BE one of:
 - "merge" — same product, same unit, should be merged into one catalog entry
-- "link" — same product, different pack size/unit, should stay separate but be linked for reference
+- "keep_separate" — same product but different pack size/unit, must stay as separate items
 
 IMPORTANT: Be EXHAUSTIVE — scan EVERY item against EVERY other item. Do NOT stop after finding a few groups. Check all ${items.length} items systematically. Missing a duplicate is worse than flagging a false positive. Each group MUST contain at least 2 items. Only return groups where you found 2 or more items that appear to be the same product.
 
@@ -736,22 +709,6 @@ export async function handleKeepSeparate({ account, itemIds, itemNames, email })
       JSON.stringify(itemIds),
       JSON.stringify(itemNames || itemIds),
       "keep_separate", "",
-    ]);
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function handleLinkItems({ account, itemIds, itemNames, email }) {
-  try {
-    const now = new Date().toISOString();
-    await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
-      generateId("mrg"), account, now, email || "",
-      "", "",
-      JSON.stringify(itemIds),
-      JSON.stringify(itemNames || itemIds),
-      "link", "",
     ]);
     return { success: true };
   } catch (error) {

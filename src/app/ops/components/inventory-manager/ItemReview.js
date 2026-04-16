@@ -163,20 +163,6 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
     finally { setSaving(false); setSeparatingGroup(null); setSeparateNames({}); }
   };
 
-  const linkItems = async (group) => {
-    setSaving(true);
-    try {
-      const itemNames = group.items.map(i => i.name);
-      await fetch("/api/ops/inventory", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "link-items", account, itemIds: group.items.map(i => i.itemId), itemNames }),
-      });
-      setResolvedGroups(prev => new Set(prev).add(group.groupId));
-      showToast?.("Items linked — they'll appear in each other's catalog detail", "success");
-    } catch { showToast?.("Network error", "error"); }
-    finally { setSaving(false); }
-  };
-
   // #5: Bulk merge with progress
   const acceptAllHigh = async () => {
     const highGroups = activeGroups.filter(g => g.confidence >= 95);
@@ -355,23 +341,13 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
                         ))}
                       </div>
                       <div className="ir-group-actions">
-                        {group.type === "link" ? (<>
-                          <button className="ir-btn ir-btn--link" onClick={() => linkItems(group)} disabled={saving}>
-                            Link Items
-                          </button>
-                          <button className="ir-btn ir-btn--ghost" onClick={() => {
-                            setSeparatingGroup(group.groupId); setEditingGroup(null);
-                            const names = {}; enriched.forEach(i => { names[i.itemId] = i.name; }); setSeparateNames(names);
-                          }} disabled={saving}>Not Related</button>
-                        </>) : (<>
-                          <button className="ir-btn ir-btn--primary" onClick={() => { setEditingGroup(group.groupId); setSeparatingGroup(null); setEditName(group.suggestedName); }} disabled={saving}>
-                            Review &amp; Merge
-                          </button>
-                          <button className="ir-btn ir-btn--ghost" onClick={() => {
-                            setSeparatingGroup(group.groupId); setEditingGroup(null);
-                            const names = {}; enriched.forEach(i => { names[i.itemId] = i.name; }); setSeparateNames(names);
-                          }} disabled={saving}>Keep Separate</button>
-                        </>)}
+                        <button className="ir-btn ir-btn--primary" onClick={() => { setEditingGroup(group.groupId); setSeparatingGroup(null); setEditName(group.suggestedName); }} disabled={saving}>
+                          Review &amp; Merge
+                        </button>
+                        <button className="ir-btn ir-btn--ghost" onClick={() => {
+                          setSeparatingGroup(group.groupId); setEditingGroup(null);
+                          const names = {}; enriched.forEach(i => { names[i.itemId] = i.name; }); setSeparateNames(names);
+                        }} disabled={saving}>Keep Separate</button>
                       </div>
                     </>)}
 
@@ -404,9 +380,7 @@ export default function ItemReview({ catalogItems, locations, account, onComplet
                           </div>
                         </div>
                         <div className="ir-preview-summary">
-                          {group.type === "link"
-                            ? "Same product in different pack sizes. Linking keeps both items separate but shows them in each other's catalog detail for reference."
-                            : "These are the same item spelled differently. Merging keeps one clean entry and links all vendor names so future invoices match automatically."}
+                          These are the same item spelled differently. Merging keeps one clean entry and links all vendor names so future invoices match automatically.
                         </div>
                         <div className="ir-group-actions">
                           <button className="ir-btn ir-btn--primary" onClick={() => mergeGroup(group, editName)} disabled={saving}>
