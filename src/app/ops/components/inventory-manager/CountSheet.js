@@ -15,6 +15,7 @@ const ic = {
   x: "M18 6L6 18M6 6l12 12",
   download: ["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"],
   clipboard: ["M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2","M15 2H9a1 1 0 00-1 1v2a1 1 0 001 1h6a1 1 0 001-1V3a1 1 0 00-1-1z"],
+  clock: ["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z", "M12 6v6l4 2"],
 };
 const fmt = n => "$" + Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const fmtWhole = n => "$" + Math.round(Number(n||0)).toLocaleString();
@@ -83,6 +84,7 @@ export default function CountSheet({
   const [isOnline, setIsOnline] = useState(typeof window === "undefined" ? true : navigator.onLine);
   const [isPaused, setIsPaused] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [heroMenuOpen, setHeroMenuOpen] = useState(false);
   const [justConfirmedId, setJustConfirmedId] = useState(null);
   const [draftInputs, setDraftInputs] = useState({});
   const draftInputsRef = useRef({});
@@ -208,7 +210,7 @@ export default function CountSheet({
     setDraftInputs(p => { const n = { ...p }; delete n[id]; return n; });
     setSyncState("unsaved");
     setJustConfirmedId(id);
-    setTimeout(() => { setJustConfirmedId(null); advanceAfter(id); }, 280);
+    setTimeout(() => { setJustConfirmedId(null); advanceAfter(id); }, 320);
   };
   const applyLastCount = id => {
     const l = lastCountItems[id]; if (!l) return;
@@ -217,23 +219,23 @@ export default function CountSheet({
     setDraftInputs(p => { const n = { ...p }; delete n[id]; return n; });
     setSyncState("unsaved");
     setJustConfirmedId(id);
-    setTimeout(() => { setJustConfirmedId(null); advanceAfter(id); }, 280);
+    setTimeout(() => { setJustConfirmedId(null); advanceAfter(id); }, 320);
   };
 
   const advanceAfter = useCallback(justId => {
-    setActiveItem(null);
-    setTimeout(() => {
-      const idx = filteredItems.findIndex(i => i.itemId === justId);
-      if (idx < 0) return;
-      for (let i = idx + 1; i < filteredItems.length; i++) {
-        const c = counts[filteredItems[i].itemId];
-        if (!c || (c.qty === null && !c.none)) {
-          setActiveItem(filteredItems[i].itemId);
+    const idx = filteredItems.findIndex(i => i.itemId === justId);
+    if (idx < 0) { setActiveItem(null); return; }
+    for (let i = idx + 1; i < filteredItems.length; i++) {
+      const c = counts[filteredItems[i].itemId];
+      if (!c || (c.qty === null && !c.none)) {
+        setActiveItem(filteredItems[i].itemId);
+        requestAnimationFrame(() => {
           document.getElementById(`cs-row-${filteredItems[i].itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
+        });
+        return;
       }
-    }, 80);
+    }
+    setActiveItem(null);
   }, [filteredItems, counts]);
 
   const confirmQty = id => {
@@ -253,7 +255,13 @@ export default function CountSheet({
     setSyncState("unsaved");
     try { navigator.vibrate?.(10); } catch {}
     setJustConfirmedId(id);
-    setTimeout(() => { setJustConfirmedId(null); advanceAfter(id); }, 280);
+    // Animation plays 420ms: amber → green success → fade to 0 opacity.
+    // After it completes, swap to next item. The fade-out hides the DOM swap
+    // so the next focus card appears fresh via its own entry animation.
+    setTimeout(() => {
+      setJustConfirmedId(null);
+      advanceAfter(id);
+    }, 420);
   };
 
   const locItemsCounted = currentItems.filter(i => isCounted(i.itemId)).length;
@@ -526,7 +534,7 @@ export default function CountSheet({
           </div>
           {ovSearchQ && (
             <div className="cs-ov-search-results">
-              {ovSearchResults.length === 0 ? <div className="cs-ov-search-empty">No items matching "{ovSearch}"</div>
+              {ovSearchResults.length === 0 ? <div className="cs-ov-search-empty">No items matching &ldquo;{ovSearch}&rdquo;</div>
               : ovSearchResults.map(r => (
                 <button key={r.item.itemId} className="cs-ov-search-result" onClick={() => { setOvSearchOpen(false); setOvSearch(""); setActiveItem(r.item.itemId); enterZone(r.idx); }}>
                   <span className="cs-cat-dot" style={{background:cc(r.item.category)}}/>
@@ -629,7 +637,7 @@ export default function CountSheet({
             <button key={i} className="cs-review-loc-row" onClick={()=>{setLocIdx(loc.idx);setMode("counting");}}><div className="cs-review-loc-left"><span className="cs-review-loc-name">{loc.name}</span><span className="cs-review-loc-sub">{loc.counted}/{loc.items} counted{loc.noneCount>0?` · ${loc.noneCount} none`:""}</span></div><span className="cs-review-loc-total">{fmt(loc.total)}</span><I d={ic.chevR} size={12} color="#cbd5e1"/></button>
           ))}</div>
           {skipped>0&&<div className="cs-review-warning">{skipped} item{skipped!==1?"s":""} not counted — recorded as 0.</div>}
-          {totalNone>0&&<div className="cs-review-none">{totalNone} item{totalNone!==1?"s":""} marked "none on hand"</div>}
+          {totalNone>0&&<div className="cs-review-none">{totalNone} item{totalNone!==1?"s":""} marked &ldquo;none on hand&rdquo;</div>}
           <div className="cs-review-actions">
             <button className="cs-review-back" onClick={()=>setMode("overview")}><I d={ic.chevL} size={14} color="#0f3057"/> Back</button>
             <button className="cs-review-submit" onClick={doSubmit} disabled={submitting}>{submitting?"Submitting...":"Submit count"}{!submitting&&<I d={ic.check} size={14} color="#fff" sw={2.5}/>}</button>
@@ -674,18 +682,20 @@ export default function CountSheet({
 
     return (
       <div key={item.itemId} id={`cs-row-${item.itemId}`} className={`cs-focus${justConfirmedId === item.itemId ? " cs-focus--confirming" : ""}`}>
-        <div className="cs-focus-top">
-          <span className="cs-cat-dot" style={{ background: cc(item.category), marginTop: "6px" }} />
-          <div className="cs-focus-info">
+        <div className="cs-focus-head">
+          <div className="cs-focus-head-l">
             <div className="cs-focus-name-row">
+              <span className="cs-focus-dot-status" style={{ background: cc(item.category) }} />
               <span className="cs-focus-name">{item.name}</span>
               {recentlyOrdered && <span className="cs-focus-new-dot" title={`Delivered ${daysAgo(item.lastPriceDate)}`}/>}
             </div>
-            <div className="cs-focus-meta">
-              {vendor && <span>{vendor}</span>}
-              {vendor && item.lastPriceDate && <span>·</span>}
-              {item.lastPriceDate && <span>Last ordered {shortDate(item.lastPriceDate)}{recentlyOrdered ? ` (${daysAgo(item.lastPriceDate)})` : ""}</span>}
-            </div>
+            {(vendor || item.lastPriceDate) && (
+              <div className="cs-focus-meta">
+                {vendor && <span>{vendor}</span>}
+                {vendor && item.lastPriceDate && <span> · </span>}
+                {item.lastPriceDate && <span>{shortDate(item.lastPriceDate)}</span>}
+              </div>
+            )}
           </div>
           <div className="cs-focus-price-col">
             <span className="cs-focus-price">{fmt(item.lastPrice)}</span>
@@ -693,30 +703,28 @@ export default function CountSheet({
           </div>
         </div>
 
-        {/* Last count reference — critical signal */}
         {last && (
-          <div className="cs-focus-lastcount">
-            <I d={ic.clipboard} size={11} color="#64748b" />
-            <span>Last count: </span>
-            {last.noneOnHand ? <span className="cs-focus-lastcount-val">none on hand</span>
-              : <span className="cs-focus-lastcount-val">{last.quantity} {unitLabel}{last.quantity !== 1 ? "s" : ""}</span>}
-            {lastCount?.submittedAt && <span className="cs-focus-lastcount-date">· {daysAgo(lastCount.submittedAt)}</span>}
-            {lastCount?.submittedBy && <span className="cs-focus-lastcount-by">· by {lastCount.submittedBy.split(" ")[0] || lastCount.submittedBy}</span>}
+          <div className="cs-focus-context">
+            <I d={ic.clock} size={11} color="#A15C0A" />
+            {last.noneOnHand
+              ? <span>Last count: <strong>none on hand</strong>{lastCount?.submittedAt ? ` · ${daysAgo(lastCount.submittedAt)}` : ""}</span>
+              : <span>Last count: <strong>{last.quantity} {unitLabel}</strong>{lastCount?.submittedAt ? ` · ${daysAgo(lastCount.submittedAt)}` : ""}</span>}
           </div>
         )}
 
-        <div className="cs-focus-stepper-row">
-          <div className="cs-stepper">
-            <button className="cs-stepper-btn"
-              onClick={onMinus}
-              onMouseDown={() => startLongPress(item.itemId, -step, c.qty || 0)}
-              onMouseUp={endLongPress} onMouseLeave={endLongPress}
-              onTouchStart={() => startLongPress(item.itemId, -step, c.qty || 0)}
-              onTouchEnd={endLongPress}>
-              <I d={ic.minus} size={16} color="#0f3057" />
-            </button>
+        <div className="cs-focus-entry">
+          <button className="cs-entry-step"
+            onClick={onMinus}
+            onMouseDown={() => startLongPress(item.itemId, -step, c.qty || 0)}
+            onMouseUp={endLongPress} onMouseLeave={endLongPress}
+            onTouchStart={() => startLongPress(item.itemId, -step, c.qty || 0)}
+            onTouchEnd={endLongPress}
+            aria-label="Decrease">
+            <I d={ic.minus} size={18} color="#A15C0A" sw={2.4}/>
+          </button>
+          <div className="cs-entry-input-wrap">
             <input
-              className="cs-stepper-input"
+              className="cs-entry-input"
               type="text"
               inputMode="decimal"
               value={draftInputs[item.itemId] !== undefined ? draftInputs[item.itemId] : (c.qty !== null ? c.qty : "")}
@@ -726,20 +734,19 @@ export default function CountSheet({
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); confirmQty(item.itemId); } }}
               ref={el => { if (el) inputRefs.current[item.itemId] = el; }}
             />
-            <button className="cs-stepper-btn"
-              onClick={onPlus}
-              onMouseDown={() => startLongPress(item.itemId, step, c.qty || 0)}
-              onMouseUp={endLongPress} onMouseLeave={endLongPress}
-              onTouchStart={() => startLongPress(item.itemId, step, c.qty || 0)}
-              onTouchEnd={endLongPress}>
-              <I d={ic.plus} size={16} color="#0f3057" />
-            </button>
+            <span className="cs-entry-unit">{unitLabel}</span>
           </div>
-          <span className="cs-stepper-unit">{unitLabel}{c.qty !== 1 ? "s" : ""}</span>
-          {liveExt > 0 && <span className="cs-focus-ext">= {fmt(liveExt)}</span>}
+          <button className="cs-entry-step"
+            onClick={onPlus}
+            onMouseDown={() => startLongPress(item.itemId, step, c.qty || 0)}
+            onMouseUp={endLongPress} onMouseLeave={endLongPress}
+            onTouchStart={() => startLongPress(item.itemId, step, c.qty || 0)}
+            onTouchEnd={endLongPress}
+            aria-label="Increase">
+            <I d={ic.plus} size={18} color="#A15C0A" sw={2.4}/>
+          </button>
         </div>
 
-        {/* Variance warning */}
         {highVariance && (
           <div className="cs-focus-variance">
             <span className="cs-focus-variance-icon">!</span>
@@ -750,20 +757,21 @@ export default function CountSheet({
           </div>
         )}
 
-        <div className="cs-focus-chips">
+        <div className="cs-focus-actions">
           {last && !last.noneOnHand && last.quantity > 0 && (
-            <button className="cs-chip-last" onClick={() => applyLastCount(item.itemId)}>
-              <span>Last: {last.quantity}</span>
-              {lastCount?.submittedAt && <span className="cs-chip-last-date">· {shortDate(lastCount.submittedAt)}</span>}
+            <button className="cs-btn-last" onClick={() => applyLastCount(item.itemId)}>
+              Apply last · {last.quantity}
             </button>
           )}
-          <button className="cs-chip-none" onClick={() => setItemNone(item.itemId)}>None on hand</button>
+          <button className="cs-btn-none" onClick={() => setItemNone(item.itemId)}>None</button>
           <button
-            className="cs-chip-confirm"
+            className="cs-btn-confirm"
             onClick={() => confirmQty(item.itemId)}
             disabled={(draftInputs[item.itemId] === undefined || draftInputs[item.itemId] === "" || draftInputs[item.itemId] === ".") && (c.qty === null || c.qty < 0)}
           >
-            <I d={ic.check} size={16} color="#fff" sw={2.5} />
+            {liveExt > 0 && <span className="cs-btn-confirm-ext">{fmt(liveExt)} · </span>}
+            Confirm
+            <I d={ic.check} size={14} color="#fff" sw={2.4}/>
           </button>
         </div>
       </div>
@@ -771,18 +779,11 @@ export default function CountSheet({
   };
 
   const renderUncountedRow = (item) => {
-    const vendor = item.primaryVendor || item.lastPriceVendor || "";
     const recentlyOrdered = item.lastPriceDate && ((new Date() - new Date(item.lastPriceDate)) / 86400000) <= 7;
     return (
       <div key={item.itemId} id={`cs-row-${item.itemId}`} className="cs-row cs-row--uncounted" onClick={() => setActiveItem(item.itemId)}>
-        <span className="cs-cat-dot" style={{ background: cc(item.category) }} />
-        <div className="cs-row-info">
-          <div className="cs-row-name-wrap">
-            <span className="cs-row-name">{item.name}</span>
-            {recentlyOrdered && <span className="cs-row-new-dot" title={`Delivered ${daysAgo(item.lastPriceDate)}`}/>}
-          </div>
-          {vendor && <span className="cs-row-vendor">{vendor}</span>}
-        </div>
+        <span className={`cs-row-dot${recentlyOrdered ? " cs-row-dot--new" : ""}`} title={recentlyOrdered ? `Delivered ${daysAgo(item.lastPriceDate)}` : undefined}/>
+        <span className="cs-row-name">{item.name}</span>
         <span className="cs-row-price">{fmt(item.lastPrice)}/{shortUnit(item.unit)}</span>
       </div>
     );
@@ -826,7 +827,7 @@ export default function CountSheet({
           <I d={ic.clipboard} size={14} color="#d97706" />
           <div className="cs-paused-text">
             <span className="cs-paused-title">Count paused</span>
-            <span className="cs-paused-sub">Resume when you're ready — draft is saved</span>
+            <span className="cs-paused-sub">Resume when you&rsquo;re ready — draft is saved</span>
           </div>
           <button className="cs-paused-resume" onClick={() => setIsPaused(false)}>Resume →</button>
         </div>
@@ -834,49 +835,43 @@ export default function CountSheet({
 
       {/* Hero header */}
       <div className="cs-hero">
+        <button className="cs-hero-back" onClick={() => { saveCurrentLocation(); setMode("overview"); }} title="Back to zones" aria-label="Back to zones">
+          <I d={ic.chevL} size={15} color="#0B2344" sw={2.4}/>
+        </button>
         <div className="cs-hero-ico" style={{ background: locColor.bg }}>{ri(currentLoc?.icon)}</div>
         <div className="cs-hero-body">
           {parentZone && <div className="cs-hero-crumb">{parentZone.name}</div>}
           <span className="cs-hero-name">{currentLoc?.name || "Unknown"}</span>
-          <div className="cs-hero-stats">
-            <span className="cs-hero-pct">{Math.round(locProgress)}%</span>
-            {locDollarTotal > 0 && <span className="cs-hero-dollar">· {fmt(locDollarTotal)}</span>}
-            <span className="cs-hero-count">· {locItemsCounted} of {locTotal} counted</span>
-          </div>
         </div>
-        <div className="cs-hero-actions">
-          {/* Sync status */}
-          <div className={`cs-sync cs-sync--${syncState}`} title={
-            syncState === "synced" ? "All changes saved" :
-            syncState === "saving" ? "Saving..." :
-            syncState === "offline" ? "Offline — changes queued" :
-            "Unsaved changes"
-          }>
-            {syncState === "saving" ? <span className="cs-sync-spinner"/>
-              : syncState === "synced" ? <I d={ic.check} size={10} color="#16a34a" sw={3}/>
-              : syncState === "offline" ? <span className="cs-sync-dot"/>
-              : <span className="cs-sync-dot"/>}
-            <span className="cs-sync-label">
-              {syncState === "synced" ? "Saved" : syncState === "saving" ? "Saving" : syncState === "offline" ? "Offline" : "Unsaved"}
-            </span>
-          </div>
-          <button className="cs-hero-ico-btn" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (desktop)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="6" width="20" height="12" rx="2"/>
-              <path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/>
-            </svg>
+        <div className="cs-hero-pct-col">
+          <span className="cs-hero-pct">{Math.round(locProgress)}%</span>
+          <span className="cs-hero-pct-lab">Complete</span>
+        </div>
+        <div className="cs-hero-menu-wrap">
+          <button className="cs-hero-ico-btn" onClick={() => setHeroMenuOpen(v => !v)} title="More" aria-label="More actions">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
           </button>
-          <button className="cs-hero-ico-btn" onClick={() => setIsPaused(true)} title="Pause count">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="6" y="4" width="4" height="16" rx="1"/>
-              <rect x="14" y="4" width="4" height="16" rx="1"/>
-            </svg>
-          </button>
-          <button className="cs-hero-ico-btn" onClick={exportCount} title="Export">
-            <I d={ic.download} size={14} color="#94a3b8" />
-          </button>
+          {heroMenuOpen && (
+            <div className="cs-hero-menu" onMouseLeave={() => setHeroMenuOpen(false)}>
+              <button className="cs-hero-menu-item" onClick={() => { setShortcutsOpen(true); setHeroMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/></svg>
+                Keyboard shortcuts
+              </button>
+              <button className="cs-hero-menu-item" onClick={() => { setIsPaused(true); setHeroMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                Pause count
+              </button>
+              <button className="cs-hero-menu-item" onClick={() => { exportCount(); setHeroMenuOpen(false); }}>
+                <I d={ic.download} size={14} color="currentColor"/>
+                Export
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Zone progress bar — thin, full width */}
+      <div className="cs-pbar"><div className="cs-pfill" style={{ width: `${locProgress}%` }} /></div>
 
       {/* Shortcuts overlay */}
       {shortcutsOpen && (
@@ -899,16 +894,12 @@ export default function CountSheet({
         </div>
       )}
 
-      {/* Zone progress bar */}
-      <div className="cs-pbar"><div className="cs-pfill" style={{ width: `${locProgress}%`, background: locColor.fg }} /></div>
-
       {/* Counted summary pill */}
       {countedItems.length > 0 && (
         <button className="cs-counted-pill" onClick={() => setShowCounted(v => !v)}>
-          <div className="cs-counted-pill-check"><I d={ic.check} size={12} color="#fff" sw={3} /></div>
-          <span className="cs-counted-pill-text">{countedItems.length} counted</span>
-          <span className="cs-counted-pill-stat">· {fmt(locDollarTotal)}</span>
-          <span className="cs-counted-pill-toggle">{showCounted ? "Hide" : "Show"} <I d={showCounted ? ic.chevU : ic.chevD} size={10} color="#16a34a" /></span>
+          <div className="cs-counted-pill-check"><I d={ic.check} size={11} color="#fff" sw={3} /></div>
+          <span className="cs-counted-pill-text">{showCounted ? "Hide" : "Show"} {countedItems.length} counted item{countedItems.length !== 1 ? "s" : ""}</span>
+          <I d={showCounted ? ic.chevU : ic.chevD} size={11} color="#1F5F3F" sw={2.4}/>
         </button>
       )}
 
@@ -919,21 +910,10 @@ export default function CountSheet({
         {search && <button className="cs-search-x" onClick={() => setSearch("")}><I d={ic.x} size={12} color="#94a3b8" /></button>}
       </div>
 
-      {/* Uncounted section */}
-      {filteredUncounted.length > 0 && (<>
-        <div className="cs-section-label">
-          <span>Up next ({filteredUncounted.length})</span>
-          {zoneCategories.size > 1 && <span className="cs-section-label-right">{zoneCategories.size} categories</span>}
-        </div>
-        <div className="cs-items">
-          {filteredUncounted.map(item => activeItem === item.itemId ? renderFocusCard(item) : renderUncountedRow(item))}
-        </div>
-      </>)}
-
-      {/* Counted section (expanded) */}
+      {/* Counted section (expanded) — renders above Up Next so the pill toggle reveals items right below it */}
       {showCounted && (<>
         <div className="cs-section-label">
-          <span>Just counted ({filteredCounted.length})</span>
+          <span>Just counted · {filteredCounted.length}</span>
           {filteredCounted.length > 0 && <span className="cs-section-label-right">tap to re-edit</span>}
         </div>
         {filteredCounted.length > 0 ? (
@@ -952,21 +932,69 @@ export default function CountSheet({
         )}
       </>)}
 
+      {/* Uncounted section with category grouping */}
+      {filteredUncounted.length > 0 && (<>
+        <div className="cs-section-label">
+          <span>Up next · {filteredUncounted.length} item{filteredUncounted.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="cs-items">
+          {(() => {
+            // Group by category, preserve original order within categories
+            const byCat = {};
+            filteredUncounted.forEach(i => {
+              const cat = i.category || "Other";
+              if (!byCat[cat]) byCat[cat] = [];
+              byCat[cat].push(i);
+            });
+            const catOrder = Object.keys(byCat);
+            const showCatHeaders = catOrder.length > 1;
+            const out = [];
+            catOrder.forEach(cat => {
+              const items = byCat[cat];
+              const catTotalInZone = currentItems.filter(i => (i.category || "Other") === cat).length;
+              const catDoneInZone = currentItems.filter(i => (i.category || "Other") === cat && isCounted(i.itemId)).length;
+              if (showCatHeaders) {
+                out.push(
+                  <div key={`cat-${cat}`} className="cs-cat-hdr">
+                    <span className="cs-cat-hdr-l">
+                      <span className="cs-cat-hdr-dot" style={{ background: cc(cat) }} />
+                      {cat}
+                    </span>
+                    <span className="cs-cat-hdr-r">{catDoneInZone} of {catTotalInZone} done</span>
+                  </div>
+                );
+              }
+              items.forEach(item => {
+                out.push(activeItem === item.itemId ? renderFocusCard(item) : renderUncountedRow(item));
+              });
+            });
+            return out;
+          })()}
+        </div>
+      </>)}
+
       {filteredUncounted.length === 0 && filteredCounted.length === 0 && (
         <div className="cs-no-results">{search ? `No items matching "${search}"` : "No items in this location."}</div>
       )}
 
       {/* Footer */}
       <div className="cs-nav">
-        <button className="cs-nav-back" onClick={goPrev}>
-          <I d={ic.chevL} size={13} color="#0f3057" /> Zones
+        <button className="cs-nav-back" onClick={goPrev} title="Back to zones">
+          <I d={ic.chevL} size={12} color="#0B2344" sw={2.4}/> Zones
         </button>
         <div className="cs-nav-stat">
-          <span className="cs-nav-stat-top">{locItemsCounted}/{locTotal} · {fmt(locDollarTotal)}</span>
-          <span className="cs-nav-stat-sub">{Math.round(locProgress)}% of {currentLoc?.name}</span>
+          <span className="cs-nav-stat-top">
+            {locItemsCounted} of {locTotal} · {fmt(locDollarTotal)}
+            {" · "}
+            <span className={`cs-nav-sync cs-nav-sync--${syncState}`}>
+              {syncState === "synced" ? "Saved" : syncState === "saving" ? "Saving…" : syncState === "offline" ? "Offline" : "Unsaved"}
+            </span>
+          </span>
+          <span className="cs-nav-stat-sub">{locRemaining > 0 ? `${locRemaining} left in ${currentLoc?.name}` : `${currentLoc?.name} complete`}</span>
         </div>
         <button className="cs-nav-next" onClick={goNext} disabled={saving}>
-          {saving ? "Saving..." : locIdx < allLocs.length - 1 ? allLocs[locIdx + 1]?.name : "Review"} <I d={ic.chevR} size={13} color="#fff" />
+          {saving ? "Saving…" : locIdx < allLocs.length - 1 ? (allLocs[locIdx + 1]?.name || "Next") : "Review"}
+          <I d={ic.chevR} size={12} color="#fff" sw={2.4}/>
         </button>
       </div>
     </div>
