@@ -158,7 +158,9 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
 
   if (screen === "counting") {
     content = <CountSheet catalogItems={catalogItems} locations={locations} lastCountItems={lastCountItems}
-      sessionId={sessionId} account={account} period={cp?.name} onSaveLocation={handleSaveLocation}
+      sessionId={sessionId} account={account} period={cp?.name} periodDue={cp?.due}
+      allPeriods={data?.allPeriods || []} lastCount={lastCount}
+      onSaveLocation={handleSaveLocation}
       onSubmit={async ({ sessionId: sid, account: acct, period: per }) => {
         const res = await fetch("/api/ops/inventory", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "submit", sessionId: sid, account: acct, period: per }) });
