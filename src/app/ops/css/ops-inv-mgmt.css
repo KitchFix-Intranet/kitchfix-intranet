@@ -1804,7 +1804,7 @@
   --bg-page: #FAFAF7;      /* warm near-white (was #FCF6EB ivory) */
   --bg-surface: #F4F1EA;   /* for subtle insets */
   --bg-card: #FFFFFF;
-  padding-bottom: 96px;     /* make room for sticky footer */
+  padding-bottom: 24px;     /* make room for sticky footer */
   background: var(--bg-page);
   position: relative;
   min-height: 100vh;
@@ -1908,23 +1908,34 @@
   transition: width 0.3s ease-out;
 }
 
-/* ─── Counted summary pill ─── */
-.cs-counted-pill {
-  display: flex; align-items: center; gap: 8px;
-  width: calc(100% - 36px);
-  margin: 12px 18px 10px;
-  padding: 11px 14px;
+/* ─── Counted drawer (pill + expanded body) ─── */
+.cs-counted-drawer {
+  margin: 10px 18px 12px;
   background: var(--bg-card);
   border: 0.5px solid rgba(46, 143, 94, 0.25);
   border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(11, 35, 68, 0.04);
+  overflow: hidden;
+  transition: box-shadow 0.16s;
+}
+.cs-counted-drawer--open {
+  box-shadow: 0 2px 8px rgba(11, 35, 68, 0.06);
+}
+
+/* ─── Counted summary pill (drawer header) ─── */
+.cs-counted-pill {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.12s, box-shadow 0.12s;
-  box-shadow: 0 1px 3px rgba(11, 35, 68, 0.04);
+  transition: background 0.12s;
 }
 .cs-counted-pill:hover {
   background: var(--success-100);
-  box-shadow: 0 2px 6px rgba(11, 35, 68, 0.06);
 }
 .cs-counted-pill-check {
   width: 18px; height: 18px; flex-shrink: 0;
@@ -1935,6 +1946,24 @@
 .cs-counted-pill-text {
   flex: 1; text-align: left;
   font-size: 12px; color: var(--success-700); font-weight: 600;
+}
+
+/* ─── Counted drawer body (rows contained inside) ─── */
+.cs-counted-drawer-body {
+  border-top: 0.5px solid rgba(46, 143, 94, 0.18);
+}
+.cs-counted-drawer-body .cs-row-counted,
+.cs-counted-drawer-body .cs-row-none-v2 {
+  padding-left: 14px;
+  padding-right: 14px;
+  border-bottom-color: rgba(11, 35, 68, 0.05);
+}
+.cs-counted-drawer-body .cs-row-counted:last-child,
+.cs-counted-drawer-body .cs-row-none-v2:last-child {
+  border-bottom: none;
+}
+.cs-counted-drawer-body .cs-focus {
+  margin: 8px 6px;
 }
 
 /* ─── Search ─── */
@@ -2557,7 +2586,7 @@
     margin-right: auto;
   }
   .cs-search,
-  .cs-counted-pill,
+  .cs-counted-drawer,
   .cs-focus,
   .cs-nav {
     max-width: 680px;
@@ -2571,7 +2600,9 @@
   .cs-row-none-v2 { padding-left: 28px; padding-right: 28px; }
   .cs-focus { padding: 20px 22px; margin-top: 14px; margin-bottom: 14px; }
   .cs-search,
-  .cs-counted-pill { margin-top: 12px; margin-bottom: 12px; }
+  .cs-counted-drawer { margin-top: 12px; margin-bottom: 12px; }
+  .cs-counted-drawer-body .cs-row-counted,
+  .cs-counted-drawer-body .cs-row-none-v2 { padding-left: 18px; padding-right: 18px; }
   .cs-nav { margin-top: 14px; margin-bottom: 14px; bottom: 16px; }
   .cs-entry-input { font-size: 38px; }
   .cs-focus-name { font-size: 17px; }
@@ -2580,7 +2611,7 @@
 /* ─── Wider desktop: even tighter inset ─── */
 @media (min-width: 1200px) {
   .cs-search,
-  .cs-counted-pill,
+  .cs-counted-drawer,
   .cs-focus,
   .cs-nav {
     max-width: 620px;
@@ -2630,7 +2661,7 @@
 .cs-export-ico:active { opacity: 1; }
 .cs-review-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
 /* ═══ COUNT ZONE OVERVIEW — Designer vision ═══ */
-.cs-root--overview { display: flex; flex-direction: column; padding-bottom: 0; }
+.cs-root--overview { display: flex; flex-direction: column; padding-bottom: 0; min-height: 100vh; }
 
 /* Hero header */
 .cs-ov-hero { padding: 16px; border-bottom: 0.5px solid #f1f5f9; }

@@ -103,9 +103,20 @@ export default function CountSheet({
     return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
   }, []);
 
-  // Ref for keyboard shortcut access to current uncounted list
+// Ref for keyboard shortcut access to current uncounted list
   const filteredUncountedRef = useRef([]);
 
+  // Auto-focus the focus-card input whenever the active item changes.
+  // Enables rapid-entry counting: type → Enter → next card ready → type → Enter.
+  useEffect(() => {
+    if (!activeItem) return;
+    const raf = requestAnimationFrame(() => {
+      const el = inputRefs.current[activeItem];
+      if (el && typeof el.focus === "function") el.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeItem]);
+  
   // Keyboard shortcuts (desktop power users)
   useEffect(() => {
     if (mode !== "counting") return;
@@ -894,15 +905,6 @@ export default function CountSheet({
         </div>
       )}
 
-      {/* Counted summary pill */}
-      {countedItems.length > 0 && (
-        <button className="cs-counted-pill" onClick={() => setShowCounted(v => !v)}>
-          <div className="cs-counted-pill-check"><I d={ic.check} size={11} color="#fff" sw={3} /></div>
-          <span className="cs-counted-pill-text">{showCounted ? "Hide" : "Show"} {countedItems.length} counted item{countedItems.length !== 1 ? "s" : ""}</span>
-          <I d={showCounted ? ic.chevU : ic.chevD} size={11} color="#1F5F3F" sw={2.4}/>
-        </button>
-      )}
-
       {/* Search */}
       <div className="cs-search">
         <I d={ic.search} size={13} color="#94a3b8" />
@@ -910,27 +912,32 @@ export default function CountSheet({
         {search && <button className="cs-search-x" onClick={() => setSearch("")}><I d={ic.x} size={12} color="#94a3b8" /></button>}
       </div>
 
-      {/* Counted section (expanded) — renders above Up Next so the pill toggle reveals items right below it */}
-      {showCounted && (<>
-        <div className="cs-section-label">
-          <span>Just counted · {filteredCounted.length}</span>
-          {filteredCounted.length > 0 && <span className="cs-section-label-right">tap to re-edit</span>}
+      {/* Counted summary drawer — pill is the header; expanded rows live inside the drawer body */}
+      {countedItems.length > 0 && (
+        <div className={`cs-counted-drawer${showCounted ? " cs-counted-drawer--open" : ""}`}>
+          <button className="cs-counted-pill" onClick={() => setShowCounted(v => !v)}>
+            <div className="cs-counted-pill-check"><I d={ic.check} size={11} color="#fff" sw={3} /></div>
+            <span className="cs-counted-pill-text">{showCounted ? "Hide" : "Show"} {countedItems.length} counted item{countedItems.length !== 1 ? "s" : ""}</span>
+            <I d={showCounted ? ic.chevU : ic.chevD} size={11} color="#1F5F3F" sw={2.4}/>
+          </button>
+          {showCounted && (
+            <div className="cs-counted-drawer-body">
+              {filteredCounted.length > 0 ? (
+                filteredCounted.map(item => {
+                  if (activeItem === item.itemId) return renderFocusCard(item);
+                  const c = getCount(item.itemId);
+                  if (c.none) return renderNoneRow(item);
+                  return renderCountedRow(item);
+                })
+              ) : (
+                <div className="cs-counted-empty">
+                  {search ? `No counted items match "${search}"` : "No items counted yet in this zone"}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        {filteredCounted.length > 0 ? (
-          <div className="cs-items">
-            {filteredCounted.map(item => {
-              if (activeItem === item.itemId) return renderFocusCard(item);
-              const c = getCount(item.itemId);
-              if (c.none) return renderNoneRow(item);
-              return renderCountedRow(item);
-            })}
-          </div>
-        ) : (
-          <div className="cs-counted-empty">
-            {search ? `No counted items match "${search}"` : "No items counted yet in this zone"}
-          </div>
-        )}
-      </>)}
+      )}
 
       {/* Uncounted section with category grouping */}
       {filteredUncounted.length > 0 && (<>

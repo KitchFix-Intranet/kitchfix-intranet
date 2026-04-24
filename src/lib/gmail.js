@@ -50,9 +50,8 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
 
     const subject = buildSubject(data);
     const htmlBody = buildEmailHtml(data, typeLabel, senderEmail);
-const recipients = [AP_EMAIL];
-    AP_CC.forEach((cc) => { if (!recipients.includes(cc)) recipients.push(cc); });
-    if (data.ccSelf && !recipients.includes(senderEmail)) recipients.push(senderEmail);
+    const toList = [AP_EMAIL];
+    const ccList = AP_CC.filter((e) => e !== AP_EMAIL && e !== senderEmail);
         
     // Build MIME message
     let rawMessage;
@@ -61,7 +60,8 @@ const recipients = [AP_EMAIL];
       // ── Attach stamped PDF ──
       rawMessage = buildMimeWithAttachment({
         from: senderEmail,
-        to: recipients,
+        to: toList,
+        cc: ccList,
         subject,
         html: htmlBody,
         attachmentBase64: data.pdfBase64,
@@ -78,7 +78,8 @@ const recipients = [AP_EMAIL];
 
       rawMessage = buildMimeWithAttachment({
         from: senderEmail,
-        to: recipients,
+        to: toList,
+        cc: ccList,
         subject,
         html: htmlBody,
         attachmentBase64: raw,
@@ -89,7 +90,8 @@ const recipients = [AP_EMAIL];
       // ── No attachment ──
       rawMessage = buildMimeSimple({
         from: senderEmail,
-        to: recipients,
+        to: toList,
+        cc: ccList,
         subject,
         html: htmlBody,
       });
@@ -204,32 +206,46 @@ function encodeSubject(subject) {
   return `=?UTF-8?B?${encoded}?=`;
 }
 
-function buildMimeSimple({ from, to, subject, html }) {
+function buildMimeSimple({ from, to, cc, subject, html }) {
   const toStr = Array.isArray(to) ? to.join(", ") : to;
 
-  const message = [
+  const headers = [
     `From: ${from}`,
     `To: ${toStr}`,
+  ];
+  if (cc && cc.length > 0) {
+    headers.push(`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`);
+  }
+  headers.push(
     `Subject: ${encodeSubject(subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset=utf-8`,
-    ``,
-    html,
-  ].join("\r\n");
+  );
+
+  const message = [...headers, ``, html].join("\r\n");
 
   return Buffer.from(message).toString("base64url");
 }
 
-function buildMimeWithAttachment({ from, to, subject, html, attachmentBase64, attachmentFilename, attachmentMimeType }) {
+function buildMimeWithAttachment({ from, to, cc, subject, html, attachmentBase64, attachmentFilename, attachmentMimeType }) {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const toStr = Array.isArray(to) ? to.join(", ") : to;
 
-  const message = [
+  const headers = [
     `From: ${from}`,
     `To: ${toStr}`,
+  ];
+  if (cc && cc.length > 0) {
+    headers.push(`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`);
+  }
+  headers.push(
     `Subject: ${encodeSubject(subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
+  );
+
+  const message = [
+    ...headers,
     ``,
     `--${boundary}`,
     `Content-Type: text/html; charset=utf-8`,
@@ -315,9 +331,12 @@ export async function sendRejectionEmail(accessToken, senderEmail, recipientEmai
   </div>
 </div>`;
 
+    const ccList = AP_CC.filter((e) => e !== recipientEmail && e !== senderEmail);
+
     const rawMessage = buildMimeSimple({
       from: senderEmail,
       to: [recipientEmail],
+      cc: ccList,
       subject,
       html,
     });
