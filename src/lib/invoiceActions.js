@@ -1037,6 +1037,9 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           const normalizeInv = (n) => String(n || "").trim().replace(/^[#\s]+/, "").replace(/^0+/, "") || "0";
           const inputNorm = normalizeInv(invoiceNumber);
           const dupFound = dupRead.rows.find((r) => {
+            const status = String(r[13] || "sent");
+            const correctedFrom = String(r[21] || "");
+            if (status === "corrected" || correctedFrom) return false;
             return String(r[4] || "").trim() === vendor
               && normalizeInv(r[6]) === inputNorm
               && String(r[7] || "").trim() === invoiceDate
@@ -1161,6 +1164,10 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
       const inv = normalizeInvNum(r[6]);
       const d = String(r[7] || "").trim();
       const amt = Number(r[8]) || 0;
+      const status = String(r[13] || "sent");
+      const correctedFrom = String(r[21] || "");
+      // Skip corrected originals and resubmissions — they're expected to match
+      if (status === "corrected" || correctedFrom) return false;
       return v === vendor && inv === inputInvNorm && d === invoiceDate && Math.abs(amt - Number(totalAmount)) < 0.01;
     });
         return {

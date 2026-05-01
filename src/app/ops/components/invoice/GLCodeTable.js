@@ -286,7 +286,9 @@ export default function GLCodeTable({ glCodes = [], rows, onChange, hasError, di
   }
 
   function updateRowAmount(idx, amount) {
-    const updated = rows.map((r, i) => (i === idx ? { ...r, amount } : r));
+    // Always use positive amounts — the system handles credit signs at submission
+    const clean = amount.replace(/^-/, "");
+    const updated = rows.map((r, i) => (i === idx ? { ...r, amount: clean } : r));
     onChange(updated);
   }
 

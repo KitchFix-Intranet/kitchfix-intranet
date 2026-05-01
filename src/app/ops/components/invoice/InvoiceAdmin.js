@@ -48,15 +48,6 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
 
   useEffect(() => { loadSubmissions(); }, [loadSubmissions]);
 
-  // Report pending count to parent for tab badge
-  useEffect(() => {
-    if (!onStatsReady || allSubmissions.length === 0) return;
-    const weekAgo = new Date(Date.now() - 7 * 86400000);
-    const weekItems = allSubmissions.filter((s) => new Date(s.timestamp) >= weekAgo);
-    const pending = weekItems.filter((s) => s.status === "sent" || s.status === "pending").length;
-    onStatsReady({ pending });
-  }, [allSubmissions, onStatsReady]);
-
   // Client-side period filter
   const submissions = useMemo(() => {
     if (period === "all") return allSubmissions;
@@ -68,21 +59,30 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
     return [...new Set(submissions.map((s) => s.account).filter(Boolean))].sort();
   }, [submissions]);
 
-  // Duplicate detection — respects persistent dupeOverride
+  // Duplicate detection — respects persistent dupeOverride, excludes corrected/resubmit pairs
   const duplicateSet = useMemo(() => {
     const counts = {};
     for (const s of submissions) {
       if (!s.invoiceNumber || s.dupeOverride === "not_duplicate") continue;
+      if (s.status === "corrected" || s.correctedFromUuid) continue;
       const key = `${s.vendor}||${s.invoiceNumber}`;
       counts[key] = (counts[key] || 0) + 1;
     }
     const dupes = new Set();
     for (const s of submissions) {
       if (!s.invoiceNumber || s.dupeOverride === "not_duplicate") continue;
+      if (s.status === "corrected" || s.correctedFromUuid) continue;
       if (counts[`${s.vendor}||${s.invoiceNumber}`] > 1) dupes.add(s.uuid);
     }
     return dupes;
   }, [submissions]);
+
+  // Report actionable count to parent for tab badge (dupes needing review)
+  useEffect(() => {
+    if (!onStatsReady || allSubmissions.length === 0) return;
+    const dupeCount = allSubmissions.filter((s) => duplicateSet.has(s.uuid)).length;
+    onStatsReady({ actionable: dupeCount });
+  }, [allSubmissions, onStatsReady, duplicateSet]);
 
   const accountScoped = useMemo(() => {
     return accountFilter === "__all__" ? submissions : submissions.filter((s) => s.account === accountFilter);

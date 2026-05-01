@@ -199,7 +199,7 @@ const accounts = config?.accounts || [];
   const gateAllCleared = hasPages && pages.every((p) => p.gate === "pass" || p.gate === "warn");
   const pagesReady = hasPages && gateAllCleared && !gateScanning;
 
-const glTotalRaw = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+const glTotalRaw = glRows.reduce((sum, r) => sum + Math.abs(Number(r.amount) || 0), 0);
   const glTotal = Math.round(glTotalRaw * 100) / 100;
   const invoiceTotal = Math.round(Number(totalAmount) * 100) / 100;
   const glBalanceDiff = invoiceTotal > 0 ? invoiceTotal - glTotal : 0;
@@ -633,7 +633,7 @@ setErrors({});
     if (!totalAmount || Number(totalAmount) <= 0) errs.totalAmount = true;
     if (pages.length === 0) errs.pages = true;
     if (!glRows.some((r) => r.code && Number(r.amount) > 0)) errs.glRows = true;
-    const glT = glRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const glT = glRows.reduce((sum, r) => sum + Math.abs(Number(r.amount) || 0), 0);
 const roundedGlT = Math.round(glT * 100) / 100;
     const roundedTotal = Math.round(Number(totalAmount) * 100) / 100;
     if (Math.abs(roundedGlT - roundedTotal) > 0.01 && roundedTotal > 0) errs.glBalance = true;
@@ -655,6 +655,8 @@ const handleSubmit = useCallback(() => {
     setShowReview(false);
     setSubmitting(true);
     try {
+      // Skip duplicate check for Fix & Resubmit — it's expected to match the original
+      if (!resubmitSource) {
                   const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
       const dupData = await dupRes.json();
@@ -664,6 +666,7 @@ const handleSubmit = useCallback(() => {
           setTimeout(() => resolve(false), 30000);
         });
         if (!proceed) { setSubmitting(false); return; }
+      }
       }
     } catch {}
     glRows.filter((r) => r.code).forEach((r) => trackGLUsage(r.code));
@@ -998,7 +1001,7 @@ Upload, code &amp; submit to AP.
               <button className={`oh-inv-tab${activeTab === "admin" ? " oh-inv-tab--active" : ""}`} onClick={() => setActiveTab("admin")}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
                 AP Review
-                {adminStats?.pending > 0 && <span className="oh-inv-tab-count">{adminStats.pending}</span>}
+                {adminStats?.actionable > 0 && <span className="oh-inv-tab-count">{adminStats.actionable}</span>}
               </button>
             )}
           </div>
