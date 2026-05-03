@@ -18,6 +18,12 @@ const DocIcon = () => (
     <polyline points="14 2 14 8 20 8" />
   </svg>
 );
+const AlertTriangleIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <path d="M12 9v4" /><path d="M12 17h.01" />
+  </svg>
+);
 const ArrowRight = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
@@ -128,6 +134,25 @@ export default function DashboardView({ counts, hasDraftNH, hasDraftPAF, isAdmin
               <ArrowRight />
             </button>
           )}
+        </div>
+
+        {/* Incident Reporting Card */}
+        <div
+          className="pp-card pp-card--interactive"
+          onClick={() => onNavigate("incidents")}
+        >
+          <div className="pp-card-header-row">
+            <div className="pp-icon-box pp-icon-purple"><AlertTriangleIcon /></div>
+          </div>
+          <h3 className="pp-card-title">Incident Reporting</h3>
+          <p className="pp-card-desc">Report injuries, vehicle, allergen, food safety and other incidents.</p>
+          <button
+            className="pp-card-cta pp-card-cta--primary"
+            onClick={(e) => { e.stopPropagation(); onNavigate("incidents"); }}
+          >
+            <span>Launch Tool</span>
+            <ArrowRight />
+          </button>
         </div>
 
         {/* Locked Cards — compact row */}

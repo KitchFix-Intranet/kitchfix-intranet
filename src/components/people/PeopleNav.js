@@ -5,10 +5,13 @@ const TABS = [
   { id: "activity", label: "Action Center" },
   { id: "newhire", label: "New Hire" },
   { id: "paf", label: "PAF" },
+  { id: "incidents", label: "Incidents" },
 ];
 
 export default function PeopleNav({ activeView, onNavigate, isAdmin }) {
-  const tabs = isAdmin ? [...TABS, { id: "admin", label: "Admin" }] : TABS;
+  const tabs = isAdmin
+    ? [...TABS, { id: "incident-admin", label: "Incident Admin" }, { id: "admin", label: "Admin" }]
+    : TABS;
 
   return (
     <div className="pp-nav-wrapper">

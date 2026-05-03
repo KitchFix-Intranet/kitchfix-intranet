@@ -6,6 +6,8 @@ import DashboardView from "@/components/people/DashboardView";
 import ActionCenter from "@/components/people/ActionCenter";
 import NewHireWizard from "@/components/people/NewHireWizard";
 import PAFForm from "@/components/people/PAFForm";
+import IncidentCenter from "@/components/people/IncidentCenter";
+import IncidentAdminQueue from "@/components/people/IncidentAdminQueue";
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
@@ -146,7 +148,7 @@ export default function PeoplePage() {
 
     const shouldPoll = () => {
       // Don't poll while user is filling out a form
-      if (view === "newhire" || view === "paf") return false;
+      if (view === "newhire" || view === "paf" || view === "incidents") return false;
       // Don't poll while tab is hidden
       if (document.hidden) return false;
       return true;
@@ -353,6 +355,22 @@ export default function PeoplePage() {
             showToast={showToast}
             openConfirm={openConfirm}
             refreshHistory={refreshHistory}
+          />
+        )}
+
+        {view === "incidents" && (
+          <IncidentCenter
+            bootstrapData={bootstrapData}
+            onNavigate={navigate}
+            showToast={showToast}
+            refreshHistory={refreshHistory}
+          />
+        )}
+
+        {view === "incident-admin" && bootstrapData?.isAdmin && (
+          <IncidentAdminQueue
+            bootstrapData={bootstrapData}
+            showToast={showToast}
           />
         )}
 

@@ -1981,3 +1981,267 @@ body:has(.pp-app) {
     width: 100% !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   INCIDENT CENTER STYLES
+   All classes prefixed with pp-inc- to avoid namespace collisions
+   ═══════════════════════════════════════════════════════════════ */
+
+
+/* ─── Step labels and helpers ─── */
+.pp-inc-step-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.pp-inc-step-help {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.pp-inc-step-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fee2e2;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.pp-inc-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.pp-inc-section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+
+/* ─── Incident type grid (step 1) ─── */
+.pp-inc-typegrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pp-inc-typecard {
+  background: white;
+  border: 1px solid var(--pp-grey-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+
+.pp-inc-typecard:hover {
+  border-color: #c4b5fd;
+  transform: translateY(-1px);
+}
+
+.pp-inc-typecard--selected {
+  border-color: var(--pp-purple, #7c3aed);
+  border-width: 2px;
+  padding: 11px;
+  background: var(--pp-purple-soft, #f3e8ff);
+}
+
+.pp-inc-typeicon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  color: white;
+}
+
+.pp-inc-typeicon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pp-inc-typelabel {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  margin-bottom: 4px;
+  color: var(--pp-navy, #0f3057);
+}
+
+.pp-inc-typedesc {
+  font-size: 11px;
+  color: var(--pp-grey, #64748b);
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .pp-inc-typegrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+/* ─── Severity tier picker (step 2) ─── */
+.pp-inc-tierstack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pp-inc-tiercard {
+  background: white;
+  border: 1px solid var(--pp-grey-border, #e2e8f0);
+  border-left-width: 6px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.pp-inc-tiercard:hover {
+  background: #f9fafb;
+}
+
+.pp-inc-tiercard--selected {
+  background: var(--pp-purple-soft, #f3e8ff);
+  border-color: var(--pp-purple, #7c3aed);
+  border-left-color: var(--tc);
+}
+
+.pp-inc-tier-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.pp-inc-tier-code {
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.pp-inc-tier-label {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  color: var(--pp-navy, #0f3057);
+}
+
+.pp-inc-tier-deadline {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pp-inc-tier-examples {
+  font-size: 11px;
+  color: var(--pp-grey, #64748b);
+  line-height: 1.4;
+}
+
+
+/* ─── Admin queue toolbar (incident-admin view) ─── */
+.pp-inc-admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pp-inc-admin-filter {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 0.5px solid #cbd5e1;
+  background: white;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.pp-inc-admin-filter--active {
+  background: var(--pp-navy, #0f3057);
+  color: white;
+  border-color: var(--pp-navy, #0f3057);
+}
+
+
+/* ─── Admin queue list items (override pp-adm-list-item for type icons) ─── */
+.pp-inc-admin-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: white;
+  border: 1px solid var(--pp-grey-border, #e2e8f0);
+  border-left: 3px solid #94a3b8;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.pp-inc-admin-item:hover {
+  background: var(--pp-purple-soft, #f3e8ff);
+}
+
+.pp-inc-admin-item--selected {
+  border-color: var(--pp-purple, #7c3aed);
+  background: var(--pp-purple-soft, #f3e8ff);
+}
+
+.pp-inc-admin-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pp-inc-admin-avatar svg {
+  width: 16px;
+  height: 16px;
+}
+
+
+/* ─── Spinner (matches NewHireWizard submit button pattern) ─── */
+.pp-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: pp-spin 0.7s linear infinite;
+}
