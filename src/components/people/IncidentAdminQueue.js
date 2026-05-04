@@ -38,6 +38,7 @@ export default function IncidentAdminQueue({ bootstrapData, showToast }) {
   const [advancing, setAdvancing] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [showNote, setShowNote] = useState(false);
+  const [savingInvestigation, setSavingInvestigation] = useState(false);
 
   const adminEmail = bootstrapData?.userEmail || "";
 
@@ -96,6 +97,18 @@ export default function IncidentAdminQueue({ bootstrapData, showToast }) {
   // ─── Status update ───
   const updateStatus = async (newStatus) => {
     if (!selected) return;
+    // SOP §8.4 - client-side guard (server will also reject)
+    if (newStatus === "closed") {
+      const ca = String(selected.corrective_action || "").trim();
+      const pa = String(selected.preventive_action || "").trim();
+      if (!ca || !pa) {
+        const missing = [];
+        if (!ca) missing.push("corrective action");
+        if (!pa) missing.push("preventive action");
+        if (showToast) showToast(`⚠️ Fill in ${missing.join(" and ")} below first (SOP §8.4)`, "error");
+        return;
+      }
+    }
     setAdvancing(true);
     try {
       const res = await fetch("/api/people", {
@@ -119,6 +132,34 @@ export default function IncidentAdminQueue({ bootstrapData, showToast }) {
       if (showToast) showToast(`⚠️ Error: ${err.message}`, "error");
     } finally {
       setAdvancing(false);
+    }
+  };
+
+  const updateInvestigation = async (fields) => {
+    if (!selected) return;
+    setSavingInvestigation(true);
+    try {
+      const res = await fetch("/api/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "incident-update-investigation",
+          incidentId: selected.incident_id,
+          fields,
+          adminEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (showToast) showToast("✅ Investigation saved");
+        await refresh();
+      } else {
+        if (showToast) showToast(`⚠️ ${data.error || "Save failed"}`, "error");
+      }
+    } catch (err) {
+      if (showToast) showToast(`⚠️ Error: ${err.message}`, "error");
+    } finally {
+      setSavingInvestigation(false);
     }
   };
 
@@ -249,14 +290,17 @@ export default function IncidentAdminQueue({ bootstrapData, showToast }) {
             )}
             {selected && (
               <IncidentDetail
+                key={selected.incident_id}
                 incident={selected}
                 onAdvance={updateStatus}
                 onAddNote={addNote}
+                onUpdateInvestigation={updateInvestigation}
                 noteText={noteText}
                 setNoteText={setNoteText}
                 showNote={showNote}
                 setShowNote={setShowNote}
                 advancing={advancing}
+                savingInvestigation={savingInvestigation}
               />
             )}
           </div>
@@ -268,12 +312,47 @@ export default function IncidentAdminQueue({ bootstrapData, showToast }) {
 
 // ─────────────────────────────────────────────
 // INCIDENT DETAIL PANE
+// Re-mounts on selection change via key={incident.incident_id} in parent.
+// Local state safe to initialize from props.
 // ─────────────────────────────────────────────
-function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText, showNote, setShowNote, advancing }) {
+function IncidentDetail({
+  incident,
+  onAdvance,
+  onAddNote,
+  onUpdateInvestigation,
+  noteText,
+  setNoteText,
+  showNote,
+  setShowNote,
+  advancing,
+  savingInvestigation,
+}) {
   const t = INCIDENT_TYPES.find((x) => x.id === incident.incident_type);
   const sev = SEVERITY_TIERS.find((x) => x.id === incident.severity);
   const stIdx = STATUS_FLOW.indexOf(incident.status);
   const nextStatus = stIdx >= 0 && stIdx < STATUS_FLOW.length - 1 ? STATUS_FLOW[stIdx + 1] : null;
+
+  // Investigation form state — editable in pane, persists via onUpdateInvestigation
+  const [invForm, setInvForm] = useState({
+    root_cause: incident.root_cause || "",
+    corrective_action: incident.corrective_action || "",
+    corrective_action_owner: incident.corrective_action_owner || "",
+    corrective_action_due: incident.corrective_action_due || "",
+    preventive_action: incident.preventive_action || "",
+    preventive_action_owner: incident.preventive_action_owner || "",
+    preventive_action_completed_at: incident.preventive_action_completed_at || "",
+  });
+  const setInv = (k, v) => setInvForm((f) => ({ ...f, [k]: v }));
+
+  // Closure gating (SOP §8.4) — uses LIVE form values so admin can fill + close
+  // without an interim save. But if the pane is dirty, server uses persisted values
+  // not the form values, so we save first when needed.
+  const caFilled = !!String(invForm.corrective_action || "").trim();
+  const paFilled = !!String(invForm.preventive_action || "").trim();
+  const persistedCaFilled = !!String(incident.corrective_action || "").trim();
+  const persistedPaFilled = !!String(incident.preventive_action || "").trim();
+  const canClose = persistedCaFilled && persistedPaFilled;
+  const canCloseAfterSave = caFilled && paFilled;
 
   // Parse type-specific data
   let tsData = {};
@@ -284,6 +363,15 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
   } catch {
     tsData = {};
   }
+
+  const sla = computeSLAStatus(incident);
+  const rcOverdue = isOverdue(incident.root_cause_due_at, incident.root_cause);
+  const caOverdue = isOverdue(incident.corrective_action_due_at, incident.corrective_action);
+
+  // Investigation save
+  const handleSaveInvestigation = () => {
+    onUpdateInvestigation(invForm);
+  };
 
   return (
     <div style={{ padding: "8px 4px" }}>
@@ -315,6 +403,19 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
         </span>
       </div>
 
+      {/* SLA badge — SOP §06 documentation SLA */}
+      {sla && (
+        <div style={{
+          marginBottom: 12, padding: "6px 10px", borderRadius: 6,
+          fontSize: 11, fontWeight: 500,
+          background: sla.met ? "#d1fae5" : "#fee2e2",
+          color: sla.color,
+          display: "inline-flex", alignItems: "center", gap: 6,
+        }}>
+          {sla.met ? "✓" : "⚠"} {sla.label}
+        </div>
+      )}
+
       {/* Status flow */}
       <div style={{ display: "flex", gap: 3, marginBottom: 16 }}>
         {STATUS_FLOW.map((s, i) => (
@@ -343,6 +444,12 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
         <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
           <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>Witnesses</div>
           <div style={{ color: "#0f3057", flex: 1, whiteSpace: "pre-wrap" }}>{incident.witnesses}</div>
+        </div>
+      )}
+      {incident.immediate_actions_taken && (
+        <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
+          <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>Immediate actions</div>
+          <div style={{ color: "#0f3057", flex: 1, whiteSpace: "pre-wrap" }}>{incident.immediate_actions_taken}</div>
         </div>
       )}
 
@@ -382,6 +489,129 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
           ⏰ Employee 30-day check-in due: <strong>{incident.employee_check_in_due}</strong>
         </div>
       )}
+
+      {/* ─── Investigation & Closure (SOP §8.3, §8.4) ─── */}
+      <div className="pp-inc-invpane">
+        <div className="pp-inc-invpane-header">
+          <span>Investigation &amp; Closure</span>
+          <span className="pp-inc-invpane-help">SOP §8.3 cadence · §8.4 requires both fields to close</span>
+        </div>
+
+        {/* Root cause + due */}
+        <div className="pp-inc-invpane-field">
+          <div className="pp-inc-invpane-label">
+            Root cause
+            {incident.root_cause_due_at && (
+              <span className={`pp-inc-invpane-due${rcOverdue ? " pp-inc-invpane-due--overdue" : ""}`}>
+                {rcOverdue ? "⚠ Overdue · " : "Due "}
+                {formatDateOnly(incident.root_cause_due_at)}
+              </span>
+            )}
+          </div>
+          <textarea
+            className="pp-input"
+            rows={2}
+            value={invForm.root_cause}
+            onChange={(e) => setInv("root_cause", e.target.value)}
+            placeholder="What conditions allowed this to happen? (Ask 'why' five times.)"
+            style={{ minHeight: 50, resize: "vertical" }}
+          />
+        </div>
+
+        {/* Corrective action group */}
+        <div className="pp-inc-invpane-field">
+          <div className="pp-inc-invpane-label">
+            Corrective action <span style={{ color: "#dc2626" }}>*</span>
+            {incident.corrective_action_due_at && (
+              <span className={`pp-inc-invpane-due${caOverdue ? " pp-inc-invpane-due--overdue" : ""}`}>
+                {caOverdue ? "⚠ Overdue · " : "Due "}
+                {formatDateOnly(incident.corrective_action_due_at)}
+              </span>
+            )}
+          </div>
+          <textarea
+            className="pp-input"
+            rows={2}
+            value={invForm.corrective_action}
+            onChange={(e) => setInv("corrective_action", e.target.value)}
+            placeholder="What fixes THIS incident?"
+            style={{ minHeight: 50, resize: "vertical" }}
+          />
+          <div className="pp-inc-invpane-row">
+            <div>
+              <div className="pp-inc-invpane-sublabel">Owner</div>
+              <input
+                className="pp-input"
+                value={invForm.corrective_action_owner}
+                onChange={(e) => setInv("corrective_action_owner", e.target.value)}
+                placeholder="email or name"
+              />
+            </div>
+            <div>
+              <div className="pp-inc-invpane-sublabel">Target completion</div>
+              <input
+                type="date"
+                className="pp-input"
+                value={invForm.corrective_action_due}
+                onChange={(e) => setInv("corrective_action_due", e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Preventive action group */}
+        <div className="pp-inc-invpane-field">
+          <div className="pp-inc-invpane-label">
+            Preventive action <span style={{ color: "#dc2626" }}>*</span>
+          </div>
+          <textarea
+            className="pp-input"
+            rows={2}
+            value={invForm.preventive_action}
+            onChange={(e) => setInv("preventive_action", e.target.value)}
+            placeholder="What prevents the NEXT one?"
+            style={{ minHeight: 50, resize: "vertical" }}
+          />
+          <div className="pp-inc-invpane-row">
+            <div>
+              <div className="pp-inc-invpane-sublabel">Owner</div>
+              <input
+                className="pp-input"
+                value={invForm.preventive_action_owner}
+                onChange={(e) => setInv("preventive_action_owner", e.target.value)}
+                placeholder="email or name"
+              />
+            </div>
+            <div>
+              <div className="pp-inc-invpane-sublabel">Completed at</div>
+              <input
+                type="datetime-local"
+                className="pp-input"
+                value={invForm.preventive_action_completed_at}
+                onChange={(e) => setInv("preventive_action_completed_at", e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Closure readiness hint */}
+        {!canCloseAfterSave && (
+          <div className="pp-inc-invpane-hint">
+            Both Corrective and Preventive must be filled to advance status to Closed (SOP §8.4).
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          <button
+            className="pp-btn pp-btn--primary"
+            style={{ padding: "7px 14px", fontSize: 12 }}
+            onClick={handleSaveInvestigation}
+            disabled={savingInvestigation}
+          >
+            {savingInvestigation ? "Saving..." : "Save investigation"}
+          </button>
+        </div>
+      </div>
 
       {/* Internal notes */}
       {incident.internal_notes && (
@@ -429,7 +659,8 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
             className="pp-btn pp-btn--primary"
             style={{ padding: "7px 14px", fontSize: 12 }}
             onClick={() => onAdvance(nextStatus)}
-            disabled={advancing}
+            disabled={advancing || (nextStatus === "closed" && !canClose)}
+            title={nextStatus === "closed" && !canClose ? "Save corrective + preventive action first" : ""}
           >
             {advancing ? "..." : `Advance to ${STATUS_LABELS[nextStatus]}`}
           </button>
@@ -442,9 +673,14 @@ function IncidentDetail({ incident, onAdvance, onAddNote, noteText, setNoteText,
           disabled={advancing}
         >
           <option value="">Set status...</option>
-          {STATUS_FLOW.map((s) => (
-            <option key={s} value={s} disabled={s === incident.status}>{STATUS_LABELS[s]}</option>
-          ))}
+          {STATUS_FLOW.map((s) => {
+            const blocked = s === "closed" && !canClose;
+            return (
+              <option key={s} value={s} disabled={s === incident.status || blocked}>
+                {STATUS_LABELS[s]}{blocked ? " · need CA + PA" : ""}
+              </option>
+            );
+          })}
         </select>
         {!showNote && (
           <button className="pp-btn pp-btn--ghost" style={{ padding: "7px 12px", fontSize: 12 }} onClick={() => setShowNote(true)}>
@@ -479,5 +715,67 @@ function formatDateTime(iso) {
     return d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
   } catch {
     return iso;
+  }
+}
+
+function formatDateOnly(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
+// SOP §06 Documentation SLA — measured from "moment of identification"
+// (manager_aware_date if filled, else incident_date+time) to submitted_at.
+const SLA_HOURS = { S1: 4, S2: 12, S3: 24, S4: 24 };
+
+function computeSLAStatus(incident) {
+  if (!incident?.submitted_at) return null;
+  const slaHours = SLA_HOURS[incident.severity];
+  if (!slaHours) return null;
+
+  let identifiedAt = null;
+  if (incident.manager_aware_date) {
+    identifiedAt = new Date(`${incident.manager_aware_date}T00:00:00`);
+  } else if (incident.incident_date) {
+    const time = incident.incident_time || "00:00";
+    identifiedAt = new Date(`${incident.incident_date}T${time}`);
+  }
+  if (!identifiedAt || isNaN(identifiedAt.getTime())) return null;
+
+  const submittedAt = new Date(incident.submitted_at);
+  const deltaMs = submittedAt.getTime() - identifiedAt.getTime();
+  if (deltaMs < 0) return null; // identification after submit — bad data, skip
+
+  const deltaHours = deltaMs / (1000 * 60 * 60);
+  const met = deltaHours <= slaHours;
+
+  const fmt = (h) => {
+    if (h < 1) return `${Math.round(h * 60)}m`;
+    if (h < 24) return `${h.toFixed(1)}h`;
+    return `${(h / 24).toFixed(1)}d`;
+  };
+
+  return {
+    met,
+    label: met
+      ? `SLA met · filed in ${fmt(deltaHours)} (limit ${slaHours}h)`
+      : `SLA missed · ${fmt(deltaHours - slaHours)} late (${fmt(deltaHours)} vs ${slaHours}h limit)`,
+    color: met ? "#065f46" : "#991b1b",
+  };
+}
+
+// Bucket D2 - field is overdue when its deadline has passed AND the
+// associated value is still empty.
+function isOverdue(dueIso, currentValue) {
+  if (!dueIso) return false;
+  if (String(currentValue || "").trim()) return false;
+  try {
+    return new Date(dueIso).getTime() < Date.now();
+  } catch {
+    return false;
   }
 }

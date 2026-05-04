@@ -96,20 +96,51 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
     location_detail: "",
     manager_aware_date: "",
     what_happened: "",
+    immediate_actions_taken: "",
     witnesses: "",
     type_specific_data: {},
     attachments: [], // { name, mimeType, base64, size }
   });
 
   const update = (field, value) => {
-    setForm((f) => ({ ...f, [field]: value }));
+    setForm((f) => {
+      const next = { ...f, [field]: value };
+      // SOP severity auto-rules (Bucket C)
+      if (field === "incident_type") {
+        // C1 - foodborne illness is ALWAYS S1 (SOP §7.4)
+        if (value === "foodborne_illness") next.severity = "S1";
+        // C4 - near-miss defaults to S4 (SOP §7.8)
+        else if (value === "near_miss" && !next.severity) next.severity = "S4";
+        // C3 - non-employee injury is S2 minimum; clear if currently S3/S4
+        else if (value === "non_employee_injury" && (next.severity === "S3" || next.severity === "S4")) {
+          next.severity = "S2";
+        }
+      }
+      return next;
+    });
     if (errors[field]) {
       setErrors((e) => { const n = { ...e }; delete n[field]; return n; });
     }
   };
   const updateTS = (field, value) => {
-    setForm((f) => ({ ...f, type_specific_data: { ...f.type_specific_data, [field]: value } }));
+    setForm((f) => {
+      const nextTS = { ...f.type_specific_data, [field]: value };
+      const next = { ...f, type_specific_data: nextTS };
+      // C2 - food safety auto-escalates to S1 if food was served (SOP §7.5)
+      if (f.incident_type === "food_safety" && field === "food_served" && value === "Yes") {
+        next.severity = "S1";
+      }
+      return next;
+    });
   };
+
+  // Severity options gating (C3 - non-employee injury removes S3/S4)
+  const allowedSeverities = (() => {
+    if (form.incident_type === "foodborne_illness") return ["S1"];                // C1 lock
+    if (form.incident_type === "non_employee_injury") return ["S1", "S2"];        // C3 floor
+    return ["S1", "S2", "S3", "S4"];
+  })();
+  const severityLocked = allowedSeverities.length === 1;
 
   // ─── Validation per step ───
   const validateStep = (s) => {
@@ -122,6 +153,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
       if (!form.incident_time) e.incident_time = true;
       if (!form.manager_aware_date) e.manager_aware_date = true;
       if (!form.what_happened || form.what_happened.trim().length < 10) e.what_happened = true;
+      if (!form.immediate_actions_taken || form.immediate_actions_taken.trim().length < 5) e.immediate_actions_taken = true;
     }
     return e;
   };
@@ -169,6 +201,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
           notificationsSent: data.notifications_sent,
           severity: form.severity,
           incidentType: form.incident_type,
+          medicalTreatmentRefused: form.type_specific_data?.medical_treatment_refused === "Yes",
         });
         if (refreshHistory) refreshHistory();
         if (showToast) showToast("✅ Incident submitted");
@@ -187,7 +220,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
       incident_type: null, severity: null,
       site_code: "", incident_date: "", incident_time: "",
       location_detail: "", manager_aware_date: "",
-      what_happened: "", witnesses: "",
+      what_happened: "", immediate_actions_taken: "", witnesses: "",
       type_specific_data: {}, attachments: [],
     });
     setStep(1);
@@ -229,6 +262,29 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
             )}
           </div>
 
+          {/* SOP §06 - S1 phone call is non-delegable */}
+          {success.severity === "S1" && (
+            <div className="pp-inc-callout pp-inc-callout--critical" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
+              <div className="pp-inc-callout-head">📞 Call Mariela now</div>
+              <div className="pp-inc-callout-phone">
+                <a href="tel:+13125481420">(312) 548-1420</a>
+              </div>
+              <div className="pp-inc-callout-body">
+                S1 requires a phone call within 15 minutes — the form does not replace the call. Voicemail counts only with a callback number AND a Slack message.
+              </div>
+            </div>
+          )}
+
+          {/* SOP §7.1 - Refusal of Medical Treatment Form (Appendix C) */}
+          {success.incidentType === "employee_injury" && success.medicalTreatmentRefused && (
+            <div className="pp-inc-callout pp-inc-callout--warn" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
+              <div className="pp-inc-callout-head">📝 Appendix C required</div>
+              <div className="pp-inc-callout-body">
+                Complete the <strong>Refusal of Medical Treatment</strong> form. Both employee and manager must sign. Send signed copy to Mariela.
+              </div>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             <button className="pp-btn pp-btn--ghost" onClick={() => { resetForm(); onNavigate("dashboard"); }}>
               Back to Home
@@ -250,18 +306,15 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
 
         <div className="pp-form-content">
           {step === 1 && <Step1Type form={form} update={update} errors={errors} />}
-          {step === 2 && <Step2Severity form={form} update={update} errors={errors} />}
+          {step === 2 && <Step2Severity form={form} update={update} errors={errors} allowedSeverities={allowedSeverities} severityLocked={severityLocked} />}
           {step === 3 && <Step3Basics form={form} update={update} errors={errors} />}
           {step === 4 && <Step4TypeSpecific form={form} updateTS={updateTS} />}
           {step === 5 && <Step5Review form={form} update={update} submitting={submitting} />}
         </div>
 
-        <div style={{
-          display: "flex", justifyContent: "space-between", gap: 8,
-          paddingTop: 20, marginTop: 20, borderTop: "0.5px solid #e2e8f0",
-        }}>
+        <div className="pp-form-footer">
           <button className="pp-btn pp-btn--ghost" onClick={handleBack} disabled={submitting}>
-            {step === 1 ? "← Cancel" : "← Back"}
+            Back
           </button>
           <button
             className="pp-btn pp-btn--primary"
@@ -271,7 +324,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
           >
             {submitting ? (
               <><span className="pp-spinner" /> Submitting...</>
-            ) : step === TOTAL_STEPS ? "Submit incident" : "Next →"}
+            ) : step === TOTAL_STEPS ? "Submit" : "Next"}
           </button>
         </div>
       </div>
@@ -285,7 +338,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
 function Step1Type({ form, update, errors }) {
   return (
     <>
-      <div className="pp-inc-step-label">Step 1 of 5</div>
+
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>What kind of incident?</h3>
       <p className="pp-inc-step-help">Pick the type that best fits. If unsure between two, pick the more serious one.</p>
 
@@ -312,33 +365,69 @@ function Step1Type({ form, update, errors }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 2 - SEVERITY PICKER
+// STEP 2 - SEVERITY PICKER (with SOP auto-rules per Bucket C)
 // ═══════════════════════════════════════════════════════════════
-function Step2Severity({ form, update, errors }) {
+function Step2Severity({ form, update, errors, allowedSeverities, severityLocked }) {
+  const showLockNotice = severityLocked && form.incident_type === "foodborne_illness";
+  const showFloorNotice = form.incident_type === "non_employee_injury";
+  const showNearMissPrompt = form.incident_type === "near_miss";
+
   return (
     <>
-      <div className="pp-inc-step-label">Step 2 of 5</div>
+
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>How severe is it?</h3>
-      <p className="pp-inc-step-help">Pick the tier that fits. When in doubt, pick the more serious tier.</p>
+      <p className="pp-inc-step-help">Not sure? Classify up — Mariela can downgrade in triage.</p>
+
+      {showLockNotice && (
+        <div className="pp-inc-callout pp-inc-callout--lock">
+          <strong>Auto-classified:</strong> Suspected foodborne illness is always S1. Mariela will triage.
+        </div>
+      )}
+      {showFloorNotice && (
+        <div className="pp-inc-callout pp-inc-callout--note">
+          <strong>Note:</strong> Non-employee injury is S2 minimum. Player injury or any offsite medical care = S1.
+        </div>
+      )}
+      {showNearMissPrompt && (
+        <div className="pp-inc-callout pp-inc-callout--note">
+          <strong>Worst-case check:</strong> If this had played out worst-case, would it have been S1 or S2? If yes, classify there — not S4.
+        </div>
+      )}
 
       <div className="pp-inc-tierstack">
-        {SEVERITY_TIERS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`pp-inc-tiercard${form.severity === t.id ? " pp-inc-tiercard--selected" : ""}`}
-            style={{ "--tc": t.color, borderLeftColor: t.color }}
-            onClick={() => update("severity", t.id)}
-          >
-            <div className="pp-inc-tier-row">
-              <span className="pp-inc-tier-code" style={{ background: t.color }}>{t.id}</span>
-              <span className="pp-inc-tier-label">{t.label}</span>
-              <span className="pp-inc-tier-deadline" style={{ color: t.color }}>{t.deadline}</span>
-            </div>
-            <div className="pp-inc-tier-examples">{t.examples}</div>
-          </button>
-        ))}
+        {SEVERITY_TIERS.map((t) => {
+          const allowed = allowedSeverities.includes(t.id);
+          const selected = form.severity === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className={`pp-inc-tiercard${selected ? " pp-inc-tiercard--selected" : ""}${!allowed ? " pp-inc-tiercard--disabled" : ""}`}
+              style={{ "--tc": t.color, borderLeftColor: t.color }}
+              onClick={() => allowed && update("severity", t.id)}
+              disabled={!allowed}
+              title={!allowed ? "Not allowed for this incident type per SOP" : ""}
+            >
+              <div className="pp-inc-tier-row">
+                <span className="pp-inc-tier-code" style={{ background: t.color }}>{t.id}</span>
+                <span className="pp-inc-tier-label">{t.label}</span>
+                <span className="pp-inc-tier-deadline" style={{ color: t.color }}>{t.deadline}</span>
+              </div>
+              <div className="pp-inc-tier-examples">{t.examples}</div>
+            </button>
+          );
+        })}
       </div>
+
+      {/* SOP §06 Critical - S1 phone call non-delegable */}
+      {form.severity === "S1" && (
+        <div className="pp-inc-callout pp-inc-callout--critical" style={{ marginTop: 12 }}>
+          <div className="pp-inc-callout-head">📞 S1 requires a phone call — the form is not enough</div>
+          <div className="pp-inc-callout-body">
+            Within 15 minutes, the Site Leader or Manager of Record personally calls Mariela at <a href="tel:+13125481420">(312) 548-1420</a>. Voicemail counts only with a callback number AND a Slack message.
+          </div>
+        </div>
+      )}
 
       {errors.severity && <div className="pp-inc-step-error">Please pick a severity tier</div>}
     </>
@@ -351,7 +440,7 @@ function Step2Severity({ form, update, errors }) {
 function Step3Basics({ form, update, errors }) {
   return (
     <>
-      <div className="pp-inc-step-label">Step 3 of 5</div>
+
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>The basics</h3>
       <p className="pp-inc-step-help">Capture the essential facts. The "manager became aware" date is a compliance check (24-hour rule).</p>
 
@@ -424,9 +513,22 @@ function Step3Basics({ form, update, errors }) {
         style={{ resize: "vertical", minHeight: 90 }}
       />
 
+      <label className="pp-label" style={{ marginTop: 12 }}>Immediate actions taken</label>
+      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
+        What did you do right after — first aid, called 911, pulled the food, cordoned the area, etc.
+      </div>
+      <textarea
+        className={`pp-input${errors.immediate_actions_taken ? " pp-input-error" : ""}`}
+        rows={3}
+        value={form.immediate_actions_taken}
+        onChange={(e) => update("immediate_actions_taken", e.target.value)}
+        placeholder="e.g., 'Applied pressure with clean towel, escorted to urgent care, pulled all knives from line for inspection.'"
+        style={{ resize: "vertical", minHeight: 70 }}
+      />
+
       <label className="pp-label" style={{ marginTop: 12 }}>Witnesses</label>
       <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
-        Names and how to reach each witness, one per line. Optional.
+        Names + phone/email — one per line. Optional.
       </div>
       <textarea
         className="pp-input"
@@ -471,7 +573,7 @@ function Step4TypeSpecific({ form, updateTS }) {
 
   return (
     <>
-      <div className="pp-inc-step-label">Step 4 of 5</div>
+
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>Type-specific details</h3>
       <p className="pp-inc-step-help">A few extra fields that only apply to {typeMeta?.label || "this type"}. All optional.</p>
 
@@ -529,13 +631,26 @@ function EmployeeInjuryFields({ ts, updateTS, accent }) {
         <label className="pp-label">Expected to miss work?</label>
         <YesNoToggle value={ts.miss_work || ""} onChange={(v) => updateTS("miss_work", v)} />
       </div>
+      <div style={{ marginTop: 12 }}>
+        <label className="pp-label">Did the employee refuse offered medical care?</label>
+        <YesNoToggle value={ts.medical_treatment_refused || ""} onChange={(v) => updateTS("medical_treatment_refused", v)} />
+        {ts.medical_treatment_refused === "Yes" && (
+          <div style={{ marginTop: 6, fontSize: 11, color: "#92400e" }}>
+            <strong>Required:</strong> Refusal of Medical Treatment form (Appendix C) must be signed by employee and manager.
+          </div>
+        )}
+      </div>
     </TypeBlock>
   );
 }
 
 function VehicleFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Vehicle">
+    <TypeBlock
+      accent={accent}
+      label="Vehicle"
+      tip={<><strong>On scene:</strong> Get the police report number. Photograph all vehicles and plates. Do not admit fault. VPO is auto-cc'd on every vehicle incident regardless of severity.</>}
+    >
       <div>
         <label className="pp-label">KitchFix vehicle?</label>
         <YesNoToggle value={ts.kf_vehicle || ""} onChange={(v) => updateTS("kf_vehicle", v)} />
@@ -566,6 +681,12 @@ function VehicleFields({ ts, updateTS, accent }) {
           <YesNoToggle value={ts.police || ""} onChange={(v) => updateTS("police", v)} />
         </div>
       </div>
+      {ts.police === "Yes" && (
+        <div style={{ marginTop: 12 }}>
+          <label className="pp-label">Police report number</label>
+          <input className="pp-input" value={ts.police_report_number || ""} onChange={(e) => updateTS("police_report_number", e.target.value)} placeholder="If not yet issued, leave blank and update later" />
+        </div>
+      )}
       <div style={{ marginTop: 12 }}>
         <label className="pp-label">Tickets issued?</label>
         <YesNoToggle value={ts.tickets || ""} onChange={(v) => updateTS("tickets", v)} />
@@ -582,7 +703,11 @@ function VehicleFields({ ts, updateTS, accent }) {
 
 function AllergenFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Allergen Reaction">
+    <TypeBlock
+      accent={accent}
+      label="Allergen Reaction"
+      tip={<><strong>Critical:</strong> Notify within 10 minutes — faster than the standard S1 15-minute window. Pull suspected item and utensils. Preserve food and packaging. Client communication runs through corporate, not the Site Leader.</>}
+    >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label className="pp-label">Person affected</label>
@@ -623,7 +748,11 @@ function AllergenFields({ ts, updateTS, accent }) {
 
 function FoodborneFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Suspected Foodborne Illness">
+    <TypeBlock
+      accent={accent}
+      label="Suspected Foodborne Illness"
+      tip={<><strong>Always S1.</strong> Preserve all suspected food — label, date, refrigerate or freeze. Do not discard. Pull menu items from production until cleared. Health department contact is corporate-only.</>}
+    >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label className="pp-label">Affected count (estimate)</label>
@@ -652,7 +781,20 @@ function FoodborneFields({ ts, updateTS, accent }) {
 
 function FoodSafetyFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Food Safety Incident">
+    <TypeBlock
+      accent={accent}
+      label="Food Safety Incident"
+      tip={<><strong>On scene:</strong> Pull and segregate. Label "DO NOT USE." Photograph product, packaging, and lot codes before any disposal.</>}
+    >
+      <div style={{ background: "#fef3c7", border: "0.5px solid #fde68a", borderRadius: 8, padding: 10, marginBottom: 12 }}>
+        <label className="pp-label" style={{ marginTop: 0 }}>Was any of the affected food served to anyone?</label>
+        <YesNoToggle value={ts.food_served || ""} onChange={(v) => updateTS("food_served", v)} />
+        {ts.food_served === "Yes" && (
+          <div style={{ marginTop: 6, fontSize: 11, color: "#92400e" }}>
+            ⚠ <strong>Severity auto-set</strong> to S1. The incident becomes a foodborne illness watch.
+          </div>
+        )}
+      </div>
       <div>
         <label className="pp-label">Product affected</label>
         <input className="pp-input" value={ts.product_affected || ""} onChange={(e) => updateTS("product_affected", e.target.value)} />
@@ -680,7 +822,11 @@ function FoodSafetyFields({ ts, updateTS, accent }) {
 
 function PropertyDamageFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Property / Equipment Damage">
+    <TypeBlock
+      accent={accent}
+      label="Property / Equipment Damage"
+      tip={<><strong>Watch for:</strong> If safety-critical equipment (refrigeration, fire suppression, gas, vehicles) is damaged, tag out of service and notify HR regardless of dollar value. Do not attempt repair without authorization. Photograph from multiple angles.</>}
+    >
       <div>
         <label className="pp-label">Equipment / property</label>
         <input className="pp-input" value={ts.equipment || ""} onChange={(e) => updateTS("equipment", e.target.value)} />
@@ -704,7 +850,11 @@ function PropertyDamageFields({ ts, updateTS, accent }) {
 
 function NonEmployeeInjuryFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Non-Employee Injury">
+    <TypeBlock
+      accent={accent}
+      label="Non-Employee Injury"
+      tip={<><strong>On scene:</strong> Render aid to level of training. Do not admit fault, speculate on cause, or offer compensation. All non-employee injuries are S2 minimum. Player injury OR offsite medical care = S1.</>}
+    >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label className="pp-label">Affected person</label>
@@ -732,6 +882,15 @@ function NonEmployeeInjuryFields({ ts, updateTS, accent }) {
           <YesNoToggle value={ts.called_911 || ""} onChange={(v) => updateTS("called_911", v)} />
         </div>
       </div>
+      <div style={{ marginTop: 12 }}>
+        <label className="pp-label">Did they receive offsite medical care?</label>
+        <YesNoToggle value={ts.offsite_medical || ""} onChange={(v) => updateTS("offsite_medical", v)} />
+      </div>
+      {(ts.relationship === "Player" || ts.offsite_medical === "Yes") && (
+        <div style={{ marginTop: 10, padding: "8px 12px", background: "#fee2e2", border: "0.5px solid #fecaca", borderRadius: 8, fontSize: 11, color: "#991b1b" }}>
+          ⚠ <strong>Heads up:</strong> {ts.relationship === "Player" ? "Player injury" : "Offsite medical care"} should be classified <strong>S1</strong>. Go back to Step 2 to upgrade if it isn&apos;t already.
+        </div>
+      )}
     </TypeBlock>
   );
 }
@@ -760,7 +919,11 @@ function NearMissFields({ ts, updateTS, accent }) {
 
 function SecurityFields({ ts, updateTS, accent }) {
   return (
-    <TypeBlock accent={accent} label="Security / Altercation">
+    <TypeBlock
+      accent={accent}
+      label="Security / Altercation"
+      tip={<><strong>Personal safety first:</strong> Do not engage physically except in self-defense. Call 911 for any threat, weapon, or active assault. <strong>No social media. No discussion outside the operation.</strong></>}
+    >
       <div>
         <label className="pp-label">Persons involved</label>
         <textarea className="pp-input" rows={2} value={ts.persons_involved || ""} onChange={(e) => updateTS("persons_involved", e.target.value)} style={{ minHeight: 60, resize: "vertical" }} placeholder="Names + roles if known" />
@@ -812,7 +975,7 @@ function Step5Review({ form, update, submitting }) {
 
   return (
     <>
-      <div className="pp-inc-step-label">Step 5 of 5</div>
+
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>Review and submit</h3>
       <p className="pp-inc-step-help">Verify everything below, attach any photos, then submit.</p>
 
@@ -843,6 +1006,14 @@ function Step5Review({ form, update, submitting }) {
         <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
           {form.what_happened || <span style={{ color: "#94a3b8" }}>No description</span>}
         </div>
+        {form.immediate_actions_taken && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8", marginTop: 10, marginBottom: 4 }}>Immediate actions</div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
+              {form.immediate_actions_taken}
+            </div>
+          </>
+        )}
         {form.witnesses && <ReviewRow l="Witnesses" v={form.witnesses} />}
       </ReviewBlock>
 
@@ -902,7 +1073,7 @@ function Step5Review({ form, update, submitting }) {
 // ─────────────────────────────────────────────
 // SHARED COMPONENTS
 // ─────────────────────────────────────────────
-function TypeBlock({ accent, label, children }) {
+function TypeBlock({ accent, label, tip, children }) {
   return (
     <div style={{
       background: "white", border: "0.5px solid #e2e8f0",
@@ -916,6 +1087,11 @@ function TypeBlock({ accent, label, children }) {
       }}>
         {label} — additional fields
       </div>
+      {tip && (
+        <div className="pp-inc-typetip" style={{ borderLeftColor: accent || "#7c3aed" }}>
+          {tip}
+        </div>
+      )}
       {children}
     </div>
   );

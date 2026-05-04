@@ -9,7 +9,10 @@ import {
   INCIDENT_TYPES,
   SEVERITY_TIERS,
   MARIELA_EMAIL,
-  CORPORATE_CC,
+  CEO_EMAIL,
+  VPO_EMAIL,
+  DIR_CULINARY_EMAIL,
+  SR_DIR_OPS_EMAIL,
 } from "./incidentSchema";
 
 // ─────────────────────────────────────────────
@@ -303,61 +306,88 @@ export function buildIncidentEmailHtml(incident) {
 
 // ─────────────────────────────────────────────
 // TIER-BASED NOTIFICATION ORCHESTRATION
-// S1: channel + email Mariela (urgent flagged)
-// S2: channel + email Mariela
-// S3: channel + email Mariela & corporate
-// S4: channel only
+// Per SOP §06 Notification Matrix (v2.1):
+//   S1, S2, S3 → Slack channel + email to:
+//                HR + CEO + VPO + Dir Culinary + Sr Dir Ops + Regional Director
+//                (S1 gets 🚨 prefix; S1 phone-to-HR is non-codable)
+//   S4         → Slack channel only (weekly digest is Session 3 cron)
+// Vehicle override (§7.2): VPO always cc'd regardless of tier — even S4.
+//
+// regionalEmail is resolved by route.js from HUB accounts sheet column F
+// (East/West/CORP). CORP region passes null and skips Regional cc.
 // ─────────────────────────────────────────────
-export async function notifyIncident(incident, sendEmail) {
+export async function notifyIncident(incident, sendEmail, regionalEmail) {
   const sent = [];
   let s1EscalationAt = null;
 
+  // 1. Slack channel post for every tier
   const channelRes = await postSlackChannel(incident);
   if (channelRes.ok) sent.push("slack-channel");
 
-  const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
-  const typeLabel = typeMeta?.label || incident.incident_type;
-  const subjectBase = `${incident.severity} incident ${incident.incident_id} - ${typeLabel} at ${incident.site_code}`;
-  // NOTE: regular hyphens in subject, no em-dashes (avoids encoding artifacts)
+  // 2. Email recipient list per tier (SOP §06)
+  let recipients = [];
+  if (["S1", "S2", "S3"].includes(incident.severity)) {
+    recipients = [
+      MARIELA_EMAIL,        // HR
+      CEO_EMAIL,            // Josh Katt
+      VPO_EMAIL,            // Joe Lessard
+      DIR_CULINARY_EMAIL,   // Britt
+      SR_DIR_OPS_EMAIL,     // Kevin
+    ];
+    if (regionalEmail) recipients.push(regionalEmail);
+  }
+  // S4: no email — weekly digest handled by future cron (Session 3)
 
-  if (incident.severity === "S1") {
-    if (sendEmail) {
-      const emailRes = await sendEmail(
-        MARIELA_EMAIL,
-        `🚨 ${subjectBase}`,
-        buildIncidentEmailHtml(incident),
-        incident.submitted_by_email
-      );
-      if (emailRes && emailRes.success !== false) sent.push("email-mariela-s1");
+  // 3. Vehicle override (SOP §7.2): VPO cc'd for ALL vehicle incidents
+  if (incident.incident_type === "vehicle" && !recipients.includes(VPO_EMAIL)) {
+    recipients.push(VPO_EMAIL);
+  }
+
+  // Dedupe (regionalEmail could match an executive email in edge cases)
+  recipients = [...new Set(recipients.filter(Boolean))];
+
+  if (recipients.length && sendEmail) {
+    const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
+    const typeLabel = typeMeta?.label || incident.incident_type;
+    // NOTE: regular hyphens in subject, no em-dashes (avoids encoding artifacts)
+    const subjectBase = `${incident.severity} incident ${incident.incident_id} - ${typeLabel} at ${incident.site_code}`;
+    const subject = incident.severity === "S1" ? `🚨 ${subjectBase}` : subjectBase;
+
+    const emailRes = await sendEmail(
+      recipients.join(","),
+      subject,
+      buildIncidentEmailHtml(incident),
+      incident.submitted_by_email
+    );
+    // sendEmail returns "sent" or "failed" (string)
+    if (emailRes === "sent") {
+      sent.push(`email-${incident.severity.toLowerCase()}-${recipients.length}rcpts`);
     }
-    s1EscalationAt = new Date().toISOString();
-  } else if (incident.severity === "S2") {
-    if (sendEmail) {
-      const emailRes = await sendEmail(
-        MARIELA_EMAIL,
-        subjectBase,
-        buildIncidentEmailHtml(incident),
-        incident.submitted_by_email
-      );
-      if (emailRes && emailRes.success !== false) sent.push("email-mariela-s2");
-    }
-  } else if (incident.severity === "S3") {
-    if (sendEmail) {
-      const recipients = [MARIELA_EMAIL, ...CORPORATE_CC].join(",");
-      const emailRes = await sendEmail(
-        recipients,
-        subjectBase,
-        buildIncidentEmailHtml(incident),
-        incident.submitted_by_email
-      );
-      if (emailRes && emailRes.success !== false) sent.push("email-mariela-corp-s3");
+
+    if (incident.severity === "S1") {
+      s1EscalationAt = new Date().toISOString();
     }
   }
-  // S4: channel post only, aggregated in weekly digest (Session 3)
 
   return {
     notifications_sent: sent.join("|"),
     s1_escalation_at: s1EscalationAt,
+  };
+}
+
+// ─────────────────────────────────────────────
+// SOP §8.3 - Site Action Cadence deadlines
+// Computed at submit time and stored on the incident row so that
+// admin queue overdue badges and future cron alerts can query them
+// without parsing dates inline. (Bucket D2.)
+// ─────────────────────────────────────────────
+export function computeIncidentDeadlines(submittedAt) {
+  const sub = submittedAt instanceof Date ? submittedAt : new Date(submittedAt);
+  const rc = new Date(sub.getTime() + 48 * 60 * 60 * 1000);          // +48h
+  const ca = new Date(sub.getTime() + 7 * 24 * 60 * 60 * 1000);      // +7 days
+  return {
+    rootCauseDueAt: rc.toISOString(),
+    correctiveActionDueAt: ca.toISOString(),
   };
 }
 

@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import { logEventSA } from "@/lib/analytics";
 import { generateReport } from "@/lib/peopleReport";
+import {
+  INCIDENT_COLUMNS,
+  INCIDENTS_TAB,
+  INCIDENT_TYPES,
+  STATUS_FLOW,
+  REGIONAL_DIRECTORS,
+  rowToIncident,
+  incidentToRow,
+} from "@/lib/incidentSchema";
+import {
+  generateIncidentId,
+  ensureIncidentFolder,
+  uploadIncidentFile,
+  notifyIncident,
+  computeIncidentDeadlines,
+  computeEmployeeCheckInDue,
+} from "@/lib/incidentActions";
 
 // ═══════════════════════════════════════
 // PEOPLE PORTAL API
@@ -21,6 +38,7 @@ const SHEETS = {
   SUBMISSIONS: "submissions",
   DRAFTS: "drafts",
   NOTIFICATION_LOG: "notification_log",
+  INCIDENTS: INCIDENTS_TAB,
 };
 
 // Named column indices for submissions sheet (1-indexed for Sheets API)
@@ -847,6 +865,16 @@ rows.forEach((row, i) => {
       }
     }
 
+    // ─── Incident: list all (admin queue) ───
+    if (action === "incident-list") {
+      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      if (!rows) rows = [];
+      const incidents = rows
+        .map(rowToIncident)
+        .filter((i) => i.incident_id);
+      return NextResponse.json({ success: true, incidents });
+    }
+
     return NextResponse.json(
       { success: false, error: "Unknown action" },
       { status: 400 }
@@ -1204,7 +1232,358 @@ if (action === "submit-help") {
 
       return NextResponse.json({ success: status === "sent" });
     }
-    
+
+    // ─── Incident: submit new ───
+    if (action === "submit-incident") {
+      const f = body.form || {};
+
+      // Server-side defense (frontend already validates)
+      if (!f.incident_type || !f.severity || !f.site_code || !f.incident_date || !f.what_happened) {
+        return NextResponse.json(
+          { success: false, error: "Missing required fields" },
+          { status: 400 }
+        );
+      }
+
+      // Read existing rows for ID sequence
+      let { rows: existingRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      if (!existingRows) existingRows = [];
+
+      const submittedAt = new Date();
+      const incidentId = generateIncidentId(existingRows, submittedAt);
+
+      const typeMeta = INCIDENT_TYPES.find((t) => t.id === f.incident_type);
+      const typeLabel = typeMeta?.label || f.incident_type;
+
+      // Resolve region → Regional Director (SOP §02)
+      const region = await getSiteRegion(f.site_code);
+      const regionalEmail = getRegionalDirectorEmail(region);
+
+      // Compute SOP §8.3 cadence deadlines (Bucket D2)
+      const deadlines = computeIncidentDeadlines(submittedAt);
+
+      // Drive folder (best-effort: failure logs but doesn't block submission)
+      let driveFolderId = "";
+      let driveFolderUrl = "";
+      try {
+        const folder = await ensureIncidentFolder({
+          incidentId,
+          siteCode: f.site_code,
+          incidentTypeLabel: typeLabel,
+          date: submittedAt,
+        });
+        driveFolderId = folder.folderId;
+        driveFolderUrl = folder.folderUrl;
+      } catch (e) {
+        console.error("[Incident] Drive folder creation failed:", e.message);
+      }
+
+      // Upload attachments
+      const attachments = Array.isArray(f.attachments) ? f.attachments : [];
+      const uploadedFiles = [];
+      if (driveFolderId && attachments.length) {
+        for (const att of attachments) {
+          try {
+            const up = await uploadIncidentFile({
+              folderId: driveFolderId,
+              base64Data: att.base64,
+              filename: att.name,
+              mimeType: att.mimeType,
+            });
+            uploadedFiles.push(up);
+          } catch (e) {
+            console.error(`[Incident] File upload failed (${att.name}):`, e.message);
+          }
+        }
+      }
+
+      // Build incident object (all 42 columns, server-set timestamps)
+      const incident = {
+        incident_id: incidentId,
+        submitted_at: submittedAt.toISOString(),
+        submitted_by_name: f.submitterName || "",
+        submitted_by_email: f.submitterEmail || "",
+        submitter_role: "",
+        incident_type: f.incident_type,
+        severity: f.severity,
+        site_code: f.site_code,
+        incident_date: f.incident_date,
+        incident_time: f.incident_time || "",
+        location_detail: f.location_detail || "",
+        manager_aware_date: f.manager_aware_date || "",
+        what_happened: f.what_happened,
+        witnesses: f.witnesses || "",
+        type_specific_data: f.type_specific_data ? JSON.stringify(f.type_specific_data) : "",
+        drive_folder_id: driveFolderId,
+        drive_folder_url: driveFolderUrl,
+        attachment_count: uploadedFiles.length,
+        attachment_summary: uploadedFiles.map((u) => u.filename).join(" | "),
+        notifications_sent: "",
+        s1_escalation_at: "",
+        status: "submitted",
+        acknowledged_by: "",
+        acknowledged_at: "",
+        investigating_assignee: "",
+        investigating_started_at: "",
+        root_cause: "",
+        corrective_action: "",
+        corrective_action_owner: "",
+        corrective_action_due: "",
+        corrective_action_completed_at: "",
+        closed_by: "",
+        closed_at: "",
+        employee_check_in_due: computeEmployeeCheckInDue(f.incident_type, f.incident_date),
+        employee_check_in_completed_at: "",
+        claim_submitted_date: "",
+        claim_number: "",
+        claim_handler_name: "",
+        claim_handler_contact: "",
+        internal_notes: "",
+        last_updated_at: submittedAt.toISOString(),
+        last_updated_by: f.submitterEmail || "",
+        // SOP v2.1 additions (Bucket B + D2)
+        immediate_actions_taken: f.immediate_actions_taken || "",  // §8.2
+        preventive_action: "",                                     // §8.4 - admin-edited
+        preventive_action_owner: "",
+        preventive_action_completed_at: "",
+        root_cause_due_at: deadlines.rootCauseDueAt,               // §8.3 - 48h
+        corrective_action_due_at: deadlines.correctiveActionDueAt, // §8.3 - 7d
+      };
+
+      // Notifications (SOP §06 tier-based routing + Regional Director)
+      try {
+        const notifResult = await notifyIncident(incident, sendEmail, regionalEmail);
+        incident.notifications_sent = notifResult.notifications_sent || "";
+        incident.s1_escalation_at = notifResult.s1_escalation_at || "";
+      } catch (e) {
+        console.error("[Incident] Notification orchestration failed:", e.message);
+      }
+
+      // Append row (with tab-create fallback)
+      const row = incidentToRow(incident);
+      let appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
+      if (!appendOk) {
+        console.log(`[Incident] First append failed, trying to create "${INCIDENTS_TAB}" tab`);
+        const tabOk = await ensureIncidentsTab(SHEET_IDS.DB);
+        if (tabOk) {
+          appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
+        }
+      }
+      if (!appendOk) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Sheet write failed (Drive folder + notifications may have succeeded)",
+            incident_id: incidentId,
+            drive_folder_url: driveFolderUrl,
+          },
+          { status: 500 }
+        );
+      }
+
+      // Audit log
+      await logNotification(
+        f.submitterEmail || "unknown",
+        "system",
+        `${incident.severity} incident ${incidentId} submitted`,
+        "incident_submit",
+        "sent",
+        `${incident.severity} | ${incident.site_code} | ${typeLabel}`
+      );
+
+      logEventSA({
+        email: f.submitterEmail,
+        category: "people",
+        action: "incident_submit",
+        page: "/people",
+        detail: {
+          incident_id: incidentId,
+          severity: incident.severity,
+          type: f.incident_type,
+          site: f.site_code,
+          region: region || "unknown",
+          regional_cc: regionalEmail || "none",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        incident_id: incidentId,
+        drive_folder_url: driveFolderUrl,
+        notifications_sent: incident.notifications_sent,
+      });
+    }
+
+    // ─── Incident: status update (honest gaps - skipped stages stay empty) ───
+    if (action === "incident-status-update") {
+      const { incidentId, newStatus, adminEmail } = body;
+      if (!incidentId || !newStatus || !adminEmail) {
+        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      }
+      if (!STATUS_FLOW.includes(newStatus)) {
+        return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
+      }
+
+      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      if (!rows) rows = [];
+      const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
+      if (idx === -1) {
+        return NextResponse.json({ success: false, error: "Incident not found" }, { status: 404 });
+      }
+      const sheetRow = idx + 2; // +1 header, +1 1-indexed
+
+      const previousStatus = rowToIncident(rows[idx]).status;
+      const currentIncident = rowToIncident(rows[idx]);
+      const nowIso = new Date().toISOString();
+
+      // SOP §8.4: closure requires both corrective AND preventive action documented
+      if (newStatus === "closed") {
+        const ca = String(currentIncident.corrective_action || "").trim();
+        const pa = String(currentIncident.preventive_action || "").trim();
+        if (!ca || !pa) {
+          const missing = [];
+          if (!ca) missing.push("corrective action");
+          if (!pa) missing.push("preventive action");
+          return NextResponse.json({
+            success: false,
+            error: `SOP §8.4: Cannot close until ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} documented. Use the Investigation panel to fill in.`,
+          }, { status: 400 });
+        }
+      }
+
+      // 1-indexed col map for updateCell
+      const col = {};
+      INCIDENT_COLUMNS.forEach((c, i) => { col[c] = i + 1; });
+
+      // Always: status + last_updated audit
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.status, newStatus);
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+
+      // Stage-entry timestamps (only the stage being entered — no backfill)
+      if (newStatus === "acknowledged") {
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.acknowledged_by, adminEmail);
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.acknowledged_at, nowIso);
+      } else if (newStatus === "investigating") {
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigating_assignee, adminEmail);
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigating_started_at, nowIso);
+      } else if (newStatus === "closed") {
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.closed_by, adminEmail);
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.closed_at, nowIso);
+        // Edge case: leaving CA stage means CA is by definition complete.
+        // Only stamp when we ACTUALLY came from CA (honest gaps for jumps).
+        if (previousStatus === "corrective_action") {
+          await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.corrective_action_completed_at, nowIso);
+        }
+      }
+      // submitted, corrective_action: no stage-specific timestamps
+
+      logEventSA({
+        email: adminEmail,
+        category: "people",
+        action: "incident_status_update",
+        page: "/people",
+        detail: { incident_id: incidentId, from: previousStatus, to: newStatus },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ─── Incident: add internal note (append-only audit log) ───
+    if (action === "incident-add-note") {
+      const { incidentId, note, adminEmail } = body;
+      if (!incidentId || !note || !adminEmail) {
+        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      }
+
+      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      if (!rows) rows = [];
+      const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
+      if (idx === -1) {
+        return NextResponse.json({ success: false, error: "Incident not found" }, { status: 404 });
+      }
+      const sheetRow = idx + 2;
+
+      const col = {};
+      INCIDENT_COLUMNS.forEach((c, i) => { col[c] = i + 1; });
+
+      // Append (preserve chronological order — never overwrite)
+      const currentNotes = rows[idx][col.internal_notes - 1] || "";
+      const stamp = new Date().toISOString().replace("T", " ").slice(0, 16);
+      const newEntry = `[${stamp} by ${adminEmail}] ${String(note).trim()}`;
+      const updatedNotes = currentNotes ? `${currentNotes}\n${newEntry}` : newEntry;
+
+      const nowIso = new Date().toISOString();
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.internal_notes, updatedNotes);
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+
+      logEventSA({
+        email: adminEmail,
+        category: "people",
+        action: "incident_add_note",
+        page: "/people",
+        detail: { incident_id: incidentId },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ─── Incident: edit investigation/closure fields (admin pane) ───
+    // SOP §8.4 - root cause, corrective + preventive action, owners, dates.
+    // Whitelist enforced server-side; unknown fields silently dropped.
+    if (action === "incident-update-investigation") {
+      const { incidentId, fields, adminEmail } = body;
+      if (!incidentId || !fields || typeof fields !== "object" || !adminEmail) {
+        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      }
+
+      const EDITABLE = [
+        "root_cause",
+        "corrective_action",
+        "corrective_action_owner",
+        "corrective_action_due",
+        "preventive_action",
+        "preventive_action_owner",
+        "preventive_action_completed_at",
+      ];
+
+      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      if (!rows) rows = [];
+      const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
+      if (idx === -1) {
+        return NextResponse.json({ success: false, error: "Incident not found" }, { status: 404 });
+      }
+      const sheetRow = idx + 2;
+
+      const col = {};
+      INCIDENT_COLUMNS.forEach((c, i) => { col[c] = i + 1; });
+
+      // Update only whitelisted, provided fields
+      const updated = [];
+      for (const key of EDITABLE) {
+        if (Object.prototype.hasOwnProperty.call(fields, key)) {
+          const val = fields[key] == null ? "" : String(fields[key]);
+          await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col[key], val);
+          updated.push(key);
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+
+      logEventSA({
+        email: adminEmail,
+        category: "people",
+        action: "incident_update_investigation",
+        page: "/people",
+        detail: { incident_id: incidentId, fields_updated: updated },
+      });
+
+      return NextResponse.json({ success: true, updated });
+    }
+
     return NextResponse.json(
       { success: false, error: "Unknown action" },
       { status: 400 }
@@ -1215,5 +1594,144 @@ if (action === "submit-help") {
       { success: false, error: error.message },
       { status: 500 }
     );
+  }
+}
+
+// ═══════════════════════════════════════
+// INCIDENT HELPERS
+// ═══════════════════════════════════════
+
+// Look up a site's region from HUB accounts sheet (column F).
+// Returns "East" | "West" | "CORP" | null. Normalizes whitespace because
+// accounts sheet uses "STL - MO" but our SITES uses "STL-MO".
+async function getSiteRegion(siteCode) {
+  try {
+    const { rows } = await readSheet(SHEET_IDS.HUB, SHEETS.ACCOUNTS);
+    const target = String(siteCode || "").replace(/\s+/g, "").toUpperCase();
+    if (!target) return null;
+    for (const row of rows) {
+      const rowKey = String(row[0] || "").replace(/\s+/g, "").toUpperCase();
+      if (rowKey === target) {
+        const region = String(row[5] || "").trim();
+        return region || null;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error(`[Incident] Region lookup failed for ${siteCode}:`, e.message);
+    return null;
+  }
+}
+
+// Resolve region → Regional Director email per SOP §02.
+// CORP and unknown regions return null (no regional cc).
+function getRegionalDirectorEmail(region) {
+  if (!region) return null;
+  return REGIONAL_DIRECTORS[region] || null;
+}
+
+// UTC-safe date parser for "YYYY-MM-DD" strings (avoids Vercel UTC drift)
+function parseIncidentDate(str) {
+  if (!str) return null;
+  const [yyyy, mm, dd] = String(str).split("-").map(Number);
+  if (!yyyy || !mm || !dd) return null;
+  return new Date(Date.UTC(yyyy, mm - 1, dd));
+}
+
+// Anchored append: pins to !A:A so variable-width rows can't column-shift
+// (per Kevin's saved learning — this bug has bitten other tabs before)
+async function appendRowAnchored(spreadsheetId, sheetName, rowData) {
+  try {
+    const token = await getAccessToken();
+    const range = `${sheetName}!A:A`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ values: [rowData] }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[People] Anchored append failed (${sheetName}):`, res.status, errText);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`[People] Anchored append error (${sheetName}):`, e.message);
+    return false;
+  }
+}
+
+// Auto-create the Incidents tab with 42 column headers if missing.
+// Called as a fallback when first append fails (likely cause: tab doesn't exist).
+async function ensureIncidentsTab(spreadsheetId) {
+  try {
+    const token = await getAccessToken();
+
+    // Step 1: addSheet via batchUpdate (frozen header row)
+    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    const addRes = await fetch(batchUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requests: [{
+          addSheet: {
+            properties: {
+              title: INCIDENTS_TAB,
+              gridProperties: { frozenRowCount: 1 },
+            },
+          },
+        }],
+      }),
+    });
+
+    if (!addRes.ok) {
+      const errText = await addRes.text();
+      // Race condition: another writer just created it — treat as success
+      if (errText.includes("already exists")) {
+        console.log(`[Incident] Tab "${INCIDENTS_TAB}" already exists, skipping create`);
+      } else {
+        console.error(`[Incident] Failed to create tab "${INCIDENTS_TAB}":`, addRes.status, errText);
+        return false;
+      }
+    }
+
+    // Step 2: write 42 column headers as row 1
+    const numCols = INCIDENT_COLUMNS.length;
+    let endCol;
+    if (numCols <= 26) {
+      endCol = String.fromCharCode(64 + numCols);
+    } else {
+      const first = Math.floor((numCols - 1) / 26);
+      const second = ((numCols - 1) % 26) + 1;
+      endCol = String.fromCharCode(64 + first) + String.fromCharCode(64 + second);
+    }
+    const headerRange = `${INCIDENTS_TAB}!A1:${endCol}1`;
+    const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=USER_ENTERED`;
+    const headerRes = await fetch(headerUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ values: [INCIDENT_COLUMNS] }),
+    });
+    if (!headerRes.ok) {
+      const errText = await headerRes.text();
+      console.error(`[Incident] Failed to write headers:`, headerRes.status, errText);
+      return false;
+    }
+
+    console.log(`[Incident] Created "${INCIDENTS_TAB}" tab with ${numCols} columns`);
+    return true;
+  } catch (e) {
+    console.error(`[Incident] ensureIncidentsTab error:`, e.message);
+    return false;
   }
 }

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // INCIDENT CENTER - Shared schema constants
 // Source of truth for: 9 incident types, 4 severity tiers,
-// 5 status states, 13 site codes, sheet column order.
+// 5 status states, 12 site codes, sheet column order (48 cols, SOP v2.1).
 // Imported by both server (api/people/route.js) and client
 // (IncidentCenter.js, IncidentAdminQueue.js).
 // ═══════════════════════════════════════════════════════════════
@@ -76,7 +76,7 @@ export const SEVERITY_TIERS = [
     id: "S1",
     label: "Life-Safety / Regulatory",
     color: "#dc2626",
-    deadline: "Phone Mariela in 15 min",
+    deadline: "Phone HR within 15 min",
     examples:
       "Hospitalization or 911 transport · Regulatory inspector on-site · Anaphylaxis",
   },
@@ -84,7 +84,7 @@ export const SEVERITY_TIERS = [
     id: "S2",
     label: "Medical / Significant",
     color: "#ea580c",
-    deadline: "Phone Mariela in 30 min",
+    deadline: "Slack + email within 30 min",
     examples:
       "Injury requiring offsite medical care · Vehicle accident with damage · Allergen reaction (no 911)",
   },
@@ -92,7 +92,7 @@ export const SEVERITY_TIERS = [
     id: "S3",
     label: "First Aid / Minor",
     color: "#d97706",
-    deadline: "Email within 2 hr",
+    deadline: "Email within 4 hr",
     examples:
       "First aid only, no offsite care · Minor property damage · Minor food safety, contained",
   },
@@ -100,7 +100,7 @@ export const SEVERITY_TIERS = [
     id: "S4",
     label: "Near-Miss / Hazard",
     color: "#6b7280",
-    deadline: "Submit via report URL",
+    deadline: "Weekly digest",
     examples:
       "Almost-burn caught · Cross-contact noticed before service · Slip without injury",
   },
@@ -139,7 +139,6 @@ export const SITES = [
   { code: "TXR-TX-H", label: "Rangers — TXR (TX H)" },
   { code: "TXR-TX-V", label: "Rangers — TXR (TX V)" },
   { code: "TXR-AZ", label: "Rangers — Spring Training (AZ)" },
-  { code: "PIT", label: "Pirates — PIT" },
   { code: "TBR-FL", label: "Rays — TBR (FL)" },
   { code: "TBJ-FL", label: "Blue Jays — Spring Training (FL)" },
   { code: "TBJ-NY", label: "Blue Jays — Affiliate (Buffalo NY)" },
@@ -147,8 +146,9 @@ export const SITES = [
 ];
 
 // ─────────────────────────────────────────────
-// SHEET COLUMNS (42 total)
-// Order matters - this defines the column layout in the Incidents tab
+// SHEET COLUMNS (48 total, SOP v2.1)
+// Order matters - this defines the column layout in the Incidents tab.
+// New SOP-required columns appended at end to preserve existing row data.
 // ─────────────────────────────────────────────
 export const INCIDENT_COLUMNS = [
   // Identity (5)
@@ -210,6 +210,17 @@ export const INCIDENT_COLUMNS = [
   "internal_notes",
   "last_updated_at",
   "last_updated_by",
+
+  // ─── SOP v2.1 additions (appended to preserve any existing row data) ───
+  // §8.2 - required in every report
+  "immediate_actions_taken",
+  // §8.4 - both corrective AND preventive required for closure
+  "preventive_action",
+  "preventive_action_owner",
+  "preventive_action_completed_at",
+  // §8.3 - SOP-imposed cadence deadlines (computed at submit time)
+  "root_cause_due_at",          // submitted_at + 48h
+  "corrective_action_due_at",   // submitted_at + 7d
 ];
 
 // ─────────────────────────────────────────────
@@ -217,12 +228,27 @@ export const INCIDENT_COLUMNS = [
 // ─────────────────────────────────────────────
 export const INCIDENTS_TAB = "Incidents";
 export const SLACK_CHANNEL_NAME = "opshub-incident-submissions";
-export const MARIELA_EMAIL = "m.chavez@kitchfix.com";
-export const CORPORATE_CC = [
-  "joe@kitchfix.com",
-  "britt@kitchfix.com",
-  "k.fietek@kitchfix.com",
-];
+
+// ─────────────────────────────────────────────
+// NOTIFICATION RECIPIENTS — SOP §06 Notification Matrix
+// Roles named in SOP, emails resolved here.
+// S1/S2/S3: HR + CEO + VPO + Dir Culinary + Sr Dir Ops + Regional Director
+// S4: HR + Regional Director (weekly digest — Session 3 cron)
+// Vehicle override (§7.2): VPO always cc'd regardless of tier
+// ─────────────────────────────────────────────
+export const MARIELA_EMAIL = "m.chavez@kitchfix.com";          // HR
+export const CEO_EMAIL = "josh@kitchfix.com";                  // Josh Katt
+export const VPO_EMAIL = "joe@kitchfix.com";                   // Joe Lessard
+export const DIR_CULINARY_EMAIL = "britt@kitchfix.com";        // Brittney Chernikovich
+export const SR_DIR_OPS_EMAIL = "k.fietek@kitchfix.com";       // Kevin Fietek
+
+// Regional Directors keyed by region value from HUB accounts sheet (column F)
+// CORP region returns null — corporate HQ has no regional escalation per SOP §02
+export const REGIONAL_DIRECTORS = {
+  East: "s.lynch@kitchfix.com",   // Shane Lynch — RDO East
+  West: "r.moore@kitchfix.com",   // Ryan Moore — RDO West
+  CORP: null,
+};
 
 // Helper: convert array row → object keyed by column name
 export function rowToIncident(row) {

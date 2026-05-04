@@ -1435,10 +1435,6 @@ body:has(.pp-app) {
     padding: 16px !important;
   }
 
-  .pp-form-content [style*="gridTemplateColumns: 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-  }
-
   /* Admin queue detail panel: single column */
   .pp-detail-panel [style*="gridTemplateColumns"] {
     grid-template-columns: 1fr !important;
@@ -2244,4 +2240,220 @@ body:has(.pp-app) {
   border-top-color: white;
   border-radius: 50%;
   animation: pp-spin 0.7s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────
+   INCIDENT CENTER — SOP v2.1 additions (Package 2)
+   Callout banners, Investigation pane, type-specific tips,
+   disabled tier card.
+   ───────────────────────────────────────────────────────── */
+
+/* ─── Callout base ─── */
+.pp-inc-callout {
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 0.5px solid transparent;
+}
+.pp-inc-callout strong {
+  font-weight: 600;
+}
+.pp-inc-callout-head {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+.pp-inc-callout-body {
+  color: inherit;
+  opacity: 0.92;
+}
+.pp-inc-callout-phone {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 6px 0 8px;
+  letter-spacing: 0.01em;
+}
+.pp-inc-callout-phone a {
+  color: inherit;
+  text-decoration: none;
+}
+.pp-inc-callout-phone a:hover {
+  text-decoration: underline;
+}
+
+/* Critical (KF brand red) — S1 phone call, hard reminders */
+.pp-inc-callout--critical {
+  background: #fef2f2;
+  border-color: #E53530;
+  border-left: 4px solid #E53530;
+  color: #8a1d1a;
+}
+.pp-inc-callout--critical .pp-inc-callout-head {
+  color: #E53530;
+}
+
+/* Warning (brand amber) — Appendix C, auto-escalations */
+.pp-inc-callout--warn {
+  background: #fffaf0;
+  border-color: #d97706;
+  border-left: 4px solid #d97706;
+  color: #7c4a06;
+}
+.pp-inc-callout--warn .pp-inc-callout-head {
+  color: #b45309;
+}
+
+/* Lock (People Portal purple — keeps PP identity for portal-internal logic) */
+.pp-inc-callout--lock {
+  background: #f9f5ff;
+  border-color: #c4b5fd;
+  border-left: 4px solid var(--pp-purple);
+  color: #5b21b6;
+}
+.pp-inc-callout--lock .pp-inc-callout-head {
+  color: var(--pp-purple);
+}
+
+/* Note (brand sky blue tint — informational context) */
+.pp-inc-callout--note {
+  background: #eef6f8;
+  border-color: #C4E3E8;
+  border-left: 4px solid #6ba8b6;
+  color: var(--pp-navy);
+}
+.pp-inc-callout--note .pp-inc-callout-head {
+  color: var(--pp-navy);
+}
+
+/* ─── Type-specific tip banner inside TypeBlock ─── */
+.pp-inc-typetip {
+  background: #f8fafc;
+  border-left: 3px solid #7c3aed;
+  border-radius: 0 8px 8px 0;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #475569;
+}
+.pp-inc-typetip strong {
+  font-weight: 600;
+  color: #0f3057;
+}
+
+/* ─── Disabled tier card (severity gating per SOP) ─── */
+.pp-inc-tiercard--disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  filter: grayscale(0.4);
+}
+.pp-inc-tiercard--disabled:hover {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* ─── Investigation & Closure pane (admin queue detail) ─── */
+.pp-inc-invpane {
+  margin-top: 14px;
+  padding: 14px;
+  background: #fafafa;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+}
+.pp-inc-invpane-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid #e2e8f0;
+}
+.pp-inc-invpane-header > span:first-child {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f3057;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pp-inc-invpane-help {
+  font-size: 10px;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+.pp-inc-invpane-field {
+  margin-bottom: 14px;
+}
+.pp-inc-invpane-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pp-inc-invpane-sublabel {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-bottom: 3px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pp-inc-invpane-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.pp-inc-invpane-due {
+  font-size: 10px;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.pp-inc-invpane-due--overdue {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.pp-inc-invpane-hint {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #fef3c7;
+  border-left: 3px solid #d97706;
+  border-radius: 0 6px 6px 0;
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .pp-inc-invpane-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ─────────────────────────────────────────────────────────
+   Responsive: collapse 2-col grids inside form on tablets & phones
+   (was 420px — too narrow; phones in landscape were squeezing)
+   ───────────────────────────────────────────────────────── */
+@media (max-width: 540px) {
+  .pp-form-content [style*="gridTemplateColumns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
 }
