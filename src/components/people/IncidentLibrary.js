@@ -132,17 +132,6 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: 18 }}>
-        <h2 style={{
-          fontFamily: "Inter, sans-serif", fontWeight: 700, margin: "0 0 4px",
-          fontSize: 22, letterSpacing: "-0.01em", color: "#0f3057",
-        }}>Reference Library</h2>
-        <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>
-          Scan, tap, print. Updated by HR — what you see here is current.
-        </p>
-      </div>
-
       {/* S1 Emergency Hero - always-on, non-dismissable */}
       <div className="pp-inc-lib-hero">
         <div className="pp-inc-lib-hero-icon">
@@ -215,20 +204,26 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
         </div>
       )}
 
-      {/* Sections */}
-      {!loading && grouped.map((section) => (
-        <div key={section.id} className="pp-inc-lib-section">
-          <div className="pp-inc-lib-section-head">
-            <h3>{section.label}</h3>
-            <span className="pp-inc-lib-section-count">
-              {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
-            </span>
+      {/* Sections - hide section header when a specific filter is active
+          (the filter pill already says what category we're viewing) */}
+      {!loading && grouped.map((section) => {
+        const hideHeader = activeFilter !== "all" && grouped.length === 1;
+        return (
+          <div key={section.id} className="pp-inc-lib-section">
+            {!hideHeader && (
+              <div className="pp-inc-lib-section-head">
+                <h3>{section.label}</h3>
+                <span className="pp-inc-lib-section-count">
+                  {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+            <div className="pp-inc-lib-grid">
+              {section.docs.map((doc) => <Tile key={doc.id} doc={doc} showToast={showToast} />)}
+            </div>
           </div>
-          <div className="pp-inc-lib-grid">
-            {section.docs.map((doc) => <Tile key={doc.id} doc={doc} showToast={showToast} />)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

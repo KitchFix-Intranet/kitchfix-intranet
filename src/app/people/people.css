@@ -2459,44 +2459,152 @@ body:has(.pp-app) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   INCIDENT TOOL — Sub-nav (Report Incident | Library | History)
-   Pill style matches existing pp-toggle-container aesthetics
+   INCIDENT TOOL — Direction C: Title block + segmented control
+   In-card header strip, single master-card wraps everything,
+   content renders inline in the body.
    ───────────────────────────────────────────────────────── */
-.pp-inc-subnav {
-  display: inline-flex;
-  background: white;
-  padding: 6px;
-  border-radius: 999px;
-  box-shadow: var(--pp-shadow-card);
-  margin-bottom: 18px;
-  gap: 2px;
+.pp-inc-tool-card {
+  padding: 0;
+  overflow: hidden;
 }
-.pp-inc-subnav-item {
+
+/* Header strip - title left, segmented control right */
+.pp-inc-tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--pp-grey-border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Left: title block (icon + name + tagline) - muted, breadcrumb-style.
+   The main People Portal nav already says "Incidents"; this block is
+   secondary context, not the primary page header. */
+.pp-inc-tool-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.pp-inc-tool-title-icon {
+  width: 26px;
+  height: 26px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.pp-inc-tool-title-icon svg {
+  width: 13px;
+  height: 13px;
+}
+.pp-inc-tool-title-text h3 {
+  margin: 0;
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pp-navy);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+.pp-inc-tool-title-text p {
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  color: var(--pp-grey);
+  line-height: 1.3;
+}
+
+/* Right: segmented control */
+.pp-inc-tool-segmented {
+  display: inline-flex;
+  background: #f8fafc;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.pp-inc-tool-segment {
   background: none;
   border: 0;
-  padding: 9px 18px;
+  padding: 7px 14px;
   font-family: var(--pp-font-body);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pp-grey);
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: all 0.15s;
   white-space: nowrap;
 }
-.pp-inc-subnav-item:hover {
+.pp-inc-tool-segment:hover {
   color: var(--pp-navy);
 }
-.pp-inc-subnav-item--active,
-.pp-inc-subnav-item--active:hover {
+.pp-inc-tool-segment--active,
+.pp-inc-tool-segment--active:hover {
   background: var(--pp-purple);
   color: white;
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.25);
 }
 
-@media (max-width: 480px) {
-  .pp-inc-subnav-item {
-    padding: 8px 14px;
-    font-size: 12px;
+/* Body: content area below header. Padding controlled per-view. */
+.pp-inc-tool-body {
+  /* default no padding - each view manages its own */
+}
+/* Report (wizard) view - zero padding so footer + form span edge-to-edge.
+   The wizard's pp-form-content provides internal padding (40px). */
+.pp-inc-tool-body--report {
+  padding: 0;
+}
+/* Library view - normal padding so hero, filter pills, tiles have air */
+.pp-inc-tool-body--library {
+  padding: 24px 20px;
+}
+
+/* When IncidentCenter (wizard) renders nested inside the tool card,
+   strip its own card chrome to avoid card-in-card visual.
+   Keep pp-card--form's flex column layout so footer anchors to bottom. */
+.pp-card--form.pp-inc-nested {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  max-width: none;
+  margin: 0;
+  /* keep min-height so card has a baseline floor; footer anchors to bottom via flex */
+  min-height: 480px;
+}
+
+/* Footer inside nested wizard: spans full card width, anchored bottom.
+   Override the form-footer's existing padding to match master-card edge. */
+.pp-inc-nested .pp-form-footer {
+  padding: 18px 24px;
+  background: #f8fafc;
+  border-top: 1px solid var(--pp-grey-border);
+  margin-top: auto; /* flex-column floor — pushes to bottom */
+}
+
+/* Mobile: stack title + segmented vertically */
+@media (max-width: 540px) {
+  .pp-inc-tool-header {
+    padding: 14px;
+    gap: 12px;
+  }
+  .pp-inc-tool-segment {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .pp-inc-tool-segment svg {
+    display: none;
+  }
+  .pp-inc-tool-body--library {
+    padding: 16px;
   }
 }
 

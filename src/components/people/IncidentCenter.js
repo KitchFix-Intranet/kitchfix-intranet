@@ -231,8 +231,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
   // ─── Success view ───
   if (success) {
     return (
-      <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
-        <div className="pp-card pp-card--form" style={{ textAlign: "center", padding: "32px 24px" }}>
+      <div className="pp-card pp-card--form pp-inc-nested" style={{ textAlign: "center", padding: "32px 24px" }}>
           <div style={{
             width: 64, height: 64, borderRadius: "50%", background: "#d1fae5", color: "#059669",
             display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
@@ -294,15 +293,13 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
             </button>
           </div>
         </div>
-      </div>
     );
   }
 
   // ─── Wizard view ───
   return (
-    <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
-      <div className="pp-card pp-card--form">
-        <Stepper step={step} totalSteps={TOTAL_STEPS} />
+    <div className="pp-card pp-card--form pp-inc-nested">
+      <Stepper step={step} totalSteps={TOTAL_STEPS} />
 
         <div className="pp-form-content">
           {step === 1 && <Step1Type form={form} update={update} errors={errors} />}
@@ -327,7 +324,6 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
             ) : step === TOTAL_STEPS ? "Submit" : "Next"}
           </button>
         </div>
-      </div>
     </div>
   );
 }
