@@ -6,7 +6,7 @@ import DashboardView from "@/components/people/DashboardView";
 import ActionCenter from "@/components/people/ActionCenter";
 import NewHireWizard from "@/components/people/NewHireWizard";
 import PAFForm from "@/components/people/PAFForm";
-import IncidentCenter from "@/components/people/IncidentCenter";
+import IncidentTool from "@/components/people/IncidentTool";
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
@@ -359,7 +359,7 @@ export default function PeoplePage() {
         )}
 
         {view === "incidents" && (
-          <IncidentCenter
+          <IncidentTool
             bootstrapData={bootstrapData}
             onNavigate={navigate}
             showToast={showToast}

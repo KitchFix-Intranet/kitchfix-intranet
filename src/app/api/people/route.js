@@ -39,6 +39,7 @@ const SHEETS = {
   DRAFTS: "drafts",
   NOTIFICATION_LOG: "notification_log",
   INCIDENTS: INCIDENTS_TAB,
+  LIBRARY_MANIFEST: "library_manifest",
 };
 
 // Named column indices for submissions sheet (1-indexed for Sheets API)
@@ -948,6 +949,71 @@ rows.forEach((row, i) => {
         .map(rowToIncident)
         .filter((i) => i.incident_id);
       return NextResponse.json({ success: true, incidents });
+    }
+
+    // ─── Library: list documents from manifest sheet ───
+    // Manifest tab "library_manifest" lives in HUB sheet. Columns (10):
+    //   A drive_file_id   B category   C title         D version      E updated_at
+    //   F description     G pinned     H critical      I sort_order   J active
+    //
+    // Returns [] if tab doesn't exist OR has no rows; client renders demo cards.
+    // Tab is created manually by Kevin/Mariela; no auto-create here.
+    if (action === "library-list") {
+      let rows;
+      try {
+        const result = await readSheet(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
+        rows = result?.rows;
+      } catch (e) {
+        // Tab missing - that's fine, return empty so client shows stub
+        console.log("[Library] manifest tab not found - returning empty");
+        return NextResponse.json({ success: true, documents: [] });
+      }
+
+      if (!rows || rows.length === 0) {
+        return NextResponse.json({ success: true, documents: [] });
+      }
+
+      const documents = rows
+        .map((row, idx) => {
+          const driveFileId = String(row[0] || "").trim();
+          const category = String(row[1] || "").trim().toLowerCase();
+          const title = String(row[2] || "").trim();
+          const version = String(row[3] || "").trim();
+          const updatedAt = String(row[4] || "").trim();
+          const description = String(row[5] || "").trim();
+          const pinned = String(row[6] || "").trim().toUpperCase() === "TRUE";
+          const critical = String(row[7] || "").trim().toUpperCase() === "TRUE";
+          const sortOrder = Number(row[8]) || 100;
+          const active = String(row[9] || "").trim().toUpperCase() !== "FALSE"; // default true
+
+          return {
+            id: `lib-${idx}-${driveFileId.slice(-8)}`,
+            drive_file_id: driveFileId,
+            category,
+            title,
+            version,
+            updated_at: updatedAt,
+            description,
+            pinned,
+            critical,
+            sort_order: sortOrder,
+            active,
+            // Drive viewer + free thumbnail (no auth needed when folder is shared
+            // anyone-with-link, viewer)
+            view_url: driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : null,
+            thumbnail_url: driveFileId ? `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w400` : null,
+          };
+        })
+        .filter((d) => d.active && d.drive_file_id && d.title); // skip inactive/incomplete rows
+
+      // Sort: pinned first, then by sort_order asc, then by title asc
+      documents.sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+        return a.title.localeCompare(b.title);
+      });
+
+      return NextResponse.json({ success: true, documents });
     }
 
     return NextResponse.json(
