@@ -242,7 +242,7 @@ export const VPO_EMAIL = "joe@kitchfix.com";                   // Joe Lessard
 export const DIR_CULINARY_EMAIL = "britt@kitchfix.com";        // Brittney Chernikovich
 export const SR_DIR_OPS_EMAIL = "k.fietek@kitchfix.com";       // Kevin Fietek
 
-// Regional Directors keyed by region value from HUB accounts sheet (column F)
+// Regional Directors keyed by region value from HUB accounts sheet (column T)
 // CORP region returns null — corporate HQ has no regional escalation per SOP §02
 export const REGIONAL_DIRECTORS = {
   East: "s.lynch@kitchfix.com",   // Shane Lynch — RDO East

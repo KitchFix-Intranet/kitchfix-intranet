@@ -1742,7 +1742,7 @@ if (action === "submit-help") {
 // INCIDENT HELPERS
 // ═══════════════════════════════════════
 
-// Look up a site's region from HUB accounts sheet (column F).
+// Look up a site's region from HUB accounts sheet (column T).
 // Returns "East" | "West" | "CORP" | null. Normalizes whitespace because
 // accounts sheet uses "STL - MO" but our SITES uses "STL-MO".
 async function getSiteRegion(siteCode) {
@@ -1753,7 +1753,7 @@ async function getSiteRegion(siteCode) {
     for (const row of rows) {
       const rowKey = String(row[0] || "").replace(/\s+/g, "").toUpperCase();
       if (rowKey === target) {
-        const region = String(row[5] || "").trim();
+        const region = String(row[19] || "").trim();  // col T (was col F)
         return region || null;
       }
     }

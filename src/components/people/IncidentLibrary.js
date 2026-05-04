@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // ═══════════════════════════════════════════════════════════════
 // INCIDENT LIBRARY - Direction B (Reference Cards)
@@ -113,19 +113,47 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
     return () => { cancelled = true; };
   }, []);
 
+  // ─── Visible filter tabs ───
+  // Only show tabs for categories that actually have at least one active doc.
+  // "All" always shows when there are any docs at all. Empty categories are
+  // hidden so users don't tap a pill and see "No documents in this category."
+  const visibleTabs = useMemo(() => {
+    if (docs.length === 0) return [];
+    const categoriesWithDocs = new Set(docs.map((d) => d.category));
+    return FILTER_TABS.filter((tab) => tab.id === "all" || categoriesWithDocs.has(tab.id));
+  }, [docs]);
+
+  // ─── Reset filter if the active category no longer has docs ───
+  // Edge case: user is filtered on "Forms," then a doc gets deactivated and
+  // the docs list refreshes with no Forms left. Snap back to "all" so the
+  // user isn't staring at an empty view with their selected pill highlighted.
+  useEffect(() => {
+    if (activeFilter !== "all" && docs.length > 0) {
+      const stillHasCategory = docs.some((d) => d.category === activeFilter);
+      if (!stillHasCategory) setActiveFilter("all");
+    }
+  }, [docs, activeFilter]);
+
   // ─── Filter logic ───
-  // Pinned docs always show in Pinned section, never duplicated in their category.
+  // In "All" view: pinned docs surface in the Pinned section only (not duplicated
+  // in their category section). In a specific category view: pinned docs DO surface
+  // in that category, since the Pinned section is hidden anyway.
   const filteredDocs = activeFilter === "all"
     ? docs
-    : docs.filter((d) => d.category === activeFilter && !d.pinned);
+    : docs.filter((d) => d.category === activeFilter);
 
   // ─── Group by category for "All" view ───
+  // The Pinned section only renders when filter === "all" — in single-category view,
+  // the user has explicitly asked to see that category, so pinned docs join the
+  // category bucket rather than appearing in a separate Pinned section.
   const grouped = CATEGORIES.map((cat) => {
     let bucket;
     if (cat.id === "pinned") {
-      bucket = filteredDocs.filter((d) => d.pinned);
-    } else {
+      bucket = activeFilter === "all" ? filteredDocs.filter((d) => d.pinned) : [];
+    } else if (activeFilter === "all") {
       bucket = filteredDocs.filter((d) => d.category === cat.id && !d.pinned);
+    } else {
+      bucket = filteredDocs.filter((d) => d.category === cat.id);
     }
     return { ...cat, docs: bucket };
   }).filter((g) => g.docs.length > 0);
@@ -151,18 +179,20 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
         </a>
       </div>
 
-      {/* Filter tabs */}
-      <div className="pp-inc-lib-tabs">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`pp-inc-lib-tab${activeFilter === tab.id ? " pp-inc-lib-tab--active" : ""}`}
-            onClick={() => setActiveFilter(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Filter tabs - only categories with real docs, hidden if 0/1 visible */}
+      {visibleTabs.length > 1 && (
+        <div className="pp-inc-lib-tabs">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`pp-inc-lib-tab${activeFilter === tab.id ? " pp-inc-lib-tab--active" : ""}`}
+              onClick={() => setActiveFilter(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Stub-mode hint */}
       {isStub && !loading && (
