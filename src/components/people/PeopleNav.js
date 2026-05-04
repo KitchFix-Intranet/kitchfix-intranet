@@ -10,7 +10,7 @@ const TABS = [
 
 export default function PeopleNav({ activeView, onNavigate, isAdmin }) {
   const tabs = isAdmin
-    ? [...TABS, { id: "incident-admin", label: "Incident Admin" }, { id: "admin", label: "Admin" }]
+    ? [...TABS, { id: "admin", label: "Admin" }]
     : TABS;
 
   return (

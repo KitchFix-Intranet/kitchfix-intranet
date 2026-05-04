@@ -1,5 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
+import IncidentDetailPane, { INCIDENT_ICONS } from "@/components/people/IncidentDetailPane";
+import { INCIDENT_TYPES, SEVERITY_TIERS, STATUS_LABELS } from "@/lib/incidentSchema";
 
 const FILTERS = [
   { id: "action", label: "Action" },
@@ -92,16 +94,39 @@ function getLabel(key) {
 
 function statusMatch(status, filter) {
   if (filter === "all") return true;
-  if (filter === "action") return /Rejected|Action/i.test(status);
-  if (filter === "pending") return /Pending/i.test(status);
-  if (filter === "done") return /Complete|Approved|Withdrawn|Cancelled/i.test(status);
+  const s = String(status || "").toLowerCase();
+  if (filter === "action") return /rejected|action/i.test(status);
+  if (filter === "pending") {
+    // NH/PAF "Pending" + open incident states (submitted, acknowledged, investigating, corrective_action)
+    if (/pending/i.test(status)) return true;
+    if (/^(submitted|acknowledged|investigating|corrective_action)$/i.test(s)) return true;
+    return false;
+  }
+  if (filter === "done") {
+    // NH/PAF terminal + incident closed
+    if (/complete|approved|withdrawn|cancelled/i.test(status)) return true;
+    if (s === "closed") return true;
+    return false;
+  }
   return true;
 }
 
-function StatusChip({ status }) {
+function StatusChip({ status, isIncident }) {
   const s = String(status).toLowerCase();
   let cls = "pp-chip-pending";
   let label = status;
+
+  if (isIncident) {
+    // Incident statuses: submitted | acknowledged | investigating | corrective_action | closed
+    if (s === "closed") { cls = "pp-chip-success"; label = "Closed"; }
+    else if (s === "submitted") { cls = "pp-chip-pending"; label = "Submitted"; }
+    else if (s === "acknowledged") { cls = "pp-chip-pending"; label = "Acknowledged"; }
+    else if (s === "investigating") { cls = "pp-chip-pending"; label = "Investigating"; }
+    else if (s === "corrective_action") { cls = "pp-chip-pending"; label = "Corrective Action"; }
+    else { label = STATUS_LABELS?.[s] || status; }
+    return <span className={`pp-status-chip ${cls}`}>{label}</span>;
+  }
+
   if (/complete|approved/i.test(s)) { cls = "pp-chip-success"; label = "Complete"; }
   if (/rejected|action/i.test(s)) { cls = "pp-chip-danger"; label = "Action Required"; }
   if (/withdrawn/i.test(s)) { cls = "pp-chip-withdrawn"; label = "Withdrawn"; }
@@ -112,7 +137,8 @@ function StatusChip({ status }) {
 // ── List item border color ──
 function getBorderClass(status) {
   if (/Rejected|Action/i.test(status)) return "pp-ac-item--rejected";
-  if (/Pending/i.test(status)) return "pp-ac-item--pending";
+  const s = String(status || "").toLowerCase();
+  if (/Pending/i.test(status) || /^(submitted|acknowledged|investigating|corrective_action)$/i.test(s)) return "pp-ac-item--pending";
   return "pp-ac-item--done";
 }
 
@@ -132,9 +158,10 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
     const c = { action: 0, pending: 0, done: 0 };
     history.forEach((h) => {
       if (h.status === "Archived") return;
+      const s = String(h.status || "").toLowerCase();
       if (/Rejected|Action/i.test(h.status)) c.action++;
-      else if (/Pending/i.test(h.status)) c.pending++;
-      else if (/Complete|Approved|Withdrawn|Cancelled/i.test(h.status)) c.done++;
+      else if (/Pending/i.test(h.status) || /^(submitted|acknowledged|investigating|corrective_action)$/i.test(s)) c.pending++;
+      else if (/Complete|Approved|Withdrawn|Cancelled/i.test(h.status) || s === "closed") c.done++;
     });
     return c;
   }, [history]);
@@ -201,6 +228,20 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
           <div style={{ fontSize: 40, marginBottom: 8, opacity: 0.4 }}>←</div>
           <p>Select an item to review</p>
         </div>
+      );
+    }
+
+    // ─── Incident: render read-only detail pane ───
+    if (selectedItem.module === "incident" && selectedItem.incident) {
+      return (
+        <IncidentDetailPane
+          key={selectedItem.id}
+          incident={selectedItem.incident}
+          bootstrapData={null /* not needed in read-only */}
+          showToast={showToast}
+          onRefresh={onRefresh}
+          readOnly={true}
+        />
       );
     }
 
@@ -402,23 +443,38 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
             {filtered.map((item) => {
               const isActive = selectedId === item.id;
               const isNH = item.module === "newhire";
+              const isIncident = item.module === "incident";
               const isRejected = /Rejected|Action/i.test(item.status);
               const borderCls = getBorderClass(item.status);
+              const sevColor = isIncident
+                ? (SEVERITY_TIERS.find((s) => s.id === item.severity)?.color || "#94a3b8")
+                : null;
 
               return (
                 <div
                   key={item.id}
                   className={`pp-adm-list-item ${borderCls}${isActive ? " active" : ""}`}
+                  style={isIncident ? { borderLeft: `3px solid ${sevColor}` } : {}}
                   onClick={() => {
                     setSelectedId(item.id);
                     setMobileDetail(true);
                   }}
                 >
-                  <div className={`pp-adm-list-avatar ${isRejected ? "rejected" : isNH ? "nh" : "paf"}`}>
+                  <div
+                    className={`pp-adm-list-avatar ${isRejected ? "rejected" : isNH ? "nh" : isIncident ? "inc" : "paf"}`}
+                    style={isIncident ? { background: item.typeColor || "#6b7280" } : {}}
+                  >
                     {isNH ? (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                       </svg>
+                    ) : isIncident ? (
+                      INCIDENT_ICONS[item.incidentType] || (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                          <path d="M12 9v4" /><path d="M12 17h.01" />
+                        </svg>
+                      )
                     ) : (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
@@ -427,14 +483,28 @@ export default function ActionCenter({ history, onResumeEdit, onRefresh, userEma
                   </div>
                   <div className="pp-adm-list-info">
                     <div className="pp-adm-list-name">{item.title}</div>
-                    <div className="pp-adm-list-sub">{Formatter.toTitleCase(item.subtitle)}</div>
+                    <div className="pp-adm-list-sub">
+                      {isIncident ? (
+                        <>
+                          <span style={{ color: sevColor, fontWeight: 700, marginRight: 6 }}>{item.severity}</span>
+                          {Formatter.toTitleCase(item.subtitle)}
+                        </>
+                      ) : (
+                        Formatter.toTitleCase(item.subtitle)
+                      )}
+                    </div>
                   </div>
                   <div className="pp-adm-list-right">
                     <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, whiteSpace: "nowrap" }}>
                       {Formatter.toDate(item.date)}
                     </div>
-                    {isRejected && (
+                    {isRejected && !isIncident && (
                       <div style={{ fontSize: 9, fontWeight: 800, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 4, padding: "1px 5px", marginTop: 2 }}>ACTION</div>
+                    )}
+                    {isIncident && (
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", marginTop: 2, fontFamily: "ui-monospace, monospace" }}>
+                        {item.incidentId || ""}
+                      </div>
                     )}
                   </div>
                 </div>

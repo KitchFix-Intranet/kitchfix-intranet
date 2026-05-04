@@ -7,7 +7,6 @@ import ActionCenter from "@/components/people/ActionCenter";
 import NewHireWizard from "@/components/people/NewHireWizard";
 import PAFForm from "@/components/people/PAFForm";
 import IncidentCenter from "@/components/people/IncidentCenter";
-import IncidentAdminQueue from "@/components/people/IncidentAdminQueue";
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
@@ -193,6 +192,7 @@ export default function PeoplePage() {
   const counts = { paf: 0, newHire: 0, actionRequired: 0 };
   history.forEach((h) => {
     if (h.status === "Archived") return;
+    if (h.module === "incident") return; // incidents counted separately, not in NH/PAF buckets
     if (/Rejected|Action/i.test(h.status)) counts.actionRequired++;
     else if (/Pending/i.test(h.status)) {
       if (h.module === "newhire") counts.newHire++;
@@ -364,13 +364,6 @@ export default function PeoplePage() {
             onNavigate={navigate}
             showToast={showToast}
             refreshHistory={refreshHistory}
-          />
-        )}
-
-        {view === "incident-admin" && bootstrapData?.isAdmin && (
-          <IncidentAdminQueue
-            bootstrapData={bootstrapData}
-            showToast={showToast}
           />
         )}
 

@@ -1,10 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import IncidentDetailPane, { INCIDENT_ICONS } from "@/components/people/IncidentDetailPane";
+import { INCIDENT_TYPES, SEVERITY_TIERS } from "@/lib/incidentSchema";
 
 const FILTERS = [
   { id: "all", label: "All" },
   { id: "newhire", label: "New Hires" },
   { id: "paf", label: "PAFs" },
+  { id: "incident", label: "Incidents" },
 ];
 
 // ── Human-readable label map ──
@@ -115,6 +118,14 @@ const UserIconSm = () => (
 const DocIconSm = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+// Generic warning icon for incidents in list
+const IncidentIconSm = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <path d="M12 9v4" /><path d="M12 17h.01" />
   </svg>
 );
 
@@ -322,6 +333,20 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
       );
     }
 
+    // ─── Incident: render full investigation/triage pane ───
+    if (selectedItem.type === "incident" && selectedItem.incident) {
+      return (
+        <IncidentDetailPane
+          key={selectedItem.id}
+          incident={selectedItem.incident}
+          bootstrapData={bootstrapData}
+          showToast={showToast}
+          onRefresh={loadQueue}
+          readOnly={false}
+        />
+      );
+    }
+
     const details = parseDetails(selectedItem);
     const isNH = selectedItem.type === "newhire";
     const submitter = details.submitterEmail || "—";
@@ -443,22 +468,30 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
             {filtered.map((item) => {
               const metric = getMetric(item);
               const isNH = item.type === "newhire";
+              const isIncident = item.type === "incident";
               const isActive = selectedId === item.id;
               const isExiting = approvingId === item.id || rejectingId === item.id;
               const teamAbbr = item.location.split(" - ")[0];
+              const sevColor = isIncident
+                ? (SEVERITY_TIERS.find((s) => s.id === item.severity)?.color || "#94a3b8")
+                : null;
 
               return (
                 <div
                   key={item.id}
-                  className={`pp-adm-list-item${isActive ? " active" : ""} ${isNH ? "type-nh" : "type-paf"}${isExiting ? " pp-adm-list-item--exiting" : ""}`}
+                  className={`pp-adm-list-item${isActive ? " active" : ""} ${isNH ? "type-nh" : isIncident ? "type-inc" : "type-paf"}${isExiting ? " pp-adm-list-item--exiting" : ""}`}
+                  style={isIncident ? { borderLeft: `3px solid ${sevColor}` } : {}}
                   onClick={() => {
                     if (approvingId || rejectingId) return;
                     setSelectedId(item.id);
                     setMobileDetail(true);
                   }}
                 >
-                  <div className={`pp-adm-list-avatar ${isNH ? "nh" : "paf"}`}>
-                    {isNH ? <UserIconSm /> : <DocIconSm />}
+                  <div
+                    className={`pp-adm-list-avatar ${isNH ? "nh" : isIncident ? "inc" : "paf"}`}
+                    style={isIncident ? { background: item.typeColor || "#6b7280" } : {}}
+                  >
+                    {isNH ? <UserIconSm /> : isIncident ? (INCIDENT_ICONS[item.incidentType] || <IncidentIconSm />) : <DocIconSm />}
                   </div>
                   <div className="pp-adm-list-info">
                     <div className="pp-adm-list-name">{item.title}</div>
@@ -466,7 +499,17 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
                   </div>
                   <div className="pp-adm-list-right">
                     <div className="pp-adm-list-badge">{teamAbbr}</div>
-                    {metric && <div className="pp-adm-list-metric">{metric}</div>}
+                    {isIncident ? (
+                      <div style={{
+                        fontSize: 9, fontWeight: 700, marginTop: 2,
+                        padding: "1px 6px", borderRadius: 4,
+                        background: `${sevColor}22`,
+                        color: sevColor,
+                        letterSpacing: "0.04em",
+                      }}>{item.severity}</div>
+                    ) : (
+                      metric && <div className="pp-adm-list-metric">{metric}</div>
+                    )}
                   </div>
                 </div>
               );

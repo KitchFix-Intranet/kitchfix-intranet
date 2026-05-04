@@ -753,6 +753,39 @@ if (action === "bootstrap") {
         });
       });
 
+      // ─── Append user's incidents (Bucket A4: own submissions only) ───
+      try {
+        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        if (!incRows) incRows = [];
+        incRows.forEach((r) => {
+          const inc = rowToIncident(r);
+          if (!inc.incident_id) return;
+          if (String(inc.submitted_by_email || "").toLowerCase() !== userEmail.toLowerCase()) return;
+
+          const typeMeta = INCIDENT_TYPES.find((t) => t.id === inc.incident_type);
+          const typeLabel = typeMeta?.label || inc.incident_type;
+
+          history.push({
+            id: `inc-${inc.incident_id}`,
+            module: "incident",
+            date: inc.submitted_at || new Date().toISOString(),
+            title: typeLabel,
+            subtitle: `${inc.severity} · ${inc.site_code}`,
+            status: inc.status,
+            notes: "",
+            payload: "{}",
+            // Incident-specific fields used by ActionCenter list rendering
+            incident: inc,
+            incidentId: inc.incident_id,
+            incidentType: inc.incident_type,
+            severity: inc.severity,
+            typeColor: typeMeta?.color || "#6b7280",
+          });
+        });
+      } catch (e) {
+        console.error("[history] Failed to merge incidents:", e.message);
+      }
+
       history.sort((a, b) => new Date(b.date) - new Date(a.date));
       return NextResponse.json({ success: true, history });
     }
@@ -836,7 +869,49 @@ rows.forEach((row, i) => {
         });
       });
 
-      queue.sort((a, b) => new Date(a.date) - new Date(b.date));
+      // ─── Append all open (non-closed) incidents (Bucket B5: location filter respects site) ───
+      try {
+        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        if (!incRows) incRows = [];
+        incRows.forEach((r) => {
+          const inc = rowToIncident(r);
+          if (!inc.incident_id) return;
+          if (inc.status === "closed") return;  // closed incidents not in active queue
+
+          const typeMeta = INCIDENT_TYPES.find((t) => t.id === inc.incident_type);
+          const typeLabel = typeMeta?.label || inc.incident_type;
+
+          queue.push({
+            id: `inc-${inc.incident_id}`,
+            type: "incident",
+            submitter: inc.submitted_by_email,
+            location: inc.site_code,  // matches existing location filter
+            title: typeLabel,
+            subtitle: `${inc.severity} · ${inc.site_code}`,
+            date: inc.submitted_at || new Date().toISOString(),
+            details: "{}",
+            // Incident-specific fields for AdminQueue list rendering
+            incident: inc,
+            incidentType: inc.incident_type,
+            severity: inc.severity,
+            typeColor: typeMeta?.color || "#6b7280",
+          });
+        });
+      } catch (e) {
+        console.error("[admin-queue] Failed to merge incidents:", e.message);
+      }
+
+      // Sort: incidents with S1 first, then everything by date (oldest first - normal queue behavior)
+      queue.sort((a, b) => {
+        // Severity priority for incidents (B2: flat list, sorted by date first then severity)
+        // Date desc (newest first), then severity within same date
+        const dateDiff = new Date(b.date) - new Date(a.date);
+        if (dateDiff !== 0) return dateDiff;
+        const sevOrder = { S1: 0, S2: 1, S3: 2, S4: 3 };
+        const sa = sevOrder[a.severity] ?? 99;
+        const sb = sevOrder[b.severity] ?? 99;
+        return sa - sb;
+      });
       return NextResponse.json({ success: true, queue });
     }
 
