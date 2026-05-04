@@ -143,10 +143,19 @@ export async function uploadIncidentFile({ folderId, base64Data, filename, mimeT
 // ─────────────────────────────────────────────
 const SEV_EMOJI = { S1: "🔴", S2: "🟠", S3: "🟡", S4: "⚪" };
 
-export async function postSlackChannel(incident) {
-  const webhook = process.env.SLACK_INCIDENT_WEBHOOK;
+export async function postSlackChannel(incident, testMode = false) {
+  // Test mode: prefer SLACK_INCIDENT_TEST_WEBHOOK if set, else skip Slack entirely.
+  // Production: use SLACK_INCIDENT_WEBHOOK as before.
+  const webhook = testMode
+    ? (process.env.SLACK_INCIDENT_TEST_WEBHOOK || null)
+    : process.env.SLACK_INCIDENT_WEBHOOK;
+
   if (!webhook) {
-    console.warn("[Incident] SLACK_INCIDENT_WEBHOOK not set; skipping channel post");
+    if (testMode) {
+      console.log("[Incident TEST MODE] SLACK_INCIDENT_TEST_WEBHOOK not set, skipping Slack");
+    } else {
+      console.warn("[Incident] SLACK_INCIDENT_WEBHOOK not set; skipping channel post");
+    }
     return { ok: false, reason: "no-webhook" };
   }
 
@@ -154,12 +163,17 @@ export async function postSlackChannel(incident) {
   const sevEmoji = SEV_EMOJI[incident.severity] || "⚪";
   const typeLabel = typeMeta?.label || incident.incident_type;
 
+  // Test mode: prefix the header text so the message is unmistakable
+  const headerText = testMode
+    ? `[TEST] ${sevEmoji} ${incident.severity} - ${typeLabel}`
+    : `${sevEmoji} ${incident.severity} - ${typeLabel}`;
+
   const blocks = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: `${sevEmoji} ${incident.severity} - ${typeLabel}`,
+        text: headerText,
       },
     },
     {
@@ -192,12 +206,28 @@ export async function postSlackChannel(incident) {
     });
   }
 
+  // Test mode: add a clearly-labeled context block at the bottom
+  if (testMode) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "⚠️ *TEST MODE* — this is a test notification. In production it would post to the real channel.",
+        },
+      ],
+    });
+  }
+
   try {
+    const fallbackText = testMode
+      ? `[TEST] New ${incident.severity} incident: ${incident.incident_id}`
+      : `New ${incident.severity} incident: ${incident.incident_id}`;
     const res = await fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: `New ${incident.severity} incident: ${incident.incident_id}`,
+        text: fallbackText,
         blocks,
       }),
     });
@@ -320,9 +350,21 @@ export async function notifyIncident(incident, sendEmail, regionalEmail) {
   const sent = [];
   let s1EscalationAt = null;
 
+  // ─── TEST MODE check ───
+  // When INCIDENT_TEST_MODE=true, every notification gets:
+  //   - Subject prefixed with [TEST]
+  //   - Email recipients overridden to k.fietek@kitchfix.com only
+  //   - Slack webhook overridden to SLACK_INCIDENT_TEST_WEBHOOK if set,
+  //     otherwise Slack is skipped entirely
+  // Set in Vercel env vars. Default false (production behavior).
+  const TEST_MODE = process.env.INCIDENT_TEST_MODE === "true";
+  if (TEST_MODE) {
+    console.log(`[Incident TEST MODE] active - all notifications redirected to ${SR_DIR_OPS_EMAIL}`);
+  }
+
   // 1. Slack channel post for every tier
-  const channelRes = await postSlackChannel(incident);
-  if (channelRes.ok) sent.push("slack-channel");
+  const channelRes = await postSlackChannel(incident, TEST_MODE);
+  if (channelRes.ok) sent.push(TEST_MODE ? "slack-test" : "slack-channel");
 
   // 2. Email recipient list per tier (SOP §06)
   let recipients = [];
@@ -346,22 +388,49 @@ export async function notifyIncident(incident, sendEmail, regionalEmail) {
   // Dedupe (regionalEmail could match an executive email in edge cases)
   recipients = [...new Set(recipients.filter(Boolean))];
 
+  // ─── TEST MODE: capture intended recipients, override to Kevin only ───
+  let intendedRecipients = [];
+  if (TEST_MODE && recipients.length) {
+    intendedRecipients = [...recipients];
+    recipients = [SR_DIR_OPS_EMAIL]; // route everything to Kevin
+    console.log(`[Incident TEST MODE] intended recipients: ${intendedRecipients.join(", ")}`);
+    console.log(`[Incident TEST MODE] actual recipient: ${recipients[0]}`);
+  }
+
   if (recipients.length && sendEmail) {
     const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
     const typeLabel = typeMeta?.label || incident.incident_type;
     // NOTE: regular hyphens in subject, no em-dashes (avoids encoding artifacts)
     const subjectBase = `${incident.severity} incident ${incident.incident_id} - ${typeLabel} at ${incident.site_code}`;
-    const subject = incident.severity === "S1" ? `🚨 ${subjectBase}` : subjectBase;
+    let subject = incident.severity === "S1" ? `🚨 ${subjectBase}` : subjectBase;
+    if (TEST_MODE) subject = `[TEST] ${subject}`;
+
+    // In test mode, prepend a banner to the email body showing who would
+    // have received it in production
+    let htmlBody = buildIncidentEmailHtml(incident);
+    if (TEST_MODE && intendedRecipients.length) {
+      const banner = `
+        <div style="background:#fef3c7; border:2px solid #d97706; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-family:Arial,sans-serif;">
+          <div style="font-size:14px; font-weight:700; color:#92400e; margin-bottom:6px;">⚠️ TEST MODE — this email was redirected</div>
+          <div style="font-size:12px; color:#78350f; line-height:1.5;">
+            In production, this email would have been sent to:<br/>
+            <code style="font-family:Consolas,monospace; font-size:11px; color:#451a03;">${intendedRecipients.join(", ")}</code>
+          </div>
+        </div>
+      `;
+      htmlBody = banner + htmlBody;
+    }
 
     const emailRes = await sendEmail(
       recipients.join(","),
       subject,
-      buildIncidentEmailHtml(incident),
+      htmlBody,
       incident.submitted_by_email
     );
     // sendEmail returns "sent" or "failed" (string)
     if (emailRes === "sent") {
-      sent.push(`email-${incident.severity.toLowerCase()}-${recipients.length}rcpts`);
+      const tag = TEST_MODE ? "test" : `${incident.severity.toLowerCase()}-${intendedRecipients.length || recipients.length}rcpts`;
+      sent.push(`email-${tag}`);
     }
 
     if (incident.severity === "S1") {
