@@ -422,13 +422,13 @@ export async function notifyIncident(incident, sendEmail, regionalEmail) {
       htmlBody = banner + htmlBody;
     }
 
-    const emailRes = await sendEmail(
-      recipients.join(","),
+const emailRes = await sendEmail(
+      recipients,
       subject,
       htmlBody,
       incident.submitted_by_email
     );
-    // sendEmail returns "sent" or "failed" (string)
+        // sendEmail returns "sent" or "failed" (string)
     if (emailRes === "sent") {
       const tag = TEST_MODE ? "test" : `${incident.severity.toLowerCase()}-${intendedRecipients.length || recipients.length}rcpts`;
       sent.push(`email-${tag}`);
