@@ -24,6 +24,13 @@ import {
 // Uses Google Service Account for Sheets + Gmail access
 // ═══════════════════════════════════════
 
+// Allow longer execution for incident submissions that include
+// multiple file uploads to Drive (default 10s, bumping to 60s).
+// Note: Vercel's body size limit is platform-level (~4.5MB) and cannot
+// be raised here — large uploads are handled by the chunking strategy
+// described in the incident submission handler.
+export const maxDuration = 60;
+
 const SHEET_IDS = {
   HUB: process.env.MASTER_HUB_SHEET_ID,
   DB: process.env.PEOPLE_DB_SHEET_ID || process.env.MASTER_HUB_SHEET_ID,
@@ -302,12 +309,21 @@ async function sendEmail(to, subject, html, replyTo) {
     const token = await getGmailToken();
     const recipients = Array.isArray(to) ? to : [to];
 
+    // MIME-encode Subject if it contains non-ASCII (emoji, accented chars, etc.)
+    // Without this, Gmail/Outlook fall back to Latin-1 interpretation and the
+    // subject renders as mojibake (e.g. 🚨 becomes "Ã°ÂŸÂ¨").
+    // Per RFC 2047: =?UTF-8?B?<base64>?= for non-ASCII.
+    const hasNonAscii = /[^\x00-\x7F]/.test(subject);
+    const subjectHeader = hasNonAscii
+      ? `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`
+      : subject;
+
     // Build RFC 2822 MIME message
     const boundary = "boundary_" + Date.now();
     const mimeLines = [
       `From: ${GMAIL_SENDER_NAME} <${GMAIL_SENDER}>`,
       `To: ${recipients.join(", ")}`,
-      `Subject: ${subject}`,
+      `Subject: ${subjectHeader}`,
       ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
       "MIME-Version: 1.0",
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -1421,6 +1437,14 @@ if (action === "submit-help") {
 
       // Upload attachments
       const attachments = Array.isArray(f.attachments) ? f.attachments : [];
+      console.log(`[Incident] Submit received ${attachments.length} attachments for ${incidentId}`);
+      if (attachments.length) {
+        attachments.forEach((a, i) => {
+          const b64Len = (a?.base64 || "").length;
+          const sizeKb = Math.round(b64Len * 0.75 / 1024);
+          console.log(`[Incident]   attachment[${i}] name=${a?.name} mime=${a?.mimeType} base64Len=${b64Len} (~${sizeKb}KB)`);
+        });
+      }
       const uploadedFiles = [];
       if (driveFolderId && attachments.length) {
         for (const att of attachments) {
@@ -1432,11 +1456,13 @@ if (action === "submit-help") {
               mimeType: att.mimeType,
             });
             uploadedFiles.push(up);
+            console.log(`[Incident]   uploaded ${att.name} -> ${up.fileId}`);
           } catch (e) {
-            console.error(`[Incident] File upload failed (${att.name}):`, e.message);
+            console.error(`[Incident] File upload failed (${att.name}):`, e.message, e.stack);
           }
         }
       }
+      console.log(`[Incident] Upload complete: ${uploadedFiles.length}/${attachments.length} succeeded`);
 
       // Build incident object (all 42 columns, server-set timestamps)
       const incident = {

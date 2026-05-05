@@ -947,22 +947,32 @@ function Step5Review({ form, update, submitting }) {
   const site = SITES.find((x) => x.code === form.site_code);
   const fileInputRef = useRef(null);
 
-  const handleFiles = async (e) => {
+const handleFiles = async (e) => {
     const newFiles = Array.from(e.target.files || []);
-    const processed = await Promise.all(newFiles.map(async (f) => {
-      const buf = await f.arrayBuffer();
-      const base64 = Buffer.from(buf).toString("base64");
-      return {
-        name: f.name,
-        mimeType: f.type || "application/octet-stream",
-        size: f.size,
-        base64,
-      };
-    }));
+    const processed = await Promise.all(newFiles.map((f) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // readAsDataURL returns "data:mime/type;base64,XXXX" — strip the prefix
+          const dataUrl = reader.result || "";
+          const base64 = String(dataUrl).includes(",")
+            ? String(dataUrl).split(",")[1]
+            : String(dataUrl);
+          resolve({
+            name: f.name,
+            mimeType: f.type || "application/octet-stream",
+            size: f.size,
+            base64,
+          });
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(f);
+      })
+    ));
     update("attachments", [...(form.attachments || []), ...processed]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-
+  
   const removeFile = (idx) => {
     update("attachments", form.attachments.filter((_, i) => i !== idx));
   };
