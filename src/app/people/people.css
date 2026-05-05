@@ -13,7 +13,7 @@ body:has(.pp-app) {
   --pp-purple: #7c3aed;
   --pp-purple-soft: #f3e8ff;
   --pp-purple-mid: #e0e7ff;
-  --pp-navy: #0f3057;
+--pp-navy: #153968;
   --pp-white: #ffffff;
   --pp-bg: #f8fafc;
   --pp-grey: #64748b;
@@ -771,15 +771,45 @@ body:has(.pp-app) {
 .pp-textarea {
   display: block;
   width: 100%;
-  padding: 14px 16px;
-  border-radius: 12px;
+  /* Direction B density pass: padding 14×16 → 11×14, radius 12 → 8.
+     Lightens form ~25% without breaking 44pt iOS tap-target math
+     (effective tap height = 11+11+~22 line-height = 44px exactly). */
+  padding: 11px 14px;
+  border-radius: 8px;
   border: 1px solid var(--pp-grey-border);
+  /* Mobile-first: 16px preserves iOS no-zoom-on-focus.
+     Desktop tightens via media query below (line ~798). */
   font-size: 16px;
   font-family: inherit;
   background: #fcfcfc;
   transition: all 0.2s;
   color: var(--pp-navy);
   box-sizing: border-box;
+}
+
+/* Direction B: desktop tightens to 15px. iOS no-zoom rule only matters under ~768px. */
+@media (min-width: 768px) {
+  .pp-input,
+  .pp-select,
+  .pp-textarea {
+    font-size: 15px;
+  }
+}
+
+/* Direction B: placeholder color override. Browser default ≈ gray-500, which
+   reads at near-content darkness and makes the form feel "filled in" before
+   the user types. #cbd5e1 (slate-300) clearly signals "this is a hint, not content."
+   opacity:1 forces Firefox to honor the color (Firefox defaults to opacity 0.54). */
+.pp-input::placeholder,
+.pp-textarea::placeholder {
+  color: #cbd5e1;
+  opacity: 1;
+}
+
+/* Direction B: select dropdowns use option[value=""] as a placeholder.
+   Match the same hint color so "Select a site..." reads consistently. */
+.pp-select option[value=""] {
+  color: #cbd5e1;
 }
 
 .pp-select {
@@ -792,7 +822,7 @@ body:has(.pp-app) {
   padding-right: 44px;
 }
 
-.pp-textarea { resize: none; min-height: 100px; }
+.pp-textarea { resize: none; min-height: 72px; }
 
 .pp-input:focus,
 .pp-select:focus,
@@ -2038,19 +2068,22 @@ body:has(.pp-app) {
 .pp-inc-section-divider {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 14px 0 10px;
-  font-size: 11px;
-  font-weight: 500;
+  gap: 10px;
+  margin: 18px 0 12px;
+  /* P3 — Phase 3: divider was too muted (11px gray) to anchor scan in a long step.
+     Promoted to 12px / 700 weight / slate-600 + 2px accent line so "When & Where"
+     and "What Happened" act as proper section anchors. */
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: #475569;
 }
 .pp-inc-section-divider::after {
   content: "";
   flex: 1;
-  height: 1px;
-  background: #e2e8f0;
+  height: 2px;
+  background: #cbd5e1;
 }
 
 
@@ -2186,8 +2219,13 @@ body:has(.pp-app) {
 }
 
 .pp-inc-tier-deadline {
-  font-size: 12px;
-  font-weight: 500;
+  /* P3 — Phase 3: was 12px / 500. Deadline is the thing a director cares about
+     most ("when do I get pinged?") and was getting buried as right-aligned subtle
+     text. Bumped to 13px / 700 so it reads as a hard commitment, not microcopy.
+     Color is already inline-styled to the tier color. */
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .pp-inc-tier-examples {

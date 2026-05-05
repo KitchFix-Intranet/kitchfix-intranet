@@ -84,7 +84,9 @@ If you have time, consolidating to one location is a P2 polish target.
 
 ---
 
-## CSS namespace prefixes (strict isolation)
+## CSS namespace prefixes
+
+### Module prefixes (intent: strict isolation per module)
 
 | Module | Prefix | CSS file |
 |---|---|---|
@@ -93,7 +95,7 @@ If you have time, consolidating to one location is a P2 polish target.
 | Inventory Manager | `oh-inv-mgmt-` | `src/app/ops/css/ops-inv-mgmt.css` |
 | Inventory (legacy) | `oh-inv-` | `src/app/ops/css/ops-inventory.css` |
 | Invoice Capture | `oh-inv-` (overlapping — be careful) | `src/app/ops/css/ops-invoice.css` |
-| Labor / Season Tracker | `oh-lbr-` | `src/app/ops/css/ops-labor.css` |
+| Labor / Season Planner | `oh-sp-` | `src/app/ops/css/ops-labor.css` |
 | Executive | `oh-exec-` | `src/app/ops/css/ops-executive.css` |
 | Service Calendar | `sc-` | `src/app/service-calendar/ops-sc.css` |
 | Team Directory | (Cardinals red theme, no strict prefix yet) | `src/app/directory/directory.css` |
@@ -101,7 +103,31 @@ If you have time, consolidating to one location is a P2 polish target.
 | News Feed | `kf-news-` | (in component file or globals) |
 | Top Nav | (no prefix yet) | `src/components/TopNav.css` |
 
-**Never cross-contaminate prefixes.** A People Portal component should not use `oh-vp-` classes.
+**Never cross-contaminate module prefixes.** A People Portal component should not use `oh-vp-` classes.
+
+### Shared utility prefixes (deliberately cross modules)
+
+The Ops Hub has a layer of utility classes that are shared across modules by design. These live alongside module CSS and are referenced from any Ops Hub tool that needs them.
+
+| Prefix | Purpose |
+|---|---|
+| `oh-tool-` | Tool shell scaffolding (toolbar, view, account selector) |
+| `oh-btn-` | Button utility variants |
+| `oh-modal-` | Modal containers and structure |
+| `oh-input-`, `oh-select-` | Form input utilities |
+| `oh-popover-` | Popover positioning and chrome |
+| `oh-widget-` | Generic widget container |
+| `oh-font-` | Typography utilities |
+| `oh-grey-`, `oh-mustard-` | Color/state utilities |
+| `oh-history-`, `oh-hx-` | History view utilities |
+| `oh-spinner` | Loading state utility |
+
+When adding a new shared utility, prefix it `oh-{utility}-` and document it here. Don't reach for a module prefix from another module — promote the pattern to a utility instead.
+
+### Known prefix issues (drift to be aware of)
+
+- **`oh-inv-` collision.** Used by both legacy Inventory and Invoice Capture. New work in either module should be careful — class names can win specificity battles unexpectedly. The newer Inventory Manager uses `oh-inv-mgmt-` to avoid this.
+- **Inventory Manager partial adoption.** Only `InventoryManager.js` and `QuickTour.js` use `oh-inv-mgmt-`. Other files in the module (notably `LocationSetup.js`) still use the legacy `oh-inv-` prefix. New files in the Inventory Manager folder should use `oh-inv-mgmt-`; legacy files migrate opportunistically when touched.
 
 ---
 
@@ -265,3 +291,12 @@ The People Portal pattern: the wizard has local React state, but partial drafts 
 | CSS classes | `{prefix}-component-name` | `pp-action-center`, `oh-vp-card` |
 | Sheet tabs | lowercase_underscore | `hero_images`, `notification_log` |
 | Sheet column headers | Title Case (in the sheet itself) | `Timestamp`, `Action Type` |
+
+---
+
+## Captain's log
+
+*Add additions to conventions here with date and a one-line note on what prompted the change.*
+
+- **2026-05-05** — Initial conventions captured: action-dispatch APIs, file/component placement, CSS prefixes, sheet column conventions, shared utilities, analytics taxonomy, naming, React patterns.
+- **2026-05-05** — CSS prefix table corrected and expanded after audit. Labor prefix corrected from `oh-lbr-` to actual `oh-sp-`. Shared utility prefix layer documented (`oh-tool-`, `oh-btn-`, `oh-modal-`, etc.) — these are deliberately cross-module. Inventory Manager partial-adoption drift documented.

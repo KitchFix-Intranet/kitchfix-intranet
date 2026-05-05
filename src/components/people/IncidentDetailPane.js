@@ -314,8 +314,11 @@ const data = await res.json();
         <div className="pp-inc-invpane">
           <div className="pp-inc-invpane-header">
             <span>Investigation &amp; Closure</span>
-            <span className="pp-inc-invpane-help">SOP §8.3 cadence · §8.4 requires both fields to close</span>
-          </div>
+{/* P3 — Phase 3: was "SOP §8.3 cadence · §8.4 requires both fields to close"
+                (legalese). Plain-English version is faster to scan and tells the admin
+                what they actually need to do. */}
+            <span className="pp-inc-invpane-help">Two fields are required before this can be closed.</span>
+                      </div>
 
           {/* Root cause + due */}
           <div className="pp-inc-invpane-field">

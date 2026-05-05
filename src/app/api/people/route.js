@@ -766,7 +766,7 @@ if (action === "bootstrap") {
         appendixCUrl,
       });
     }
-    
+
     if (action === "history") {
       const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
 
@@ -1632,15 +1632,18 @@ if (action === "submit-help") {
         corrective_action_due_at: deadlines.correctiveActionDueAt, // §8.3 - 7d
       };
 
-      // Notifications (SOP §06 tier-based routing + Regional Director)
+// Notifications (SOP §06 tier-based routing + Regional Director)
       try {
-        const notifResult = await notifyIncident(incident, sendEmail, regionalEmail);
+        // P3 — Phase 3: pass appUrl so the email body can render a deep-link
+        // CTA back to the admin queue (existing pattern, see lines 386/570/1780).
+        const appUrl = process.env.AUTH_URL || "http://localhost:3000";
+        const notifResult = await notifyIncident(incident, sendEmail, regionalEmail, appUrl);
         incident.notifications_sent = notifResult.notifications_sent || "";
         incident.s1_escalation_at = notifResult.s1_escalation_at || "";
       } catch (e) {
         console.error("[Incident] Notification orchestration failed:", e.message);
       }
-
+      
       // Append row (with tab-create fallback)
       const row = incidentToRow(incident);
       let appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);

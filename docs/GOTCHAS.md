@@ -65,7 +65,7 @@ This bug shows up as "the period boundary cron sometimes catches things and some
 
 ### Date helpers are duplicated across 10+ files
 
-`formatDate`, `fmt`, `fmtDate`, `parseDate` are each redefined locally in many files. This is drift. **New code should put date helpers in `opsUtils.js`.** Existing duplicates can be migrated opportunistically — don't do a sweeping refactor for this alone.
+`formatDate`, `fmt`, `parseDate` are redefined in many files. See `CONVENTIONS.md` for the centralization rule (new code adds to `opsUtils.js`; existing duplicates migrate opportunistically).
 
 ---
 
@@ -201,8 +201,9 @@ Two Ops Hub modules — Inventory (legacy) and Invoice Capture — both use the 
 
 ---
 
-## Captain's log — recent additions
+## Captain's log
 
 *Add new entries here, dated, with symptom and fix.*
 
 - **2026-05-05** — Initial gotchas captured from working memory: currency parsing, UTC dates, em-dashes, AI reliability ceiling, React inner components, str_replace whitespace, file moves, Drive auth boundary, prefix collisions.
+- **2026-05-05** — Date helper note trimmed to a pointer to `CONVENTIONS.md` (the centralization rule lives there; this doc just flags the symptom).

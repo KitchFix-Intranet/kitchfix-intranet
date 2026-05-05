@@ -288,14 +288,20 @@ export function buildIncidentEmailBody(incident) {
   return lines.join("\n");
 }
 
-export function buildIncidentEmailHtml(incident) {
+export function buildIncidentEmailHtml(incident, appUrl) {
   const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
   const sevMeta = SEVERITY_TIERS.find((s) => s.id === incident.severity);
   const typeLabel = typeMeta?.label || incident.incident_type;
   const isS1 = incident.severity === "S1";
 
-  let typeSpecificHtml = "";
-  if (incident.type_specific_data) {
+  // P3 — Phase 3: deep-link CTA back into the People Portal admin queue so the
+  // recipient can review/triage in one click instead of navigating manually.
+  // Falls back gracefully when appUrl isn't passed (older callers, tests).
+  const adminCta = appUrl
+    ? `<div style="margin-top:18px;"><a href="${appUrl}/people?view=admin" style="display:inline-block; background:#7c3aed; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:500;">Review in Admin Queue →</a></div>`
+    : "";
+
+  let typeSpecificHtml = "";  if (incident.type_specific_data) {
     try {
       const ts = typeof incident.type_specific_data === "string"
         ? JSON.parse(incident.type_specific_data)
@@ -325,8 +331,9 @@ export function buildIncidentEmailHtml(incident) {
       <div style="font-size:13px; line-height:1.5; color:#334155; white-space:pre-wrap;">${escapeHtml(incident.what_happened || "")}</div>
       ${incident.witnesses ? `<h3 style="margin:18px 0 6px; font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em;">Witnesses</h3><div style="font-size:13px; color:#334155; white-space:pre-wrap;">${escapeHtml(incident.witnesses)}</div>` : ""}
       ${typeSpecificHtml}
-${incident.drive_folder_url ? `<div style="margin-top:18px; padding-top:14px; border-top:0.5px solid #e2e8f0;"><a href="${incident.drive_folder_url}" style="color:#7c3aed; text-decoration:none; font-size:13px; font-weight:500;">📂 Open ${formatAttachmentLabel(incident.attachment_count)}</a></div>` : ""}
-      ${isS1 ? `<div style="margin-top:18px; padding:12px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5;"><strong>⏱️ S1 protocol:</strong> The Site Leader or Manager of Record is calling Mariela at <strong>(312) 548-1420</strong> within 15 minutes (once the person is in a safe spot). Mariela: expect a phone call. If no call by 15-min mark, dial that number directly. Voicemail counts only with a callback number AND a Slack message.</div>` : ""}
+${incident.drive_folder_url ? `<div style="margin-top:18px; padding-top:14px; border-top:0.5px solid #e2e8f0;"><a href="${incident.drive_folder_url}" style="color:#7c3aed; text-decoration:none; font-size:13px; font-weight:500;">📂 Open Drive folder (${incident.attachment_count || 0} attachments)</a></div>` : ""}
+      ${adminCta}
+${isS1 ? `<div style="margin-top:18px; padding:12px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5;"><strong>⏱️ S1 protocol:</strong> The Site Leader or Manager of Record is calling Mariela at <strong>(312) 548-1420</strong> within 15 minutes (once the person is in a safe spot). Mariela: expect a phone call. If no call by 15-min mark, dial that number directly. Voicemail counts only with a callback number AND a Slack message.</div>` : ""}
     </div>
   </div>`;
 }
@@ -343,8 +350,8 @@ ${incident.drive_folder_url ? `<div style="margin-top:18px; padding-top:14px; bo
 // regionalEmail is resolved by route.js from HUB accounts sheet column F
 // (East/West/CORP). CORP region passes null and skips Regional cc.
 // ─────────────────────────────────────────────
-export async function notifyIncident(incident, sendEmail, regionalEmail) {
-  const sent = [];
+export async function notifyIncident(incident, sendEmail, regionalEmail, appUrl) {
+      const sent = [];
   let s1EscalationAt = null;
 
   // ─── TEST MODE check ───
@@ -417,7 +424,7 @@ const TEST_MODE_RAW = process.env.INCIDENT_TEST_MODE;
 
     // In test mode, prepend a banner to the email body showing who would
     // have received it in production
-    let htmlBody = buildIncidentEmailHtml(incident);
+let htmlBody = buildIncidentEmailHtml(incident, appUrl);
     if (TEST_MODE && intendedRecipients.length) {
       const banner = `
         <div style="background:#fef3c7; border:2px solid #d97706; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-family:Arial,sans-serif;">

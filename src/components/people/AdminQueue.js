@@ -153,7 +153,11 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
 const [filter, setFilter] = useState("all");
   const [locFilter, setLocFilter] = useState("all");
   // W4 — toggle between active queue and closed-incidents history
-  const [view, setView] = useState("open"); // "open" | "closed"
+const [view, setView] = useState("open"); // "open" | "closed"
+  // P3 — Phase 3: client-side date filter for the Closed view. Defaults to 90d
+  // since closed PAFs accumulate (1000+ over 2 years) but admins almost always
+  // care about recent. Only applies when view === "closed".
+  const [dateRange, setDateRange] = useState("90d");
   //   //   const [locFilter, setLocFilter] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
@@ -203,10 +207,22 @@ const loadQueue = useCallback(async () => {
     };
   }, []);
 
-  // ── Filter logic ──
+// ── Filter logic ──
+  // P3 — Phase 3: dateRange filter applies only in closed view.
+  // "all" disables the filter; otherwise we cut by N days from now.
+  const dateCutoffMs = (() => {
+    if (view !== "closed" || dateRange === "all") return null;
+    const days = { "30d": 30, "90d": 90, "1y": 365 }[dateRange] ?? 90;
+    return Date.now() - days * 24 * 60 * 60 * 1000;
+  })();
+
   const filtered = queue.filter((item) => {
     if (filter !== "all" && item.type !== filter) return false;
     if (locFilter !== "all" && !item.location.includes(locFilter)) return false;
+    if (dateCutoffMs !== null && item.date) {
+      const itemMs = new Date(item.date).getTime();
+      if (!isNaN(itemMs) && itemMs < dateCutoffMs) return false;
+    }
     return true;
   });
 
@@ -523,12 +539,28 @@ const loadQueue = useCallback(async () => {
                 </button>
               ))}
             </div>
-            <select className="pp-select" value={locFilter} onChange={(e) => setLocFilter(e.target.value)} style={{ width: "auto", minWidth: 150, fontSize: 13 }}>
+<select className="pp-select" value={locFilter} onChange={(e) => setLocFilter(e.target.value)} style={{ width: "auto", minWidth: 150, fontSize: 13 }}>
               <option value="all">All Locations</option>
               {locations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
             </select>
+            {/* P3 — Phase 3: date-range filter is only meaningful in the closed
+                view (open queue rarely exceeds 30 items). Defaults to 90d. */}
+            {view === "closed" && (
+              <select
+                className="pp-select"
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                style={{ width: "auto", minWidth: 130, fontSize: 13 }}
+                aria-label="Filter by date"
+              >
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="1y">Last year</option>
+                <option value="all">All time</option>
+              </select>
+            )}
           </div>
-        </div>
+                  </div>
 
         {/* ═══ Split panel ═══ */}
         <div className={`pp-adm-split${mobileDetail ? " pp-adm-split--detail-open" : ""}`}>

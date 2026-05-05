@@ -163,7 +163,7 @@ Before critiquing any module, identify **2–3 things the existing design gets r
 
 Patterns that have proven themselves across the Ops Hub:
 
-- **Module-prefixed CSS** (`pp-`, `oh-vp-`, `oh-inv-mgmt-`, `sc-`, `kf-news-`) — strict isolation, no cross-contamination
+- **Module-prefixed CSS** (`pp-`, `oh-vp-`, `oh-inv-mgmt-`, `sc-`, `kf-news-`, etc.) — module isolation is the intent and largely the practice. Known exceptions: `oh-inv-` collides between Inventory and Invoice Capture (see `GOTCHAS.md`); shared `oh-{utility}-*` classes deliberately cross modules (see `CONVENTIONS.md`).
 - **Action Center split-panel inbox** (People Portal) — list + detail, fast triage. Already an implicit dual-density pattern: the list pane uses density tokens (queue triage), the detail pane uses comfortable tokens (form work). This is the canonical model for hybrid surfaces — when a tool needs both modes inside one screen, follow this pattern.
 - **Card-based account grids** (Team Directory) with flip-card detail — works well for portfolio-scale browsing
 - **Hero banner + launchpad nav cards** on home — clear, scannable, mobile-tolerant
@@ -197,3 +197,4 @@ If a recommendation can't survive these constraints, it isn't right for this sys
 
 - **2026-05-05** — Initial principles documented. Built from working memory of the Ops Hub's evolution: Floor-first, Four Gates, EI lens, AI design realities, what's working list.
 - **2026-05-05** — Dual-mode density principle added. Density vs Comfortable is task-tuned, not user-tuned. Floor-first encoded into the mobile override rule (<1024px always Comfortable). Action Center protected pattern updated to acknowledge it as the canonical hybrid-surface model. IA bullet retuned to reference the dual-mode rule. Mobile bullet retuned to reference the override.
+- **2026-05-05** — Module-prefixed CSS protected pattern softened to acknowledge known exceptions (`oh-inv-` collision, shared `oh-*` utilities). Honest framing replaces aspirational "strict isolation" claim.

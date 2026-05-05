@@ -1101,7 +1101,7 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
     }
     return merged;
   })();
-  
+
   return (
     <>
 
@@ -1160,10 +1160,11 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
             padding: 14, textAlign: "center", cursor: "pointer", marginBottom: 8,
           }}
         >
-          <div style={{ fontSize: 18, marginBottom: 4 }}>📎</div>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>Click to add files</div>
+<div style={{ fontSize: 18, marginBottom: 4 }}>📎</div>
+          {/* P3 — Phase 3: mobile-first verb. "Click" is a desktop-only word. */}
+          <div style={{ fontSize: 12, fontWeight: 500 }}>Tap or drop files</div>
           <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Photos · PDFs · Documents · Multiple files OK</div>
-        </div>
+                  </div>
         <input
           ref={fileInputRef}
           type="file"
