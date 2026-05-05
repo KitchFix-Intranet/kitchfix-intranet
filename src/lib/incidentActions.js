@@ -144,18 +144,14 @@ export async function uploadIncidentFile({ folderId, base64Data, filename, mimeT
 const SEV_EMOJI = { S1: "🔴", S2: "🟠", S3: "🟡", S4: "⚪" };
 
 export async function postSlackChannel(incident, testMode = false) {
-  // Test mode: prefer SLACK_INCIDENT_TEST_WEBHOOK if set, else skip Slack entirely.
-  // Production: use SLACK_INCIDENT_WEBHOOK as before.
-  const webhook = testMode
-    ? (process.env.SLACK_INCIDENT_TEST_WEBHOOK || null)
-    : process.env.SLACK_INCIDENT_WEBHOOK;
+  // Slack always uses the production webhook — Kevin's keeping the
+  // production channel private (no other members) until testing is done,
+  // so test posts and real posts both land in the same isolated channel.
+  // Test mode still adds [TEST] prefix + footer for visual distinction.
+  const webhook = process.env.SLACK_INCIDENT_WEBHOOK;
 
   if (!webhook) {
-    if (testMode) {
-      console.log("[Incident TEST MODE] SLACK_INCIDENT_TEST_WEBHOOK not set, skipping Slack");
-    } else {
-      console.warn("[Incident] SLACK_INCIDENT_WEBHOOK not set; skipping channel post");
-    }
+    console.warn("[Incident] SLACK_INCIDENT_WEBHOOK not set; skipping channel post");
     return { ok: false, reason: "no-webhook" };
   }
 
@@ -354,8 +350,9 @@ export async function notifyIncident(incident, sendEmail, regionalEmail) {
   // When INCIDENT_TEST_MODE=true, every notification gets:
   //   - Subject prefixed with [TEST]
   //   - Email recipients overridden to k.fietek@kitchfix.com only
-  //   - Slack webhook overridden to SLACK_INCIDENT_TEST_WEBHOOK if set,
-  //     otherwise Slack is skipped entirely
+  //   - Slack still uses production webhook (channel kept private during
+  //     testing, no separate test channel needed). [TEST] prefix added
+  //     to the message header for visual distinction.
   // Set in Vercel env vars. Default false (production behavior).
   const TEST_MODE = process.env.INCIDENT_TEST_MODE === "true";
   if (TEST_MODE) {
