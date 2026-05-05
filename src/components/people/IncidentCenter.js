@@ -175,8 +175,28 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
     else onNavigate("dashboard");
   };
 
-  // ─── Submit ───
+// ─── Submit ───
   const handleSubmit = async () => {
+    // Direction A guard: even with image compression, a stack of large PDFs
+    // can still blow the 4.5MB serverless body limit. Sum base64 lengths;
+    // base64 is ~1.37x raw bytes, so 3.5MB encoded ≈ 2.6MB actual. Block at
+    // 3.5MB to leave headroom for form fields + JSON overhead.
+    const PAYLOAD_LIMIT_B64 = 3.5 * 1024 * 1024;
+    const totalB64 = (form.attachments || []).reduce(
+      (sum, a) => sum + (a.base64?.length || 0),
+      0
+    );
+    if (totalB64 > PAYLOAD_LIMIT_B64) {
+      const totalMb = (totalB64 / 1024 / 1024).toFixed(1);
+      if (showToast) {
+        showToast(
+          `⚠️ Attachments total ~${totalMb} MB — too large to submit. Remove a file and try again.`,
+          "error"
+        );
+      }
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
@@ -185,7 +205,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
         submitterEmail: bootstrapData?.userEmail || "",
         submitterName: bootstrapData?.firstName || "",
       };
-
+      
       const res = await fetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1046,30 +1066,45 @@ function Step5Review({ form, update, submitting, locations = [] }) {
 
 const handleFiles = async (e) => {
     const newFiles = Array.from(e.target.files || []);
-    const processed = await Promise.all(newFiles.map((f) =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          // readAsDataURL returns "data:mime/type;base64,XXXX" — strip the prefix
-          const dataUrl = reader.result || "";
-          const base64 = String(dataUrl).includes(",")
-            ? String(dataUrl).split(",")[1]
-            : String(dataUrl);
-          resolve({
-            name: f.name,
-            mimeType: f.type || "application/octet-stream",
-            size: f.size,
-            base64,
-          });
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(f);
-      })
-    ));
-    update("attachments", [...(form.attachments || []), ...processed]);
+    if (!newFiles.length) return;
+
+    // Direction A: compress images via canvas, pass through PDFs/docs as-is.
+    // allSettled lets us surface failures per-file without losing the rest.
+    const results = await Promise.allSettled(newFiles.map(async (f) => {
+      if (f.type.startsWith("image/")) {
+        try {
+          const compressed = await compressImage(f);
+          console.log(
+            `[Incident] compressed ${f.name}: ` +
+            `${formatFileSize(f.size)} → ${formatFileSize(compressed.size)} ` +
+            `(${Math.round((1 - compressed.size / f.size) * 100)}% smaller)`
+          );
+          return compressed;
+        } catch (err) {
+          console.warn(`[Incident] image compression failed for ${f.name}, using raw:`, err.message);
+          // Fall back to raw — server-side will fail if it's truly oversized,
+          // but smaller HEIC/odd formats may still squeak through.
+          return await readFileAsBase64(f);
+        }
+      }
+      return await readFileAsBase64(f);
+    }));
+
+    const successful = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+    const failed = results.filter((r) => r.status === "rejected");
+
+    if (failed.length) {
+      const names = failed.map((r) => r.reason?.message || "Unknown error").join("\n");
+      alert(`Some files couldn't be processed:\n${names}\n\nThe rest were added.`);
+    }
+
+    if (successful.length) {
+      update("attachments", [...(form.attachments || []), ...successful]);
+    }
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-
+  
   const removeFile = (idx) => {
     update("attachments", form.attachments.filter((_, i) => i !== idx));
   };
@@ -1173,7 +1208,7 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
           onChange={handleFiles}
           style={{ display: "none" }}
         />
-        {(form.attachments || []).length > 0 && (
+{(form.attachments || []).length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {form.attachments.map((a, i) => (
               <div key={i} style={{
@@ -1193,9 +1228,32 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
                 </button>
               </div>
             ))}
+            {(() => {
+              // Direction A: surface total payload size so the user knows when
+              // they're approaching the upload limit. Color shifts amber at 75%
+              // of the 3.5MB threshold so they can drop a file before submit.
+              const totalB64 = form.attachments.reduce((s, a) => s + (a.base64?.length || 0), 0);
+              const totalBytes = Math.round(totalB64 * 0.75);
+              const PAYLOAD_LIMIT = 3.5 * 1024 * 1024;
+              const pctB64 = totalB64 / PAYLOAD_LIMIT;
+              const isWarn = pctB64 > 0.75;
+              const isOver = pctB64 > 1;
+              const color = isOver ? "#dc2626" : isWarn ? "#92400e" : "#94a3b8";
+              return (
+                <div style={{
+                  fontSize: 10, color, marginTop: 2, paddingLeft: 4,
+                  fontWeight: isWarn ? 600 : 500,
+                }}>
+                  Total: {formatFileSize(totalBytes)}
+                  {isOver && " — too large to submit, remove a file"}
+                  {!isOver && isWarn && " — approaching upload limit"}
+                </div>
+              );
+            })()}
           </div>
         )}
-      </ReviewBlock>
+        
+              </ReviewBlock>
     </>
   );
 }
@@ -1256,6 +1314,70 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILE PROCESSING — Direction A from the design review
+// Mirrors InvoiceTool.js compression pattern (canvas downscale + JPEG re-encode)
+// to keep payloads under Vercel's 4.5MB serverless body limit.
+// Without this, a single iPhone photo (4–11 MB base64) blows the limit and
+// the whole submission is rejected with 413 before the route handler runs.
+// ═══════════════════════════════════════════════════════════════
+const IMG_MAX_WIDTH = 1280;     // most evidence reads fine at 1280px wide
+const IMG_JPEG_QUALITY = 0.85;  // matches invoice flow; ~250–500 KB per photo
+
+// Compress images via canvas → JPEG. Throws if the browser can't decode
+// (HEIC on Chrome desktop, corrupt files); caller falls back to raw.
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const scale = img.width > IMG_MAX_WIDTH ? IMG_MAX_WIDTH / img.width : 1;
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", IMG_JPEG_QUALITY);
+          const base64 = dataUrl.split(",")[1];
+          resolve({
+            // Force .jpg extension since we re-encoded to JPEG
+            name: file.name.replace(/\.[^.]+$/, ".jpg"),
+            mimeType: "image/jpeg",
+            size: Math.round(base64.length * 0.75), // approx decoded byte size
+            base64,
+          });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error(`Could not decode ${file.name}`));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Pass-through for PDFs and documents — no compression, just base64 encode.
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+      resolve({
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        base64,
+      });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function prettify(k) {
