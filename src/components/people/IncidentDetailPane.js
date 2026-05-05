@@ -38,10 +38,14 @@ export default function IncidentDetailPane({
   onRefresh,
   readOnly = false,    // submitter side passes true → hides investigation pane + status actions + internal notes
 }) {
-  const [advancing, setAdvancing] = useState(false);
+const [advancing, setAdvancing] = useState(false);
   const [savingInvestigation, setSavingInvestigation] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [showNote, setShowNote] = useState(false);
+  // W2 — investigation save feedback (timestamp of last successful save)
+  const [lastInvSavedAt, setLastInvSavedAt] = useState(null);
+  // W3 — status change visual confirmation (holds new status for ~3s after change)
+  const [statusFlash, setStatusFlash] = useState(null);
 
   const adminEmail = bootstrapData?.userEmail || "";
 
@@ -111,9 +115,13 @@ export default function IncidentDetailPane({
           adminEmail,
         }),
       });
-      const data = await res.json();
+const data = await res.json();
       if (data.success) {
         if (showToast) showToast(`✅ Status: ${STATUS_LABELS[newStatus]}`);
+        // W3 — flash the new status in the dropdown for 3 seconds so the
+        // change is visible inline (separate from the toast that disappears).
+        setStatusFlash(newStatus);
+        setTimeout(() => setStatusFlash(null), 3000);
         if (onRefresh) await onRefresh();
       } else {
         if (showToast) showToast(`⚠️ ${data.error || "Update failed"}`, "error");
@@ -139,9 +147,11 @@ export default function IncidentDetailPane({
           adminEmail,
         }),
       });
-      const data = await res.json();
+const data = await res.json();
       if (data.success) {
         if (showToast) showToast("✅ Investigation saved");
+        // W2 — Record save time so we can show "Last saved at HH:MM" near the button.
+        setLastInvSavedAt(new Date());
         if (onRefresh) await onRefresh();
       } else {
         if (showToast) showToast(`⚠️ ${data.error || "Save failed"}`, "error");
@@ -410,7 +420,7 @@ export default function IncidentDetailPane({
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+<div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
             <button
               className="pp-btn pp-btn--primary"
               style={{ padding: "7px 14px", fontSize: 12 }}
@@ -419,46 +429,90 @@ export default function IncidentDetailPane({
             >
               {savingInvestigation ? "Saving..." : "Save investigation"}
             </button>
+            {/* W2 — Last-saved indicator. Visible after first successful save in this session. */}
+            {lastInvSavedAt && !savingInvestigation && (
+              <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 500 }}>
+                ✓ Saved at {lastInvSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
           </div>
         </div>
       )}
 
-      {/* Internal notes — admin only */}
-      {!readOnly && incident.internal_notes && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
-          <div style={{
-            fontSize: 11, fontWeight: 500, letterSpacing: "0.06em",
-            textTransform: "uppercase", color: "#94a3b8", marginBottom: 6,
-          }}>Internal notes</div>
-          <div style={{ fontSize: 12, color: "#334155", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-            {incident.internal_notes}
+{/* W9 — Internal notes section (admin only)
+          Single self-contained card: header + Add Note button + (optional) textarea + body.
+          Previously the Add Note button lived in the status action bar far below the notes
+          themselves, which created a disconnected feel — clicking the button caused content
+          to appear in a different region of the screen. Now it's all colocated. */}
+      {!readOnly && (
+        <div style={{
+          marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showNote ? 8 : 6 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 500, letterSpacing: "0.06em",
+              textTransform: "uppercase", color: "#94a3b8",
+            }}>
+              Internal notes
+              {incident.internal_notes && (
+                <span style={{ marginLeft: 6, color: "#64748b", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>
+                  · {(incident.internal_notes.match(/\[/g) || []).length || 1}
+                </span>
+              )}
+            </div>
+            {!showNote && (
+              <button
+                className="pp-btn pp-btn--ghost"
+                style={{ padding: "4px 10px", fontSize: 11, height: "auto" }}
+                onClick={() => setShowNote(true)}
+              >
+                + Add note
+              </button>
+            )}
           </div>
+
+          {/* Inline composer — appears at top of the section so it's adjacent to the button */}
+          {showNote && (
+            <div style={{ marginBottom: 10, padding: 10, background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+              <textarea
+                className="pp-input"
+                rows={2}
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add an internal note..."
+                style={{ minHeight: 56, resize: "vertical", background: "white" }}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                <button className="pp-btn pp-btn--primary" style={{ padding: "6px 12px", fontSize: 12 }} onClick={addNote}>
+                  Save note
+                </button>
+                <button
+                  className="pp-btn pp-btn--ghost"
+                  style={{ padding: "6px 12px", fontSize: 12 }}
+                  onClick={() => { setShowNote(false); setNoteText(""); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Notes body OR empty-state */}
+          {incident.internal_notes ? (
+            <div style={{ fontSize: 12, color: "#334155", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+              {incident.internal_notes}
+            </div>
+          ) : (
+            !showNote && (
+              <div style={{ fontSize: 12, color: "#cbd5e1", fontStyle: "italic" }}>
+                No internal notes yet.
+              </div>
+            )
+          )}
         </div>
       )}
-
-      {/* Add note inline — admin only */}
-      {!readOnly && showNote && (
-        <div style={{ marginTop: 12 }}>
-          <textarea
-            className="pp-input"
-            rows={2}
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="Add an internal note..."
-            style={{ minHeight: 60, resize: "vertical" }}
-          />
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            <button className="pp-btn pp-btn--primary" style={{ padding: "6px 12px", fontSize: 12 }} onClick={addNote}>
-              Save note
-            </button>
-            <button className="pp-btn pp-btn--ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => { setShowNote(false); setNoteText(""); }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Status actions — admin only */}
+            {/* Status actions — admin only */}
       {!readOnly && (
         <div style={{
           display: "flex", gap: 6, marginTop: 16,
@@ -476,14 +530,19 @@ export default function IncidentDetailPane({
               {advancing ? "..." : `Advance to ${STATUS_LABELS[nextStatus]}`}
             </button>
           )}
-          <select
+<select
             className="pp-select"
-            style={{ width: "auto", minWidth: 130, padding: "7px 10px", fontSize: 12 }}
+            style={{
+              width: "auto", minWidth: 130, padding: "7px 10px", fontSize: 12,
+              // W3 — when flash is active, give the dropdown a green tint to confirm change
+              ...(statusFlash ? { background: "#dcfce7", color: "#166534", borderColor: "#86efac" } : {}),
+            }}
             value=""
             onChange={(e) => { if (e.target.value) updateStatus(e.target.value); }}
             disabled={advancing}
           >
-            <option value="">Set status...</option>
+            {/* W3 — flash the most recent change for 3s before reverting to "Set status..." */}
+            <option value="">{statusFlash ? `✓ Now: ${STATUS_LABELS[statusFlash]}` : "Set status..."}</option>
             {STATUS_FLOW.map((s) => {
               const blocked = s === "closed" && !canClose;
               return (
@@ -492,15 +551,10 @@ export default function IncidentDetailPane({
                 </option>
               );
             })}
-          </select>
-          {!showNote && (
-            <button className="pp-btn pp-btn--ghost" style={{ padding: "7px 12px", fontSize: 12 }} onClick={() => setShowNote(true)}>
-              Add note
-            </button>
-          )}
+</select>
         </div>
       )}
-
+      
       {/* Read-only footer note (submitter side) */}
       {readOnly && (
         <div style={{

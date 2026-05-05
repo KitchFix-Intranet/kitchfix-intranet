@@ -354,11 +354,19 @@ export async function notifyIncident(incident, sendEmail, regionalEmail) {
   //     testing, no separate test channel needed). [TEST] prefix added
   //     to the message header for visual distinction.
   // Set in Vercel env vars. Default false (production behavior).
-  const TEST_MODE_RAW = process.env.INCIDENT_TEST_MODE;
-  const TEST_MODE = TEST_MODE_RAW === "true";
-  // Always log the test mode status with the raw env var value so we can
-  // diagnose env var issues (typos, wrong env, missed redeploy) from logs.
-  console.log(`[Incident] notifyIncident called | TEST_MODE=${TEST_MODE} | INCIDENT_TEST_MODE env=${JSON.stringify(TEST_MODE_RAW)} | severity=${incident.severity} | id=${incident.incident_id}`);
+const TEST_MODE_RAW = process.env.INCIDENT_TEST_MODE;
+  // ─── TEMPORARY HARDCODED OVERRIDE ──────────────────────────────────
+  // The INCIDENT_TEST_MODE env var is set in Vercel but isn't reading at
+  // runtime for reasons not yet diagnosed. Until root cause is fixed,
+  // force test mode ON unconditionally so every incident email routes
+  // to Kevin only and never blasts leadership.
+  //
+  // TO RESTORE PROD ROUTING: change the line below back to:
+  //   const TEST_MODE = TEST_MODE_RAW === "true";
+  // ────────────────────────────────────────────────────────────────────
+  const TEST_MODE = true;
+  console.log(`[Incident] notifyIncident called | TEST_MODE=${TEST_MODE} (HARDCODED) | env=${JSON.stringify(TEST_MODE_RAW)} | severity=${incident.severity} | id=${incident.incident_id}`);
+
   if (TEST_MODE) {
     console.log(`[Incident TEST MODE] active - all notifications redirected to ${SR_DIR_OPS_EMAIL}`);
   }
@@ -439,15 +447,188 @@ const emailRes = await sendEmail(
     }
   }
 
-  return {
+return {
     notifications_sent: sent.join("|"),
     s1_escalation_at: s1EscalationAt,
   };
 }
 
 // ─────────────────────────────────────────────
+// W5 — STATUS TRANSITION NOTIFICATIONS
+// Fired by /api/people action=incident-status-update after the sheet
+// row's status column is rewritten. Posts a short status-change card to
+// the Slack incident channel AND emails the original submitter so they
+// know their report is being acted on.
+//
+// Per Kevin's spec: Slack the channel + email to submitter (not full
+// leadership distribution — that's the submission notification's job).
+//
+// Test-mode aware: in test mode, email recipient is overridden to Kevin
+// and the Slack header gets a [TEST] prefix.
+// ─────────────────────────────────────────────
+const STATUS_LABEL_MAP = {
+  submitted: "Submitted",
+  acknowledged: "Acknowledged",
+  investigating: "Investigating",
+  corrective_action: "Corrective Action",
+  closed: "Closed",
+};
+
+const STATUS_EMOJI_MAP = {
+  submitted: "📥",
+  acknowledged: "👀",
+  investigating: "🔍",
+  corrective_action: "🛠️",
+  closed: "✅",
+};
+
+export async function notifyStatusChange({
+  incident,
+  oldStatus,
+  newStatus,
+  adminEmail,
+  sendEmail,
+  appUrl,
+}) {
+  const TEST_MODE = process.env.INCIDENT_TEST_MODE === "true";
+  const sent = [];
+
+  const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
+  const typeLabel = typeMeta?.label || incident.incident_type;
+  const oldLabel = STATUS_LABEL_MAP[oldStatus] || oldStatus;
+  const newLabel = STATUS_LABEL_MAP[newStatus] || newStatus;
+  const newEmoji = STATUS_EMOJI_MAP[newStatus] || "🔔";
+
+  // ───────────── 1. Slack channel post ─────────────
+  const webhook = process.env.SLACK_INCIDENT_WEBHOOK;
+  if (webhook) {
+    const headerPrefix = TEST_MODE ? "[TEST] " : "";
+    const blocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: `${headerPrefix}${newEmoji} Status update: ${newLabel}`,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Incident:*\n${incident.incident_id}` },
+          { type: "mrkdwn", text: `*Type:*\n${incident.severity} · ${typeLabel}` },
+          { type: "mrkdwn", text: `*Site:*\n${incident.site_code}` },
+          { type: "mrkdwn", text: `*Updated by:*\n${adminEmail}` },
+        ],
+      },
+      {
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `*${oldLabel}* → *${newLabel}*` },
+        ],
+      },
+    ];
+    if (TEST_MODE) {
+      blocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: "⚠️ *TEST MODE* — submitter email redirected to test inbox." }],
+      });
+    }
+    try {
+      const res = await fetch(webhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `${headerPrefix}Incident ${incident.incident_id} → ${newLabel}`,
+          blocks,
+        }),
+      });
+      if (res.ok) sent.push(TEST_MODE ? "slack-status-test" : "slack-status");
+      else console.warn(`[Incident] Slack status post failed: ${res.status}`);
+    } catch (e) {
+      console.error("[Incident] Slack status post error:", e.message);
+    }
+  } else {
+    console.warn("[Incident] SLACK_INCIDENT_WEBHOOK not set; skipping status Slack post");
+  }
+
+  // ───────────── 2. Email to submitter ─────────────
+  const submitterEmail = String(incident.submitted_by_email || "").trim();
+  if (submitterEmail && sendEmail) {
+    let recipient = submitterEmail;
+    let intendedRecipient = submitterEmail;
+    if (TEST_MODE) {
+      recipient = SR_DIR_OPS_EMAIL; // redirect to Kevin in test mode
+    }
+
+    const subjectBase = `Your incident ${incident.incident_id} — status: ${newLabel}`;
+    const subject = TEST_MODE ? `[TEST] ${subjectBase}` : subjectBase;
+
+    // Per-status submitter-facing copy
+    const STATUS_BODY_COPY = {
+      acknowledged: "Your report has been acknowledged. A reviewer is preparing to investigate. You don't need to do anything — we'll follow up if we need more information.",
+      investigating: "An investigator has been assigned and is actively reviewing your report. We may reach out for additional context.",
+      corrective_action: "The team has identified a corrective action and is working through it. The incident will be closed once preventive steps are documented.",
+      closed: "Your incident has been closed. Thank you for reporting it — these reports keep our teams safe. The full record is on file and the closure summary is in the incident's Drive folder.",
+      submitted: "Your incident has been recorded. Submission status reset to Submitted.",
+    };
+    const bodyCopy = STATUS_BODY_COPY[newStatus] || `Status changed to ${newLabel}.`;
+
+    const driveLine = incident.drive_folder_url
+      ? `<div style="margin-top:14px;"><a href="${incident.drive_folder_url}" style="color:#7c3aed; text-decoration:none; font-size:13px; font-weight:500;">📂 Open Drive folder</a></div>`
+      : "";
+
+    const portalLink = appUrl ? `${appUrl}/people?view=activity` : null;
+    const portalCta = portalLink
+      ? `<div style="margin-top:18px;"><a href="${portalLink}" style="display:inline-block; background:#7c3aed; color:white; padding:9px 16px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:500;">View in your Action Center</a></div>`
+      : "";
+
+    const testBanner = TEST_MODE
+      ? `<div style="background:#fef3c7; border:2px solid #d97706; border-radius:8px; padding:12px 16px; margin-bottom:18px; font-family:Arial,sans-serif;">
+           <div style="font-size:13px; font-weight:700; color:#92400e; margin-bottom:4px;">⚠️ TEST MODE</div>
+           <div style="font-size:12px; color:#78350f;">In production this would have been sent to: <code style="font-family:Consolas,monospace; font-size:11px;">${escapeHtml(intendedRecipient)}</code></div>
+         </div>`
+      : "";
+
+    const html = `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#0f3057;">
+      ${testBanner}
+      <div style="padding:14px 18px; background:#7c3aed; color:white; border-radius:10px 10px 0 0;">
+        <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.85;">Status update</div>
+        <div style="font-size:18px; font-weight:500; margin-top:2px;">${newEmoji} ${escapeHtml(newLabel)}</div>
+      </div>
+      <div style="padding:18px; border:0.5px solid #e2e8f0; border-top:none; border-radius:0 0 10px 10px;">
+        <table style="border-collapse:collapse; width:100%;">
+          <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px; width:130px;">Incident ID</td><td style="padding:4px 0; font-family:monospace; font-size:13px;">${escapeHtml(incident.incident_id)}</td></tr>
+          <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Type</td><td style="padding:4px 0; font-size:13px;">${incident.severity} · ${escapeHtml(typeLabel)}</td></tr>
+          <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Site</td><td style="padding:4px 0; font-size:13px;">${escapeHtml(incident.site_code)}</td></tr>
+          <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Previous status</td><td style="padding:4px 0; font-size:13px; color:#94a3b8;">${escapeHtml(oldLabel)}</td></tr>
+        </table>
+        <div style="margin-top:14px; font-size:13px; line-height:1.55; color:#334155;">
+          ${escapeHtml(bodyCopy)}
+        </div>
+        ${driveLine}
+        ${portalCta}
+      </div>
+      <div style="font-size:11px; color:#94a3b8; margin-top:10px; text-align:center;">
+        Updated by ${escapeHtml(adminEmail)}
+      </div>
+    </div>`;
+
+    try {
+      const status = await sendEmail([recipient], subject, html, adminEmail);
+      if (status === "sent") {
+        sent.push(TEST_MODE ? "email-status-test" : "email-status-submitter");
+      }
+    } catch (e) {
+      console.error("[Incident] Status email send error:", e.message);
+    }
+  }
+
+  return { notifications_sent: sent.join("|") };
+}
+
+// ─────────────────────────────────────────────
 // SOP §8.3 - Site Action Cadence deadlines
-// Computed at submit time and stored on the incident row so that
+// // Computed at submit time and stored on the incident row so that
 // admin queue overdue badges and future cron alerts can query them
 // without parsing dates inline. (Bucket D2.)
 // ─────────────────────────────────────────────

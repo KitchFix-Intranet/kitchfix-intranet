@@ -132,8 +132,11 @@ const IncidentIconSm = () => (
 export default function AdminQueue({ bootstrapData, Formatter, showToast, openConfirm }) {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+const [filter, setFilter] = useState("all");
   const [locFilter, setLocFilter] = useState("all");
+  // W4 — toggle between active queue and closed-incidents history
+  const [view, setView] = useState("open"); // "open" | "closed"
+  //   //   const [locFilter, setLocFilter] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
@@ -144,17 +147,19 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
   const approveTimerRef = useRef(null);
   const rejectTimerRef = useRef(null);
 
-  const loadQueue = useCallback(async () => {
+const loadQueue = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/people?action=admin-queue`);
+      // W4 — pick endpoint based on current view (open queue vs closed history)
+      const endpoint = view === "closed" ? "admin-queue-closed" : "admin-queue";
+      const res = await fetch(`/api/people?action=${endpoint}`);
       const data = await res.json();
       if (data.success) setQueue(data.queue);
     } catch (e) {
       showToast("Failed to load queue", "error");
     }
     setLoading(false);
-  }, [showToast]);
+  }, [showToast, view]);
 
   useEffect(() => { loadQueue(); }, [loadQueue]);
 
@@ -162,13 +167,15 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.hidden || approvingId || rejectingId) return;
-      fetch(`/api/people?action=admin-queue`)
+      // W4 — match current view in polling too
+      const endpoint = view === "closed" ? "admin-queue-closed" : "admin-queue";
+      fetch(`/api/people?action=${endpoint}`)
         .then((r) => r.json())
         .then((data) => { if (data.success) setQueue(data.queue); })
         .catch(() => {});
     }, 30000);
     return () => clearInterval(interval);
-  }, [approvingId, rejectingId]);
+  }, [approvingId, rejectingId, view]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -390,45 +397,100 @@ export default function AdminQueue({ bootstrapData, Formatter, showToast, openCo
           </>
         )}
 
-        {/* Action buttons */}
-        <div className="pp-adm-detail-actions">
-          <button
-            className="pp-btn pp-adm-btn-approve"
-            onClick={() => handleApprove(selectedItem)}
-            disabled={!!approvingId || !!rejectingId || !!processing}
-          >
-            ✓ Approve
-          </button>
-          <button
-            className="pp-btn pp-adm-btn-reject"
-            onClick={() => handleReject(selectedItem)}
-            disabled={!!approvingId || !!rejectingId || !!processing}
-          >
-            ✕ Reject
-          </button>
-        </div>
+{/* Action buttons — only in OPEN view (closed items are terminal) */}
+        {view === "open" ? (
+          <div className="pp-adm-detail-actions">
+            <button
+              className="pp-btn pp-adm-btn-approve"
+              onClick={() => handleApprove(selectedItem)}
+              disabled={!!approvingId || !!rejectingId || !!processing}
+            >
+              ✓ Approve
+            </button>
+            <button
+              className="pp-btn pp-adm-btn-reject"
+              onClick={() => handleReject(selectedItem)}
+              disabled={!!approvingId || !!rejectingId || !!processing}
+            >
+              ✕ Reject
+            </button>
+          </div>
+        ) : (
+          // W4 — closed view: show terminal status badge in place of action buttons
+          <div className="pp-adm-detail-actions" style={{ justifyContent: "flex-start" }}>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 14px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              background: /reject/i.test(selectedItem.closedStatus || "") ? "#fee2e2" : "#dcfce7",
+              color: /reject/i.test(selectedItem.closedStatus || "") ? "#991b1b" : "#166534",
+            }}>
+              {/reject/i.test(selectedItem.closedStatus || "") ? "✕" : "✓"}
+              {" "}
+              {selectedItem.closedStatus || "Closed"}
+            </span>
+          </div>
+        )}
       </div>
     );
   };
-
+  
   return (
     <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
       <div className="pp-master-card" style={{ borderTop: "4px solid var(--pp-purple)" }}>
-        {/* Header */}
+{/* Header */}
         <div className="pp-master-header" style={{ display: "block" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
-              <h3 className="pp-card-title" style={{ margin: 0, fontSize: 18 }}>Approvals Queue</h3>
+              <h3 className="pp-card-title" style={{ margin: 0, fontSize: 18 }}>
+                {view === "closed" ? "Closed Incidents" : "Approvals Queue"}
+              </h3>
               <p className="pp-card-desc" style={{ margin: 0, fontSize: 12 }}>
-                {loading ? "Syncing..." : `${filtered.length} item${filtered.length !== 1 ? "s" : ""} pending`}
+                {loading
+                  ? "Syncing..."
+                  : view === "closed"
+                    ? `${filtered.length} closed incident${filtered.length !== 1 ? "s" : ""}`
+                    : `${filtered.length} item${filtered.length !== 1 ? "s" : ""} pending`}
               </p>
             </div>
-            <button className="pp-btn pp-btn--ghost" onClick={loadQueue} style={{ padding: "6px 16px", height: 32, fontSize: 12 }}>
-              Refresh ↻
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* W4 — Open / Closed toggle */}
+              <div style={{ display: "inline-flex", border: "1px solid #e2e8f0", borderRadius: 999, padding: 2, background: "#f8fafc" }}>
+                <button
+                  className="pp-btn"
+                  onClick={() => setView("open")}
+                  style={{
+                    padding: "5px 12px", fontSize: 12, borderRadius: 999, border: "none",
+                    background: view === "open" ? "var(--pp-purple)" : "transparent",
+                    color: view === "open" ? "white" : "#64748b",
+                    fontWeight: view === "open" ? 600 : 400,
+                  }}
+                >
+                  Open
+                </button>
+                <button
+                  className="pp-btn"
+                  onClick={() => setView("closed")}
+                  style={{
+                    padding: "5px 12px", fontSize: 12, borderRadius: 999, border: "none",
+                    background: view === "closed" ? "#0f3057" : "transparent",
+                    color: view === "closed" ? "white" : "#64748b",
+                    fontWeight: view === "closed" ? 600 : 400,
+                  }}
+                >
+                  Closed
+                </button>
+              </div>
+              <button className="pp-btn pp-btn--ghost" onClick={loadQueue} style={{ padding: "6px 16px", height: 32, fontSize: 12 }}>
+                Refresh ↻
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div className="pp-toggle-container" style={{ flex: 1 }}>
               {FILTERS.map((f) => (
                 <button

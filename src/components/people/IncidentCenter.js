@@ -4,7 +4,6 @@ import { Stepper, YesNoToggle } from "./shared";
 import {
   INCIDENT_TYPES,
   SEVERITY_TIERS,
-  SITES,
 } from "@/lib/incidentSchema";
 
 // ═══════════════════════════════════════════════════════════════
@@ -261,7 +260,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
             )}
           </div>
 
-          {/* SOP §06 - S1 phone call is non-delegable */}
+{/* SOP §06 - S1 phone call is non-delegable */}
           {success.severity === "S1" && (
             <div className="pp-inc-callout pp-inc-callout--critical" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
               <div className="pp-inc-callout-head">📞 Call Mariela now</div>
@@ -269,17 +268,38 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
                 <a href="tel:+13125481420">(312) 548-1420</a>
               </div>
               <div className="pp-inc-callout-body">
-                S1 requires a phone call within 15 minutes — the form does not replace the call. Voicemail counts only with a callback number AND a Slack message.
+                Within 15 minutes once the person is in a safe spot, the Site Leader or Manager of Record personally calls Mariela. The form does not replace the call. Voicemail counts only with a callback number AND a Slack message.
               </div>
             </div>
           )}
 
-          {/* SOP §7.1 - Refusal of Medical Treatment Form (Appendix C) */}
+{/* SOP §7.1 - Refusal of Medical Treatment Form (Appendix C) */}
           {success.incidentType === "employee_injury" && success.medicalTreatmentRefused && (
             <div className="pp-inc-callout pp-inc-callout--warn" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
               <div className="pp-inc-callout-head">📝 Appendix C required</div>
               <div className="pp-inc-callout-body">
                 Complete the <strong>Refusal of Medical Treatment</strong> form. Both employee and manager must sign. Send signed copy to Mariela.
+                {/* W8 — direct link to the printable form (manifest-driven URL); falls back to inline text if not configured */}
+                {bootstrapData?.appendixCUrl ? (
+                  <div style={{ marginTop: 8 }}>
+                    <a
+                      href={bootstrapData.appendixCUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "6px 12px", background: "#d97706", color: "white",
+                        textDecoration: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      }}
+                    >
+                      📄 Open / print Appendix C →
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#92400e", fontStyle: "italic" }}>
+                    Find the printable form in the Incident Library tab.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -302,12 +322,12 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
       <Stepper step={step} totalSteps={TOTAL_STEPS} />
 
         <div className="pp-form-content">
-          {step === 1 && <Step1Type form={form} update={update} errors={errors} />}
+{step === 1 && <Step1Type form={form} update={update} errors={errors} />}
           {step === 2 && <Step2Severity form={form} update={update} errors={errors} allowedSeverities={allowedSeverities} severityLocked={severityLocked} />}
-          {step === 3 && <Step3Basics form={form} update={update} errors={errors} />}
-          {step === 4 && <Step4TypeSpecific form={form} updateTS={updateTS} />}
-          {step === 5 && <Step5Review form={form} update={update} submitting={submitting} />}
-        </div>
+          {step === 3 && <Step3Basics form={form} update={update} errors={errors} locations={bootstrapData?.locations || []} />}
+          {step === 4 && <Step4TypeSpecific form={form} updateTS={updateTS} appendixCUrl={bootstrapData?.appendixCUrl} />}
+          {step === 5 && <Step5Review form={form} update={update} submitting={submitting} locations={bootstrapData?.locations || []} />}
+                  </div>
 
         <div className="pp-form-footer">
           <button className="pp-btn pp-btn--ghost" onClick={handleBack} disabled={submitting}>
@@ -415,12 +435,12 @@ function Step2Severity({ form, update, errors, allowedSeverities, severityLocked
         })}
       </div>
 
-      {/* SOP §06 Critical - S1 phone call non-delegable */}
+{/* SOP §06 Critical - S1 phone call non-delegable */}
       {form.severity === "S1" && (
         <div className="pp-inc-callout pp-inc-callout--critical" style={{ marginTop: 12 }}>
           <div className="pp-inc-callout-head">📞 S1 requires a phone call — the form is not enough</div>
           <div className="pp-inc-callout-body">
-            Within 15 minutes, the Site Leader or Manager of Record personally calls Mariela at <a href="tel:+13125481420">(312) 548-1420</a>. Voicemail counts only with a callback number AND a Slack message.
+            Within 15 minutes once the person is in a safe spot, the Site Leader or Manager of Record personally calls Mariela at <a href="tel:+13125481420">(312) 548-1420</a>. Voicemail counts only with a callback number AND a Slack message.
           </div>
         </div>
       )}
@@ -433,8 +453,8 @@ function Step2Severity({ form, update, errors, allowedSeverities, severityLocked
 // ═══════════════════════════════════════════════════════════════
 // STEP 3 - THE BASICS (combined site/date/time/location/aware/description/witnesses)
 // ═══════════════════════════════════════════════════════════════
-function Step3Basics({ form, update, errors }) {
-  return (
+function Step3Basics({ form, update, errors, locations = [] }) {
+      return (
     <>
 
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>The basics</h3>
@@ -442,15 +462,17 @@ function Step3Basics({ form, update, errors }) {
 
       <div className="pp-inc-section-divider">When &amp; where</div>
 
-      <label className="pp-label">Site</label>
+<label className="pp-label">Site</label>
       <select
         className={`pp-select${errors.site_code ? " pp-input-error" : ""}`}
         value={form.site_code}
         onChange={(e) => update("site_code", e.target.value)}
       >
         <option value="">Select a site...</option>
-        {SITES.map((s) => (
-          <option key={s.code} value={s.code}>{s.code} — {s.label}</option>
+        {/* W7 — sourced from Hub `accounts` tab via bootstrapData.locations.
+            Single source of truth across People Portal (PAF, New Hire, Incidents). */}
+        {locations.map((s) => (
+          <option key={s.key} value={s.key}>{s.key} — {s.name}</option>
         ))}
       </select>
 
@@ -541,14 +563,14 @@ function Step3Basics({ form, update, errors }) {
 // ═══════════════════════════════════════════════════════════════
 // STEP 4 - TYPE-SPECIFIC FIELDS (router by type)
 // ═══════════════════════════════════════════════════════════════
-function Step4TypeSpecific({ form, updateTS }) {
-  const typeMeta = INCIDENT_TYPES.find((t) => t.id === form.incident_type);
+function Step4TypeSpecific({ form, updateTS, appendixCUrl }) {
+      const typeMeta = INCIDENT_TYPES.find((t) => t.id === form.incident_type);
 
   let content;
-  if (form.incident_type === "employee_injury") {
-    content = <EmployeeInjuryFields ts={form.type_specific_data} updateTS={updateTS} accent={typeMeta?.color} />;
+if (form.incident_type === "employee_injury") {
+    content = <EmployeeInjuryFields ts={form.type_specific_data} updateTS={updateTS} accent={typeMeta?.color} appendixCUrl={appendixCUrl} />;
   } else if (form.incident_type === "vehicle") {
-    content = <VehicleFields ts={form.type_specific_data} updateTS={updateTS} accent={typeMeta?.color} />;
+        content = <VehicleFields ts={form.type_specific_data} updateTS={updateTS} accent={typeMeta?.color} />;
   } else if (form.incident_type === "allergen_reaction") {
     content = <AllergenFields ts={form.type_specific_data} updateTS={updateTS} accent={typeMeta?.color} />;
   } else if (form.incident_type === "foodborne_illness") {
@@ -579,8 +601,8 @@ function Step4TypeSpecific({ form, updateTS }) {
 }
 
 // ─── Type-specific field components ───
-function EmployeeInjuryFields({ ts, updateTS, accent }) {
-  return (
+function EmployeeInjuryFields({ ts, updateTS, accent, appendixCUrl }) {
+      return (
     <TypeBlock accent={accent} label="Employee Injury">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
@@ -598,7 +620,7 @@ function EmployeeInjuryFields({ ts, updateTS, accent }) {
           <input className="pp-input" value={ts.body_part || ""} onChange={(e) => updateTS("body_part", e.target.value)} placeholder="e.g., left index finger" />
         </div>
         <div>
-          <label className="pp-label">Type of injury</label>
+<label className="pp-label">Type of injury</label>
           <select className="pp-select" value={ts.injury_type || ""} onChange={(e) => updateTS("injury_type", e.target.value)}>
             <option value="">Select...</option>
             {["Cut/laceration", "Burn", "Strain/sprain", "Contusion/bruise", "Heat illness", "Slip/fall", "Other"].map((o) => (
@@ -607,9 +629,21 @@ function EmployeeInjuryFields({ ts, updateTS, accent }) {
           </select>
         </div>
       </div>
+      {ts.injury_type === "Other" && (
+        <div style={{ marginTop: 12 }}>
+          <label className="pp-label">Please specify <span style={{ color: "#dc2626" }}>*</span></label>
+          <input
+            className="pp-input"
+            value={ts.injury_type_other || ""}
+            onChange={(e) => updateTS("injury_type_other", e.target.value)}
+            placeholder="Describe the injury type"
+          />
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
         <div>
           <label className="pp-label">Required medical attention?</label>
+
           <YesNoToggle value={ts.medical || ""} onChange={(v) => updateTS("medical", v)} />
         </div>
         <div>
@@ -627,16 +661,30 @@ function EmployeeInjuryFields({ ts, updateTS, accent }) {
         <label className="pp-label">Expected to miss work?</label>
         <YesNoToggle value={ts.miss_work || ""} onChange={(v) => updateTS("miss_work", v)} />
       </div>
-      <div style={{ marginTop: 12 }}>
+<div style={{ marginTop: 12 }}>
         <label className="pp-label">Did the employee refuse offered medical care?</label>
         <YesNoToggle value={ts.medical_treatment_refused || ""} onChange={(v) => updateTS("medical_treatment_refused", v)} />
         {ts.medical_treatment_refused === "Yes" && (
           <div style={{ marginTop: 6, fontSize: 11, color: "#92400e" }}>
             <strong>Required:</strong> Refusal of Medical Treatment form (Appendix C) must be signed by employee and manager.
+            {/* W8 — direct link to printable form when manifest provides it */}
+            {appendixCUrl && (
+              <>
+                {" "}
+                <a
+                  href={appendixCUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#7c3aed", fontWeight: 600, textDecoration: "underline" }}
+                >
+                  Open / print the form →
+                </a>
+              </>
+            )}
           </div>
         )}
       </div>
-    </TypeBlock>
+          </TypeBlock>
   );
 }
 
@@ -941,10 +989,11 @@ function SecurityFields({ ts, updateTS, accent }) {
 // ═══════════════════════════════════════════════════════════════
 // STEP 5 - REVIEW + ATTACH + SUBMIT
 // ═══════════════════════════════════════════════════════════════
-function Step5Review({ form, update, submitting }) {
+function Step5Review({ form, update, submitting, locations = [] }) {
   const t = INCIDENT_TYPES.find((x) => x.id === form.incident_type);
   const sev = SEVERITY_TIERS.find((x) => x.id === form.severity);
-  const site = SITES.find((x) => x.code === form.site_code);
+  // W7 — site lookup via bootstrap-supplied locations (Hub accounts tab)
+  const site = locations.find((x) => x.key === form.site_code);
   const fileInputRef = useRef(null);
 
 const handleFiles = async (e) => {
@@ -972,7 +1021,7 @@ const handleFiles = async (e) => {
     update("attachments", [...(form.attachments || []), ...processed]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-  
+
   const removeFile = (idx) => {
     update("attachments", form.attachments.filter((_, i) => i !== idx));
   };
@@ -1000,14 +1049,14 @@ const handleFiles = async (e) => {
         </div>
       </ReviewBlock>
 
-      <ReviewBlock title="When & Where">
-        <ReviewRow l="Site" v={site ? `${site.code} — ${site.label}` : form.site_code || "—"} />
+<ReviewBlock title="When & Where">
+        <ReviewRow l="Site" v={site ? `${site.key} — ${site.name}` : form.site_code || "—"} />
         <ReviewRow l="Date" v={form.incident_date || "—"} />
         <ReviewRow l="Time" v={form.incident_time || "—"} />
         <ReviewRow l="Location" v={form.location_detail || "—"} />
         <ReviewRow l="Manager aware" v={form.manager_aware_date || "—"} />
       </ReviewBlock>
-
+      
       <ReviewBlock title="What happened">
         <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
           {form.what_happened || <span style={{ color: "#94a3b8" }}>No description</span>}

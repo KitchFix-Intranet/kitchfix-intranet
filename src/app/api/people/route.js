@@ -15,6 +15,7 @@ import {
   ensureIncidentFolder,
   uploadIncidentFile,
   notifyIncident,
+  notifyStatusChange,
   computeIncidentDeadlines,
   computeEmployeeCheckInDue,
 } from "@/lib/incidentActions";
@@ -717,13 +718,39 @@ if (action === "bootstrap") {
         },
       };
 
-      // Check for server-side drafts for this user
+// Check for server-side drafts for this user
       const userDrafts = {};
       drafts.rows.forEach((r) => {
         if (String(r[0] || "").toLowerCase().trim() === userEmail.toLowerCase() && r[3]) {
           userDrafts[String(r[1])] = r[3]; // key: "nh" or "paf", value: JSON string
         }
       });
+
+      // ─── W8: Surface Appendix C (Refusal of Medical Treatment) URL ───
+      // Read the library_manifest tab and look for the Appendix C entry by
+      // title. If found, expose its Drive viewer URL so the wizard can
+      // turn the "Appendix C required" callouts into clickable links.
+      // Fails silently — wizard falls back to a Library tab link if no URL.
+      let appendixCUrl = null;
+      try {
+        const libResult = await readSheet(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
+        const libRows = libResult?.rows || [];
+        const match = libRows.find((row) => {
+          const title = String(row[2] || "").toLowerCase();
+          const active = String(row[9] || "").trim().toUpperCase() !== "FALSE";
+          const fileId = String(row[0] || "").trim();
+          return active && fileId && (
+            title.includes("appendix c") ||
+            title.includes("refusal of medical")
+          );
+        });
+        if (match) {
+          appendixCUrl = `https://drive.google.com/file/d/${String(match[0]).trim()}/view`;
+        }
+      } catch (e) {
+        // Manifest tab missing or unreadable — wizard handles fallback gracefully
+        console.log("[Bootstrap] Appendix C lookup skipped:", e.message);
+      }
 
       return NextResponse.json({
         success: true,
@@ -736,9 +763,10 @@ if (action === "bootstrap") {
         counts,
         isAdmin,
         drafts: userDrafts,
+        appendixCUrl,
       });
     }
-
+    
     if (action === "history") {
       const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
 
@@ -929,11 +957,98 @@ rows.forEach((row, i) => {
         const sb = sevOrder[b.severity] ?? 99;
         return sa - sb;
       });
+return NextResponse.json({ success: true, queue });
+    }
+
+// ─── W4: Admin queue (CLOSED view) ───
+    // Returns incidents with status === "closed" so admins can find/review
+    // historical incidents after they've been closed out. Mirrors the open
+    // queue payload shape so the UI can render the same list/detail pane.
+    if (action === "admin-queue-closed") {
+      const queue = [];
+
+      // ── Submissions: PAFs + New Hires that are no longer pending ──
+      // (Approved / Complete / Rejected — anything that's left the active queue)
+      try {
+        const { rows: subRows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
+        if (subRows) {
+          subRows.forEach((row, i) => {
+            const status = String(row[SUB.STATUS] || "Pending").trim();
+            const statusLower = status.toLowerCase();
+            // Closed = not pending. Action Required is still an open state.
+            if (statusLower === "pending" || /action/i.test(status)) return;
+
+            const module = String(row[SUB.MODULE] || "paf");
+            const employeeName = String(row[SUB.EMPLOYEE] || "");
+            const actionType = String(row[SUB.ACTION_TYPE] || "");
+            const payload = row[SUB.PAYLOAD] && String(row[SUB.PAYLOAD]).startsWith("{") ? row[SUB.PAYLOAD] : "{}";
+
+            let subtitle = actionType;
+            if (module === "newhire") {
+              try {
+                const p = JSON.parse(payload);
+                subtitle = `New Hire (${p.jobTitle || "Unknown"})`;
+              } catch (e) { subtitle = "New Hire Onboarding"; }
+            }
+
+            queue.push({
+              id: "sub-" + (i + 2),
+              type: module,
+              submitter: String(row[SUB.SUBMITTER] || ""),
+              location: String(row[SUB.LOCATION] || "Unknown"),
+              title: employeeName || "Request",
+              subtitle,
+              date: row[SUB.TIMESTAMP] ? new Date(row[SUB.TIMESTAMP]).toISOString() : new Date().toISOString(),
+              details: payload,
+              // W4 — surface terminal status so the closed-list UI can show "Approved" vs "Rejected"
+              closedStatus: status,
+            });
+          });
+        }
+      } catch (e) {
+        console.error("[admin-queue-closed] Failed to read submissions:", e.message);
+      }
+
+      // ── Incidents: status === "closed" ──
+      try {
+        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        if (!incRows) incRows = [];
+        incRows.forEach((r) => {
+          const inc = rowToIncident(r);
+          if (!inc.incident_id) return;
+          if (inc.status !== "closed") return;
+
+          const typeMeta = INCIDENT_TYPES.find((t) => t.id === inc.incident_type);
+          const typeLabel = typeMeta?.label || inc.incident_type;
+
+          queue.push({
+            id: `inc-${inc.incident_id}`,
+            type: "incident",
+            submitter: inc.submitted_by_email,
+            location: inc.site_code,
+            title: typeLabel,
+            subtitle: `${inc.severity} · ${inc.site_code}`,
+            // Use closed_at when available so closed list sorts by close date, not submit date
+            date: inc.closed_at || inc.submitted_at || new Date().toISOString(),
+            details: "{}",
+            incident: inc,
+            incidentType: inc.incident_type,
+            severity: inc.severity,
+            typeColor: typeMeta?.color || "#6b7280",
+            closedStatus: "Closed",
+          });
+        });
+      } catch (e) {
+        console.error("[admin-queue-closed] Failed to read incidents:", e.message);
+      }
+      // Newest closures first
+      queue.sort((a, b) => new Date(b.date) - new Date(a.date));
       return NextResponse.json({ success: true, queue });
     }
 
 // ─── Email Reports (Vercel Cron) ───
     if (action === "generate-report") {
+      
       const authHeader = request.headers.get("authorization");
       const cronSecret = process.env.CRON_SECRET;
       const manual = searchParams.get("manual") === "true";
@@ -1645,13 +1760,35 @@ if (action === "submit-help") {
       }
       // submitted, corrective_action: no stage-specific timestamps
 
-      logEventSA({
+logEventSA({
         email: adminEmail,
         category: "people",
         action: "incident_status_update",
         page: "/people",
         detail: { incident_id: incidentId, from: previousStatus, to: newStatus },
       });
+
+      // ── W5: Status transition notifications ──
+      // Slack the channel + email the original submitter so they know the
+      // incident is being acted on. Best-effort — failure here doesn't roll
+      // back the status change (which is already persisted to the sheet).
+      try {
+        // Re-read the row so the notification reflects the freshly-saved state
+        // (status, timestamps, etc) rather than the pre-update snapshot.
+        const { rows: postRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        const updated = postRows && postRows[idx] ? rowToIncident(postRows[idx]) : { ...currentIncident, status: newStatus };
+        const appUrl = process.env.AUTH_URL || "http://localhost:3000";
+        await notifyStatusChange({
+          incident: updated,
+          oldStatus: previousStatus,
+          newStatus,
+          adminEmail,
+          sendEmail,
+          appUrl,
+        });
+      } catch (e) {
+        console.error("[Incident] Status notification failed:", e.message);
+      }
 
       return NextResponse.json({ success: true });
     }
