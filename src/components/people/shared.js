@@ -15,13 +15,16 @@ export function Stepper({ step, totalSteps = 3 }) {
           <div className={`pp-step${s < step ? " pp-step--done" : s === step ? " pp-step--active" : ""}`}>
             {s < step ? "✓" : s}
           </div>
-          {i < steps.length - 1 && <div className="pp-step-line" />}
+          {/* P1 — Phase 2: connector line picks up "done" variant for completed segments
+              so progress is dual-coded (circles + lines), not just circles. */}
+          {i < steps.length - 1 && (
+            <div className={`pp-step-line${s < step ? " pp-step-line--done" : ""}`} />
+          )}
         </div>
       ))}
     </div>
   );
 }
-
 /**
  * CurrencyInput — formats as USD on blur, raw number while editing
  */

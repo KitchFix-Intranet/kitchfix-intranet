@@ -28,7 +28,7 @@ Every UX decision is gut-checked against:
 
 > *Does this work for a chef on a phone in a 38°F walk-in cooler with wet hands?*
 
-Tap targets, contrast, label clarity, and number of taps to value all flow from this. The floor wins ties.
+Tap targets, contrast, label clarity, and number of taps to value all flow from this. The floor wins ties. **The dual-mode density rule encodes this directly: any viewport <1024px renders Comfortable tokens regardless of module assignment.** See `DESIGN_SYSTEM_REFERENCE.md` for the full rule.
 
 ### The Four Gates
 
@@ -46,6 +46,14 @@ A pattern that fails any gate doesn't ship. A pattern that passes all four earns
 Beyond UX/UI, factor the user's *state*: stressed, cold, rushed, distracted, accountable to a head coach. Design should reduce cognitive load and emotional friction, not add polish for polish's sake.
 
 The vibe sits between **MLB clubhouse-grade professionalism** and **kitchen-line utility**. Not SaaS-startup playful. Not enterprise-banking sterile. Confident, dense, tactile.
+
+### Density vs Comfortable — task-tuned, not user-tuned
+
+The Ops Hub has two density modes (Density and Comfortable, full spec in `DESIGN_SYSTEM_REFERENCE.md`). The mode is chosen by **task**, not by user identity. A director filing their own PAF gets Comfortable. A chef counting 200 inventory items gets Density (on desktop) or Comfortable (on phone — mobile override). The rule:
+
+> *Is this surface for triage/scanning/comparison (Density) or for single-task work that should forgive interruption (Comfortable)?*
+
+Lists and queues take Density. Forms and entry take Comfortable. Mobile is always Comfortable. When uncertain, default to the module's mode and flag for review.
 
 ---
 
@@ -95,7 +103,7 @@ These are the floor, not the ceiling. Apply silently; only call them out when a 
 ### Information architecture & density
 
 - Progressive disclosure: 80% case default, 20% on demand
-- Density modes for power users; comfortable spacing as default
+- Density mode (table-friendly, tight spacing) for triage and admin surfaces; Comfortable mode (forgiving padding, generous type) for single-task and floor work — see `DESIGN_SYSTEM_REFERENCE.md` for the rule and module assignments
 - Sort, filter, search are different verbs — don't conflate
 - Bulk actions belong on selection, not on individual rows
 - Tables on desktop become cards on mobile, never horizontal-scroll tables
@@ -125,6 +133,7 @@ These are the floor, not the ceiling. Apply silently; only call them out when a 
 - No hover-only affordances — everything must work on tap
 - Bottom sheets > modals on mobile
 - Account for one-handed use and gloved fingers — bigger than you think
+- Mobile is always Comfortable mode regardless of module — see `DESIGN_SYSTEM_REFERENCE.md`
 
 ### EI / emotional design
 
@@ -155,7 +164,7 @@ Before critiquing any module, identify **2–3 things the existing design gets r
 Patterns that have proven themselves across the Ops Hub:
 
 - **Module-prefixed CSS** (`pp-`, `oh-vp-`, `oh-inv-mgmt-`, `sc-`, `kf-news-`) — strict isolation, no cross-contamination
-- **Action Center split-panel inbox** (People Portal) — list + detail, fast triage. Model for other queue surfaces.
+- **Action Center split-panel inbox** (People Portal) — list + detail, fast triage. Already an implicit dual-density pattern: the list pane uses density tokens (queue triage), the detail pane uses comfortable tokens (form work). This is the canonical model for hybrid surfaces — when a tool needs both modes inside one screen, follow this pattern.
 - **Card-based account grids** (Team Directory) with flip-card detail — works well for portfolio-scale browsing
 - **Hero banner + launchpad nav cards** on home — clear, scannable, mobile-tolerant
 - **Stamped PDF pipeline** (Invoice Capture) — surface the receipt, make audit trail visible
@@ -187,3 +196,4 @@ If a recommendation can't survive these constraints, it isn't right for this sys
 *Add additions to principles here with date and a one-line note on what prompted the change.*
 
 - **2026-05-05** — Initial principles documented. Built from working memory of the Ops Hub's evolution: Floor-first, Four Gates, EI lens, AI design realities, what's working list.
+- **2026-05-05** — Dual-mode density principle added. Density vs Comfortable is task-tuned, not user-tuned. Floor-first encoded into the mobile override rule (<1024px always Comfortable). Action Center protected pattern updated to acknowledge it as the canonical hybrid-surface model. IA bullet retuned to reference the dual-mode rule. Mobile bullet retuned to reference the override.

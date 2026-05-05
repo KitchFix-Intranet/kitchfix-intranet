@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# KitchFix Ops Hub
 
-## Getting Started
+Internal operations intranet for KitchFix Performance Food Service. Serves Executive Chefs, site leads, and ops leadership across MLB, MiLB, PDC, and corporate kitchen accounts — a portfolio exceeding $10M annually.
 
-First, run the development server:
+**Live:** [https://kitchfix-intranet.vercel.app](https://kitchfix-intranet.vercel.app)
+**Hosted by:** Vercel Pro
+**Built by:** Kevin Fietek, Director of Operations
+
+---
+
+## What this is
+
+A single web application that consolidates the operational tools KitchFix sites need to run service: HR submissions, vendor management, inventory counts, invoice capture (with AI OCR), labor budget tracking, service calendar, team directory, and analytics. Designed for chefs on phones in walk-in coolers and directors at desks — same tool, both jobs.
+
+## Architecture in three sentences
+
+A Next.js 16 / React 19 web app authenticated via Google OAuth, with **Google Sheets as the database** (five spreadsheets, each with a defined role) and a **service account** handling all writes. Drive and Gmail integrations power document storage and notifications. AI features (Invoice OCR, Smart Inventory matching) run through the Anthropic Claude API.
+
+## Modules
+
+| Route | Module | What it does |
+|---|---|---|
+| `/` | Home Dashboard | Hero banner, launchpad, news feed, celebrations |
+| `/people` | People Portal | New Hire Wizard, PAFs, Action Center, Admin Queue, Incident Center |
+| `/ops` | Ops Hub | Season Tracker, Smart Inventory, Invoice Capture, Vendor Portal |
+| `/directory` | Team Directory | Account-by-account team contacts |
+| `/service-calendar` | Service Calendar | Day-level service config and actuals |
+| `/analytics` | Analytics | Admin-only usage dashboard |
+| `/financial` | Financial | (Internal financial views) |
+
+## Documentation
+
+Everything beyond "what is this" lives in [`/docs/`](./docs/):
+
+**Technical:**
+- [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — five-pillar sheet architecture, modules, data flow, auth boundary
+- [`CONVENTIONS.md`](./docs/CONVENTIONS.md) — non-obvious rules (action-dispatch APIs, file layout, naming)
+- [`GOTCHAS.md`](./docs/GOTCHAS.md) — hard-won lessons. Read this before debugging anything.
+
+**Design:**
+- [`DESIGN_REVIEW_PERSONA.md`](./docs/DESIGN_REVIEW_PERSONA.md) — how to run a UX/UI/EI review
+- [`DESIGN_SYSTEM_REFERENCE.md`](./docs/DESIGN_SYSTEM_REFERENCE.md) — palette, tokens, roles, scales
+- [`DESIGN_PRINCIPLES.md`](./docs/DESIGN_PRINCIPLES.md) — Floor-first, Four Gates, EI lens
+
+## Local development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires a `.env.local` with all required environment variables. See `docs/ENV_VARS.md` (forthcoming) or the working production environment in Vercel for the canonical list.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Deploying
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Push to `main` → Vercel auto-deploys to production. There is no staging environment. Every merge to main is live.
 
-## Learn More
+## Contributing
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This is a solo-maintained project. The intended contributor — including future-Kevin returning to a module after months away, or any AI assistant pulling code from this repo — should always read `/docs/CONVENTIONS.md` and `/docs/GOTCHAS.md` before making changes.

@@ -104,6 +104,24 @@ function formatValue(key, value, Formatter) {
   return s;
 }
 
+// P0 — Phase 1: relative-time formatter for incident list cards.
+// Renders "12m ago" / "3h ago" / "2d ago" / "May 5" — graceful at any age.
+function formatRelativeTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return d.toLocaleDateString([], { month: "short", day: "numeric" }); // future-dated, just show date
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 function getLabel(key) {
   return LABEL_MAP[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
 }
@@ -438,7 +456,7 @@ const loadQueue = useCallback(async () => {
       </div>
     );
   };
-  
+
   return (
     <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
       <div className="pp-master-card" style={{ borderTop: "4px solid var(--pp-purple)" }}>
@@ -555,11 +573,17 @@ const loadQueue = useCallback(async () => {
                   >
                     {isNH ? <UserIconSm /> : isIncident ? (INCIDENT_ICONS[item.incidentType] || <IncidentIconSm />) : <DocIconSm />}
                   </div>
-                  <div className="pp-adm-list-info">
+<div className="pp-adm-list-info">
                     <div className="pp-adm-list-name">{item.title}</div>
                     <div className="pp-adm-list-sub">{Formatter.toTitleCase(item.subtitle)}</div>
+                    {/* P0 — Phase 1: incidents need a distinguishing line so two
+                        adjacent same-type/same-site incidents are tellable apart.
+                        Relative time is the cheapest signal that's always different. */}
+                    {isIncident && item.date && (
+                      <div className="pp-adm-list-time">{formatRelativeTime(item.date)}</div>
+                    )}
                   </div>
-                  <div className="pp-adm-list-right">
+                                    <div className="pp-adm-list-right">
                     <div className="pp-adm-list-badge">{teamAbbr}</div>
                     {isIncident ? (
                       <div style={{

@@ -5,6 +5,7 @@ import {
   SEVERITY_TIERS,
   STATUS_FLOW,
   STATUS_LABELS,
+  formatAttachmentLabel,
 } from "@/lib/incidentSchema";
 
 // ═══════════════════════════════════════════════════════════════
@@ -287,15 +288,15 @@ const data = await res.json();
       {/* Drive folder — visible to both admin and submitter */}
       {incident.drive_folder_url && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
-          <a
+<a
             href={incident.drive_folder_url}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: "#7c3aed", fontSize: 12, fontWeight: 500, textDecoration: "none" }}
           >
-            📂 Open Drive folder ({incident.attachment_count || 0} attachments) ↗
+            📂 Open {formatAttachmentLabel(incident.attachment_count)} ↗
           </a>
-        </div>
+                  </div>
       )}
 
       {/* Check-in due — admin only */}
@@ -530,10 +531,14 @@ const data = await res.json();
               {advancing ? "..." : `Advance to ${STATUS_LABELS[nextStatus]}`}
             </button>
           )}
-<select
+{/* P1 — Phase 2: dropdown is a secondary escape hatch (skip ahead, jump back).
+              Was visually equal-weight to "Advance to X" primary. Now tighter, lower-contrast,
+              with clear "Other status" framing. Primary remains the obvious choice. */}
+          <select
             className="pp-select"
             style={{
-              width: "auto", minWidth: 130, padding: "7px 10px", fontSize: 12,
+              width: "auto", minWidth: 110, padding: "5px 8px", fontSize: 11,
+              background: "transparent", borderColor: "#e2e8f0", color: "#64748b",
               // W3 — when flash is active, give the dropdown a green tint to confirm change
               ...(statusFlash ? { background: "#dcfce7", color: "#166534", borderColor: "#86efac" } : {}),
             }}
@@ -541,8 +546,8 @@ const data = await res.json();
             onChange={(e) => { if (e.target.value) updateStatus(e.target.value); }}
             disabled={advancing}
           >
-            {/* W3 — flash the most recent change for 3s before reverting to "Set status..." */}
-            <option value="">{statusFlash ? `✓ Now: ${STATUS_LABELS[statusFlash]}` : "Set status..."}</option>
+            {/* W3 — flash the most recent change for 3s before reverting */}
+            <option value="">{statusFlash ? `✓ Now: ${STATUS_LABELS[statusFlash]}` : "Other status…"}</option>
             {STATUS_FLOW.map((s) => {
               const blocked = s === "closed" && !canClose;
               return (
@@ -551,10 +556,10 @@ const data = await res.json();
                 </option>
               );
             })}
-</select>
-        </div>
+          </select>
+                  </div>
       )}
-      
+
       {/* Read-only footer note (submitter side) */}
       {readOnly && (
         <div style={{

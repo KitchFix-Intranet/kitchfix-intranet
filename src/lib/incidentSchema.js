@@ -268,3 +268,14 @@ export function incidentToRow(incident) {
     return String(v);
   });
 }
+
+// P1 — Phase 2: shared formatter for the "Drive folder · N attachments" line.
+// Used in admin detail pane, email body, and Slack block. When count is 0 we
+// drop the count entirely rather than rendering "(0 attachments)" which reads
+// like a defect to non-technical users.
+export function formatAttachmentLabel(count) {
+  const n = Number(count) || 0;
+  if (n === 0) return "Drive folder";
+  if (n === 1) return "Drive folder (1 attachment)";
+  return `Drive folder (${n} attachments)`;
+}

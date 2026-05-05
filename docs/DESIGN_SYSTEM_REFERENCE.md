@@ -13,7 +13,7 @@
 
 - **Framework:** Next.js 16, React 19
 - **Auth:** NextAuth + Google OAuth
-- **Backend:** Google Sheets (dual-spreadsheet: HUB read-only config, COLLECTION read/write actuals)
+- **Backend:** Google Sheets (five-pillar architecture — see `ARCHITECTURE.md`)
 - **Drive/Sheets writes:** Service account `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com` — never user OAuth
 - **AI:** Anthropic Claude API (Invoice OCR, Smart Inventory matching)
 - **Hosting:** Vercel Pro
@@ -49,8 +49,7 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 
 ### CSS variables (from `globals.css`)
 
-```css
---kf-navy: #0f3057    /* DRIFT — should be #153968 */
+css--kf-navy: #0f3057    /* DRIFT — should be #153968 */
 --kf-blue: #2563eb
 --kf-gold: #fbbf24
 --kf-green: #10b981
@@ -63,28 +62,18 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 --kf-mustard: #fbbf24
 --kf-mustard-light: #fffbeb
 --kf-mustard-text: #92400e
-```
 
 ---
 
 ## Typography
 
-- **Screen:** Inter (weights 400 / 600 / 800)
-- **Print / PDF:** Mulish (weights 400 / 700)
+- **Screen UI (both density modes):** Inter (weights 400 / 600 / 800)
+- **Print / PDF only (Pre-Service Materials):** Mulish (weights 400 / 700)
 - Both loaded via Google Fonts in `globals.css`
 
-### Type scale
+**Mulish is demoted from screen.** All screen UI uses Inter regardless of density mode. Mulish remains canonical for the print/PDF pipeline (Pre-Service Materials) only. If you find Mulish on a screen surface, that's drift to fix.
 
-| Size | Use |
-|---|---|
-| 12 | Caption, label |
-| 14 | Body small, dense tables |
-| 16 | Body default |
-| 20 | h3 |
-| 24 | h2 |
-| 32 | h1, hero |
-
-- Line height: 1.4 body / 1.2 headings
+Type scale lives inside the density mode tables below — there is no single screen type scale. See "Density modes."
 
 ---
 
@@ -103,16 +92,20 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 
 ## Spacing scale
 
-`4 / 8 / 12 / 16 / 24 / 32 / 48 / 64`
+Spacing values live inside the density mode tables below. Both modes can pull wider values (32 / 48 / 64) when hero/section breathing room is needed — the per-mode tables show the common case, not a ceiling.
+
+---
 
 ## Radius scale
 
-| Value | Use |
+Radius values live inside the density mode tables below. Modal and pill values are mode-independent:
+
+| Element | Value (both modes) |
 |---|---|
-| 4 | Inputs, buttons |
-| 8 | Cards |
-| 12 | Modals |
-| 999 | Pills |
+| Modal | 12 |
+| Pill | 999 |
+
+---
 
 ## Elevation
 
@@ -123,12 +116,16 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 | modal | 8–12px |
 | overlay | 16px+ |
 
+---
+
 ## Motion
 
 - Default: 150ms ease-out
 - Layout shifts: 250ms
 - Never exceed 400ms
 - Always respect `prefers-reduced-motion`
+
+---
 
 ## Z-index
 
@@ -143,6 +140,162 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 | 100 | Dropdowns |
 | 1000 | Modals |
 | 10000 | Toasts, overlays |
+
+---
+
+## Density modes — Density and Comfortable
+
+The Ops Hub has two density modes. Every module declares one as its default; individual surfaces inside a module can override.
+
+### When to use which mode
+
+> *Is this surface for triage/scanning/comparison (Density) or for single-task work that should forgive interruption (Comfortable)? When unsure, default to the module's mode.*
+
+**Density** — director and admin surfaces. Tight type, tight spacing, table-friendly, more information per viewport. Calibrate against Linear and Ramp.
+
+**Comfortable** — floor user, HR, onboarding, single-task forms. Generous type, generous spacing, forgiving padding, scaffolding for stress and interruption. Calibrate against Notion onboarding and Toast/Square POS entry.
+
+### Mobile override (non-negotiable)
+
+**Any viewport <1024px renders Comfortable tokens, regardless of module assignment.** Floor-first overrides density on phones — the cooler-test wins.
+
+Implementation: media-query gate in each module's CSS, or a `data-density` attribute on the page root that flips at `min-width: 1024px`.
+
+### Module assignments
+
+**Density default:**
+- Vendor Portal
+- Inventory Manager (catalog/admin surfaces)
+- Service Calendar (month admin view)
+- Invoice Capture (admin queue)
+- Season Tracker
+- Analytics
+- Leadership Dugout *(when built)*
+- Calibration Queue *(when built)*
+
+**Comfortable default:**
+- People Portal dashboard
+- Incident Reporting
+- New Hire Wizard
+- PAF Form
+- Action Center submitter view
+- Team Directory
+- Home dashboard
+- Login
+
+**Surface-level overrides** (where a module default is overridden inside the module):
+
+| Surface | Module default | This surface uses |
+|---|---|---|
+| Action Center admin queue | Comfortable | Density |
+| People Portal Admin Queue | Comfortable | Density |
+| Inventory count flow | Density | Comfortable |
+| Invoice submission upload (chef side) | Density | Comfortable |
+| Service Calendar day detail entry | Density | Comfortable |
+
+The general rule: **lists and queues take density; forms and entry take comfortable, even inside a density module.**
+
+### Token tables
+
+#### Type scale — Inter only
+
+| Role | Density | Comfortable |
+|---|---|---|
+| Caption / metadata / label | 11 | 12 |
+| Body small / table cell | 13 | 14 |
+| Body (default reading) | 14 | 16 |
+| Body emphasis / h3 | 16 | 18 |
+| h2 / section head | 20 | 24 |
+| h1 / hero | 24 | 32 |
+| Line height — body | 1.3 | 1.5 |
+| Line height — headings | 1.15 | 1.2 |
+
+11px is reserved for table column headers and metadata labels. Never body.
+
+#### Spacing scale
+
+| Density | Comfortable |
+|---|---|
+| 4 / 8 / 12 / 16 / 20 / 24 | 8 / 12 / 16 / 24 / 32 / 48 |
+
+Wider values (32 / 48 / 64) are available in both modes for hero/section breathing room. The table is the common case, not a ceiling.
+
+#### Radius
+
+| Element | Density | Comfortable |
+|---|---|---|
+| Card | 8 | 12 |
+| Input / button | 4 | 8 |
+| Modal | 12 | 12 |
+| Pill | 999 | 999 |
+
+#### Card padding
+
+| Card type | Density | Comfortable |
+|---|---|---|
+| List / queue card | 12 | 24 |
+| Content card | 16 | 24 |
+| Hero / feature card | 20 | 32 |
+
+#### Tap targets (mode-independent)
+
+| Viewport | Minimum tap target |
+|---|---|
+| Desktop (≥1024px) | 32×32 |
+| Tablet (768–1023px) | 48×48 |
+| Phone (<768px) | 48×48 |
+
+### CSS variable structure
+
+Both mode token sets live in `globals.css`, gated by `data-density` attribute on the page root or module root:
+
+css[data-density="compact"] {
+--type-caption: 11px;
+--type-body-sm: 13px;
+--type-body: 14px;
+--type-emphasis: 16px;
+--type-h2: 20px;
+--type-h1: 24px;
+--line-body: 1.3;
+--line-heading: 1.15;
+--space-1: 4px;
+--space-2: 8px;
+--space-3: 12px;
+--space-4: 16px;
+--space-5: 20px;
+--space-6: 24px;
+--radius-card: 8px;
+--radius-input: 4px;
+--pad-card-list: 12px;
+--pad-card-content: 16px;
+--pad-card-hero: 20px;
+}[data-density="comfortable"] {
+--type-caption: 12px;
+--type-body-sm: 14px;
+--type-body: 16px;
+--type-emphasis: 18px;
+--type-h2: 24px;
+--type-h1: 32px;
+--line-body: 1.5;
+--line-heading: 1.2;
+--space-1: 8px;
+--space-2: 12px;
+--space-3: 16px;
+--space-4: 24px;
+--space-5: 32px;
+--space-6: 48px;
+--radius-card: 12px;
+--radius-input: 8px;
+--pad-card-list: 24px;
+--pad-card-content: 24px;
+--pad-card-hero: 32px;
+}@media (max-width: 1023px) {
+[data-density="compact"] {
+/* mobile override — fall back to comfortable tokens */
+}
+}
+
+The mobile override block can either redefine all variables to match comfortable, or apply `data-density="comfortable"` programmatically at <1024px. Implementation choice; outcome is the same.
 
 ---
 
@@ -245,10 +398,10 @@ Patterns that work for 12 rows must also work for 1,200. If a pattern only works
 
 | Product | When to reference |
 |---|---|
-| **Linear** | Density + keyboard + restraint. Director dashboards, Action Center, Vendor Portal lists. |
-| **Notion** | Flexible structure, content-forward. Recipe / spec / briefing surfaces. |
-| **Toast / Square POS** | Kitchen utility, big tap targets, time pressure. Service Calendar entry, Inventory count, mobile-floor screens. |
-| **Ramp / Brex** | Financial clarity, audit-grade tables, document-centric. Invoice Capture, AP queue, GL coding. |
+| **Linear** | Density + keyboard + restraint. Director dashboards, Action Center admin queue, Vendor Portal lists. |
+| **Notion** | Flexible structure, content-forward. Recipe / spec / briefing surfaces, onboarding flows. |
+| **Toast / Square POS** | Kitchen utility, big tap targets, time pressure. Service Calendar day-detail entry, Inventory count flow, mobile-floor screens. |
+| **Ramp / Brex** | Financial clarity, audit-grade tables, document-centric. Invoice Capture queue, AP queue, GL coding, Analytics. |
 | **Resy host stand / OpenTable manager** | Operational pace, pre-service mindset. Homestand/season views. |
 
 A recommendation should be locatable: *"This is closer to Toast than Linear — wrong for a director."* If a pattern doesn't fit any anchor, ask whether it belongs in the Ops Hub at all.
@@ -270,3 +423,12 @@ When a design choice could be reinforced by Slack notification quality, call it 
 
 - **UI:** English only. No i18n on roadmap.
 - **Pre-Service Materials (print/PDF):** Bilingual EN/ES, native Spanish speaker validation pending. Out of scope for screen UI reviews.
+
+---
+
+## Captain's log
+
+*Add additions to system reference here with date and a one-line note on what prompted the change.*
+
+- **2026-05-05** — Initial reference documented. Tokens, palette, roles, scales captured.
+- **2026-05-05** — Dual-mode density rule added (Density / Comfortable). Inter locked as canonical screen typeface; Mulish demoted to print/PDF only. Type scale, spacing scale, radius, and card padding now live inside per-mode tables. Mobile override (<1024px = comfortable) added as non-negotiable rule. Module assignments and surface-level overrides documented. Reference anchors retuned to mode-specific guidance.

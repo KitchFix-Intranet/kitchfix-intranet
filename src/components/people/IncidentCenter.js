@@ -244,13 +244,20 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
             background: "#f3e8ff", color: "#7c3aed", padding: "6px 14px", borderRadius: 6, marginBottom: 16,
           }}>{success.incidentId}</div>
 
-          <div style={{ textAlign: "left", maxWidth: 360, margin: "0 auto 20px", fontSize: 13, lineHeight: 1.7, color: "#475569" }}>
-            {success.notificationsSent && success.notificationsSent.split("|").filter(Boolean).map((n, i) => (
-              <div key={i}>
-                <span style={{ color: "#10b981", fontWeight: 500, marginRight: 6 }}>✓</span>
-                {formatNotification(n)}
-              </div>
-            ))}
+<div style={{ textAlign: "left", maxWidth: 360, margin: "0 auto 20px", fontSize: 13, lineHeight: 1.7, color: "#475569" }}>
+            {/* P0 — Phase 1: filter null returns from formatNotification so
+                unknown/test codes are never rendered as raw strings. */}
+            {success.notificationsSent && success.notificationsSent
+              .split("|")
+              .filter(Boolean)
+              .map((code) => ({ code, label: formatNotification(code) }))
+              .filter(({ label }) => label !== null)
+              .map(({ label }, i) => (
+                <div key={i}>
+                  <span style={{ color: "#10b981", fontWeight: 500, marginRight: 6 }}>✓</span>
+                  {label}
+                </div>
+              ))}
             {success.driveFolderUrl && (
               <div style={{ marginTop: 12 }}>
                 <a href={success.driveFolderUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#7c3aed", textDecoration: "none", fontWeight: 500 }}>
@@ -351,6 +358,29 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
 // ═══════════════════════════════════════════════════════════════
 // STEP 1 - TYPE PICKER
 // ═══════════════════════════════════════════════════════════════
+// P1 — Phase 2: domain grouping for the Step 1 type picker.
+// Cuts the 9-card flat scan into three operational buckets, reducing
+// cognitive load on first-time submitters (Hick's Law).
+// Order within each group preserves the existing schema order so the
+// underlying data flow / icons / colors don't change.
+const TYPE_GROUPS = [
+  {
+    id: "people",
+    label: "People",
+    types: ["employee_injury", "non_employee_injury"],
+  },
+  {
+    id: "operations",
+    label: "Operations",
+    types: ["vehicle", "allergen_reaction", "foodborne_illness", "food_safety", "property_damage"],
+  },
+  {
+    id: "hazards",
+    label: "Hazards & Security",
+    types: ["near_miss", "security_altercation"],
+  },
+];
+
 function Step1Type({ form, update, errors }) {
   return (
     <>
@@ -358,22 +388,33 @@ function Step1Type({ form, update, errors }) {
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>What kind of incident?</h3>
       <p className="pp-inc-step-help">Pick the type that best fits. If unsure between two, pick the more serious one.</p>
 
-      <div className="pp-inc-typegrid">
-        {INCIDENT_TYPES.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`pp-inc-typecard${form.incident_type === t.id ? " pp-inc-typecard--selected" : ""}`}
-            onClick={() => update("incident_type", t.id)}
-          >
-            <div className="pp-inc-typeicon" style={{ background: t.color }}>
-              {ICONS[t.id]}
+      {TYPE_GROUPS.map((group, gIdx) => {
+        const groupTypes = group.types
+          .map((id) => INCIDENT_TYPES.find((t) => t.id === id))
+          .filter(Boolean);
+        if (groupTypes.length === 0) return null;
+        return (
+          <div key={group.id} style={{ marginTop: gIdx === 0 ? 0 : 18 }}>
+            <div className="pp-inc-typegroup-label">{group.label}</div>
+            <div className="pp-inc-typegrid">
+              {groupTypes.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`pp-inc-typecard${form.incident_type === t.id ? " pp-inc-typecard--selected" : ""}`}
+                  onClick={() => update("incident_type", t.id)}
+                >
+                  <div className="pp-inc-typeicon" style={{ background: t.color }}>
+                    {ICONS[t.id]}
+                  </div>
+                  <div className="pp-inc-typelabel">{t.label}</div>
+                  <div className="pp-inc-typedesc">{t.desc}</div>
+                </button>
+              ))}
             </div>
-            <div className="pp-inc-typelabel">{t.label}</div>
-            <div className="pp-inc-typedesc">{t.desc}</div>
-          </button>
-        ))}
-      </div>
+          </div>
+        );
+      })}
 
       {errors.incident_type && <div className="pp-inc-step-error">Please pick an incident type</div>}
     </>
@@ -394,7 +435,7 @@ function Step2Severity({ form, update, errors, allowedSeverities, severityLocked
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>How severe is it?</h3>
       <p className="pp-inc-step-help">Not sure? Classify up — Mariela can downgrade in triage.</p>
 
-      {showLockNotice && (
+{showLockNotice && (
         <div className="pp-inc-callout pp-inc-callout--lock">
           <strong>Auto-classified:</strong> Suspected foodborne illness is always S1. Mariela will triage.
         </div>
@@ -407,6 +448,21 @@ function Step2Severity({ form, update, errors, allowedSeverities, severityLocked
       {showNearMissPrompt && (
         <div className="pp-inc-callout pp-inc-callout--note">
           <strong>Worst-case check:</strong> If this had played out worst-case, would it have been S1 or S2? If yes, classify there — not S4.
+        </div>
+      )}
+
+      {/* P0 — Phase 1: SOP §06 Critical S1 phone call callout.
+          Was previously rendered AFTER the tier stack, which buried the most
+          critical instruction in the entire flow below the Near-Miss option.
+          A chef on a phone in a real S1 had to scroll past S2/S3/S4 to find it.
+          Moved here so it appears immediately when S1 is selected, in the
+          thumb zone, with the call-Mariela tap target front-and-center. */}
+      {form.severity === "S1" && (
+        <div className="pp-inc-callout pp-inc-callout--critical">
+          <div className="pp-inc-callout-head">📞 S1 requires a phone call — the form is not enough</div>
+          <div className="pp-inc-callout-body">
+            Within 15 minutes once the person is in a safe spot, the Site Leader or Manager of Record personally calls Mariela at <a href="tel:+13125481420">(312) 548-1420</a>. Voicemail counts only with a callback number AND a Slack message.
+          </div>
         </div>
       )}
 
@@ -434,16 +490,6 @@ function Step2Severity({ form, update, errors, allowedSeverities, severityLocked
           );
         })}
       </div>
-
-{/* SOP §06 Critical - S1 phone call non-delegable */}
-      {form.severity === "S1" && (
-        <div className="pp-inc-callout pp-inc-callout--critical" style={{ marginTop: 12 }}>
-          <div className="pp-inc-callout-head">📞 S1 requires a phone call — the form is not enough</div>
-          <div className="pp-inc-callout-body">
-            Within 15 minutes once the person is in a safe spot, the Site Leader or Manager of Record personally calls Mariela at <a href="tel:+13125481420">(312) 548-1420</a>. Voicemail counts only with a callback number AND a Slack message.
-          </div>
-        </div>
-      )}
 
       {errors.severity && <div className="pp-inc-step-error">Please pick a severity tier</div>}
     </>
@@ -668,6 +714,8 @@ function EmployeeInjuryFields({ ts, updateTS, accent, appendixCUrl }) {
           <div style={{ marginTop: 6, fontSize: 11, color: "#92400e" }}>
             <strong>Required:</strong> Refusal of Medical Treatment form (Appendix C) must be signed by employee and manager.
             {/* W8 — direct link to printable form when manifest provides it */}
+{/* P1 — Phase 2: link recolored from purple to amber so it sits in the
+                same warning palette as the alert area, instead of clashing. */}
             {appendixCUrl && (
               <>
                 {" "}
@@ -675,13 +723,13 @@ function EmployeeInjuryFields({ ts, updateTS, accent, appendixCUrl }) {
                   href={appendixCUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: "#7c3aed", fontWeight: 600, textDecoration: "underline" }}
+                  style={{ color: "#92400e", fontWeight: 700, textDecoration: "underline" }}
                 >
                   Open / print the form →
                 </a>
               </>
             )}
-          </div>
+                      </div>
         )}
       </div>
           </TypeBlock>
@@ -1026,8 +1074,34 @@ const handleFiles = async (e) => {
     update("attachments", form.attachments.filter((_, i) => i !== idx));
   };
 
-  const tsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]) => v);
+const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]) => v);
 
+  // P1 — Phase 2: merge "injury_type" + "injury_type_other" into a single row
+  // so the review screen reads "Type of Injury — Other (Stubbed toe)" instead
+  // of two adjacent rows where one has the database column name as a label.
+  const tsEntries = (() => {
+    const map = Object.fromEntries(rawTsEntries);
+    const merged = [];
+    const seen = new Set();
+    for (const [k, v] of rawTsEntries) {
+      if (seen.has(k)) continue;
+      if (k === "injury_type" && map["injury_type_other"]) {
+        merged.push(["injury_type", `${v} — ${map["injury_type_other"]}`]);
+        seen.add("injury_type");
+        seen.add("injury_type_other");
+        continue;
+      }
+      if (k === "injury_type_other" && map["injury_type"]) {
+        // already folded into the injury_type row above; skip
+        seen.add(k);
+        continue;
+      }
+      merged.push([k, v]);
+      seen.add(k);
+    }
+    return merged;
+  })();
+  
   return (
     <>
 
@@ -1056,7 +1130,7 @@ const handleFiles = async (e) => {
         <ReviewRow l="Location" v={form.location_detail || "—"} />
         <ReviewRow l="Manager aware" v={form.manager_aware_date || "—"} />
       </ReviewBlock>
-      
+
       <ReviewBlock title="What happened">
         <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
           {form.what_happened || <span style={{ color: "#94a3b8" }}>No description</span>}
@@ -1187,12 +1261,39 @@ function prettify(k) {
   return k.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
+// P0 — Phase 1: rewritten to handle:
+//   • production codes (slack-channel, email-s1-6rcpts, email-s3-4rcpts, etc.)
+//   • test-mode codes (slack-test, email-test, slack-status-test, etc.)
+//   • status-change codes (slack-status, email-status-submitter)
+//   • unknown codes → returns null so caller filters them out instead of
+//     leaking raw debug strings like "slack-test" / "email-test" to the user.
 function formatNotification(code) {
-  const map = {
-    "slack-channel": "Posted to #opshub-incident-submissions",
-    "email-mariela-s1": "🚨 Email sent to Mariela (S1 - urgent)",
-    "email-mariela-s2": "Email sent to Mariela",
-    "email-mariela-corp-s3": "Email sent to Mariela + corporate",
-  };
-  return map[code] || code;
+  if (!code) return null;
+
+  // Slack channel posts
+  if (code === "slack-channel") return "Posted to incident channel";
+  if (code === "slack-test")    return "Posted to test channel";
+  if (code === "slack-status")  return "Status update posted to channel";
+  if (code === "slack-status-test") return "Status update posted to test channel";
+
+  // Test-mode email
+  if (code === "email-test") return "Test email sent";
+  if (code === "email-status-test") return "Test status email sent";
+  if (code === "email-status-submitter") return "Submitter notified by email";
+
+  // Production email — patterns like "email-s1-6rcpts" / "email-s3-4rcpts"
+  const m = code.match(/^email-(s[1-4])-(\d+)rcpts?$/i);
+  if (m) {
+    const sev = m[1].toUpperCase();
+    const count = m[2];
+    return `Email sent to ${count} recipient${count === "1" ? "" : "s"} (${sev} distribution)`;
+  }
+
+  // Legacy / explicit production codes (kept for backward compatibility)
+  if (code === "email-mariela-s1") return "🚨 Email sent to Mariela (S1 — urgent)";
+  if (code === "email-mariela-s2") return "Email sent to Mariela";
+  if (code === "email-mariela-corp-s3") return "Email sent to Mariela + corporate";
+
+  // Unknown code — don't leak the raw string to the user
+  return null;
 }

@@ -738,6 +738,13 @@ body:has(.pp-app) {
   height: 2px;
   background: var(--pp-purple-mid);
   margin: 0 10px;
+  transition: background 0.3s;
+}
+
+/* P1 — Phase 2: completed connector picks up the same green as done circles
+   so progress reads at half the cognitive cost (dual-coded). */
+.pp-step-line--done {
+  background: var(--pp-success);
 }
 
 /* â”€â”€ Form Elements â”€â”€ */
@@ -1578,14 +1585,32 @@ body:has(.pp-app) {
   font-size: 13px;
   font-weight: 700;
   color: #0f3057;
-  white-space: nowrap;
+  /* P0 — Phase 1: was nowrap+ellipsis, which truncated "Employee Injury / Illness".
+     Now allow up to 2 lines via line-clamp so titles fully render. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .pp-adm-list-sub {
   font-size: 11px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* P0 — Phase 1: relative-time line for incident cards so adjacent
+   same-type/same-site incidents are distinguishable at a glance. */
+.pp-adm-list-time {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2030,11 +2055,21 @@ body:has(.pp-app) {
 
 
 /* ─── Incident type grid (step 1) ─── */
+/* P1 — Phase 2: type-group label sits above each grid (PEOPLE / OPERATIONS / HAZARDS) */
+.pp-inc-typegroup-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
 .pp-inc-typegrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .pp-inc-typecard {

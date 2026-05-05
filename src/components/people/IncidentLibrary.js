@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
+import { Pin, ShieldCheck, ClipboardList, BookmarkCheck, MapPin, GraduationCap } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════
 // INCIDENT LIBRARY - Direction B (Reference Cards)
@@ -53,13 +54,16 @@ const DEMO_DOCS = [
   },
 ];
 
+// P1 — Phase 2: emoji-prefixed labels (★ 📋 📌 🎓) replaced with Lucide icons
+// per the documented iconography standard. Icons rendered as a separate React
+// element in the section head so they can be styled independently.
 const CATEGORIES = [
-  { id: "pinned",          label: "★ Pinned by HR",     icon: "pin" },
-  { id: "policies",        label: "📋 Policies",         icon: "shield" },
-  { id: "forms",           label: "📋 Forms",            icon: "doc" },
-  { id: "reference_cards", label: "🔖 Reference Cards",  icon: "card" },
-  { id: "postings",        label: "📌 Postings",         icon: "pin" },
-  { id: "training",        label: "🎓 Training",         icon: "grad" },
+  { id: "pinned",          label: "Pinned by HR",     Icon: Pin },
+  { id: "policies",        label: "Policies",         Icon: ShieldCheck },
+  { id: "forms",           label: "Forms",            Icon: ClipboardList },
+  { id: "reference_cards", label: "Reference Cards",  Icon: BookmarkCheck },
+  { id: "postings",        label: "Postings",         Icon: MapPin },
+  { id: "training",        label: "Training",         Icon: GraduationCap },
 ];
 
 const FILTER_TABS = [
@@ -236,13 +240,19 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
 
       {/* Sections - hide section header when a specific filter is active
           (the filter pill already says what category we're viewing) */}
-      {!loading && grouped.map((section) => {
+{!loading && grouped.map((section) => {
         const hideHeader = activeFilter !== "all" && grouped.length === 1;
+        // P1 — Phase 2: pull the Lucide Icon component for this category
+        const cat = CATEGORIES.find((c) => c.id === section.id);
+        const Icon = cat?.Icon;
         return (
           <div key={section.id} className="pp-inc-lib-section">
             {!hideHeader && (
               <div className="pp-inc-lib-section-head">
-                <h3>{section.label}</h3>
+                <h3 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  {Icon && <Icon size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  {section.label}
+                </h3>
                 <span className="pp-inc-lib-section-count">
                   {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
                 </span>
@@ -254,7 +264,7 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
           </div>
         );
       })}
-    </div>
+          </div>
   );
 }
 
