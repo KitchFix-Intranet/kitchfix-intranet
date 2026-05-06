@@ -211,12 +211,16 @@ export default function PeoplePage() {
   });
 
   // ─── Toast helper ───
-  const showToast = useCallback((msg, type = "success") => {
-    setToast({ msg, type });
+const showToast = useCallback((msgOrObj, type = "success") => {
+    // Accept either showToast("text", "type") or showToast({ msg, type })
+    if (msgOrObj && typeof msgOrObj === "object") {
+      setToast({ msg: String(msgOrObj.msg || ""), type: msgOrObj.type || "success" });
+    } else {
+      setToast({ msg: String(msgOrObj || ""), type });
+    }
     setTimeout(() => setToast(null), 4000);
   }, []);
-
-  // ─── Confirm helper ───
+    // ─── Confirm helper ───
   const openConfirm = useCallback((title, text, confirmLabel, callback) => {
     setConfirm({ title, text, confirmLabel, callback });
   }, []);

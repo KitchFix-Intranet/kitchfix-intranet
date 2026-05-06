@@ -4,12 +4,13 @@
 // ActiveWork — list of in-flight instruments for current user
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2 (WOW Plans live)  →  Sprint 5 (+ Cycle Reviews)
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
 import WowPlanWorkspace from "@/components/people/leadership-dugout/WowPlanWorkspace";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 export default function ActiveWork({ ldugBootstrap, showToast }) {
   const chain = ldugBootstrap?.chain;
@@ -23,9 +24,8 @@ export default function ActiveWork({ ldugBootstrap, showToast }) {
 
   useEffect(() => {
     if (!currentUserEmail) return;
-    fetch("/api/people/leadership-dugout", {
+    ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "list-active-instruments", email: currentUserEmail }),
     })
       .then((r) => r.json())
@@ -36,7 +36,6 @@ export default function ActiveWork({ ldugBootstrap, showToast }) {
       .catch((err) => setError(err.message));
   }, [currentUserEmail]);
 
-  // Drill-down to a single plan
   if (activePlanId) {
     return (
       <WowPlanWorkspace

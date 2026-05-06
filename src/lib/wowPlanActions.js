@@ -2,7 +2,7 @@
 // wowPlanActions — WOW Plan server-side helpers
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
+// Sprint: 2 + Chunk 7 (createCalendarInvites with test mode)
 // Spec: /docs/LEADERSHIP_DUGOUT_BUILD_PLAN.md  +  PB-001 §"The 90-Day WOW Plan"
 //
 // All Sheets writes via service account (sheets.js).
@@ -60,10 +60,7 @@ export const WOW_BODY_COL = {
   DAY90_DATA: 11,
 };
 
-// ─── Row → object helpers (skip the 3-row xlsx header block) ───
 function isHeaderRow(row) {
-  // Row 1: column names; Row 2: types; Row 3: descriptions
-  // Real data starts row 4; UUIDs contain hyphens, header cells don't
   const id = String(row[0] || "");
   return !id || id === "id" || id === "uuid" || !id.includes("-");
 }
@@ -116,14 +113,12 @@ function rowToBody(row) {
   };
 }
 
-// ─── Date helpers ───
 function addDays(isoDate, days) {
   const d = new Date(isoDate + "T00:00:00");
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
-// ─── List all WOW Plans (filter applied by caller) ───
 export async function listAllWowPlans() {
   try {
     const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, COLLECTION_TABS.WOW_PLANS_HEADER);
@@ -136,7 +131,6 @@ export async function listAllWowPlans() {
   }
 }
 
-// ─── List plans where user is Leader / Reviewer / Oversight ───
 export async function listWowPlansForUser(userEmail) {
   if (!userEmail) return [];
   const all = await listAllWowPlans();
@@ -149,7 +143,6 @@ export async function listWowPlansForUser(userEmail) {
   );
 }
 
-// ─── Get single plan (header + body) ───
 export async function getWowPlan(planId) {
   if (!planId) return null;
   const all = await listAllWowPlans();
@@ -170,10 +163,6 @@ export async function getWowPlan(planId) {
   return { header, body };
 }
 
-// ─── Create a new plan ───
-// Computes Day 30/60/90 dates, creates header + body rows, writes audit log.
-// Note: calendar invite creation is best-effort and lives in createCalendarInvites().
-// PDF env: PERFORMANCE_PDF_DRIVE_FOLDER_ID (used at Day 90 close, not now).
 export async function createWowPlan({
   chainSnapshot,
   day1Date,
@@ -186,7 +175,6 @@ export async function createWowPlan({
   const day90 = addDays(day1Date, 90);
   const now = new Date().toISOString();
 
-  // Header row — order MUST match WOW_HEADER_COL indices
   const headerRow = [
     id,
     chainSnapshot.leader_email,
@@ -200,15 +188,14 @@ export async function createWowPlan({
     day60,
     day90,
     WOW_PLAN_STATUS.GENERATED,
-    "", "", "", "", // sigs
-    "", // pdf_drive_id
-    "", // calendar_event_ids (filled by createCalendarInvites if it succeeds)
+    "", "", "", "",
+    "",
+    "",
     now,
     actorEmail,
     now,
   ];
 
-  // Body row — empty JSON shells, filled as the plan progresses
   const bodyRow = [
     id,
     DEFAULT_SCALE_DIRECTION,
@@ -239,13 +226,12 @@ export async function createWowPlan({
   return { id, day1_date: day1Date, day30_date: day30, day60_date: day60, day90_date: day90 };
 }
 
-// ─── Update header status + last-action stamps ───
 export async function updateWowPlanStatus({ planId, newStatus, actorEmail, signedDay = null }) {
   const all = await listAllWowPlans();
   const idx = all.findIndex((p) => p.id === planId);
   if (idx === -1) throw new Error(`WOW Plan ${planId} not found`);
 
-  const sheetRowNumber = idx + 4; // 3 xlsx header rows + 1-based indexing
+  const sheetRowNumber = idx + 4;
   const now = new Date().toISOString();
 
   const updates = [
@@ -254,7 +240,6 @@ export async function updateWowPlanStatus({ planId, newStatus, actorEmail, signe
     { range: `${COLLECTION_TABS.WOW_PLANS_HEADER}!U${sheetRowNumber}`, value: now },
   ];
 
-  // Stamp the appropriate signed_at column when a day is signed off
   if (signedDay) {
     const colMap = { 1: "M", 30: "N", 60: "O", 90: "P" };
     const col = colMap[signedDay];
@@ -271,10 +256,7 @@ export async function updateWowPlanStatus({ planId, newStatus, actorEmail, signe
   }
 }
 
-// ─── Update body section (single column) ───
-// columnLetter must match the body schema (B=scale, C=pre_work, etc.)
 export async function updateWowPlanBodySection({ planId, columnLetter, jsonValue, actorEmail }) {
-  // Locate row in body sheet
   const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, COLLECTION_TABS.WOW_PLANS_BODY);
   const dataRows = (rows || []).filter((r) => !isHeaderRow(r));
   const idx = dataRows.findIndex((r) => String(r[WOW_BODY_COL.ID] || "").trim() === planId);
@@ -286,7 +268,6 @@ export async function updateWowPlanBodySection({ planId, columnLetter, jsonValue
 
   await updateRangeSA(SHEET_IDS.COLLECTION, range, [[value]]);
 
-  // Also bump last_action_at on header (best-effort, swallow errors)
   try {
     const all = await listAllWowPlans();
     const headerIdx = all.findIndex((p) => p.id === planId);
@@ -301,5 +282,78 @@ export async function updateWowPlanBodySection({ planId, columnLetter, jsonValue
     }
   } catch (e) {
     console.warn("[wowPlan] couldn't bump header last_action:", e.message);
+  }
+}
+
+// ─── Calendar invite helper ───
+// Creates Day 30 / 60 / 90 events on a shared calendar.
+// In test mode, ALL attendees collapse to a single test recipient.
+// Best-effort: never throws.
+export async function createCalendarInvites({ planId, header, testMode = false, testRecipient = "" }) {
+  const calendarId = process.env.PERFORMANCE_CALENDAR_ID || "primary";
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+    console.warn("[wowPlan] Calendar invites skipped — service account creds missing");
+    return [];
+  }
+
+  const realLeaderEmail = header.leader_email;
+  const realReviewerEmail = header.reviewer_email;
+  const realOversightEmail = header.oversight_email;
+
+  const leaderAttendee = testMode ? testRecipient : realLeaderEmail;
+  const reviewerAttendee = testMode ? testRecipient : realReviewerEmail;
+  const oversightAttendee = testMode ? testRecipient : realOversightEmail;
+
+  try {
+    const { google } = await import("googleapis");
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      },
+      scopes: ["https://www.googleapis.com/auth/calendar"],
+    });
+    const calendar = google.calendar({ version: "v3", auth });
+
+    const buildAttendees = (includeOversight) => {
+      const set = new Set([leaderAttendee, reviewerAttendee]);
+      if (includeOversight) set.add(oversightAttendee);
+      return Array.from(set).filter(Boolean).map((email) => ({ email }));
+    };
+
+    const titlePrefix = testMode ? "[TEST] " : "";
+    const descriptionTestNote = testMode
+      ? `\n\n[TEST MODE] Real chain: leader=${realLeaderEmail}, reviewer=${realReviewerEmail}, oversight=${realOversightEmail}\n`
+      : "";
+
+    const eventIds = [];
+    for (const checkpoint of [
+      { day: 30, date: header.day30_date, title: "Day 30", includeOversight: false },
+      { day: 60, date: header.day60_date, title: "Day 60", includeOversight: false },
+      { day: 90, date: header.day90_date, title: "Day 90 close-out", includeOversight: true },
+    ]) {
+      try {
+        const event = await calendar.events.insert({
+          calendarId,
+          requestBody: {
+            summary: `${titlePrefix}WOW Plan ${checkpoint.title} — ${header.leader_name}`,
+            description: `${checkpoint.title} checkpoint for ${header.leader_name} (${header.role}, ${header.account}).\n\nReviewer: ${realReviewerEmail}\nOversight: ${realOversightEmail}\n\nPlan ID: ${planId}${descriptionTestNote}`,
+            start: { date: checkpoint.date },
+            end: { date: checkpoint.date },
+            attendees: buildAttendees(checkpoint.includeOversight),
+          },
+          sendUpdates: "all",
+          supportsAttachments: false,
+        });
+        eventIds.push(event.data.id);
+      } catch (e) {
+        console.warn(`[wowPlan] Calendar event Day ${checkpoint.day} failed:`, e.message);
+      }
+    }
+
+    return eventIds;
+  } catch (e) {
+    console.error("[wowPlan] Calendar setup failed:", e.message);
+    return [];
   }
 }

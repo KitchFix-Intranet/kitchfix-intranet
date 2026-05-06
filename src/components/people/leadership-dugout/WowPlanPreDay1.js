@@ -4,21 +4,13 @@
 // WowPlanPreDay1 — leader pre-Day 1 prep (3 questions)
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Per PB-001 / SOP-001: leader gets the plan T-14 days before Day 1 and
-// answers 3 questions before the kickoff. Reviewer fills "high-leverage
-// question" answers separately on Day 1.
-//
-// Three questions (concrete v1):
-//   1. What does success look like for you in the first 30 days?
-//   2. What's the biggest unknown going into this role?
-//   3. What support do you need from your Reviewer to land well?
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
 import NarrativeField from "@/components/people/leadership-dugout/NarrativeField";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 const QUESTIONS = [
   {
@@ -62,14 +54,13 @@ export default function WowPlanPreDay1({ plan, currentUserEmail, onSubmit, showT
   }, [plan?.header?.id]);
 
   const saveSection = async (next) => {
-    await fetch("/api/people/leadership-dugout", {
+    await ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save-wow-section",
         email: currentUserEmail,
         plan_id: plan.header.id,
-        column: "C", // pre_work_responses
+        column: "C",
         value: { ...next, trigger_type: initial.trigger_type },
       }),
     });
@@ -93,11 +84,9 @@ export default function WowPlanPreDay1({ plan, currentUserEmail, onSubmit, showT
     }
     setSubmitting(true);
     try {
-      // Final save (in case last save was mid-debounce) then status flip
       await saveSection(answers);
-      await fetch("/api/people/leadership-dugout", {
+      await ldugFetch("/api/people/leadership-dugout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit-wow-section-complete",
           email: currentUserEmail,

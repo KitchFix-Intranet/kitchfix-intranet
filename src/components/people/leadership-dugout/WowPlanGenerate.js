@@ -4,16 +4,13 @@
 // WowPlanGenerate — system viewer surface to create a new WOW Plan
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Used in Admin tab. System viewer picks a leader (must already be in
-// Performance_Chain), a Day 1 date, and a trigger type. Server validates,
-// creates the plan, fires Slack, returns the plan ID.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
 import { WOW_PLAN_TRIGGERS } from "@/lib/performanceSchema";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 export default function WowPlanGenerate({ chainPreview = [], currentUserEmail, onCreated, showToast }) {
   const [leaderEmail, setLeaderEmail] = useState("");
@@ -22,7 +19,6 @@ export default function WowPlanGenerate({ chainPreview = [], currentUserEmail, o
   const [submitting, setSubmitting] = useState(false);
 
   const eligibleLeaders = chainPreview.filter((c) => {
-    // Skip "not_required" — those leaders go straight to Cycle Review
     return c.role && c.leader_email && c.chain_status === "Active";
   });
 
@@ -37,9 +33,8 @@ export default function WowPlanGenerate({ chainPreview = [], currentUserEmail, o
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/people/leadership-dugout", {
+      const res = await ldugFetch("/api/people/leadership-dugout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "create-wow-plan",
           email: currentUserEmail,

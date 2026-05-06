@@ -4,19 +4,9 @@
 // LeadershipDugoutTool — sub-nav wrapper for the Leadership Dugout
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 1
+// Sprint: 1 + Chunk 7 (test mode banner + impersonation header)
 // Spec: /docs/LEADERSHIP_DUGOUT_BUILD_PLAN.md
-// Sibling pattern: src/components/people/IncidentTool.js
 // CSS prefix: pp-ldug-
-//
-// ACCESS GATE:
-//   - System viewers (k.fietek@, joe@, m.chavez@kitchfix.com) → full tool
-//   - Everyone else → coming-soon landing
-//   - Allowlist sourced from HUB!Performance_System_Config.system_viewer_emails
-//     (read by /api/people/leadership-dugout?action=bootstrap)
-//
-// Wraps content with data-density="compact" so density tokens activate.
-// Mobile (<1024px) media query in globals.css auto-flips to comfortable.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
@@ -25,6 +15,7 @@ import ActiveWork from "@/components/people/leadership-dugout/ActiveWork";
 import Library from "@/components/people/leadership-dugout/Library";
 import CalibrationQueue from "@/components/people/leadership-dugout/CalibrationQueue";
 import AdminPanel from "@/components/people/leadership-dugout/AdminPanel";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 const ALL_SEGMENTS = [
   { id: "my-dugout", label: "My Dugout", gate: null },
@@ -39,10 +30,7 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
   const [ldugBootstrap, setLdugBootstrap] = useState(null);
   const [bootstrapLoaded, setBootstrapLoaded] = useState(false);
 
-// ─── Load Leadership Dugout bootstrap (chain, role flags, system viewer) ───
   useEffect(() => {
-    // Prefer email from People Portal bootstrapData (already authoritative);
-    // fall back to localStorage if available.
     const email =
       bootstrapData?.email ||
       (typeof window !== "undefined" ? localStorage.getItem("kf_user_email") || "" : "");
@@ -54,21 +42,19 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
     }
     console.log("[ldug] bootstrapping for email:", email);
 
-    fetch("/api/people/leadership-dugout", {
+    ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "bootstrap", email }),
     })
       .then((r) => r.json())
-.then((data) => {
+      .then((data) => {
         console.log("[ldug] bootstrap response:", data);
         if (data?.ok) setLdugBootstrap(data);
       })
-            .catch((err) => console.error("[ldug] bootstrap failed:", err))
+      .catch((err) => console.error("[ldug] bootstrap failed:", err))
       .finally(() => setBootstrapLoaded(true));
   }, []);
 
-  // ─── Loading state (prevents flash of wrong content) ───
   if (!bootstrapLoaded) {
     return (
       <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
@@ -108,7 +94,6 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
     return (
       <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
         <div className="pp-master-card pp-ldug-tool-card" data-density="compact">
-          {/* Header — title only, no segmented nav */}
           <div className="pp-ldug-tool-header">
             <div className="pp-ldug-tool-title">
               <div className="pp-ldug-tool-title-icon" aria-hidden="true">
@@ -128,7 +113,6 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
             </div>
           </div>
 
-          {/* Body — coming-soon landing */}
           <div className="pp-ldug-tool-body">
             <div className="pp-ldug-welcome">
               <h2 className="pp-ldug-welcome-title">Hey {firstName} — your dugout</h2>
@@ -185,8 +169,21 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
 
   return (
     <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
+      {ldugBootstrap?.test_mode && (
+        <div className="pp-ldug-test-banner">
+          <span className="pp-ldug-test-banner-dot">●</span>
+          <strong>TEST MODE</strong>
+          {ldugBootstrap?.is_impersonating && (
+            <span className="pp-ldug-test-banner-meta">
+              {" — "}acting as <strong>{ldugBootstrap.email}</strong> (real: {ldugBootstrap.actual_email})
+            </span>
+          )}
+          <span className="pp-ldug-test-banner-meta" style={{ marginLeft: "auto" }}>
+            Slack [TEST]-tagged · Calendar → test recipient · Audit log [TEST]-prefixed
+          </span>
+        </div>
+      )}
       <div className="pp-master-card pp-ldug-tool-card" data-density="compact">
-        {/* ── Header: title block left + segmented control right ── */}
         <div className="pp-ldug-tool-header">
           <div className="pp-ldug-tool-title">
             <div className="pp-ldug-tool-title-icon" aria-hidden="true">
@@ -220,7 +217,6 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
           </div>
         </div>
 
-        {/* ── Content area ── */}
         <div className={`pp-ldug-tool-body pp-ldug-tool-body--${subView}`}>
           {subView === "my-dugout" && (
             <MyDugout
@@ -249,14 +245,15 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
               showToast={showToast}
             />
           )}
-{subView === "admin" && isSystemViewer && (
+          {subView === "admin" && isSystemViewer && (
             <AdminPanel
               ldugBootstrap={ldugBootstrap}
               currentUserEmail={ldugBootstrap?.email || bootstrapData?.email || ""}
+              actualEmail={ldugBootstrap?.actual_email || ldugBootstrap?.email || bootstrapData?.email || ""}
               showToast={showToast}
             />
           )}
-                  </div>
+        </div>
       </div>
     </div>
   );

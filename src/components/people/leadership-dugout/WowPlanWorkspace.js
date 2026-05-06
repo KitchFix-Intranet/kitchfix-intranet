@@ -4,17 +4,8 @@
 // WowPlanWorkspace — main container for a WOW Plan instance
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2 (Chunk 3)
+// Sprint: 2 (Chunk 3) + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Routes to the right sub-screen based on plan.status and today's date:
-//   Generated          → PreDay1 (leader prep)
-//   PreDay1            → PreDay1 (still filling)
-//   Active (post-Day1) → Checkpoint(30) once today >= day30, else Day1 read-only
-//   Day30              → Checkpoint(60) once today >= day60
-//   Day60              → CloseOut once today >= day90
-//   Day90              → CloseOut
-//   Closed             → CloseOut (read-only)
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState, useCallback } from "react";
@@ -25,6 +16,7 @@ import WowPlanDay1 from "@/components/people/leadership-dugout/WowPlanDay1";
 import WowPlanCheckpoint from "@/components/people/leadership-dugout/WowPlanCheckpoint";
 import WowPlanCloseOut from "@/components/people/leadership-dugout/WowPlanCloseOut";
 import { WOW_PLAN_STATUS } from "@/lib/performanceSchema";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 const STATUS_LABEL = {
   [WOW_PLAN_STATUS.GENERATED]: "Generated · awaiting pre-Day 1",
@@ -69,9 +61,8 @@ export default function WowPlanWorkspace({ planId, currentUserEmail, onBack, sho
 
   const reload = useCallback(async () => {
     try {
-      const res = await fetch("/api/people/leadership-dugout", {
+      const res = await ldugFetch("/api/people/leadership-dugout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "get-wow-plan", email: currentUserEmail, plan_id: planId }),
       });
       const data = await res.json();

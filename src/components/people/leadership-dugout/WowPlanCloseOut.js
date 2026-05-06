@@ -4,22 +4,14 @@
 // WowPlanCloseOut — Day 90 close-out + 3 sigs + PDF trigger
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2 (signs + status)  →  Chunk 6 (PDF render)
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Three sigs: Leader, Reviewer, Oversight. Plan flips to Closed when all 3
-// land. PDF render fires async at Chunk 6.
-//
-// v2 sign tracking: We can't store 3 separate signature timestamps without a
-// schema change (header has only day90_signed_at). For Sprint 2, the day 90
-// flow uses a "all 3 acknowledge" pattern — collected as 3 boolean checks in
-// body.day90_data, then a single timestamp lands when Oversight calls
-// close-wow-plan. Schema upgrade for separate timestamps is Chunk 5/6 work.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
 import NarrativeField from "@/components/people/leadership-dugout/NarrativeField";
 import SignOffBlock from "@/components/people/leadership-dugout/SignOffBlock";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 export default function WowPlanCloseOut({ plan, currentUserEmail, onClose, showToast }) {
   const header = plan?.header || {};
@@ -47,14 +39,13 @@ export default function WowPlanCloseOut({ plan, currentUserEmail, onClose, showT
   const closed = header.status === "Closed" || !!header.day90_signed_at;
 
   const save = (next) =>
-    fetch("/api/people/leadership-dugout", {
+    ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save-wow-section",
         email: currentUserEmail,
         plan_id: header.id,
-        column: "L", // day90_data
+        column: "L",
         value: next,
       }),
     });
@@ -100,13 +91,11 @@ export default function WowPlanCloseOut({ plan, currentUserEmail, onClose, showT
       acknowledgments: next,
     });
 
-    // Once all 3 ack'd AND current user is Oversight (or system viewer), close the plan
     if (next.leader && next.reviewer && next.oversight && isOversight) {
       setSubmitting(true);
       try {
-        await fetch("/api/people/leadership-dugout", {
+        await ldugFetch("/api/people/leadership-dugout", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "close-wow-plan",
             email: currentUserEmail,
@@ -171,7 +160,6 @@ export default function WowPlanCloseOut({ plan, currentUserEmail, onClose, showT
         ))}
       </div>
 
-      {/* Three sign-offs */}
       <div className="pp-ldug-signoff-grid">
         <SignOffBlock
           role="Leader"
@@ -209,7 +197,7 @@ export default function WowPlanCloseOut({ plan, currentUserEmail, onClose, showT
           <h3 className="pp-ldug-empty-title">Plan closed</h3>
           <p className="pp-ldug-empty-desc">
             This leader has transitioned to the regular Cycle Performance Review on
-            their contract-type cadence. PDF archive will appear once the render runs (Chunk 6).
+            their contract-type cadence. PDF archive will appear once the render runs.
           </p>
         </div>
       )}

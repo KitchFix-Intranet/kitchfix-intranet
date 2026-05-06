@@ -4,17 +4,12 @@
 // Library — performance system docs viewer (Drive embeds)
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 1 (functional)
-// Spec: /docs/LEADERSHIP_DUGOUT_BUILD_PLAN.md
+// Sprint: 1 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-// Sibling pattern: src/components/people/IncidentLibrary.js
-//
-// Reads from HUB sheet "ldug_library_manifest" tab (same column structure
-// as existing library_manifest). Each row points to a Drive file ID.
-// Click → opens Drive viewer in a new tab (matches IncidentLibrary pattern).
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 const CATEGORY_LABELS = {
   pb: "Playbooks",
@@ -33,9 +28,8 @@ export default function Library({ showToast }) {
 
   useEffect(() => {
     const email = typeof window !== "undefined" ? localStorage.getItem("kf_user_email") || "" : "";
-    fetch("/api/people/leadership-dugout", {
+    ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "library-list", email }),
     })
       .then((r) => r.json())
@@ -54,7 +48,6 @@ export default function Library({ showToast }) {
     window.open(doc.view_url, "_blank", "noopener,noreferrer");
   };
 
-  // ─── Group by category ───
   const grouped = (docs || []).reduce((acc, d) => {
     const cat = d.category || "other";
     if (!acc[cat]) acc[cat] = [];

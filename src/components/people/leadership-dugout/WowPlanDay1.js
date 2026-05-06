@@ -4,22 +4,14 @@
 // WowPlanDay1 — joint kickoff working session
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Used by Reviewer + Leader together on Day 1. Both can edit; either can
-// sign at the end. Status flips Generated/PreDay1 → Active when Day 1 signs.
-//
-// Sections:
-//   - Reviewer's "high-leverage question" answers (3-5 things)
-//   - Top 3 goals for the 90 days (joint)
-//   - Manager brand expectations (Reviewer fills)
-//   - Leader style preferences (Leader fills)
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import NarrativeField from "@/components/people/leadership-dugout/NarrativeField";
 import SignOffBlock from "@/components/people/leadership-dugout/SignOffBlock";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToast }) {
   const body = plan?.body || {};
@@ -42,9 +34,8 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
   const isReviewer = header.reviewer_email?.toLowerCase() === (currentUserEmail || "").toLowerCase();
 
   const save = (column, value) =>
-    fetch("/api/people/leadership-dugout", {
+    ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save-wow-section",
         email: currentUserEmail,
@@ -80,9 +71,8 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
   const handleSign = async () => {
     setSubmitting(true);
     try {
-      await fetch("/api/people/leadership-dugout", {
+      await ldugFetch("/api/people/leadership-dugout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit-wow-checkpoint",
           email: currentUserEmail,
@@ -111,7 +101,6 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
         </p>
       </div>
 
-      {/* Reviewer's high-leverage question — what does this leader need to focus on? */}
       <div className="pp-ldug-form-row">
         <label className="pp-ldug-form-label">
           Reviewer's high-leverage question
@@ -126,7 +115,6 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
         />
       </div>
 
-      {/* Top 3 goals (joint) */}
       <div className="pp-ldug-form-row">
         <label className="pp-ldug-form-label">Top 3 goals for the 90 days</label>
         {goals.map((g, idx) => (
@@ -162,7 +150,6 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
         ))}
       </div>
 
-      {/* Brand expectations (Reviewer) */}
       <div className="pp-ldug-form-row">
         <label className="pp-ldug-form-label">
           Manager brand & expectations
@@ -186,7 +173,6 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
         </div>
       </div>
 
-      {/* Style preferences (Leader) */}
       <div className="pp-ldug-form-row">
         <label className="pp-ldug-form-label">
           Leader style preferences
@@ -210,7 +196,6 @@ export default function WowPlanDay1({ plan, currentUserEmail, onAdvance, showToa
         </div>
       </div>
 
-      {/* Sign-off */}
       <div className="pp-ldug-signoff-row">
         <SignOffBlock
           role="Day 1 sign-off"

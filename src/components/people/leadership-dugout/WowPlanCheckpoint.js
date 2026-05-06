@@ -4,25 +4,20 @@
 // WowPlanCheckpoint — Day 30 / Day 60 checkpoint screen (variant by `day`)
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
+// Sprint: 2 + Chunk 7 (ldugFetch)
 // CSS prefix: pp-ldug-
-//
-// Day 30 (Landed): goal_progress, relationship_status, adjustments
-// Day 60 (Mid-arc): goal_progress, obstacles, support_actions
-//
-// Same shell, different prompts. Either Reviewer or Leader can save sections.
-// Both attend the conversation; one signs at the end (Reviewer convention).
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
 import NarrativeField from "@/components/people/leadership-dugout/NarrativeField";
 import SignOffBlock from "@/components/people/leadership-dugout/SignOffBlock";
+import { ldugFetch } from "@/components/people/leadership-dugout/ldugFetch";
 
 const PROMPTS = {
   30: {
     title: "Day 30 — Landed",
     intro: "30 days in. How are the goals tracking? What's the relationship like? What needs to change for the next 30?",
-    column: "J", // day30_data
+    column: "J",
     fields: [
       { id: "goal_progress", label: "Goal progress", placeholder: "Where are each of the Top 3 goals tracking?" },
       { id: "relationship_status", label: "Relationship status", placeholder: "Reviewer–Leader trust, alignment, candor." },
@@ -32,7 +27,7 @@ const PROMPTS = {
   60: {
     title: "Day 60 — Mid-arc",
     intro: "60 days in. Goals on path? What obstacles are real? What support would change the trajectory?",
-    column: "K", // day60_data
+    column: "K",
     fields: [
       { id: "goal_progress", label: "Goal progress", placeholder: "Where are each of the Top 3 goals tracking?" },
       { id: "obstacles", label: "Obstacles", placeholder: "What's actually getting in the way." },
@@ -61,9 +56,8 @@ export default function WowPlanCheckpoint({ day, plan, currentUserEmail, onAdvan
 
   const save = (next) => {
     setData(next);
-    return fetch("/api/people/leadership-dugout", {
+    return ldugFetch("/api/people/leadership-dugout", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save-wow-section",
         email: currentUserEmail,
@@ -77,9 +71,8 @@ export default function WowPlanCheckpoint({ day, plan, currentUserEmail, onAdvan
   const handleSign = async () => {
     setSubmitting(true);
     try {
-      await fetch("/api/people/leadership-dugout", {
+      await ldugFetch("/api/people/leadership-dugout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit-wow-checkpoint",
           email: currentUserEmail,
