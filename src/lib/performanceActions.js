@@ -1,19 +1,17 @@
 // ════════════════════════════════════════════════════════════════════════════
-// performanceActions — module-level helpers shared across instruments
+// performanceActions — module-level helpers
 //
 // Module: People Portal · Leadership Dugout
-// Sprint: 2
-//
-// What lives here:
-//   - logAudit (append-only audit trail per SOP-001 §6.1)
-//   - postPerformanceSlack (Slack notifications to #opshub-performance)
+// Sprint: 2 (Chunk 7 — test mode)
 // ════════════════════════════════════════════════════════════════════════════
 
 import { randomUUID } from "crypto";
 import { appendRowSA, SHEET_IDS } from "@/lib/sheets";
 import { COLLECTION_TABS } from "@/lib/performanceSchema";
+import { isTestModeEnabled } from "@/lib/performanceAcl";
 
-// ─── Audit log writer (best-effort; never throws) ───
+// ─── Audit log writer (best-effort, never throws) ───
+// In test mode, prepends [TEST] to actor_email so test rows can be wiped later.
 export async function logAudit({
   instrument_type,
   instrument_id,
@@ -21,14 +19,16 @@ export async function logAudit({
   actor_email,
   actor_role,
   details = {},
+  test_mode = false, // pass through from caller for prefix
 }) {
   try {
+    const stamped = test_mode ? `[TEST] ${actor_email}` : (actor_email || "");
     const row = [
       randomUUID(),
       instrument_type,
       instrument_id,
       action,
-      actor_email || "",
+      stamped,
       actor_role || "",
       new Date().toISOString(),
       JSON.stringify(details),
@@ -40,17 +40,19 @@ export async function logAudit({
 }
 
 // ─── Slack post to #opshub-performance ───
-// Uses SLACK_PERFORMANCE_WEBHOOK env var. No-op if not set.
-// Pattern matches src/lib/incidentActions.js postSlackChannel.
-export async function postPerformanceSlack({ headerText, fields = [], context }) {
+// Continues to post in test mode (per your call) but adds a [TEST] tag in the
+// header text so you can tell test posts from real ones in the channel.
+export async function postPerformanceSlack({ headerText, fields = [], context, test_mode = false }) {
   const webhook = process.env.SLACK_PERFORMANCE_WEBHOOK;
   if (!webhook) {
     console.warn("[performance slack] SLACK_PERFORMANCE_WEBHOOK not set; skipping");
     return { ok: false, reason: "no-webhook" };
   }
 
+  const stampedHeader = test_mode ? `[TEST] ${headerText}` : headerText;
+
   const blocks = [
-    { type: "header", text: { type: "plain_text", text: headerText } },
+    { type: "header", text: { type: "plain_text", text: stampedHeader } },
   ];
 
   if (fields.length > 0) {
@@ -67,11 +69,18 @@ export async function postPerformanceSlack({ headerText, fields = [], context })
     });
   }
 
+  if (test_mode) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "⚠️ *TEST MODE* — Leadership Dugout test, not a real performance event." }],
+    });
+  }
+
   try {
     const res = await fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: headerText, blocks }),
+      body: JSON.stringify({ text: stampedHeader, blocks }),
     });
     return { ok: res.ok };
   } catch (e) {
