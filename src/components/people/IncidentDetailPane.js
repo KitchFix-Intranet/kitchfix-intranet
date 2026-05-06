@@ -67,6 +67,30 @@ const [advancing, setAdvancing] = useState(false);
   });
   const setInv = (k, v) => setInvForm((f) => ({ ...f, [k]: v }));
 
+  // P4C: lock state. After first save (investigation_saved_at populated), the
+  // form renders read-only with an "Edit" button. Click Edit → unlock for changes
+  // → "Save changes" persists silently (no notifications) and re-locks.
+  // Cancel discards in-progress edits and re-locks with the persisted values.
+  const isInvestigationSaved = !!incident.investigation_saved_at;
+  const [editing, setEditing] = useState(false);
+  // Lock UX is active when the investigation has been saved AND we're not
+  // explicitly in edit mode. Pre-save (first time filling) always renders editable.
+  const formLocked = isInvestigationSaved && !editing;
+
+  // Cancel re-edit — restore form to persisted values and exit edit mode
+  const cancelEdit = () => {
+    setInvForm({
+      root_cause: incident.root_cause || "",
+      corrective_action: incident.corrective_action || "",
+      corrective_action_owner: incident.corrective_action_owner || "",
+      corrective_action_due: incident.corrective_action_due || "",
+      preventive_action: incident.preventive_action || "",
+      preventive_action_owner: incident.preventive_action_owner || "",
+      preventive_action_completed_at: incident.preventive_action_completed_at || "",
+    });
+    setEditing(false);
+  };
+
   // Closure gating (SOP §8.4) — uses LIVE form values for hint;
   // server-side block uses persisted values.
   const caFilled = !!String(invForm.corrective_action || "").trim();
@@ -148,11 +172,17 @@ const data = await res.json();
           adminEmail,
         }),
       });
-const data = await res.json();
+      const data = await res.json();
       if (data.success) {
-        if (showToast) showToast("✅ Investigation saved");
-        // W2 — Record save time so we can show "Last saved at HH:MM" near the button.
+        // P4C: differentiate first-save (status advanced + notifications fired)
+        // from silent re-edit. Both lock the form on success.
+        if (data.first_save) {
+          if (showToast) showToast("✅ Investigation saved · Status → Investigated");
+        } else {
+          if (showToast) showToast("✅ Changes saved");
+        }
         setLastInvSavedAt(new Date());
+        setEditing(false); // re-lock the form
         if (onRefresh) await onRefresh();
       } else {
         if (showToast) showToast(`⚠️ ${data.error || "Save failed"}`, "error");
@@ -194,6 +224,41 @@ const data = await res.json();
 
   return (
     <div style={{ padding: "8px 4px" }}>
+      {/* P4B: status-aware banner (read-only / Action Center side only).
+          Replaces the static footer "incidents stay on file" with a dynamic
+          message that tells the submitter what's happening RIGHT NOW with their
+          report. EI work — closes the loop on "I submitted this and never heard back". */}
+      {readOnly && (() => {
+        const status = incident.status || "submitted";
+        const messages = {
+          submitted: "HR will review and follow up if needed.",
+          acknowledged: "HR has reviewed. Investigation in progress.",
+          investigating: "Investigation is in progress. We'll update you as it advances.",
+          investigated: "Investigation complete. 30-day check-in scheduled.",
+          corrective: "Corrective action in motion.",
+          closed: "Closed. Thank you for reporting.",
+        };
+        const msg = messages[status] || messages.submitted;
+        const isDone = status === "closed";
+        const bgColor = isDone ? "#f0fdf4" : "#eff6ff";
+        const borderColor = isDone ? "#86efac" : "#bfdbfe";
+        const textColor = isDone ? "#15803d" : "#1e40af";
+        return (
+          <div style={{
+            background: bgColor,
+            border: `1px solid ${borderColor}`,
+            borderRadius: 8,
+            padding: "10px 14px",
+            marginBottom: 14,
+            fontSize: 12,
+            color: textColor,
+            lineHeight: 1.5,
+          }}>
+            <strong style={{ marginRight: 6 }}>Status:</strong>{msg}
+          </div>
+        );
+      })()}
+
       {/* Header */}
       <div style={{
         display: "flex", gap: 12, alignItems: "flex-start",
@@ -257,18 +322,18 @@ const data = await res.json();
       <DetailRow l="Manager aware" v={incident.manager_aware_date} />
       <div style={{ display: "flex", padding: "6px 0", fontSize: 12 }}>
         <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>What happened</div>
-        <div style={{ color: "#0f3057", flex: 1, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{incident.what_happened}</div>
+        <div style={{ color: "#153968", flex: 1, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{incident.what_happened}</div>
       </div>
       {incident.witnesses && (
         <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
           <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>Witnesses</div>
-          <div style={{ color: "#0f3057", flex: 1, whiteSpace: "pre-wrap" }}>{incident.witnesses}</div>
+          <div style={{ color: "#153968", flex: 1, whiteSpace: "pre-wrap" }}>{incident.witnesses}</div>
         </div>
       )}
       {incident.immediate_actions_taken && (
         <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
           <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>Immediate actions</div>
-          <div style={{ color: "#0f3057", flex: 1, whiteSpace: "pre-wrap" }}>{incident.immediate_actions_taken}</div>
+          <div style={{ color: "#153968", flex: 1, whiteSpace: "pre-wrap" }}>{incident.immediate_actions_taken}</div>
         </div>
       )}
 
@@ -299,26 +364,54 @@ const data = await res.json();
                   </div>
       )}
 
-      {/* Check-in due — admin only */}
+      {/* Check-in due — admin only.
+          P4C: copy updated to surface that the calendar invite has been
+          auto-created on Mariela's calendar (with submitter + Kevin attendees).
+          Tells the admin they can reschedule freely without breaking anything. */}
       {!readOnly && incident.employee_check_in_due && !incident.employee_check_in_completed_at && (
         <div style={{
-          marginTop: 12, padding: "8px 12px", background: "#fef3c7", borderRadius: 8,
-          fontSize: 11, color: "#92400e",
+          marginTop: 12, padding: "10px 14px", background: "#fef3c7", borderRadius: 8,
+          fontSize: 11, color: "#92400e", lineHeight: 1.5,
         }}>
-          ⏰ Employee 30-day check-in due: <strong>{incident.employee_check_in_due}</strong>
+          <div>
+            ⏰ Employee 30-day check-in due: <strong>{incident.employee_check_in_due}</strong>
+          </div>
+          {incident.calendar_event_id && (
+            <div style={{ marginTop: 4, color: "#a16207" }}>
+              A calendar invite has been scheduled — feel free to reschedule as needed.
+            </div>
+          )}
         </div>
       )}
 
       {/* Investigation & Closure pane — admin only */}
       {!readOnly && (
         <div className="pp-inc-invpane">
-          <div className="pp-inc-invpane-header">
-            <span>Investigation &amp; Closure</span>
-{/* P3 — Phase 3: was "SOP §8.3 cadence · §8.4 requires both fields to close"
-                (legalese). Plain-English version is faster to scan and tells the admin
-                what they actually need to do. */}
-            <span className="pp-inc-invpane-help">Two fields are required before this can be closed.</span>
-                      </div>
+          <div className="pp-inc-invpane-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+            <div>
+              <span>Investigation &amp; Closure</span>
+              {/* P4C: subtitle copy adapts to lock state. Pre-save tells admin
+                  what's required; post-save tells them the form is locked and
+                  how to make changes. Re-edit shows in-progress state. */}
+              <span className="pp-inc-invpane-help">
+                {formLocked
+                  ? `Saved ${formatDateOnly(incident.investigation_saved_at)} — read only.`
+                  : editing
+                    ? "Editing — your changes will be saved silently. No notifications fire on re-edits."
+                    : "Two fields are required before this can be closed."}
+              </span>
+            </div>
+            {/* P4C: Edit button — only visible when form is locked. Click unlocks. */}
+            {formLocked && (
+              <button
+                className="pp-btn pp-btn--ghost"
+                style={{ padding: "5px 12px", fontSize: 11, height: "auto" }}
+                onClick={() => setEditing(true)}
+              >
+                ✎ Edit
+              </button>
+            )}
+          </div>
 
           {/* Root cause + due */}
           <div className="pp-inc-invpane-field">
@@ -338,6 +431,7 @@ const data = await res.json();
               onChange={(e) => setInv("root_cause", e.target.value)}
               placeholder="What conditions allowed this to happen? (Ask 'why' five times.)"
               style={{ minHeight: 50, resize: "vertical" }}
+              disabled={formLocked}
             />
           </div>
 
@@ -359,6 +453,7 @@ const data = await res.json();
               onChange={(e) => setInv("corrective_action", e.target.value)}
               placeholder="What fixes THIS incident?"
               style={{ minHeight: 50, resize: "vertical" }}
+              disabled={formLocked}
             />
             <div className="pp-inc-invpane-row">
               <div>
@@ -368,6 +463,7 @@ const data = await res.json();
                   value={invForm.corrective_action_owner}
                   onChange={(e) => setInv("corrective_action_owner", e.target.value)}
                   placeholder="email or name"
+                  disabled={formLocked}
                 />
               </div>
               <div>
@@ -377,6 +473,7 @@ const data = await res.json();
                   className="pp-input"
                   value={invForm.corrective_action_due}
                   onChange={(e) => setInv("corrective_action_due", e.target.value)}
+                  disabled={formLocked}
                 />
               </div>
             </div>
@@ -394,6 +491,7 @@ const data = await res.json();
               onChange={(e) => setInv("preventive_action", e.target.value)}
               placeholder="What prevents the NEXT one?"
               style={{ minHeight: 50, resize: "vertical" }}
+              disabled={formLocked}
             />
             <div className="pp-inc-invpane-row">
               <div>
@@ -403,6 +501,7 @@ const data = await res.json();
                   value={invForm.preventive_action_owner}
                   onChange={(e) => setInv("preventive_action_owner", e.target.value)}
                   placeholder="email or name"
+                  disabled={formLocked}
                 />
               </div>
               <div>
@@ -412,34 +511,53 @@ const data = await res.json();
                   className="pp-input"
                   value={invForm.preventive_action_completed_at}
                   onChange={(e) => setInv("preventive_action_completed_at", e.target.value)}
+                  disabled={formLocked}
                 />
               </div>
             </div>
           </div>
 
-          {/* Closure readiness hint */}
-          {!canCloseAfterSave && (
+          {/* Closure readiness hint — only when form is editable */}
+          {!formLocked && !canCloseAfterSave && (
             <div className="pp-inc-invpane-hint">
               Both Corrective and Preventive must be filled to advance status to Closed (SOP §8.4).
             </div>
           )}
 
-<div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-            <button
-              className="pp-btn pp-btn--primary"
-              style={{ padding: "7px 14px", fontSize: 12 }}
-              onClick={handleSaveInvestigation}
-              disabled={savingInvestigation}
-            >
-              {savingInvestigation ? "Saving..." : "Save investigation"}
-            </button>
-            {/* W2 — Last-saved indicator. Visible after first successful save in this session. */}
-            {lastInvSavedAt && !savingInvestigation && (
-              <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 500 }}>
-                ✓ Saved at {lastInvSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
-          </div>
+          {/* P4C: Save / Save changes / Cancel button row.
+              - Locked: button row hidden (Edit button in header is the only action)
+              - Pre-save (first time): "Save investigation" — fires status advance + notifications
+              - Editing (re-edit): "Save changes" + "Cancel" — silent save / discard */}
+          {!formLocked && (
+            <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+              <button
+                className="pp-btn pp-btn--primary"
+                style={{ padding: "7px 14px", fontSize: 12 }}
+                onClick={handleSaveInvestigation}
+                disabled={savingInvestigation}
+              >
+                {savingInvestigation
+                  ? "Saving..."
+                  : editing ? "Save changes" : "Save investigation"}
+              </button>
+              {editing && (
+                <button
+                  className="pp-btn pp-btn--ghost"
+                  style={{ padding: "7px 14px", fontSize: 12 }}
+                  onClick={cancelEdit}
+                  disabled={savingInvestigation}
+                >
+                  Cancel
+                </button>
+              )}
+              {/* W2 — Last-saved indicator. Visible after first successful save in this session. */}
+              {lastInvSavedAt && !savingInvestigation && (
+                <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 500 }}>
+                  ✓ Saved at {lastInvSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -583,7 +701,7 @@ function DetailRow({ l, v }) {
   return (
     <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
       <div style={{ color: "#64748b", width: 110, flexShrink: 0 }}>{l}</div>
-      <div style={{ color: "#0f3057", flex: 1 }}>{v}</div>
+      <div style={{ color: "#153968", flex: 1 }}>{v}</div>
     </div>
   );
 }
@@ -646,8 +764,8 @@ function computeSLAStatus(incident) {
   return {
     met,
     label: met
-      ? `SLA met · filed in ${fmt(deltaHours)} (limit ${slaHours}h)`
-      : `SLA missed · ${fmt(deltaHours - slaHours)} late (${fmt(deltaHours)} vs ${slaHours}h limit)`,
+      ? `Filed within ${slaHours}h · ${fmt(deltaHours)} response`
+      : `Late filing · ${fmt(deltaHours - slaHours)} past ${slaHours}h limit`,
     color: met ? "#065f46" : "#991b1b",
   };
 }

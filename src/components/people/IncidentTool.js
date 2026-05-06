@@ -30,10 +30,10 @@ export default function IncidentTool({ bootstrapData, onNavigate, showToast, ref
         <div className="pp-inc-tool-header">
           <div className="pp-inc-tool-title">
             <div className="pp-inc-tool-title-icon" aria-hidden="true">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-            </div>
+                          </div>
             <div className="pp-inc-tool-title-text">
               <h3>Incident Center</h3>
               <p>Report or look up the rules</p>

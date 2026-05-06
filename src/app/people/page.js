@@ -190,10 +190,19 @@ export default function PeoplePage() {
   }, [view]);
 
   // ─── Counts ───
-  const counts = { paf: 0, newHire: 0, actionRequired: 0 };
+  // P4B: openIncidents = user's own incidents that are still open (not closed).
+  // Surfaces on the home dashboard as "1 in progress" so the user knows their
+  // submission is still being worked, not silently sitting in a queue.
+  const counts = { paf: 0, newHire: 0, actionRequired: 0, openIncidents: 0 };
   history.forEach((h) => {
     if (h.status === "Archived") return;
-    if (h.module === "incident") return; // incidents counted separately, not in NH/PAF buckets
+    if (h.module === "incident") {
+      // Open = anything except closed. Submitted/Acknowledged/Investigating/etc all count.
+      if (h.status && String(h.status).toLowerCase() !== "closed") {
+        counts.openIncidents++;
+      }
+      return; // don't double-count incidents in NH/PAF buckets
+    }
     if (/Rejected|Action/i.test(h.status)) counts.actionRequired++;
     else if (/Pending/i.test(h.status)) {
       if (h.module === "newhire") counts.newHire++;

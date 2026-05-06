@@ -43,6 +43,10 @@ const TrophyIcon = () => (
 export default function DashboardView({ counts, hasDraftNH, hasDraftPAF, isAdmin, onNavigate, onDiscardDraft }) {
   const totalPending = counts.paf + counts.newHire;
   const totalAction = counts.actionRequired;
+  // P4B: user's own open incidents (non-closed). Reflects on the launchpad
+  // pill so "All Caught Up" doesn't lie when they have an active incident.
+  const openIncidents = counts.openIncidents || 0;
+  const allCaughtUp = totalPending === 0 && totalAction === 0 && openIncidents === 0;
 
   return (
     <div className="pp-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
@@ -57,7 +61,7 @@ export default function DashboardView({ counts, hasDraftNH, hasDraftPAF, isAdmin
           <h3 className="pp-card-title">Action Center</h3>
           <p className="pp-card-desc">Track status & requests.</p>
 
-          {/* Chips row — urgent + processing inline */}
+          {/* Chips row — urgent + processing + open incidents inline */}
           <div className="pp-action-chips">
             {totalAction > 0 && (
               <div className="pp-chip pp-chip-danger" style={{ flex: 1, textAlign: "center" }}>
@@ -69,7 +73,15 @@ export default function DashboardView({ counts, hasDraftNH, hasDraftPAF, isAdmin
                 {totalPending} Processing
               </div>
             )}
-            {totalPending === 0 && totalAction === 0 && (
+            {/* P4B: open incidents render as a neutral "in progress" pill.
+                Distinct from "Needs Action" — user doesn't have to do anything,
+                but their case isn't done yet. Reads as a status update, not a task. */}
+            {openIncidents > 0 && (
+              <div className="pp-chip pp-chip-blue" style={{ flex: 1, textAlign: "center" }}>
+                🔍 {openIncidents} In Progress
+              </div>
+            )}
+            {allCaughtUp && (
               <div className="pp-chip pp-chip-loading" style={{ width: "100%", textAlign: "center" }}>
                 ✨ All Caught Up
               </div>

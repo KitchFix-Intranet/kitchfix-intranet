@@ -239,29 +239,55 @@ export default function IncidentLibrary({ bootstrapData, showToast }) {
       )}
 
       {/* Sections - hide section header when a specific filter is active
-          (the filter pill already says what category we're viewing) */}
-{!loading && grouped.map((section) => {
+          (the filter pill already says what category we're viewing).
+          P4B: non-pinned sections are now collapsible via native <details>.
+          Pinned section is the most-accessed, so it stays a plain div (always open).
+          Native <details> gives free accessibility, keyboard nav, and zero JS. */}
+      {!loading && grouped.map((section) => {
         const hideHeader = activeFilter !== "all" && grouped.length === 1;
-        // P1 — Phase 2: pull the Lucide Icon component for this category
         const cat = CATEGORIES.find((c) => c.id === section.id);
         const Icon = cat?.Icon;
-        return (
-          <div key={section.id} className="pp-inc-lib-section">
-            {!hideHeader && (
-              <div className="pp-inc-lib-section-head">
-                <h3 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  {Icon && <Icon size={16} strokeWidth={1.75} aria-hidden="true" />}
-                  {section.label}
-                </h3>
-                <span className="pp-inc-lib-section-count">
-                  {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
-                </span>
+        const isPinned = section.id === "pinned";
+
+        // Filter-active or pinned section → render plain (always-open)
+        if (hideHeader || isPinned) {
+          return (
+            <div key={section.id} className={`pp-inc-lib-section${isPinned ? " pp-inc-lib-section--pinned" : ""}`}>
+              {!hideHeader && (
+                <div className="pp-inc-lib-section-head">
+                  <h3 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {Icon && <Icon size={16} strokeWidth={1.75} aria-hidden="true" />}
+                    {section.label}
+                  </h3>
+                  <span className="pp-inc-lib-section-count">
+                    {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              )}
+              <div className="pp-inc-lib-grid">
+                {section.docs.map((doc) => <Tile key={doc.id} doc={doc} showToast={showToast} />)}
               </div>
-            )}
+            </div>
+          );
+        }
+
+        // Non-pinned section → collapsible. Default open=false (collapsed)
+        // so the page lands compact and the user expands as needed.
+        return (
+          <details key={section.id} className="pp-inc-lib-section pp-inc-lib-section--collapsible">
+            <summary className="pp-inc-lib-section-head">
+              <h3 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                {Icon && <Icon size={16} strokeWidth={1.75} aria-hidden="true" />}
+                {section.label}
+              </h3>
+              <span className="pp-inc-lib-section-count">
+                {section.docs.length} doc{section.docs.length !== 1 ? "s" : ""}
+              </span>
+            </summary>
             <div className="pp-inc-lib-grid">
               {section.docs.map((doc) => <Tile key={doc.id} doc={doc} showToast={showToast} />)}
             </div>
-          </div>
+          </details>
         );
       })}
           </div>

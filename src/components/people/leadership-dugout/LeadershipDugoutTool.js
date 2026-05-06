@@ -249,13 +249,14 @@ export default function LeadershipDugoutTool({ bootstrapData, onNavigate, showTo
               showToast={showToast}
             />
           )}
-          {subView === "admin" && isSystemViewer && (
+{subView === "admin" && isSystemViewer && (
             <AdminPanel
               ldugBootstrap={ldugBootstrap}
+              currentUserEmail={ldugBootstrap?.email || bootstrapData?.email || ""}
               showToast={showToast}
             />
           )}
-        </div>
+                  </div>
       </div>
     </div>
   );

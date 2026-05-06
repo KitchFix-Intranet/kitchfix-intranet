@@ -96,12 +96,48 @@ export const THEMES = [
   { id: "compliance", label: "Compliance" },
 ];
 
-// ─── Three Composites ───
-export const COMPOSITES = [
+// ─── All possible composites — PB-001 (filtered per role at render time) ───
+export const COMPOSITES_ALL = [
   { id: "team_health", label: "Leadership Team Health" },
   { id: "client_health", label: "Client Relationship Health" },
-  { id: "trajectory", label: "Development Trajectory" },
+  { id: "financial_health", label: "Financial Health" },
 ];
+
+// ─── Role-conditional composites (PB-001 §"Performance Reviews") ───
+//   Leadership Team Health     → Site Leaders ONLY
+//   Client Relationship Health → Site Leaders + RDOs ONLY
+//   Financial Health           → everyone
+export function getCompositesForRole(role) {
+  const result = [];
+  if (role === "EC") {
+    result.push({ id: "team_health", label: "Leadership Team Health" });
+  }
+  if (role === "EC" || role === "RDO") {
+    result.push({ id: "client_health", label: "Client Relationship Health" });
+  }
+  result.push({ id: "financial_health", label: "Financial Health" });
+  return result;
+}
+
+// ─── WOW Plan trigger gate (PB-001 §"The 90-Day WOW Plan") ───
+// Required: new hire, internal promotion, lateral move into new account.
+// NOT required: routine continuation, return from leave, same-account same-level reassignment.
+export const WOW_PLAN_TRIGGERS = [
+  { id: "new_hire", label: "New hire" },
+  { id: "promotion", label: "Internal promotion" },
+  { id: "lateral", label: "Lateral move into new account" },
+  { id: "not_required", label: "Not a new role — skip WOW Plan" },
+];
+
+// ─── Review Chain (PB-001) — used as defaults when seeding chain entries ───
+// Reviewed Party → Reviewer → Oversight
+export const CHAIN_DEFAULTS = {
+  RDO: { reviewer_role: "VP_Ops", oversight_role: "Sr_Dir_Ops" },
+  EC: { reviewer_role: "RDO", oversight_role: "VP_Ops" },
+  Sous: { reviewer_role: "EC", oversight_role: "RDO" },
+  HM: { reviewer_role: "EC", oversight_role: "RDO" },
+  FieldChef: { reviewer_role: "Director_Culinary", oversight_role: "VP_Ops" },
+};
 
 // ─── Rating scale (1=worst, 5=best per SOP-001; v2 hourly normalized to match) ───
 export const RATING_SCALE = [

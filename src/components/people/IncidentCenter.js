@@ -244,6 +244,9 @@ setSubmitting(true);
           attachmentsTotal: data.attachments_total ?? 0,
           attachmentsUploaded: data.attachments_uploaded ?? 0,
           attachmentErrors: data.attachment_errors || [],
+          // P4C: PDF export — base64 for client-side download
+          pdfBase64: data.pdf_base64 || "",
+          pdfDriveUrl: data.pdf_drive_url || "",
         });
         if (refreshHistory) refreshHistory();
         if (showToast) showToast("✅ Incident submitted");
@@ -272,131 +275,172 @@ setSubmitting(true);
   };
 
   // ─── Success view ───
+  // P4B Option A: redesigned as a single confirmation card with conversational tone.
+  // Was: 7 separate elements (check + title + subtitle + ID pill + notif list + Drive link + Appendix C card + 2 buttons)
+  // Now: tight single card. Green check, "Incident submitted", INC ID, conversational summary.
+  // Secondary actions (Drive folder, Appendix C, S1 callout) tucked under primary confirmation.
   if (success) {
+    const isS1 = success.severity === "S1";
+    const needsAppendixC = success.incidentType === "employee_injury" && success.medicalTreatmentRefused;
+    const allAttachmentsLanded = success.attachmentsTotal > 0 && success.attachmentsUploaded === success.attachmentsTotal;
+    const partialAttachments = success.attachmentsTotal > 0 && success.attachmentsUploaded < success.attachmentsTotal;
+
     return (
-      <div className="pp-card pp-card--form pp-inc-nested" style={{ textAlign: "center", padding: "32px 24px" }}>
+      <div className="pp-card pp-card--form pp-inc-nested" style={{ padding: "32px 24px", maxWidth: 480, margin: "0 auto" }}>
+
+        {/* Hero: green check + heading + INC ID — tight stack */}
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{
-            width: 64, height: 64, borderRadius: "50%", background: "#d1fae5", color: "#059669",
-            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+            width: 56, height: 56, borderRadius: "50%", background: "#d1fae5", color: "#059669",
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px",
           }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <h2 className="pp-card-title" style={{ marginBottom: 6 }}>Incident submitted</h2>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 14px" }}>Your incident has been recorded.</p>
+          <h2 className="pp-card-title" style={{ marginBottom: 4, fontSize: 18 }}>Incident submitted</h2>
           <div style={{
-            display: "inline-block", fontFamily: "ui-monospace, monospace", fontSize: 14, fontWeight: 500,
-            background: "#f3e8ff", color: "#7c3aed", padding: "6px 14px", borderRadius: 6, marginBottom: 16,
-          }}>{success.incidentId}</div>
-
-<div style={{ textAlign: "left", maxWidth: 360, margin: "0 auto 20px", fontSize: 13, lineHeight: 1.7, color: "#475569" }}>
-            {/* P0 — Phase 1: filter null returns from formatNotification so
-                unknown/test codes are never rendered as raw strings. */}
-            {success.notificationsSent && success.notificationsSent
-              .split("|")
-              .filter(Boolean)
-              .map((code) => ({ code, label: formatNotification(code) }))
-              .filter(({ label }) => label !== null)
-              .map(({ label }, i) => (
-                <div key={i}>
-                  <span style={{ color: "#10b981", fontWeight: 500, marginRight: 6 }}>✓</span>
-                  {label}
-                </div>
-              ))}
-{/* P4 diagnostic: show attachment outcomes from server response.
-                Three states:
-                - none attempted → render nothing
-                - all uploaded → quiet green check
-                - partial / all failed → amber warning with error list */}
-            {success.attachmentsTotal > 0 && (
-              <div style={{ marginTop: 10 }}>
-                {success.attachmentsUploaded === success.attachmentsTotal ? (
-                  <div>
-                    <span style={{ color: "#10b981", fontWeight: 500, marginRight: 6 }}>✓</span>
-                    {success.attachmentsTotal === 1
-                      ? "1 attachment uploaded"
-                      : `${success.attachmentsTotal} attachments uploaded`}
-                  </div>
-                ) : (
-                  <div style={{
-                    background: "#fef3c7", border: "1px solid #fbbf24", borderRadius: 6,
-                    padding: "8px 12px", color: "#92400e", fontSize: 12,
-                  }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                      ⚠ {success.attachmentsUploaded}/{success.attachmentsTotal} attachments uploaded
-                    </div>
-                    {success.attachmentErrors?.length > 0 && (
-                      <ul style={{ margin: "4px 0 0 16px", padding: 0, fontSize: 11 }}>
-                        {success.attachmentErrors.map((e, i) => (
-                          <li key={i}>{e.name}: {e.error}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            {success.driveFolderUrl && (
-                              <div style={{ marginTop: 12 }}>
-                <a href={success.driveFolderUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#7c3aed", textDecoration: "none", fontWeight: 500 }}>
-                  📂 Open Drive folder ↗
-                </a>
-              </div>
-            )}
-          </div>
-
-{/* SOP §06 - S1 phone call is non-delegable */}
-          {success.severity === "S1" && (
-            <div className="pp-inc-callout pp-inc-callout--critical" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
-              <div className="pp-inc-callout-head">📞 Call Mariela now</div>
-              <div className="pp-inc-callout-phone">
-                <a href="tel:+13125481420">(312) 548-1420</a>
-              </div>
-              <div className="pp-inc-callout-body">
-                Within 15 minutes once the person is in a safe spot, the Site Leader or Manager of Record personally calls Mariela. The form does not replace the call. Voicemail counts only with a callback number AND a Slack message.
-              </div>
-            </div>
-          )}
-
-{/* SOP §7.1 - Refusal of Medical Treatment Form (Appendix C) */}
-          {success.incidentType === "employee_injury" && success.medicalTreatmentRefused && (
-            <div className="pp-inc-callout pp-inc-callout--warn" style={{ maxWidth: 420, margin: "0 auto 16px" }}>
-              <div className="pp-inc-callout-head">📝 Appendix C required</div>
-              <div className="pp-inc-callout-body">
-                Complete the <strong>Refusal of Medical Treatment</strong> form. Both employee and manager must sign. Send signed copy to Mariela.
-                {/* W8 — direct link to the printable form (manifest-driven URL); falls back to inline text if not configured */}
-                {bootstrapData?.appendixCUrl ? (
-                  <div style={{ marginTop: 8 }}>
-                    <a
-                      href={bootstrapData.appendixCUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "6px 12px", background: "#d97706", color: "white",
-                        textDecoration: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                      }}
-                    >
-                      📄 Open / print Appendix C →
-                    </a>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 6, fontSize: 11, color: "#92400e", fontStyle: "italic" }}>
-                    Find the printable form in the Incident Library tab.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-            <button className="pp-btn pp-btn--ghost" onClick={() => { resetForm(); onNavigate("dashboard"); }}>
-              Back to Home
-            </button>
-            <button className="pp-btn pp-btn--primary" onClick={resetForm}>
-              Submit another
-            </button>
+            display: "inline-block", fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 500,
+            color: "#7c3aed", letterSpacing: "0.04em",
+          }}>
+            {success.incidentId}
           </div>
         </div>
+
+        {/* Conversational summary — replaces "Your incident has been recorded" + notification list */}
+        <p style={{
+          fontSize: 13, color: "#475569", lineHeight: 1.55, margin: "0 0 16px", textAlign: "center",
+        }}>
+          All set. We'll route this to Mariela and the leadership team.
+          {isS1 && " S1 protocol requires a phone call — see below."}
+        </p>
+
+        {/* Attachment status — quiet line for success, amber callout for partial */}
+        {allAttachmentsLanded && (
+          <div style={{
+            fontSize: 12, color: "#10b981", textAlign: "center", marginBottom: 16,
+          }}>
+            ✓ {success.attachmentsTotal === 1 ? "1 attachment uploaded" : `${success.attachmentsTotal} attachments uploaded`}
+          </div>
+        )}
+        {partialAttachments && (
+          <div style={{
+            background: "#fef3c7", border: "1px solid #fbbf24", borderRadius: 8,
+            padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#92400e",
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              ⚠ {success.attachmentsUploaded}/{success.attachmentsTotal} attachments uploaded
+            </div>
+            {success.attachmentErrors?.length > 0 && (
+              <ul style={{ margin: "4px 0 0 16px", padding: 0, fontSize: 11 }}>
+                {success.attachmentErrors.map((e, i) => (
+                  <li key={i}>{e.name}: {e.error}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* S1 protocol callout — only when severity is S1 */}
+        {isS1 && (
+          <div className="pp-inc-callout pp-inc-callout--critical" style={{ marginBottom: 16 }}>
+            <div className="pp-inc-callout-head">📞 Call Mariela now</div>
+            <div className="pp-inc-callout-phone">
+              <a href="tel:+13125481420">(312) 548-1420</a>
+            </div>
+            <div className="pp-inc-callout-body">
+              Within 15 minutes once the person is in a safe spot. The form does not replace the call.
+            </div>
+          </div>
+        )}
+
+        {/* Appendix C callout — only when employee_injury + medical_treatment_refused */}
+        {needsAppendixC && (
+          <div className="pp-inc-callout pp-inc-callout--warn" style={{ marginBottom: 16 }}>
+            <div className="pp-inc-callout-head">📝 Appendix C required</div>
+            <div className="pp-inc-callout-body">
+              Complete the <strong>Refusal of Medical Treatment</strong> form. Both employee and manager must sign. Send signed copy to Mariela.
+              {bootstrapData?.appendixCUrl && (
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={bootstrapData.appendixCUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "6px 12px", background: "#d97706", color: "white",
+                      textDecoration: "none", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    }}
+                  >
+                    📄 Open / print Appendix C →
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Secondary actions — Drive folder + Download PDF, both quiet text links */}
+        {(success.driveFolderUrl || success.pdfBase64) && (
+          <div style={{
+            display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap",
+            marginBottom: 18,
+          }}>
+            {success.driveFolderUrl && (
+              <a
+                href={success.driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#7c3aed", textDecoration: "none", fontSize: 13, fontWeight: 500,
+                }}
+              >
+                📂 Open Drive folder ↗
+              </a>
+            )}
+            {/* P4C: Download PDF — converts base64 to a Blob, triggers browser download.
+                Filename matches the Drive copy ({INC_ID}_Report.pdf). */}
+            {success.pdfBase64 && (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const byteChars = atob(success.pdfBase64);
+                    const bytes = new Uint8Array(byteChars.length);
+                    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: "application/pdf" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${success.incidentId || "incident"}_Report.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch (err) {
+                    console.error("[Incident] PDF download failed:", err);
+                    if (showToast) showToast("⚠️ PDF download failed", "error");
+                  }
+                }}
+                style={{
+                  background: "none", border: "none", padding: 0, cursor: "pointer",
+                  color: "#7c3aed", fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+                }}
+              >
+                📥 Download report PDF
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Primary navigation — two buttons, equal weight */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+          <button className="pp-btn pp-btn--ghost" onClick={() => { resetForm(); onNavigate("dashboard"); }}>
+            Back to Home
+          </button>
+          <button className="pp-btn pp-btn--primary" onClick={resetForm}>
+            Submit another
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -1196,85 +1240,95 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
 
   return (
     <>
-
       <h3 className="pp-card-title" style={{ marginBottom: 4 }}>Review and submit</h3>
       <p className="pp-inc-step-help">Verify everything below, attach any photos, then submit.</p>
 
-      <ReviewBlock title="Type & Severity">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <div className="pp-inc-typeicon" style={{ background: t?.color, width: 32, height: 32, marginBottom: 0 }}>
+      {/* P4B Direction 1: receipt-style single card.
+          Was: 5 separate ReviewBlock cards stacked, each with own border.
+          Now: one card with internal section dividers — feels like a printed
+          incident report receipt instead of a form-with-form-with-form. */}
+      <div style={{
+        background: "white",
+        border: "1px solid #e2e8f0",
+        borderRadius: 12,
+        padding: "16px 18px",
+        marginBottom: 10,
+      }}>
+
+        {/* SECTION 1 — Type & Severity (no divider above; this is the top) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14 }}>
+          <div className="pp-inc-typeicon" style={{ background: t?.color, width: 36, height: 36, marginBottom: 0, flexShrink: 0 }}>
             {ICONS[t?.id]}
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{t?.label || "—"}</div>
-            <div style={{ fontSize: 11, color: "#64748b" }}>
-              <span className="pp-inc-tier-code" style={{ background: sev?.color, marginRight: 6 }}>{sev?.id || "—"}</span>
-              {sev?.label || ""} <span style={{ color: sev?.color || "#64748b" }}>· {sev?.deadline || ""}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#153968", marginBottom: 2 }}>
+              {t?.label || "—"}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span className="pp-inc-tier-code" style={{ background: sev?.color, fontSize: 11, padding: "3px 8px", minWidth: "auto" }}>
+                {sev?.id || "—"}
+              </span>
+              <span>{sev?.label || ""}</span>
+              {sev?.deadline && (
+                <span style={{ color: sev?.color || "#64748b", fontWeight: 600 }}>· {sev.deadline}</span>
+              )}
             </div>
           </div>
         </div>
-      </ReviewBlock>
 
-<ReviewBlock title="When & Where">
-        <ReviewRow l="Site" v={site ? `${site.key} — ${site.name}` : form.site_code || "—"} />
-        <ReviewRow l="Date" v={form.incident_date || "—"} />
-        <ReviewRow l="Time" v={form.incident_time || "—"} />
-        <ReviewRow l="Location" v={form.location_detail || "—"} />
-        <ReviewRow l="Manager aware" v={form.manager_aware_date || "—"} />
-      </ReviewBlock>
+        {/* SECTION 2 — When & Where */}
+        <ReceiptDivider label="When & where" />
+        <ReceiptRow l="Site" v={site ? `${site.key} — ${site.name}` : form.site_code || "—"} />
+        <ReceiptRow l="Date" v={form.incident_date || "—"} />
+        <ReceiptRow l="Time" v={form.incident_time || "—"} />
+        <ReceiptRow l="Location" v={form.location_detail || "—"} />
+        <ReceiptRow l="Manager aware" v={form.manager_aware_date || "—"} />
 
-      <ReviewBlock title="What happened">
-        <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
-          {form.what_happened || <span style={{ color: "#94a3b8" }}>No description</span>}
+        {/* SECTION 3 — Narrative (what happened + immediate actions + witnesses) */}
+        <ReceiptDivider label="Narrative" />
+        <div style={{ marginBottom: form.immediate_actions_taken || form.witnesses ? 10 : 0 }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>What happened</div>
+          <div style={{ fontSize: 13, lineHeight: 1.55, color: "#334155", whiteSpace: "pre-wrap" }}>
+            {form.what_happened || <span style={{ color: "#cbd5e1" }}>No description</span>}
+          </div>
         </div>
         {form.immediate_actions_taken && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8", marginTop: 10, marginBottom: 4 }}>Immediate actions</div>
-            <div style={{ fontSize: 12, lineHeight: 1.5, color: "#334155", padding: "4px 0", whiteSpace: "pre-wrap" }}>
+          <div style={{ marginBottom: form.witnesses ? 10 : 0 }}>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>Immediate actions</div>
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: "#334155", whiteSpace: "pre-wrap" }}>
               {form.immediate_actions_taken}
             </div>
+          </div>
+        )}
+        {form.witnesses && (
+          <div>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>Witnesses</div>
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: "#334155", whiteSpace: "pre-wrap" }}>
+              {form.witnesses}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 4 — Type-specific details (only if any) */}
+        {tsEntries.length > 0 && (
+          <>
+            <ReceiptDivider label="Type-specific details" />
+            {tsEntries.map(([k, v]) => <ReceiptRow key={k} l={prettify(k)} v={String(v)} />)}
           </>
         )}
-        {form.witnesses && <ReviewRow l="Witnesses" v={form.witnesses} />}
-      </ReviewBlock>
 
-      {tsEntries.length > 0 && (
-        <ReviewBlock title="Type-specific details">
-          {tsEntries.map(([k, v]) => <ReviewRow key={k} l={prettify(k)} v={String(v)} />)}
-        </ReviewBlock>
-      )}
-
-      <ReviewBlock title="Photos and documents">
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          style={{
-            background: "white", border: "1.5px dashed #cbd5e1", borderRadius: 10,
-            padding: 14, textAlign: "center", cursor: "pointer", marginBottom: 8,
-          }}
-        >
-<div style={{ fontSize: 18, marginBottom: 4 }}>📎</div>
-          {/* P3 — Phase 3: mobile-first verb. "Click" is a desktop-only word. */}
-          <div style={{ fontSize: 12, fontWeight: 500 }}>Tap or drop files</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Photos · PDFs · Documents · Multiple files OK</div>
-                  </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,application/pdf,.doc,.docx"
-          onChange={handleFiles}
-          style={{ display: "none" }}
-        />
-{(form.attachments || []).length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* SECTION 5 — Photos & documents */}
+        <ReceiptDivider label="Photos & documents" />
+        {(form.attachments || []).length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
             {form.attachments.map((a, i) => (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: 8,
-                background: "#f8fafc", borderRadius: 6, padding: "6px 10px", fontSize: 11,
+                background: "#f8fafc", borderRadius: 6, padding: "6px 10px", fontSize: 12,
               }}>
                 <span style={{ fontSize: 14 }}>📎</span>
-                <span style={{ flex: 1 }}>{a.name}</span>
-                <span style={{ color: "#94a3b8", fontSize: 10 }}>{formatFileSize(a.size)}</span>
+                <span style={{ flex: 1, color: "#334155" }}>{a.name}</span>
+                <span style={{ color: "#94a3b8", fontSize: 11 }}>{formatFileSize(a.size)}</span>
                 <button
                   type="button"
                   onClick={() => removeFile(i)}
@@ -1286,9 +1340,7 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
               </div>
             ))}
             {(() => {
-              // Direction A: surface total payload size so the user knows when
-              // they're approaching the upload limit. Color shifts amber at 75%
-              // of the 3.5MB threshold so they can drop a file before submit.
+              // Total size meter — amber warning at 75%, red block at 100%
               const totalB64 = form.attachments.reduce((s, a) => s + (a.base64?.length || 0), 0);
               const totalBytes = Math.round(totalB64 * 0.75);
               const PAYLOAD_LIMIT = 3.5 * 1024 * 1024;
@@ -1296,12 +1348,15 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
               const isWarn = pctB64 > 0.75;
               const isOver = pctB64 > 1;
               const color = isOver ? "#dc2626" : isWarn ? "#92400e" : "#94a3b8";
+              const count = form.attachments.length;
+              const label = count === 1 ? "1 file" : `${count} files`;
               return (
                 <div style={{
-                  fontSize: 10, color, marginTop: 2, paddingLeft: 4,
+                  fontSize: 11, color, marginTop: 2, paddingLeft: 4,
                   fontWeight: isWarn ? 600 : 500,
                 }}>
-                  Total: {formatFileSize(totalBytes)}
+                  {/* P4B: attachment count visibility — "2 files · 248 KB total" */}
+                  {label} · {formatFileSize(totalBytes)} total
                   {isOver && " — too large to submit, remove a file"}
                   {!isOver && isWarn && " — approaching upload limit"}
                 </div>
@@ -1309,9 +1364,62 @@ const rawTsEntries = Object.entries(form.type_specific_data || {}).filter(([, v]
             })()}
           </div>
         )}
-        
-              </ReviewBlock>
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            background: "#fafafa", border: "1.5px dashed #cbd5e1", borderRadius: 10,
+            padding: 14, textAlign: "center", cursor: "pointer",
+          }}
+        >
+          <div style={{ fontSize: 18, marginBottom: 4 }}>📎</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: "#475569" }}>Tap or drop files</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Photos · PDFs · Documents · Multiple files OK</div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,application/pdf,.doc,.docx"
+          onChange={handleFiles}
+          style={{ display: "none" }}
+        />
+      </div>
+
+      {/* P4B disclaimer footer — small print, builds operational accountability.
+          Not a callout box; reads as the standard "by submitting, you confirm" footer
+          that any printed compliance form would have. */}
+      <div style={{
+        fontSize: 11, color: "#94a3b8", lineHeight: 1.5, padding: "0 4px",
+        textAlign: "center", marginBottom: 4,
+      }}>
+        By submitting, I confirm this report is accurate to the best of my knowledge. Mariela will follow up if more information is needed.
+      </div>
     </>
+  );
+}
+
+// P4B Direction 1: receipt-style row helpers used by Step 5 review card.
+// Internal to this module — kept here to colocate with the only consumer.
+function ReceiptDivider({ label }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      margin: "14px 0 10px",
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+      textTransform: "uppercase", color: "#64748b",
+    }}>
+      <span>{label}</span>
+      <span style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+    </div>
+  );
+}
+
+function ReceiptRow({ l, v }) {
+  return (
+    <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
+      <div style={{ color: "#64748b", width: 130, flexShrink: 0 }}>{l}</div>
+      <div style={{ color: "#153968", flex: 1, fontWeight: 500 }}>{v}</div>
+    </div>
   );
 }
 
@@ -1362,7 +1470,7 @@ function ReviewRow({ l, v }) {
   return (
     <div style={{ display: "flex", padding: "3px 0", fontSize: 12 }}>
       <div style={{ color: "#64748b", width: 130, flexShrink: 0 }}>{l}</div>
-      <div style={{ color: "#0f3057", flex: 1 }}>{v}</div>
+      <div style={{ color: "#153968", flex: 1 }}>{v}</div>
     </div>
   );
 }

@@ -18,6 +18,8 @@ import {
   notifyStatusChange,
   computeIncidentDeadlines,
   computeEmployeeCheckInDue,
+  createIncident30DayEvent,
+  buildIncidentPdf,
 } from "@/lib/incidentActions";
 
 // ═══════════════════════════════════════
@@ -1654,6 +1656,18 @@ if (action === "submit-help") {
         console.error("[Incident] Notification orchestration failed:", e.message);
       }
 
+      // 30-day calendar event (P4C — employee_injury & non_employee_injury only).
+      // Failure NEVER blocks submission; we log and proceed. Event ID is stored
+      // on the row so we could update/cancel later if needed.
+      try {
+        const appUrl = process.env.AUTH_URL || "http://localhost:3000";
+        const calResult = await createIncident30DayEvent(incident, appUrl);
+        incident.calendar_event_id = calResult?.eventId || "";
+      } catch (e) {
+        console.error("[Incident] 30-day calendar event creation failed:", e.message);
+        incident.calendar_event_id = "";
+      }
+
       // Append row (with tab-create fallback)
       const row = incidentToRow(incident);
       let appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
@@ -1701,7 +1715,37 @@ if (action === "submit-help") {
         },
       });
 
-return NextResponse.json({
+      // P4C: generate PDF report and upload to Drive folder.
+      // Also returned as base64 in the response so the client can offer a
+      // "Download report PDF" action on the success screen.
+      // Failure NEVER blocks the response — PDF is supplementary, not critical path.
+      let pdfBase64 = "";
+      let pdfDriveUrl = "";
+      try {
+        const attachmentNames = (attachments || []).map((a) => a?.name).filter(Boolean);
+        const pdfBuffer = await buildIncidentPdf(incident, attachmentNames);
+        pdfBase64 = pdfBuffer.toString("base64");
+        // Upload to Drive folder if we have one
+        if (driveFolderId) {
+          try {
+            const pdfFilename = `${incidentId}_Report.pdf`;
+            const up = await uploadIncidentFile({
+              folderId: driveFolderId,
+              base64Data: pdfBase64,
+              filename: pdfFilename,
+              mimeType: "application/pdf",
+            });
+            pdfDriveUrl = up.fileUrl || "";
+            console.log(`[Incident] PDF uploaded to Drive: ${pdfFilename}`);
+          } catch (e) {
+            console.error("[Incident] PDF Drive upload failed:", e.message);
+          }
+        }
+      } catch (e) {
+        console.error("[Incident] PDF generation failed:", e.message);
+      }
+
+      return NextResponse.json({
         success: true,
         incident_id: incidentId,
         drive_folder_url: driveFolderUrl,
@@ -1712,6 +1756,10 @@ return NextResponse.json({
         attachments_total: attachments.length,
         attachments_uploaded: uploadedFiles.length,
         attachment_errors: uploadErrors,
+        // P4C: PDF export — returned as base64 for client-side download trigger.
+        // pdf_drive_url is the Drive-hosted copy if upload succeeded.
+        pdf_base64: pdfBase64,
+        pdf_drive_url: pdfDriveUrl,
       });
         }
 
@@ -1882,6 +1930,13 @@ logEventSA({
       const col = {};
       INCIDENT_COLUMNS.forEach((c, i) => { col[c] = i + 1; });
 
+      // P4C: detect first save vs re-edit by inspecting investigation_saved_at.
+      // Empty = first save (fires status auto-advance + notifications).
+      // Populated = re-edit (silent update + audit log entry).
+      const existingIncident = rowToIncident(rows[idx]);
+      const isFirstSave = !existingIncident.investigation_saved_at;
+      const oldStatus = existingIncident.status || "submitted";
+
       // Update only whitelisted, provided fields
       const updated = [];
       for (const key of EDITABLE) {
@@ -1896,15 +1951,66 @@ logEventSA({
       await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
       await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
 
+      // P4C: lifecycle actions
+      let statusAdvanced = false;
+      if (isFirstSave) {
+        // First save — record investigation_saved_at and auto-advance to investigated
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigation_saved_at, nowIso);
+        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.status, "investigated");
+        statusAdvanced = true;
+
+        // Fire Slack + email-to-submitter via existing notifyStatusChange.
+        // Build a fresh incident object reflecting the updated fields so the
+        // notifications carry the latest data (especially status).
+        try {
+          const updatedRow = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS).then((r) => (r.rows || [])[idx]);
+          const refreshedIncident = updatedRow ? rowToIncident(updatedRow) : { ...existingIncident, status: "investigated" };
+          const appUrl = process.env.AUTH_URL || "http://localhost:3000";
+          await notifyStatusChange({
+            incident: refreshedIncident,
+            oldStatus,
+            newStatus: "investigated",
+            adminEmail,
+            sendEmail,
+            appUrl,
+          });
+        } catch (e) {
+          console.error("[Incident] Investigation save notification failed:", e.message);
+        }
+      } else {
+        // Re-edit — append to JSON edit log (audit trail), no notifications
+        let log = [];
+        try {
+          log = JSON.parse(existingIncident.investigation_edit_log || "[]");
+          if (!Array.isArray(log)) log = [];
+        } catch {
+          log = [];
+        }
+        log.push({ at: nowIso, by: adminEmail });
+        await updateCell(
+          SHEET_IDS.DB,
+          SHEETS.INCIDENTS,
+          sheetRow,
+          col.investigation_edit_log,
+          JSON.stringify(log)
+        );
+      }
+
       logEventSA({
         email: adminEmail,
         category: "people",
-        action: "incident_update_investigation",
+        action: isFirstSave ? "incident_investigation_first_save" : "incident_investigation_reedit",
         page: "/people",
-        detail: { incident_id: incidentId, fields_updated: updated },
+        detail: { incident_id: incidentId, fields_updated: updated, status_advanced: statusAdvanced },
       });
 
-      return NextResponse.json({ success: true, updated });
+      return NextResponse.json({
+        success: true,
+        updated,
+        first_save: isFirstSave,
+        status_advanced: statusAdvanced,
+        new_status: statusAdvanced ? "investigated" : oldStatus,
+      });
     }
 
     return NextResponse.json(

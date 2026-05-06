@@ -109,11 +109,14 @@ export const SEVERITY_TIERS = [
 // ─────────────────────────────────────────────
 // 5-STATE STATUS FLOW
 // Per Decision 9
+// P4C: investigating → investigated (past tense). When HR clicks "Save investigation"
+// the work is complete; the status should reflect that. "Investigating" implied
+// "still in progress" which was the wrong signal post-save.
 // ─────────────────────────────────────────────
 export const STATUS_FLOW = [
   "submitted",
   "acknowledged",
-  "investigating",
+  "investigated",
   "corrective_action",
   "closed",
 ];
@@ -121,6 +124,9 @@ export const STATUS_FLOW = [
 export const STATUS_LABELS = {
   submitted: "Submitted",
   acknowledged: "Acknowledged",
+  investigated: "Investigated",
+  // Backward compat: any existing row in the sheet with old "investigating"
+  // status renders correctly until HR re-saves it (which moves it to investigated).
   investigating: "Investigating",
   corrective_action: "Corrective",
   closed: "Closed",
@@ -221,6 +227,20 @@ export const INCIDENT_COLUMNS = [
   // §8.3 - SOP-imposed cadence deadlines (computed at submit time)
   "root_cause_due_at",          // submitted_at + 48h
   "corrective_action_due_at",   // submitted_at + 7d
+
+  // ─── Phase 4C additions (workflow automation) ───
+  // 4C.2 — first time HR saves the investigation. Drives the
+  // "Edit / Save changes" UX (presence here means form is locked).
+  "investigation_saved_at",
+  // 4C.2 — JSON array of {at, by} edits AFTER the first save. Keeps a
+  // visible audit trail in the sheet without needing a separate audit tab.
+  "investigation_edit_log",
+  // 4C.3 — Google Calendar event ID for the 30-day follow-up. Stored so
+  // we could update/cancel it later if status changes (post-MVP).
+  "calendar_event_id",
+  // 4C.4 — timestamp of when the 7-day pre-30 reminder email fired.
+  // Used by the cron to dedupe (don't send twice).
+  "reminder_7day_sent_at",
 ];
 
 // ─────────────────────────────────────────────

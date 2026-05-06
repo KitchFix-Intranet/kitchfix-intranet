@@ -2178,7 +2178,8 @@ body:has(.pp-app) {
   border: 1px solid var(--pp-grey-border, #e2e8f0);
   border-left-width: 6px;
   border-radius: 8px;
-  padding: 10px 14px;
+  /* P4A: tighten vertical to favor density */
+  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
@@ -2197,43 +2198,58 @@ body:has(.pp-app) {
 .pp-inc-tier-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 4px;
-  flex-wrap: wrap;
+  /* P4A: removed flex-wrap so deadline always anchors right on one line.
+     If the title is too long it ellipses rather than pushing deadline below. */
 }
 
 .pp-inc-tier-code {
+  /* P4A Option A: chip 2x larger so severity is the primary visual anchor.
+     Was 11px / 2px×8px padding — barely readable. Now 14px / 6px×12px,
+     slight letter-spacing for legibility, fixed min-width so all four chips
+     align across cards regardless of code width. */
   color: white;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  min-width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+  font-family: ui-monospace, "SF Mono", monospace;
 }
 
 .pp-inc-tier-label {
-  font-size: 13px;
-  font-weight: 500;
+  /* P4A: bumped to match new chip weight, flex:1 fills space, ellipsis
+     for safety on very long labels. */
+  font-size: 14px;
+  font-weight: 600;
   flex: 1;
   color: var(--pp-navy, #0f3057);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pp-inc-tier-deadline {
-  /* P3 — Phase 3: was 12px / 500. Deadline is the thing a director cares about
-     most ("when do I get pinged?") and was getting buried as right-aligned subtle
-     text. Bumped to 13px / 700 so it reads as a hard commitment, not microcopy.
-     Color is already inline-styled to the tier color. */
+  /* P4A: anchors right of title row. 13px / 700 / tier color (inline style).
+     Don't shrink — this is a hard commitment, not microcopy. */
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  flex-shrink: 0;
 }
 
 .pp-inc-tier-examples {
   font-size: 11px;
   color: var(--pp-grey, #64748b);
   line-height: 1.4;
+  /* P4A: indent to align with the chip's right edge. Chip is 36px min + 12px gap = ~48px.
+     This way examples visually flow under the title, not under the chip. */
+  padding-left: 48px;
 }
-
 
 /* ─── Admin queue toolbar (incident-admin view) ─── */
 .pp-inc-admin-toolbar {
@@ -2561,20 +2577,23 @@ body:has(.pp-app) {
   gap: 9px;
 }
 .pp-inc-tool-title-icon {
-  width: 26px;
-  height: 26px;
+  /* P4A: was 26×26 with 13×13 SVG and 0.7 opacity — too anemic for module identity.
+     Doubled to 44×44 with 22×22 SVG and full opacity. Matches Lucide standard
+     for header icons and reads as a proper module anchor. */
+  width: 44px;
+  height: 44px;
   background: var(--pp-purple-soft);
   color: var(--pp-purple);
-  border-radius: 6px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 1;
 }
 .pp-inc-tool-title-icon svg {
-  width: 13px;
-  height: 13px;
+  width: 22px;
+  height: 22px;
 }
 .pp-inc-tool-title-text h3 {
   margin: 0;
@@ -3579,6 +3598,874 @@ body:has(.pp-app) {
   color: var(--pp-grey);
   font-style: italic;
   margin: 0;
+}
+
+/* ─── Rating selector (shared) ─── */
+.pp-ldug-rating-selector {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.pp-ldug-rating-btn {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 6px;
+  padding: 10px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.15s;
+  font-family: var(--pp-font-body);
+}
+.pp-ldug-rating-btn:hover:not(:disabled) {
+  border-color: var(--pp-purple);
+  background: var(--pp-purple-soft);
+}
+.pp-ldug-rating-btn--selected,
+.pp-ldug-rating-btn--selected:hover {
+  border-color: var(--pp-purple);
+  background: var(--pp-purple-soft);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
+}
+.pp-ldug-rating-btn--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pp-ldug-rating-num {
+  font-family: var(--pp-font-head);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--pp-navy);
+}
+.pp-ldug-rating-btn--selected .pp-ldug-rating-num { color: var(--pp-purple); }
+.pp-ldug-rating-anchor {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--pp-grey);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.pp-ldug-rating-btn--selected .pp-ldug-rating-anchor { color: var(--pp-purple); }
+
+/* ─── Narrative field (shared) ─── */
+.pp-ldug-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pp-ldug-narrative-textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px 12px;
+  font-family: var(--pp-font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pp-navy);
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.pp-ldug-narrative-textarea:focus {
+  border-color: var(--pp-purple);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+.pp-ldug-narrative--warn .pp-ldug-narrative-textarea { border-color: #f59e0b; }
+.pp-ldug-narrative--block .pp-ldug-narrative-textarea { border-color: #ef4444; }
+.pp-ldug-narrative-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--pp-grey);
+}
+.pp-ldug-narrative--warn .pp-ldug-narrative-count { color: #b45309; }
+.pp-ldug-narrative--block .pp-ldug-narrative-count { color: #b91c1c; font-weight: 700; }
+.pp-ldug-narrative-status--saving { color: var(--pp-grey); }
+.pp-ldug-narrative-status--saved { color: #10b981; }
+.pp-ldug-narrative-status--error { color: #ef4444; font-weight: 700; }
+
+/* ─── Sign-off block (shared) ─── */
+.pp-ldug-signoff {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.pp-ldug-signoff--signed {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+.pp-ldug-signoff-role {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+  margin-bottom: 6px;
+}
+.pp-ldug-signoff--signed .pp-ldug-signoff-role { color: #047857; }
+.pp-ldug-signoff-signer {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+}
+.pp-ldug-signoff-timestamp {
+  font-size: 11px;
+  color: var(--pp-grey);
+  margin-top: 2px;
+}
+.pp-ldug-signoff-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--pp-navy);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.pp-ldug-signoff-check input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.pp-ldug-signoff-name {
+  font-size: 11px;
+  color: var(--pp-grey);
+}
+
+/* ─── Chain snapshot badge ─── */
+.pp-ldug-chain-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.pp-ldug-chain-badge--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--pp-grey);
+}
+.pp-ldug-chain-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.pp-ldug-chain-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+}
+.pp-ldug-chain-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pp-navy);
+}
+
+/* ─── Co-editor banner ─── */
+.pp-ldug-coeditor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #92400e;
+  margin-bottom: 12px;
+}
+.pp-ldug-coeditor-icon { font-size: 14px; }
+
+/* ─── Role anchor drawer ─── */
+.pp-ldug-anchor-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 49;
+}
+.pp-ldug-anchor-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 90vw);
+  background: white;
+  border-left: 1px solid var(--pp-grey-border);
+  box-shadow: -4px 0 12px rgba(0,0,0,0.08);
+  padding: 18px 20px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.pp-ldug-anchor-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.pp-ldug-anchor-drawer-header h4 {
+  margin: 0;
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  text-transform: capitalize;
+}
+.pp-ldug-anchor-drawer-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--pp-grey);
+  cursor: pointer;
+  line-height: 1;
+}
+.pp-ldug-anchor-section { margin-bottom: 16px; }
+.pp-ldug-anchor-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pp-purple);
+  margin-bottom: 4px;
+}
+.pp-ldug-anchor-section p {
+  font-size: 13px;
+  color: var(--pp-navy);
+  margin: 0;
+  line-height: 1.5;
+}
+.pp-ldug-anchor-footnote {
+  font-size: 11px;
+  color: var(--pp-grey);
+  font-style: italic;
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pp-grey-border);
+}
+
+/* ─── Delta flag ─── */
+.pp-ldug-delta--chip {
+  display: inline-block;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+.pp-ldug-delta--callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #92400e;
+  margin-bottom: 12px;
+}
+.pp-ldug-delta-icon { font-size: 14px; }
+
+/* ─── Form rows (Admin / WOW Generate) ─── */
+.pp-ldug-form-row {
+  margin-bottom: 14px;
+}
+.pp-ldug-form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+  margin-bottom: 6px;
+}
+.pp-ldug-form-input,
+.pp-ldug-form-select {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: var(--pp-font-body);
+  font-size: 13px;
+  color: var(--pp-navy);
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 4px;
+  outline: none;
+}
+.pp-ldug-form-input:focus,
+.pp-ldug-form-select:focus {
+  border-color: var(--pp-purple);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+.pp-ldug-form-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pp-ldug-form-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pp-navy);
+  cursor: pointer;
+}
+.pp-ldug-form-hint {
+  font-size: 11px;
+  color: var(--pp-grey);
+  margin: 4px 0 0;
+  font-style: italic;
+}
+.pp-ldug-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ─── Admin action card ─── */
+.pp-ldug-admin-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.pp-ldug-admin-action-title {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 2px;
+}
+.pp-ldug-admin-action-desc {
+  font-size: 12px;
+  color: var(--pp-grey);
+  margin: 0;
+  line-height: 1.4;
+}
+.pp-ldug-admin-action-expanded {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+/* ─── Active Work list ─── */
+.pp-ldug-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pp-ldug-active-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--pp-font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.pp-ldug-active-row:hover {
+  border-color: var(--pp-purple);
+  transform: translateY(-1px);
+}
+.pp-ldug-active-row-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pp-ldug-active-row-type {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pp-purple);
+}
+.pp-ldug-active-row-title {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+}
+.pp-ldug-active-row-meta {
+  font-size: 11px;
+  color: var(--pp-grey);
+}
+.pp-ldug-active-row-arrow {
+  color: var(--pp-purple);
+  font-size: 16px;
+}
+
+/* ─── Link button ─── */
+.pp-ldug-link {
+  background: none;
+  border: 0;
+  color: var(--pp-purple);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--pp-font-body);
+}
+.pp-ldug-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── WOW workspace shell ─── */
+.pp-ldug-wow-workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pp-ldug-wow-workspace-title h2 {
+  font-family: var(--pp-font-head);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 2px;
+}
+.pp-ldug-wow-workspace-title p {
+  font-size: 12px;
+  color: var(--pp-grey);
+  margin: 0 0 12px;
+}
+
+/* ─── Status pill ─── */
+.pp-ldug-status-pill {
+  display: inline-block;
+  background: var(--pp-bg);
+  color: var(--pp-grey);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.pp-ldug-status-pill--generated { background: #e0e7ff; color: #4338ca; }
+.pp-ldug-status-pill--preday1 { background: #fef3c7; color: #92400e; }
+.pp-ldug-status-pill--active { background: #dcfce7; color: #166534; }
+.pp-ldug-status-pill--day30,
+.pp-ldug-status-pill--day60,
+.pp-ldug-status-pill--day90 { background: #f3e8ff; color: #6b21a8; }
+.pp-ldug-status-pill--closed { background: var(--pp-bg); color: var(--pp-grey); }
+
+/* ─── WOW day-strip placeholder (real component arrives Chunk 3) ─── */
+.pp-ldug-wow-strip-placeholder {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.pp-ldug-wow-strip-cell {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pp-navy);
+  text-align: center;
+}
+ 
+/* ─── WOW path strip (Day 1/30/60/90) ─── */
+.pp-ldug-wow-path {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.pp-ldug-wow-path-cell {
+  position: relative;
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 10px 10px;
+  text-align: center;
+}
+.pp-ldug-wow-path-cell--signed {
+  background: #ecfdf5;
+  border-color: #10b981;
+}
+.pp-ldug-wow-path-cell--today {
+  background: var(--pp-purple-soft);
+  border-color: var(--pp-purple);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
+}
+.pp-ldug-wow-path-cell--overdue {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+.pp-ldug-wow-path-day {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--pp-navy);
+  line-height: 1.1;
+}
+.pp-ldug-wow-path-cell--signed .pp-ldug-wow-path-day { color: #047857; }
+.pp-ldug-wow-path-cell--today .pp-ldug-wow-path-day { color: var(--pp-purple); }
+.pp-ldug-wow-path-cell--overdue .pp-ldug-wow-path-day { color: #b91c1c; }
+.pp-ldug-wow-path-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+  margin-top: 2px;
+}
+.pp-ldug-wow-path-date {
+  font-size: 11px;
+  color: var(--pp-grey);
+  margin-top: 4px;
+}
+.pp-ldug-wow-path-mark {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pp-grey);
+}
+.pp-ldug-wow-path-cell--signed .pp-ldug-wow-path-mark { color: #047857; }
+.pp-ldug-wow-path-cell--today .pp-ldug-wow-path-mark { color: var(--pp-purple); }
+.pp-ldug-wow-path-cell--overdue .pp-ldug-wow-path-mark { color: #b91c1c; }
+
+/* ─── WOW form layout ─── */
+.pp-ldug-wow-form {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.pp-ldug-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pp-ldug-form-hint-inline {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--pp-grey);
+  margin-left: 6px;
+}
+
+/* ─── Goal row (Day 1 Top 3) ─── */
+.pp-ldug-goal-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.pp-ldug-goal-num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  background: var(--pp-purple);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pp-font-head);
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+.pp-ldug-goal-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ─── Sign-off layout ─── */
+.pp-ldug-signoff-row {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pp-grey-border);
+}
+.pp-ldug-signoff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pp-grey-border);
+}
+
+
+/* ─── Cycle Review fill ─── */
+.pp-ldug-cr-fill {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.pp-ldug-cr-section-group {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--pp-grey-border);
+}
+.pp-ldug-cr-section-group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.pp-ldug-cr-group-title {
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--pp-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.pp-ldug-cr-group-meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pp-grey);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pp-ldug-cr-theme {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.pp-ldug-cr-theme-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.pp-ldug-cr-theme-title {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0;
+}
+
+/* ─── Cycle Review calibrate (split-pane) ─── */
+.pp-ldug-cr-calibrate {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.pp-ldug-cr-split-row {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.pp-ldug-cr-split-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pp-ldug-cr-split-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pp-ldug-cr-split-pane {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.pp-ldug-cr-split-pane--manager {
+  border-color: var(--pp-purple);
+  background: var(--pp-purple-soft);
+}
+.pp-ldug-cr-split-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+  margin-bottom: 6px;
+}
+.pp-ldug-cr-split-pane--manager .pp-ldug-cr-split-tag {
+  color: var(--pp-purple);
+}
+.pp-ldug-cr-split-rating {
+  font-family: var(--pp-font-head);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--pp-navy);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.pp-ldug-cr-split-narrative {
+  font-size: 12px;
+  color: var(--pp-navy);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+.pp-ldug-cr-split-narrative em {
+  color: var(--pp-grey);
+  font-style: italic;
+}
+.pp-ldug-cr-split-example {
+  font-size: 11px;
+  color: var(--pp-grey);
+  font-style: italic;
+  border-left: 2px solid var(--pp-grey-border);
+  padding-left: 8px;
+}
+
+.pp-ldug-cr-top3-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pp-ldug-cr-top3-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.pp-ldug-cr-top3-list li {
+  font-size: 13px;
+  color: var(--pp-navy);
+  margin-bottom: 4px;
+}
+
+/* ─── Cycle Review outcomes ─── */
+.pp-ldug-cr-outcomes {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pp-grey-border);
+  flex-wrap: wrap;
+}
+.pp-ldug-cr-outcome-btn {
+  font-family: var(--pp-font-body);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pp-ldug-cr-outcome-btn--notes {
+  background: white;
+  color: var(--pp-purple);
+  border-color: var(--pp-purple);
+}
+.pp-ldug-cr-outcome-btn--notes:hover:not(:disabled) {
+  background: var(--pp-purple-soft);
+}
+.pp-ldug-cr-outcome-btn--sendback {
+  background: white;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+.pp-ldug-cr-outcome-btn--sendback:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+.pp-ldug-cr-outcome-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Section 10 ─── */
+.pp-ldug-section10 {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.pp-ldug-section10-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pp-ldug-section10-icon {
+  font-size: 14px;
+}
+.pp-ldug-section10-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #92400e;
+}
+.pp-ldug-section10-meta {
+  font-size: 11px;
+  color: #92400e;
+  margin-left: auto;
+  font-style: italic;
+}
+
+/* ─── Cycle Review conversation/response/signoff ─── */
+.pp-ldug-cr-conversation,
+.pp-ldug-cr-response,
+.pp-ldug-cr-signoff {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .pp-ldug-cr-split-body {
+    grid-template-columns: 1fr;
+  }
+  .pp-ldug-cr-top3-grid {
+    grid-template-columns: 1fr;
+  }
+  .pp-ldug-cr-outcomes {
+    flex-direction: column;
+  }
+  .pp-ldug-cr-outcomes button {
+    width: 100%;
+  }
 }
 
 /* ─── Mobile override (<1024px) — relaxes density per the non-negotiable rule ─── */

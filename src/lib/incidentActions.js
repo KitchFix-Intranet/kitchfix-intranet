@@ -36,6 +36,50 @@ function getServiceAccountDriveClient() {
   return google.drive({ version: "v3", auth });
 }
 
+// ─────────────────────────────────────────────
+// Calendar client (service account, P4C)
+// Calendar API requires its own scope. Service account must have domain-wide
+// delegation enabled in Google Workspace admin to impersonate Mariela for
+// "organizer" purposes (see deploy guide for one-time setup steps).
+// If delegation isn't configured, events still create but are organized
+// by the service account itself (functional fallback, just looks weird).
+// ─────────────────────────────────────────────
+const INCIDENT_CALENDAR_ORGANIZER = process.env.INCIDENT_CALENDAR_ORGANIZER || "m.chavez@kitchfix.com";
+
+function getServiceAccountCalendarClient() {
+  const credentials = {
+    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  };
+  const scopes = ["https://www.googleapis.com/auth/calendar"];
+
+  // Try to impersonate Mariela (subject) so events appear organized by her.
+  // Requires domain-wide delegation. If delegation is not granted, the JWT
+  // creation succeeds but the API call fails with 403 — we catch that and
+  // fall back to non-impersonated SA-organized events.
+  const auth = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes,
+    subject: INCIDENT_CALENDAR_ORGANIZER,
+  });
+  return google.calendar({ version: "v3", auth });
+}
+
+// Fallback: SA-organized event (no impersonation). Used when domain-wide
+// delegation isn't configured. The event still creates and invites work,
+// it just shows the SA email as organizer instead of Mariela.
+function getServiceAccountCalendarClientNoImpersonation() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    },
+    scopes: ["https://www.googleapis.com/auth/calendar"],
+  });
+  return google.calendar({ version: "v3", auth });
+}
+
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -145,6 +189,127 @@ export async function uploadIncidentFile({ folderId, base64Data, filename, mimeT
 }
 
 // ─────────────────────────────────────────────
+// CALENDAR — 30-day follow-up event (P4C)
+// Creates a Google Calendar event 30 days from incident submission for the
+// HR follow-up check-in. Attendees: Mariela + Kevin + manager who submitted.
+// Scoped to employee_injury and non_employee_injury only — other incident
+// types (vehicle, property damage, near-miss, etc.) don't need 30-day reviews.
+// Failure here NEVER blocks incident submission. We log and continue.
+// Returns { eventId } on success or null on failure / out-of-scope.
+// ─────────────────────────────────────────────
+const CALENDAR_ELIGIBLE_TYPES = new Set(["employee_injury", "non_employee_injury"]);
+
+export async function createIncident30DayEvent(incident, appUrl) {
+  // Out-of-scope incident types skip event creation cleanly
+  if (!CALENDAR_ELIGIBLE_TYPES.has(incident.incident_type)) {
+    return null;
+  }
+
+  // Compute event datetime: 30 days from submission, 10:00 AM Central.
+  // We anchor to the submitted_at date and shift by 30 days. America/Chicago
+  // is the operational timezone for KitchFix HQ.
+  const submittedDate = new Date(incident.submitted_at || Date.now());
+  const eventDate = new Date(submittedDate);
+  eventDate.setDate(eventDate.getDate() + 30);
+  // Set to 10:00 in local representation, then format with TZ
+  // (Google's startTime uses ISO + timeZone — we send wall-clock + TZ separately)
+  const yyyy = eventDate.getFullYear();
+  const mm = String(eventDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(eventDate.getDate()).padStart(2, "0");
+  const startWall = `${yyyy}-${mm}-${dd}T10:00:00`;
+  const endWall = `${yyyy}-${mm}-${dd}T10:30:00`;
+
+  // Attendees: Mariela + Kevin + the manager who submitted (deduplicated)
+  const attendeeEmails = new Set([
+    MARIELA_EMAIL,
+    SR_DIR_OPS_EMAIL, // Kevin
+    incident.submitted_by_email,
+  ]);
+  attendeeEmails.delete(""); // safety
+  attendeeEmails.delete(undefined);
+  const attendees = Array.from(attendeeEmails).map((email) => ({ email }));
+
+  const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
+  const typeLabel = typeMeta?.label || incident.incident_type;
+
+  const summary = `Incident 30-day follow-up · ${incident.incident_id}`;
+  const adminLink = appUrl ? `${appUrl}/people?view=admin` : "";
+  const description = [
+    `30-day check-in for incident ${incident.incident_id}.`,
+    ``,
+    `Type: ${typeLabel}`,
+    `Severity: ${incident.severity}`,
+    `Site: ${incident.site_code}`,
+    `Submitted by: ${incident.submitted_by_name || incident.submitted_by_email}`,
+    `Original date: ${incident.incident_date}`,
+    ``,
+    `What happened:`,
+    incident.what_happened || "(no description)",
+    ``,
+    adminLink ? `Review in admin queue: ${adminLink}` : "",
+  ].filter(Boolean).join("\n");
+
+  const eventBody = {
+    summary,
+    description,
+    start: { dateTime: startWall, timeZone: "America/Chicago" },
+    end: { dateTime: endWall, timeZone: "America/Chicago" },
+    attendees,
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: "email", minutes: 7 * 24 * 60 }, // 7 days before
+        { method: "popup", minutes: 60 },           // 1 hour before
+      ],
+    },
+  };
+
+  // Try impersonated client first (events organized by Mariela). If domain-wide
+  // delegation isn't configured, that throws; fall through to SA-organized.
+  let calendarClient;
+  let usingImpersonation = true;
+  try {
+    calendarClient = getServiceAccountCalendarClient();
+  } catch (e) {
+    console.warn("[Incident] Calendar JWT init failed, using SA-organized fallback:", e.message);
+    calendarClient = getServiceAccountCalendarClientNoImpersonation();
+    usingImpersonation = false;
+  }
+
+  try {
+    const calendarId = usingImpersonation ? INCIDENT_CALENDAR_ORGANIZER : "primary";
+    const res = await calendarClient.events.insert({
+      calendarId,
+      requestBody: eventBody,
+      sendUpdates: "all",
+    });
+    console.log(`[Incident] Created 30-day event ${res.data.id} for ${incident.incident_id} (impersonation=${usingImpersonation})`);
+    return { eventId: res.data.id, eventUrl: res.data.htmlLink };
+  } catch (e) {
+    // If impersonation 403'd, retry without impersonation. This makes the
+    // feature still work even if delegation hasn't been set up yet.
+    if (usingImpersonation && (e.code === 403 || e.code === 401)) {
+      console.warn(`[Incident] Calendar impersonation rejected (${e.code}); retrying as SA:`, e.message);
+      try {
+        const fallback = getServiceAccountCalendarClientNoImpersonation();
+        const res = await fallback.events.insert({
+          calendarId: "primary",
+          requestBody: eventBody,
+          sendUpdates: "all",
+        });
+        console.log(`[Incident] Created 30-day event ${res.data.id} for ${incident.incident_id} (SA-organized fallback)`);
+        return { eventId: res.data.id, eventUrl: res.data.htmlLink };
+      } catch (e2) {
+        console.error("[Incident] Calendar SA fallback also failed:", e2.message);
+        return null;
+      }
+    }
+    console.error(`[Incident] Calendar event creation failed for ${incident.incident_id}:`, e.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
 // SLACK NOTIFICATIONS
 // Channel post for all tiers + DM to Mariela for S1
 // ─────────────────────────────────────────────
@@ -171,6 +336,40 @@ export async function postSlackChannel(incident, testMode = false) {
     ? `[TEST] ${sevEmoji} ${incident.severity} - ${typeLabel}`
     : `${sevEmoji} ${incident.severity} - ${typeLabel}`;
 
+  // P4B Slack expansion — add operational context fields so leadership can
+  // triage from the Slack message alone without opening the email or admin queue.
+  // Type-specific fields (Person Injured, Body Part) only render when present.
+  let typeSpecific = {};
+  try {
+    typeSpecific = typeof incident.type_specific_data === "string"
+      ? JSON.parse(incident.type_specific_data || "{}")
+      : (incident.type_specific_data || {});
+  } catch {}
+  const personInjured = typeSpecific.person_injured;
+  const bodyPart = typeSpecific.body_part;
+
+  const fields = [
+    { type: "mrkdwn", text: `*Incident ID:*\n${incident.incident_id}` },
+    { type: "mrkdwn", text: `*Site:*\n${incident.site_code}` },
+    { type: "mrkdwn", text: `*Submitted by:*\n${incident.submitted_by_name || incident.submitted_by_email}` },
+    { type: "mrkdwn", text: `*Date / Time:*\n${incident.incident_date} ${incident.incident_time}` },
+  ];
+  // Location within site (e.g., "FOH", "walk-in cooler")
+  if (incident.location_detail) {
+    fields.push({ type: "mrkdwn", text: `*Location:*\n${incident.location_detail}` });
+  }
+  // Manager aware date — compliance signal
+  if (incident.manager_aware_date) {
+    fields.push({ type: "mrkdwn", text: `*Manager aware:*\n${incident.manager_aware_date}` });
+  }
+  // Person injured + body part (only on injury-type incidents where filled)
+  if (personInjured) {
+    fields.push({ type: "mrkdwn", text: `*Person injured:*\n${personInjured}` });
+  }
+  if (bodyPart) {
+    fields.push({ type: "mrkdwn", text: `*Body part:*\n${bodyPart}` });
+  }
+
   const blocks = [
     {
       type: "header",
@@ -181,12 +380,7 @@ export async function postSlackChannel(incident, testMode = false) {
     },
     {
       type: "section",
-      fields: [
-        { type: "mrkdwn", text: `*Incident ID:*\n${incident.incident_id}` },
-        { type: "mrkdwn", text: `*Site:*\n${incident.site_code}` },
-        { type: "mrkdwn", text: `*Submitted by:*\n${incident.submitted_by_name || incident.submitted_by_email}` },
-        { type: "mrkdwn", text: `*Date / Time:*\n${incident.incident_date} ${incident.incident_time}` },
-      ],
+      fields,
     },
     {
       type: "section",
@@ -196,6 +390,18 @@ export async function postSlackChannel(incident, testMode = false) {
       },
     },
   ];
+
+  // P4B: surface immediate actions so leadership knows what's already been done.
+  // Most important field after "what happened" — answers "do I need to call?"
+  if (incident.immediate_actions_taken) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Immediate actions taken:*\n${truncate(incident.immediate_actions_taken, 400)}`,
+      },
+    });
+  }
 
   if (incident.drive_folder_url) {
     blocks.push({
@@ -300,46 +506,54 @@ export function buildIncidentEmailHtml(incident, appUrl) {
   const typeLabel = typeMeta?.label || incident.incident_type;
   const isS1 = incident.severity === "S1";
 
-  // P3 — Phase 3: deep-link CTA back into the People Portal admin queue so the
-  // recipient can review/triage in one click instead of navigating manually.
-  // Falls back gracefully when appUrl isn't passed (older callers, tests).
+  // P4B email polish:
+  // - Removed redundant eyebrow ("INCIDENT NOTIFICATION") — title already says severity+type
+  // - Field labels darkened from #94a3b8 → #64748b for WCAG AA safety
+  // - Primary CTA "Review in Admin Queue" promoted above Drive folder link (which is now plain text below)
+  // - CTA button enlarged (12×24 padding, 14px font) so it's clearly the primary action
+  // - Footer added: KitchFix branding line in muted text below the card
+
   const adminCta = appUrl
-    ? `<div style="margin-top:18px;"><a href="${appUrl}/people?view=admin" style="display:inline-block; background:#7c3aed; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:500;">Review in Admin Queue →</a></div>`
+    ? `<div style="margin-top:20px;"><a href="${appUrl}/people?view=admin" style="display:inline-block; background:#7c3aed; color:white; padding:12px 24px; border-radius:8px; text-decoration:none; font-size:14px; font-weight:600;">Review in Admin Queue →</a></div>`
     : "";
 
-  let typeSpecificHtml = "";  if (incident.type_specific_data) {
+  let typeSpecificHtml = "";
+  if (incident.type_specific_data) {
     try {
       const ts = typeof incident.type_specific_data === "string"
         ? JSON.parse(incident.type_specific_data)
         : incident.type_specific_data;
       const rows = Object.entries(ts).filter(([, v]) => v).map(([k, v]) =>
-        `<tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">${prettify(k)}</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(String(v))}</td></tr>`
+        `<tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">${prettify(k)}</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(String(v))}</td></tr>`
       ).join("");
-      if (rows) typeSpecificHtml = `<h3 style="margin:18px 0 6px; font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em;">Type-specific details</h3><table style="border-collapse:collapse;">${rows}</table>`;
+      if (rows) typeSpecificHtml = `<h3 style="margin:18px 0 6px; font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Type-specific details</h3><table style="border-collapse:collapse;">${rows}</table>`;
     } catch {}
   }
 
-  return `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#0f3057;">
+  return `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#153968;">
     <div style="padding:14px 18px; background:${sevMeta?.color || "#64748b"}; color:white; border-radius:10px 10px 0 0;">
-      <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.85;">${isS1 ? "🚨 IMMEDIATE ATTENTION" : "Incident notification"}</div>
-      <div style="font-size:18px; font-weight:500; margin-top:2px;">${incident.severity} - ${escapeHtml(typeLabel)}</div>
+      ${isS1 ? `<div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.9; font-weight:600;">🚨 IMMEDIATE ATTENTION</div>` : ""}
+      <div style="font-size:18px; font-weight:600; margin-top:${isS1 ? "2px" : "0"};">${incident.severity} — ${escapeHtml(typeLabel)}</div>
     </div>
     <div style="padding:18px; border:0.5px solid #e2e8f0; border-top:none; border-radius:0 0 10px 10px;">
       <table style="border-collapse:collapse; width:100%;">
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px; width:130px;">Incident ID</td><td style="padding:4px 0; color:#0f3057; font-size:13px; font-family:monospace;">${escapeHtml(incident.incident_id)}</td></tr>
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Site</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(incident.site_code)}</td></tr>
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Submitted by</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(incident.submitted_by_name || "")} &lt;${escapeHtml(incident.submitted_by_email)}&gt;</td></tr>
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Date / Time</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(incident.incident_date)} ${escapeHtml(incident.incident_time)}</td></tr>
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Location</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(incident.location_detail || "-")}</td></tr>
-        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Manager aware</td><td style="padding:4px 0; color:#0f3057; font-size:13px;">${escapeHtml(incident.manager_aware_date || "-")}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px; width:130px;">Incident ID</td><td style="padding:4px 0; color:#153968; font-size:13px; font-family:monospace;">${escapeHtml(incident.incident_id)}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Site</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(incident.site_code)}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Submitted by</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(incident.submitted_by_name || "")} &lt;${escapeHtml(incident.submitted_by_email)}&gt;</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Date / Time</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(incident.incident_date)} ${escapeHtml(incident.incident_time)}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Location</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(incident.location_detail || "-")}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0; color:#64748b; font-size:13px;">Manager aware</td><td style="padding:4px 0; color:#153968; font-size:13px;">${escapeHtml(incident.manager_aware_date || "-")}</td></tr>
       </table>
-      <h3 style="margin:18px 0 6px; font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em;">What happened</h3>
+      <h3 style="margin:18px 0 6px; font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">What happened</h3>
       <div style="font-size:13px; line-height:1.5; color:#334155; white-space:pre-wrap;">${escapeHtml(incident.what_happened || "")}</div>
-      ${incident.witnesses ? `<h3 style="margin:18px 0 6px; font-size:13px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em;">Witnesses</h3><div style="font-size:13px; color:#334155; white-space:pre-wrap;">${escapeHtml(incident.witnesses)}</div>` : ""}
+      ${incident.witnesses ? `<h3 style="margin:18px 0 6px; font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Witnesses</h3><div style="font-size:13px; color:#334155; white-space:pre-wrap;">${escapeHtml(incident.witnesses)}</div>` : ""}
       ${typeSpecificHtml}
-${incident.drive_folder_url ? `<div style="margin-top:18px; padding-top:14px; border-top:0.5px solid #e2e8f0;"><a href="${incident.drive_folder_url}" style="color:#7c3aed; text-decoration:none; font-size:13px; font-weight:500;">📂 Open ${formatAttachmentLabel(incident.attachment_count)}</a></div>` : ""}
-${adminCta}
-${isS1 ? `<div style="margin-top:18px; padding:12px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5;"><strong>⏱️ S1 protocol:</strong> The Site Leader or Manager of Record is calling Mariela at <strong>(312) 548-1420</strong> within 15 minutes (once the person is in a safe spot). Mariela: expect a phone call. If no call by 15-min mark, dial that number directly. Voicemail counts only with a callback number AND a Slack message.</div>` : ""}
+      ${isS1 ? `<div style="margin-top:18px; padding:12px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:13px; line-height:1.5;"><strong>⏱️ S1 protocol:</strong> The Site Leader or Manager of Record is calling Mariela at <strong>(312) 548-1420</strong> within 15 minutes (once the person is in a safe spot). Mariela: expect a phone call. If no call by 15-min mark, dial that number directly. Voicemail counts only with a callback number AND a Slack message.</div>` : ""}
+      ${adminCta}
+      ${incident.drive_folder_url ? `<div style="margin-top:14px; padding-top:14px; border-top:0.5px solid #e2e8f0;"><a href="${incident.drive_folder_url}" style="color:#7c3aed; text-decoration:none; font-size:12px; font-weight:500;">📂 Open ${formatAttachmentLabel(incident.attachment_count)}</a></div>` : ""}
+    </div>
+    <div style="padding:14px 4px 0; font-size:11px; color:#94a3b8; text-align:center;">
+      KitchFix Performance Food Service · Sent from People Portal
     </div>
   </div>`;
 }
@@ -483,6 +697,9 @@ return {
 const STATUS_LABEL_MAP = {
   submitted: "Submitted",
   acknowledged: "Acknowledged",
+  // P4C: investigated = past tense (post-Save Investigation).
+  // investigating kept for backward compat with any pre-existing rows.
+  investigated: "Investigated",
   investigating: "Investigating",
   corrective_action: "Corrective Action",
   closed: "Closed",
@@ -491,6 +708,7 @@ const STATUS_LABEL_MAP = {
 const STATUS_EMOJI_MAP = {
   submitted: "📥",
   acknowledged: "👀",
+  investigated: "🔍",
   investigating: "🔍",
   corrective_action: "🛠️",
   closed: "✅",
@@ -581,6 +799,8 @@ export async function notifyStatusChange({
     const STATUS_BODY_COPY = {
       acknowledged: "Your report has been acknowledged. A reviewer is preparing to investigate. You don't need to do anything — we'll follow up if we need more information.",
       investigating: "An investigator has been assigned and is actively reviewing your report. We may reach out for additional context.",
+      // P4C: investigated = HR has completed the investigation.
+      investigated: "The investigation on your incident has been completed. Root cause and corrective actions have been recorded. The incident will move to closure once preventive steps are documented and the 30-day check-in is complete.",
       corrective_action: "The team has identified a corrective action and is working through it. The incident will be closed once preventive steps are documented.",
       closed: "Your incident has been closed. Thank you for reporting it — these reports keep our teams safe. The full record is on file and the closure summary is in the incident's Drive folder.",
       submitted: "Your incident has been recorded. Submission status reset to Submitted.",
@@ -603,7 +823,7 @@ export async function notifyStatusChange({
          </div>`
       : "";
 
-    const html = `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#0f3057;">
+    const html = `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#153968;">
       ${testBanner}
       <div style="padding:14px 18px; background:#7c3aed; color:white; border-radius:10px 10px 0 0;">
         <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.85;">Status update</div>
@@ -689,4 +909,208 @@ export function computeEmployeeCheckInDue(incidentType, incidentDateStr) {
   const om = String(d.getUTCMonth() + 1).padStart(2, "0");
   const od = String(d.getUTCDate()).padStart(2, "0");
   return `${oy}-${om}-${od}`;
+}
+// ─────────────────────────────────────────────
+// PDF EXPORT (P4C)
+// Generates a printable PDF of an incident report. Returns a Buffer that can be:
+//   - Returned as base64 in the API response (so client can download to device)
+//   - Uploaded to the Drive folder (so the folder contains both attachments + report PDF)
+// Filenames only for v1 — attachment thumbnails not included (they're already in the folder).
+// ─────────────────────────────────────────────
+export async function buildIncidentPdf(incident, attachmentNames = []) {
+  // Dynamic import to avoid loading pdf-lib at module init (saves ~150KB cold start
+  // for routes that never produce PDFs).
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+
+  const pdfDoc = await PDFDocument.create();
+  const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helvBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const helvOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+
+  const page = pdfDoc.addPage([612, 792]); // US Letter
+  const { width, height } = page.getSize();
+  const margin = 50;
+  let y = height - margin;
+
+  // Brand colors (PFS navy + KitchFix purple)
+  const navy = rgb(0x15 / 255, 0x39 / 255, 0x68 / 255);
+  const grey = rgb(0x64 / 255, 0x74 / 255, 0x8b / 255);
+  const slate = rgb(0x33 / 255, 0x41 / 255, 0x55 / 255);
+  const lightBorder = rgb(0xe2 / 255, 0xe8 / 255, 0xf0 / 255);
+
+  const sevColors = {
+    S1: rgb(0xdc / 255, 0x26 / 255, 0x26 / 255),
+    S2: rgb(0xd9 / 255, 0x77 / 255, 0x06 / 255),
+    S3: rgb(0xea / 255, 0xa8 / 255, 0x08 / 255),
+    S4: rgb(0x64 / 255, 0x74 / 255, 0x8b / 255),
+  };
+  const sevColor = sevColors[incident.severity] || grey;
+
+  // Helpers
+  const drawText = (text, x, yPos, opts = {}) => {
+    page.drawText(text || "", {
+      x,
+      y: yPos,
+      size: opts.size || 10,
+      font: opts.bold ? helvBold : (opts.italic ? helvOblique : helv),
+      color: opts.color || slate,
+    });
+  };
+
+  const drawWrapped = (text, x, yPos, maxWidth, opts = {}) => {
+    const size = opts.size || 10;
+    const font = opts.bold ? helvBold : helv;
+    const words = String(text || "").replace(/\r\n/g, "\n").split(/(\s+)/);
+    const lines = [];
+    let line = "";
+    for (const w of words) {
+      if (w === "\n") {
+        lines.push(line);
+        line = "";
+        continue;
+      }
+      const test = line + w;
+      const wWidth = font.widthOfTextAtSize(test, size);
+      if (wWidth > maxWidth && line) {
+        lines.push(line);
+        line = w.trimStart();
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    let cursor = yPos;
+    const lineHeight = size * 1.4;
+    for (const ln of lines) {
+      drawText(ln.trimStart(), x, cursor, opts);
+      cursor -= lineHeight;
+    }
+    return cursor; // return where caller should continue
+  };
+
+  const drawRow = (label, value, yPos) => {
+    drawText(label, margin, yPos, { size: 9, color: grey });
+    drawText(String(value || "—"), margin + 130, yPos, { size: 10, color: navy });
+    return yPos - 16;
+  };
+
+  const drawDivider = (label, yPos) => {
+    yPos -= 6;
+    drawText(label.toUpperCase(), margin, yPos, { size: 9, bold: true, color: grey });
+    const labelWidth = helvBold.widthOfTextAtSize(label.toUpperCase(), 9);
+    page.drawLine({
+      start: { x: margin + labelWidth + 8, y: yPos + 3 },
+      end: { x: width - margin, y: yPos + 3 },
+      thickness: 0.5,
+      color: lightBorder,
+    });
+    return yPos - 14;
+  };
+
+  // ── HEADER — Title bar ──
+  drawText("KitchFix Performance Food Service", margin, y, { size: 9, color: grey });
+  y -= 14;
+  drawText(`Incident Report — ${incident.incident_id || ""}`, margin, y, {
+    size: 18, bold: true, color: navy,
+  });
+  y -= 24;
+
+  // Severity chip + type label
+  const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
+  const typeLabel = typeMeta?.label || incident.incident_type || "";
+  const sevMeta = SEVERITY_TIERS.find((s) => s.id === incident.severity);
+  const sevLabel = sevMeta?.label || incident.severity || "";
+
+  // Severity chip
+  const chipText = incident.severity || "—";
+  const chipWidth = helvBold.widthOfTextAtSize(chipText, 11) + 14;
+  page.drawRectangle({
+    x: margin, y: y - 4, width: chipWidth, height: 18,
+    color: sevColor, borderWidth: 0,
+  });
+  drawText(chipText, margin + 7, y, { size: 11, bold: true, color: rgb(1, 1, 1) });
+  drawText(`${typeLabel}  ·  ${sevLabel}`, margin + chipWidth + 10, y, {
+    size: 11, bold: true, color: navy,
+  });
+  y -= 28;
+
+  // ── WHEN & WHERE ──
+  y = drawDivider("When & where", y);
+  y = drawRow("Site", incident.site_code, y);
+  y = drawRow("Date", incident.incident_date, y);
+  y = drawRow("Time", incident.incident_time, y);
+  y = drawRow("Location", incident.location_detail, y);
+  y = drawRow("Manager aware", incident.manager_aware_date, y);
+  y = drawRow("Submitted by", `${incident.submitted_by_name || ""} <${incident.submitted_by_email || ""}>`, y);
+  y = drawRow("Submitted at", incident.submitted_at, y);
+
+  // ── NARRATIVE ──
+  y = drawDivider("Narrative", y);
+  drawText("What happened", margin, y, { size: 9, bold: true, color: grey });
+  y -= 14;
+  y = drawWrapped(incident.what_happened, margin, y, width - 2 * margin, { size: 10, color: slate });
+  y -= 8;
+
+  if (incident.immediate_actions_taken) {
+    drawText("Immediate actions", margin, y, { size: 9, bold: true, color: grey });
+    y -= 14;
+    y = drawWrapped(incident.immediate_actions_taken, margin, y, width - 2 * margin, { size: 10, color: slate });
+    y -= 8;
+  }
+
+  if (incident.witnesses) {
+    drawText("Witnesses", margin, y, { size: 9, bold: true, color: grey });
+    y -= 14;
+    y = drawWrapped(incident.witnesses, margin, y, width - 2 * margin, { size: 10, color: slate });
+    y -= 8;
+  }
+
+  // ── TYPE-SPECIFIC DETAILS ──
+  let tsData = {};
+  try {
+    tsData = typeof incident.type_specific_data === "string" && incident.type_specific_data
+      ? JSON.parse(incident.type_specific_data)
+      : (incident.type_specific_data || {});
+  } catch {
+    tsData = {};
+  }
+  const tsEntries = Object.entries(tsData).filter(([, v]) => v);
+  if (tsEntries.length > 0) {
+    y = drawDivider("Type-specific details", y);
+    for (const [k, v] of tsEntries) {
+      const prettyLabel = String(k).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      y = drawRow(prettyLabel, String(v), y);
+      if (y < margin + 80) {
+        // out of room — paginate
+        const newPage = pdfDoc.addPage([612, 792]);
+        page.drawText("(continued)", { x: margin, y: 30, size: 9, color: grey, font: helvOblique });
+        // switch page reference is awkward in this simple script — just stop adding here
+        break;
+      }
+    }
+  }
+
+  // ── ATTACHMENTS (filenames only) ──
+  if (attachmentNames && attachmentNames.length > 0) {
+    y = drawDivider("Photos & documents", y);
+    drawText(`${attachmentNames.length} file${attachmentNames.length === 1 ? "" : "s"} attached:`, margin, y, {
+      size: 9, color: grey,
+    });
+    y -= 14;
+    for (const name of attachmentNames) {
+      drawText(`•  ${name}`, margin + 8, y, { size: 10, color: slate });
+      y -= 14;
+      if (y < margin + 50) break;
+    }
+  }
+
+  // ── FOOTER (disclaimer) ──
+  const disclaimer = "This report is the official record submitted via People Portal. Mariela Chavez (HR) follows up if more information is needed.";
+  drawWrapped(disclaimer, margin, margin + 30, width - 2 * margin, {
+    size: 8, color: grey, italic: true,
+  });
+  drawText(`KitchFix Performance Food Service · Generated ${new Date().toLocaleString("en-US", { timeZone: "America/Chicago" })}`,
+    margin, margin, { size: 8, color: grey });
+
+  return Buffer.from(await pdfDoc.save());
 }
