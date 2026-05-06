@@ -1550,9 +1550,11 @@ if (action === "submit-help") {
         console.error("[Incident] Drive folder creation failed:", e.message);
       }
 
-      // Upload attachments
+// Upload attachments
       const attachments = Array.isArray(f.attachments) ? f.attachments : [];
-      console.log(`[Incident] Submit received ${attachments.length} attachments for ${incidentId}`);
+      // Compute total payload size up front for diagnostics
+      const totalAttachBytes = attachments.reduce((s, a) => s + (a?.base64?.length || 0), 0);
+      console.log(`[Incident] Submit received ${attachments.length} attachments for ${incidentId} (total b64=${totalAttachBytes} bytes, ~${Math.round(totalAttachBytes*0.75/1024)}KB)`);
       if (attachments.length) {
         attachments.forEach((a, i) => {
           const b64Len = (a?.base64 || "").length;
@@ -1561,6 +1563,9 @@ if (action === "submit-help") {
         });
       }
       const uploadedFiles = [];
+      // P4 diagnostic: collect upload errors so we can return them to the client
+      // and surface in the success screen instead of silently failing.
+      const uploadErrors = [];
       if (driveFolderId && attachments.length) {
         for (const att of attachments) {
           try {
@@ -1574,11 +1579,16 @@ if (action === "submit-help") {
             console.log(`[Incident]   uploaded ${att.name} -> ${up.fileId}`);
           } catch (e) {
             console.error(`[Incident] File upload failed (${att.name}):`, e.message, e.stack);
+            uploadErrors.push({ name: att.name, error: e.message || "unknown" });
           }
         }
+      } else if (attachments.length && !driveFolderId) {
+        console.warn(`[Incident] Cannot upload ${attachments.length} attachment(s) — no Drive folder ID`);
+        attachments.forEach((a) => uploadErrors.push({ name: a?.name || "?", error: "no Drive folder" }));
       }
       console.log(`[Incident] Upload complete: ${uploadedFiles.length}/${attachments.length} succeeded`);
 
+    
       // Build incident object (all 42 columns, server-set timestamps)
       const incident = {
         incident_id: incidentId,
@@ -1643,7 +1653,7 @@ if (action === "submit-help") {
       } catch (e) {
         console.error("[Incident] Notification orchestration failed:", e.message);
       }
-      
+
       // Append row (with tab-create fallback)
       const row = incidentToRow(incident);
       let appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
@@ -1691,13 +1701,19 @@ if (action === "submit-help") {
         },
       });
 
-      return NextResponse.json({
+return NextResponse.json({
         success: true,
         incident_id: incidentId,
         drive_folder_url: driveFolderUrl,
         notifications_sent: incident.notifications_sent,
+        // P4 diagnostic: attachment outcomes surfaced to client so the success
+        // screen can show "2 of 3 attachments uploaded" instead of silently
+        // hiding upload failures.
+        attachments_total: attachments.length,
+        attachments_uploaded: uploadedFiles.length,
+        attachment_errors: uploadErrors,
       });
-    }
+        }
 
     // ─── Incident: status update (honest gaps - skipped stages stay empty) ───
     if (action === "incident-status-update") {

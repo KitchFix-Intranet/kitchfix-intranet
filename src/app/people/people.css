@@ -3084,3 +3084,535 @@ body:has(.pp-app) {
   background: #c92a25;
   border-color: #c92a25;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEADERSHIP DUGOUT (pp-ldug-)
+   Spec: /docs/LEADERSHIP_DUGOUT_BUILD_PLAN.md
+   Density mode: scoped to [data-density="compact"]
+   Mobile (<1024px): auto-flips to comfortable per non-negotiable rule
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pp-ldug-tool-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Header strip ── */
+.pp-ldug-tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--pp-grey-border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pp-ldug-tool-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.pp-ldug-tool-title-icon {
+  width: 26px;
+  height: 26px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.pp-ldug-tool-title-icon svg {
+  width: 13px;
+  height: 13px;
+}
+.pp-ldug-tool-title-text h3 {
+  margin: 0;
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pp-navy);
+  line-height: 1.2;
+}
+.pp-ldug-tool-title-text p {
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  color: var(--pp-grey);
+  line-height: 1.3;
+}
+
+/* ── Segmented sub-nav ── */
+.pp-ldug-tool-segmented {
+  display: inline-flex;
+  background: #f8fafc;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 3px;
+  flex-wrap: wrap;
+}
+.pp-ldug-tool-segment {
+  background: none;
+  border: 0;
+  padding: 7px 14px;
+  font-family: var(--pp-font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pp-grey);
+  cursor: pointer;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.pp-ldug-tool-segment:hover {
+  color: var(--pp-navy);
+}
+.pp-ldug-tool-segment--active,
+.pp-ldug-tool-segment--active:hover {
+  background: var(--pp-purple);
+  color: white;
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.25);
+}
+
+/* ── Body container ── */
+.pp-ldug-tool-body {
+  padding: 24px 20px;
+}
+
+/* ─── Section header (used by every sub-view) ─── */
+.pp-ldug-section-header {
+  margin-bottom: 20px;
+}
+.pp-ldug-section-title {
+  font-family: var(--pp-font-head);
+  font-size: var(--type-h2, 20px);
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 4px;
+  line-height: var(--line-heading, 1.15);
+}
+.pp-ldug-section-desc {
+  font-size: var(--type-body-sm, 13px);
+  color: var(--pp-grey);
+  margin: 0;
+  line-height: var(--line-body, 1.3);
+  max-width: 640px;
+}
+
+/* ─── My Dugout (Sprint 1 placeholder) ─── */
+.pp-ldug-welcome {
+  background: linear-gradient(90deg, #0f3057 0%, rgba(15, 48, 87, 0.85) 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  color: white;
+  margin-bottom: 20px;
+}
+.pp-ldug-welcome-title {
+  font-family: var(--pp-font-head);
+  font-size: var(--type-h1, 24px);
+  font-weight: 800;
+  margin: 0 0 4px;
+  letter-spacing: -0.2px;
+  line-height: 1.15;
+}
+.pp-ldug-welcome-sub {
+  margin: 0;
+  font-size: var(--type-body-sm, 13px);
+  opacity: 0.85;
+}
+
+.pp-ldug-roadmap {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.pp-ldug-roadmap-header {
+  margin-bottom: 14px;
+}
+.pp-ldug-roadmap-tag {
+  display: inline-block;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+}
+.pp-ldug-roadmap-desc {
+  font-size: var(--type-body-sm, 13px);
+  color: var(--pp-grey);
+  line-height: var(--line-body, 1.3);
+  margin: 0;
+}
+.pp-ldug-roadmap-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.pp-ldug-roadmap-card {
+  text-align: left;
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--pp-font-body);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.pp-ldug-roadmap-card:hover {
+  border-color: var(--pp-purple);
+  transform: translateY(-1px);
+}
+.pp-ldug-roadmap-card--locked {
+  opacity: 0.6;
+  cursor: default;
+}
+.pp-ldug-roadmap-card--locked:hover {
+  border-color: var(--pp-grey-border);
+  transform: none;
+}
+.pp-ldug-roadmap-card h4 {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 6px 0 4px;
+}
+.pp-ldug-roadmap-card p {
+  font-size: 12px;
+  color: var(--pp-grey);
+  margin: 0;
+  line-height: 1.35;
+}
+.pp-ldug-roadmap-card-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.pp-ldug-tag-live {
+  background: #d1fae5;
+  color: #047857;
+}
+.pp-ldug-tag-soon {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* ─── Context strip (used by Active Work + Calibration) ─── */
+.pp-ldug-context-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.pp-ldug-context-pill {
+  background: var(--pp-purple-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.pp-ldug-context-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--pp-purple);
+}
+.pp-ldug-context-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pp-navy);
+}
+
+/* ─── Empty state (shared) ─── */
+.pp-ldug-empty-state {
+  background: var(--pp-bg);
+  border: 1px dashed var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 32px 24px;
+  text-align: center;
+}
+.pp-ldug-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  border-radius: 50%;
+  margin-bottom: 12px;
+}
+.pp-ldug-empty-title {
+  font-family: var(--pp-font-head);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 6px;
+}
+.pp-ldug-empty-desc {
+  font-size: 13px;
+  color: var(--pp-grey);
+  line-height: 1.4;
+  margin: 0 auto 6px;
+  max-width: 440px;
+}
+.pp-ldug-empty-meta {
+  font-size: 11px;
+  color: var(--pp-grey);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+.pp-ldug-loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--pp-grey);
+  font-size: 13px;
+}
+.pp-ldug-inline-code {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--pp-navy);
+}
+
+/* ─── Library ─── */
+.pp-ldug-library-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.pp-ldug-library-group-title {
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pp-ldug-library-group-count {
+  background: var(--pp-bg);
+  color: var(--pp-grey);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.pp-ldug-library-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pp-ldug-library-card {
+  position: relative;
+  text-align: left;
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: var(--pp-font-body);
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.pp-ldug-library-card:hover {
+  border-color: var(--pp-purple);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(124, 58, 237, 0.08);
+}
+.pp-ldug-library-pin {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--pp-purple);
+  letter-spacing: 0.4px;
+}
+.pp-ldug-library-card-title {
+  font-family: var(--pp-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 4px;
+  line-height: 1.3;
+  padding-right: 50px;
+}
+.pp-ldug-library-version {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--pp-grey);
+  letter-spacing: 0.3px;
+  background: var(--pp-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.pp-ldug-library-desc {
+  font-size: 12px;
+  color: var(--pp-grey);
+  margin: 4px 0 6px;
+  line-height: 1.35;
+}
+.pp-ldug-library-updated {
+  display: block;
+  font-size: 10px;
+  color: var(--pp-grey);
+  font-style: italic;
+}
+
+/* ─── Admin ─── */
+.pp-ldug-admin-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 16px;
+}
+.pp-ldug-admin-stat {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pp-ldug-admin-stat-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--pp-grey);
+}
+.pp-ldug-admin-stat-value {
+  font-family: var(--pp-font-head);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--pp-navy);
+}
+
+/* ─── Coming-soon landing (non-system-viewers) ─── */
+.pp-ldug-comingsoon {
+  background: white;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 12px;
+  padding: 24px 26px;
+  text-align: center;
+}
+.pp-ldug-comingsoon-tag {
+  display: inline-block;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+.pp-ldug-comingsoon-title {
+  font-family: var(--pp-font-head);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+.pp-ldug-comingsoon-desc {
+  font-size: 13px;
+  color: var(--pp-grey);
+  line-height: 1.5;
+  margin: 0 auto 18px;
+  max-width: 540px;
+}
+.pp-ldug-comingsoon-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 16px;
+  text-align: left;
+}
+.pp-ldug-comingsoon-card {
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.pp-ldug-comingsoon-card h4 {
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  margin: 0 0 4px;
+}
+.pp-ldug-comingsoon-card p {
+  font-size: 12px;
+  color: var(--pp-grey);
+  margin: 0;
+  line-height: 1.4;
+}
+.pp-ldug-comingsoon-meta {
+  font-size: 12px;
+  color: var(--pp-grey);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ─── Mobile override (<1024px) — relaxes density per the non-negotiable rule ─── */
+@media (max-width: 1023px) {
+    .pp-ldug-tool-header {
+    padding: 14px;
+    gap: 12px;
+  }
+  .pp-ldug-tool-segmented {
+    width: 100%;
+  }
+  .pp-ldug-tool-segment {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .pp-ldug-tool-body {
+    padding: 16px;
+  }
+  .pp-ldug-welcome {
+    padding: 16px 18px;
+  }
+  .pp-ldug-welcome-title {
+    font-size: 22px;
+  }
+  .pp-ldug-section-title {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 540px) {
+  .pp-ldug-tool-segment {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+}

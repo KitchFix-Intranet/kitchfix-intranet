@@ -5,6 +5,12 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { google } from "googleapis";
+// P4 fix: static top-level import of Readable. The previous pattern
+// `const { Readable } = await import("stream")` was returning undefined for
+// Readable in this route's bundle (despite working in src/lib/drive.js — likely
+// a Webpack module-resolution edge case in Next.js 16). Static import is
+// universally reliable and matches Node.js best practice.
+import { Readable } from "stream";
 import {
   INCIDENT_TYPES,
   SEVERITY_TIERS,
@@ -115,9 +121,9 @@ export async function uploadIncidentFile({ folderId, base64Data, filename, mimeT
   const rawBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
   const buffer = Buffer.from(rawBase64, "base64");
 
-  const { Readable } = await import("stream");
+  // P4 fix: Readable is now imported statically at the top of this file.
   const stream = Readable.from(buffer);
-
+  
   const file = await drive.files.create({
     requestBody: {
       name: filename,

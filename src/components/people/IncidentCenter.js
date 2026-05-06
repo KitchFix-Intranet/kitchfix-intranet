@@ -197,7 +197,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
       return;
     }
 
-    setSubmitting(true);
+setSubmitting(true);
     try {
       const payload = {
         ...form,
@@ -205,13 +205,32 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
         submitterEmail: bootstrapData?.userEmail || "",
         submitterName: bootstrapData?.firstName || "",
       };
-      
+
+      // P4 diagnostic — log payload shape to browser console pre-flight.
+      // If submit fails / files don't land, this log answers: "did the client
+      // even try to send N files of size X each, or was the array empty?"
+      const reqBody = JSON.stringify({ action: "submit-incident", form: payload });
+      const reqMb = (reqBody.length / 1024 / 1024).toFixed(2);
+      console.log(
+        `[Incident] POST /api/people | action=submit-incident | ` +
+        `attachments=${(form.attachments || []).length} | ` +
+        `payload=${reqMb} MB | ` +
+        `Vercel limit=4.5 MB`
+      );
+      if (form.attachments?.length) {
+        form.attachments.forEach((a, i) => {
+          console.log(`[Incident]   client attachment[${i}] name=${a.name} size=${a.size} b64Len=${a.base64?.length || 0}`);
+        });
+      }
+
       const res = await fetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit-incident", form: payload }),
+        body: reqBody,
       });
+      console.log(`[Incident] response status=${res.status} ok=${res.ok}`);
       const data = await res.json();
+      console.log(`[Incident] response body=`, data);
 
       if (data.success) {
         setSuccess({
@@ -221,6 +240,10 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
           severity: form.severity,
           incidentType: form.incident_type,
           medicalTreatmentRefused: form.type_specific_data?.medical_treatment_refused === "Yes",
+          // P4 diagnostic: pass through attachment outcomes
+          attachmentsTotal: data.attachments_total ?? 0,
+          attachmentsUploaded: data.attachments_uploaded ?? 0,
+          attachmentErrors: data.attachment_errors || [],
         });
         if (refreshHistory) refreshHistory();
         if (showToast) showToast("✅ Incident submitted");
@@ -228,6 +251,7 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
         if (showToast) showToast(`⚠️ ${data.error || "Submission failed"}`, "error");
       }
     } catch (err) {
+      console.error(`[Incident] submit threw:`, err);
       if (showToast) showToast(`⚠️ Error: ${err.message}`, "error");
     } finally {
       setSubmitting(false);
@@ -278,8 +302,41 @@ export default function IncidentCenter({ bootstrapData, onNavigate, showToast, r
                   {label}
                 </div>
               ))}
+{/* P4 diagnostic: show attachment outcomes from server response.
+                Three states:
+                - none attempted → render nothing
+                - all uploaded → quiet green check
+                - partial / all failed → amber warning with error list */}
+            {success.attachmentsTotal > 0 && (
+              <div style={{ marginTop: 10 }}>
+                {success.attachmentsUploaded === success.attachmentsTotal ? (
+                  <div>
+                    <span style={{ color: "#10b981", fontWeight: 500, marginRight: 6 }}>✓</span>
+                    {success.attachmentsTotal === 1
+                      ? "1 attachment uploaded"
+                      : `${success.attachmentsTotal} attachments uploaded`}
+                  </div>
+                ) : (
+                  <div style={{
+                    background: "#fef3c7", border: "1px solid #fbbf24", borderRadius: 6,
+                    padding: "8px 12px", color: "#92400e", fontSize: 12,
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                      ⚠ {success.attachmentsUploaded}/{success.attachmentsTotal} attachments uploaded
+                    </div>
+                    {success.attachmentErrors?.length > 0 && (
+                      <ul style={{ margin: "4px 0 0 16px", padding: 0, fontSize: 11 }}>
+                        {success.attachmentErrors.map((e, i) => (
+                          <li key={i}>{e.name}: {e.error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {success.driveFolderUrl && (
-              <div style={{ marginTop: 12 }}>
+                              <div style={{ marginTop: 12 }}>
                 <a href={success.driveFolderUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#7c3aed", textDecoration: "none", fontWeight: 500 }}>
                   📂 Open Drive folder ↗
                 </a>

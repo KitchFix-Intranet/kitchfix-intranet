@@ -7,6 +7,7 @@ import ActionCenter from "@/components/people/ActionCenter";
 import NewHireWizard from "@/components/people/NewHireWizard";
 import PAFForm from "@/components/people/PAFForm";
 import IncidentTool from "@/components/people/IncidentTool";
+import LeadershipDugoutTool from "@/components/people/leadership-dugout/LeadershipDugoutTool";
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
@@ -358,7 +359,7 @@ export default function PeoplePage() {
           />
         )}
 
-        {view === "incidents" && (
+{view === "incidents" && (
           <IncidentTool
             bootstrapData={bootstrapData}
             onNavigate={navigate}
@@ -367,8 +368,16 @@ export default function PeoplePage() {
           />
         )}
 
+        {view === "leadership-dugout" && (
+          <LeadershipDugoutTool
+            bootstrapData={bootstrapData}
+            onNavigate={navigate}
+            showToast={showToast}
+          />
+        )}
+
         {view === "admin" && bootstrapData?.isAdmin && (
-          <AdminQueue
+                    <AdminQueue
             bootstrapData={bootstrapData}
             Formatter={Formatter}
             showToast={showToast}
