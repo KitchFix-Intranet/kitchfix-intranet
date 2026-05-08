@@ -277,7 +277,7 @@ export default function ServiceCalendar({ showToast, session }) {
   };
 
   return (
-    <div className="sc-root">
+    <div className="sc-root" data-density="compact">
       <div className="sc-card">
         <div className="sc-header">
           <div className="sc-header-account">
@@ -549,7 +549,7 @@ export default function ServiceCalendar({ showToast, session }) {
       {/* Day detail overlay */}
       {focusDay && focusDayData && data?.serviceGroups && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setFocusDay(null); }}>
-          <div className="sc-overlay-card">
+          <div className="sc-overlay-card" data-density="comfortable">
             <DayDetail day={focusDayData} serviceGroups={data.serviceGroups}
               overrides={data.overrides?.filter(o => o.date === focusDay) || []}
               onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
@@ -563,7 +563,7 @@ export default function ServiceCalendar({ showToast, session }) {
       {/* Bulk entry overlay */}
       {bulkPanelOpen && data?.serviceGroups && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkPanelOpen(false); }}>
-          <div className="sc-overlay-card">
+          <div className="sc-overlay-card" data-density="comfortable">
             <div className="sc-day">
               <div className="sc-day-header">
                 <div>
@@ -615,7 +615,7 @@ export default function ServiceCalendar({ showToast, session }) {
       {/* Service config overlay */}
       {showConfig && data?.serviceGroups && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowConfig(false); }}>
-          <div className="sc-overlay-card">
+          <div className="sc-overlay-card" data-density="comfortable">
             <ServiceConfig
               account={data.account}
               serviceGroups={data.serviceGroups}

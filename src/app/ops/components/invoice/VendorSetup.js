@@ -71,7 +71,7 @@ const CATEGORY_COLORS = {
 
 const DAYS            = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DELIVERY_METHODS = ["Direct Delivery", "Will Call / Pickup", "Shipped (Common Carrier)", "Drop Ship"];
-const PAYMENT_TERMS   = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
+const PAYMENT_TERMS   = ["Net 7", "Net 10", "Net 14", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
 
 const emptyForm = () => ({
   vendorName:         "",

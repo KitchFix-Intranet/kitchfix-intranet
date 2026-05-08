@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 
 const DELIVERY_DAY_OPTIONS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DELIVERY_METHODS      = ["Direct Delivery", "Will Call / Pickup", "Shipped (Common Carrier)", "Drop Ship"];
-const PAYMENT_TERMS_OPTIONS = ["Net 7", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
+const PAYMENT_TERMS_OPTIONS = ["Net 7", "Net 10", "Net 14", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
 const CATEGORIES            = ["Produce", "Protein", "Dairy", "Dry Goods", "Beverage", "Packaging", "Cleaning", "Supplies", "Equipment", "Linen", "Specialty", "Broadliner", "Other"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

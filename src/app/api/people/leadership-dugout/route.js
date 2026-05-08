@@ -447,16 +447,17 @@ export async function POST(request) {
       const { enabled } = body;
       const { updateRangeSA } = await import("@/lib/sheets");
 
-      const configResult = await readSheetSA(SHEET_IDS.HUB, TABS.CONFIG);
+const configResult = await readSheetSA(SHEET_IDS.HUB, TABS.CONFIG);
       const configRows = configResult?.rows || [];
       let rowNumber = -1;
       for (let i = 0; i < configRows.length; i++) {
         if (String(configRows[i][0] || "").trim() === "test_mode_enabled") {
-          rowNumber = i + 1;
+          // configRows excludes header row 1. Index 0 = sheet row 2.
+          rowNumber = i + 2;
           break;
         }
       }
-      if (rowNumber === -1) {
+            if (rowNumber === -1) {
         return NextResponse.json({
           ok: false,
           error: "test_mode_enabled row not found in HUB__Performance_System_Config. Add it first."
