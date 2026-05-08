@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Stepper, CurrencyInput, EditButton, YesNoToggle, TechRow } from "./shared";
 
-const STANDARD_ROLES = ["General Manager", "Executive Chef", "Sous Chef", "Cook", "Prep Cook", "Dishwasher", "Driver"];
+const STANDARD_ROLES = ["General Manager", "Executive Chef", "Sous Chef", "Cook", "Prep Cook", "FOH Attendant", "Dishwasher", "Driver"];
 const MGMT_ROLES = ["General Manager", "Executive Chef", "Sous Chef"];
 
 function getLocalISODate() {
@@ -140,8 +140,10 @@ export default function NewHireWizard({ bootstrapData, Drafts, Formatter, onNavi
     return loc ? loc.key : null;
   })();
   const filteredManagers = activeLocKey ? allManagers.filter((m) => m.teamKey === activeLocKey) : [];
-  const isOtherRole = form.jobTitle && !STANDARD_ROLES.includes(form.jobTitle);
-  const isSalary = form.payType === "Salary";
+const isOtherRole = form.jobTitle && !STANDARD_ROLES.includes(form.jobTitle);
+  const isOtherSelected = isOtherRole || form.jobTitle === "other";
+    const showOtherInput = isOtherRole || (form.jobTitle === "" && document.querySelector?.('[data-other-selected]'));
+    const isSalary = form.payType === "Salary";
 
   // ── Success View ──
   if (success) {
@@ -235,9 +237,9 @@ export default function NewHireWizard({ bootstrapData, Drafts, Formatter, onNavi
                 value={isOtherRole ? "Other" : form.jobTitle}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === "Other") {
-                    update("jobTitle", "");
-                  } else {
+if (val === "Other") {
+                    update("jobTitle", "other");
+                                    } else {
                     update("jobTitle", val);
                     if (MGMT_ROLES.includes(val)) {
                       update("payType", "Salary");
@@ -259,26 +261,23 @@ export default function NewHireWizard({ bootstrapData, Drafts, Formatter, onNavi
                   <option>Executive Chef</option>
                   <option>Sous Chef</option>
                 </optgroup>
-                <optgroup label="Staff">
+<optgroup label="Staff">
                   <option>Cook</option>
                   <option>Prep Cook</option>
+                  <option>FOH Attendant</option>
                   <option>Dishwasher</option>
                   <option>Driver</option>
                 </optgroup>
-                <option value="Other">Other (Specify)</option>
+                                <option value="Other">Other (Specify)</option>
               </select>
 
-              {(isOtherRole || form.jobTitle === "") && (
-                <div className={`pp-slide-wrapper${isOtherRole || form.jobTitle === "" ? "" : ""}`}>
-                  {isOtherRole && (
-                    <>
-                      <label className="pp-label">Specify Job Title</label>
-                      <input className={`pp-input${errors.jobTitle ? " pp-input-error" : ""}`} value={form.jobTitle} onChange={(e) => update("jobTitle", e.target.value)} placeholder="Enter role name" />
-                    </>
-                  )}
+{isOtherSelected && (
+                <div>
+                  <label className="pp-label">Specify Job Title</label>
+                  <input className={`pp-input${errors.jobTitle ? " pp-input-error" : ""}`} value={form.jobTitle === "other" ? "" : form.jobTitle} onChange={(e) => update("jobTitle", e.target.value || "other")} placeholder="Enter role name" autoFocus />
                 </div>
               )}
-            </>
+                          </>
           )}
 
           {/* STEP 3: Compensation — Fix #5: conversational heading */}
