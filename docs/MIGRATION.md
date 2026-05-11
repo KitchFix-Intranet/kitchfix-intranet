@@ -85,7 +85,7 @@
 
 10. **OAuth scope reduction.** Change `src/lib/auth.js` from full `drive` scope to `drive.file`. Test that all Drive operations still work (they will — the service account does the writes, not the user token).
 
-11. **Turbopack opt-in.** Change `package.json` script from `next dev --webpack` to `next dev`. Verify build works. Should reduce local dev startup time significantly.
+11. **Turbopack opt-in.** ~~Change `package.json` script from `next dev --webpack` to `next dev`. Verify build works. Should reduce local dev startup time significantly.~~ Shipped 2026-05-11 in PR #4 (commit 83fd0d5) — removed the `--webpack` flag from the `package.json` dev script. Verified the Turbopack banner appears on `npm run dev` startup; production builds were already on Turbopack via the Next 16 default. See Captain's log.
 
 12. **Analytics sheet rotation.** Archive old analytics events to a separate sheet to free up cells. Bridge measure until Phase 3 moves analytics to Postgres.
 
@@ -104,7 +104,7 @@
 - [ ] `RUNBOOK.md`, `ENV_VARS.md`, `MIGRATION.md` complete
 - [ ] Auth boundary cleanup done
 - [ ] OAuth scope reduced
-- [ ] Turbopack flipped on
+- [x] Turbopack flipped on — shipped 2026-05-11 (PR #4)
 - [ ] Production hasn't broken once during this phase
 
 ---
@@ -339,3 +339,4 @@ Top nav reorganizes. Redirects from old URLs in place for 90 days.
 
 - **2026-05-11** — Document created during Phase 0 completion. Five phases scoped. Three architectural axes locked. Multi-tenancy locked yes. Naming locked Option A. Migration order locked dependency-ordered. Six calibration findings added to Phase 1 backlog. Risk R9 added based on Claude Code's identification of Incidents side-effect entanglement. Risk R10 added based on maintainer's transition to full-time work on the codebase.
 - **2026-05-11** — Phase 1 Task 6 (lucide-react upgrade) closed as a no-op. The task was scoped on a misread of lucide-react's version history: `^1.14.0` was assumed to be an old pre-reset version with `0.5xx` being current. The reverse is true — lucide-react ran the `0.x` lineage for years, then cut `1.0.0` on 2026-03-20 and is now at `1.14.0` (2026-04-29), which is the current `latest` dist-tag and already what's in `package.json`. Verified against the npm registry. Only one file imports it — `src/components/people/IncidentLibrary.js` (Pin, ShieldCheck, ClipboardList, BookmarkCheck, MapPin, GraduationCap) — and all six resolve in 1.14.0; no renames or removals between the assumed-old and actual-current versions because there is no gap. No `npm install`, no `package.json` change, no code edits. Lesson: don't infer "stale" from a version number alone; check the registry's dist-tags.
+- **2026-05-11** — Phase 1 Task 11 (Turbopack opt-in) shipped (PR #4, commit 83fd0d5). One-line change in `package.json`: dropped the `--webpack` flag from the `dev` script. Production was already building with Turbopack via the Next 16 default; only local dev was opting out — the fix just aligns local with production. Separately, during today's local dev session the Analytics 10M-cell-limit issue (calibration finding #4) was confirmed live: analytics events are silently failing in production because the sheet is full. **Priority for next session — address this before any other Phase 1 task.**
