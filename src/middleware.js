@@ -7,9 +7,10 @@ export async function middleware(request) {
   const isLoginPage = request.nextUrl.pathname === "/login";
 const isAuthRoute = request.nextUrl.pathname.startsWith("/api/auth");
   const isCronRoute = request.nextUrl.pathname.startsWith("/api/cron");
+  const isHealthRoute = request.nextUrl.pathname === "/api/health";
 
-  // Allow auth API routes and cron jobs through
-  if (isAuthRoute || isCronRoute) return NextResponse.next();
+  // Allow auth API routes, cron jobs, and the health probe through
+  if (isAuthRoute || isCronRoute || isHealthRoute) return NextResponse.next();
   // Redirect logged-in users away from login page
   if (isLoginPage && isLoggedIn) {
     return NextResponse.redirect(new URL("/", request.url));
