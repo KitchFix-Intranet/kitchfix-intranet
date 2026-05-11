@@ -70,7 +70,7 @@
 
 5. **Daily Sheets backup.** Google Apps Script in each of the five sheets. Triggers 2 AM Central daily. Copies to timestamped Drive folder. 30-day retention. Slack alerts on success/failure.
 
-6. **lucide-react upgrade.** Bump from 1.14 to current. Audit icon imports.
+6. **lucide-react upgrade.** ~~Bump from 1.14 to current. Audit icon imports.~~ Closed 2026-05-11 as a no-op — `^1.14.0` is already the latest release. The 1.x line is lucide-react's *current* lineage (it cut 1.0.0 on 2026-03-20, reset upward from 0.x); it is not a stale pre-reset version. Icon imports audited: one importer (`src/components/people/IncidentLibrary.js`, 6 icons), all valid in 1.14.0, no renames affect us. See Captain's log.
 
 7. **Documentation.**
    - `docs/RUNBOOK.md` (expand from skeleton)
@@ -100,7 +100,7 @@
 - [ ] `/api/health` endpoint live and monitored
 - [ ] All Anthropic calls go through `src/lib/ai.ts`
 - [ ] Daily sheet backups confirmed running for 7 consecutive days
-- [ ] lucide-react upgraded
+- [x] lucide-react — closed 2026-05-11 as no-op; already on latest (1.14.0)
 - [ ] `RUNBOOK.md`, `ENV_VARS.md`, `MIGRATION.md` complete
 - [ ] Auth boundary cleanup done
 - [ ] OAuth scope reduced
@@ -338,3 +338,4 @@ Top nav reorganizes. Redirects from old URLs in place for 90 days.
 ## Captain's log
 
 - **2026-05-11** — Document created during Phase 0 completion. Five phases scoped. Three architectural axes locked. Multi-tenancy locked yes. Naming locked Option A. Migration order locked dependency-ordered. Six calibration findings added to Phase 1 backlog. Risk R9 added based on Claude Code's identification of Incidents side-effect entanglement. Risk R10 added based on maintainer's transition to full-time work on the codebase.
+- **2026-05-11** — Phase 1 Task 6 (lucide-react upgrade) closed as a no-op. The task was scoped on a misread of lucide-react's version history: `^1.14.0` was assumed to be an old pre-reset version with `0.5xx` being current. The reverse is true — lucide-react ran the `0.x` lineage for years, then cut `1.0.0` on 2026-03-20 and is now at `1.14.0` (2026-04-29), which is the current `latest` dist-tag and already what's in `package.json`. Verified against the npm registry. Only one file imports it — `src/components/people/IncidentLibrary.js` (Pin, ShieldCheck, ClipboardList, BookmarkCheck, MapPin, GraduationCap) — and all six resolve in 1.14.0; no renames or removals between the assumed-old and actual-current versions because there is no gap. No `npm install`, no `package.json` change, no code edits. Lesson: don't infer "stale" from a version number alone; check the registry's dist-tags.
