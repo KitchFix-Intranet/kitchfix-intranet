@@ -2,7 +2,7 @@
 
 > **Purpose:** Canonical list of every environment variable used by this system. Where it's set, what it's for, what breaks if it's missing.
 >
-> **Last verified:** 2026-05-11
+> **Last verified:** 2026-05-12
 > **Rule:** Adding an env var requires updating this doc in the same commit.
 
 ---
@@ -89,6 +89,7 @@
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `INCIDENT_TEST_MODE` | When `"true"`, incidents skip live side-effects (Slack/email/calendar) | Prod, Preview | Defaults to false (live mode) |
+| `ANALYTICS_ENABLED` | Master kill-switch for analytics **sheet writes**. Writes (`logEvent*`, `logHealth*`, `writeAnalyticsRow`, `clearAndWriteAnalytics`) no-op unless this is exactly `"true"`. Reads (`/analytics` dashboard) and the analytics cron's non-Slack work are unaffected; the analytics cron skips its Slack recaps when disabled. Default off as of 2026-05-12 (the analytics sheet hit Google's 10M-cell limit; system stays dormant until the Phase 3 Postgres rebuild). | Prod, Preview, Dev | Writes stay disabled — the intended state |
 
 ---
 
@@ -107,3 +108,4 @@ See `docs/RUNBOOK.md → How to rotate a secret`.
 ## Captain's log
 
 - **2026-05-11** — Initial env var inventory captured during Phase 0. List built from `grep` of source files; values to be confirmed against Vercel dashboard as Phase 1 sanity check.
+- **2026-05-12** — Added `ANALYTICS_ENABLED` (Phase 1 Task 12). Master kill-switch for analytics sheet writes; default off. Set to `false` on Vercel Production + Preview + Development. See `docs/MIGRATION.md → Captain's log`.
