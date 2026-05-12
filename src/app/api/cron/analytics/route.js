@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  ANALYTICS_ENABLED,
   logEventSA,
   logHealthSA,
   readAnalyticsSheet,
@@ -863,8 +864,12 @@ export async function GET(request) {
     const healthIssues = summarizeHealthFailures(dayHealth);
     results.daily.healthIssues = healthIssues ? Object.keys(healthIssues).length : 0;
 
-    await postDailyRecap(yesterday, stats, ghosts, healthIssues);
-    results.daily.slackPosted = true;
+    if (ANALYTICS_ENABLED) {
+      await postDailyRecap(yesterday, stats, ghosts, healthIssues);
+      results.daily.slackPosted = true;
+    } else {
+      results.daily.slackPosted = "skipped (analytics disabled)";
+    }
 
     console.log("[Analytics Cron] Daily tasks complete");
 
@@ -891,8 +896,12 @@ export async function GET(request) {
       const aiSummary = await buildAIPulse(stats, weekEvents);
       results.weekly.aiPulse = aiSummary ? "generated" : "skipped";
 
-      await postWeeklyRecap(weekEvents, aiSummary);
-      results.weekly.slackPosted = true;
+      if (ANALYTICS_ENABLED) {
+        await postWeeklyRecap(weekEvents, aiSummary);
+        results.weekly.slackPosted = true;
+      } else {
+        results.weekly.slackPosted = "skipped (analytics disabled)";
+      }
 
       await sendWeeklyEmail(weekEvents, aiSummary);
       results.weekly.emailSent = true;
@@ -909,8 +918,12 @@ export async function GET(request) {
       const archived = await archiveMonthlyEvents(allEvents);
       results.monthly.archived = archived;
 
-      await postMonthlyRecap(allEvents);
-      results.monthly.slackPosted = true;
+      if (ANALYTICS_ENABLED) {
+        await postMonthlyRecap(allEvents);
+        results.monthly.slackPosted = true;
+      } else {
+        results.monthly.slackPosted = "skipped (analytics disabled)";
+      }
 
       // Monthly email — reuse weekly email format with monthly data
       try {

@@ -111,6 +111,18 @@ curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
 
 (Replace `$CRON_SECRET` with the value from Vercel env vars.)
 
+## Analytics writes are feature-flagged off
+
+As of 2026-05-12 the analytics sheet hit Google's 10M-cell limit and writes were silently failing. The analytics system is intact but **dormant**: every write function in `src/lib/analytics.js` no-ops unless `ANALYTICS_ENABLED === "true"`. Reads still work — the `/analytics` dashboard renders historical data — and the analytics cron still runs, but skips its Slack recaps when disabled.
+
+To re-enable writes (debugging only — **production will still hit the cell limit**, so this is not a fix):
+
+1. Set `ANALYTICS_ENABLED=true` in Vercel (Production + Preview + Development) and in local `.env.local`.
+2. Redeploy (env var changes don't take effect until the next deploy).
+3. To disable again: set it back to `false` (or remove it — absent is treated as off) and redeploy.
+
+The real fix is the Phase 3 Postgres rebuild of analytics. See `docs/MIGRATION.md → Task 12` and `docs/ENV_VARS.md`.
+
 ## How to check production health
 
 Quick checks:
@@ -126,3 +138,4 @@ Quick checks:
 *Add new procedures here as they're learned. Date, what prompted the addition, where it lives.*
 
 - **2026-05-11** — Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
+- **2026-05-12** — Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.

@@ -7,10 +7,20 @@
  *   import { logEvent, logHealth } from "@/lib/analytics";
  *   logEvent(token, { email, userName, category, action, page, detail, status });
  *   logHealth(token, { service, endpoint, status, responseMs, errorMsg });
+ *
+ * Kill-switch: analytics WRITES no-op unless ANALYTICS_ENABLED === "true".
+ * Reads (readAnalyticsSheet) and slackRecap are intentionally unaffected.
  */
 
 const ANALYTICS_SHEET_ID = process.env.ANALYTICS_SHEET_ID;
 const SLACK_RECAP_WEBHOOK = process.env.SLACK_RECAP_WEBHOOK;
+
+// Master kill-switch — analytics WRITES no-op unless this is exactly "true".
+// Default-off as of 2026-05-12: the analytics sheet hit Google's 10M-cell limit
+// and writes were silently failing in production. The system stays dormant (all
+// instrumentation call sites intact) until Phase 3 rebuilds it on Postgres.
+// See docs/MIGRATION.md.
+export const ANALYTICS_ENABLED = process.env.ANALYTICS_ENABLED === "true";
 
 // Services that trigger instant Slack alerts on failure
 const REALTIME_ALERT_SERVICES = ["gmail_api", "sheets_api", "slack_webhook", "drive_api"];
@@ -30,7 +40,7 @@ export async function logEvent(token, {
   errorMsg = "",
   userAgent = "",
 } = {}) {
-  if (!ANALYTICS_SHEET_ID || !token) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID || !token) return;
 
   const row = [
     new Date().toISOString(),
@@ -63,7 +73,7 @@ export async function logHealth(token, {
   errorMsg = "",
   metadata = null,
 } = {}) {
-  if (!ANALYTICS_SHEET_ID || !token) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID || !token) return;
 
   const row = [
     new Date().toISOString(),
@@ -103,7 +113,7 @@ export async function logEventSA({
   errorMsg = "",
   userAgent = "",
 } = {}) {
-  if (!ANALYTICS_SHEET_ID) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID) return;
 
   const row = [
     new Date().toISOString(),
@@ -132,7 +142,7 @@ export async function logHealthSA({
   errorMsg = "",
   metadata = null,
 } = {}) {
-  if (!ANALYTICS_SHEET_ID) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID) return;
 
   const row = [
     new Date().toISOString(),
@@ -289,7 +299,7 @@ export async function readAnalyticsSheet(tabName) {
 // ─── Write a single row to any analytics tab (Service Account) ───
 // Used by daily aggregations that append one row at a time
 export async function writeAnalyticsRow(tabName, rowData) {
-  if (!ANALYTICS_SHEET_ID) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID) return;
   await appendToSheetSA(tabName, rowData);
 }
 
@@ -297,7 +307,7 @@ export async function writeAnalyticsRow(tabName, rowData) {
 // ─── Clear a tab (keep header) and write fresh rows ───
 // Used by weekly/monthly aggregations that rebuild entire tabs
 export async function clearAndWriteAnalytics(tabName, rows) {
-  if (!ANALYTICS_SHEET_ID || !rows.length) return;
+  if (!ANALYTICS_ENABLED || !ANALYTICS_SHEET_ID || !rows.length) return;
   const saToken = await getServiceAccountToken();
 
   // Step 1: Clear all data below the header row (row 1)
