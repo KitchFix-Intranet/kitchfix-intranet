@@ -66,6 +66,23 @@ All tests reuse a saved authenticated session from
 
 That's it. All subsequent test runs will reuse this file.
 
+> The `setup` project is idempotent: if `tests/.auth/user.json` already
+> exists and contains cookies, `auth.setup.ts` skips the interactive
+> login. So you only need the procedure above on first setup or after a
+> forced refresh — normal test runs just reuse the cached state.
+
+### Forcing a re-login
+
+If tests fail with sign-in redirects, the cached auth has likely
+expired. Force a fresh login:
+
+```bash
+rm -f tests/.auth/user.json
+npm run test:e2e:setup -- --headed
+```
+
+Then complete the manual login as documented above.
+
 ### Troubleshooting
 
 - "Google won't let me sign in / says browser is not secure":

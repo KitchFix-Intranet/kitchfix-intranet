@@ -23,6 +23,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
+      testIgnore: /auth\.setup\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'tests/.auth/user.json',
