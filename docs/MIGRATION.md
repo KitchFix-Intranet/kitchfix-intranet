@@ -57,6 +57,7 @@
 ### Tasks
 
 1. **Playwright test harness against the current system.** 30-40 happy-path tests covering critical flows for every module. Test data isolation via a dedicated test tab in COLLECTION sheet.
+   - **Follow-up: TEST_MODE plumbing for write tests** (deferred from Round 1). Requires HUB clone + helper in `src/lib/sheets.js` + audit of all `SHEET_IDS` references. ~2 hours dev + Kevin clones HUB. Tracked for Round 2. Round 1 ships read-only tests only (home dashboard, Vendor Portal render) against live prod Sheets — see `docs/TESTING.md`.
 
 2. **GitHub Actions CI.** Run ESLint, TypeScript check (placeholder for now, becomes real in Phase 2), and Playwright tests on every PR. Block merge if any fail. Add branch protection on `main`: require CI passing, require 1 review.
 

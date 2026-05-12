@@ -2,19 +2,20 @@
 
 ## Overview
 
-Playwright end-to-end tests that exercise the KitchFix Ops Hub through a real browser (Chromium for now; Firefox/WebKit to be added later in Phase 1). Tests run against a locally running dev server and a dedicated test data sheet so they never touch production data.
+Playwright end-to-end tests that exercise the KitchFix Ops Hub through a real browser (Chromium for now; Firefox/WebKit to be added later in Phase 1). Tests run against a locally running dev server you start yourself — the Playwright config does **not** start one for you. Round 1 tests are **read-only** and run against the live production Google Sheets (reads don't mutate state); the `TEST_MODE` plumbing that would route writes to test clones is deferred — see `docs/TESTING.md`.
 
 ## Prerequisites
 
-- Node.js (same version the app uses — see `package.json` / `.nvmrc` if present).
-- `npm install` has been run (installs `@playwright/test`).
-- Chromium browser installed: `npx playwright install chromium`.
-- `.env.local` has `TEST_MODE` and `TEST_COLLECTION_SHEET_ID` set. *(These are added in Step 4 of the Playwright setup plan; until then the harness is scaffolding only.)*
-- The dev server is started manually with test mode on before running tests:
-  ```bash
-  TEST_MODE=true npm run dev
-  ```
-  The Playwright config does **not** start the server for you.
+- Node.js (same version the app uses)
+- `npm install` has been run
+- `.env.local` set up for normal dev. Tests run against prod Google Sheets in read-only mode for now. See `docs/TESTING.md` for scope and the deferred `TEST_MODE` plumbing.
+- Auth state has been generated. See "Auth state" section below.
+
+Then start the dev server before running tests:
+
+```bash
+npm run dev
+```
 
 ## Running tests
 
