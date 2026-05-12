@@ -29,9 +29,52 @@ Useful flags: `npm run test:e2e -- --list` lists tests without running them; `np
 
 ## Auth state
 
-Login is performed once by `tests/auth.setup.ts` (the `setup` project) and the resulting session is saved to `tests/.auth/user.json`, which the `chromium` project loads via `storageState`. That file is **gitignored** — it holds live session state and must never be committed.
+All tests reuse a saved authenticated session from
+`tests/.auth/user.json` (gitignored). This file is created by the
+`setup` Playwright project, which runs `tests/auth.setup.ts`.
 
-The refresh procedure (how to regenerate `user.json` when the session expires) will be documented here once Step 3 wires up the real Google OAuth login flow. For now `auth.setup.ts` is a no-op placeholder.
+### When to refresh auth state
+
+- First time setting up the test harness on a new machine
+- When the session expires (Google OAuth sessions typically last weeks)
+- After clearing `tests/.auth/` for any reason
+- If tests start failing with login redirects in the first navigation
+
+### How to refresh auth state
+
+1. Start the dev server in one terminal:
+     npm run dev
+
+2. In a second terminal, run the auth setup script with --headed so
+   the browser is visible:
+     npm run test:e2e:setup -- --headed
+
+3. A Chromium window opens to http://localhost:3000.
+
+4. The Playwright Inspector opens at the same time. Ignore it for now.
+
+5. In the Chromium window, complete the Google OAuth login. Use the
+   account you normally use for the Ops Hub. Wait until the home
+   dashboard fully loads.
+
+6. Click "Resume" in the Playwright Inspector. The script will save
+   auth state to `tests/.auth/user.json` and exit.
+
+7. Verify the file exists and is roughly 2-10 KB:
+     ls -lh tests/.auth/user.json
+
+That's it. All subsequent test runs will reuse this file.
+
+### Troubleshooting
+
+- "Google won't let me sign in / says browser is not secure":
+  Use a Google account that allows OAuth from less-secure browsers,
+  or temporarily turn off the security warning. This is a Google
+  anti-automation measure, not a Playwright issue.
+
+- "Resume button is greyed out":
+  The page is still loading or has thrown an error. Open the
+  inspector's Console tab to see why.
 
 ## When tests fail
 
