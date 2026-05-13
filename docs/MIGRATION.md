@@ -1,6 +1,6 @@
 # Migration Plan — KitchFix Ops Hub Architectural Arc
 
-> **Last updated:** 2026-05-13 (end of Phase 1 push day)
+> **Last updated:** 2026-05-13 (end-of-day, post-observability scoping)
 > **Last commit at update:** see `git log` for this file's most recent edit
 > **Owner:** Kevin Fietek
 > **Estimated duration:** 5–6 months calendar time. Some phases gated by calendar (dual-write validation windows) regardless of effort.
@@ -96,7 +96,7 @@ These describe the dance. Both sides keep the discipline; neither side waives it
 All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Claude Max 20x plan, repo moved to `~/dev/kitchfix-intranet`, GitHub Desktop + gh CLI authenticated, Claude Code installed, side-project isolation verified, calibration done, stale `dev` branch deleted, foundational docs created (`CLAUDE.md`, `.claude/settings.json`, `docs/RUNBOOK.md`, `docs/ENV_VARS.md`, `docs/MIGRATION.md`), `src-backup/` removed.
 
 ### Phase 1: Stabilize Before Migrating
-**Status: 🟡 In progress — 10 of 13 original tasks closed + 11 housekeeping items closed as of 2026-05-13.**
+**Status: 🟡 In progress — 11 of 13 original tasks closed + 11 housekeeping items closed as of 2026-05-13.**
 
 #### Original Phase 1 tasks
 
@@ -111,11 +111,11 @@ All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Clau
 | 7 | Daily sheet backup cron | ✅ | #14 | Closed May 13. Runs 06:00 UTC, 5 sheets, restore drilled and verified. |
 | 8 | Anthropic SDK consolidation | Open | — | Needs spec before code — touches Invoice OCR |
 | 9 | `/api/health` endpoint | Open | — | Attempted May 11, reverted. Possibly blocked on Task 17. |
-| 10 | Observability stack (Sentry / Better Stack / Vercel Analytics) | Open | — | Needs scoping session |
+| 10 | Observability stack (Sentry) | 🟡 Scoped 2026-05-13 | — | Plan: Sentry on free Developer tier (errors only, no Better Stack — internal app, users will report downtime). Phase A = SDK install + basic error tracking. Phase B = custom Sheets API health instrumentation (R12 visibility). Next concrete step: create Sentry account (~5 min) before SDK install. |
 | 11 | (duplicate of #3) | ✅ | — | Same as #3 |
 | 12 | Playwright test harness | ✅ | #9 | Closed May 12. 3 read-only tests. Expansion to 30–40 tests is future work. |
 | 13 | GitHub Actions CI | ✅ | #11 | Closed May 13. Runs against production on every PR. |
-| 14 | Branch protection on main | Open | — | Unblocked. ~5 min task. **Elevated priority** — May 13 had two near-misses of committing direct to main due to silent `git checkout -b` failures. |
+| 14 | Branch protection on main | ✅ | — | Closed 2026-05-13 end-of-session. Required GitHub Pro upgrade ($4/mo) for private-repo enforcement. Configured: PR required + Playwright CI pass + branch up-to-date + restrict deletions + block force pushes. Active. |
 | 15 | Analytics taxonomy cleanup | Deferred | — | Moved to Phase 3 as part of analytics redesign |
 | 16 | Fix `.claude/settings.json` npm publish rule | Open | — | 5-min fix |
 | 17 | Migrate `middleware.ts` → `proxy.ts` | Open | — | Deprecation warning still firing after 16.2.6 bump. Unknown effort. May block Task 9 (`/api/health`). |
@@ -143,7 +143,7 @@ All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Clau
 |---|---|
 | Test suite covers critical paths | ✅ harness exists; expansion future work |
 | CI runs on every PR | ✅ |
-| Branch protection on main | ❌ Task #14 — elevated to immediate priority |
+| Branch protection on main | ✅ Closed end-of-day 2026-05-13 (PR-free; ruleset config + GitHub Pro upgrade) |
 | Observability live | ❌ Task #10 — needs scoping |
 | Backup safety net online | ✅ cron + restore both verified |
 | Dependencies pinned and audit-clean | ✅ |
@@ -247,7 +247,7 @@ Format per entry: `[Priority] Discovery (date, context). Effort estimate. Owner-
 | R9 | Incidents side-effect entanglement — Drive + Calendar + Slack + email + PDF + escalation all from one submission | Open (Phase 3 risk) | Settle architecture for side-effect modules before Phase 3 |
 | R10 | Loss of operational distance — discipline that protected $10M+ ops hardest to maintain when full-time on codebase | Active | Trust docs and procedures more, not less |
 | R11 | Auth state environment-scoping in CI — `storageState` cookies domain-locked | Mitigated | Documented in `GOTCHAS.md` + `TESTING.md` with refresh procedure |
-| **R12** | **Sheets API rate limits — 60 reads/min/user can be tripped by rapid module navigation, especially during busy game-day pushes by multiple operators** | **🟡 Identified 2026-05-13. No mitigation implemented yet.** | **Caching layer, request coalescing, or quota increase. Scoping in next session. Per-user limit; SA routes unaffected.** |
+| **R12** | **Sheets API rate limits — 60 reads/min/user can be tripped by rapid module navigation. Also affects the service account (per-project quota), not just user OAuth.** | **🟡 Identified and confirmed live 2026-05-13. No mitigation implemented yet. Higher priority than initially scoped — SA routes also affected.** | **Caching layer, request coalescing, or quota increase. Observability work (Sentry + custom health endpoint) is partly how we detect this in production. Scoping in next session.** |
 
 ---
 
@@ -288,6 +288,7 @@ Documented but explicitly NOT part of the migration arc. Lives in the broader pr
 - **2026-05-13 (morning)** — PRs #10–#13 shipped: `logHealthSA` cleanup, Playwright CI, auth.setup.ts regex, docs (TESTING + GOTCHAS auth-state). `CRON_SECRET` rotated. R11 captured.
 - **2026-05-13 (push day)** — PRs #14–#18 shipped. Daily backup cron live + restore drilled. Next.js 16.2.6 security bump (19 advisories closed). All deps pinned. `SHEET_IDS.INVENTORY` footgun closed. `supportsAllDrives` audit verified clean. 3 new gotchas + restore runbook documented. R12 identified (rate limits). Phase 1 went from 46% to 77% closure. **Two near-misses of committing to main due to silent `git checkout -b` failures — recovery procedure now documented in GOTCHAS.**
 - **2026-05-13 (doc creation)** — This living doc replaced the static migration plan. Session-start checklist and working agreements added. All Phase 1 status reflects end-of-day state.
+- **2026-05-13 (end-of-day, post-observability scoping)** — Task #14 closed (branch protection on main, required GitHub Pro upgrade $4/mo). Observability scoping done — chose Sentry alone (not Better Stack) for an internal-tool scale, free Developer tier ($0/mo). R12 refined to reflect SA also affected. Phase 1 closure: 11 of 13 tasks. One Phase 1 gate remains (observability install — next session). Sentry account creation is the literal next concrete action.
 
 ---
 
