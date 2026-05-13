@@ -10,6 +10,8 @@ permissions:
   contents: read
   deployments: read
   statuses: read
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: e2e-${{ github.ref }}
