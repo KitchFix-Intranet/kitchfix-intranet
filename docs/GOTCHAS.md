@@ -175,6 +175,56 @@ await drive.files.create({ auth: userOAuth, ... });
 await uploadInvoiceImage(serviceAccountClient, ...);
 ```
 
+### Drive API + shared drives requires `supportsAllDrives: true`
+
+Any `drive.files.*` operation (copy, get, list, update, delete) against a file that lives in a shared drive — e.g., CJK Foods — silently returns `File not found` if `supportsAllDrives: true` is not set in the request options. The API returns 404 even when the calling principal has been shared as Editor or Content manager on both the source and the destination. The error message is identical to "the file genuinely doesn't exist," which is misleading.
+
+This affects: anything using `google.drive()` directly. The Sheets API (`sheets.spreadsheets.*`) is unaffected — it has its own shared-drive handling internal to the call.
+
+**Fix:** Add `supportsAllDrives: true` to every Drive API request.
+
+```javascript
+// WRONG — returns File not found on shared-drive files
+await drive.files.copy({
+  fileId: sheet.id,
+  requestBody: { name, parents: [folderId] },
+  fields: "id, name",
+});
+
+// RIGHT
+await drive.files.copy({
+  fileId: sheet.id,
+  requestBody: { name, parents: [folderId] },
+  fields: "id, name",
+  supportsAllDrives: true,
+});
+```
+
+**First seen:** 2026-05-13, building the `/api/cron/backup-sheets` route. Cost: ~30 min of "share dialog must be wrong" diagnosis before realizing the SA already had access and the flag was the issue.
+
+### `SHEET_IDS.INVENTORY` is an empty string in `src/lib/sheets.js`
+
+The exported `SHEET_IDS.INVENTORY` constant is `""` (empty string). Routes that read from INVENTORY resolve the actual ID from elsewhere (env var fallback or hardcoded in the route). This is a footgun — code that imports `SHEET_IDS.INVENTORY` expecting a real value will silently fail with "Sheet ID is undefined" or worse, "File not found" against an empty string.
+
+**Fix:** Either wire the constant to the env var explicitly, or delete the empty key so future readers don't get confused.
+
+```javascript
+// Current state (footgun):
+export const SHEET_IDS = {
+  // ...
+  INVENTORY: "",  // ← real ID resolved elsewhere
+};
+```
+
+**Tracked as P2 followup.** Until cleaned up, treat `SHEET_IDS.INVENTORY` as unreliable — verify any new code that imports it.
+
+// WRONG — uses user token
+await drive.files.create({ auth: userOAuth, ... });
+
+// RIGHT — uses service account (helper handles auth internally)
+await uploadInvoiceImage(serviceAccountClient, ...);
+```
+
 ### Token refresh sometimes returns a new refresh token, sometimes doesn't
 
 Google's OAuth refresh response *may* include a new `refresh_token`, or it may not. The auth code in `src/lib/auth.js` handles this:
@@ -184,6 +234,33 @@ refreshToken: refreshed.refresh_token ?? token.refreshToken,
 ```
 
 If a user's session goes weird ("RefreshTokenError"), this is usually the cause. They should sign out and sign back in to re-issue both tokens.
+
+---
+
+## Git & Workflow
+
+### `git checkout -b` failure leaves you on the previous branch — silently
+
+If `git checkout -b newbranch` fails because the branch already exists, git stays on whatever branch you were on (usually `main`). The error scrolls off-screen mid-flow, and subsequent commits land on the wrong branch silently. You then `git push -u origin newbranch` — git happily pushes the *empty* feature branch (which still matches origin/main), while your real work sits orphaned on local main.
+
+**Symptom:** PR opens with zero changes, or with the wrong commits. `git log --oneline --all` shows the feature branch pointing somewhere unexpected.
+
+**Fix:** Always `git status` before `git commit`. The branch name is the first line — a one-second check that catches this and a dozen related footguns.
+
+**Recovery if you've already committed to the wrong branch:**
+
+```bash
+# Move local branch pointer to current HEAD (where your commit lives)
+git branch -f wrong-branch HEAD
+
+# Reset main back to origin/main
+git reset --hard origin/main
+
+# Push the now-correct branch
+git push --force-with-lease origin wrong-branch
+```
+
+**First seen:** 2026-05-13, mid-Phase-1 push day. Cost: ~10 min of git gymnastics. The lesson is cheap; the bug is annoying.
 
 ---
 
@@ -227,3 +304,4 @@ Two Ops Hub modules — Inventory (legacy) and Invoice Capture — both use the 
 - **2026-05-05** — Date helper note trimmed to a pointer to `CONVENTIONS.md` (the centralization rule lives there; this doc just flags the symptom).
 
 - **2026-05-13** — Auth state from `storageState` is environment-scoped. NextAuth session cookies are domain-locked to the URL where login happened — a `user.json` generated against `localhost:3000` does NOT work when tests target `kitchfix-intranet.vercel.app`. The browser refuses to send cookies cross-domain, NextAuth sees no session, middleware bounces to `/login`. **Fix:** regenerate `tests/.auth/user.json` against the target environment using `PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app npm run test:e2e:setup -- --headed`. Cost: 30 minutes of CI failure debugging before realizing cookie domain was the issue. See `docs/TESTING.md` "Refreshing the auth state secret" for the full procedure.
+- **2026-05-13** — Three new entries from Phase 1 push day: (1) Drive API + shared drives requires `supportsAllDrives: true` — found while building `/api/cron/backup-sheets`. (2) `SHEET_IDS.INVENTORY` is an empty string footgun — real ID resolves from env var. (3) New "Git & Workflow" section with `git checkout -b` silent-failure recovery — committed to main by accident mid-bump, ~10 min recovery.
