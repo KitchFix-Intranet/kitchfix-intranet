@@ -19,6 +19,10 @@
     {
       "path": "/api/people?action=generate-report&period=monthly",
       "schedule": "0 13 1 * *"
+    },
+    {
+      "path": "/api/cron/backup-sheets",
+      "schedule": "0 6 * * *"
     }
   ]
 }
