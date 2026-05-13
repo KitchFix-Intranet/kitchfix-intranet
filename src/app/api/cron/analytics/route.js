@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   ANALYTICS_ENABLED,
   logEventSA,
-  logHealthSA,
   readAnalyticsSheet,
   writeAnalyticsRow,
   clearAndWriteAnalytics,

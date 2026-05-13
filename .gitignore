@@ -45,3 +45,6 @@ tests/.auth/
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Personal handoff notes
+HANDOFF_*.md
