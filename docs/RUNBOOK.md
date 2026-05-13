@@ -64,20 +64,46 @@ KitchFix uses Google Workspace OAuth. There is no user table to add to.
 
 ## How to restore a Google Sheet from backup
 
-Once daily Apps Script backups are running (Phase 1 task):
+Daily backups run via `/api/cron/backup-sheets` at 06:00 UTC (01:00 CT). Backups land in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub — Sheet Backups"). Covered: HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS is deliberately skipped (generated data, cell-quota sensitive).
 
-1. Open Drive folder: `KitchFix Sheet Backups / {sheet name}`
-2. Find the most recent good snapshot dated before the bad change
-3. Right-click → "Make a copy" → name it with today's date and "RESTORED"
-4. Open the copy, verify the data looks correct
-5. If the entire sheet is to be restored:
-   - Copy the new sheet's ID (from the URL)
-   - Update the sheet ID in `src/lib/sheets.js` constants (or env var if applicable)
-   - Deploy
-6. If only a tab needs to be restored:
-   - In the production sheet, archive the broken tab (rename with `_BROKEN_<date>`)
-   - In the snapshot copy, copy the good tab to the production sheet
-7. Document the incident in a postmortem committed to `docs/incidents/`
+Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is currently unlimited — backups accumulate; pruning is a future sub-cron.
+
+### Scenario 1: A tab was wiped or corrupted (most common)
+
+**Drilled and verified 2026-05-13.** Takes ~2 minutes.
+
+1. Open the backup folder. Find the most recent good snapshot dated before the bad change. For yesterday's accidental wipe, that's the same-day backup if the wipe happened after 01:00 CT, or the prior day's if before.
+2. Open the backup file. Find the tab that needs restoring.
+3. Right-click the tab → **"Copy to" → "Existing spreadsheet"**.
+4. In the picker, navigate to and select the live sheet (HUB, COLLECTION, etc.). Click **"Select"**.
+5. Google copies the tab into the live sheet as `Copy of {tabname}`. The original (broken) tab is still there.
+6. In the live sheet:
+   - Rename the broken tab to `{tabname}_BROKEN_{YYYY-MM-DD}` (right-click → Rename). Don't delete it yet — keeps an audit trail.
+   - Rename `Copy of {tabname}` to the original name `{tabname}` (right-click → Rename).
+7. Reload any module that reads the restored tab. Confirm data is back.
+8. After 24h of stable operation, delete the `_BROKEN_` tab.
+
+### Scenario 2: An entire sheet is gone or corrupted (rare, catastrophic)
+
+Not drilled yet — procedure is theoretical until tested. Schedule a drill before relying on this.
+
+1. Open the most recent backup of the missing sheet.
+2. File → Make a copy → name it `{ORIGINAL_NAME}_RESTORED_{YYYY-MM-DD}`.
+3. Share the new copy with the service account `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com` as Editor.
+4. Copy the new sheet's ID (from the URL).
+5. Update the sheet ID:
+   - If in `src/lib/sheets.js` constants → edit, commit, push, deploy.
+   - If in env var → update on Vercel (Production + Preview), redeploy.
+6. Verify by hitting an endpoint that reads from the restored sheet (e.g., `/api/dashboard` for HUB).
+7. Document the incident in `docs/incidents/`.
+
+### Don't drill on live sheets
+
+To practice the procedure or verify a recent backup is intact:
+
+1. Right-click the live sheet in Drive → "Make a copy" → name it `{ORIGINAL}-DRILL-{YYYY-MM-DD}`.
+2. Run the wipe + restore on the drill copy. Zero risk to live data.
+3. Delete the drill copy when done.
 
 ## How to rotate a secret
 
@@ -139,3 +165,4 @@ Quick checks:
 
 - **2026-05-11** — Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
 - **2026-05-12** — Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.
+- **2026-05-13** — Rewrote "How to restore a Google Sheet from backup" — backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice — never drill on live sheets.
