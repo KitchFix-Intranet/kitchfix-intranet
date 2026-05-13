@@ -6,13 +6,6 @@ on:
     types: [opened, synchronize, reopened]
 
 # Cancel in-progress runs for the same PR when a new commit is pushed
-permissions:
-  contents: read
-  deployments: read
-  statuses: read
-  checks: read
-  pull-requests: read
-
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
@@ -39,14 +32,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Wait for Vercel preview to be ready
-        id: wait-for-preview
-        uses: patrickedqvist/wait-for-vercel-preview@v1.3.2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          max_timeout: 300
-          check_interval: 10
-
       - name: Restore Playwright auth state from secret
         run: |
           mkdir -p tests/.auth
@@ -56,8 +41,7 @@ jobs:
 
       - name: Run Playwright tests
         env:
-          PLAYWRIGHT_BASE_URL: ${{ steps.wait-for-preview.outputs.url }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app
         run: npx playwright test --project=chromium
 
       - name: Upload Playwright HTML report
