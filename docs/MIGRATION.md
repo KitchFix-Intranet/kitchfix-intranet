@@ -1,344 +1,300 @@
 # Migration Plan — KitchFix Ops Hub Architectural Arc
 
-> **Status:** Phase 0 complete (May 11, 2026). Phase 1 starting.
+> **Last updated:** 2026-05-13 (end of Phase 1 push day)
+> **Last commit at update:** see `git log` for this file's most recent edit
 > **Owner:** Kevin Fietek
-> **Estimated duration:** 5-6 months calendar time. Some phases gated by calendar (dual-write validation windows) regardless of effort. Capacity assumption: 20-40 hrs/week. If finishing phases ahead of schedule, the right move is depth, not speed — strengthen the test suite, add more observability, polish UX, write better docs. Don't pull Phase N+1 forward.
-> **Strategic goal:** Evolve the intranet from a working solo-built tool into a production-grade operational platform capable of running KitchFix and optionally being spun out as a multi-tenant SaaS product.
+> **Estimated duration:** 5–6 months calendar time. Some phases gated by calendar (dual-write validation windows) regardless of effort.
+> **Capacity assumption:** 20–40 hrs/week. If finishing phases ahead of schedule, the right move is depth, not speed — strengthen the test suite, add observability, polish UX, write better docs. Don't pull Phase N+1 forward.
 
 ---
 
-## Locked decisions
+## How to use this doc
 
-1. **Multi-tenancy:** Yes. Every transactional Postgres table gets a `tenant_id` column from day one. KitchFix is `tenant_id = 1`.
-2. **Naming:** Option A. The suite is **KitchFix Ops**. The current `/ops` umbrella dissolves during route-splitting. Its tools become top-level modules: `/season`, `/inventory`, `/invoices`, `/vendors`.
-3. **Module migration order:** Dependency-ordered. Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → Analytics → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory → Financial → Dashboard.
-4. **Architectural axes:** Postgres (Supabase), TypeScript, shadcn/ui + Tailwind v4. All three.
-5. **Migration discipline:** One axis at a time per module. Never two simultaneously.
-6. **Tests-first:** Phase 1 builds the Playwright suite against the current Sheets-backed system before any architecture changes.
-7. **Workflow:** Branch → Claude Code → localhost → push → Vercel preview → manual merge to main in GitHub Desktop or GitHub UI.
+**This is a living document.** It is the single source of truth for project state. It is read at the start of every session, updated at the end of every session, and committed to the repo as part of the work it describes.
+
+**Section update rules** are stated in the header of each section. Some sections are locked (strategic frame, architectural decisions); others update every session (phase status, followups log, captain's log).
+
+**Stale doc = broken doc.** If the "last updated" date is more than 2 weeks old, treat the doc with suspicion and verify against the actual repo before relying on it.
 
 ---
 
-## Guiding principles
+## Session-start checklist
 
-**Never break production.** Dual-write, feature-flag, behind-the-test-suite. If a migration step doesn't have a rollback path, it's not ready to ship.
+Read top-to-bottom before any work. Three minutes well spent.
 
-**One axis per module per migration.** TypeScript conversion, Postgres migration, and shadcn redesign happen in three separate passes, in that order, on each module.
+```
+[ ] git status — confirm clean tree and which branch I'm on
+[ ] git log --oneline -5 — confirm I'm where I think I am
+[ ] Read this doc through "Phase Status" — confirm what we agreed to do this session
+[ ] Confirm any pasted handoff matches the doc's current state — flag drift
+[ ] Verify dev server starts clean: npm run dev (sanity check before touching anything)
+```
 
-**Tests catch behavior changes, not opinions.** Playwright tests assert end-to-end behavior. They don't pin implementation details. Each module's test suite must pass before, during, and after its migration.
-
-**The runbook is code.** Every infrastructure change updates `docs/RUNBOOK.md` in the same commit. Same for env vars touching `docs/ENV_VARS.md`.
-
-**Floor-first survives the migration.** Every UI change is validated on a phone-sized viewport before it ships.
-
-**The arc is reversible.** Each phase has rollback procedures. Each module's data migration runs dual-write for two weeks minimum before Sheets goes read-only, and another two weeks before Sheets is removed. Total reversibility window per module: 4 weeks minimum.
-
----
-
-## Phase 0 — Foundations ✓ COMPLETE (May 11, 2026)
-
-- [x] Repo private
-- [x] Vercel preview deploys confirmed working
-- [x] Max 20x plan active
-- [x] No `ANTHROPIC_API_KEY` in shell
-- [x] Repo relocated to `~/dev/kitchfix-intranet`
-- [x] `src-backup/` deleted, PR #1 merged
-- [x] GitHub Desktop repointed
-- [x] `gh` CLI authenticated for terminal git
-- [x] Claude Code installed, authenticated, calibrated
-- [x] First end-to-end branch → PR → preview → merge workflow completed
+If any of these fail or surprise me, stop and reconcile before writing code.
 
 ---
 
-## Phase 1 — Safety net and ergonomics (weeks 2-3, ~30 hours)
+## Working agreements (Kevin + Claude)
 
-**Goal:** Make production safer than it's ever been, without changing any architecture. Build the test suite that will catch regressions throughout the rest of the migration.
+These describe the dance. Both sides keep the discipline; neither side waives it for "just this one thing."
 
-### Tasks
+**Claude's side**
+- Read this doc before responding to "what's next" or "where are we" questions
+- Pull live code from the repo before answering questions about how the system works — don't work from memory
+- Propose-before-execute on any non-trivial change: state the plan, get sign-off, then act
+- Push back honestly when a plan is weak; flag risks the user might not see
+- Surface scope drift the moment it appears — name new followups before they get lost
+- Use Find-this / Replace-with-this patches for surgical edits; full file replacements only for sprawling changes
+- At session end, draft updates to this doc and propose them for review and commit
 
-1. **Playwright test harness against the current system.** 30-40 happy-path tests covering critical flows for every module. Test data isolation via a dedicated test tab in COLLECTION sheet.
-   - **Follow-up: TEST_MODE plumbing for write tests** (deferred from Round 1). Requires HUB clone + helper in `src/lib/sheets.js` + audit of all `SHEET_IDS` references. ~2 hours dev + Kevin clones HUB. Tracked for Round 2. Round 1 ships read-only tests only (home dashboard, Vendor Portal render) against live prod Sheets — see `docs/TESTING.md`.
+**Kevin's side**
+- Run `git status` before every commit. The doc cannot save you from this; you have to look.
+- Review and commit doc updates at session end — the doc only stays current if you actually merge it
+- Tell Claude when you're stopping or pivoting so the doc gets updated correctly
+- Push back on Claude when proposals feel wrong; honest disagreement is the design
 
-2. **GitHub Actions CI.** Run ESLint, TypeScript check (placeholder for now, becomes real in Phase 2), and Playwright tests on every PR. Block merge if any fail. Add branch protection on `main`: require CI passing, require 1 review.
-
-3. **Observability stack.**
-   - Sentry: server + client error capture with Slack integration
-   - Better Stack (or Uptime Robot): synthetic uptime monitoring of `/api/health`
-   - Vercel Analytics: enable
-   - `/api/health` endpoint: returns 200 if it can read one row from HUB, 500 otherwise
-
-4. **Anthropic SDK consolidation.** Replace three raw `fetch` calls (in `invoiceActions.js` 3x and `inventoryActions.js` 1x) with `@anthropic-ai/sdk`. Create `src/lib/ai.ts` with shared client, retry logic, timeout handling, and centralized logging.
-
-5. **Daily Sheets backup.** Google Apps Script in each of the five sheets. Triggers 2 AM Central daily. Copies to timestamped Drive folder. 30-day retention. Slack alerts on success/failure.
-
-6. **lucide-react upgrade.** ~~Bump from 1.14 to current. Audit icon imports.~~ Closed 2026-05-11 as a no-op — `^1.14.0` is already the latest release. The 1.x line is lucide-react's *current* lineage (it cut 1.0.0 on 2026-03-20, reset upward from 0.x); it is not a stale pre-reset version. Icon imports audited: one importer (`src/components/people/IncidentLibrary.js`, 6 icons), all valid in 1.14.0, no renames affect us. See Captain's log.
-
-7. **Documentation.**
-   - `docs/RUNBOOK.md` (expand from skeleton)
-   - `docs/ENV_VARS.md` (verify all values against Vercel dashboard)
-   - `docs/MIGRATION.md` (this document, ongoing)
-
-8. **Analytics taxonomy cleanup.** Audit current `logEventSA` calls. Build canonical taxonomy in `src/lib/analyticsTaxonomy.ts`. One-time normalization pass on the analytics sheet. — **Deferred to Phase 3** (2026-05-12): subsumed by the Postgres analytics redesign. No value normalizing a frozen sheet that's being replaced; the canonical taxonomy gets defined against the new Postgres schema instead. See Task 12 and Captain's log.
-
-### Additional tasks from May 11 calibration
-
-9. **Auth boundary cleanup.** Consolidate the hand-rolled JWT path in `src/app/api/people/route.js` (lines 80-151) to use `src/lib/sheets.js`'s canonical service account client. Rename local non-SA helpers to use the SA suffix.
-
-10. **OAuth scope reduction.** Change `src/lib/auth.js` from full `drive` scope to `drive.file`. Test that all Drive operations still work (they will — the service account does the writes, not the user token).
-
-11. **Turbopack opt-in.** ~~Change `package.json` script from `next dev --webpack` to `next dev`. Verify build works. Should reduce local dev startup time significantly.~~ Shipped 2026-05-11 in PR #4 (commit 83fd0d5) — removed the `--webpack` flag from the `package.json` dev script. Verified the Turbopack banner appears on `npm run dev` startup; production builds were already on Turbopack via the Next 16 default. See Captain's log.
-
-12. **Analytics writes feature-flagged off.** ~~Analytics sheet rotation — archive old analytics events to a separate sheet to free up cells. Bridge measure until Phase 3 moves analytics to Postgres.~~ Reframed and shipped 2026-05-12. The analytics sheet hit Google's 10M-cell limit and writes were silently failing in production. Rather than rotate/archive the sheet or delete the ~1,500-line analytics system, the write path is now gated behind an `ANALYTICS_ENABLED` env var (default off). The six write functions in `src/lib/analytics.js` — `logEvent`, `logEventSA`, `logHealth`, `logHealthSA`, `writeAnalyticsRow`, `clearAndWriteAnalytics` — no-op unless `ANALYTICS_ENABLED === "true"`; reads (`readAnalyticsSheet`) and the `/analytics` dashboard are unaffected; the analytics cron still runs end-to-end but skips its daily/weekly/monthly Slack recaps when disabled. All 28 instrumentation call sites stay in place for the Phase 3 Postgres rebuild. See Captain's log and `docs/ENV_VARS.md`.
-
-13. **Dependency pinning evaluation.** Decide whether to pin `googleapis` and `google-auth-library` to specific versions or accept the caret range. Decision and rationale documented.
-
-### Exit criteria
-
-- [ ] Playwright suite with 30+ tests covering critical paths for every module
-- [ ] CI runs tests on every PR and blocks merge on failure
-- [ ] Branch protection on main: CI required, 1 review required
-- [ ] Sentry, Better Stack, Vercel Analytics live; alerts working
-- [ ] `/api/health` endpoint live and monitored
-- [ ] All Anthropic calls go through `src/lib/ai.ts`
-- [ ] Daily sheet backups confirmed running for 7 consecutive days
-- [x] lucide-react — closed 2026-05-11 as no-op; already on latest (1.14.0)
-- [ ] `RUNBOOK.md`, `ENV_VARS.md`, `MIGRATION.md` complete
-- [ ] Auth boundary cleanup done
-- [ ] OAuth scope reduced
-- [x] Turbopack flipped on — shipped 2026-05-11 (PR #4)
-- [ ] Production hasn't broken once during this phase
+**Both sides**
+- Sessions that don't end with a doc update are sessions that decay. Default to "we update before we sign off."
 
 ---
 
-## Phase 2 — TypeScript foundation (weeks 4-6, ~30 hours)
+## Strategic Frame
 
-**Goal:** Convert load-bearing infrastructure to TypeScript so the Postgres migration can use real types.
+> **Update rule: locked. Don't edit without explicit strategic re-direction and a captain's-log entry explaining why.**
 
-### Conversion order
+**Goal:** Evolve the intranet from a working solo-built tool into a production-grade operational platform, optionally capable of being spun out as a multi-tenant SaaS product (KitchFix Ops).
 
-`src/lib/*.js` → `src/lib/*.ts`, file by file:
+**Operating principle:** Floor-first — every change evaluated against whether it works for a chef on a phone in a walk-in cooler with wet hands.
 
-1. `opsUtils.js` — defines core types (`Account`, `Period`, `Vendor`)
-2. `sheets.js` — typed Sheets client, return types on every helper
-3. `auth.js` — typed session, token, callbacks
-4. `analytics.js` — uses the new `analyticsTaxonomy.ts` types
-5. `drive.js` — typed file metadata, typed upload responses
-6. `gmail.js` — typed message construction
-7. `incidentSchema.js`, `incidentActions.js`, `inventoryActions.js`, `invoiceActions.js`
-8. `peopleReport.js`, `stampInvoice.js`, others
-
-### Rules
-
-- Strict mode on from day one (`"strict": true` in `tsconfig.json`)
-- `any` is allowed but flagged with `// TODO: type properly`
-- No JS-to-TS conversion of pages or components in this phase
-- Each file conversion is its own commit
-- CI runs Playwright on every PR
-- Date helpers (`formatDate`, `fmt`, `parseDate`) consolidate to `src/lib/dates.ts`
-
-### Exit criteria
-
-- [ ] All files in `src/lib/` are `.ts`
-- [ ] `tsconfig.json` strict mode enabled
-- [ ] Date helpers consolidated
-- [ ] CI type-check is real
-- [ ] All Playwright tests still pass
+**Strategic goal beneath the migration:** Build a foundation trustworthy enough that future operational tools and widgets can be built on it at speed without fear of regression. The migration isn't the goal — the velocity of future tool-building is the goal.
 
 ---
 
-## Phase 3 — Supabase migration, module by module (weeks 7-16, ~120 hours)
+## Locked Architectural Decisions
 
-**Goal:** Move every transactional data store from Google Sheets to Supabase Postgres. Sheets remains as a config layer for human-edited reference data only.
+> **Update rule: locked May 11, 2026. Don't edit silently. A decision change is a captain's-log entry plus an inline note explaining the reason and date.**
 
-### Setup (week 7)
-
-- Create Supabase project. Free tier initially; upgrade to Pro ($25/mo) when warranted.
-- Configure auth: link to existing Google OAuth. NextAuth stays in front; Supabase auth is for RLS only.
-- Schema baseline:
-  - `tenants` table. Insert `(1, 'KitchFix')`.
-  - `users` table linked to NextAuth identity.
-  - RLS policies: every transactional table requires `tenant_id = current_setting('app.current_tenant')::int`.
-- Set up `src/lib/db.ts` abstraction.
-- Generate TypeScript types from Supabase. Commit to `src/lib/database.types.ts`.
-
-### Standard migration pattern (per module)
-
-1. **Schema design.** Map existing Sheets columns to Postgres. Add foreign keys, indexes, `tenant_id`, `created_at`, `updated_at`. Migration SQL in `supabase/migrations/`.
-2. **Data-access layer.** Add module functions to `src/lib/db.ts`. Typed against Supabase types.
-3. **Dual-write.** Update action handlers to write to both Sheets and Postgres. Reads still from Sheets. Run for 1 week.
-4. **Shadow read validation.** Comparison job reads both stores, logs divergence to Sentry. Run for 1 week. Fix all divergences.
-5. **Cutover.** Flip reads to Postgres behind feature flag. Sheets writes continue. Monitor 48 hours.
-6. **Decommission.** After 2 weeks of clean Postgres reads, stop writing to Sheets. After another 2 weeks, archive the sheet tab.
-
-Per-module reversibility window: 4 weeks minimum.
-
-### Module sequence
-
-1. **Incidents** (weeks 7-8). Proves the pattern. Smallest blast radius.
-   - **CRITICAL:** Incidents has external side-effect entanglement (Drive folders, Calendar events, Slack, email, PDF). The dual-write pattern needs special handling to avoid duplicate side-effects. Plan this before starting.
-2. **Vendors** (weeks 9-10). Reference data Invoices depends on.
-3. **Invoices + AI Line Items** (weeks 10-12).
-4. **Inventory** (weeks 12-13). Includes Railway cron coordination.
-5. **Service Calendar** (week 13).
-6. **Season Tracker / Labor** (week 14).
-7. **Analytics events** (week 14). Resolves the 10M cell limit issue.
-8. **PAF submissions** (week 15).
-9. **New Hire Wizard** (week 15).
-10. **Action Center & Admin Queue** (week 15).
-11. **Leadership Dugout** (week 16).
-12. **Reports** (week 16). Pure read-side.
-13. **Financial** (week 16). Mostly aggregation.
-
-**Directory stays on Sheets.** Reference data, human-edited, low volume. Migrating it gains nothing. Deliberate exception.
-
-**Dashboard migrates last.** Pure aggregator. Phase 5.
-
-### Exit criteria
-
-- [ ] All transactional data in Postgres
-- [ ] All modules' reads from Postgres
-- [ ] No Sheets writes (except Directory)
-- [ ] RLS policies enforced on every table
-- [ ] Multi-tenancy verified by inserting a second test tenant and confirming isolation
-- [ ] Historical Sheets archived to Drive
-- [ ] All Playwright tests pass against Postgres-backed system
-- [ ] Zero production incidents during the phase
+1. **Multi-tenancy: YES.** Every transactional Postgres table gets `tenant_id` from day one. KitchFix = `tenant_id 1`. Preserves SaaS optionality without forcing the spinout.
+2. **Naming: Option A.** Suite is "KitchFix Ops". `/ops` URL prefix dissolves in Phase 5 into top-level routes (`/season`, `/inventory`, `/invoices`, `/vendors`).
+3. **Module migration order: dependency-ordered, NOT Hub-ordered.** Sequence: Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → Analytics → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory (stays on Sheets) → Financial → Dashboard (last, pure aggregator).
+4. **Three architectural axes:** Supabase Postgres + TypeScript + shadcn/ui + Tailwind v4. All three eventually.
+5. **Migration discipline:** One axis per module per pass. Never combine two axes in a single change.
+6. **Tests-first:** Phase 1 builds the Playwright test suite before any architectural changes.
+7. **Workflow:** Feature branch → Claude Code (or surgical zsh) → localhost → push → Vercel preview → manual merge via GitHub UI. Preview verification is REQUIRED for middleware/auth PRs.
+8. **Co-Authored-By trailers stay on Claude Code commits.**
+9. **Capacity assumption:** 20–40 hrs/week. Finishing ahead of schedule = depth, not pulling work forward.
 
 ---
 
-## Phase 4 — shadcn/ui + Tailwind v4 + mobile-first (weeks 17-21, ~60 hours)
+## Phase Status
 
-**Goal:** Replace the hand-built vanilla CSS component system with shadcn/ui. Mobile-first becomes the default. PWA support added.
+> **Update rule: every session-end. Tasks move statuses, get marked closed with PR #s, get notes when work surfaces complications.**
 
-### Setup (week 17)
+### Phase 0: Foundations
+**Status: ✅ Complete (May 11, 2026).**
 
-- Install shadcn/ui CLI, generate `components.json`
-- Add primitives: `Button`, `Dialog`, `Input`, `Label`, `Select`, `Textarea`, `Table`, `Card`, `Toast`, `DropdownMenu`, `Tabs`, `Sheet`, `Skeleton`, `Avatar`, `Badge`
-- Configure Tailwind v4 with `@theme` directive for KitchFix brand tokens
-- Configure shadcn theme to match brand
+All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Claude Max 20x plan, repo moved to `~/dev/kitchfix-intranet`, GitHub Desktop + gh CLI authenticated, Claude Code installed, side-project isolation verified, calibration done, stale `dev` branch deleted, foundational docs created (`CLAUDE.md`, `.claude/settings.json`, `docs/RUNBOOK.md`, `docs/ENV_VARS.md`, `docs/MIGRATION.md`), `src-backup/` removed.
 
-### Migration order
+### Phase 1: Stabilize Before Migrating
+**Status: 🟡 In progress — 10 of 13 original tasks closed + 11 housekeeping items closed as of 2026-05-13.**
 
-Same as Phase 3, each module's UI migrates after its data migration is finalized:
+#### Original Phase 1 tasks
 
-1. Rebuild components: replace `oh-modal-`, `oh-btn-`, etc. with shadcn primitives
-2. Mobile-first redesign: 375px viewport validation, ≥44px touch targets, correct iOS keyboard types, pull-to-refresh where appropriate
+| # | Task | Status | PR | Notes |
+|---|---|---|---|---|
+| 1 | Auth boundary cleanup (`route.js` hand-rolled JWT → service account) | Open | — | Needs quiet Saturday — touches sign-in |
+| 2 | OAuth scope reduction (`drive` → `drive.file`) | Open | — | Needs quiet Saturday — touches sign-in |
+| 3 | Turbopack opt-in | ✅ | #4 | Shipped May 11. Verified still default in 16.2.6. |
+| 4 | Analytics sheet rotation/bridge | ✅ | #8 | Closed May 12. Feature-flagged via `ANALYTICS_ENABLED`. Full Postgres rebuild deferred to Phase 3. |
+| 5 | Dependency pinning evaluation | ✅ | #15 | Closed May 13. All 9 caret-range deps pinned to exact versions. |
+| 6 | lucide-react upgrade | ✅ | — | Closed May 11 as no-op (1.14.0 already current) |
+| 7 | Daily sheet backup cron | ✅ | #14 | Closed May 13. Runs 06:00 UTC, 5 sheets, restore drilled and verified. |
+| 8 | Anthropic SDK consolidation | Open | — | Needs spec before code — touches Invoice OCR |
+| 9 | `/api/health` endpoint | Open | — | Attempted May 11, reverted. Possibly blocked on Task 17. |
+| 10 | Observability stack (Sentry / Better Stack / Vercel Analytics) | Open | — | Needs scoping session |
+| 11 | (duplicate of #3) | ✅ | — | Same as #3 |
+| 12 | Playwright test harness | ✅ | #9 | Closed May 12. 3 read-only tests. Expansion to 30–40 tests is future work. |
+| 13 | GitHub Actions CI | ✅ | #11 | Closed May 13. Runs against production on every PR. |
+| 14 | Branch protection on main | Open | — | Unblocked. ~5 min task. **Elevated priority** — May 13 had two near-misses of committing direct to main due to silent `git checkout -b` failures. |
+| 15 | Analytics taxonomy cleanup | Deferred | — | Moved to Phase 3 as part of analytics redesign |
+| 16 | Fix `.claude/settings.json` npm publish rule | Open | — | 5-min fix |
+| 17 | Migrate `middleware.ts` → `proxy.ts` | Open | — | Deprecation warning still firing after 16.2.6 bump. Unknown effort. May block Task 9 (`/api/health`). |
 
-### PWA setup (week 19, parallel)
+#### Non-task work closed this session (not in original Phase 1 plan)
 
-- Service worker setup (`next-pwa` or manual)
-- App manifest with KitchFix branding
-- Offline shell: app loads with cached data on no network
-- Queued writes for offline mode
-- Installable to home screen on iOS and Android
+| Item | PR | Notes |
+|---|---|---|
+| Next.js security bump 16.1.6 → 16.2.6 | #16 | Closes 19 high-severity advisories (CVE-2026-23869). `npm audit` → 0 vulnerabilities. Live smoke-tested across 5 modules. |
+| `SHEET_IDS.INVENTORY` cleanup | #18 | One-line fix: `process.env.INVENTORY_SHEET_ID \|\| ""` → hardcoded literal. Closes documented footgun. |
+| `supportsAllDrives` audit | — | Grepped 4 files, 12 ops. **All already patched.** Verification work was the deliverable. |
+| Backup restore drill | — | Tab-level restore drilled end-to-end on `HUB-DRILL-2026-05-13` copy. ~2 minutes. **Critical — proves the backup is real.** |
+| `GOTCHAS.md` + `RUNBOOK.md` updates | #17 | 3 new gotcha entries, full rewrite of restore section, new "Git & Workflow" gotcha section. |
+| `logHealthSA` unused import removal | #10 | Cleanup |
+| Playwright CI workflow | #11 | (Same as Task 13 above; tracked here for completeness) |
+| `auth.setup.ts` URL regex flexibility | #12 | Supports both localhost and production targets |
+| Docs: `TESTING.md` + `GOTCHAS.md` (auth-state scoping) | #13 | Documented R11 risk |
+| `CRON_SECRET` rotation | — | Old value leaked in chat transcript; rotated May 13. All three Vercel envs updated. Old value confirmed dead via curl. |
+| Vercel Deployment Protection bypass token | — | Generated and stored as `VERCEL_AUTOMATION_BYPASS_SECRET` GitHub secret. Reserved; not currently consumed by CI. |
+| `.gitignore` update | — | Added `HANDOFF_*.md` pattern |
 
-### Polish layer (week 21)
+#### Phase 1 exit gate status
 
-- Cmd-K command palette via `cmdk`
-- Skeleton loading states everywhere
-- Standardized toast notifications
-- Designed empty states for every list view
+| Gate | Status |
+|---|---|
+| Test suite covers critical paths | ✅ harness exists; expansion future work |
+| CI runs on every PR | ✅ |
+| Branch protection on main | ❌ Task #14 — elevated to immediate priority |
+| Observability live | ❌ Task #10 — needs scoping |
+| Backup safety net online | ✅ cron + restore both verified |
+| Dependencies pinned and audit-clean | ✅ |
 
-### Exit criteria
+**Two real gates remain:** branch protection (5 min) and observability scoping (real work). Phase 1 exit is close.
 
-- [ ] Every module's UI uses shadcn primitives
-- [ ] No `oh-*-` prefixed CSS classes remain
-- [ ] Every screen validated at 375px and 1024px
-- [ ] PWA installable on iOS and Android
-- [ ] Offline shell renders with cached data
-- [ ] Offline writes queue and sync on reconnect
-- [ ] Cmd-K palette covers every common action
-- [ ] All Playwright tests still pass
+### Phase 2: TypeScript Conversion
+**Status: Not started. Blocked on Phase 1 exit.**
 
----
+Module-by-module, dependency-ordered. Same module sequence as locked decision #3. For each module: convert `.js`/`.jsx` → `.ts`/`.tsx`, add type definitions, type API route handlers, type React components. No runtime behavior changes. Tests still pass.
 
-## Phase 5 — Route splitting, naming, Dashboard, polish (weeks 22-24, ~30 hours)
+**Exit criterion:** Entire codebase is TypeScript. Build is type-clean. No new bugs introduced.
 
-**Goal:** Implement Option A naming and IA. Split giant route files. Dashboard becomes the suite's home, properly aggregating from Postgres.
+### Phase 3: Postgres Migration
+**Status: Not started. Blocked on Phase 2 exit.**
 
-### Route splitting
+Move data from Google Sheets to Supabase, module-by-module, same dependency order. Each module gets a **2-week dual-write validation window**. Highest-risk phase.
 
-`src/app/api/people/route.js` (2,165 lines, 24 actions) becomes:
-- `src/app/api/people/paf/route.ts`
-- `src/app/api/people/new-hire/route.ts`
-- `src/app/api/people/incidents/route.ts`
-- `src/app/api/people/action-center/route.ts`
-- `src/app/api/people/admin-queue/route.ts`
-- `src/app/api/people/reports/route.ts`
-- `src/app/api/people/leadership-dugout/route.ts`
+Per module: design schema (with `tenant_id`), stand up Supabase tables, implement dual-write (Sheets AND Postgres), 2-week validation, cut reads to Postgres, decommission Sheets writes. Then next module.
 
-**CRITICAL:** Build a shared auth/config loader first. The action-dispatch pattern's hidden benefit is single HUB config load per request — splitting without this gives N× more HUB API calls. Identified during May 11 calibration.
+Special handling for **Incidents** module (R9): side-effect entanglement (Drive folder + Calendar event + Slack + email + PDF + escalation timestamps fire from one submission). Architecture for side-effect modules must be settled before Phase 3 begins.
 
-Similar split for `src/app/api/ops/route.js`. Shared imports move to `src/lib/people/` and `src/lib/ops/`.
+**Directory STAYS ON SHEETS** — read-only config, low write volume.
 
-### IA changes (Option A)
+**Analytics REBUILDS on Postgres** — existing 28 instrumentation points reused; only write target changes. `ANALYTICS_ENABLED` flips back on once Postgres writes wired.
 
-`/ops` route dissolves. Top-level modules:
-- `/season` (was `/ops` → Season Tracker tab)
-- `/inventory` (was `/ops` → Inventory tab)
-- `/invoices` (was `/ops` → Invoice Capture tab)
-- `/vendors` (was `/ops` → Vendor Portal tab)
+**Exit criterion:** All modules except Directory on Postgres. Sheets writes decommissioned. Multi-tenant boundaries in place.
 
-Top nav reorganizes. Redirects from old URLs in place for 90 days.
+### Phase 4: UI Modernization (shadcn/ui + Tailwind v4)
+**Status: Not started. Blocked on Phase 3 exit.**
 
-### Suite naming pass
+Replace custom CSS prefix system (`oh-`, `oh-vp-`, `oh-inv-mgmt-`, `sc-`, `pp-`, `kf-`, `an-`) with shadcn/ui components on Tailwind v4. Module-by-module, same dependency order. Preserve design language (amber for focus, navy for primary CTAs, red reserved for errors) and motion specs (240ms / 420ms / 180ms).
 
-- Suite is **KitchFix Ops**. Updates to `<title>`, manifest, README, all docs.
-- Each module retains its name.
-- "Ops Hub" references removed from anything user-facing.
+**Exit criterion:** Custom CSS prefix system fully replaced. Design language preserved.
 
-### Dashboard rebuild
+### Phase 5: Cleanup & SaaS-Readiness
+**Status: Not started. Blocked on Phase 4 exit.**
 
-- Real-time data via Supabase subscriptions where it adds value
-- SQL-driven aggregation
-- Personalized to viewer
-- Mobile-first
+- Dissolve `/ops` URL namespace → top-level routes
+- Finalize multi-tenant boundaries (row-level security policies in Supabase)
+- Tenant onboarding flow (if SaaS)
+- Billing integration (if SaaS)
+- Final documentation pass
+- Operational baseline (backups, monitoring, alerting all final-form)
 
-### Documentation finalization
+#### Phase 5 cleanup items identified during prior sessions
 
-- `/docs/ARCHITECTURE.md` rewritten for new architecture
-- Old "Sheets-as-database" content moved to `/docs/HISTORY.md`
-- `/docs/MIGRATION.md` marked complete with retrospective
+- **`SHEET_IDS.COLLECTION` retirement.** Hardcoded constant matches `PEOPLE_DB_SHEET_ID` env var (historical artifact). Retire in favor of single canonical `COLLECTION_SHEET_ID` env var.
+- **`inventoryActions.js` import migration.** ~80 call sites of `process.env.INVENTORY_SHEET_ID` should migrate to `import { SHEET_IDS }` pattern. Closes env-var dependency entirely. (Identified May 13.)
+- **Directory route SA migration.** `src/app/api/directory/route.js` is the only Drive-using file still on user OAuth. Read-only and works; migrate to SA pattern for consistency. (Identified May 13.)
+- **`SHEET_IDS` env-var-ification decision.** Should the remaining 5 hardcoded sheet IDs become env-var-driven for staging support? Architectural call. (Identified May 13.)
 
-### Exit criteria
-
-- [ ] No route file over 400 lines
-- [ ] `/ops` dissolved, new top-level routes live with redirects
-- [ ] Suite uniformly named "KitchFix Ops" everywhere user-facing
-- [ ] Dashboard rebuilt with real-time data
-- [ ] Documentation up to date
-- [ ] All Playwright tests pass
-- [ ] Production hasn't broken once during the entire arc
-
----
-
-## Risk register
-
-**R1: Test suite is wrong or incomplete.** Mitigation: every module's tests reviewed against actual user workflows during Phase 1. Add tests retroactively when gaps discovered.
-
-**R2: Dual-write window allows data divergence.** Sheets is canonical during dual-write. Shadow-read job in Step 4 catches divergence. No cutover until divergence is zero for a week.
-
-**R3: Supabase outage or pricing change.** Postgres is portable. `src/lib/db.ts` abstraction means we can swap providers. Daily Supabase backups + weekly logical dumps to Drive.
-
-**R4: Burnout.** Phase structure means safe to pause between phases — production always in stable state. Pause weeks built in.
-
-**R5: Bad commit reaches production.** CI must pass. Vercel preview sanity-check on phone before merge. Branch protection. Sentry alerts. Rollback documented in runbook.
-
-**R6: Side project contamination.** Separate directories, separate `CLAUDE.md`, separate terminals.
-
-**R7: Multi-tenancy bugs leak data across tenants.** Phase 3 tests run against two tenants asserting isolation. "Test tenant" added day one of Phase 3.
-
-**R8: AI feature quality regresses during SDK consolidation.** Playwright tests cover invoice OCR and inventory matching, must pass before and after.
-
-**R9 (added May 11): Incidents side-effect entanglement during dual-write.** Single incident submit fires Drive folder creation, Calendar event, Slack, email, PDF stamping. Naive dual-write could fire these twice or zero times. Settle architecture before Phase 3 starts.
-
-**R10 (added May 11): Loss of operational distance.** With the maintainer now full-time on this codebase, every architectural choice risks becoming a personal preference rather than a structured decision. The discipline that protected $10M as a part-time dev is hardest to maintain when this becomes a full-time identity. Mitigation: trust the docs and procedures more, not less. The CLAUDE.md, RUNBOOK, ENV_VARS, and MIGRATION docs exist to protect future-self from present-self. Every shortcut feels small at the time and looks expensive in retrospect.
+**Exit criterion:** Platform in final architectural state. Either operating cleanly as KitchFix-internal or ready to onboard a second tenant.
 
 ---
 
-## Captain's log
+## Followups & Discoveries Log
 
-- **2026-05-11** — Document created during Phase 0 completion. Five phases scoped. Three architectural axes locked. Multi-tenancy locked yes. Naming locked Option A. Migration order locked dependency-ordered. Six calibration findings added to Phase 1 backlog. Risk R9 added based on Claude Code's identification of Incidents side-effect entanglement. Risk R10 added based on maintainer's transition to full-time work on the codebase.
-- **2026-05-11** — Phase 1 Task 6 (lucide-react upgrade) closed as a no-op. The task was scoped on a misread of lucide-react's version history: `^1.14.0` was assumed to be an old pre-reset version with `0.5xx` being current. The reverse is true — lucide-react ran the `0.x` lineage for years, then cut `1.0.0` on 2026-03-20 and is now at `1.14.0` (2026-04-29), which is the current `latest` dist-tag and already what's in `package.json`. Verified against the npm registry. Only one file imports it — `src/components/people/IncidentLibrary.js` (Pin, ShieldCheck, ClipboardList, BookmarkCheck, MapPin, GraduationCap) — and all six resolve in 1.14.0; no renames or removals between the assumed-old and actual-current versions because there is no gap. No `npm install`, no `package.json` change, no code edits. Lesson: don't infer "stale" from a version number alone; check the registry's dist-tags.
-- **2026-05-11** — Phase 1 Task 11 (Turbopack opt-in) shipped (PR #4, commit 83fd0d5). One-line change in `package.json`: dropped the `--webpack` flag from the `dev` script. Production was already building with Turbopack via the Next 16 default; only local dev was opting out — the fix just aligns local with production. Separately, during today's local dev session the Analytics 10M-cell-limit issue (calibration finding #4) was confirmed live: analytics events are silently failing in production because the sheet is full. **Priority for next session — address this before any other Phase 1 task.**
-- **2026-05-12** — Phase 1 Task 12 reframed and shipped. Originally scoped as "analytics sheet rotation" (archive old rows to free cells). On review, rotation was the wrong frame: the analytics system is ~1,500 lines across 14 files (4 new: analytics cron, analytics API, `/analytics` page, analytics CSS; 10 modified), with 28 instrumentation call sites across 6 API routes plus auth, and daily/weekly/monthly cron aggregation into ~16 sheet tabs. Decision: don't delete it, don't rotate the sheet — feature-flag the **writes** off and leave the structure dormant for the Phase 3 Postgres rebuild (where only the write target changes; the instrumentation points and dashboard stay). Implementation: `export const ANALYTICS_ENABLED = process.env.ANALYTICS_ENABLED === "true"` in `src/lib/analytics.js`; the six write functions (`logEvent`, `logEventSA`, `logHealth`, `logHealthSA`, `writeAnalyticsRow`, `clearAndWriteAnalytics`) gain a `!ANALYTICS_ENABLED` short-circuit in their existing early-return guard — no-op, no console noise, return signatures unchanged. Reads (`readAnalyticsSheet`) and `slackRecap` stay unguarded so the `/analytics` dashboard still renders historical data. `timedFetch`/`timedFetchSA` aren't guarded directly (they delegate to `logHealth*` and must keep returning the wrapped fetch result). The analytics cron imports `ANALYTICS_ENABLED` and **skips its daily/weekly/monthly Slack recaps** when disabled — the cron still runs end-to-end (so we can verify cron infra) but doesn't post misleading "0 events" recaps to `#intranet-recap`; the crash-handler `slackRecap` stays unconditional. New env var `ANALYTICS_ENABLED` documented in `docs/ENV_VARS.md` and `docs/RUNBOOK.md`; default off (absent ⇒ falsy ⇒ writes disabled, which is the intended state). Vercel env var set to `false` on Production + Preview + Development. Task 8 (analytics taxonomy cleanup) deferred to Phase 3 alongside the rest of the redesign. **Open question, deferred:** whether to also pause the `analytics` cron entry in `vercel.json` — left alone for now (danger-zone file; the cron is harmless with recaps skipped) and folded into the Phase 3 analytics work. Rollback if needed: set `ANALYTICS_ENABLED=true` in Vercel + redeploy, or revert the PR — additive change, no data implications, writes were already failing.
+> **Update rule: immediately when discovered, not at session-end.** This is the section that fails most often without discipline. Anything noticed during a task that isn't part of the task lands here the moment it surfaces.
+
+Format per entry: `[Priority] Discovery (date, context). Effort estimate. Owner-action.`
+
+### P1 — Must address before Phase 1 exit
+*None open. The Next.js bump was the only open P1; closed May 13 via PR #16.*
+
+### P2 — Should address in next 1–2 sessions
+
+- **Sheets API rate-limit headroom audit.** (Discovered 2026-05-13 during PR #16 smoke testing.) Rapid module navigation tripped 60-reads/min/user quota with cascading 429s. Real production risk under traffic spikes. Mitigation options: in-memory caching of hot reads, request coalescing within bootstrap, batchGet consolidation, quota increase request. Per-OAuth-user limit — SA routes unaffected. **Needs scoping session in fresh head.** See R12.
+
+### P3 — Nice-to-have, no time pressure
+
+- **Whole-sheet restore drill.** (Discovered 2026-05-13.) Tab-level drilled; whole-sheet only documented. ~30 min when scheduled.
+- **`inventoryActions.js` import migration.** (Discovered 2026-05-13.) ~80 call sites — see Phase 5 cleanup items.
+- **`SHEET_IDS` env-var-ification decision.** (Discovered 2026-05-13.) See Phase 5 cleanup items.
+- **Directory route SA migration.** (Discovered 2026-05-13.) See Phase 5 cleanup items.
+- **Backup retention policy.** ~90-day pruning sub-cron. Schedule for ~August (after real accumulation period).
+- **Anthropic SDK consolidation.** Task #8. Needs spec first.
+- **`.claude/settings.json` npm publish rule fix.** Task #16. 5-min fix.
+
+### Discovered earlier, still parked
+
+- **`SHEET_IDS.COLLECTION` retirement** (Phase 5)
+- **R11 — Auth state environment-scoping in CI** (mitigated by docs; ongoing low risk)
+
+---
+
+## Risk Register
+
+> **Update rule: every session-end. New risks added with discovery context. Existing risks updated when status changes.**
+
+| # | Risk | Status | Mitigation |
+|---|---|---|---|
+| R1 | Test suite gaps — Phase 3 dual-write divergence could go undetected if Playwright coverage thin | 🟡 Harness exists (3 tests); expansion pending | Build harness as Phase 1 priority before any data migration |
+| R2 | Dual-write divergence — Sheets and Postgres drift apart during 2-week validation | Open (Phase 3 risk) | Comparison tooling, weekly review of divergence reports |
+| R3 | Supabase outage — new external dependency that doesn't exist today | Open (Phase 3 risk) | Monitor Supabase status; rollback plan to Sheets-only |
+| R4 | Maintainer burnout — solo dev, 5-6 month arc | 🟡 Active mitigation | Documented procedures; HANDOFF_*.md hygiene used May 13 successfully |
+| R5 | Bad commit to prod — direct push, missing CI gate, fatigue merge | 🟡 CI exists; branch protection pending Task #14 | Branch protection elevated priority after May 13 near-misses |
+| R6 | Side project contamination — Holtburg game project at `~/Holtburg/` | Mitigated | HARD RULE physical directory separation, verified clean May 11 |
+| R7 | Multi-tenancy data leak — query forgets `tenant_id` filter | Open (Phase 3+ risk) | Supabase row-level security at DB layer, not app layer |
+| R8 | AI feature regression — TypeScript/Postgres migrations break OCR or AI Pulse | Open | AI features get explicit test coverage in Playwright suite |
+| R9 | Incidents side-effect entanglement — Drive + Calendar + Slack + email + PDF + escalation all from one submission | Open (Phase 3 risk) | Settle architecture for side-effect modules before Phase 3 |
+| R10 | Loss of operational distance — discipline that protected $10M+ ops hardest to maintain when full-time on codebase | Active | Trust docs and procedures more, not less |
+| R11 | Auth state environment-scoping in CI — `storageState` cookies domain-locked | Mitigated | Documented in `GOTCHAS.md` + `TESTING.md` with refresh procedure |
+| **R12** | **Sheets API rate limits — 60 reads/min/user can be tripped by rapid module navigation, especially during busy game-day pushes by multiple operators** | **🟡 Identified 2026-05-13. No mitigation implemented yet.** | **Caching layer, request coalescing, or quota increase. Scoping in next session. Per-user limit; SA routes unaffected.** |
+
+---
+
+## Pre-Specified, Not Built (Out of Scope for the Migration)
+
+> **Update rule: items move in or out as explicit decisions are made. A decision to build something here moves it into the relevant Phase.**
+
+Documented but explicitly NOT part of the migration arc. Lives in the broader product backlog:
+
+- Culinary Management Platform (replacing Galley Solutions) — specced, stakeholders identified
+- Pre-Service Briefing Tool — fully specced, content library (100 topics, bilingual), design locked
+- Pre-Service print materials — bilingual wall postings (Batch 1 partial: S02, S05, S08, S09); pending Spanish-speaker validation
+- Count History and Price Dashboard tools within Inventory Manager
+- Custom domain `ops.kitchfix.com` — one CNAME, free on Vercel
+- Standalone Slack maintenance logger (Railway-hosted) for STL-FL facility
+- Backup retention policy (~90 days)
+
+---
+
+## Specifically Out of Scope
+
+> **Update rule: same as above. Items only move out of this list with explicit decision + captain's-log entry.**
+
+- **KPI Dashboard.** Built prematurely. Not referenced in current architecture, data flow, or tool connections until/unless reintroduced explicitly.
+- Tailwind expansion beyond shadcn migration (no CSS-in-JS, no Material UI, no Chakra)
+- Backend rewrites beyond Phase 3 (Google Sheets dual-architecture locked for non-migrated modules)
+- Navigation/IA overhauls outside Phase 5's `/ops` dissolution
+- Test framework alternatives (Playwright locked in)
+
+---
+
+## Captain's Log
+
+> **Update rule: every session-end. One date-stamped line per session. Five-month arc means six months of these — when you're tired in October and want to know "did I ever drill X," grep this.**
+
+- **2026-05-11** — Phase 0 closed. Foundations in place. Phase 1 begins.
+- **2026-05-12** — PR #4 (Turbopack), PR #8 (analytics feature flag), PR #9 (Playwright harness). Closed Tasks #3, #4, #12.
+- **2026-05-13 (morning)** — PRs #10–#13 shipped: `logHealthSA` cleanup, Playwright CI, auth.setup.ts regex, docs (TESTING + GOTCHAS auth-state). `CRON_SECRET` rotated. R11 captured.
+- **2026-05-13 (push day)** — PRs #14–#18 shipped. Daily backup cron live + restore drilled. Next.js 16.2.6 security bump (19 advisories closed). All deps pinned. `SHEET_IDS.INVENTORY` footgun closed. `supportsAllDrives` audit verified clean. 3 new gotchas + restore runbook documented. R12 identified (rate limits). Phase 1 went from 46% to 77% closure. **Two near-misses of committing to main due to silent `git checkout -b` failures — recovery procedure now documented in GOTCHAS.**
+- **2026-05-13 (doc creation)** — This living doc replaced the static migration plan. Session-start checklist and working agreements added. All Phase 1 status reflects end-of-day state.
+
+---
+
+## Bottom Line
+
+**Five phases. Six months. Three architectural axes** (Postgres + TypeScript + shadcn). **One axis per module per pass. Tests first. Dependency-ordered everything. Multi-tenancy from day one. Preserve the work; don't rebuild from scratch.**
+
+The goal isn't speed to Supabase. The goal is a foundation trustworthy enough that the work after this migration — new operational tools that protect the bottom line — gets built faster and safer than it could on the current Sheets foundation.
+
+**Where we are 2026-05-13:** Phase 0 complete. Phase 1 at ~77% closure. The two highest-leverage Phase 1 outcomes — Playwright test harness and CI gates — are both live. Backup safety net is live AND verified by restore drill. Dependency tree is patched and pinned. Two gates remain before Phase 1 exit: branch protection (5 min) and observability scoping. Phase 2 unblocks when Phase 1 closes.
