@@ -16,17 +16,20 @@
     "google-auth-library": "10.5.0",
     "googleapis": "171.4.0",
     "lucide-react": "1.14.0",
-    "next": "16.1.6",
+"next": "16.2.6",
     "next-auth": "5.0.0-beta.30",
     "pdf-lib": "1.17.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
-  "devDependencies": {
+"devDependencies": {
     "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "4.2.0",
     "eslint": "9.39.2",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "16.2.6",
     "tailwindcss": "4.2.0"
+  },
+  "overrides": {
+    "postcss": "8.5.14"
   }
 }
