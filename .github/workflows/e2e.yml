@@ -6,6 +6,11 @@ on:
     types: [opened, synchronize, reopened]
 
 # Cancel in-progress runs for the same PR when a new commit is pushed
+permissions:
+  contents: read
+  deployments: read
+  statuses: read
+
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
