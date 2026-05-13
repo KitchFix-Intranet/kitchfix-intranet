@@ -202,21 +202,15 @@ await drive.files.copy({
 
 **First seen:** 2026-05-13, building the `/api/cron/backup-sheets` route. Cost: ~30 min of "share dialog must be wrong" diagnosis before realizing the SA already had access and the flag was the issue.
 
-### `SHEET_IDS.INVENTORY` is an empty string in `src/lib/sheets.js`
+### Historical: `SHEET_IDS.INVENTORY` was `process.env.INVENTORY_SHEET_ID || ""`
 
-The exported `SHEET_IDS.INVENTORY` constant is `""` (empty string). Routes that read from INVENTORY resolve the actual ID from elsewhere (env var fallback or hardcoded in the route). This is a footgun — code that imports `SHEET_IDS.INVENTORY` expecting a real value will silently fail with "Sheet ID is undefined" or worse, "File not found" against an empty string.
+**Fixed 2026-05-13.** `SHEET_IDS.INVENTORY` is now a hardcoded literal matching the pattern of HUB, COLLECTION, GAME, GL_CODES, and AI_LINE_ITEMS.
 
-**Fix:** Either wire the constant to the env var explicitly, or delete the empty key so future readers don't get confused.
+The old pattern (`process.env.INVENTORY_SHEET_ID || ""`) created two issues: (1) running `node -e` to inspect `SHEET_IDS` outside Next.js produced an empty string because Node's `require` doesn't load `.env.local` — misleading anyone debugging; (2) routes that imported `SHEET_IDS.INVENTORY` directly worked in Next.js runtime but silently broke if the env var was missing.
 
-```javascript
-// Current state (footgun):
-export const SHEET_IDS = {
-  // ...
-  INVENTORY: "",  // ← real ID resolved elsewhere
-};
-```
+**Note:** `src/lib/inventoryActions.js` still reads `process.env.INVENTORY_SHEET_ID` directly (~80 call sites) rather than importing `SHEET_IDS.INVENTORY`. Functional but inconsistent — a P3 refactor is to migrate those imports. Until then, the env var must remain set on Vercel to keep inventory writes working.
 
-**Tracked as P2 followup.** Until cleaned up, treat `SHEET_IDS.INVENTORY` as unreliable — verify any new code that imports it.
+**Lesson worth keeping:** if you find a "weird empty string" while debugging, check whether you're inspecting code inside the framework's runtime context vs. a bare `node -e` shell.
 
 // WRONG — uses user token
 await drive.files.create({ auth: userOAuth, ... });
