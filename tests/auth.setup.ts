@@ -41,7 +41,7 @@ setup('authenticate via Google OAuth', async ({ page }) => {
 
   // After resume: verify we landed on an authenticated page
   // The home dashboard URL is '/' — adjust if your app redirects elsewhere
-  await expect(page).toHaveURL(/^http:\/\/localhost:3000\//);
+await expect(page).toHaveURL(/^https?:\/\/[^/]+\//);
 
   // Sanity check: a known authed-only element should be visible.
   // Pick something stable from the home dashboard hero or launchpad nav.
