@@ -16,7 +16,7 @@ export const SHEET_IDS = {
   GAME: "1BFEGUIjmU56iRsu0Dbnn-x-jF2Bnw8K4BmUZrq6pghs",
   GL_CODES: "1Gs7ToEvrsraBt81DctgwImKK-ck2Ch6V2ifvF8VndeY",
 AI_LINE_ITEMS: "18mTWaeodOpFVmDSNRkGpNZvCrNWqHxVv3qN8r1b2REo",
-  INVENTORY: process.env.INVENTORY_SHEET_ID || "",
+INVENTORY: "14oROcj9hyQJfKOm-ZXUDn6qvOviZYX1aLMs27V8zZnk"
 };
 
 export function getSheetsClient(accessToken) {
