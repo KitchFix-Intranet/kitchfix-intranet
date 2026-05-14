@@ -193,10 +193,9 @@ console.log("[Cron] Daily notification run starting...");
      logEventSA({ category: "system", action: "cron_start", detail: { type: "daily" } });
 
      // Batch read all needed sheets
-    const [periodRows, celebrationRows, newsRows, contactRows, notifRows] = await Promise.all([
+    const [periodRows, celebrationRows, contactRows, notifRows] = await Promise.all([
       readSheet(SHEET_IDS.HUB, "period_data"),
       readSheet(SHEET_IDS.HUB, "personnel_celebrations"),
-      readSheet(SHEET_IDS.HUB, "home_news"),
       readSheet(SHEET_IDS.HUB, "contacts"),
       readSheet(SHEET_IDS.DB, "notification_log"),
     ]);
@@ -295,22 +294,6 @@ await writeNotification("ALL", `[OPS] New period started - ${label}`, "period_st
       }
     }
 
-    // ─── #13: New KitchFix News (ALL) ───
-    // home_news: [0]=date, [1]=headline, [2]=category, [3]=body, [4]=link, [5]=pinned
-    // Check if any news item has today's date
-    const todayStr = today.toISOString().split("T")[0];
-    for (const row of newsRows) {
-      const newsDate = parseDate(row[0]);
-      if (!newsDate) continue;
-      const newsDateStr = newsDate.toISOString().split("T")[0];
-      const headline = String(row[1] || "").trim();
-      if (!headline) continue;
-
-      if (newsDateStr === todayStr && !alreadyFired(notifRows, "news_posted", headline.slice(0, 40))) {
-        await writeNotification("ALL", `[NEWS] ${headline}`, "news_posted", headline.slice(0, 40));
-        written++;
-      }
-    }
 
     // ─── #14: Birthday (ALL) ───
     // personnel_celebrations: [0]=date, [1]=headline, [2]=type
