@@ -393,4 +393,18 @@ These supplement the working agreements in \`MIGRATION.md\`:
 
 ## Captain's Log
 
-- **2026-05-14** — Migration committed. Strangler fig approach chosen over big-bang. Stages: 0 (audit + abstraction), 1 (Supabase setup), 2a (read-only HUB), 2b (People Portal), 2c (Ops Hub), 2d (Service Calendar), 3 (decommission). Dashboard cleanup PR #23 reclassified as Stage 0 Step 1. Most of Phase 2-5 of the original \`MIGRATION.md\` plan deferred or absorbed.
+- **2026-05-14** — Migration committed. Strangler fig approach chosen over big-bang. Stages: 0 (audit + abstraction), 1 (Supabase setup), 2a (read-only HUB), 2b (People Portal), 2c (Ops Hub), 2d (Service Calendar), 3 (decommission). Dashboard cleanup PR #23 reclassified as Stage 0 Step 1. Most of Phase 2-5 of the original `MIGRATION.md` plan deferred or absorbed.
+
+  **How the decision arose:** Today's planned work was Sentry Phase A install + Phase B observability scoping + Task #2 OAuth scope reduction. Shipped Sentry (PR #21) and its docs (PR #22) on plan. Then noticed during local dashboard testing that the `/api/dashboard` route was reading kudos/waste/logs/celebrations on every page load — none of which the current dashboard UI displays. Audit confirmed: ~3 dead Sheets reads + 1 dead write + 3 dead metric computations + dead helper function per dashboard load. PR #23 surgically removed them (~200 lines deleted, 3x faster dashboard load, ~500 fewer Sheets calls/day for 25 users).
+
+  **What the discovery surfaced:** This pattern (legacy backend reads that survived UI rewrites) is likely systemic across all routes — `people/route.js` has 25+ action handlers and ~2165 lines, `ops/route.js` has multiple bootstrap actions with 13+ reads. Started a full-codebase audit; uploaded HUB + COLLECTION xlsx files for ground-truth verification. Discovered that several core "feature" tabs (kudos_log, paf_log, incidents at the time, kudos_bonus_log, labor_logs, invoice_logs) have 0 data rows — features exist in code but never adopted, or are still in development.
+
+  **The strategic conversation:** Kevin raised that the Sheets-as-backend architecture is a learning-while-building artifact accumulating cluttered tabs, and that the rate-limit incident yesterday + today's dead-code discovery indicate it may be time to think about Supabase. Discussed: (a) honest tradeoffs of staying on Sheets vs migrating, (b) hybrid as a rejected option, (c) cleanup-first vs migrate-with-cleanup-integrated, (d) strangler fig as the right pattern. Decision: commit to migration, staged by data category and risk. Pre-clean-Sheets-first rejected as a separate step because cleanup is intrinsic to migration.
+
+  **What this changes:** Phase B observability instrumentation officially CANCELLED — the R12 problem dissolves post-migration; not worth instrumenting a backend that's leaving. Task #2 (OAuth scope reduction) DEFERRED to post-migration. Phase 2 (TypeScript), most of Phase 3, Phase 5 (multi-tenancy) all deferred. Pre-Service Briefing Tool can still ship during migration if built against the abstraction layer.
+
+  **Captured ground truth:** Sheet inventory doc (`docs/SHEET_INVENTORY_2026-05-14.md`) records which tabs are populated vs empty vs in-development. Future sessions should NOT re-download xlsx files to rediscover this.
+
+  **DO NOT TOUCH list (confirmed with Kevin):** `incidents`, `preservice_logs`, `preservice_content`, `deep_clean_days`, `ops_newsfeed`, all `HUB__Performance_*` and `COLL__Cycle_Review_*` / `COLL__WOW_*` / `COLL__Scorecards` (KPI Dashboard parked). These read/write paths must remain untouched during audit and migration.
+
+  **Next session opens with:** Stage 0 audit of `src/app/api/people/route.js` — the People Portal route. Bootstrap action is at line 638. Use the same pattern as dashboard cleanup: read what's computed, verify frontend usage, mark dead reads. Don't touch incident-related handlers.
