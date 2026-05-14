@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { logEventSA } from "@/lib/analytics";
-import { generateReport } from "@/lib/peopleReport";
 import {
   INCIDENT_COLUMNS,
   INCIDENTS_TAB,
@@ -1048,31 +1047,6 @@ return NextResponse.json({ success: true, queue });
       return NextResponse.json({ success: true, queue });
     }
 
-// ─── Email Reports (Vercel Cron) ───
-    if (action === "generate-report") {
-      
-      const authHeader = request.headers.get("authorization");
-      const cronSecret = process.env.CRON_SECRET;
-      const manual = searchParams.get("manual") === "true";
-
-      if (!manual && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-      }
-
-      const period = searchParams.get("period") || "weekly";
-      try {
-        const result = await generateReport(period, {
-          readSheet: (id, name) => readSheet(id, name),
-          sendEmail,
-          logNotification,
-          sheetIds: { DB: SHEET_IDS.DB },
-        });
-        return NextResponse.json(result);
-      } catch (e) {
-        console.error("[Report] Generation failed:", e.message);
-        return NextResponse.json({ success: false, error: e.message }, { status: 500 });
-      }
-    }
 
     // ─── Incident: list all (admin queue) ───
     if (action === "incident-list") {
