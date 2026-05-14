@@ -1,10 +1,20 @@
 # Migration Plan — KitchFix Ops Hub Architectural Arc
 
-> **Last updated:** 2026-05-13 (end-of-day, post-observability scoping)
+> **Last updated:** 2026-05-14 (Supabase migration committed — see redirect below)
 > **Last commit at update:** see `git log` for this file's most recent edit
 > **Owner:** Kevin Fietek
 > **Estimated duration:** 5–6 months calendar time. Some phases gated by calendar (dual-write validation windows) regardless of effort.
 > **Capacity assumption:** 20–40 hrs/week. If finishing phases ahead of schedule, the right move is depth, not speed — strengthen the test suite, add observability, polish UX, write better docs. Don't pull Phase N+1 forward.
+
+> ## ⚠️ REDIRECT — Read this first
+>
+> As of 2026-05-14, the project direction has been reshaped. The original Phase 4 (Database Migration) has been pulled forward and is now the active focus.
+>
+> **Current direction:** See `docs/SUPABASE_MIGRATION.md` for the active migration plan, current stage, and reprioritized task list.
+>
+> **This doc is preserved as historical record.** The Phase 1 work it describes is largely complete (11 of 13 tasks closed, with #2 deferred to post-migration). Phases 2-5 are deferred, absorbed into the migration, or superseded by it. See `docs/SUPABASE_MIGRATION.md` § "Impact on the original migration plan" for the explicit mapping.
+>
+> **At session start:** read `docs/SUPABASE_MIGRATION.md` first. Refer to this doc for historical context only.
 
 ---
 
