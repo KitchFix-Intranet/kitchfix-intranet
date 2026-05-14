@@ -84,6 +84,76 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 
 **Estimated effort:** 4-8 sessions of focused work. ~3-4 weeks calendar time.
 
+#### Audit findings — accumulated as audits complete
+
+**Dashboard route** (`/api/dashboard`) — completed 2026-05-14
+- 3 dead Sheets reads removed (kudos_log, wastenot_log, login_logs)
+- 1 dead Sheets write removed (login_logs visit logging)
+- 3 dead metric computations removed (kudos, waste, MOD)
+- 1 dead helper function removed (calculateLoginStreak)
+- ~200 lines deleted from route.js
+- Dashboard load time: ~2.3s → ~860ms (3x faster)
+- Shipped: PR #23
+
+**People Portal GET handlers** (`/api/people`, GET) — completed 2026-05-14
+- 7 of 8 actions audited (`incident-list` skipped per DO NOT TOUCH)
+- All 7 audited: CLEAN
+- Note: `bootstrap.counts.completedTotal` computed but unused (server-side dead computation, not a Sheets read — left in place, will be cleaned by abstraction layer redesign)
+- Note: People Portal route serves both `/people` page AND global TopNav (notifications endpoint cross-cutting)
+
+**People Portal POST handlers** (`/api/people`, POST) — completed 2026-05-14
+- 10 of 14 actions audited (4 incident-related skipped)
+- 9 of 10 CLEAN; 1 deleted
+- Deleted: `submit-help` action + `HelpModal.js` component (~104 lines total) — replaced by global HelpFAB, never cleaned up
+- Bug fixed: duplicate `await logNotification` in `submit-help-global` (was logging every help request twice)
+- Shipped: PR #27
+
+**Broken People reports** (`/api/people?action=generate-report` + `src/lib/peopleReport.js`) — completed 2026-05-14
+- 1 broken feature deleted entirely (~621 lines)
+- Was generating broken weekly/monthly emails via Vercel cron, ignored by recipient (filtered to junk folder)
+- 2 cron entries removed from `vercel.json`
+- Bug root causes (em-dash encoding, period date math) confirmed but not fixed — feature deleted instead per disciplined "don't fix broken stuff we're about to migrate" call
+- Shipped: PR #26
+
+**Directory route** (`/api/directory`) — completed 2026-05-14
+- 9 of 9 actions audited
+- All 9 CLEAN — zero dead code
+- BUT: 4 architectural concerns surfaced (documented below)
+- NOT shipped: discipline call to document concerns instead of building Sheets-specific workarounds for code we're about to rewrite in Postgres
+
+**Cron daily** (`/api/cron/daily`) — completed 2026-05-14
+- 4 of 5 categories CLEAN, 1 dead block
+- Dead: news notifications block reading from non-existent `home_news` tab — never fired since deployment
+- Active categories preserved: inventory countdowns (3d/2d/1d/today), inventory past-due, birthdays, anniversaries
+- Removed 1 of 5 daily reads, ~17 lines deleted
+- Shipped: PR pending (#28)
+
+#### Directory route architectural concerns (Stage 1 schema design must address)
+
+These are real concerns we chose to document rather than fix in Sheets. They become non-issues post-migration with Postgres features.
+
+**Concern 1: User OAuth used for write operations** (affects 6 handlers: `admin-update-account`, `admin-add-account`, `admin-deactivate-account`, `admin-reactivate-account`, `admin-update-contacts`, `admin-update-heroes`)
+
+The directory POST handlers use `getSheetsClient(token)` — user's OAuth token — to write to Sheets. Every other write path in the codebase uses the service account. This means every admin user must have edit permission on the HUB spreadsheet for these to work. **Migration consideration:** Stage 1 schema should design these as service-account writes from the start.
+
+**Concern 2: Destructive write pattern in `admin-update-contacts`**
+
+The handler does `delete N rows → append N rows` in sequence. If the function crashes (Vercel timeout, network failure) between delete and append, contact rows for that account are permanently lost. Recovery requires daily backup restore. **Migration consideration:** Postgres transaction wraps this trivially. Stage 1 schema design should account for atomic multi-row updates of relational data (account ↔ contacts is a foreign key relationship in Postgres).
+
+**Concern 3: Destructive write pattern in `admin-update-heroes`**
+
+Same shape as Concern 2. `clear column A → write new values`. If clear succeeds but update fails, all hero images are lost from production until next backup restore. **Migration consideration:** Same transaction-based fix.
+
+**Concern 4: Multi-step writes in `admin-update-account` have no transactional safety**
+
+The handler does 3 sequential writes: update accounts row → update work_locations row → update dir_links row. Partial failure leaves data in an inconsistent state across tabs. **Migration consideration:** Stage 1 schema should design account/work_location/links as relational tables with proper foreign keys. The 3-write sequence becomes one transaction in Postgres.
+
+#### Cron architectural concerns
+
+**Concern: `notification_log` full-scan dedup cost**
+
+The daily cron reads all of `notification_log` (411 rows currently) every morning to check if a notification was already fired today. As `notification_log` grows (it currently grows ~5-15 rows per day), this scan gets linearly slower and consumes more Sheets quota. Will eventually hit R12 (rate limit) on its own. **Migration consideration:** Stage 1 schema design should index `notification_log` by `(date, event_type, dedup_key)` for instant dedup lookups instead of full scans. Or implement notifications with a different pattern entirely (Postgres triggers, event tables, etc.).
+
 ---
 
 ### Stage 1 — Supabase Setup + Schema Design
@@ -156,6 +226,43 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - \`ops_newsfeed\` (in development)
 
 **Estimated effort:** 4-6 sessions. ~2-3 weeks calendar time.
+
+---
+
+### Stage 2a.5 — Migrate image hosting to Supabase Storage
+
+**Why this stage exists:** Discovered during Stage 0 audit of `/api/directory`. The intranet currently hosts images on Google Drive, served through a server-side proxy (`/api/directory?action=drive-image`). This is using Drive as an accidental CDN — purpose-built tools (Supabase Storage) do this better, faster, with less code.
+
+**What gets migrated:**
+- Hero images (HUB `hero_images` tab — currently Drive URLs)
+- Stadium header images (HUB `accounts` tab column H — currently Drive URLs)
+- Team logos (HUB `accounts` tab column I — currently Drive URLs)
+- Map/satellite images (HUB `accounts` tab column R — currently Drive URLs, accessed via `drive-image` proxy)
+- Any other Drive-hosted image references across the codebase
+
+**Why this is between 2a and 2b:**
+- Depends on Supabase being set up (Stage 1)
+- Touches HUB tables already migrated in Stage 2a — image URL columns change from Drive URLs to Supabase Storage URLs
+- Resolves the user-OAuth Drive operation in `drive-image` (only one in codebase, was blocking Task #2)
+- Better to do before Stage 2b so People Portal also benefits from the new image hosting
+
+**Approach:**
+1. Create Supabase Storage buckets:
+   - `kf-heroes` (public) — hero images
+   - `kf-accounts` (public) — stadium headers, team logos, map images
+2. Write migration script: for each Drive URL in HUB tabs, download file, upload to Supabase Storage with structured naming (e.g., `accounts/STL-MO/logo.png`), update sheet column with new URL
+3. Verify all images load via Supabase Storage URLs in dev
+4. Deploy to production
+5. Delete `drive-image` action handler from `/api/directory/route.js`
+6. Update `TeamCard.js` to use direct image URLs (no proxy fetch needed)
+
+**Estimated effort:** 2-3 sessions. ~1-2 weeks calendar time. Most time is migration script + validation, not code changes.
+
+**Side effects:**
+- Removes ~35 lines from `route.js` (drive-image action)
+- Eliminates 2 Drive API calls per card flip (faster perceived load)
+- Closes the last user-OAuth Drive operation in the codebase
+- Sets up the pattern for invoice PDF storage migration later (Stage 2c)
 
 ---
 
