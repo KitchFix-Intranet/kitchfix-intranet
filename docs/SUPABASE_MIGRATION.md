@@ -514,4 +514,23 @@ These supplement the working agreements in \`MIGRATION.md\`:
 
   **DO NOT TOUCH list (confirmed with Kevin):** `incidents`, `preservice_logs`, `preservice_content`, `deep_clean_days`, `ops_newsfeed`, all `HUB__Performance_*` and `COLL__Cycle_Review_*` / `COLL__WOW_*` / `COLL__Scorecards` (KPI Dashboard parked). These read/write paths must remain untouched during audit and migration.
 
-  **Next session opens with:** Stage 0 audit of `src/app/api/people/route.js` — the People Portal route. Bootstrap action is at line 638. Use the same pattern as dashboard cleanup: read what's computed, verify frontend usage, mark dead reads. Don't touch incident-related handlers.
+**Next session opens with:** Stage 0 audit of `src/app/api/people/route.js` — the People Portal route. Bootstrap action is at line 638. Use the same pattern as dashboard cleanup: read what's computed, verify frontend usage, mark dead reads. Don't touch incident-related handlers.
+
+  **AFTERNOON UPDATE (2026-05-14 PM):** Plan executed AND exceeded. Stage 0 audit work continued past morning prediction:
+  - People GET handlers (7 of 8) — all CLEAN
+  - Broken People reports deleted (PR #26, ~621 lines) — Vercel cron was generating broken emails Kevin had filtered to junk
+  - People POST handlers (10 of 14) — 9 CLEAN + 1 deleted (PR #27)
+  - Directory route (9 of 9) — all CLEAN code, but 4 architectural concerns documented (PR #28)
+  - Stage 2a.5 added — image hosting migration to Supabase Storage (PR #28)
+  - Cron daily (5 of 5 categories) — 4 CLEAN + 1 dead block removed (PR #29)
+  - Total: 9 PRs shipped today (#21-#29). Five cleanups, three docs, one strategic pivot.
+
+  **REVISED next-session opening:** Stage 0 audit of `src/app/api/cron/analytics/route.js`. See `docs/HANDOFF_2026-05-14-pm.md` for the concrete next action and full state.
+
+  **Remaining Stage 0 audit queue (after analytics cron):**
+  - `/api/cron/backup-sheets` — quick, added yesterday
+  - `/api/people/leadership-dugout` — light audit only, no deletions (in active dev)
+  - `/api/ops` — DEFERRED to own dedicated session per Kevin's call (largest, most complex)
+  - Stage 0 abstraction layer design — NOT YET STARTED. Audit is necessary but not sufficient for Stage 0 completion.
+
+  **Working agreement adopted today:** When audit finds architectural concerns in code being migrated, document the concerns rather than build Sheets-specific workarounds. We don't invest in code we're throwing away. Concerns become Stage 1 schema design inputs.
