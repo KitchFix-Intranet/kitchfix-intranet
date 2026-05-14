@@ -1399,21 +1399,6 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       return NextResponse.json({ success: true });
     }
 
-if (action === "submit-help") {
-        const { userEmail, message } = body;
-
-        logEventSA({ email: userEmail, category: "people", action: "help_request", page: "/people", detail: { email: userEmail } });
-
-        //       🔔 Notification: help request
-
-      notify("help_request_hr", {
-        submitterEmail: userEmail,
-        message,
-      }).catch(() => {});
-
-      return NextResponse.json({ success: true });
-}
-
     // ─── Global Help FAB — send to k.fietek@kitchfix.com ───
     if (action === "submit-help-global") {
       const { email, message, page } = body;
@@ -1438,24 +1423,6 @@ if (action === "submit-help") {
 `[HELP] Request from ${userDisplay} - ${pageDisplay}`,
         html,
         email || undefined
-      );
-
-      await logNotification(
-        email || "unknown",
-        "email",
-        `[HELP] Help request sent from ${pageDisplay}`,
-        "help_request_global",
-        status,
-        pageDisplay
-      );
-
-      await logNotification(
-        email || "unknown",
-        "email",
-        `[HELP] Help request sent from ${pageDisplay}`,
-        "help_request_global",
-        status,
-        pageDisplay
       );
 
       // Slack notification to #help-submission
