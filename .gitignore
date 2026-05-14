@@ -48,3 +48,6 @@ playwright/.cache/
 
 # Personal handoff notes
 HANDOFF_*.md
+
+# Sentry Config File
+.env.sentry-build-plugin
