@@ -11,7 +11,6 @@ export async function GET(request) {
   }
 
   const token = session.accessToken;
-// token kept for appendRow login log — guard removed for SA reads
 
   // ── Action routing ──
   const { searchParams } = new URL(request.url);
@@ -26,7 +25,7 @@ export async function GET(request) {
       const today = new Date().toISOString().split("T")[0];
 
       // Read posts from HUB
-const postsRaw = await readSheetSA(SHEET_IDS.HUB, "news_posts");
+      const postsRaw = await readSheetSA(SHEET_IDS.HUB, "news_posts");
       const posts = postsRaw.rows
         .filter(r => String(r[11] || "") === "TRUE" && (!r[7] || r[7] >= today))
         .map(r => ({
@@ -46,7 +45,7 @@ const postsRaw = await readSheetSA(SHEET_IDS.HUB, "news_posts");
         .sort((a, b) => (b.publishDate || "").localeCompare(a.publishDate || ""));
 
       // Read interactions from COLLECTION (all users for this is fine — small table)
-const ixRaw = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
+      const ixRaw = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
 
       // Filter to current user
       const interactions = ixRaw.rows
@@ -79,11 +78,11 @@ const ixRaw = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
     // BATCH FETCH (100x Rule: all at once)
     // Each read is wrapped to prevent one failure from killing everything
     // ═══════════════════════════════════════
-const safeRead = async (id, tab) => {
+    const safeRead = async (id, tab) => {
       try {
         return await readSheetSA(id, tab);
       } catch (e) {
-                console.warn(`[Dashboard] Sheet "${tab}" not found or error:`, e.message);
+        console.warn(`[Dashboard] Sheet "${tab}" not found or error:`, e.message);
         return { headers: [], rows: [] };
       }
     };
@@ -91,7 +90,7 @@ const safeRead = async (id, tab) => {
     // Internal fetch for People Portal metrics (uses service account, separate sheet)
     const safePeopleFetch = async () => {
       try {
-       const subs = await readSheetSA(SHEET_IDS.COLLECTION, "submissions");
+        const subs = await readSheetSA(SHEET_IDS.COLLECTION, "submissions");
         const metrics = { pending: 0, rejected: 0, completedTotal: 0 };
         for (const row of subs.rows) {
           if (row.length < 9) continue;
@@ -109,6 +108,9 @@ const safeRead = async (id, tab) => {
       }
     };
 
+    // Batch fetch — 5 HUB reads + 1 personnel_celebrations + 1 people metrics
+    // Previously also read kudos_log, wastenot_log, login_logs but the data was
+    // computed and never rendered. Removed 2026-05-14 to reduce Sheets quota burn.
     const [contactsRaw, accountsRaw, heroRaw, philosophyRaw, periodRaw] =
       await Promise.all([
         safeRead(SHEET_IDS.HUB, "contacts"),
@@ -118,10 +120,7 @@ const safeRead = async (id, tab) => {
         safeRead(SHEET_IDS.HUB, "period_data"),
       ]);
 
-    const [kudosRaw, wasteRaw, logsRaw, celebrationsRaw, peopleMetrics] = await Promise.all([
-      safeRead(SHEET_IDS.COLLECTION, "kudos_log"),
-      safeRead(SHEET_IDS.COLLECTION, "wastenot_log"),
-      safeRead(SHEET_IDS.COLLECTION, "login_logs"),
+    const [celebrationsRaw, peopleMetrics] = await Promise.all([
       safeRead(SHEET_IDS.HUB, "personnel_celebrations"),
       safePeopleFetch(),
     ]);
@@ -132,9 +131,6 @@ const safeRead = async (id, tab) => {
       hero: heroRaw.rows.length,
       philosophy: philosophyRaw.rows.length,
       periods: periodRaw.rows.length,
-      kudos: kudosRaw.rows.length,
-      waste: wasteRaw.rows.length,
-      logs: logsRaw.rows.length,
       celebrations: celebrationsRaw.rows.length,
       people: peopleMetrics,
     });
@@ -178,16 +174,6 @@ const safeRead = async (id, tab) => {
       }
     }
 
-    // Login streak
-    const loginStreak = calculateLoginStreak(logsRaw.rows, email);
-
-    // Log this visit (fire and forget)
-    appendRow(token, SHEET_IDS.COLLECTION, "login_logs", [
-      new Date().toISOString(),
-      new Date().toLocaleDateString(),
-      email,
-    ]).catch((e) => console.warn("Login log failed:", e.message));
-
     const user = {
       name: userName,
       firstName: nameParts[0] || "Chef",
@@ -197,7 +183,6 @@ const safeRead = async (id, tab) => {
       role: userRole,
       teamKey,
       stadiumImg,
-      streak: loginStreak,
       // People metrics from People Portal API (unified submissions sheet)
       peopleMetrics,
     };
@@ -279,130 +264,6 @@ const safeRead = async (id, tab) => {
     console.log("[Dashboard] Ops:", opsMetrics);
 
     // ═══════════════════════════════════════
-    // KUDOS METRICS
-    // row[0]=timestamp, row[4]=recipient, row[10]=submitterEmail, row[11]=status
-    // ═══════════════════════════════════════
-    let kudosMetrics = { companyTotal: 0, personalSent: 0, recent: [] };
-    const recentRecipients = [];
-
-    for (const row of kudosRaw.rows) {
-      if (row.length < 12) continue;
-      const status = String(row[11] || "").toUpperCase().trim();
-      const submitter = String(row[10] || "").toLowerCase().trim();
-      const recipient = String(row[4] || "");
-
-      if (status === "ACTIVE") {
-        kudosMetrics.companyTotal++;
-        if (submitter === email) kudosMetrics.personalSent++;
-        if (recipient) recentRecipients.push(recipient);
-      }
-    }
-
-    const uniqueRecent = [...new Set(recentRecipients.reverse())].slice(0, 3);
-    kudosMetrics.recent = uniqueRecent.map((name) => {
-      const parts = name.split(" ");
-      if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-      return name.substring(0, 2).toUpperCase();
-    });
-
-    console.log("[Dashboard] Kudos:", kudosMetrics);
-
-    // ═══════════════════════════════════════
-    // WASTE METRICS
-    // row[1]=date, row[2]=team, row[3]=lbs
-    // ═══════════════════════════════════════
-    let wasteMetrics = { streak: 0, lbs: 0, status: "red", diff: 99 };
-
-    if (teamKey) {
-      const teamWaste = wasteRaw.rows
-        .filter((r) => r[2] && String(r[2]).startsWith(teamKey))
-        .sort((a, b) => new Date(b[1]) - new Date(a[1]));
-
-      if (teamWaste.length > 0) {
-        const lastRow = teamWaste[0];
-        const lastDate = new Date(lastRow[1]);
-        wasteMetrics.lbs = lastRow[3] || 0;
-
-        const checkDate = new Date(lastDate);
-        checkDate.setHours(0, 0, 0, 0);
-        const todayClean = new Date();
-        todayClean.setHours(0, 0, 0, 0);
-        wasteMetrics.diff = Math.floor((todayClean - checkDate) / (1000 * 60 * 60 * 24));
-
-        if (wasteMetrics.diff <= 1) wasteMetrics.status = "green";
-        else if (wasteMetrics.diff <= 3) wasteMetrics.status = "orange";
-        else wasteMetrics.status = "red";
-
-        // Streak
-        const dateSet = new Set();
-        teamWaste.forEach((r) => {
-          const d = new Date(r[1]);
-          if (!isNaN(d.getTime())) dateSet.add(d.toISOString().split("T")[0]);
-        });
-        const dates = Array.from(dateSet).sort().reverse();
-        let streak = 0;
-        let cursor = new Date();
-        let cursorStr = cursor.toISOString().split("T")[0];
-
-        if (dates[0] !== cursorStr) {
-          cursor.setDate(cursor.getDate() - 1);
-          cursorStr = cursor.toISOString().split("T")[0];
-          if (dates[0] !== cursorStr) {
-            wasteMetrics.streak = 0;
-          } else {
-            for (const dStr of dates) {
-              if (dStr === cursorStr) { streak++; cursor.setDate(cursor.getDate() - 1); cursorStr = cursor.toISOString().split("T")[0]; } else break;
-            }
-            wasteMetrics.streak = streak;
-          }
-        } else {
-          for (const dStr of dates) {
-            if (dStr === cursorStr) { streak++; cursor.setDate(cursor.getDate() - 1); cursorStr = cursor.toISOString().split("T")[0]; } else break;
-          }
-          wasteMetrics.streak = streak;
-        }
-      }
-    }
-
-    console.log("[Dashboard] Waste:", wasteMetrics);
-
-    // ═══════════════════════════════════════
-    // MANAGER OF THE DAY (MOD)
-    // ═══════════════════════════════════════
-    const validContacts = contactsRaw.rows.filter((row) => {
-      const name = String(row[2] || "").trim();
-      return name && name !== "" && name.toUpperCase() !== "TBD";
-    });
-
-    let mod = { name: "Team Directory", role: "Manager of the Day", email: "", image: "", found: false };
-
-    if (validContacts.length > 0) {
-      const seed = Math.floor(today.getTime() / (1000 * 60 * 60 * 24));
-      const index = seed % validContacts.length;
-      const selected = validContacts[index];
-
-      mod.found = true;
-      mod.name = String(selected[2] || "Team Member");
-      mod.role = String(selected[1] || "Chef de Cuisine");
-      mod.email = String(selected[3] || "");
-      const modTeamKey = String(selected[0] || "");
-
-      if (modTeamKey && accountsRaw.headers.length > 0) {
-        const logoIdx = accountsRaw.headers.indexOf("Logo URL");
-        if (logoIdx !== -1) {
-          for (const aRow of accountsRaw.rows) {
-            if (String(aRow[0] || "").trim() === modTeamKey.trim()) {
-              mod.image = String(aRow[logoIdx] || "");
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    console.log("[Dashboard] MOD:", mod.name);
-
-    // ═══════════════════════════════════════
     // CELEBRATIONS (Birthday/Anniversary)
     // ═══════════════════════════════════════
     const todayMonth = new Date().getMonth();
@@ -436,13 +297,10 @@ const safeRead = async (id, tab) => {
       news: [],
       standard: todayStandard,
       ops: opsMetrics,
-      kudos: kudosMetrics,
-      wasteMetrics,
-      mod,
       celebrations,
     };
 
-    console.log("[Dashboard] ✅ Success! Kudos:", kudosMetrics.companyTotal);
+    console.log("[Dashboard] ✅ Success");
     return NextResponse.json(payload);
 
   } catch (error) {
@@ -544,35 +402,4 @@ export async function POST(request) {
     console.error("[Dashboard] POST error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-
-// ═══════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════
-function calculateLoginStreak(rows, email) {
-  const userDates = new Set();
-  const search = email.toLowerCase().trim();
-  for (let i = rows.length - 1; i >= 0; i--) {
-    if (String(rows[i][2] || "").toLowerCase().trim() === search) {
-      const d = new Date(rows[i][1]);
-      if (!isNaN(d.getTime())) userDates.add(d.toISOString().split("T")[0]);
-    }
-  }
-  const dates = Array.from(userDates).sort().reverse();
-  if (dates.length === 0) return 0;
-  let streak = 0;
-  let checkDate = new Date();
-  const todayStr = checkDate.toISOString().split("T")[0];
-  if (dates[0] !== todayStr) {
-    checkDate.setDate(checkDate.getDate() - 1);
-    if (dates[0] !== checkDate.toISOString().split("T")[0]) return 0;
-  }
-  for (const dateStr of dates) {
-    if (dateStr === checkDate.toISOString().split("T")[0]) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else break;
-  }
-  return streak;
 }
