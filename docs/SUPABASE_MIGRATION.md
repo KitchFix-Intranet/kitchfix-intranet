@@ -142,6 +142,11 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - **Verdict:** Route is genuinely clean. 2 small drift items fixed (A1, A2), 1 deprecated-constant clarified inline (B1), 1 GOTCHA captured (C2), 2 captures for follow-up (B2, em-dash sweep).
 - Shipped: PR #35 (this PR)
 
+**People leadership-dugout** (`/api/people/leadership-dugout`) - deferred 2026-05-15
+- Status: very early/raw product, not stable enough for a meaningful Stage 0 audit.
+- Will audit after the route reaches stable v1 status. Auditing in-progress work creates friction with the in-progress work.
+- Not blocking Stage 0 completion; will be folded into Phase 3 migration prep when the feature stabilizes.
+
 #### Directory route architectural concerns (Stage 1 schema design must address)
 
 These are real concerns we chose to document rather than fix in Sheets. They become non-issues post-migration with Postgres features.
@@ -541,11 +546,14 @@ These supplement the working agreements in \`MIGRATION.md\`:
 
   **REVISED next-session opening:** Stage 0 audit of `src/app/api/cron/analytics/route.js`. See `docs/HANDOFF_2026-05-14-pm.md` for the concrete next action and full state.
 
-  **Remaining Stage 0 audit queue (after analytics cron):**
-  - `/api/cron/backup-sheets` - quick, added yesterday
-  - `/api/people/leadership-dugout` - light audit only, no deletions (in active dev)
+  **Remaining Stage 0 audit queue (updated 2026-05-15):**
   - `/api/ops` - DEFERRED to own dedicated session per Kevin's call (largest, most complex)
-  - Stage 0 abstraction layer design - NOT YET STARTED. Audit is necessary but not sufficient for Stage 0 completion.
+
+  **Completed today:**
+  - `/api/cron/backup-sheets` - audit complete (PR #35, 2026-05-15)
+  - `/api/people/leadership-dugout` - deferred until route reaches stable v1 (this PR, 2026-05-15)
+
+  Stage 0 abstraction layer design - NOT YET STARTED. Audit is necessary but not sufficient for Stage 0 completion.
 
   **Working agreement adopted today:** When audit finds architectural concerns in code being migrated, document the concerns rather than build Sheets-specific workarounds. We don't invest in code we're throwing away. Concerns become Stage 1 schema design inputs.
 
