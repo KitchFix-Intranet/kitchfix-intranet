@@ -1,4 +1,4 @@
-# Architecture — KitchFix Ops Hub
+# Architecture - KitchFix Ops Hub
 
 > **Purpose:** The 30,000-ft view of how this system is wired. Read this before touching anything new.
 >
@@ -14,7 +14,7 @@
 | Framework | Next.js 16 (App Router) |
 | UI | React 19 |
 | Auth | NextAuth v5 + Google OAuth |
-| Database | Google Sheets (five spreadsheets — see below) |
+| Database | Google Sheets (five spreadsheets - see below) |
 | File storage | Google Drive |
 | Email | Gmail API |
 | AI | Anthropic Claude API (Invoice OCR, vendor auto-detect, inventory matching) |
@@ -28,18 +28,18 @@
 
 ## The data layer: Five-Pillar Sheet Architecture
 
-The system uses **five Google Sheets**, each with a defined role. The header comment in `src/lib/sheets.js` calls this "Three-Pillar Architecture" but lists five — the comment is out of date. The five pillars are the real model.
+The system uses **five Google Sheets**, each with a defined role. The header comment in `src/lib/sheets.js` calls this "Three-Pillar Architecture" but lists five - the comment is out of date. The five pillars are the real model.
 
 | Pillar | Constant | Role | Access pattern |
 |---|---|---|---|
-| 1. Master Hub | `SHEET_IDS.HUB` | Source of truth — config, accounts, periods, contacts, admins, hero images, notifications, library manifests | Read-only from app |
-| 2. Data Collection | `SHEET_IDS.COLLECTION` | Transaction logs — submissions, drafts, notification log, incidents | Write-heavy |
+| 1. Master Hub | `SHEET_IDS.HUB` | Source of truth - config, accounts, periods, contacts, admins, hero images, notifications, library manifests | Read-only from app |
+| 2. Data Collection | `SHEET_IDS.COLLECTION` | Transaction logs - submissions, drafts, notification log, incidents | Write-heavy |
 | 3. Game Engine | `SHEET_IDS.GAME` | Gamification logic | Write |
 | 4. GL Codes | `SHEET_IDS.GL_CODES` | Chart of accounts for invoice coding | Read-only |
 | 5. AI Line Items | `SHEET_IDS.AI_LINE_ITEMS` | Invoice line items extracted by Claude OCR | Write |
-| (separate) | `SHEET_IDS.INVENTORY` | Inventory schema (8-tab) — items, locations, counts, vendor mapping | Read/write, env-configured |
+| (separate) | `SHEET_IDS.INVENTORY` | Inventory schema (8-tab) - items, locations, counts, vendor mapping | Read/write, env-configured |
 
-When designing a new feature, decide which pillar(s) it touches before writing code. A feature that mixes config (Pillar 1) and transactions (Pillar 2) is normal. A feature that writes to Pillar 1 from the app is wrong — Pillar 1 is configured in Sheets directly.
+When designing a new feature, decide which pillar(s) it touches before writing code. A feature that mixes config (Pillar 1) and transactions (Pillar 2) is normal. A feature that writes to Pillar 1 from the app is wrong - Pillar 1 is configured in Sheets directly.
 
 ---
 
@@ -64,7 +64,7 @@ There are **two authentication paths**, and using the wrong one is a security bu
 
 ### Why this matters
 
-If you use a user's OAuth token for a Drive upload, the upload succeeds only if that user has Drive permission to the target folder. In a multi-user system that's brittle and inconsistent — invoices a chef uploads might land in a different folder than invoices the director uploads. **Use the service account for all Drive/Sheets writes.** This is one of the most important rules in the codebase.
+If you use a user's OAuth token for a Drive upload, the upload succeeds only if that user has Drive permission to the target folder. In a multi-user system that's brittle and inconsistent - invoices a chef uploads might land in a different folder than invoices the director uploads. **Use the service account for all Drive/Sheets writes.** This is one of the most important rules in the codebase.
 
 Functions ending in `SA` (e.g., `readSheetSA`, `appendRowSA`, `updateRangeSA`) use the service account. Functions without that suffix take an `accessToken` and use user OAuth.
 
@@ -101,8 +101,8 @@ Browser
 | Path | Purpose |
 |---|---|
 | `/` (`page.js`) | Home Dashboard |
-| `/people` | People Portal — HR command center |
-| `/ops` | Ops Hub — operational tools |
+| `/people` | People Portal - HR command center |
+| `/ops` | Ops Hub - operational tools |
 | `/directory` | Team Directory |
 | `/service-calendar` | Service Calendar |
 | `/financial` | Financial views |
@@ -120,7 +120,7 @@ Browser
 | `/api/dashboard` | Home Dashboard data | (full route) |
 | `/api/financial` | Financial views | (full route) |
 | `/api/cron/daily` | Daily notification cron | 13:00 UTC daily |
-| `/api/auth/[...nextauth]` | NextAuth handlers | — |
+| `/api/auth/[...nextauth]` | NextAuth handlers | - |
 
 API routes use the **action-dispatch pattern** (one route file, many action handlers). See `CONVENTIONS.md`.
 
@@ -132,9 +132,9 @@ API routes use the **action-dispatch pattern** (one route file, many action hand
 | `auth.js` | NextAuth config, token refresh logic |
 | `drive.js` | Drive uploads (invoice images, stamped PDFs, multi-page invoices) |
 | `gmail.js` | Outbound email (invoice notifications, rejections) |
-| `analytics.js` | Stub — no-op `logEventSA` only (kept while `auth.js` and `incident-reminders` still import it; full removal pending). See PR #34. |
-| `opsUtils.js` | Shared helpers — `parseNum`, `formatCurrency`, `generateId`, `cachedRead`, account/period config, vendor lookup, Slack posting |
-| `incidentActions.js` | Incident Center business logic — ID generation, Drive folders, escalation |
+| `analytics.js` | Stub - no-op `logEventSA` only (kept while `auth.js` and `incident-reminders` still import it; full removal pending). See PR #34. |
+| `opsUtils.js` | Shared helpers - `parseNum`, `formatCurrency`, `generateId`, `cachedRead`, account/period config, vendor lookup, Slack posting |
+| `incidentActions.js` | Incident Center business logic - ID generation, Drive folders, escalation |
 | `incidentSchema.js` | Incident column definitions, types, statuses, regional director mapping |
 | `inventoryActions.js` | Inventory Manager business logic |
 | `invoiceActions.js` | Invoice Capture business logic |
@@ -143,10 +143,10 @@ API routes use the **action-dispatch pattern** (one route file, many action hand
 
 ### Components
 
-Components live in two locations. **This is current state, not necessarily the final rule** — see `CONVENTIONS.md` for guidance:
+Components live in two locations. **This is current state, not necessarily the final rule** - see `CONVENTIONS.md` for guidance:
 
-- `src/components/` — shared and home/directory/people components
-- `src/app/ops/components/` — Ops Hub components (organized into `executive/`, `inventory/`, `inventory-manager/`, `invoice/`, `labor/`, `vendors/`, `shared/`)
+- `src/components/` - shared and home/directory/people components
+- `src/app/ops/components/` - Ops Hub components (organized into `executive/`, `inventory/`, `inventory-manager/`, `invoice/`, `labor/`, `vendors/`, `shared/`)
 
 ---
 
@@ -156,7 +156,7 @@ Components live in two locations. **This is current state, not necessarily the f
 
 | Path | Schedule (UTC) | Purpose |
 |---|---|---|
-| `/api/cron/daily` | `0 13 * * *` (daily 13:00) | Daily notification run — celebrations, news, contact updates |
+| `/api/cron/daily` | `0 13 * * *` (daily 13:00) | Daily notification run - celebrations, news, contact updates |
 | `/api/cron/incident-reminders` | `0 14 * * *` (daily 14:00) | 7-day reminders for open incidents (regional/AVP escalation) |
 | `/api/cron/backup-sheets` | `0 6 * * *` (daily 06:00) | Full backup of HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY to Drive |
 
@@ -194,11 +194,11 @@ Runs nightly. Calls Anthropic Claude in 50-item batches to AI-match invoice line
 
 ---
 
-## Permission tiers (summary — see `DESIGN_SYSTEM_REFERENCE.md` for full breakdown)
+## Permission tiers (summary - see `DESIGN_SYSTEM_REFERENCE.md` for full breakdown)
 
 | Tier | Members | Gates |
 |---|---|---|
-| Authenticated User | Any `@kitchfix.com` Google account | Default — submit forms, see own history |
+| Authenticated User | Any `@kitchfix.com` Google account | Default - submit forms, see own history |
 | Module Admin (Ops Leadership) | 7 emails in `OPS_LEADERSHIP_EMAILS` | Ops admin tabs, Vendor/Labor/Invoice admin |
 | Service Calendar Admin | k.fietek, joe | Service config |
 | People Portal Admin | Sheet-driven (`admins` tab) | PAF approvals, HR-flagged views |
@@ -210,7 +210,7 @@ Runs nightly. Calls Anthropic Claude in 50-item batches to AI-match invoice line
 
 These exist in conversations or specs but are not in the running system:
 
-- **KPI Dashboard** — built prematurely, removed from active architecture. Don't include in data flow diagrams.
-- **Pre-Service Briefing Tool, Culinary Management Platform, Stage 2 Inventory** — specs exist, not built.
-- **Tests** — there are no automated tests. Validation is manual.
-- **Staging environment** — there isn't one. `main` branch = production.
+- **KPI Dashboard** - built prematurely, removed from active architecture. Don't include in data flow diagrams.
+- **Pre-Service Briefing Tool, Culinary Management Platform, Stage 2 Inventory** - specs exist, not built.
+- **Tests** - there are no automated tests. Validation is manual.
+- **Staging environment** - there isn't one. `main` branch = production.

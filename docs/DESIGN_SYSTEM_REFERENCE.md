@@ -1,6 +1,6 @@
-# Design System Reference — KitchFix Ops Hub
+# Design System Reference - KitchFix Ops Hub
 
-> **Purpose:** Single source of truth for tokens, palette, roles, scales, and system facts. Used by humans coding solo and by AI assistants doing design review. When this disagrees with the actual repo, the repo wins — but the disagreement should be flagged and reconciled.
+> **Purpose:** Single source of truth for tokens, palette, roles, scales, and system facts. Used by humans coding solo and by AI assistants doing design review. When this disagrees with the actual repo, the repo wins - but the disagreement should be flagged and reconciled.
 >
 > **Last verified:** 2026-05-05
 > **Verified against:** `globals.css`, `src/app/api/ops/route.js`, `src/app/service-calendar/`, `src/app/api/people/route.js`, `package.json`
@@ -13,12 +13,12 @@
 
 - **Framework:** Next.js 16, React 19
 - **Auth:** NextAuth + Google OAuth
-- **Backend:** Google Sheets (five-pillar architecture — see `ARCHITECTURE.md`)
-- **Drive/Sheets writes:** Service account `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com` — never user OAuth
+- **Backend:** Google Sheets (five-pillar architecture - see `ARCHITECTURE.md`)
+- **Drive/Sheets writes:** Service account `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com` - never user OAuth
 - **AI:** Anthropic Claude API (Invoice OCR, Smart Inventory matching)
 - **Hosting:** Vercel Pro
 - **Crons:** Vercel cron + Railway (inventory nightly)
-- **CSS:** Vanilla CSS with module-prefixed classes (primary). Tailwind v4 is imported in `globals.css` as utility backstop only — do not expand its usage.
+- **CSS:** Vanilla CSS with module-prefixed classes (primary). Tailwind v4 is imported in `globals.css` as utility backstop only - do not expand its usage.
 
 ---
 
@@ -30,8 +30,8 @@ This is the only valid navy. Two existing values in the codebase are **drift to 
 
 | Location | Current value | Action |
 |---|---|---|
-| `globals.css` `--kf-navy` | `#0f3057` | **Drift** — update to `#153968` |
-| Ops Hub dark navy | `#0b1d35` | **Drift** — update to `#153968`, OR document as deliberate dark variant if a darker navy is genuinely needed |
+| `globals.css` `--kf-navy` | `#0f3057` | **Drift** - update to `#153968` |
+| Ops Hub dark navy | `#0b1d35` | **Drift** - update to `#153968`, OR document as deliberate dark variant if a darker navy is genuinely needed |
 
 When proposing CSS, always use `#153968` for navy unless a different value is explicitly called out. Flag any non-canonical navy as P2 polish.
 
@@ -49,7 +49,7 @@ When proposing CSS, always use `#153968` for navy unless a different value is ex
 
 ### CSS variables (from `globals.css`)
 
-css--kf-navy: #0f3057    /* DRIFT — should be #153968 */
+css--kf-navy: #0f3057    /* DRIFT - should be #153968 */
 --kf-blue: #2563eb
 --kf-gold: #fbbf24
 --kf-green: #10b981
@@ -73,11 +73,11 @@ css--kf-navy: #0f3057    /* DRIFT — should be #153968 */
 
 **Mulish is demoted from screen.** All screen UI uses Inter regardless of density mode. Mulish remains canonical for the print/PDF pipeline (Pre-Service Materials) only. If you find Mulish on a screen surface, that's drift to fix.
 
-Type scale lives inside the density mode tables below — there is no single screen type scale. See "Density modes."
+Type scale lives inside the density mode tables below - there is no single screen type scale. See "Density modes."
 
 ---
 
-## Module CSS prefixes (strict isolation — never cross-contaminate)
+## Module CSS prefixes (strict isolation - never cross-contaminate)
 
 | Module | Prefix | Theme |
 |---|---|---|
@@ -85,14 +85,14 @@ Type scale lives inside the density mode tables below — there is no single scr
 | Vendor Portal | `oh-vp-` | Ops Hub navy/amber |
 | Inventory Manager | `oh-inv-mgmt-` | Ops Hub navy/amber |
 | Service Calendar | `sc-` | Ops Hub navy/amber |
-| Team Directory | (varies — Cardinals red theme) | Cardinals red |
+| Team Directory | (varies - Cardinals red theme) | Cardinals red |
 | News Feed | `kf-news-` | Brand neutral |
 
 ---
 
 ## Spacing scale
 
-Spacing values live inside the density mode tables below. Both modes can pull wider values (32 / 48 / 64) when hero/section breathing room is needed — the per-mode tables show the common case, not a ceiling.
+Spacing values live inside the density mode tables below. Both modes can pull wider values (32 / 48 / 64) when hero/section breathing room is needed - the per-mode tables show the common case, not a ceiling.
 
 ---
 
@@ -129,7 +129,7 @@ Radius values live inside the density mode tables below. Modal and pill values a
 
 ## Z-index
 
-**Current state in repo: chaotic.** 20+ different values across the codebase, no enforced scale. Common clusters: `1`, `2`, `10`, `100`, `1000`, `9999`. Z-index normalization is a known **P2 system-wide cleanup** — log once, not per module.
+**Current state in repo: chaotic.** 20+ different values across the codebase, no enforced scale. Common clusters: `1`, `2`, `10`, `100`, `1000`, `9999`. Z-index normalization is a known **P2 system-wide cleanup** - log once, not per module.
 
 ### Target scale (use for all new work)
 
@@ -143,7 +143,7 @@ Radius values live inside the density mode tables below. Modal and pill values a
 
 ---
 
-## Density modes — Density and Comfortable
+## Density modes - Density and Comfortable
 
 The Ops Hub has two density modes. Every module declares one as its default; individual surfaces inside a module can override.
 
@@ -151,13 +151,13 @@ The Ops Hub has two density modes. Every module declares one as its default; ind
 
 > *Is this surface for triage/scanning/comparison (Density) or for single-task work that should forgive interruption (Comfortable)? When unsure, default to the module's mode.*
 
-**Density** — director and admin surfaces. Tight type, tight spacing, table-friendly, more information per viewport. Calibrate against Linear and Ramp.
+**Density** - director and admin surfaces. Tight type, tight spacing, table-friendly, more information per viewport. Calibrate against Linear and Ramp.
 
-**Comfortable** — floor user, HR, onboarding, single-task forms. Generous type, generous spacing, forgiving padding, scaffolding for stress and interruption. Calibrate against Notion onboarding and Toast/Square POS entry.
+**Comfortable** - floor user, HR, onboarding, single-task forms. Generous type, generous spacing, forgiving padding, scaffolding for stress and interruption. Calibrate against Notion onboarding and Toast/Square POS entry.
 
 ### Mobile override (non-negotiable)
 
-**Any viewport <1024px renders Comfortable tokens, regardless of module assignment.** Floor-first overrides density on phones — the cooler-test wins.
+**Any viewport <1024px renders Comfortable tokens, regardless of module assignment.** Floor-first overrides density on phones - the cooler-test wins.
 
 Implementation: media-query gate in each module's CSS, or a `data-density` attribute on the page root that flips at `min-width: 1024px`.
 
@@ -197,7 +197,7 @@ The general rule: **lists and queues take density; forms and entry take comforta
 
 ### Token tables
 
-#### Type scale — Inter only
+#### Type scale - Inter only
 
 | Role | Density | Comfortable |
 |---|---|---|
@@ -207,8 +207,8 @@ The general rule: **lists and queues take density; forms and entry take comforta
 | Body emphasis / h3 | 16 | 18 |
 | h2 / section head | 20 | 24 |
 | h1 / hero | 24 | 32 |
-| Line height — body | 1.3 | 1.5 |
-| Line height — headings | 1.15 | 1.2 |
+| Line height - body | 1.3 | 1.5 |
+| Line height - headings | 1.15 | 1.2 |
 
 11px is reserved for table column headers and metadata labels. Never body.
 
@@ -291,7 +291,7 @@ css[data-density="compact"] {
 --pad-card-hero: 32px;
 }@media (max-width: 1023px) {
 [data-density="compact"] {
-/* mobile override — fall back to comfortable tokens */
+/* mobile override - fall back to comfortable tokens */
 }
 }
 
@@ -310,7 +310,7 @@ The mobile override block can either redefine all variables to match comfortable
 
 ### Migration status
 
-Lucide is **not yet installed**. Current icons are inline SVG (~70 files) plus emoji ad hoc (`WeatherBadge.js`, `NewsFeed.js`, celebrations strip). Migration is **opportunistic**, not sweeping — when a module is being touched, swap its inline SVGs to Lucide as part of that work.
+Lucide is **not yet installed**. Current icons are inline SVG (~70 files) plus emoji ad hoc (`WeatherBadge.js`, `NewsFeed.js`, celebrations strip). Migration is **opportunistic**, not sweeping - when a module is being touched, swap its inline SVGs to Lucide as part of that work.
 
 ### Emoji policy
 
@@ -322,7 +322,7 @@ Lucide is **not yet installed**. Current icons are inline SVG (~70 files) plus e
 
 - **Photography:** Team Directory account cards only. No stock photography in ops tools.
 - **Illustration:** Minimal. Empty states use icon + text, not illustrations.
-- **Pre-Service Materials (print):** Exception — has its own illustration system using Mulish font.
+- **Pre-Service Materials (print):** Exception - has its own illustration system using Mulish font.
 
 ### Logos
 
@@ -336,10 +336,10 @@ The system uses Google OAuth via NextAuth. Middleware redirects unauthenticated 
 
 ### Permission tiers (breadth: widest → narrowest)
 
-**1. Authenticated User** — any `@kitchfix.com` Google account
+**1. Authenticated User** - any `@kitchfix.com` Google account
 - Read most views, submit forms, see own history, cancel/withdraw own requests
 
-**2. Module Admins** — allowlists vary by tool
+**2. Module Admins** - allowlists vary by tool
 
 | Allowlist | Defined in | Members | Gates |
 |---|---|---|---|
@@ -347,13 +347,13 @@ The system uses Google OAuth via NextAuth. Middleware redirects unauthenticated 
 | Service Calendar admin | `src/app/service-calendar/ServiceCalendar.js`, `ServiceConfig.js` | k.fietek, joe | Service config, calendar admin actions |
 | People Portal admin | Sheet-driven (`admins` tab in HUB sheet, HR sub-flag in column C) | Configured in sheet | PAF approvals, HR-sensitive views (HR flag) |
 
-**3. System Admin** — `k.fietek@kitchfix.com` only
+**3. System Admin** - `k.fietek@kitchfix.com` only
 - Analytics dashboard (`src/app/api/analytics/route.js`)
 
-**Service Account** — `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com`
+**Service Account** - `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com`
 - Not a user role. All Drive/Sheets writes route through this. Never use user OAuth tokens for writes.
 
-When designing admin surfaces, **always check the actual allowlist before assuming**. Don't hardcode emails for People Portal — that's sheet-driven.
+When designing admin surfaces, **always check the actual allowlist before assuming**. Don't hardcode emails for People Portal - that's sheet-driven.
 
 ---
 
@@ -369,7 +369,7 @@ When designing admin surfaces, **always check the actual allowlist before assumi
 
 - **iOS Safari** (last 2 major versions)
 - **Android Chrome** (last 2 major versions)
-- iPhone SE (375×667) is the **narrow case test** — works there → works
+- iPhone SE (375×667) is the **narrow case test** - works there → works
 - Tablets: not optimized; should not break
 
 ### Walk-in cooler reality
@@ -378,7 +378,7 @@ Worst-case wifi, 4G fallback, gloved fingers, screen glare. Performance and cont
 
 ---
 
-## Data volumes (rough — confirm when sharper data matters)
+## Data volumes (rough - confirm when sharper data matters)
 
 | Surface | Volume |
 |---|---|
@@ -404,7 +404,7 @@ Patterns that work for 12 rows must also work for 1,200. If a pattern only works
 | **Ramp / Brex** | Financial clarity, audit-grade tables, document-centric. Invoice Capture queue, AP queue, GL coding, Analytics. |
 | **Resy host stand / OpenTable manager** | Operational pace, pre-service mindset. Homestand/season views. |
 
-A recommendation should be locatable: *"This is closer to Toast than Linear — wrong for a director."* If a pattern doesn't fit any anchor, ask whether it belongs in the Ops Hub at all.
+A recommendation should be locatable: *"This is closer to Toast than Linear - wrong for a director."* If a pattern doesn't fit any anchor, ask whether it belongs in the Ops Hub at all.
 
 ---
 
@@ -430,5 +430,5 @@ When a design choice could be reinforced by Slack notification quality, call it 
 
 *Add additions to system reference here with date and a one-line note on what prompted the change.*
 
-- **2026-05-05** — Initial reference documented. Tokens, palette, roles, scales captured.
-- **2026-05-05** — Dual-mode density rule added (Density / Comfortable). Inter locked as canonical screen typeface; Mulish demoted to print/PDF only. Type scale, spacing scale, radius, and card padding now live inside per-mode tables. Mobile override (<1024px = comfortable) added as non-negotiable rule. Module assignments and surface-level overrides documented. Reference anchors retuned to mode-specific guidance.
+- **2026-05-05** - Initial reference documented. Tokens, palette, roles, scales captured.
+- **2026-05-05** - Dual-mode density rule added (Density / Comfortable). Inter locked as canonical screen typeface; Mulish demoted to print/PDF only. Type scale, spacing scale, radius, and card padding now live inside per-mode tables. Mobile override (<1024px = comfortable) added as non-negotiable rule. Module assignments and surface-level overrides documented. Reference anchors retuned to mode-specific guidance.

@@ -1,10 +1,10 @@
-# Supabase Migration Plan — KitchFix Ops Hub
+# Supabase Migration Plan - KitchFix Ops Hub
 
 > **Status: Committed.** Decision made 2026-05-14.
 > **Last updated:** 2026-05-14
 > **Owner:** Kevin Fietek
 > **Estimated duration:** 3-5 months calendar time, depending on weekly capacity.
-> **Approach:** Strangler fig — staged migration by data category, not big-bang cutover.
+> **Approach:** Strangler fig - staged migration by data category, not big-bang cutover.
 
 ---
 
@@ -38,9 +38,9 @@
 
 **What this decision does NOT commit to:**
 - A specific timeline (5 months is an estimate, not a deadline)
-- An all-or-nothing migration — some operator-edited config may stay on Sheets
-- A specific auth strategy (NextAuth vs Supabase Auth is an open question — see below)
-- Specific Postgres features (Row Level Security, Edge Functions, Realtime, Storage — to be evaluated stage by stage)
+- An all-or-nothing migration - some operator-edited config may stay on Sheets
+- A specific auth strategy (NextAuth vs Supabase Auth is an open question - see below)
+- Specific Postgres features (Row Level Security, Edge Functions, Realtime, Storage - to be evaluated stage by stage)
 
 ---
 
@@ -55,14 +55,14 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 **Rejected alternatives:**
 
 - **Big-bang cutover.** Stop all feature work, rewrite everything, deploy in one weekend. Too risky for a solo dev; one unforeseen issue blocks production for everyone.
-- **Hybrid permanent state.** Keep both backends forever. Hybrid is the worst of both worlds — twice the integration code, twice the things that break, ongoing cognitive overhead. Most teams that try hybrid regret it within 12 months. We commit to a single destination.
+- **Hybrid permanent state.** Keep both backends forever. Hybrid is the worst of both worlds - twice the integration code, twice the things that break, ongoing cognitive overhead. Most teams that try hybrid regret it within 12 months. We commit to a single destination.
 - **Pre-clean Sheets first as a separate step.** Cleaning is intrinsic to the migration. Doing it twice (once in Sheets, then again mapping to Postgres) is wasted effort. The audit and the schema design happen together.
 
 ---
 
 ## The Stages
 
-### Stage 0 — Audit + Abstraction Layer (current stage)
+### Stage 0 - Audit + Abstraction Layer (current stage)
 
 **Goal:** Know what data exists, what's actually used, and create a clean data-access boundary in code.
 
@@ -84,9 +84,9 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 
 **Estimated effort:** 4-8 sessions of focused work. ~3-4 weeks calendar time.
 
-#### Audit findings — accumulated as audits complete
+#### Audit findings - accumulated as audits complete
 
-**Dashboard route** (`/api/dashboard`) — completed 2026-05-14
+**Dashboard route** (`/api/dashboard`) - completed 2026-05-14
 - 3 dead Sheets reads removed (kudos_log, wastenot_log, login_logs)
 - 1 dead Sheets write removed (login_logs visit logging)
 - 3 dead metric computations removed (kudos, waste, MOD)
@@ -95,35 +95,35 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - Dashboard load time: ~2.3s → ~860ms (3x faster)
 - Shipped: PR #23
 
-**People Portal GET handlers** (`/api/people`, GET) — completed 2026-05-14
+**People Portal GET handlers** (`/api/people`, GET) - completed 2026-05-14
 - 7 of 8 actions audited (`incident-list` skipped per DO NOT TOUCH)
 - All 7 audited: CLEAN
-- Note: `bootstrap.counts.completedTotal` computed but unused (server-side dead computation, not a Sheets read — left in place, will be cleaned by abstraction layer redesign)
+- Note: `bootstrap.counts.completedTotal` computed but unused (server-side dead computation, not a Sheets read - left in place, will be cleaned by abstraction layer redesign)
 - Note: People Portal route serves both `/people` page AND global TopNav (notifications endpoint cross-cutting)
 
-**People Portal POST handlers** (`/api/people`, POST) — completed 2026-05-14
+**People Portal POST handlers** (`/api/people`, POST) - completed 2026-05-14
 - 10 of 14 actions audited (4 incident-related skipped)
 - 9 of 10 CLEAN; 1 deleted
-- Deleted: `submit-help` action + `HelpModal.js` component (~104 lines total) — replaced by global HelpFAB, never cleaned up
+- Deleted: `submit-help` action + `HelpModal.js` component (~104 lines total) - replaced by global HelpFAB, never cleaned up
 - Bug fixed: duplicate `await logNotification` in `submit-help-global` (was logging every help request twice)
 - Shipped: PR #27
 
-**Broken People reports** (`/api/people?action=generate-report` + `src/lib/peopleReport.js`) — completed 2026-05-14
+**Broken People reports** (`/api/people?action=generate-report` + `src/lib/peopleReport.js`) - completed 2026-05-14
 - 1 broken feature deleted entirely (~621 lines)
 - Was generating broken weekly/monthly emails via Vercel cron, ignored by recipient (filtered to junk folder)
 - 2 cron entries removed from `vercel.json`
-- Bug root causes (em-dash encoding, period date math) confirmed but not fixed — feature deleted instead per disciplined "don't fix broken stuff we're about to migrate" call
+- Bug root causes (em-dash encoding, period date math) confirmed but not fixed - feature deleted instead per disciplined "don't fix broken stuff we're about to migrate" call
 - Shipped: PR #26
 
-**Directory route** (`/api/directory`) — completed 2026-05-14
+**Directory route** (`/api/directory`) - completed 2026-05-14
 - 9 of 9 actions audited
-- All 9 CLEAN — zero dead code
+- All 9 CLEAN - zero dead code
 - BUT: 4 architectural concerns surfaced (documented below)
 - NOT shipped: discipline call to document concerns instead of building Sheets-specific workarounds for code we're about to rewrite in Postgres
 
-**Cron daily** (`/api/cron/daily`) — completed 2026-05-14
+**Cron daily** (`/api/cron/daily`) - completed 2026-05-14
 - 4 of 5 categories CLEAN, 1 dead block
-- Dead: news notifications block reading from non-existent `home_news` tab — never fired since deployment
+- Dead: news notifications block reading from non-existent `home_news` tab - never fired since deployment
 - Active categories preserved: inventory countdowns (3d/2d/1d/today), inventory past-due, birthdays, anniversaries
 - Removed 1 of 5 daily reads, ~17 lines deleted
 - Shipped: PR pending (#28)
@@ -148,7 +148,7 @@ These are real concerns we chose to document rather than fix in Sheets. They bec
 
 **Concern 1: User OAuth used for write operations** (affects 6 handlers: `admin-update-account`, `admin-add-account`, `admin-deactivate-account`, `admin-reactivate-account`, `admin-update-contacts`, `admin-update-heroes`)
 
-The directory POST handlers use `getSheetsClient(token)` — user's OAuth token — to write to Sheets. Every other write path in the codebase uses the service account. This means every admin user must have edit permission on the HUB spreadsheet for these to work. **Migration consideration:** Stage 1 schema should design these as service-account writes from the start.
+The directory POST handlers use `getSheetsClient(token)` - user's OAuth token - to write to Sheets. Every other write path in the codebase uses the service account. This means every admin user must have edit permission on the HUB spreadsheet for these to work. **Migration consideration:** Stage 1 schema should design these as service-account writes from the start.
 
 **Concern 2: Destructive write pattern in `admin-update-contacts`**
 
@@ -170,7 +170,7 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 1 — Supabase Setup + Schema Design
+### Stage 1 - Supabase Setup + Schema Design
 
 **Goal:** Supabase project provisioned. Postgres schema designed and deployed. No code touching it yet.
 
@@ -182,7 +182,7 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
   - Option B: Migrate auth to Supabase Auth (more unified, more migration risk)
   - Recommendation pending until Stage 0 complete
 - [ ] Design the Postgres schema based on the audit findings:
-  - One table per current sheet "concept" (not 1:1 with tabs — clean as you go)
+  - One table per current sheet "concept" (not 1:1 with tabs - clean as you go)
   - Real foreign keys
   - Real indexes
   - Real data type enforcement
@@ -197,7 +197,7 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 2a — Migrate Read-Only HUB Tabs
+### Stage 2a - Migrate Read-Only HUB Tabs
 
 **Why first:** These tabs change slowly. Code reads them on every page load. Biggest quota win, lowest risk.
 
@@ -243,27 +243,27 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 2a.5 — Migrate image hosting to Supabase Storage
+### Stage 2a.5 - Migrate image hosting to Supabase Storage
 
-**Why this stage exists:** Discovered during Stage 0 audit of `/api/directory`. The intranet currently hosts images on Google Drive, served through a server-side proxy (`/api/directory?action=drive-image`). This is using Drive as an accidental CDN — purpose-built tools (Supabase Storage) do this better, faster, with less code.
+**Why this stage exists:** Discovered during Stage 0 audit of `/api/directory`. The intranet currently hosts images on Google Drive, served through a server-side proxy (`/api/directory?action=drive-image`). This is using Drive as an accidental CDN - purpose-built tools (Supabase Storage) do this better, faster, with less code.
 
 **What gets migrated:**
-- Hero images (HUB `hero_images` tab — currently Drive URLs)
-- Stadium header images (HUB `accounts` tab column H — currently Drive URLs)
-- Team logos (HUB `accounts` tab column I — currently Drive URLs)
-- Map/satellite images (HUB `accounts` tab column R — currently Drive URLs, accessed via `drive-image` proxy)
+- Hero images (HUB `hero_images` tab - currently Drive URLs)
+- Stadium header images (HUB `accounts` tab column H - currently Drive URLs)
+- Team logos (HUB `accounts` tab column I - currently Drive URLs)
+- Map/satellite images (HUB `accounts` tab column R - currently Drive URLs, accessed via `drive-image` proxy)
 - Any other Drive-hosted image references across the codebase
 
 **Why this is between 2a and 2b:**
 - Depends on Supabase being set up (Stage 1)
-- Touches HUB tables already migrated in Stage 2a — image URL columns change from Drive URLs to Supabase Storage URLs
+- Touches HUB tables already migrated in Stage 2a - image URL columns change from Drive URLs to Supabase Storage URLs
 - Resolves the user-OAuth Drive operation in `drive-image` (only one in codebase, was blocking Task #2)
 - Better to do before Stage 2b so People Portal also benefits from the new image hosting
 
 **Approach:**
 1. Create Supabase Storage buckets:
-   - `kf-heroes` (public) — hero images
-   - `kf-accounts` (public) — stadium headers, team logos, map images
+   - `kf-heroes` (public) - hero images
+   - `kf-accounts` (public) - stadium headers, team logos, map images
 2. Write migration script: for each Drive URL in HUB tabs, download file, upload to Supabase Storage with structured naming (e.g., `accounts/STL-MO/logo.png`), update sheet column with new URL
 3. Verify all images load via Supabase Storage URLs in dev
 4. Deploy to production
@@ -280,18 +280,18 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 2b — Migrate People Portal Data
+### Stage 2b - Migrate People Portal Data
 
-**Why second:** Mostly forms. Submissions/drafts/notifications/notification_log are write-heavy but contained — they don't sprawl into other features. Good practice for transactional migration before the harder Ops Hub work.
+**Why second:** Mostly forms. Submissions/drafts/notifications/notification_log are write-heavy but contained - they don't sprawl into other features. Good practice for transactional migration before the harder Ops Hub work.
 
 **Tabs in scope:**
 - \`submissions\` (96 rows, active)
 - \`drafts\` (17 rows, active)
 - \`notification_log\` (411 rows, active)
-- \`employee_roster\` (99 rows, read-only via Rippling sync — keep in mind)
+- \`employee_roster\` (99 rows, read-only via Rippling sync - keep in mind)
 
 **Approach:**
-- Schema design accounts for the People Portal's specific JSON payload pattern (currently stored as JSON in a Sheet column — Postgres has native JSONB which is better)
+- Schema design accounts for the People Portal's specific JSON payload pattern (currently stored as JSON in a Sheet column - Postgres has native JSONB which is better)
 - Dual-write during transition: write to both Sheets and Postgres
 - Migrate reads to Postgres first
 - Verify, then cut writes to Postgres-only
@@ -305,13 +305,13 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 2c — Migrate Ops Hub Data
+### Stage 2c - Migrate Ops Hub Data
 
-**Why third:** Most complex, most volume, most risk. By this stage we've already done a HUB migration and a People migration — we know our patterns.
+**Why third:** Most complex, most volume, most risk. By this stage we've already done a HUB migration and a People migration - we know our patterns.
 
 **Tabs in scope:**
 - \`inventory_submissions\` (28 rows, active)
-- \`invoice_submissions_26\` (386 rows, active — high volume)
+- \`invoice_submissions_26\` (386 rows, active - high volume)
 - \`labor_plans\` (16 rows, active)
 - \`labor_sold_revenue\` (8 rows, active)
 - \`service_audit_log_26\` (8 rows, active)
@@ -320,7 +320,7 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 - Schema designed carefully for invoice OCR pipeline (currently stuffs JSON into sheet columns)
 - Dual-write during transition
 - Carefully sequence: read migration first, then writes
-- Invoice upload pipeline gets attention — it's the highest-impact write path
+- Invoice upload pipeline gets attention - it's the highest-impact write path
 
 **Tabs explicitly NOT in this stage (in development, don't touch):**
 - \`deep_clean_days\` (in development)
@@ -330,7 +330,7 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 2d — Migrate Service Calendar Data
+### Stage 2d - Migrate Service Calendar Data
 
 **Why last:** Service Calendar is a relatively new module. Smaller surface than Ops Hub but still transactional.
 
@@ -342,18 +342,18 @@ The daily cron reads all of `notification_log` (411 rows currently) every mornin
 
 ---
 
-### Stage 3 — Decommission Sheets dependencies
+### Stage 3 - Decommission Sheets dependencies
 
 **Goal:** Sheets retained only for what genuinely benefits from operator editing. Most reads/writes happen against Postgres.
 
 **Likely Sheets retainees:**
-- Configuration tabs that operators actively edit (vendor master, schedules, accounts) — if we don't build admin UIs
+- Configuration tabs that operators actively edit (vendor master, schedules, accounts) - if we don't build admin UIs
 - Reporting exports for finance teams
 
 **Likely Sheets deletions:**
 - All transactional tabs (submissions, invoices, inventory, labor)
 - All log tabs (notification_log, etc.)
-- All empty/dead tabs (kudos_log, wastenot_log, etc. — already removed from reads in PR #23)
+- All empty/dead tabs (kudos_log, wastenot_log, etc. - already removed from reads in PR #23)
 
 **Estimated effort:** 2-3 sessions. ~2 weeks calendar time.
 
@@ -386,16 +386,16 @@ This work happens **before** any Supabase code is written. The abstraction is th
 
 Today's commitment reshapes the original Phase 1-5 plan:
 
-### Phase 1 — Foundation (still active)
+### Phase 1 - Foundation (still active)
 
 **Status: ~85% complete, finish what's started.**
 
 | Task | Status | New consideration |
 |---|---|---|
-| #1 Tests | ✅ Closed (PR #11-13) | Keep — tests prevent migration regressions |
+| #1 Tests | ✅ Closed (PR #11-13) | Keep - tests prevent migration regressions |
 | #2 OAuth scope reduction | Open | **DEFER** until post-migration. Touches auth, unrelated to data layer. |
-| #3-9 Various security/infra | ✅ Closed | Keep — independent of data layer |
-| #10 Observability | ✅ Phase A closed (Sentry) | **Phase B observability instrumentation CANCELLED** — R12 goes away post-migration. Don't build for a backend that's leaving. |
+| #3-9 Various security/infra | ✅ Closed | Keep - independent of data layer |
+| #10 Observability | ✅ Phase A closed (Sentry) | **Phase B observability instrumentation CANCELLED** - R12 goes away post-migration. Don't build for a backend that's leaving. |
 | #11-13 Branch protection, backups, deps | ✅ Closed | Keep |
 | #14 Branch protection | ✅ Closed | Keep |
 
@@ -412,7 +412,7 @@ Today's commitment reshapes the original Phase 1-5 plan:
 - Post-migration, the entire Drive access pattern may change (Supabase Storage instead)
 - Fixing it now would require directory route refactoring that may be wasted post-migration
 
-### Phase 2 — TypeScript conversion
+### Phase 2 - TypeScript conversion
 
 **Status: DEFERRED.**
 
@@ -420,19 +420,19 @@ Reasoning: Converting \`.js\` to \`.ts\` for code that's about to be partially r
 
 Exception: any new files written during the migration should be TypeScript from day one if it doesn't slow us down. Don't backport, but don't add to the JS pile either.
 
-### Phase 3 — Refactor + architecture cleanup
+### Phase 3 - Refactor + architecture cleanup
 
 **Status: ABSORBED into Stage 0 of this migration.**
 
 The data-access layer refactor *is* Phase 3 for the parts of the code that matter. The rest of Phase 3 (component cleanup, routing improvements, etc.) defers to post-migration.
 
-### Phase 4 — Database migration
+### Phase 4 - Database migration
 
 **Status: SUPERSEDED by this doc.**
 
 This plan replaces Phase 4. It's pulled forward and scoped more concretely.
 
-### Phase 5 — Multi-tenancy / SaaS
+### Phase 5 - Multi-tenancy / SaaS
 
 **Status: DEFERRED, but informed by this migration.**
 
@@ -463,7 +463,7 @@ These continue normally because they don't depend on the data layer:
 - Branch protection
 - All security/auth work that's not OAuth-scope-specific
 - Bug fixes in active features
-- Pre-Service Briefing Tool (specced, can be built — but build against the abstraction layer once it exists, so it survives migration)
+- Pre-Service Briefing Tool (specced, can be built - but build against the abstraction layer once it exists, so it survives migration)
 
 ## What's cancelled
 
@@ -514,60 +514,60 @@ These supplement the working agreements in \`MIGRATION.md\`:
 
 ## Captain's Log
 
-- **2026-05-14** — Migration committed. Strangler fig approach chosen over big-bang. Stages: 0 (audit + abstraction), 1 (Supabase setup), 2a (read-only HUB), 2b (People Portal), 2c (Ops Hub), 2d (Service Calendar), 3 (decommission). Dashboard cleanup PR #23 reclassified as Stage 0 Step 1. Most of Phase 2-5 of the original `MIGRATION.md` plan deferred or absorbed.
+- **2026-05-14** - Migration committed. Strangler fig approach chosen over big-bang. Stages: 0 (audit + abstraction), 1 (Supabase setup), 2a (read-only HUB), 2b (People Portal), 2c (Ops Hub), 2d (Service Calendar), 3 (decommission). Dashboard cleanup PR #23 reclassified as Stage 0 Step 1. Most of Phase 2-5 of the original `MIGRATION.md` plan deferred or absorbed.
 
-  **How the decision arose:** Today's planned work was Sentry Phase A install + Phase B observability scoping + Task #2 OAuth scope reduction. Shipped Sentry (PR #21) and its docs (PR #22) on plan. Then noticed during local dashboard testing that the `/api/dashboard` route was reading kudos/waste/logs/celebrations on every page load — none of which the current dashboard UI displays. Audit confirmed: ~3 dead Sheets reads + 1 dead write + 3 dead metric computations + dead helper function per dashboard load. PR #23 surgically removed them (~200 lines deleted, 3x faster dashboard load, ~500 fewer Sheets calls/day for 25 users).
+  **How the decision arose:** Today's planned work was Sentry Phase A install + Phase B observability scoping + Task #2 OAuth scope reduction. Shipped Sentry (PR #21) and its docs (PR #22) on plan. Then noticed during local dashboard testing that the `/api/dashboard` route was reading kudos/waste/logs/celebrations on every page load - none of which the current dashboard UI displays. Audit confirmed: ~3 dead Sheets reads + 1 dead write + 3 dead metric computations + dead helper function per dashboard load. PR #23 surgically removed them (~200 lines deleted, 3x faster dashboard load, ~500 fewer Sheets calls/day for 25 users).
 
-  **What the discovery surfaced:** This pattern (legacy backend reads that survived UI rewrites) is likely systemic across all routes — `people/route.js` has 25+ action handlers and ~2165 lines, `ops/route.js` has multiple bootstrap actions with 13+ reads. Started a full-codebase audit; uploaded HUB + COLLECTION xlsx files for ground-truth verification. Discovered that several core "feature" tabs (kudos_log, paf_log, incidents at the time, kudos_bonus_log, labor_logs, invoice_logs) have 0 data rows — features exist in code but never adopted, or are still in development.
+  **What the discovery surfaced:** This pattern (legacy backend reads that survived UI rewrites) is likely systemic across all routes - `people/route.js` has 25+ action handlers and ~2165 lines, `ops/route.js` has multiple bootstrap actions with 13+ reads. Started a full-codebase audit; uploaded HUB + COLLECTION xlsx files for ground-truth verification. Discovered that several core "feature" tabs (kudos_log, paf_log, incidents at the time, kudos_bonus_log, labor_logs, invoice_logs) have 0 data rows - features exist in code but never adopted, or are still in development.
 
   **The strategic conversation:** Kevin raised that the Sheets-as-backend architecture is a learning-while-building artifact accumulating cluttered tabs, and that the rate-limit incident yesterday + today's dead-code discovery indicate it may be time to think about Supabase. Discussed: (a) honest tradeoffs of staying on Sheets vs migrating, (b) hybrid as a rejected option, (c) cleanup-first vs migrate-with-cleanup-integrated, (d) strangler fig as the right pattern. Decision: commit to migration, staged by data category and risk. Pre-clean-Sheets-first rejected as a separate step because cleanup is intrinsic to migration.
 
-  **What this changes:** Phase B observability instrumentation officially CANCELLED — the R12 problem dissolves post-migration; not worth instrumenting a backend that's leaving. Task #2 (OAuth scope reduction) DEFERRED to post-migration. Phase 2 (TypeScript), most of Phase 3, Phase 5 (multi-tenancy) all deferred. Pre-Service Briefing Tool can still ship during migration if built against the abstraction layer.
+  **What this changes:** Phase B observability instrumentation officially CANCELLED - the R12 problem dissolves post-migration; not worth instrumenting a backend that's leaving. Task #2 (OAuth scope reduction) DEFERRED to post-migration. Phase 2 (TypeScript), most of Phase 3, Phase 5 (multi-tenancy) all deferred. Pre-Service Briefing Tool can still ship during migration if built against the abstraction layer.
 
   **Captured ground truth:** Sheet inventory doc (`docs/SHEET_INVENTORY_2026-05-14.md`) records which tabs are populated vs empty vs in-development. Future sessions should NOT re-download xlsx files to rediscover this.
 
   **DO NOT TOUCH list (confirmed with Kevin):** `incidents`, `preservice_logs`, `preservice_content`, `deep_clean_days`, `ops_newsfeed`, all `HUB__Performance_*` and `COLL__Cycle_Review_*` / `COLL__WOW_*` / `COLL__Scorecards` (KPI Dashboard parked). These read/write paths must remain untouched during audit and migration.
 
-**Next session opens with:** Stage 0 audit of `src/app/api/people/route.js` — the People Portal route. Bootstrap action is at line 638. Use the same pattern as dashboard cleanup: read what's computed, verify frontend usage, mark dead reads. Don't touch incident-related handlers.
+**Next session opens with:** Stage 0 audit of `src/app/api/people/route.js` - the People Portal route. Bootstrap action is at line 638. Use the same pattern as dashboard cleanup: read what's computed, verify frontend usage, mark dead reads. Don't touch incident-related handlers.
 
   **AFTERNOON UPDATE (2026-05-14 PM):** Plan executed AND exceeded. Stage 0 audit work continued past morning prediction:
-  - People GET handlers (7 of 8) — all CLEAN
-  - Broken People reports deleted (PR #26, ~621 lines) — Vercel cron was generating broken emails Kevin had filtered to junk
-  - People POST handlers (10 of 14) — 9 CLEAN + 1 deleted (PR #27)
-  - Directory route (9 of 9) — all CLEAN code, but 4 architectural concerns documented (PR #28)
-  - Stage 2a.5 added — image hosting migration to Supabase Storage (PR #28)
-  - Cron daily (5 of 5 categories) — 4 CLEAN + 1 dead block removed (PR #29)
+  - People GET handlers (7 of 8) - all CLEAN
+  - Broken People reports deleted (PR #26, ~621 lines) - Vercel cron was generating broken emails Kevin had filtered to junk
+  - People POST handlers (10 of 14) - 9 CLEAN + 1 deleted (PR #27)
+  - Directory route (9 of 9) - all CLEAN code, but 4 architectural concerns documented (PR #28)
+  - Stage 2a.5 added - image hosting migration to Supabase Storage (PR #28)
+  - Cron daily (5 of 5 categories) - 4 CLEAN + 1 dead block removed (PR #29)
   - Total: 9 PRs shipped today (#21-#29). Five cleanups, three docs, one strategic pivot.
 
   **REVISED next-session opening:** Stage 0 audit of `src/app/api/cron/analytics/route.js`. See `docs/HANDOFF_2026-05-14-pm.md` for the concrete next action and full state.
 
   **Remaining Stage 0 audit queue (after analytics cron):**
-  - `/api/cron/backup-sheets` — quick, added yesterday
-  - `/api/people/leadership-dugout` — light audit only, no deletions (in active dev)
-  - `/api/ops` — DEFERRED to own dedicated session per Kevin's call (largest, most complex)
-  - Stage 0 abstraction layer design — NOT YET STARTED. Audit is necessary but not sufficient for Stage 0 completion.
+  - `/api/cron/backup-sheets` - quick, added yesterday
+  - `/api/people/leadership-dugout` - light audit only, no deletions (in active dev)
+  - `/api/ops` - DEFERRED to own dedicated session per Kevin's call (largest, most complex)
+  - Stage 0 abstraction layer design - NOT YET STARTED. Audit is necessary but not sufficient for Stage 0 completion.
 
   **Working agreement adopted today:** When audit finds architectural concerns in code being migrated, document the concerns rather than build Sheets-specific workarounds. We don't invest in code we're throwing away. Concerns become Stage 1 schema design inputs.
 
-- **2026-05-15** — Analytics module fully decommissioned in a 3-PR sequence (PRs #31/#32/#33). The analytics sheet had hit Google's 10M-cell limit on 2026-05-12; writes were gated off behind `ANALYTICS_ENABLED` (default off). Stage 0 audit of `/api/cron/analytics` (the next-session opener queued above) concluded that the entire module had no plausible product use case: the read surface (`/analytics` dashboard) was visible only to k.fietek and was never used in steady state, and the write surface was already dormant. Decision: delete the module rather than rebuild on Postgres.
+- **2026-05-15** - Analytics module fully decommissioned in a 3-PR sequence (PRs #31/#32/#33). The analytics sheet had hit Google's 10M-cell limit on 2026-05-12; writes were gated off behind `ANALYTICS_ENABLED` (default off). Stage 0 audit of `/api/cron/analytics` (the next-session opener queued above) concluded that the entire module had no plausible product use case: the read surface (`/analytics` dashboard) was visible only to k.fietek and was never used in steady state, and the write surface was already dormant. Decision: delete the module rather than rebuild on Postgres.
 
   **Teardown shape (3 PRs over one session, ~2,408 lines deleted):**
-  - **PR #31 — surface deletion (2,294 lines).** Deleted `src/app/analytics/page.js` (509), `src/app/analytics/analytics.css` (517), `src/app/api/analytics/route.js` (297), `src/app/api/cron/analytics/route.js` (959). Removed the cron entry from `vercel.json` and the email-gated Analytics link from `TopNav.js`. Bundled as one PR to avoid the 404 window from splitting the cron + dashboard removals.
-  - **PR #32 — callsite cleanup (114 lines).** Stripped every `logEvent`/`logEventSA`/`logHealthSA` import and call from 8 route files: `dashboard`, `directory`, `service-calendar`, `ops`, `ops/inventory` (dead import), `people`, `people/leadership-dugout`, `cron/daily`. `auth.js` and `cron/incident-reminders` were excluded — `auth.js` is in the danger zone and `incident-reminders` was in its post-incident-feature stabilization window.
-  - **PR #33 — lib stub + doc sweep (this PR).** `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Once `auth.js` and `incident-reminders` are safe to edit, the file gets deleted entirely. `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` removed from `docs/ENV_VARS.md`; corresponding env vars must be removed from Vercel manually. Doc sweep covered `ENV_VARS.md`, `ARCHITECTURE.md` (6 analytics refs + 2 stale cron rows from PR #26 drift + 2 missing rows added for cron-table coherence with `vercel.json`), `MIGRATION.md` (Phase 3 commentary rewritten), and `RUNBOOK.md` (section retitled "Analytics module deleted").
+  - **PR #31 - surface deletion (2,294 lines).** Deleted `src/app/analytics/page.js` (509), `src/app/analytics/analytics.css` (517), `src/app/api/analytics/route.js` (297), `src/app/api/cron/analytics/route.js` (959). Removed the cron entry from `vercel.json` and the email-gated Analytics link from `TopNav.js`. Bundled as one PR to avoid the 404 window from splitting the cron + dashboard removals.
+  - **PR #32 - callsite cleanup (114 lines).** Stripped every `logEvent`/`logEventSA`/`logHealthSA` import and call from 8 route files: `dashboard`, `directory`, `service-calendar`, `ops`, `ops/inventory` (dead import), `people`, `people/leadership-dugout`, `cron/daily`. `auth.js` and `cron/incident-reminders` were excluded - `auth.js` is in the danger zone and `incident-reminders` was in its post-incident-feature stabilization window.
+  - **PR #33 - lib stub + doc sweep (this PR).** `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Once `auth.js` and `incident-reminders` are safe to edit, the file gets deleted entirely. `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` removed from `docs/ENV_VARS.md`; corresponding env vars must be removed from Vercel manually. Doc sweep covered `ENV_VARS.md`, `ARCHITECTURE.md` (6 analytics refs + 2 stale cron rows from PR #26 drift + 2 missing rows added for cron-table coherence with `vercel.json`), `MIGRATION.md` (Phase 3 commentary rewritten), and `RUNBOOK.md` (section retitled "Analytics module deleted").
 
   **The strategic frame for future analytics:** Custom analytics is not currently planned. Errors go to Sentry, traffic to Vercel Analytics, operational data to Supabase dashboards once Phase 3 ships. If custom dashboards become necessary later, they will be built on Postgres queries against real usage data, not preemptively as instrumentation across the codebase.
 
-  **Stage 0 audit also surfaced 195 pre-existing lint issues across the codebase.** Worth a dedicated lint-cleanup pass post-migration. Particularly notable: `react-hooks/set-state-in-effect` violations in `TopNav.js:270` (setEmail inside an effect body) and `WowPlanPreDay1.js` (form state initialization inside an effect) — these are real React anti-patterns that could cause subtle bugs, not just style issues. Not actionable now (out of Stage 0 scope), but flagged here so it doesn't get lost.
+  **Stage 0 audit also surfaced 195 pre-existing lint issues across the codebase.** Worth a dedicated lint-cleanup pass post-migration. Particularly notable: `react-hooks/set-state-in-effect` violations in `TopNav.js:270` (setEmail inside an effect body) and `WowPlanPreDay1.js` (form state initialization inside an effect) - these are real React anti-patterns that could cause subtle bugs, not just style issues. Not actionable now (out of Stage 0 scope), but flagged here so it doesn't get lost.
 
   **What Stage 0 audit queue looks like after this:** `/api/cron/analytics` is closed (deleted). Remaining: `/api/cron/backup-sheets` (quick), `/api/people/leadership-dugout` (light audit only, in active dev), `/api/ops` (deferred to own session). Then Stage 0 abstraction layer design.
 
-- **2026-05-15 (post-PR-33-merge)** — Three backlog items surfaced during the analytics teardown, captured here so they don't get lost:
+- **2026-05-15 (post-PR-33-merge)** - Three backlog items surfaced during the analytics teardown, captured here so they don't get lost:
 
-  1. **e2e CI is hardcoded against production, not the PR preview.** `.github/workflows/e2e.yml` sets `PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app` in the test step's env. Every PR's Playwright run exercises prod, authenticated via a cached `PLAYWRIGHT_AUTH_STATE_B64` secret — meaning PR-side regressions can't actually be caught by this CI (the PR's code never runs in the test) and any prod flake blocks merges. Surfaced when PR #33's CI failed on `tests/vendors/card-detail.spec.ts` against a slow prod redirect that had nothing to do with PR 3's code (which only touched `src/lib/analytics.js` and docs). Re-run passed on retry. **Fix:** point `PLAYWRIGHT_BASE_URL` at Vercel's preview URL via the GitHub deployment event. Estimated ~30 min; slot as a quick win or defer.
+  1. **e2e CI is hardcoded against production, not the PR preview.** `.github/workflows/e2e.yml` sets `PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app` in the test step's env. Every PR's Playwright run exercises prod, authenticated via a cached `PLAYWRIGHT_AUTH_STATE_B64` secret - meaning PR-side regressions can't actually be caught by this CI (the PR's code never runs in the test) and any prod flake blocks merges. Surfaced when PR #33's CI failed on `tests/vendors/card-detail.spec.ts` against a slow prod redirect that had nothing to do with PR 3's code (which only touched `src/lib/analytics.js` and docs). Re-run passed on retry. **Fix:** point `PLAYWRIGHT_BASE_URL` at Vercel's preview URL via the GitHub deployment event. Estimated ~30 min; slot as a quick win or defer.
 
   2. **`/ops` redirect takes 3.3s.** Curl probes during PR #33 diagnosis: `/login` returns 200 in 290ms; `/` redirects in 117ms; `/ops` redirects in **3.3 seconds**. The 307 is correct behavior (auth-gated route → /login for unauth users), but a 3-second redirect is anomalous. Candidates: Vercel cold start, middleware overhead (note the `middleware.ts` → `proxy.ts` deprecation warning still firing in build output, possibly related), or a slow auth check on the request path. User-perceptible latency on the most-trafficked route. Worth investigating in a future session.
 
-  3. **Playwright 15s element-visibility timeouts may be insufficient when prod is slow.** The flaky failure in (1) was likely a 15s `toBeVisible` timeout firing during one of the slow-redirect moments from (2). The test suite currently has 3 tests; if it grows, revisit wait strategies (network idle, more specific selectors) or bump per-step timeouts. Lower priority — largely masked by (1), since preview deploys are more predictable than prod.
+  3. **Playwright 15s element-visibility timeouts may be insufficient when prod is slow.** The flaky failure in (1) was likely a 15s `toBeVisible` timeout firing during one of the slow-redirect moments from (2). The test suite currently has 3 tests; if it grows, revisit wait strategies (network idle, more specific selectors) or bump per-step timeouts. Lower priority - largely masked by (1), since preview deploys are more predictable than prod.
 
   **All three are paused, not actively worked.** They sit in the post-migration backlog. (1) is genuinely small if you want to slot it earlier.

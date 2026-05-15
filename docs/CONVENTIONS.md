@@ -1,4 +1,4 @@
-# Conventions — KitchFix Ops Hub
+# Conventions - KitchFix Ops Hub
 
 > **Purpose:** The non-obvious rules a contributor (human or AI) must follow to stay consistent with the existing codebase. If you're tempted to invent a new pattern, check here first.
 >
@@ -55,11 +55,11 @@ Functions ending in `SA` use the service account. Functions taking `accessToken`
 `src/lib/{thing}.js`
 
 One file per concern. Examples that work:
-- `sheets.js` — all Sheets API calls
-- `drive.js` — all Drive operations
-- `opsUtils.js` — shared utilities (parseNum, formatCurrency, account/period helpers, Slack posting)
-- `{module}Actions.js` — business logic for a single module (`incidentActions.js`, `invoiceActions.js`, `inventoryActions.js`)
-- `{module}Schema.js` — column definitions, type constants, status flows (`incidentSchema.js`)
+- `sheets.js` - all Sheets API calls
+- `drive.js` - all Drive operations
+- `opsUtils.js` - shared utilities (parseNum, formatCurrency, account/period helpers, Slack posting)
+- `{module}Actions.js` - business logic for a single module (`incidentActions.js`, `invoiceActions.js`, `inventoryActions.js`)
+- `{module}Schema.js` - column definitions, type constants, status flows (`incidentSchema.js`)
 
 ### API routes
 `src/app/api/{module}/route.js`
@@ -68,19 +68,19 @@ One route file per module. Sub-routes only when a sub-domain warrants its own fi
 
 ### Components
 
-**Current state — there are two patterns.** This is documented drift, not necessarily a final rule:
+**Current state - there are two patterns.** This is documented drift, not necessarily a final rule:
 
-- `src/components/{module}/Component.js` — used for People Portal, Team Directory, Home Dashboard, shared components (TopNav, ProfileModal, WeatherBadge, HelpFAB)
-- `src/app/{module}/components/...` — used only for Ops Hub (`src/app/ops/components/{tool}/Component.js`)
+- `src/components/{module}/Component.js` - used for People Portal, Team Directory, Home Dashboard, shared components (TopNav, ProfileModal, WeatherBadge, HelpFAB)
+- `src/app/{module}/components/...` - used only for Ops Hub (`src/app/ops/components/{tool}/Component.js`)
 
 **Default rule going forward:** put new components in `src/components/{module}/` unless they are tightly coupled to a single Ops Hub tool, in which case follow the existing `src/app/ops/components/{tool}/` pattern.
 
 If you have time, consolidating to one location is a P2 polish target.
 
 ### CSS
-`src/app/{module}/{module}.css` — module-scoped CSS file with prefix-isolated class names.
-`src/app/ops/css/ops-{tool}.css` — Ops Hub sub-tool CSS files.
-`src/app/globals.css` — root variables, fonts, and Tailwind import. Don't add module-specific styles here.
+`src/app/{module}/{module}.css` - module-scoped CSS file with prefix-isolated class names.
+`src/app/ops/css/ops-{tool}.css` - Ops Hub sub-tool CSS files.
+`src/app/globals.css` - root variables, fonts, and Tailwind import. Don't add module-specific styles here.
 
 ---
 
@@ -94,7 +94,7 @@ If you have time, consolidating to one location is a P2 polish target.
 | Vendor Portal | `oh-vp-` | `src/app/ops/css/ops-vendor.css` |
 | Inventory Manager | `oh-inv-mgmt-` | `src/app/ops/css/ops-inv-mgmt.css` |
 | Inventory (legacy) | `oh-inv-` | `src/app/ops/css/ops-inventory.css` |
-| Invoice Capture | `oh-inv-` (overlapping — be careful) | `src/app/ops/css/ops-invoice.css` |
+| Invoice Capture | `oh-inv-` (overlapping - be careful) | `src/app/ops/css/ops-invoice.css` |
 | Labor / Season Planner | `oh-sp-` | `src/app/ops/css/ops-labor.css` |
 | Executive | `oh-exec-` | `src/app/ops/css/ops-executive.css` |
 | Service Calendar | `sc-` | `src/app/service-calendar/ops-sc.css` |
@@ -122,11 +122,11 @@ The Ops Hub has a layer of utility classes that are shared across modules by des
 | `oh-history-`, `oh-hx-` | History view utilities |
 | `oh-spinner` | Loading state utility |
 
-When adding a new shared utility, prefix it `oh-{utility}-` and document it here. Don't reach for a module prefix from another module — promote the pattern to a utility instead.
+When adding a new shared utility, prefix it `oh-{utility}-` and document it here. Don't reach for a module prefix from another module - promote the pattern to a utility instead.
 
 ### Known prefix issues (drift to be aware of)
 
-- **`oh-inv-` collision.** Used by both legacy Inventory and Invoice Capture. New work in either module should be careful — class names can win specificity battles unexpectedly. The newer Inventory Manager uses `oh-inv-mgmt-` to avoid this.
+- **`oh-inv-` collision.** Used by both legacy Inventory and Invoice Capture. New work in either module should be careful - class names can win specificity battles unexpectedly. The newer Inventory Manager uses `oh-inv-mgmt-` to avoid this.
 - **Inventory Manager partial adoption.** Only `InventoryManager.js` and `QuickTour.js` use `oh-inv-mgmt-`. Other files in the module (notably `LocationSetup.js`) still use the legacy `oh-inv-` prefix. New files in the Inventory Manager folder should use `oh-inv-mgmt-`; legacy files migrate opportunistically when touched.
 
 ---
@@ -170,7 +170,7 @@ Always anchor to `range: "tabname!A:A"` to prevent column-offset bugs when a tab
 
 ---
 
-## Shared utilities — never reinvent
+## Shared utilities - never reinvent
 
 These live in `src/lib/opsUtils.js`. **Never redefine them locally.**
 
@@ -250,13 +250,13 @@ When adding a cron, register the schedule in `vercel.json` and the auth check in
 ### Never define function components inside another component's render body
 
 ```javascript
-// WRONG — causes infinite render loops
+// WRONG - causes infinite render loops
 function Parent() {
   const Inner = () => <div>...</div>;
   return <Inner />;
 }
 
-// RIGHT — use a single content variable with if/else
+// RIGHT - use a single content variable with if/else
 function Parent() {
   let content;
   if (condition) content = <div>A</div>;
@@ -298,5 +298,5 @@ The People Portal pattern: the wizard has local React state, but partial drafts 
 
 *Add additions to conventions here with date and a one-line note on what prompted the change.*
 
-- **2026-05-05** — Initial conventions captured: action-dispatch APIs, file/component placement, CSS prefixes, sheet column conventions, shared utilities, analytics taxonomy, naming, React patterns.
-- **2026-05-05** — CSS prefix table corrected and expanded after audit. Labor prefix corrected from `oh-lbr-` to actual `oh-sp-`. Shared utility prefix layer documented (`oh-tool-`, `oh-btn-`, `oh-modal-`, etc.) — these are deliberately cross-module. Inventory Manager partial-adoption drift documented.
+- **2026-05-05** - Initial conventions captured: action-dispatch APIs, file/component placement, CSS prefixes, sheet column conventions, shared utilities, analytics taxonomy, naming, React patterns.
+- **2026-05-05** - CSS prefix table corrected and expanded after audit. Labor prefix corrected from `oh-lbr-` to actual `oh-sp-`. Shared utility prefix layer documented (`oh-tool-`, `oh-btn-`, `oh-modal-`, etc.) - these are deliberately cross-module. Inventory Manager partial-adoption drift documented.
