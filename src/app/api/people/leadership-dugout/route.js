@@ -25,7 +25,6 @@ import {
 } from "@/lib/wowPlanActions";
 import { logAudit, postPerformanceSlack } from "@/lib/performanceActions";
 import { renderWowPlanPdf } from "@/lib/performancePdf";
-import { logEventSA } from "@/lib/analytics";
 
 // ════════════════════════════════════════════════════════════════════════════
 // PEOPLE PORTAL · LEADERSHIP DUGOUT API
@@ -55,13 +54,6 @@ export async function POST(request) {
 
     // ─── bootstrap ────────────────────────────────────────────────────────
     if (action === "bootstrap") {
-      logEventSA({
-        email: actualEmail,
-        category: "leadership-dugout",
-        action: "page_view",
-        page: "/people/leadership-dugout",
-      });
-
       const [chain, leadersReviewed, leadersOverseen, sysViewer] = await Promise.all([
         getChainForLeader(email),
         getLeadersReviewedBy(email),

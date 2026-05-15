@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { readSheet, readSheetSA, appendRow, updateCell, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/analytics";
 
 export async function GET(request) {
   const session = await auth();
@@ -71,8 +70,6 @@ export async function GET(request) {
   try {
     const email = session.user?.email?.toLowerCase().trim();
     console.log("[Dashboard] Loading for:", email);
-
-    logEvent(token, { email, category: "home", action: "page_view", page: "/" });
 
     // ═══════════════════════════════════════
     // BATCH FETCH (100x Rule: all at once)
