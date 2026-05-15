@@ -105,7 +105,6 @@ Browser
 | `/ops` | Ops Hub — operational tools |
 | `/directory` | Team Directory |
 | `/service-calendar` | Service Calendar |
-| `/analytics` | Analytics dashboard (admin-only) |
 | `/financial` | Financial views |
 | `/login` | Login page |
 
@@ -118,11 +117,9 @@ Browser
 | `/api/ops/inventory` | Inventory Manager | (sub-route) |
 | `/api/directory` | Team Directory | ~9 actions |
 | `/api/service-calendar` | Service Calendar | (full route) |
-| `/api/analytics` | Analytics | Admin-gated |
 | `/api/dashboard` | Home Dashboard data | (full route) |
 | `/api/financial` | Financial views | (full route) |
 | `/api/cron/daily` | Daily notification cron | 13:00 UTC daily |
-| `/api/cron/analytics` | Analytics aggregation | 14:00 UTC daily |
 | `/api/auth/[...nextauth]` | NextAuth handlers | — |
 
 API routes use the **action-dispatch pattern** (one route file, many action handlers). See `CONVENTIONS.md`.
@@ -135,7 +132,7 @@ API routes use the **action-dispatch pattern** (one route file, many action hand
 | `auth.js` | NextAuth config, token refresh logic |
 | `drive.js` | Drive uploads (invoice images, stamped PDFs, multi-page invoices) |
 | `gmail.js` | Outbound email (invoice notifications, rejections) |
-| `analytics.js` | Event logging — `logEvent()` (user) and `logEventSA()` (service account) |
+| `analytics.js` | Stub — no-op `logEventSA` only (kept while `auth.js` and `incident-reminders` still import it; full removal pending). See PR #34. |
 | `opsUtils.js` | Shared helpers — `parseNum`, `formatCurrency`, `generateId`, `cachedRead`, account/period config, vendor lookup, Slack posting |
 | `incidentActions.js` | Incident Center business logic — ID generation, Drive folders, escalation |
 | `incidentSchema.js` | Incident column definitions, types, statuses, regional director mapping |
@@ -160,9 +157,8 @@ Components live in two locations. **This is current state, not necessarily the f
 | Path | Schedule (UTC) | Purpose |
 |---|---|---|
 | `/api/cron/daily` | `0 13 * * *` (daily 13:00) | Daily notification run — celebrations, news, contact updates |
-| `/api/cron/analytics` | `0 14 * * *` (daily 14:00) | Aggregate analytics events |
-| `/api/people?action=generate-report&period=weekly` | `0 13 * * 1` (Mondays 13:00) | Weekly People Portal email |
-| `/api/people?action=generate-report&period=monthly` | `0 13 1 * *` (1st of month 13:00) | Monthly People Portal email |
+| `/api/cron/incident-reminders` | `0 14 * * *` (daily 14:00) | 7-day reminders for open incidents (regional/AVP escalation) |
+| `/api/cron/backup-sheets` | `0 6 * * *` (daily 06:00) | Full backup of HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY to Drive |
 
 All cron routes require `Authorization: Bearer ${CRON_SECRET}` header. Vercel sends this automatically for configured crons.
 
@@ -206,7 +202,6 @@ Runs nightly. Calls Anthropic Claude in 50-item batches to AI-match invoice line
 | Module Admin (Ops Leadership) | 7 emails in `OPS_LEADERSHIP_EMAILS` | Ops admin tabs, Vendor/Labor/Invoice admin |
 | Service Calendar Admin | k.fietek, joe | Service config |
 | People Portal Admin | Sheet-driven (`admins` tab) | PAF approvals, HR-flagged views |
-| System Admin | k.fietek only | Analytics dashboard |
 | Service Account | App identity, not a person | All Sheets/Drive writes |
 
 ---

@@ -86,7 +86,7 @@ These describe the dance. Both sides keep the discipline; neither side waives it
 
 1. **Multi-tenancy: YES.** Every transactional Postgres table gets `tenant_id` from day one. KitchFix = `tenant_id 1`. Preserves SaaS optionality without forcing the spinout.
 2. **Naming: Option A.** Suite is "KitchFix Ops". `/ops` URL prefix dissolves in Phase 5 into top-level routes (`/season`, `/inventory`, `/invoices`, `/vendors`).
-3. **Module migration order: dependency-ordered, NOT Hub-ordered.** Sequence: Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → Analytics → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory (stays on Sheets) → Financial → Dashboard (last, pure aggregator).
+3. **Module migration order: dependency-ordered, NOT Hub-ordered.** Sequence: Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory (stays on Sheets) → Financial → Dashboard (last, pure aggregator). *(Analytics removed from sequence 2026-05-15 — module decommissioned in PRs #31/#32/#33; see Phase 3 commentary below and captain's log.)*
 4. **Three architectural axes:** Supabase Postgres + TypeScript + shadcn/ui + Tailwind v4. All three eventually.
 5. **Migration discipline:** One axis per module per pass. Never combine two axes in a single change.
 6. **Tests-first:** Phase 1 builds the Playwright test suite before any architectural changes.
@@ -115,7 +115,7 @@ All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Clau
 | 1 | Auth boundary cleanup (`route.js` hand-rolled JWT → service account) | Open | — | Needs quiet Saturday — touches sign-in |
 | 2 | OAuth scope reduction (`drive` → `drive.file`) | Open | — | Needs quiet Saturday — touches sign-in |
 | 3 | Turbopack opt-in | ✅ | #4 | Shipped May 11. Verified still default in 16.2.6. |
-| 4 | Analytics sheet rotation/bridge | ✅ | #8 | Closed May 12. Feature-flagged via `ANALYTICS_ENABLED`. Full Postgres rebuild deferred to Phase 3. |
+| 4 | Analytics sheet rotation/bridge | ✅ | #8 | Closed May 12. Feature-flagged via `ANALYTICS_ENABLED`. Module subsequently deleted in full 2026-05-15 (PRs #31/#32/#33); Phase 3 Postgres rebuild cancelled. See Phase 3 commentary. |
 | 5 | Dependency pinning evaluation | ✅ | #15 | Closed May 13. All 9 caret-range deps pinned to exact versions. |
 | 6 | lucide-react upgrade | ✅ | — | Closed May 11 as no-op (1.14.0 already current) |
 | 7 | Daily sheet backup cron | ✅ | #14 | Closed May 13. Runs 06:00 UTC, 5 sheets, restore drilled and verified. |
@@ -126,7 +126,7 @@ All tasks closed: private repo, Vercel previews, ANTHROPIC_API_KEY hygiene, Clau
 | 12 | Playwright test harness | ✅ | #9 | Closed May 12. 3 read-only tests. Expansion to 30–40 tests is future work. |
 | 13 | GitHub Actions CI | ✅ | #11 | Closed May 13. Runs against production on every PR. |
 | 14 | Branch protection on main | ✅ | — | Closed 2026-05-13 end-of-session. Required GitHub Pro upgrade ($4/mo) for private-repo enforcement. Configured: PR required + Playwright CI pass + branch up-to-date + restrict deletions + block force pushes. Active. |
-| 15 | Analytics taxonomy cleanup | Deferred | — | Moved to Phase 3 as part of analytics redesign |
+| 15 | Analytics taxonomy cleanup | Cancelled | — | Obsolete — analytics module deleted 2026-05-15. No taxonomy to clean. |
 | 16 | Fix `.claude/settings.json` npm publish rule | Open | — | 5-min fix |
 | 17 | Migrate `middleware.ts` → `proxy.ts` | Open | — | Deprecation warning still firing after 16.2.6 bump. Unknown effort. May block Task 9 (`/api/health`). |
 
@@ -178,7 +178,7 @@ Special handling for **Incidents** module (R9): side-effect entanglement (Drive 
 
 **Directory STAYS ON SHEETS** — read-only config, low write volume.
 
-**Analytics REBUILDS on Postgres** — existing 28 instrumentation points reused; only write target changes. `ANALYTICS_ENABLED` flips back on once Postgres writes wired.
+**Analytics REMOVED** — Analytics removed in PRs #31/#32/#33 (2026-05-15). Analytics will be addressed post-migration via Sentry (error tracking), Vercel Analytics (traffic), and Supabase dashboards (operational data). A custom analytics surface is not currently planned. If custom dashboards become necessary, they will be built on Postgres queries from real usage data, not preemptively.
 
 **Exit criterion:** All modules except Directory on Postgres. Sheets writes decommissioned. Multi-tenant boundaries in place.
 
@@ -299,6 +299,7 @@ Documented but explicitly NOT part of the migration arc. Lives in the broader pr
 - **2026-05-13 (push day)** — PRs #14–#18 shipped. Daily backup cron live + restore drilled. Next.js 16.2.6 security bump (19 advisories closed). All deps pinned. `SHEET_IDS.INVENTORY` footgun closed. `supportsAllDrives` audit verified clean. 3 new gotchas + restore runbook documented. R12 identified (rate limits). Phase 1 went from 46% to 77% closure. **Two near-misses of committing to main due to silent `git checkout -b` failures — recovery procedure now documented in GOTCHAS.**
 - **2026-05-13 (doc creation)** — This living doc replaced the static migration plan. Session-start checklist and working agreements added. All Phase 1 status reflects end-of-day state.
 - **2026-05-13 (end-of-day, post-observability scoping)** — Task #14 closed (branch protection on main, required GitHub Pro upgrade $4/mo). Observability scoping done — chose Sentry alone (not Better Stack) for an internal-tool scale, free Developer tier ($0/mo). R12 refined to reflect SA also affected. Phase 1 closure: 11 of 13 tasks. One Phase 1 gate remains (observability install — next session). Sentry account creation is the literal next concrete action.
+- **2026-05-15** — Analytics module fully decommissioned (PRs #31/#32/#33). Stage 0 audit of `/api/cron/analytics` concluded the module had no plausible product use case post-migration. Decision change recorded in three places: (1) module migration order at #3 above — "Analytics" removed from the Phase 3 sequence with inline date note; (2) Task #4 row in Phase 1 task table — closed-status note updated to record full deletion 2026-05-15; (3) Phase 3 commentary section — "Analytics REBUILDS on Postgres" replaced with "Analytics REMOVED" framing (Sentry for errors, Vercel Analytics for traffic, Supabase dashboards for operational data; custom analytics not currently planned). Task #15 (Analytics taxonomy cleanup) marked Cancelled — obsolete. Full teardown narrative in `docs/SUPABASE_MIGRATION.md → 2026-05-15` captain's log entry.
 
 ---
 

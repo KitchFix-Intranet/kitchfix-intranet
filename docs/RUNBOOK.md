@@ -136,17 +136,11 @@ curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
 
 (Replace `$CRON_SECRET` with the value from Vercel env vars.)
 
-## Analytics writes are feature-flagged off
+## Analytics module deleted
 
-As of 2026-05-12 the analytics sheet hit Google's 10M-cell limit and writes were silently failing. The analytics system is intact but **dormant**: every write function in `src/lib/analytics.js` no-ops unless `ANALYTICS_ENABLED === "true"`. Reads still work — the `/analytics` dashboard renders historical data — and the analytics cron still runs, but skips its Slack recaps when disabled.
+The custom analytics system was decommissioned 2026-05-15 in PRs #31/#32/#33. There is no `/analytics` dashboard, no analytics cron, and no `logEvent*` writes anywhere in production code. `src/lib/analytics.js` exists only as a no-op stub (kept while `src/lib/auth.js` and `src/app/api/cron/incident-reminders/route.js` still import `logEventSA`; touching those files is out of scope for now).
 
-To re-enable writes (debugging only — **production will still hit the cell limit**, so this is not a fix):
-
-1. Set `ANALYTICS_ENABLED=true` in Vercel (Production + Preview + Development) and in local `.env.local`.
-2. Redeploy (env var changes don't take effect until the next deploy).
-3. To disable again: set it back to `false` (or remove it — absent is treated as off) and redeploy.
-
-The real fix is the Phase 3 Postgres rebuild of analytics. See `docs/MIGRATION.md → Task 12` and `docs/ENV_VARS.md`.
+Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned — see `docs/MIGRATION.md → Phase 3 commentary`.
 
 ## How to check production health
 
@@ -165,4 +159,5 @@ Quick checks:
 - **2026-05-11** — Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
 - **2026-05-12** — Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.
 - **2026-05-13** — Rewrote "How to restore a Google Sheet from backup" — backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice — never drill on live sheets.
-- **2026-05-15** — Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3). The "Analytics writes are feature-flagged off" section above is now partially stale (dashboard + cron references) and gets rewritten in PR 3.
+- **2026-05-15** — Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
+- **2026-05-15 (PR 3/3)** — Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` — these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.

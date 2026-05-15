@@ -56,7 +56,6 @@
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `INVENTORY_SHEET_ID` | Sheet ID for inventory module (8-tab schema) | Prod, Preview | Inventory module fails |
-| `ANALYTICS_SHEET_ID` | Sheet ID for analytics events | Prod, Preview | Analytics writes fail (currently failing in prod due to 10M cell limit) |
 
 ### Email
 
@@ -89,7 +88,6 @@
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `INCIDENT_TEST_MODE` | When `"true"`, incidents skip live side-effects (Slack/email/calendar) | Prod, Preview | Defaults to false (live mode) |
-| `ANALYTICS_ENABLED` | Master kill-switch for analytics **sheet writes**. Writes (`logEvent*`, `logHealth*`, `writeAnalyticsRow`, `clearAndWriteAnalytics`) no-op unless this is exactly `"true"`. Reads (`/analytics` dashboard) and the analytics cron's non-Slack work are unaffected; the analytics cron skips its Slack recaps when disabled. Default off as of 2026-05-12 (the analytics sheet hit Google's 10M-cell limit; system stays dormant until the Phase 3 Postgres rebuild). | Prod, Preview, Dev | Writes stay disabled — the intended state |
 | `TEST_MODE` | **Reserved — not implemented yet.** When `"true"`, will route Sheet writes to test clones instead of prod sheets so the Playwright suite can exercise write paths. See `docs/TESTING.md → TEST_MODE plumbing`. | Not set anywhere yet | n/a — feature not built |
 | `TEST_COLLECTION_SHEET_ID` | **Reserved — inactive.** Test clone of the COLLECTION sheet (`1OcccMHY-TSvv30drmL0RdqaMz36GjoQgmpCp6vIaZYE`, created 2026-05-12, shared with the `kitchfix-sheets` service account). Unused until `TEST_MODE` plumbing lands. | Not set anywhere yet | n/a — feature not built |
 | `TEST_HUB_SHEET_ID` | **Reserved.** Will point to a test clone of the HUB sheet — **clone not yet created.** Needed before any Vendor Portal write test (Vendor writes go to HUB, not COLLECTION). | Not set anywhere yet | n/a — feature not built |
@@ -113,3 +111,4 @@ See `docs/RUNBOOK.md → How to rotate a secret`.
 - **2026-05-11** — Initial env var inventory captured during Phase 0. List built from `grep` of source files; values to be confirmed against Vercel dashboard as Phase 1 sanity check.
 - **2026-05-12** — Added `ANALYTICS_ENABLED` (Phase 1 Task 12). Master kill-switch for analytics sheet writes; default off. Set to `false` on Vercel Production + Preview + Development. See `docs/MIGRATION.md → Captain's log`.
 - **2026-05-12** — Reserved `TEST_MODE`, `TEST_COLLECTION_SHEET_ID`, `TEST_HUB_SHEET_ID` for the Playwright write-test plumbing (deferred from Phase 1 Task 1 Round 1). None are set yet; documented now so the names are claimed. See `docs/TESTING.md`.
+- **2026-05-15** — Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` (PR 3/3 of the analytics teardown, PR #34). Both env vars must also be removed from Vercel Production + Preview + Development. `SLACK_RECAP_WEBHOOK` stays — still used by `/api/cron/backup-sheets/route.js:54`. See `docs/MIGRATION.md → Phase 3 commentary` for the new analytics-via-Sentry/Vercel/Supabase plan.
