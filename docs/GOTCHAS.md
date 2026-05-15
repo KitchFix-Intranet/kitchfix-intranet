@@ -229,6 +229,34 @@ refreshToken: refreshed.refresh_token ?? token.refreshToken,
 
 If a user's session goes weird ("RefreshTokenError"), this is usually the cause. They should sign out and sign back in to re-issue both tokens.
 
+### Conditional `CRON_SECRET` check fails open if the env var is unset
+
+The cron auth pattern in `/api/cron/backup-sheets/route.js:70-75` gates the check on `CRON_SECRET` being defined:
+
+```javascript
+if (
+  process.env.CRON_SECRET &&
+  authHeader !== `Bearer ${process.env.CRON_SECRET}`
+) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+If `CRON_SECRET` is missing from the environment, the auth check is skipped entirely and the route becomes publicly accessible. Production has the env var set so this is fine in practice, but it's a fail-open pattern that's easy to miss - any future env-var rotation that leaves a gap exposes the cron.
+
+**Fix (for any new cron route):** prefer fail-closed.
+
+```javascript
+if (!process.env.CRON_SECRET) {
+  return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+}
+if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+**Surfaced:** Stage 0 audit of `backup-sheets`, 2026-05-15. Existing crons left as-is - not worth a defensive change for routes that work in prod today. Apply the fail-closed pattern to new cron routes.
+
 ---
 
 ## Git & Workflow

@@ -6,7 +6,7 @@ import { SHEET_IDS } from "@/lib/sheets";
  * BACKUP CRON — Daily Sheets Snapshot
  *
  * Creates dated copies of operationally critical Google Sheets into the
- * Drive backup folder. Runs nightly at 2am UTC (9pm CT) via Vercel cron.
+ * Drive backup folder. Runs daily at 06:00 UTC (01:00 CT) via Vercel cron.
  *
  * Coverage (5 sheets):
  *   - HUB             — vendor data, accounts, config

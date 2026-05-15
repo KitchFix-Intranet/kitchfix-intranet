@@ -13,6 +13,7 @@ import { google } from "googleapis";
 export const SHEET_IDS = {
   HUB: "1rvIg9trPCxiEWvzrYbtp1j7V_sbtQnKaysv5BOwA90E",
   COLLECTION: "1itJh5x1YFBdyHTBr-dyKD_r_nRBfjwIBiR_bWiOyCzQ",
+  // Paused - gamification pilot from the AppScript era. Not in active use; intentionally excluded from the backup-sheets cron. May be revived later.
   GAME: "1BFEGUIjmU56iRsu0Dbnn-x-jF2Bnw8K4BmUZrq6pghs",
   GL_CODES: "1Gs7ToEvrsraBt81DctgwImKK-ck2Ch6V2ifvF8VndeY",
 AI_LINE_ITEMS: "18mTWaeodOpFVmDSNRkGpNZvCrNWqHxVv3qN8r1b2REo",
