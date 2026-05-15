@@ -1,4 +1,4 @@
-# Runbook — KitchFix Ops Hub
+# Runbook - KitchFix Ops Hub
 
 > **Purpose:** How to do operational things on this system. If you can't find the procedure here, add it after you've done it once.
 >
@@ -20,13 +20,13 @@ pwd && git status && git branch --show-current
 7. Push branch: `git push -u origin branch-name`
 8. Verify Vercel preview deploys cleanly
 9. Open PR via GitHub
-10. Merge via GitHub UI (squash or regular merge — either is fine)
+10. Merge via GitHub UI (squash or regular merge - either is fine)
 11. Pull main locally: `git checkout main && git pull origin main`
 12. Delete local branch: `git branch -d branch-name`
 
 ## How to roll back a bad deploy
 
-**Fastest path — Vercel instant rollback:**
+**Fastest path - Vercel instant rollback:**
 
 1. Go to https://vercel.com/kitchfix-intranets-projects/kitchfix-intranet/deployments
 2. Find the last known-good production deployment (look for green "Ready" + "Current" badges in the past)
@@ -43,10 +43,10 @@ pwd && git status && git branch --show-current
 ## How to add a new environment variable
 
 1. In Vercel: Project Settings → Environments → click the relevant environment (Production / Preview / Development)
-2. Add the variable. Decide scope — usually "Production and Preview" (rarely Production-only)
+2. Add the variable. Decide scope - usually "Production and Preview" (rarely Production-only)
 3. Update local `.env.local` with the same value
 4. Update `docs/ENV_VARS.md` with the variable name, one-line description, and which module uses it
-5. Commit the doc update — same commit as the code change that uses the new var
+5. Commit the doc update - same commit as the code change that uses the new var
 6. Trigger a redeploy if Vercel didn't auto-detect
 
 ## How to invite a new user
@@ -55,9 +55,9 @@ KitchFix uses Google Workspace OAuth. There is no user table to add to.
 
 1. Add the user to Google Workspace if they're not already in `@kitchfix.com`
 2. Tell them to visit `https://kitchfix-intranet.vercel.app` and sign in with their Google account
-3. First login self-provisions their session — no admin action needed
+3. First login self-provisions their session - no admin action needed
 4. To grant admin access to specific modules, add their email to the relevant tab in the HUB sheet:
-   - Ops Hub admin: `OPS_LEADERSHIP_EMAILS` constant (in code — Phase 1 backlog: move to HUB)
+   - Ops Hub admin: `OPS_LEADERSHIP_EMAILS` constant (in code - Phase 1 backlog: move to HUB)
    - People Portal admin: `admins` tab in HUB
    - Analytics admin: hardcoded to `k.fietek@kitchfix.com` (in code)
    - Service Calendar admin: k.fietek + j.curtin
@@ -66,7 +66,7 @@ KitchFix uses Google Workspace OAuth. There is no user table to add to.
 
 Daily backups run via `/api/cron/backup-sheets` at 06:00 UTC (01:00 CT). Backups land in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub — Sheet Backups"). Covered: HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS is deliberately skipped (generated data, cell-quota sensitive).
 
-Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is currently unlimited — backups accumulate; pruning is a future sub-cron.
+Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is currently unlimited - backups accumulate; pruning is a future sub-cron.
 
 ### Scenario 1: A tab was wiped or corrupted (most common)
 
@@ -78,14 +78,14 @@ Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention i
 4. In the picker, navigate to and select the live sheet (HUB, COLLECTION, etc.). Click **"Select"**.
 5. Google copies the tab into the live sheet as `Copy of {tabname}`. The original (broken) tab is still there.
 6. In the live sheet:
-   - Rename the broken tab to `{tabname}_BROKEN_{YYYY-MM-DD}` (right-click → Rename). Don't delete it yet — keeps an audit trail.
+   - Rename the broken tab to `{tabname}_BROKEN_{YYYY-MM-DD}` (right-click → Rename). Don't delete it yet - keeps an audit trail.
    - Rename `Copy of {tabname}` to the original name `{tabname}` (right-click → Rename).
 7. Reload any module that reads the restored tab. Confirm data is back.
 8. After 24h of stable operation, delete the `_BROKEN_` tab.
 
 ### Scenario 2: An entire sheet is gone or corrupted (rare, catastrophic)
 
-Not drilled yet — procedure is theoretical until tested. Schedule a drill before relying on this.
+Not drilled yet - procedure is theoretical until tested. Schedule a drill before relying on this.
 
 1. Open the most recent backup of the missing sheet.
 2. File → Make a copy → name it `{ORIGINAL_NAME}_RESTORED_{YYYY-MM-DD}`.
@@ -122,10 +122,10 @@ For the service account private key, OAuth client secret, or any API key:
 
 Crons are at:
 
-- `/api/cron/daily` — 13:00 UTC daily
-- `/api/cron/incident-reminders` — 14:00 UTC daily
-- `/api/people?action=generate-report&period=weekly` — Mondays 13:00 UTC
-- `/api/people?action=generate-report&period=monthly` — 1st of month 13:00 UTC
+- `/api/cron/daily` - 13:00 UTC daily
+- `/api/cron/incident-reminders` - 14:00 UTC daily
+- `/api/people?action=generate-report&period=weekly` - Mondays 13:00 UTC
+- `/api/people?action=generate-report&period=monthly` - 1st of month 13:00 UTC
 
 To trigger manually:
 
@@ -140,24 +140,24 @@ curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
 
 The custom analytics system was decommissioned 2026-05-15 in PRs #31/#32/#33. There is no `/analytics` dashboard, no analytics cron, and no `logEvent*` writes anywhere in production code. `src/lib/analytics.js` exists only as a no-op stub (kept while `src/lib/auth.js` and `src/app/api/cron/incident-reminders/route.js` still import `logEventSA`; touching those files is out of scope for now).
 
-Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned — see `docs/MIGRATION.md → Phase 3 commentary`.
+Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned - see `docs/MIGRATION.md → Phase 3 commentary`.
 
 ## How to check production health
 
 Quick checks:
 
-- Visit `https://kitchfix-intranet.vercel.app` — login page should render
-- Sign in and load `/` — dashboard should render with hero, news, celebrations
-- Check Vercel deployments — top deployment should be "Ready" with green dot
-- Check Sentry (once installed in Phase 1) — no new errors in last hour
-- Check Better Stack (once installed in Phase 1) — `/api/health` returning 200
+- Visit `https://kitchfix-intranet.vercel.app` - login page should render
+- Sign in and load `/` - dashboard should render with hero, news, celebrations
+- Check Vercel deployments - top deployment should be "Ready" with green dot
+- Check Sentry (once installed in Phase 1) - no new errors in last hour
+- Check Better Stack (once installed in Phase 1) - `/api/health` returning 200
 
 ## Captain's log
 
 *Add new procedures here as they're learned. Date, what prompted the addition, where it lives.*
 
-- **2026-05-11** — Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
-- **2026-05-12** — Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.
-- **2026-05-13** — Rewrote "How to restore a Google Sheet from backup" — backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice — never drill on live sheets.
-- **2026-05-15** — Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
-- **2026-05-15 (PR 3/3)** — Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` — these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.
+- **2026-05-11** - Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
+- **2026-05-12** - Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.
+- **2026-05-13** - Rewrote "How to restore a Google Sheet from backup" - backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice - never drill on live sheets.
+- **2026-05-15** - Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
+- **2026-05-15 (PR 3/3)** - Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` - these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.

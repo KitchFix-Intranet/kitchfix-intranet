@@ -1,4 +1,4 @@
-# Gotchas — KitchFix Ops Hub
+# Gotchas - KitchFix Ops Hub
 
 > **Purpose:** Hard-won lessons from building this system. Every entry is a real bug or pitfall that has already cost time. Read before debugging anything that smells familiar.
 >
@@ -11,7 +11,7 @@
 
 ### Currency values from Sheets are strings, not numbers
 
-Google Sheets returns currency as `"$20,309.00"` — a string with a `$` and commas. Doing arithmetic on it silently produces `NaN`.
+Google Sheets returns currency as `"$20,309.00"` - a string with a `$` and commas. Doing arithmetic on it silently produces `NaN`.
 
 **Fix:** Always run currency values through `parseNum()` from `opsUtils.js` before any math.
 
@@ -45,7 +45,7 @@ Setting frozen rows/columns *before* a merge operation in the same `batchUpdate`
 
 ## Time & Dates
 
-### Vercel runs in UTC — date comparisons need normalization
+### Vercel runs in UTC - date comparisons need normalization
 
 Date comparisons that work locally fail in production because Vercel's UTC offset shifts day boundaries.
 
@@ -61,7 +61,7 @@ end.setHours(23, 59, 59, 999);
 if (eventDate >= start && eventDate <= end) { /* ... */ }
 ```
 
-This bug shows up as "the period boundary cron sometimes catches things and sometimes doesn't" — classic timezone-edge symptom.
+This bug shows up as "the period boundary cron sometimes catches things and sometimes doesn't" - classic timezone-edge symptom.
 
 ### Date helpers are duplicated across 10+ files
 
@@ -73,7 +73,7 @@ This bug shows up as "the period boundary cron sometimes catches things and some
 
 ### Em-dashes in email subjects break encoding
 
-Subject lines with `—` (em-dash) produce encoding artifacts in some email clients — the recipient sees `=?UTF-8?...` garbage in the subject.
+Subject lines with `-` (em-dash) produce encoding artifacts in some email clients - the recipient sees `=?UTF-8?...` garbage in the subject.
 
 **Fix:** Use a regular hyphen `-` in email subjects. Em-dashes in body content are fine.
 
@@ -92,11 +92,11 @@ A Slack message like "vendor deactivated" tells you nothing in 2 days when you'r
 
 ### Vendor auto-detect works. Invoice numbers, dates, totals do NOT.
 
-Claude OCR is reliable for vendor identification (matching against a known vendor list). It is **unreliable** for extracting structured numeric fields — invoice number, invoice date, totals.
+Claude OCR is reliable for vendor identification (matching against a known vendor list). It is **unreliable** for extracting structured numeric fields - invoice number, invoice date, totals.
 
 **Rule:** Always require manual entry for invoice number, date, and total. Treat AI extraction of these as a *suggestion to verify*, not a value to trust. Surface the AI confidence visibly.
 
-### AI calls are slow — design for it
+### AI calls are slow - design for it
 
 A single Claude OCR call can take 5–15 seconds. Don't freeze the UI. Use skeletons, progress states, or background processing patterns. The Railway nightly catalog match runs in 50-item batches for this reason.
 
@@ -142,7 +142,7 @@ For sweeping token replacements (e.g., renaming a variable across a file), `sed`
 
 ### Never move files via VS Code drag-and-drop when they have relative imports
 
-Dragging a file in the VS Code explorer triggers automatic import-path updates that frequently miss cases — `../utils` becomes `./utils` cleanly, but cross-folder moves often break.
+Dragging a file in the VS Code explorer triggers automatic import-path updates that frequently miss cases - `../utils` becomes `./utils` cleanly, but cross-folder moves often break.
 
 **Fix:** Use `mv` in the terminal, then `rm -rf .next` before `npm run dev` to clear Next.js's cached module graph.
 
@@ -155,7 +155,7 @@ npm run dev
 
 ### `rm -rf .next && npm run dev` is the rebuild incantation
 
-When something is "stuck" — old code running, hot reload not picking up changes, weird import errors — clear the `.next` cache before suspecting a deeper bug. 80% of "this should work but doesn't" turns out to be stale build cache.
+When something is "stuck" - old code running, hot reload not picking up changes, weird import errors - clear the `.next` cache before suspecting a deeper bug. 80% of "this should work but doesn't" turns out to be stale build cache.
 
 ---
 
@@ -168,23 +168,23 @@ If you use a user's OAuth token to upload a file to Drive, the upload only works
 **Fix:** All Drive uploads use the service account. Always. There is no exception.
 
 ```javascript
-// WRONG — uses user token
+// WRONG - uses user token
 await drive.files.create({ auth: userOAuth, ... });
 
-// RIGHT — uses service account (helper handles auth internally)
+// RIGHT - uses service account (helper handles auth internally)
 await uploadInvoiceImage(serviceAccountClient, ...);
 ```
 
 ### Drive API + shared drives requires `supportsAllDrives: true`
 
-Any `drive.files.*` operation (copy, get, list, update, delete) against a file that lives in a shared drive — e.g., CJK Foods — silently returns `File not found` if `supportsAllDrives: true` is not set in the request options. The API returns 404 even when the calling principal has been shared as Editor or Content manager on both the source and the destination. The error message is identical to "the file genuinely doesn't exist," which is misleading.
+Any `drive.files.*` operation (copy, get, list, update, delete) against a file that lives in a shared drive - e.g., CJK Foods - silently returns `File not found` if `supportsAllDrives: true` is not set in the request options. The API returns 404 even when the calling principal has been shared as Editor or Content manager on both the source and the destination. The error message is identical to "the file genuinely doesn't exist," which is misleading.
 
-This affects: anything using `google.drive()` directly. The Sheets API (`sheets.spreadsheets.*`) is unaffected — it has its own shared-drive handling internal to the call.
+This affects: anything using `google.drive()` directly. The Sheets API (`sheets.spreadsheets.*`) is unaffected - it has its own shared-drive handling internal to the call.
 
 **Fix:** Add `supportsAllDrives: true` to every Drive API request.
 
 ```javascript
-// WRONG — returns File not found on shared-drive files
+// WRONG - returns File not found on shared-drive files
 await drive.files.copy({
   fileId: sheet.id,
   requestBody: { name, parents: [folderId] },
@@ -206,16 +206,16 @@ await drive.files.copy({
 
 **Fixed 2026-05-13.** `SHEET_IDS.INVENTORY` is now a hardcoded literal matching the pattern of HUB, COLLECTION, GAME, GL_CODES, and AI_LINE_ITEMS.
 
-The old pattern (`process.env.INVENTORY_SHEET_ID || ""`) created two issues: (1) running `node -e` to inspect `SHEET_IDS` outside Next.js produced an empty string because Node's `require` doesn't load `.env.local` — misleading anyone debugging; (2) routes that imported `SHEET_IDS.INVENTORY` directly worked in Next.js runtime but silently broke if the env var was missing.
+The old pattern (`process.env.INVENTORY_SHEET_ID || ""`) created two issues: (1) running `node -e` to inspect `SHEET_IDS` outside Next.js produced an empty string because Node's `require` doesn't load `.env.local` - misleading anyone debugging; (2) routes that imported `SHEET_IDS.INVENTORY` directly worked in Next.js runtime but silently broke if the env var was missing.
 
-**Note:** `src/lib/inventoryActions.js` still reads `process.env.INVENTORY_SHEET_ID` directly (~80 call sites) rather than importing `SHEET_IDS.INVENTORY`. Functional but inconsistent — a P3 refactor is to migrate those imports. Until then, the env var must remain set on Vercel to keep inventory writes working.
+**Note:** `src/lib/inventoryActions.js` still reads `process.env.INVENTORY_SHEET_ID` directly (~80 call sites) rather than importing `SHEET_IDS.INVENTORY`. Functional but inconsistent - a P3 refactor is to migrate those imports. Until then, the env var must remain set on Vercel to keep inventory writes working.
 
 **Lesson worth keeping:** if you find a "weird empty string" while debugging, check whether you're inspecting code inside the framework's runtime context vs. a bare `node -e` shell.
 
-// WRONG — uses user token
+// WRONG - uses user token
 await drive.files.create({ auth: userOAuth, ... });
 
-// RIGHT — uses service account (helper handles auth internally)
+// RIGHT - uses service account (helper handles auth internally)
 await uploadInvoiceImage(serviceAccountClient, ...);
 ```
 
@@ -261,13 +261,13 @@ if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
 
 ## Git & Workflow
 
-### `git checkout -b` failure leaves you on the previous branch — silently
+### `git checkout -b` failure leaves you on the previous branch - silently
 
-If `git checkout -b newbranch` fails because the branch already exists, git stays on whatever branch you were on (usually `main`). The error scrolls off-screen mid-flow, and subsequent commits land on the wrong branch silently. You then `git push -u origin newbranch` — git happily pushes the *empty* feature branch (which still matches origin/main), while your real work sits orphaned on local main.
+If `git checkout -b newbranch` fails because the branch already exists, git stays on whatever branch you were on (usually `main`). The error scrolls off-screen mid-flow, and subsequent commits land on the wrong branch silently. You then `git push -u origin newbranch` - git happily pushes the *empty* feature branch (which still matches origin/main), while your real work sits orphaned on local main.
 
 **Symptom:** PR opens with zero changes, or with the wrong commits. `git log --oneline --all` shows the feature branch pointing somewhere unexpected.
 
-**Fix:** Always `git status` before `git commit`. The branch name is the first line — a one-second check that catches this and a dozen related footguns.
+**Fix:** Always `git status` before `git commit`. The branch name is the first line - a one-second check that catches this and a dozen related footguns.
 
 **Recovery if you've already committed to the wrong branch:**
 
@@ -288,7 +288,7 @@ git push --force-with-lease origin wrong-branch
 
 ## Testing & CI
 
-### Auth state is environment-scoped — cookies don't cross domains
+### Auth state is environment-scoped - cookies don't cross domains
 
 A `tests/.auth/user.json` generated by signing in at `localhost:3000` will NOT authenticate against `kitchfix-intranet.vercel.app`. NextAuth session cookies have a domain attribute; the browser refuses to send `localhost`-scoped cookies to a `.vercel.app` host. Result: tests visit production, see no session, bounce to `/login`, and fail with "expected pattern: not /sign-?in|\/login|\/api\/auth/i".
 
@@ -300,21 +300,21 @@ PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app npm run test:e2e:setup 
 # manually log in, click Resume in Inspector
 ```
 
-The `auth.setup.ts` URL regex must also be flexible (matches any `^https?://[^/]+/` rather than hardcoded localhost), which it now is — but worth checking if regenerating future test environments.
+The `auth.setup.ts` URL regex must also be flexible (matches any `^https?://[^/]+/` rather than hardcoded localhost), which it now is - but worth checking if regenerating future test environments.
 
 **When this bites:** CI was previously green, now suddenly failing on the home dashboard test with login-redirect symptoms. Either the cookies expired (Google's schedule) or someone regenerated against the wrong environment.
 
 ## CSS
 
-### Module prefix collisions are real — `oh-inv-` vs `oh-inv-mgmt-`
+### Module prefix collisions are real - `oh-inv-` vs `oh-inv-mgmt-`
 
-Two Ops Hub modules — Inventory (legacy) and Invoice Capture — both use the `oh-inv-` prefix. The newer Inventory Manager uses `oh-inv-mgmt-`. When working in any of these three, double-check which file your CSS is going into and whether your class name collides.
+Two Ops Hub modules - Inventory (legacy) and Invoice Capture - both use the `oh-inv-` prefix. The newer Inventory Manager uses `oh-inv-mgmt-`. When working in any of these three, double-check which file your CSS is going into and whether your class name collides.
 
 **Fix when adding new prefixes:** Make them clearly distinct (`oh-inv-mgmt-` not just `oh-im-`). Prefix collisions cause hard-to-debug visual bugs because the wrong module's styles win specificity battles.
 
 ### Tailwind is imported but is NOT the system
 
-`globals.css` imports Tailwind v4 as a utility backstop. The primary styling system is vanilla CSS with prefix-isolated classes. Don't write Tailwind-first components — they break the prefix-isolation guarantee and create a mixed system.
+`globals.css` imports Tailwind v4 as a utility backstop. The primary styling system is vanilla CSS with prefix-isolated classes. Don't write Tailwind-first components - they break the prefix-isolation guarantee and create a mixed system.
 
 ---
 
@@ -322,8 +322,8 @@ Two Ops Hub modules — Inventory (legacy) and Invoice Capture — both use the 
 
 *Add new entries here, dated, with symptom and fix.*
 
-- **2026-05-05** — Initial gotchas captured from working memory: currency parsing, UTC dates, em-dashes, AI reliability ceiling, React inner components, str_replace whitespace, file moves, Drive auth boundary, prefix collisions.
-- **2026-05-05** — Date helper note trimmed to a pointer to `CONVENTIONS.md` (the centralization rule lives there; this doc just flags the symptom).
+- **2026-05-05** - Initial gotchas captured from working memory: currency parsing, UTC dates, em-dashes, AI reliability ceiling, React inner components, str_replace whitespace, file moves, Drive auth boundary, prefix collisions.
+- **2026-05-05** - Date helper note trimmed to a pointer to `CONVENTIONS.md` (the centralization rule lives there; this doc just flags the symptom).
 
-- **2026-05-13** — Auth state from `storageState` is environment-scoped. NextAuth session cookies are domain-locked to the URL where login happened — a `user.json` generated against `localhost:3000` does NOT work when tests target `kitchfix-intranet.vercel.app`. The browser refuses to send cookies cross-domain, NextAuth sees no session, middleware bounces to `/login`. **Fix:** regenerate `tests/.auth/user.json` against the target environment using `PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app npm run test:e2e:setup -- --headed`. Cost: 30 minutes of CI failure debugging before realizing cookie domain was the issue. See `docs/TESTING.md` "Refreshing the auth state secret" for the full procedure.
-- **2026-05-13** — Three new entries from Phase 1 push day: (1) Drive API + shared drives requires `supportsAllDrives: true` — found while building `/api/cron/backup-sheets`. (2) `SHEET_IDS.INVENTORY` is an empty string footgun — real ID resolves from env var. (3) New "Git & Workflow" section with `git checkout -b` silent-failure recovery — committed to main by accident mid-bump, ~10 min recovery.
+- **2026-05-13** - Auth state from `storageState` is environment-scoped. NextAuth session cookies are domain-locked to the URL where login happened - a `user.json` generated against `localhost:3000` does NOT work when tests target `kitchfix-intranet.vercel.app`. The browser refuses to send cookies cross-domain, NextAuth sees no session, middleware bounces to `/login`. **Fix:** regenerate `tests/.auth/user.json` against the target environment using `PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app npm run test:e2e:setup -- --headed`. Cost: 30 minutes of CI failure debugging before realizing cookie domain was the issue. See `docs/TESTING.md` "Refreshing the auth state secret" for the full procedure.
+- **2026-05-13** - Three new entries from Phase 1 push day: (1) Drive API + shared drives requires `supportsAllDrives: true` - found while building `/api/cron/backup-sheets`. (2) `SHEET_IDS.INVENTORY` is an empty string footgun - real ID resolves from env var. (3) New "Git & Workflow" section with `git checkout -b` silent-failure recovery - committed to main by accident mid-bump, ~10 min recovery.
