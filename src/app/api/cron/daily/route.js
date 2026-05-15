@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { logEventSA, logHealthSA } from "@/lib/analytics";
 
 // ═══════════════════════════════════════
 // DAILY CRON — Notification Generator
@@ -190,8 +189,6 @@ export async function GET(request) {
   try {
 console.log("[Cron] Daily notification run starting...");
 
-     logEventSA({ category: "system", action: "cron_start", detail: { type: "daily" } });
-
      // Batch read all needed sheets
     const [periodRows, celebrationRows, contactRows, notifRows] = await Promise.all([
       readSheet(SHEET_IDS.HUB, "period_data"),
@@ -333,12 +330,10 @@ await writeNotification("ALL", `[OPS] New period started - ${label}`, "period_st
     }
 
 console.log(`[Cron]   ✅ Done. ${written} notifications written.`);
-      logEventSA({ category: "system", action: "cron_complete", detail: { written } });
       return NextResponse.json({ success: true, written });
 
 } catch (error) {
       console.error("[Cron]   ❌ CRASH:", error.message, error.stack);
-      logEventSA({ category: "system", action: "cron_error", status: "error", errorMsg: error.message, detail: { error: error.message } });
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
       }
 }

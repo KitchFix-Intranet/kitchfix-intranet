@@ -12,7 +12,6 @@ import {
   handleVendorMerge,
 } from "@/lib/invoiceActions";
 import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/analytics";
 
 // ═══════════════════════════════════════
 // OPS HUB API — v3.2
@@ -684,7 +683,6 @@ try { return await readSheetSA(id, tab); }
 
   try {
 if (action === "bootstrap") {
-       logEvent(token, { email, category: "ops", action: "page_view", page: "/ops" });
        const [accountsRaw, periodsRaw, heroRaw, inventoryRaw, budgetsRaw] = await Promise.all([
                 safeRead(SHEET_IDS.HUB, "accounts"),
         safeRead(SHEET_IDS.HUB, "period_data"),
@@ -988,8 +986,6 @@ export async function POST(request) {
       ];
 const result = await appendRowSA(SHEET_IDS.COLLECTION, "inventory_submissions", row);
 
-       logEvent(token, { email, userName, category: "ops", action: "submit_inventory", page: "/ops", detail: { account, period, total: Number(total) || 0 } });
-
        if (result.success) {
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
         const totalFmt = fmt(total);
@@ -1113,8 +1109,6 @@ const safeRead = async (id, tab) => {
 
 const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_plans", row);
 
-    logEvent(token, { email, userName, category: "ops", action: "labor_submit", page: "/ops", detail: { account, homestandId, variance } });
-
       if (result.success) {
         const varFmt = variance >= 0 ? `+$${variance.toLocaleString()}` : `-$${Math.abs(variance).toLocaleString()}`;
 await opsNotify(token, {
@@ -1145,8 +1139,6 @@ await opsNotify(token, {
       ];
 
 const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_sold_revenue", row);
-
-       logEvent(token, { email, userName, category: "ops", action: "sold_revenue", page: "/ops", detail: { account, homestandId, amount: Number(soldRevenue) || 0 } });
 
        if (result.success) {
                 const revFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(soldRevenue) || 0);
@@ -1331,7 +1323,6 @@ Rules:
         body: `${userName} (${email}) needs help:\n\n${message.trim()}`,
         email, targetEmails: OPS_LEADERSHIP_EMAILS,
 });
-          logEvent(token, { email, userName, category: "ops", action: "help_request", page: "/ops", detail: { message: (message || "").slice(0, 100) } });
           return NextResponse.json({ success: true });
       }
 
@@ -1359,15 +1350,6 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
                   relatedInfo: `${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
                 });
               }
-              // Analytics — log invoice-related actions
-              const invoiceEvents = {
-                  "invoice-submit":     { action: "submit_invoice", detail: { account: body.account, vendor: body.vendor, total: body.total, type: body.type } },
-                  "invoice-ocr":        { action: "ocr_scan",       detail: { account: body.account, confidence: result.confidence } },
-                  "invoice-photo-gate": { action: "photo_gate",     detail: { pass: result.pass, documentType: result.documentType } },
-                  "vendor-add":         { action: "vendor_add",     detail: { vendorName: body.vendorName, account: body.account } },
-              };
-              const evt = invoiceEvents[action];
-              if (evt) logEvent(token, { email, userName, category: "ops", page: "/ops", ...evt });
               return NextResponse.json(result);
           }
       }
@@ -1375,27 +1357,22 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
 // ── Vendor Portal (POST) ──
       if (action === "vendor-update") {
           const result = await handleVendorUpdate(body, token, email);
-          logEvent(token, { email, userName, category: "ops", action: "vendor_update", page: "/ops", detail: { vendorId: body.vendorId, accountKey: body.accountKey } });
           return NextResponse.json(result);
       }
       if (action === "vendor-master-update") {
           const result = await handleVendorMasterUpdate(body, token, email);
-          logEvent(token, { email, userName, category: "ops", action: "vendor_update", page: "/ops", detail: { vendorId: body.vendorId, name: body.name } });
           return NextResponse.json(result);
       }
       if (action === "vendor-deactivate") {
           const result = await handleVendorDeactivate(body, token, email);
-          logEvent(token, { email, userName, category: "ops", action: "vendor_deactivate", page: "/ops", detail: { vendorId: body.vendorId, accountKey: body.accountKey } });
           return NextResponse.json(result);
       }
       if (action === "vendor-reactivate") {
           const result = await handleVendorReactivate(body, token, email);
-          logEvent(token, { email, userName, category: "ops", action: "vendor_update", page: "/ops", detail: { vendorId: body.vendorId, accountKey: body.accountKey, reactivate: true } });
           return NextResponse.json(result);
       }
       if (action === "vendor-merge") {
           const result = await handleVendorMerge(body, token, email);
-          logEvent(token, { email, userName, category: "ops", action: "vendor_merge", page: "/ops", detail: { keeperId: body.keeperId, dupeIds: body.dupeIds } });
           return NextResponse.json(result);
       }
 

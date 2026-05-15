@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { logEventSA } from "@/lib/analytics";
 import {
   INCIDENT_COLUMNS,
   INCIDENTS_TAB,
@@ -635,7 +634,6 @@ export async function GET(request) {
     const userEmail = searchParams.get("email") || "";
 
 if (action === "bootstrap") {
-         logEventSA({ email: userEmail, category: "people", action: "page_view", page: "/people" });
          const [accounts, contacts, admins, submissions, heroImages, drafts] = await Promise.all([
                   readSheet(SHEET_IDS.HUB, SHEETS.ACCOUNTS),
         readSheet(SHEET_IDS.HUB, SHEETS.CONTACTS),
@@ -1154,7 +1152,6 @@ export async function POST(request) {
       delete cleanPayload.rowIndex;
 
 const employeeName = `${f.firstName} ${f.lastName}`.trim();
-         logEventSA({ email: f.submitterEmail, category: "people", action: "submit_newhire", page: "/people", detail: { name: employeeName, operation: isEdit ? "edit" : "new", isEdit: !!isEdit } });
     const row = [
               new Date().toISOString(),        // Timestamp
         f.submitterEmail,                // Submitter Email
@@ -1209,8 +1206,6 @@ text: `*New Hire - ${prefix}*\n*Name:* ${f.firstName} ${f.lastName}\n*Role:* ${f
 if (action === "submit-paf") {
        const f = body.form;
        const isEdit = f.isEdit && f.rowIndex;
-
-       logEventSA({ email: f.submitterEmail, category: "people", action: "submit_paf", page: "/people", detail: { actionType: f.actionType, employeeName: `${f.firstName || ""} ${f.lastName || ""}`.trim(), location: f.location } });
 
        // Strip edit metadata, stamp schema version
 
@@ -1299,7 +1294,6 @@ if (f.actionType === "rate_change") {
     // ─── Draft: Save (upsert) ───
 if (action === "save-draft") {
        const { email, module, payload } = body; // module: "nh" or "paf"
-       logEventSA({ email, category: "people", action: "draft_save", page: "/people", detail: { module } });
        const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.DRAFTS);
       const existingIdx = rows.findIndex(
         (r) => String(r[0] || "").toLowerCase().trim() === email.toLowerCase() && String(r[1]) === module
@@ -1317,7 +1311,6 @@ if (action === "save-draft") {
     // ─── Draft: Delete ───
 if (action === "delete-draft") {
        const { email, module } = body;
-       logEventSA({ email, category: "people", action: "draft_delete", page: "/people", detail: { module } });
        const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.DRAFTS);
 
       const existingIdx = rows.findIndex(
@@ -1332,7 +1325,6 @@ if (action === "delete-draft") {
     // ─── Notification Center: Mark one as read ───
 if (action === "mark-notification-read") {
        const { notificationId } = body;
-       logEventSA({ category: "people", action: "notif_read", page: "/people", detail: { notificationId } });
        await updateCell(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG, notificationId, 8, "TRUE");
       return NextResponse.json({ success: true });
     }
@@ -1340,7 +1332,6 @@ if (action === "mark-notification-read") {
     // ─── Notification Center: Mark all as read ───
 if (action === "mark-all-read") {
        const { email } = body;
-       logEventSA({ email, category: "people", action: "notif_read", page: "/people", detail: { count: "all" } });
        const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG);
       const updates = [];
 rows.forEach((row, i) => {
@@ -1359,7 +1350,6 @@ rows.forEach((row, i) => {
       const { itemId, email } = body;
       const rowIndex = parseInt(itemId.split("-")[1]);
       const newStatus = action === "cancel-submission" ? "Cancelled" : "Withdrawn";
-      logEventSA({ email, category: "people", action: action.replace("-", "_"), page: "/people", detail: { itemId } });
       await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
       await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, `[${newStatus} by ${email}]`);
       await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
@@ -1371,7 +1361,6 @@ rows.forEach((row, i) => {
       // Unified format: sub-{rowIndex}
       const rowIndex = parseInt(itemId.split("-")[1]);
 const newStatus = adminAction === "approve" ? "Complete" : "Rejected";
-       logEventSA({ email: adminEmail, category: "people", action: adminAction === "approve" ? "admin_approve" : "admin_reject", page: "/people", detail: { itemId, adminAction, reason: reason || "" } });
         await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
               const noteText = reason
         ? `[${newStatus} by ${adminEmail}] ${reason}`
@@ -1641,21 +1630,6 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
         `${incident.severity} | ${incident.site_code} | ${typeLabel}`
       );
 
-      logEventSA({
-        email: f.submitterEmail,
-        category: "people",
-        action: "incident_submit",
-        page: "/people",
-        detail: {
-          incident_id: incidentId,
-          severity: incident.severity,
-          type: f.incident_type,
-          site: f.site_code,
-          region: region || "unknown",
-          regional_cc: regionalEmail || "none",
-        },
-      });
-
       // P4C: generate PDF report and upload to Drive folder.
       // Also returned as base64 in the response so the client can offer a
       // "Download report PDF" action on the success screen.
@@ -1768,14 +1742,6 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       }
       // submitted, corrective_action: no stage-specific timestamps
 
-logEventSA({
-        email: adminEmail,
-        category: "people",
-        action: "incident_status_update",
-        page: "/people",
-        detail: { incident_id: incidentId, from: previousStatus, to: newStatus },
-      });
-
       // ── W5: Status transition notifications ──
       // Slack the channel + email the original submitter so they know the
       // incident is being acted on. Best-effort — failure here doesn't roll
@@ -1829,14 +1795,6 @@ logEventSA({
       await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.internal_notes, updatedNotes);
       await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
       await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
-
-      logEventSA({
-        email: adminEmail,
-        category: "people",
-        action: "incident_add_note",
-        page: "/people",
-        detail: { incident_id: incidentId },
-      });
 
       return NextResponse.json({ success: true });
     }
@@ -1936,14 +1894,6 @@ logEventSA({
           JSON.stringify(log)
         );
       }
-
-      logEventSA({
-        email: adminEmail,
-        category: "people",
-        action: isFirstSave ? "incident_investigation_first_save" : "incident_investigation_reedit",
-        page: "/people",
-        detail: { incident_id: incidentId, fields_updated: updated, status_advanced: statusAdvanced },
-      });
 
       return NextResponse.json({
         success: true,

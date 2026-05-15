@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/analytics";
 
 // ═══════════════════════════════════════
 // SERVICE CALENDAR API
@@ -226,8 +225,6 @@ export async function GET(request) {
       if (!accountKey) {
         return NextResponse.json({ success: false, error: "Missing account param" }, { status: 400 });
       }
-
-      logEvent(token, { email, category: "ops", action: "sc_load", page: "/ops/service-calendar", detail: { accountKey, month } });
 
       const configRows = await loadServiceConfig();
       const { groups, meta } = buildServiceGroups(configRows, accountKey);
@@ -517,12 +514,6 @@ export async function POST(request) {
       ];
       await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
 
-      logEvent(token, {
-        email, userName, category: "ops", action: "sc_submit_day",
-        page: "/ops/service-calendar",
-        detail: { accountKey, date, entryCount: entries.length },
-      });
-
       return NextResponse.json({
         success: !anyFailed,
         error: anyFailed ? "Some writes failed — check the sheet" : undefined,
@@ -550,12 +541,6 @@ export async function POST(request) {
       ];
 
       const result = await appendRowSA(SHEET_IDS.COLLECTION, TABS.OVERRIDES, row);
-
-      logEvent(token, {
-        email, userName, category: "ops", action: "sc_override",
-        page: "/ops/service-calendar",
-        detail: { accountKey, date, overrideAction, serviceName },
-      });
 
       return NextResponse.json(result);
     }
@@ -601,12 +586,6 @@ export async function POST(request) {
         anyFailed ? "partial" : "success",
       ];
       await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
-
-      logEvent(token, {
-        email, userName, category: "ops", action: "sc_submit_clickers",
-        page: "/ops/service-calendar",
-        detail: { accountKey, date, entryCount: entries.length },
-      });
 
       return NextResponse.json({
         success: !anyFailed,

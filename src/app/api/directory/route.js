@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { readSheet, SHEET_IDS } from "@/lib/sheets";
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/analytics";
 // ═══════════════════════════════════════
 // TEAM DIRECTORY API — v1.0
 // Actions: bootstrap, drive-image
@@ -103,7 +102,6 @@ export async function GET(request) {
 
       // First name derived from session email
 const userEmail = session.user?.email?.toLowerCase().trim() || "";
-         logEvent(token, { email: userEmail, category: "directory", action: "page_view", page: "/directory" });
          const adminEmails = (adminsRaw.rows || []).map(r => String(r[0] || "").toLowerCase().trim()).filter(Boolean);
       const isAdmin = adminEmails.includes(userEmail);
       const fullName = session.user?.name || "";
@@ -395,7 +393,6 @@ export async function POST(request) {
     // ── admin-update-contacts ─────────────────────────────────────────────
 if (action === "admin-update-contacts") {
        const { accountId, contacts } = body;
-       logEvent(token, { email: session.user?.email?.toLowerCase().trim(), category: "directory", action: "tool_click", page: "/directory", detail: { type: "admin_update" } });
        const rows = await safeReadSheet(token, SHEET_IDS.HUB, "contacts");
        
       const toDelete = rows
