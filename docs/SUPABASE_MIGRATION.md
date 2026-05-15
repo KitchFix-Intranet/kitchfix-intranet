@@ -564,7 +564,20 @@ These supplement the working agreements in \`MIGRATION.md\`:
 
 - **2026-05-15 (post-PR-33-merge)** - Three backlog items surfaced during the analytics teardown, captured here so they don't get lost:
 
-  1. **e2e CI is hardcoded against production, not the PR preview.** `.github/workflows/e2e.yml` sets `PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app` in the test step's env. Every PR's Playwright run exercises prod, authenticated via a cached `PLAYWRIGHT_AUTH_STATE_B64` secret - meaning PR-side regressions can't actually be caught by this CI (the PR's code never runs in the test) and any prod flake blocks merges. Surfaced when PR #33's CI failed on `tests/vendors/card-detail.spec.ts` against a slow prod redirect that had nothing to do with PR 3's code (which only touched `src/lib/analytics.js` and docs). Re-run passed on retry. **Fix:** point `PLAYWRIGHT_BASE_URL` at Vercel's preview URL via the GitHub deployment event. Estimated ~30 min; slot as a quick win or defer.
+  1. **e2e CI is hardcoded against production, not the PR preview.** `.github/workflows/e2e.yml` sets `PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app` in the test step's env. Every PR's Playwright run exercises prod, authenticated via a cached `PLAYWRIGHT_AUTH_STATE_B64` secret - meaning PR-side regressions can't actually be caught by this CI (the PR's code never runs in the test) and any prod flake blocks merges. Surfaced when PR #33's CI failed on `tests/vendors/card-detail.spec.ts` against a slow prod redirect that had nothing to do with PR 3's code (which only touched `src/lib/analytics.js` and docs). Re-run passed on retry.
+
+     **Original estimate (PR #34):** ~30 min - swap `PLAYWRIGHT_BASE_URL` to a preview URL via either `patrickedqvist/wait-for-vercel-preview` or Vercel's `repository_dispatch` webhook pattern.
+
+     **Refined estimate (2026-05-15 research):** the URL swap is the easy part. The real blocker is **cookie domain scoping**. NextAuth in `src/lib/auth.js` uses default cookie config (no custom `cookies:` block), so session cookies are host-only. The cached `PLAYWRIGHT_AUTH_STATE_B64` is keyed to `kitchfix-intranet.vercel.app` (prod). Preview deploys live at `kitchfix-intranet-<hash>-<team>.vercel.app` - a different host - so the cached cookies do not apply. Switching the URL alone would just shift failures from "occasional prod flake" to "every PR fails at /login redirect."
+
+     **Real fix has three parts:**
+     - Workflow change: add preview-URL extraction step, pass URL to Playwright (low risk, ~15 min)
+     - `src/lib/auth.js` change: add `cookies` config setting `domain: '.vercel.app'` (or wider) conditional on `VERCEL_ENV === 'preview'` so prod cookie behavior is unchanged (auth danger zone - careful)
+     - Verification: deploy to a preview, manually log in, confirm auth works on both prod and preview before merge
+
+     **Dependency / batching call:** this should batch with the hand-rolled SA auth consolidation flagged in PR #35's audit finding B2 (both `getServiceAccountAuth` in `cron/backup-sheets/route.js:37-46` and the same pattern in `people/route.js:80-151`, both candidates for consolidation into `getServiceAccountSheetsClient()`). That consolidation already plans to be careful in the auth-adjacent area; adding the cookie-domain change at the same time amortizes the verification overhead and avoids two separate danger-zone touches.
+
+     **Don't ship as standalone today.** Right tooling step is to wait for the SA auth consolidation work, do both at once, verify together.
 
   2. **`/ops` redirect takes 3.3s.** Curl probes during PR #33 diagnosis: `/login` returns 200 in 290ms; `/` redirects in 117ms; `/ops` redirects in **3.3 seconds**. The 307 is correct behavior (auth-gated route → /login for unauth users), but a 3-second redirect is anomalous. Candidates: Vercel cold start, middleware overhead (note the `middleware.ts` → `proxy.ts` deprecation warning still firing in build output, possibly related), or a slow auth check on the request path. User-perceptible latency on the most-trafficked route. Worth investigating in a future session.
 
