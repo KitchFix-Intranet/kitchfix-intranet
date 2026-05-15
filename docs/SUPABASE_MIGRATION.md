@@ -128,6 +128,20 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - Removed 1 of 5 daily reads, ~17 lines deleted
 - Shipped: PR pending (#28)
 
+**Cron backup-sheets** (`/api/cron/backup-sheets`) - completed 2026-05-15
+- File is 139 lines. Single-responsibility cron: 5x `drive.files.copy`, Slack summary, JSON response. Shipped 2 days prior (PR #14, 2026-05-13).
+- Route is CLEAN - no dead code, no broken paths.
+- Fixed (this PR):
+  - **A1:** Header comment claimed schedule "2am UTC (9pm CT)"; actual schedule is `0 6 * * *` (06:00 UTC / 01:00 CT). Comment now matches `vercel.json` and `RUNBOOK.md:67`.
+  - **A2:** `BACKUP_FOLDER_ID` env var (load-bearing - cron returns 500 without it) was undocumented in `docs/ENV_VARS.md`. Added to Drive folders table.
+  - **B1 (Z):** `SHEET_IDS.GAME` constant lacked context. Added inline comment in `src/lib/sheets.js`: paused gamification pilot from the AppScript era, not in active use, intentionally excluded from the backup-sheets cron, may be revived later. Future audits won't re-raise the question.
+  - **C2:** New GOTCHA captured in `docs/GOTCHAS.md` (Auth & Permissions section). The conditional `CRON_SECRET` auth check in this file (and similar patterns elsewhere) fails open if the env var is unset - production has it set so it's not exploitable today, but the fail-closed pattern is now documented for any new cron routes.
+- Followups (captured, not fixed):
+  - **B2:** This file's hand-rolled service-account auth (`getServiceAccountAuth()` at L37-46) is a second instance of the pattern already flagged in CLAUDE.md "Findings to know about #1" for `/api/people/route.js:80-151`. The Phase 1 hand-rolled-SA-auth cleanup target now covers both files; when consolidation to `getServiceAccountSheetsClient()` from `src/lib/sheets.js` happens, both get refactored together.
+  - **Em-dash sweep:** `docs/RUNBOOK.md:67` contains "Ops Hub — Sheet Backups" with an em-dash. Out of scope for this PR. Worth a future standalone docs PR to sweep all docs for em-dashes, applying the established no-em-dashes preference.
+- **Verdict:** Route is genuinely clean. 2 small drift items fixed (A1, A2), 1 deprecated-constant clarified inline (B1), 1 GOTCHA captured (C2), 2 captures for follow-up (B2, em-dash sweep).
+- Shipped: PR #35 (this PR)
+
 #### Directory route architectural concerns (Stage 1 schema design must address)
 
 These are real concerns we chose to document rather than fix in Sheets. They become non-issues post-migration with Postgres features.

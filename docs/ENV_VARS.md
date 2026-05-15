@@ -50,6 +50,7 @@
 |---|---|---|---|
 | `GOOGLE_INVOICE_DRIVE_FOLDER_ID` | Root Drive folder ID for invoice uploads | Prod, Preview | Invoice uploads fail |
 | `INCIDENTS_DRIVE_ROOT_ID` | Root Drive folder ID for incident attachments | Prod, Preview | Incident attachments fail |
+| `BACKUP_FOLDER_ID` | Drive folder ID where the daily sheet backup cron writes dated copies (`/api/cron/backup-sheets`). | Prod, Preview | Backup cron returns 500 - no backups land |
 
 ### Sheets
 
