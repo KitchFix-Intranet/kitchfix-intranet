@@ -123,7 +123,6 @@ For the service account private key, OAuth client secret, or any API key:
 Crons are at:
 
 - `/api/cron/daily` — 13:00 UTC daily
-- `/api/cron/analytics` — 14:00 UTC daily
 - `/api/cron/incident-reminders` — 14:00 UTC daily
 - `/api/people?action=generate-report&period=weekly` — Mondays 13:00 UTC
 - `/api/people?action=generate-report&period=monthly` — 1st of month 13:00 UTC
@@ -166,3 +165,4 @@ Quick checks:
 - **2026-05-11** — Initial runbook captured during Phase 0. Standard dev loop, rollback, env var addition, user invite, sheet restore, secret rotation, manual cron trigger, health check.
 - **2026-05-12** — Added "Analytics writes are feature-flagged off" section. Prompted by Phase 1 Task 12 (analytics sheet hit the 10M-cell limit; writes gated behind `ANALYTICS_ENABLED`, default off). Covers how to re-enable writes for debugging and why doing so isn't a fix.
 - **2026-05-13** — Rewrote "How to restore a Google Sheet from backup" — backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice — never drill on live sheets.
+- **2026-05-15** — Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3). The "Analytics writes are feature-flagged off" section above is now partially stale (dashboard + cron references) and gets rewritten in PR 3.
