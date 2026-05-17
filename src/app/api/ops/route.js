@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { readSheet, readSheetSA, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { opsNotify } from "@/lib/opsUtils";
 import {
   handleInvoiceGet,
   handleInvoicePost,
@@ -35,24 +36,6 @@ const OPS_LEADERSHIP_EMAILS = [
   "m.chavez@kitchfix.com",
   "s.lynch@kitchfix.com",
 ];
-
-// Notification writer — matches People route format
-// Columns: [timestamp, recipient, channel, subject, eventType, status, relatedInfo]
-// Column H (read flag) left empty = unread
-async function opsNotify(token, { recipient, subject, eventType, relatedInfo }) {
-  const row = [
-    new Date().toISOString(),
-    recipient || "ALL",
-    "bell",
-    subject,
-    eventType || "ops_info",
-    "logged",
-    relatedInfo || "",
-  ];
-  await appendRow(token, SHEET_IDS.COLLECTION, "notification_log", row).catch((e) => {
-    console.warn("[OpsHub] notification_log write failed:", e.message);
-  });
-}
 
 // ─── Simple email sender (uses user's OAuth token) ───
 async function sendOpsEmail(token, { from, to, cc, subject, html }) {
@@ -1029,7 +1012,7 @@ const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency:
         const bevFmt = fmt(beverages);
 
         // Bell notification to submitter
-        await opsNotify(token, {
+        await opsNotify({
           recipient: email,
           subject: `[OPS] Inventory submitted - ${account} ${period} (${totalFmt})`,
           eventType: "inventory_submitted",
@@ -1147,7 +1130,7 @@ const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_plans", row);
 
       if (result.success) {
         const varFmt = variance >= 0 ? `+$${variance.toLocaleString()}` : `-$${Math.abs(variance).toLocaleString()}`;
-await opsNotify(token, {
+        await opsNotify({
           recipient: email,
           subject: `[OPS] Labor actuals submitted - ${account} ${homestandId} (${varFmt})`,
           eventType: "labor_submitted",
@@ -1178,12 +1161,12 @@ const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_sold_revenue"
 
        if (result.success) {
                 const revFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(soldRevenue) || 0);
-await opsNotify(token, {
-          recipient: email,
-          subject: `[OPS] Sold revenue entered - ${account} ${homestandId} (${revFmt})`,
-          eventType: "sold_revenue",
-          relatedInfo: `${account} ${homestandId}`,
-        });
+                await opsNotify({
+                  recipient: email,
+                  subject: `[OPS] Sold revenue entered - ${account} ${homestandId} (${revFmt})`,
+                  eventType: "sold_revenue",
+                  relatedInfo: `${account} ${homestandId}`,
+                });
             }
 
       return NextResponse.json(result);
@@ -1203,7 +1186,7 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
               // Bell notification for invoice rejection
               if (action === "invoice-reject" && result.success && result.origSubmitter) {
                 const totalFmt = `$${Number(result.origTotal || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-                await opsNotify(token, {
+                await opsNotify({
                   recipient: result.origSubmitter,
                   subject: `[OPS] Invoice returned - ${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount} ${totalFmt}`,
                   eventType: "invoice_returned",
@@ -1212,7 +1195,7 @@ if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "
               }
               // Bell notification for unreject (undo return)
               if (action === "invoice-unreject" && result.success && result.origSubmitter) {
-                await opsNotify(token, {
+                await opsNotify({
                   recipient: result.origSubmitter,
                   subject: `[OPS] Invoice return reversed - ${result.origVendor} #${result.origInvNum || "N/A"} ${result.origAccount}`,
                   eventType: "invoice_unrejected",
