@@ -1160,19 +1160,6 @@ await opsNotify(token, {
       return NextResponse.json(result);
     }
 
-    if (action === "help-request") {
-      const { message } = body;
-      if (!message?.trim()) return NextResponse.json({ success: false, error: "Message is required" }, { status: 400 });
-      await notify(token, {
-        type: "help",
-        title: `Ops Help Request from ${userName}`,
-        body: `${userName} (${email}) needs help:\n\n${message.trim()}`,
-        email, targetEmails: OPS_LEADERSHIP_EMAILS,
-});
-          return NextResponse.json({ success: true });
-      }
-
-
 // ── Invoice Actions (POST) ──
 if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject", "invoice-unreject", "invoice-dismiss-dupe", "invoice-delete-dupe"].includes(action)) {
             const result = await handleInvoicePost(action, body, token, email, userName);

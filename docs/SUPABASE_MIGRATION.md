@@ -86,6 +86,10 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 
 #### Audit findings - accumulated as audits complete
 
+**2026-05-17:** Created `docs/BUSINESS_NOTES.md` as a living reference for niche business knowledge embedded in the codebase. The `/api/ops` dispatcher audit (PR #41) surfaced the first entry: MLB/MiLB/AAA P3 Auto-Inclusion rule. Future audits in the Ops Hub sequence (and beyond) should append rules to BUSINESS_NOTES.md as they surface them. This is higher leverage than embedding rules in this migration doc because the rules outlive the migration. BUSINESS_NOTES.md remains useful in 2027 when migration is done; this migration doc loses relevance once Phase 3 ships.
+
+---
+
 **Dashboard route** (`/api/dashboard`) - completed 2026-05-14
 - 3 dead Sheets reads removed (kudos_log, wastenot_log, login_logs)
 - 1 dead Sheets write removed (login_logs visit logging)
@@ -157,6 +161,65 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - Status: very early/raw product, not stable enough for a meaningful Stage 0 audit.
 - Will audit after the route reaches stable v1 status. Auditing in-progress work creates friction with the in-progress work.
 - Not blocking Stage 0 completion; will be folded into Phase 3 migration prep when the feature stabilizes.
+
+**Ops Hub dispatcher** (`/api/ops` - bootstrap, help-request, file-level structure) - completed 2026-05-17
+- First of 6 planned audits covering the Ops Hub. This audit covers the dispatcher itself: GET/POST handler structure, auth pattern, shared imports, file-level helpers, the `bootstrap` action (main page load), and the `help-request` action. Subsequent audits (Inventory submission, Season Tracker, Invoice Capture, Vendor Portal, Smart Inventory) each cover their own action groups.
+- Dispatcher is genuinely CLEAN. Auth pattern matches GET/POST. All imports used. File-level helpers (parseNum, opsNotify, sendOpsEmail, OPS_LEADERSHIP_EMAILS, date helpers) have real callers - none orphan.
+- The hand-rolled SA auth pattern flagged in `CLAUDE.md` "Findings to know about #1" (people/route.js:80-151) and found in a second instance in PR #35 (cron/backup-sheets) is NOT present in this file. `/api/ops/route.js` uses the canonical `readSheetSA`/`appendRowSA`/`appendRow` helpers from `src/lib/sheets.js`. No SA-auth concern.
+
+- **Drift fix (inline with this PR):** Removed the dead `help-request` action handler from route.js (L1163-1173) and the orphan `src/app/ops/components/OpsHelpModal.js` (35 lines, whole-file delete). The handler called `notify(token, {...})` - a function that doesn't exist anywhere in the codebase. The action would have thrown `ReferenceError` if invoked, but `OpsHelpModal.js` (the only frontend caller) was orphan, so the bug was latent rather than live.
+
+  **Product history:** Early in the intranet build, per-module help modals existed (`HelpModal` for People Portal, `OpsHelpModal` for Ops Hub). Later, the global `HelpFAB` system (`submit-help-global` action in `/api/people`) superseded per-module help. PR #27 deleted the People Portal version of the dead help-request system. This audit deletes the Ops Hub version that was missed in that cleanup. Same superseded-by-HelpFAB story, second instance found.
+
+  **If per-module help is ever needed again,** build it fresh against whatever data layer is current (Postgres by Phase 3), not by reviving the Sheets-based dead code.
+
+  **Pattern check before deletion:** confirmed zero third instances. Grep across `src/app/api/` for `submit-help|help-request|HelpModal` (excluding the live `submit-help-global`) returns only the in-scope hit. No further dead help systems hiding in other routes.
+
+- **`bootstrap` action audit** (L685-776, main Ops Hub page load):
+  - Reads 5 sheets in parallel via `Promise.all`: HUB.accounts, HUB.period_data, HUB.hero_images, COLLECTION.inventory_submissions, HUB.labor_budgets. All confirmed populated against `docs/SHEET_INVENTORY_2026-05-14.md`. No stale references.
+  - Computes `activePeriodMap` from labor_budgets (which (account, period) combos have non-zero budget data).
+  - Returns aggregated payload: accounts list, period date ranges, currentPeriod, heroImage, recent inventoryLog, isAdmin flag (via OPS_LEADERSHIP_EMAILS).
+  - CLEAN. No dead reads, no broken paths, no architectural concerns.
+
+#### Data shape for Stage 1 migration design (Ops Hub dispatcher scope)
+
+Sheets/tabs read by the dispatcher (bootstrap action) and their column usage:
+
+| Sheet/Tab | Columns used | Inferred types | Notes |
+|---|---|---|---|
+| `HUB.accounts` | col 0 (key), col 1 (name), col 2 (level) | strings; level is enum-like (MLB/MILB/AAA/PDC) | Other columns may be used by out-of-scope actions; capture during their audits |
+| `HUB.period_data` | col 0 (name), col 1 (start), col 2 (end), col 3 (due) | name is string code (P1-P13); dates are strings parsed via `new Date()` | ~13 rows, small reference data |
+| `HUB.hero_images` | all columns flattened via `row.flat()` | string URLs | Schema-loose; filter is "value contains 'http'" |
+| `COLLECTION.inventory_submissions` | col 2 (email), col 3 (account), col 4 (period), col 5 (date), col 6-11 (numbers food/packaging/supplies/snacks/beverages/total), col 12 (notes) | currency strings parsed via `parseNum` | Transactional table |
+| `HUB.labor_budgets` | col 0 (key), col 1 (period), col 2 (hourly), col 3 (salary), col 4 (revenue), col 5 (food), col 6 (pack) | numbers (raw, no currency formatting) | Drives the `activePeriodMap` computation |
+
+**Joins / cross-references:**
+- `accounts × labor_budgets` joined by account `key` to compute `activePeriodMap`. In Postgres this is an FK relationship: `labor_budgets.account_key REFERENCES accounts.key`.
+
+**Domain rules surfaced by this audit:** see `docs/BUSINESS_NOTES.md` (specifically the "Account-level rules" section). The MLB/MiLB/AAA P3 Auto-Inclusion rule must be preserved through Stage 1 schema design. Implementation options and verification approach documented in BUSINESS_NOTES.md.
+
+**Postgres design hints (dispatcher scope):**
+- `accounts` table - small reference data (~20 rows). PK on `key` (string code). Columns: `name`, `level` (enum).
+- `periods` table - tiny reference (~13 rows). PK on `name` (P1-P13). Columns: `start_date`, `end_date`, `due_date` as proper DATE type. Eliminates the string parsing in `toDate`.
+- `labor_budgets` table - composite PK on `(account_key, period_name)`. FK to both `accounts` and `periods`. Budget columns as NUMERIC.
+- `inventory_submissions` table - transactional with FK to `accounts` and `periods`. Currency columns as NUMERIC (eliminates `parseNum`). Timestamps as TIMESTAMP type.
+- `hero_images` table - very small, very loose schema. Could be JSON config in a settings table rather than its own table.
+- The `activePeriodMap` computation could be a database VIEW joining `accounts × labor_budgets` and applying the MLB/MiLB/AAA P3 rule.
+
+**Currency parsing (`parseNum`) becomes unnecessary in Postgres** - NUMERIC columns return numbers directly. The 10 `parseNum()` calls in this file disappear with the migration.
+
+**Date parsing (`toDate`) becomes unnecessary for dispatcher reads** - Postgres DATE/TIMESTAMP types return proper Date objects.
+
+**Verdict:** Dispatcher is genuinely clean. 1 latent bug found and fixed (dead help-request + orphan OpsHelpModal, second instance of the dead-help-system pattern previously seen in PR #27). 5 in-scope sheet tabs cross-checked against SHEET_INVENTORY (all live, no stale references). One business rule explicitly captured in `docs/BUSINESS_NOTES.md` (P3 auto-include).
+
+- Shipped: PR #41 (this PR)
+
+**Remaining Ops Hub audit queue:**
+- Audit #2: Inventory submission flow (submit-inventory, inventory-history)
+- Audit #3: Season Tracker (labor-bootstrap, submit-labor-actuals, submit-sold-revenue, add-deep-clean, plus buildLaborContext/buildPDCContext helpers at file level)
+- Audit #4: Invoice Capture (10 invoice-* actions + handleInvoiceGet/Post helpers)
+- Audit #5: Vendor Portal (7 vendor-* actions + handleVendor* helpers)
+- Audit #6: Smart Inventory (`/api/ops/inventory` subroute, 117 lines)
 
 #### Directory route architectural concerns (Stage 1 schema design must address)
 

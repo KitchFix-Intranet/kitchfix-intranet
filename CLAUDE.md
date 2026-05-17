@@ -1,10 +1,10 @@
-# CLAUDE.md — KitchFix Ops Hub
+# CLAUDE.md - KitchFix Ops Hub
 
 You are joining a working production codebase. This file is your briefing. Read it fully before touching anything.
 
 ## What this project is
 
-The KitchFix Ops Hub is a Next.js 16 / React 19 internal intranet that serves Executive Chefs, site leads, and ops leadership across MLB, MiLB, PDC, and corporate kitchen accounts — an operational portfolio exceeding $10M annually. It is the operational backbone of a real business with real users. **Production is `main`. There is no staging environment.** Every change merged to `main` deploys to production automatically.
+The KitchFix Ops Hub is a Next.js 16 / React 19 internal intranet that serves Executive Chefs, site leads, and ops leadership across MLB, MiLB, PDC, and corporate kitchen accounts - an operational portfolio exceeding $10M annually. It is the operational backbone of a real business with real users. **Production is `main`. There is no staging environment.** Every change merged to `main` deploys to production automatically.
 
 The maintainer is Kevin Fietek, solo developer and Director of Operations. He is the only person with commit access.
 
@@ -12,12 +12,12 @@ The maintainer is Kevin Fietek, solo developer and Director of Operations. He is
 
 We are mid-migration through a multi-phase architectural arc. Read `docs/MIGRATION.md` for the full plan. The short version:
 
-- **Phase 0 — Done.** Foundations: repo private, previews working, Claude Code adopted, src-backup removed.
-- **Phase 1 — In progress.** Safety net and ergonomics: test suite, CI, observability, AI SDK consolidation, runbook, backup scripts. **No architectural changes in Phase 1.**
-- **Phase 2 — Pending.** TypeScript foundation. Convert `src/lib/*.js` to `.ts`.
-- **Phase 3 — Pending.** Supabase migration, module by module, starting with Incidents.
-- **Phase 4 — Pending.** shadcn/ui + Tailwind v4 + mobile-first + PWA.
-- **Phase 5 — Pending.** Route splitting, naming (Option A — `/ops` dissolves into top-level modules), Dashboard rebuild.
+- **Phase 0 - Done.** Foundations: repo private, previews working, Claude Code adopted, src-backup removed.
+- **Phase 1 - In progress.** Safety net and ergonomics: test suite, CI, observability, AI SDK consolidation, runbook, backup scripts. **No architectural changes in Phase 1.**
+- **Phase 2 - Pending.** TypeScript foundation. Convert `src/lib/*.js` to `.ts`.
+- **Phase 3 - Pending.** Supabase migration, module by module, starting with Incidents.
+- **Phase 4 - Pending.** shadcn/ui + Tailwind v4 + mobile-first + PWA.
+- **Phase 5 - Pending.** Route splitting, naming (Option A - `/ops` dissolves into top-level modules), Dashboard rebuild.
 
 The migration order for Phase 3 is dependency-ordered (not Hub-ordered): Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → Analytics → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory → Financial → Dashboard.
 
@@ -25,12 +25,13 @@ The migration order for Phase 3 is dependency-ordered (not Hub-ordered): Inciden
 
 In this order, every session:
 
-1. `docs/ARCHITECTURE.md` — five-pillar Sheets model, auth boundary, module map
-2. `docs/CONVENTIONS.md` — action-dispatch APIs, CSS prefixes, sheet column conventions
-3. `docs/GOTCHAS.md` — hard-won lessons. Read before debugging anything that smells familiar.
-4. `docs/MIGRATION.md` — the migration plan
+1. `docs/ARCHITECTURE.md` - five-pillar Sheets model, auth boundary, module map
+2. `docs/CONVENTIONS.md` - action-dispatch APIs, CSS prefixes, sheet column conventions
+3. `docs/GOTCHAS.md` - hard-won lessons. Read before debugging anything that smells familiar.
+4. `docs/MIGRATION.md` - the migration plan
+5. `docs/BUSINESS_NOTES.md` - living reference for niche business knowledge (domain rules, account-specific quirks, stakeholder preferences, calculation methodology, historical context). Consult before assuming business logic is wrong. Update when audits or debug sessions surface new rules. Items tagged [PRESERVE THROUGH MIGRATION] must survive Stage 1 schema design.
 
-These four documents are canonical for technical questions. The repo itself is the ground truth — if a doc disagrees with the code, flag the doc drift, don't silently pick one.
+The first four documents are canonical for technical questions. BUSINESS_NOTES.md is canonical for domain rules. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
 
 ## Working agreement
 
@@ -44,7 +45,7 @@ These four documents are canonical for technical questions. The repo itself is t
 
 **The runbook is code.** Every infrastructure change (env var added, Vercel setting changed, cron schedule modified) updates `docs/RUNBOOK.md` in the same commit. Same for env vars touching `docs/ENV_VARS.md`. Don't ship infra changes without doc updates.
 
-**Capacity, not speed, is the constraint.** The maintainer works on this full-time. There's no need to compress phases or skip validation windows to "move faster." When ahead of schedule, use the time for depth (stronger tests, better docs, more polish) rather than pulling future phases forward. The arc's pacing is deliberate — each phase needs to settle before the next builds on it.
+**Capacity, not speed, is the constraint.** The maintainer works on this full-time. There's no need to compress phases or skip validation windows to "move faster." When ahead of schedule, use the time for depth (stronger tests, better docs, more polish) rather than pulling future phases forward. The arc's pacing is deliberate - each phase needs to settle before the next builds on it.
 
 **Floor-first.** Every UI change must work on a 375px viewport before it ships. The mental model: a chef on a phone in a 38°F walk-in cooler with wet hands.
 
@@ -52,13 +53,13 @@ These four documents are canonical for technical questions. The repo itself is t
 
 These files have outsized blast radius. Edit only with explicit user approval and never in autonomous "make it work" mode:
 
-- `src/lib/sheets.js` — the data layer. Changes here affect every module.
-- `src/lib/auth.js` — NextAuth config. Breaking this logs everyone out.
-- `src/middleware.js` — request gating. Breaking this exposes routes.
-- `vercel.json` — cron schedules and deploy config. Wrong values break production silently.
-- `next.config.mjs` — framework config. Wrong values break the build.
-- `package.json` — dependencies. Don't `npm uninstall` anything without confirming.
-- Anything matching `.env*` — **never read, never write, never echo contents to terminal or chat.** If you need to know what an env var contains, ask Kevin.
+- `src/lib/sheets.js` - the data layer. Changes here affect every module.
+- `src/lib/auth.js` - NextAuth config. Breaking this logs everyone out.
+- `src/middleware.js` - request gating. Breaking this exposes routes.
+- `vercel.json` - cron schedules and deploy config. Wrong values break production silently.
+- `next.config.mjs` - framework config. Wrong values break the build.
+- `package.json` - dependencies. Don't `npm uninstall` anything without confirming.
+- Anything matching `.env*` - **never read, never write, never echo contents to terminal or chat.** If you need to know what an env var contains, ask Kevin.
 
 ## Findings to know about (from May 11, 2026 calibration)
 
@@ -78,7 +79,7 @@ These are real issues identified in the codebase that are in the Phase 1 backlog
 
 ## Communication style
 
-Direct and concise. This is a working environment, not a tutorial. If you're uncertain, say so. If something is wrong, push back — agreement isn't helpful. If a plan is weak, say it's weak. The maintainer values honest expert pushback over politeness.
+Direct and concise. This is a working environment, not a tutorial. If you're uncertain, say so. If something is wrong, push back - agreement isn't helpful. If a plan is weak, say it's weak. The maintainer values honest expert pushback over politeness.
 
 Commit messages are terse and lowercase. Examples from the repo's history: "new hire updates," "smart inventory," "incident report v3," "leadership push." Don't impose Conventional Commits. Match the existing voice.
 
@@ -101,7 +102,7 @@ Commit messages are terse and lowercase. Examples from the repo's history: "new 
 
 ## Side project isolation (HARD RULE)
 
-The maintainer has a separate game project. It lives at `~/Holtburg/holtburg-hollow/`. The two projects must never know about each other. You are working only in `~/dev/kitchfix-intranet/`. Do not reference the game project. Do not search for files outside this directory. If the maintainer mentions the game in conversation, redirect back to the intranet — those should stay in their own session.
+The maintainer has a separate game project. It lives at `~/Holtburg/holtburg-hollow/`. The two projects must never know about each other. You are working only in `~/dev/kitchfix-intranet/`. Do not reference the game project. Do not search for files outside this directory. If the maintainer mentions the game in conversation, redirect back to the intranet - those should stay in their own session.
 
 ## Session start checklist
 
@@ -119,4 +120,4 @@ When starting a fresh session, after reading the docs above:
 - Update `docs/ENV_VARS.md` if you added an env var
 - Update `docs/MIGRATION.md` exit criteria checkboxes if applicable
 - Add a one-line entry to the relevant doc's "Captain's log" if a convention or gotcha was learned
-- Commit and push the feature branch — do not merge to main yourself
+- Commit and push the feature branch - do not merge to main yourself
