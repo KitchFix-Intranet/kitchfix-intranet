@@ -268,10 +268,99 @@ Sheets/tabs read by the dispatcher (bootstrap action) and their column usage:
 
 - Shipped: PR #42 (this PR)
 
+**Ops Hub Season Tracker** (`/api/ops` - labor-bootstrap, submit-labor-actuals, submit-sold-revenue, add-deep-clean) - completed 2026-05-17
+- Third of 6 planned audits covering the Ops Hub. Covers the four actions servicing the Season Tracker module: labor-bootstrap (read path that powers both chef and admin views, including the buildLaborContext and buildPDCContext helpers), submit-labor-actuals (the primary chef submission action), submit-sold-revenue (TXR-V revenue entry), and add-deep-clean (operator-added deep-clean day scheduling).
+- All four actions function. Cumulative variance math is sound. Three real bug fixes shipped (streak ordering, idempotency, user-OAuth writes). Three BUSINESS_NOTES entries captured for migration preservation (TXR-V math, append-only pattern, streak methodology).
+
+- **Drift fixes (inline with this PR):**
+  - Added section header dividers: `// ── Labor Actions (GET) ──` for labor-bootstrap and `// ── Labor Actions (POST) ──` for the three submit handlers (parity with Audit #2's Inventory header pattern).
+  - Hoisted `safeRead` to a file-level helper, eliminating the local duplicate in submit-labor-actuals (third duplicate of the same helper - prior duplicates in GET handler and submit-labor-actuals, flagged in Audit #2 as not fixed).
+  - Indentation drift normalized across submit-labor-actuals handler.
+
+- **submit-labor-actuals action audit:**
+  - **C1 (P1) Streak calculation iterated in submission order, not homestand order.** `Object.values(latestByHS)` preserved insertion order, which was sheet row order = chronological submission order. A chef who submitted HS3 before HS1 got a different streak than one who submitted in order, even with identical variances. Fixed: sort `acctPlans` by homestand sequence (extracted from `homestandId` string) before the streak loop.
+  - **C2 (P1) No idempotency on double-tap.** Floor-first concern. Same pattern as Audit #2 inventory. Fixed: client generates submission UUID at Submit-button time, server reads `labor_plans` col 0 before append, returns existing result if UUID is already present.
+  - **C3 (P1) User-OAuth write.** `appendRow(token, ...)` for `labor_plans` required user to have edit permission on COLLECTION sheet. Same Directory audit Concern 1 pattern as the opsNotify duplicate (PR #43). Fixed: swap to `appendRowSA`.
+
+- **submit-sold-revenue action audit:**
+  - **C4 (P1) User-OAuth write.** Same pattern as C3, for `labor_sold_revenue`. Fixed: `appendRowSA`.
+
+- **add-deep-clean action audit:**
+  - **C5 (P1) User-OAuth write.** Same pattern, for `deep_clean_days`. Fixed: `appendRowSA`.
+
+- **labor-bootstrap action audit (including buildLaborContext + buildPDCContext helpers):**
+  - Read path is clean. TXR-V derived-ratio math at L350-355 is correct (captured in BUSINESS_NOTES for migration). The `.pop()` latest-wins pattern at L335 works correctly (captured in BUSINESS_NOTES).
+  - No fixes in this PR. Read-path improvements (cross-account efficiency, helper consolidation) are Stage 1 schema design targets.
+
+- **Findings documented but not fixed in this PR (deferred to Stage 1 or later PRs):**
+  - Client-trusted `budgetEnvelope`, `carryForward`, `actualSpent` in submit-labor-actuals. Works today because client gets budget from server; would corrupt on any future client-side display bug. Server should recompute from `HUB.labor_budgets` (post-Postgres, this is a JOIN, not an extra read).
+  - TXR-V combo submission has no atomicity: `handleSubmitFlex` in `SeasonPlanner.js:280-294` posts revenue then labor in sequence with no rollback. Documented as Stage 1 transaction target.
+  - `submit-sold-revenue` lacks UUID col 0 (other tables have it). Schema inconsistency, Stage 1 cleanup target.
+  - `submit-sold-revenue` has no server-side validation that the account is in REVENUE_FLEX_ACCOUNTS. Could submit revenue for a fixed-budget account silently. Stage 1 CHECK constraint target.
+  - `add-deep-clean` has no UUID col 0 and no delete counterpart. Immutable schedule by default. Stage 1 schema decision: soft-delete or accept immutability.
+  - Dead schema columns in `labor_plans`: `actualFood` and `actualPackaging` are written as 0. Comment in code admits "not tracked in planner". Stage 1 drop target.
+  - `carryForward` parameter flows client → server → sheet but is always 0 from frontend. Either remove (Stage 1) or repurpose for a future feature.
+  - Notes silently truncated to 300 chars in submit-labor-actuals. Mild floor-first issue; consider explicit reject post-migration.
+  - `FinancialTool.js` (parked KPI Dashboard, backlog item #11) has 4 calls to labor-bootstrap. Those calls become dead when KPI Dashboard is deleted. Not in audit scope.
+
+#### Data shape for Stage 1 migration design (Season Tracker scope)
+
+Three tables in scope:
+
+**`COLLECTION.labor_plans`** - 15 columns:
+
+| Col | Field | Type today | Notes |
+|---|---|---|---|
+| 0 | uuid | string (UUID v4) | Written by submit-labor-actuals. **PK candidate in Postgres.** |
+| 1 | timestamp | ISO string | Written. **TIMESTAMPTZ in Postgres.** |
+| 2 | email | string | **FK to users table.** |
+| 3 | account | string code | **FK to `accounts.key`.** |
+| 4 | homestandId | string code (e.g. HS1, HS2, ...) | **FK to `homestands.id`.** |
+| 5 | budgetEnvelope | currency string on read, integer on write | Currently client-supplied (deferred concern). **NUMERIC; Stage 1 should derive from labor_budgets join.** |
+| 6 | carryForward | integer on write | Always 0 today. **Drop or repurpose in Stage 1.** |
+| 7 | actualLaborSpent | integer on write | The single chef-controlled value. **NUMERIC.** |
+| 8 | variance | integer on write | Currently client-supplied. **Generated column in Postgres: `(budgetEnvelope - actualLaborSpent)`.** |
+| 9 | cumulativeVariance | integer on write | Currently server-computed at write time. **Window function in Postgres - eliminates the stored column.** |
+| 10 | streak | integer on write | Currently server-computed at write time. **Window function or trigger-maintained.** |
+| 11 | notes | string (max 300 chars enforced via slice) | **TEXT, with CHECK constraint or trigger for max length.** |
+| 12 | revenueActual | integer on write | TXR-V only; 0 otherwise. **NUMERIC NULL.** |
+| 13 | actualFood | always 0 | Dead. **Drop column.** |
+| 14 | actualPackaging | always 0 | Dead. **Drop column.** |
+
+**`COLLECTION.labor_sold_revenue`** - 5 columns today:
+
+| Col | Field | Notes |
+|---|---|---|
+| 0 | account | **FK to accounts.key.** |
+| 1 | homestandId | **FK to homestands.id.** |
+| 2 | soldRevenue | integer. **NUMERIC.** |
+| 3 | email | **FK to users.** |
+| 4 | timestamp | **TIMESTAMPTZ.** |
+
+**Stage 1 changes:** Add UUID PK col 0. CHECK constraint: only insertable for accounts where `is_revenue_flex = true`.
+
+**`COLLECTION.deep_clean_days`** - 4 columns today:
+
+| Col | Field | Notes |
+|---|---|---|
+| 0 | account | **FK to accounts.key.** |
+| 1 | date | string YYYY-MM-DD. **DATE.** |
+| 2 | email | **FK to users.** |
+| 3 | timestamp | **TIMESTAMPTZ.** |
+
+**Stage 1 changes:** Add UUID PK col 0. Consider soft-delete `deleted_at` column for D6 (no current delete path).
+
+**Postgres design hints:**
+- The `latestByHS` dedup pattern from submit-labor-actuals becomes `DISTINCT ON (account, homestand_id) ORDER BY timestamp DESC`.
+- The TXR-V adjusted budget math becomes a computed view or column joining labor_budgets × labor_sold_revenue × accounts.is_revenue_flex.
+- The streak and cumulativeVariance values currently stored in labor_plans can be derived from window functions on read; storing them is a Sheets-era artifact.
+
+**Verdict:** All four actions function. Three real bug fixes shipped. Three BUSINESS_NOTES entries capture migration-critical business rules (especially TXR-V which would be lost without explicit documentation). Eight findings documented but not fixed (deferred to Stage 1 or future PRs) to keep audit scope surgical.
+
+- Shipped: PR #44 (this PR)
+
 **Remaining Ops Hub audit queue:**
-- Audit #3: Season Tracker (labor-bootstrap, submit-labor-actuals, submit-sold-revenue, add-deep-clean, plus buildLaborContext/buildPDCContext helpers at file level)
-- Audit #4: Invoice Capture (10 invoice-* actions + handleInvoiceGet/Post helpers)
-- Audit #5: Vendor Portal (7 vendor-* actions + handleVendor* helpers)
+- Audit #4 + #5 bundled: Invoice Capture + Vendor Portal (10 invoice-* + 7 vendor-* actions + handleInvoiceGet/Post + handleVendor* helpers from src/lib/invoiceActions.js, ~1,962-line helper file plus dispatcher cases; recon completed 2026-05-17 confirms bundle viability)
 - Audit #6: Smart Inventory (`/api/ops/inventory` subroute, 117 lines)
 
 #### Directory route architectural concerns (Stage 1 schema design must address)

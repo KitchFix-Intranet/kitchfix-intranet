@@ -68,6 +68,7 @@ export default function PeriodCard({ pc, idx, expanded, onToggle, showToast, ope
     setSubmitting(true);
     try {
       const revActual = isRevenueFixed ? pc.revenue : (F.num(revenueInput) || 0);
+      const uuid = crypto.randomUUID();
       const res = await fetch("/api/ops", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -75,6 +76,7 @@ export default function PeriodCard({ pc, idx, expanded, onToggle, showToast, ope
           budgetEnvelope: adjustedBudget, carryForward,
           actualSpent: labor, notes: notesInput.trim(),
           revenueActual: revActual, actualFood: food, actualPackaging: packaging,
+          uuid,
         }),
       });
       const data = await res.json();

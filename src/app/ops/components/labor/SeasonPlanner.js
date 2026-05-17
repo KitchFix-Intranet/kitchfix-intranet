@@ -255,12 +255,13 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
     if (actual <= 0) { showToast?.("Enter the labor amount", "error"); return; }
     setSubmitting(true);
     try {
+      const uuid = crypto.randomUUID();
       const res = await fetch("/api/ops", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit-labor-actuals", account, homestandId: hs.id,
           budgetEnvelope: budget, carryForward: 0, actualSpent: actual,
-          notes: "",
+          notes: "", uuid,
         }),
       });
       const data = await res.json();
@@ -284,12 +285,13 @@ function HomestandCard({ hs, account, showToast, openConfirm, onRefresh, expande
         });
       }
       const adjBudget = finalRev > 0 && laborRatio > 0 ? Math.round(finalRev * laborRatio) : budget;
+      const uuid = crypto.randomUUID();
       const res = await fetch("/api/ops", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "submit-labor-actuals", account, homestandId: hs.id,
           budgetEnvelope: adjBudget, carryForward: 0, actualSpent: actual,
-          notes: "", revenueActual: finalRev,
+          notes: "", revenueActual: finalRev, uuid,
         }),
       });
       const data = await res.json();

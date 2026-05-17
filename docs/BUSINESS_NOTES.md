@@ -51,6 +51,35 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 - **Migration consideration:** Stage 1 schema should enforce this as a Postgres CHECK constraint on the `inventory_submissions` table: `CHECK (food > 0 OR packaging > 0 OR supplies > 0)`. The `total` column should be a generated column: `GENERATED ALWAYS AS (food + packaging + supplies + COALESCE(snacks, 0) + COALESCE(beverages, 0)) STORED`. This eliminates the client-trust bug structurally.
 - **Verification:** After migration, attempt to insert a row with `food=0 AND packaging=0 AND supplies=0` and confirm Postgres rejects it. Attempt to insert a row with mismatched `total` and confirm Postgres overrides it.
 
+### TXR-V revenue-flex labor budget [PRESERVE THROUGH MIGRATION]
+- **What:** The account `TXR - TX - V` (Texas Rangers Visiting) is the only KitchFix MLB account whose labor budget is not a fixed dollar amount. Instead, the labor budget for each homestand is a percentage of that homestand's sold revenue.
+- **Mechanism:**
+  - The P&L provides a labor ratio (e.g. 19.23%) rather than a dollar budget.
+  - In code, the ratio is derived: `laborRatio = budgetEnvelope / forecastedRevenue` (where `budgetEnvelope` and `forecastedRevenue` both come from `HUB.labor_budgets`).
+  - After the homestand closes, the chef submits actual sold revenue. The adjusted budget is then computed: `adjustedEnvelope = soldRevenue * laborRatio`.
+  - Example: forecast $5,000 revenue with $1,000 budget = 20% ratio. Actual revenue $4,500 → adjusted budget $900 (not the original $1,000).
+  - In practice, the derived ratio is constant across all of TXR-V's periods (P4 through P10 all = 0.1923). The code derives it per-homestand to keep the logic uniform, but the ratio could equivalently be stored once as a season-level constant. The Postgres migration design (below) treats this as a single `labor_ratio` value on the `accounts` table - this aligns with operational reality.
+- **Why:** Visiting-team food service revenue is variable and depends on event size, opponent draw, weather. The P&L is structured to give visiting kitchens a percentage envelope rather than a fixed budget so that costs scale with revenue.
+- **Where:**
+  - `src/app/api/ops/route.js` - `REVENUE_FLEX_ACCOUNTS` constant lists revenue-flex accounts. `buildLaborContext` computes the ratio and adjustedEnvelope.
+  - `src/app/ops/components/labor/SeasonPlanner.js` - `handleSubmitFlex` is the chef's combo submission (revenue + labor) that bypasses the standard single-submission flow.
+- **Documented:** 2026-05-17 during Audit #3 (Season Tracker).
+- **Migration consideration:** Move `REVENUE_FLEX_ACCOUNTS` from code constant to a column on the `accounts` table (e.g. `is_revenue_flex` boolean OR a `budget_model` enum with values `fixed` and `revenue_ratio`). In Postgres, the adjusted budget should be a computed column or VIEW: for revenue-flex accounts, `budget = (SELECT sold_revenue FROM labor_sold_revenue WHERE ...) * (labor_ratio FROM labor_budgets)`. The two-stage submission flow (revenue first, then labor) should be a single transaction.
+- **Verification:** After migration, for `TXR - TX - V`, submit revenue $4,500 against a homestand with labor_ratio 0.20 - confirm the adjusted budget shown in the chef UI = $900. Then submit $850 actual labor and confirm variance shows +$50.
+
+### Season Tracker streak calculation
+- **What:** A chef's "streak" is the count of consecutive homestands ending with the most recent submission where actual labor spent was at or under budget envelope (i.e. variance >= 0).
+- **Rules:**
+  - Homestands are iterated in **season sequence order** (HS1, HS2, HS3, ..., not submission order).
+  - Each homestand contributes to the streak if its variance is >= 0 (on or under budget).
+  - A variance < 0 (over budget) resets the streak to 0.
+  - The streak displayed is the streak ending at the most recent homestand, NOT the season's longest run.
+- **Why:** Streaks are a leaderboard mechanic that rewards consistent on-budget execution. They're meaningful only when computed in chronological homestand order - a chef who submits HS3 first and HS1 last shouldn't get a different streak than one who submits in order.
+- **Where:** `src/app/api/ops/route.js` submit-labor-actuals handler computes streak server-side at write time and stores it in the `labor_plans.streak` column. The read path (`buildLaborContext`) trusts the stored value.
+- **Documented:** 2026-05-17 during Audit #3 (corrects the prior implementation that iterated in submission order, see PR #44).
+- **Migration consideration:** In Postgres, streak can be a window function over the labor_plans table: `SUM(CASE WHEN variance >= 0 THEN 1 ELSE 0 END) OVER (PARTITION BY account ORDER BY homestand_sequence ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`. Alternatively, a generated column maintained by trigger on insert. Decision pending Stage 1.
+- **Verification:** After migration, for a chef with submissions in order HS1(+$100), HS2(-$50), HS3(+$200), HS4(+$300), confirm streak = 2 (HS3 and HS4 only). Then submit HS5(+$0) - confirm streak = 3.
+
 ---
 
 ## Vendor-specific patterns
@@ -73,7 +102,16 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Historical context
 
-*(empty - to be populated as audits find them)*
+### Append-only "latest row wins" for labor_plans
+- **What:** The `COLLECTION.labor_plans` table is append-only. Every chef submission - including edits to a previously-submitted homestand - creates a new row rather than updating an existing one. Reads dedupe by taking the latest row per (account, homestand) combo (`.pop()` pattern in code).
+- **Why:** Append-only writes are safer in a Sheets context (no risk of corrupting historical data via row-update bugs). Edit history is preserved as a side effect - if a chef revises P5 numbers three times, all three submissions are in the sheet, with the most recent one winning on read.
+- **Where:** `src/app/api/ops/route.js` - submit-labor-actuals appends; buildLaborContext reads via `plans.filter((pl) => pl.homestandId === hsId).pop()`. Same pattern applies to `labor_sold_revenue` and `deep_clean_days`.
+- **Documented:** 2026-05-17 during Audit #3.
+- **Migration consideration:** In Postgres, two viable patterns:
+  - (a) Keep append-only with a `latest_per_homestand` VIEW that uses `DISTINCT ON (account, homestand_id) ORDER BY created_at DESC`. Preserves full edit history.
+  - (b) Switch to UPDATE semantics with a separate `labor_plans_audit` table for history. Cleaner reads, requires explicit audit trail design.
+  - Decision pending Stage 1.
+- **Verification:** After migration, submit an edit to a previously-submitted homestand. Confirm: the displayed values reflect the edit (latest wins), AND the prior version is recoverable from the audit trail or full table scan.
 
 ---
 
