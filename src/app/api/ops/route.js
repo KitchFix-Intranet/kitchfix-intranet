@@ -37,6 +37,13 @@ const OPS_LEADERSHIP_EMAILS = [
   "s.lynch@kitchfix.com",
 ];
 
+// File-level helper: safeRead wraps readSheetSA with a fail-soft fallback to {headers: [], rows: []}.
+// Hoisted from prior in-handler duplicates (Audit #3, PR #44).
+async function safeRead(spreadsheetId, tabName) {
+  try { return await readSheetSA(spreadsheetId, tabName); }
+  catch (e) { console.warn(`[OpsHub] Sheet "${tabName}" error:`, e.message); return { headers: [], rows: [] }; }
+}
+
 // ─── Simple email sender (uses user's OAuth token) ───
 async function sendOpsEmail(token, { from, to, cc, subject, html }) {
   try {
@@ -659,11 +666,6 @@ export async function GET(request) {
   const action = searchParams.get("action");
   const email = session.user?.email?.toLowerCase().trim();
 
-  const safeRead = async (id, tab) => {
-try { return await readSheetSA(id, tab); }
-    catch (e) { console.warn(`[OpsHub] Sheet "${tab}" error:`, e.message); return { headers: [], rows: [] }; }
-  };
-
   try {
 if (action === "bootstrap") {
        const [accountsRaw, periodsRaw, heroRaw, inventoryRaw, budgetsRaw] = await Promise.all([
@@ -782,6 +784,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
       return NextResponse.json({ success: true, history });
     }
 
+    // ── Labor Actions (GET) ──
     if (action === "labor-bootstrap") {
       const acctParam = searchParams.get("account");
 
@@ -1077,16 +1080,20 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
       return NextResponse.json({ success: true, uuid });
     }
 
+    // ── Labor Actions (POST) ──
     if (action === "submit-labor-actuals") {
-      const { account, homestandId, budgetEnvelope, carryForward, actualSpent, notes, revenueActual } = body;
+      const { account, homestandId, budgetEnvelope, carryForward, actualSpent, notes, revenueActual, uuid: clientUuid } = body;
 
       const variance = Math.round(budgetEnvelope - actualSpent);
 
-const safeRead = async (id, tab) => {
-        try { return await readSheetSA(id, tab); }
-        catch { return { headers: [], rows: [] }; }
-      };
-            const { rows: existingPlans } = await safeRead(SHEET_IDS.COLLECTION, "labor_plans");
+      const { rows: existingPlans } = await safeRead(SHEET_IDS.COLLECTION, "labor_plans");
+
+      // Idempotency - reject duplicate submissions by client UUID (double-tap protection)
+      const uuid = clientUuid || crypto.randomUUID();
+      if (clientUuid && existingPlans.some((r) => String(r[0] || "") === clientUuid)) {
+        return NextResponse.json({ success: true, uuid, deduplicated: true });
+      }
+
       // Deduplicate: keep only the latest row per homestandId (append-only, last wins)
       const latestByHS = {};
       existingPlans
@@ -1095,7 +1102,12 @@ const safeRead = async (id, tab) => {
           const hsId = String(r[4]).trim();
           latestByHS[hsId] = { homestandId: hsId, variance: Number(r[8]) || 0 };
         });
-      const acctPlans = Object.values(latestByHS);
+      // Sort by homestand sequence (HS1, HS2, ...) - streak math requires chronological homestand order, not submission order
+      const acctPlans = Object.values(latestByHS).sort((a, b) => {
+        const numA = parseInt(String(a.homestandId).replace(/[^0-9]/g, ""), 10) || 0;
+        const numB = parseInt(String(b.homestandId).replace(/[^0-9]/g, ""), 10) || 0;
+        return numA - numB;
+      });
 
       let cumulativeVariance = acctPlans.reduce((sum, p) => sum + p.variance, 0) + variance;
       let streak = 0;
@@ -1106,7 +1118,6 @@ const safeRead = async (id, tab) => {
       if (variance >= 0) streak++;
       else streak = 0;
 
-      const uuid = crypto.randomUUID();
       const now = new Date();
       const row = [
         uuid,
@@ -1126,7 +1137,7 @@ const safeRead = async (id, tab) => {
         0, // actualPackaging — not tracked in planner
       ];
 
-const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_plans", row);
+      const result = await appendRowSA(SHEET_IDS.COLLECTION, "labor_plans", row);
 
       if (result.success) {
         const varFmt = variance >= 0 ? `+$${variance.toLocaleString()}` : `-$${Math.abs(variance).toLocaleString()}`;
@@ -1157,7 +1168,7 @@ const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_plans", row);
         new Date().toISOString(),
       ];
 
-const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_sold_revenue", row);
+      const result = await appendRowSA(SHEET_IDS.COLLECTION, "labor_sold_revenue", row);
 
        if (result.success) {
                 const revFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(soldRevenue) || 0);
@@ -1175,7 +1186,7 @@ const result = await appendRow(token, SHEET_IDS.COLLECTION, "labor_sold_revenue"
     if (action === "add-deep-clean") {
       const { account, date } = body;
       const row = [account, date, email, new Date().toISOString()];
-      const result = await appendRow(token, SHEET_IDS.COLLECTION, "deep_clean_days", row);
+      const result = await appendRowSA(SHEET_IDS.COLLECTION, "deep_clean_days", row);
       return NextResponse.json(result);
     }
 
