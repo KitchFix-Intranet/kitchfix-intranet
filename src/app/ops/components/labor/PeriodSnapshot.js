@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import F from "@/app/ops/components/shared/F";
-import SousAI from "@/app/ops/components/labor/SousAI";
 
 export default function PeriodSnapshot({ data, plannerData, acctLabel, acctLevel }) {
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -452,22 +451,6 @@ export default function PeriodSnapshot({ data, plannerData, acctLabel, acctLevel
             </div>
           )}
 
-          {hasActuals && (
-            <SousAI
-              periodId={period.period}
-              periodData={{
-                period: period.period, account: acctLabel,
-                status: period.status === "in_progress" ? "in progress" : isOpen ? "in progress" : "closed",
-                revActual: a.revenue, revBudget: b.revenue, laborActual: a.labor, laborBudget: b.labor,
-                foodActual: a.food, foodBudget: b.food, pkgActual: a.pkg, pkgBudget: b.pkg,
-                laborVar, foodVar, pkgVar, totalVar,
-                grossMargin: a.revenue > 0 ? Math.round((1 - (a.labor + a.food + a.pkg) / a.revenue) * 100) + "%" : "N/A",
-                grossMarginTarget: pctFmt(1 - (b.labor + b.food + b.pkg) / b.revenue),
-                unitDays, unitLabel, laborPerUnit: Math.round(laborPerUnit), laborPerUnitTarget: Math.round(budgetPerUnit),
-                pacing: pacing ? { through: Math.round(pacing.through * 100) + "%", laborProj: Math.round(pacing.laborProj), foodProj: Math.round(pacing.foodProj), daysLeft: pacing.daysLeft } : null,
-              }}
-            />
-          )}
         </div>
       )}
     </div>
