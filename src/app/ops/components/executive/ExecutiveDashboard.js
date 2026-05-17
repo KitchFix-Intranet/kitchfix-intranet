@@ -1,5 +1,4 @@
 "use client";
-import { useState, useEffect } from "react";
 import ExecDonutChart from "@/app/ops/components/executive/ExecDonutChart";
 import ExecSVGTrend from "@/app/ops/components/executive/ExecSVGTrend";
 import ExecRevenueVsCost from "@/app/ops/components/executive/ExecRevenueVsCost";
@@ -7,19 +6,6 @@ import ExecSparkline from "@/app/ops/components/executive/ExecSparkline";
 import ExecDivisionCard from "@/app/ops/components/executive/ExecDivisionCard";
 
 export default function ExecutiveDashboard({ data, onSelectAccount }) {
-  const [sousState, setSousState] = useState("idle");
-  const [sousBullets, setSousBullets] = useState([]);
-  const [sousTone, setSousTone] = useState("neutral");
-  const [sousVisible, setSousVisible] = useState(0);
-  const [sousError, setSousError] = useState("");
-
-  useEffect(() => {
-    if (sousState === "done" && sousVisible < sousBullets.length) {
-      const t = setTimeout(() => setSousVisible((v) => v + 1), 400);
-      return () => clearTimeout(t);
-    }
-  }, [sousState, sousVisible, sousBullets.length]);
-
   if (!data || data.length === 0) {
     return <div className="oh-card" style={{ textAlign: "center", padding: 40 }}><p className="oh-card-desc">No account data available.</p></div>;
   }
@@ -150,40 +136,6 @@ export default function ExecutiveDashboard({ data, onSelectAccount }) {
   const watchlist = accountHealth.filter(
     (a) => a.completed > 0 && (a.laborGrade === "red" || a.foodGrade === "red" || a.packGrade === "red")
   );
-
-  const runPortfolioAnalysis = async () => {
-    setSousState("thinking");
-    setSousError("");
-    try {
-      const redFlags = [];
-      watchlist.forEach((a) => {
-        if (a.laborGrade === "red") redFlags.push(`${a.label}: Hourly labor ${a.laborPct}% over budget ($${Math.abs(a.budgetUsed - a.seasonBudget).toLocaleString()} overage)`);
-        if (a.foodGrade === "red") redFlags.push(`${a.label}: Food ${a.foodPct}% over budget ($${Math.abs(a.foodActualTotal - a.totalFoodBudget).toLocaleString()} overage)`);
-      });
-      const res = await fetch("/api/ops", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "sous-portfolio",
-          portfolioData: {
-            totalAccounts: data.length, mlbCount: mlb.length, pdcCount: pdc.length, milbCount: milb.length,
-            totalRevenueBudget: port.revBudget, totalRevenueActual: port.revActual, totalSalaryBudget: port.salaryBudget,
-            totalCogsBudget: port.cogsBudget, totalCogsActual: port.cogsActual,
-            totalLaborBudget: port.laborBudget, totalLaborActual: port.laborActual,
-            totalFoodBudget: port.foodBudget, totalFoodActual: port.foodActual,
-            totalPackBudget: port.packBudget, totalPackActual: port.packActual,
-            netVariance: port.netVariance, periodsCompleted: periodsWithData, periodsTotal: totalPeriods,
-            currentPeriod, acctReporting,
-            accountSummaries: data.map(a => ({ name: a.label || a.name, level: a.level, variance: a.cumulativeVariance, completed: a.completed, total: a.total })),
-            redFlags,
-          },
-        }),
-      });
-      const result = await res.json();
-      if (result.success && result.bullets?.length > 0) {
-        setSousBullets(result.bullets); setSousTone(result.tone || "neutral"); setSousVisible(0); setSousState("done");
-      } else { setSousError(result.error || "No analysis returned"); setSousState("error"); }
-    } catch { setSousError("Network error — try again"); setSousState("error"); }
-  };
 
   const fmtDollars = (n) => `$${Math.round(n).toLocaleString()}`;
   const fmtShort = (n) => {
@@ -423,29 +375,6 @@ export default function ExecutiveDashboard({ data, onSelectAccount }) {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      <div className="oh-exec-section">
-        <div className="oh-sous-card oh-sous-card--exec">
-          <div className="oh-sous-header">
-            <div className="oh-sous-brand"><div className="oh-sous-icon">{"\u{1F52A}"}</div><div><span className="oh-sous-name">Sous AI</span><span className="oh-sous-tagline">executive portfolio brief</span></div></div>
-            <div className="oh-sous-actions">
-              {sousState === "idle" && <button className="oh-sous-btn" onClick={runPortfolioAnalysis}>Generate Executive Brief</button>}
-              {sousState === "done" && <button className="oh-sous-regen" onClick={() => { setSousState("idle"); setSousBullets([]); setSousVisible(0); }}>{"\u21BB"} Regenerate</button>}
-              {sousState === "error" && <button className="oh-sous-regen" onClick={runPortfolioAnalysis}>Retry</button>}
-            </div>
-          </div>
-          {sousState === "thinking" && (
-            <div className="oh-sous-thinking"><div className="oh-sous-dots"><span className="oh-sous-dot" style={{ animationDelay: "0s" }} /><span className="oh-sous-dot" style={{ animationDelay: "0.2s" }} /><span className="oh-sous-dot" style={{ animationDelay: "0.4s" }} /></div><span>Sous is analyzing the full portfolio...</span></div>
-          )}
-          {sousState === "error" && <div className="oh-sous-error">{sousError}</div>}
-          {sousState === "done" && sousBullets.length > 0 && (
-            <div className="oh-sous-result" style={{ background: sousTone === "positive" ? "#f0fdf4" : sousTone === "caution" ? "#fffbeb" : sousTone === "negative" ? "#fef2f2" : "#f8fafc", borderColor: sousTone === "positive" ? "#bbf7d0" : sousTone === "caution" ? "#fef3c7" : sousTone === "negative" ? "#fecaca" : "#e2e8f0" }}>
-              {sousBullets.map((b, i) => { const icons = ["\u{1F4CA}", "\u26A0\uFE0F", "\u{1F6A8}", "\u{1F4A1}"]; return (<div key={i} className={`oh-sous-bullet${i < sousVisible ? " oh-sous-bullet--visible" : ""}`}><span className="oh-sous-bullet-icon">{icons[i] || "\u{1F4CA}"}</span><span className={i === 3 ? "oh-sous-bullet-text oh-sous-bullet-text--action" : "oh-sous-bullet-text"}>{b}</span></div>); })}
-              <div className="oh-sous-footer"><span>Sous AI · portfolio-wide analysis · {data.length} accounts</span><span>Powered by Claude</span></div>
-            </div>
-          )}
         </div>
       </div>
 

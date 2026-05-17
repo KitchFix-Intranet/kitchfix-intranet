@@ -596,13 +596,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* â”€â”€ Sous AI exec card â”€â”€ */
-.oh-exec-sous-card--exec,
-.oh-sous-card--exec {
-  border: 2px solid var(--oh-mustard-border);
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-}
-
 /* â”€â”€ Data Scope Notice â”€â”€ */
 .oh-exec-scope-notice {
   display: flex;

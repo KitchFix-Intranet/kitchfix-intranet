@@ -142,6 +142,17 @@ The migration is **staged by data category and risk**, not all-at-once. Each sta
 - **Verdict:** Route is genuinely clean. 2 small drift items fixed (A1, A2), 1 deprecated-constant clarified inline (B1), 1 GOTCHA captured (C2), 2 captures for follow-up (B2, em-dash sweep).
 - Shipped: PR #35 (this PR)
 
+**SousAI feature deletion** (`/api/ops` - sous-portfolio + sous-analyze actions) - completed 2026-05-17
+- Discovered during Stage 0 dependency map for the upcoming `/api/ops` audit. SousAI was an early experiment building an AI analysis bot into the Ops Hub (sous-portfolio for executive portfolio briefs, sous-analyze for per-period financial commentary). Not in active use; never progressed to general adoption.
+- Deferring revival until the intranet is more built out and on Supabase. Future re-integration should build fresh against the Postgres data layer, not revive the Sheets-based prototype. Original implementation available in git history.
+- Half-styled state (only one `.oh-sous-*` rule defined; rest of the classes had no rules and rendered with browser defaults) - consistent with this being an early experiment that didn't progress past the "drop in style hooks, fill in later" stage and never got completed.
+- Pre-deletion main SHA: `a36fb9cd32f4dc2c83bc8a4729e6757d6552f480`. To recover the implementation: `git show a36fb9c:src/app/ops/components/labor/SousAI.js` (and similarly for the other 4 files).
+- Deletion shape: ~365 lines across 5 files. 1 whole-file delete (`SousAI.js`, 113 lines), 4 surgical edits (`route.js` handlers 155 lines, `ExecutiveDashboard.js` 72 lines including orphan `useState`/`useEffect` import, `PeriodSnapshot.js` 17 lines, `ops-executive.css` 7 lines).
+- No sheet data dependency. Both backend handlers were stateless: consumed pre-aggregated frontend data, called Anthropic via raw fetch, returned bullets. No Stage 1 schema implications.
+- **Heads up for the next reviewer:** `ExecutiveDashboard.js` (host of these SousAI surgical edits) is part of the parked KPI Dashboard feature set per `docs/ARCHITECTURE.md:213` and `docs/SUPABASE_MIGRATION.md:534`. It has no production navigation entry point. Future KPI Dashboard cleanup PR (separately scoped, see backlog entry below) will likely delete `ExecutiveDashboard.js`, `PeriodSnapshot.js` (also same parked feature), `FinancialTool.js`, the `/financial` route, and 5 sibling `Exec*` files. SousAI's surgical edits here remain correct - they prevent shipping known-broken fetch calls into the parked feature - and will fold into the future deletion as no-op work.
+- **Workaround note:** `ExecutiveDashboard.js` edits #3 (render block) and #4 (`runPortfolioAnalysis` function) required falling back from the Edit tool to bash awk because the file contains literal Unicode escape sequences (`↻`, `\u{1F52A}`, `⚠️`, etc.) that the Edit tool's parameter handling normalizes into rendered glyphs, breaking the content-match. Line-inspection pre-deletion (`sed -n` with line numbers) verified boundaries before each awk ran. This is a harness encoding quirk, not a code or workflow issue. Future-Kevin/future-Claude: if you hit string-not-found in the Edit tool on a file with `\uXXXX` source literals, fall back to awk-by-line-number with explicit boundary verification.
+- Shipped: PR #40 (this PR)
+
 **People leadership-dugout** (`/api/people/leadership-dugout`) - deferred 2026-05-15
 - Status: very early/raw product, not stable enough for a meaningful Stage 0 audit.
 - Will audit after the route reaches stable v1 status. Auditing in-progress work creates friction with the in-progress work.
@@ -592,3 +603,41 @@ These supplement the working agreements in \`MIGRATION.md\`:
   3. **Playwright 15s element-visibility timeouts may be insufficient when prod is slow.** The flaky failure in (1) was likely a 15s `toBeVisible` timeout firing during one of the slow-redirect moments from (2). The test suite currently has 3 tests; if it grows, revisit wait strategies (network idle, more specific selectors) or bump per-step timeouts. Lower priority - largely masked by (1), since preview deploys are more predictable than prod.
 
   **All three are paused, not actively worked.** They sit in the post-migration backlog. (1) is genuinely small if you want to slot it earlier.
+
+- **2026-05-17 (during SousAI deletion prep)** - Double-encoded UTF-8 mojibake discovered in CSS comments
+
+  Discovered via byte-level inspection of `src/app/ops/css/ops-executive.css` while mapping the SousAI deletion (PR #40). Some CSS comment section dividers in source files contain corrupted em-dash sequences - 9 bytes (`c3 a2 e2 80 9d e2 82 ac`) where 3 bytes (`e2 80 94`) should be. The canonical-docs em-dash sweep (PR #36) wouldn't have caught this; that sweep replaced literal em-dash bytes, and mojibake bytes don't match.
+
+  **Scope:** 5 CSS files, 90 total mojibake instances:
+  - `src/app/people/people.css` - 44 instances
+  - `src/app/ops/css/ops-vendor.css` - 16
+  - `src/app/ops/css/ops-executive.css` - 13 (one removed inline with the SousAI block in PR #40)
+  - `src/app/ops/css/ops-shared.css` - 10
+  - `src/app/ops/css/ops-inventory.css` - 7
+
+  All in CSS comment dividers (section labels like `/* — Section Title — */`). No JS/JSX files affected. No functional impact - comments only. Visually ugly when reading the CSS files.
+
+  **Fix:** small dedicated CSS-cleanup PR. Likely a single sed pass replacing the mojibake byte sequence with `-` to satisfy the no-em-dashes preference, since em-dashes were the original intent before the double-encoding event. Extends the source-code em-dash sweep backlog item to include mojibake handling.
+
+  Not blocking any active work.
+
+- **2026-05-17 (during SousAI deletion prep)** - KPI Dashboard / FinancialTool parked-feature cleanup needed
+
+  Discovered during the ExecutiveDashboard reachability check for SousAI deletion (PR #40). The `/financial` route, `FinancialTool.js`, `ExecutiveDashboard.js`, `PeriodSnapshot.js`, and 5 sibling `Exec*` components (`ExecDonutChart`, `ExecSVGTrend`, `ExecRevenueVsCost`, `ExecSparkline`, `ExecDivisionCard`) are all part of the parked KPI Dashboard feature. Files dated 2026-02-26, untouched for three months.
+
+  No production navigation links to `/financial`. Page exists, route is reachable if user types the URL, but no operator surface points there. Pre-existing "parked" status documented at `ARCHITECTURE.md:213` ("removed from active architecture") and `SUPABASE_MIGRATION.md:534` (DO NOT TOUCH list includes "KPI Dashboard parked").
+
+  **Scope of future deletion PR** (~1,800-2,000 lines, 7-8 files):
+  - `src/app/financial/page.js` (whole file)
+  - `src/app/financial/FinancialTool.js` (554 lines)
+  - `src/app/ops/components/executive/ExecutiveDashboard.js` (382 lines, post-SousAI deletion)
+  - `src/app/ops/components/labor/PeriodSnapshot.js` (~457 lines, post-SousAI deletion) - same parked feature, importer is the parked FinancialTool
+  - 5 sibling Exec* files in `executive/` folder
+  - `src/app/api/financial/route.js` (1,828 bytes)
+  - Surgical edits to `HelpFAB.js:15` (remove `/financial` context label)
+  - Possibly `ops-executive.css` (depends on whether anything else uses it post-deletion)
+  - Doc updates: remove `/financial` from `ARCHITECTURE.md` route table; update KPI Dashboard "parked" note to "deleted"
+
+  **Sheet tabs that fed the KPI Dashboard** (documented in `SUPABASE_MIGRATION.md:244` do-not-touch list): `HUB__Performance_*`, `COLL__Cycle_Review_*`, `COLL__WOW_*`, `COLL__Scorecards`. These don't get touched in code deletion (we don't modify sheets remotely), but they become candidates for not-migrating-to-Postgres in Phase 3. Worth a separate captain's log when KPI Dashboard deletion ships to update the do-not-touch list.
+
+  **Not blocking any active work.** Same shape as the mojibake finding - real cleanup item, future PR, captured here so it doesn't get lost.
