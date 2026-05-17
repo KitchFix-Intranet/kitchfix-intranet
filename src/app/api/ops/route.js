@@ -775,19 +775,28 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
       });
     }
 
+    // ── Inventory Actions (GET) ──
     if (action === "inventory-history") {
+      const acctParam = searchParams.get("account");
       const { rows } = await safeRead(SHEET_IDS.COLLECTION, "inventory_submissions");
-const history = rows
-.filter(() => true)
+      const history = rows
+        .filter((r) => !acctParam || String(r[3] || "") === acctParam)
         .map((r, i) => ({
-          id: i, account: String(r[3] || ""), period: String(r[4] || ""),
-          date: r[5] || "", food: parseNum(r[6]), packaging: parseNum(r[7]),
-          supplies: parseNum(r[8]), snacks: parseNum(r[9]),
-          beverages: parseNum(r[10]), total: parseNum(r[11]),
+          id: String(r[0] || i),
+          account: String(r[3] || ""),
+          period: String(r[4] || ""),
+          date: r[5] || "",
+          food: parseNum(r[6]),
+          packaging: parseNum(r[7]),
+          supplies: parseNum(r[8]),
+          snacks: parseNum(r[9]),
+          beverages: parseNum(r[10]),
+          total: parseNum(r[11]),
           notes: String(r[12] || ""),
         }))
-        .reverse().slice(0, 25);
-              return NextResponse.json({ success: true, history });
+        .slice(-25)
+        .reverse();
+      return NextResponse.json({ success: true, history });
     }
 
     if (action === "labor-bootstrap") {
@@ -973,18 +982,42 @@ export async function POST(request) {
   const userName = session.user?.name || "Team Member";
 
   try {
+    // ── Inventory Actions (POST) ──
     if (action === "submit-inventory") {
-      const { account, period, food, packaging, supplies, snacks, beverages, total, notes } = body;
-      const uuid = crypto.randomUUID();
+      const { account, period, food, packaging, supplies, snacks, beverages, notes, uuid: clientUuid, localDate } = body;
+
+      // Server-side validation - mirrors client rule; see BUSINESS_NOTES.md "Inventory submission validation rule"
+      const fNum = Number(food) || 0;
+      const pNum = Number(packaging) || 0;
+      const sNum = Number(supplies) || 0;
+      const snkNum = Number(snacks) || 0;
+      const bevNum = Number(beverages) || 0;
+      if (fNum <= 0 && pNum <= 0 && sNum <= 0) {
+        return NextResponse.json({ success: false, error: "At least one of food, packaging, or supplies must be greater than zero" }, { status: 400 });
+      }
+
+      // Idempotency - reject duplicate submissions by client UUID (double-tap protection)
+      const uuid = clientUuid || crypto.randomUUID();
+      const existing = await safeRead(SHEET_IDS.COLLECTION, "inventory_submissions");
+      if (existing.rows.some((r) => String(r[0] || "") === uuid)) {
+        return NextResponse.json({ success: true, uuid, deduplicated: true });
+      }
+
+      // Server-recompute total - do not trust client-supplied total
+      const total = fNum + pNum + sNum + snkNum + bevNum;
+
+      // Date - prefer client local date; fall back to UTC date if missing (legacy clients)
       const now = new Date();
+      const dateStamp = (typeof localDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(localDate))
+        ? localDate
+        : now.toISOString().split("T")[0];
+
       const row = [
-        uuid, now.toISOString(), email, account, period,
-        now.toISOString().split("T")[0],
-        Number(food) || 0, Number(packaging) || 0, Number(supplies) || 0,
-        Number(snacks) || 0, Number(beverages) || 0, Number(total) || 0,
+        uuid, now.toISOString(), email, account, period, dateStamp,
+        fNum, pNum, sNum, snkNum, bevNum, total,
         String(notes || ""),
       ];
-const result = await appendRowSA(SHEET_IDS.COLLECTION, "inventory_submissions", row);
+      const result = await appendRowSA(SHEET_IDS.COLLECTION, "inventory_submissions", row);
 
        if (result.success) {
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
@@ -1055,7 +1088,10 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
         }
       }
 
-      return NextResponse.json(result);
+      if (!result.success) {
+        return NextResponse.json({ success: false, error: result.error || "Append failed" }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, uuid });
     }
 
     if (action === "submit-labor-actuals") {

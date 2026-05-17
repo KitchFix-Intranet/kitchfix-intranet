@@ -31,6 +31,7 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
   const [activeTab, setActiveTab] = useState("form");
   const [history, setHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [submissionUuid, setSubmissionUuid] = useState(null);
   const [lastSaved, setLastSaved] = useState(null);
   const [undoData, setUndoData] = useState(null);
   const [undoTimer, setUndoTimer] = useState(null);
@@ -41,6 +42,7 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
   const suppRef = useRef(null);
   const snackRef = useRef(null);
   const bevRef = useRef(null);
+  const lastLoadedAccountRef = useRef(null);
   const inputRefs = useMemo(() => [foodRef, packRef, suppRef, snackRef, bevRef], []);
   const popRef = useRef(null);
   const locPopRef = useRef(null);
@@ -195,14 +197,17 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
   }, [periodPop, locationPop]);
 
   const loadHistory = useCallback(() => {
-    if (history) return;
+    if (history && lastLoadedAccountRef.current === account) return;
+    if (!account) { setHistory([]); lastLoadedAccountRef.current = null; return; }
+    lastLoadedAccountRef.current = account;
     setHistoryLoading(true);
-    fetch("/api/ops?action=inventory-history")
+    const url = `/api/ops?action=inventory-history&account=${encodeURIComponent(account)}`;
+    fetch(url)
       .then((r) => r.json())
       .then((d) => setHistory(d.success ? d.history : []))
       .catch(() => setHistory([]))
       .finally(() => setHistoryLoading(false));
-  }, [history]);
+  }, [history, account]);
 
   useEffect(() => {
     if (activeTab === "history") loadHistory();
@@ -223,24 +228,34 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
     return true;
   };
 
-  const handleReview = () => { if (validate()) setShowReview(true); };
+  const handleReview = () => {
+    if (!validate()) return;
+    if (!submissionUuid) setSubmissionUuid(crypto.randomUUID());
+    setShowReview(true);
+  };
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    const d = new Date();
+    const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     try {
       const res = await fetch("/api/ops", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "submit-inventory", account, period: activePeriod,
+          action: "submit-inventory",
+          uuid: submissionUuid,
+          localDate,
+          account, period: activePeriod,
           food: F.num(food), packaging: F.num(packaging), supplies: F.num(supplies),
-          snacks: F.num(snacks), beverages: F.num(beverages), total, notes: notes.trim(),
+          snacks: F.num(snacks), beverages: F.num(beverages), notes: notes.trim(),
         }),
       });
       const data = await res.json();
       if (data.success) {
         setShowReview(false);
         setShowSuccess(true);
+        setSubmissionUuid(null);
         try { localStorage.removeItem(cacheKey); } catch {}
         refreshConfig();
         setHistory(null);

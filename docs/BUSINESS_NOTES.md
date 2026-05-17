@@ -43,7 +43,13 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Calculation methodology
 
-*(empty - to be populated as audits find them)*
+### Inventory submission validation rule
+- **What:** A valid inventory submission requires at least one of `food`, `packaging`, or `supplies` to be greater than zero. `snacks` and `beverages` are optional. `total` equals the sum of all five components.
+- **Why:** A submission with only `snacks` or `beverages` is not a real inventory event in the KitchFix data model; primary cost categories must be present.
+- **Where:** Validation enforced server-side in `src/app/api/ops/route.js` submit-inventory handler post-Audit #2. Mirror client validation in `src/app/ops/components/inventory/InventoryTool.js` `validate()` function.
+- **Documented:** 2026-05-17 during Audit #2.
+- **Migration consideration:** Stage 1 schema should enforce this as a Postgres CHECK constraint on the `inventory_submissions` table: `CHECK (food > 0 OR packaging > 0 OR supplies > 0)`. The `total` column should be a generated column: `GENERATED ALWAYS AS (food + packaging + supplies + COALESCE(snacks, 0) + COALESCE(beverages, 0)) STORED`. This eliminates the client-trust bug structurally.
+- **Verification:** After migration, attempt to insert a row with `food=0 AND packaging=0 AND supplies=0` and confirm Postgres rejects it. Attempt to insert a row with mismatched `total` and confirm Postgres overrides it.
 
 ---
 
@@ -55,7 +61,13 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Stakeholder preferences
 
-*(empty - to be populated as audits find them)*
+### Inventory submission AP fanout [PRESERVE THROUGH MIGRATION]
+- **What:** Every `submit-inventory` triggers a 3-channel fanout: bell notification to submitter, HTML email to `ap@kitchfix.com` (cc submitter), Slack post to `#opshub-inventory-submissions`.
+- **Why:** AP does not read the COLLECTION sheet directly. The email to `ap@kitchfix.com` is the handoff channel - it is how AP receives inventory submissions for accounting entry. Loss of this email means AP does not know an inventory event happened.
+- **Where:** `src/app/api/ops/route.js` submit-inventory handler (post-Audit #2 line numbers shift; search `action === "submit-inventory"`)
+- **Documented:** 2026-05-17 during Audit #2 (inventory submission flow).
+- **Migration consideration:** Post-Postgres, AP could read the table directly via a dashboard or scheduled report. The email path could become optional/configurable. Until that flip is explicitly designed and shipped, the email path must be preserved through migration.
+- **Verification:** Submit a test inventory row post-migration. Confirm `ap@kitchfix.com` receives the formatted HTML email within 30 seconds.
 
 ---
 

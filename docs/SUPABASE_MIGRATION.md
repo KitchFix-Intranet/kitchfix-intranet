@@ -214,8 +214,60 @@ Sheets/tabs read by the dispatcher (bootstrap action) and their column usage:
 
 - Shipped: PR #41 (this PR)
 
+**Ops Hub inventory submission flow** (`/api/ops` - submit-inventory, inventory-history) - completed 2026-05-17
+- Second of 6 planned audits covering the Ops Hub. Covers the two actions servicing `InventoryTool.js`: the `submit-inventory` POST handler (writes rows to `COLLECTION.inventory_submissions`, triggers AP fanout) and the `inventory-history` GET handler (reads recent rows for the History tab).
+- Both actions function. No new dead code. Several P1 cleanups around correctness (client-trusted total, UTC date stamping, no idempotency) and UX (cross-account history slice). One architectural finding crosses into Audit #1 territory - documented separately below and broken out into its own focused PR (see "opsNotify duplicate" entry).
+
+- **Drift fixes (inline with this PR):**
+  - Removed `.filter(() => true)` no-op in inventory-history (dead code, 1 line).
+  - Added section header dividers for inventory actions in both GET and POST handlers, matching the Invoice/Vendor section header convention (parity item; no functional change).
+  - Fixed indentation drift across both handlers (cosmetic; ~10 lines).
+
+- **submit-inventory action audit** (called from `InventoryTool.js` handleSubmit):
+  - **C1 (P1) Client-trusted `total`.** Server destructured `total` from request body and wrote it as-is. A client bug or tampered request could store a `total` that does not match `food + packaging + supplies + snacks + beverages`. Fixed: server now recomputes `total` from the component values; the body field is ignored.
+  - **C2 (P1) No idempotency on double-tap.** Floor-first concern. A chef double-tapping the Submit button on lounge wifi could write two rows with different server-generated UUIDs. Fixed: client now generates UUID at Review-button time and passes it in body; server reads `inventory_submissions` col A before append and returns the existing result if UUID is already present.
+  - **C3 (P1) UTC date stamping.** `now.toISOString().split("T")[0]` stamped the date column with UTC date. A 9pm Central submission on Friday wrote a Saturday date. Fixed: client now sends `localDate` (YYYY-MM-DD from `new Date()` in browser local time) in body; server uses it directly.
+  - **C4 (P3) Return shape leak.** Handler returned the raw `appendRowSA` result (`{success, updatedRange}` or `{success, error}`) which leaked internal range info. Fixed: normalized to `{success: true, uuid}` on success.
+  - **C5 (P3) Server-side validation gap.** Client validation requires `food OR packaging OR supplies > 0`. Server had no equivalent check, so a direct POST to `/api/ops` could write an all-zeros row. Fixed: server mirrors the client rule and returns 400 on violation. Captured in `BUSINESS_NOTES.md` for migration as a CHECK constraint.
+
+- **inventory-history action audit** (called from `InventoryTool.js` loadHistory):
+  - **H1 (P1) Cross-account history bleed.** Server returned the last 25 rows across ALL accounts. Client filtered to the selected location *client-side*, so during heavy submission periods the cross-account top-25 could contain zero rows for the requesting user's site and the History tab would show empty even after a successful submission moments before. Also a privilege-boundary concern: the cross-account dollar figures were visible in raw network responses to any authenticated user via DevTools. Fixed: server now accepts an `account` query param, filters rows to that account before the 25-row slice, and the client passes its selected location.
+  - **H2 (P2) `.reverse().slice(0, 25)` reverses entire array before slicing.** Scales linearly with sheet size. Fixed: `.slice(-25).reverse()`.
+  - **H3 (P2) Array-index `id`.** Used `id: i` (the post-filter array index) as the row identifier. Fragile to any reordering. Fixed: use col-0 UUID, fall back to index only if UUID is missing.
+  - **H4 (P3) Orphan columns on read.** `email` (col 2) and `timestamp` (col 1) are written by submit-inventory but never returned by inventory-history. `bootstrap.inventoryLog` returns `email` but not `timestamp`. Documented in the data-shape table below as a Stage 1 design item, not fixed in this PR.
+
+- **Cross-handler observation - partial redundancy with `bootstrap`.** Bootstrap (Audit #1 scope) returns the full unfiltered inventoryLog at `/api/ops?action=bootstrap`. inventory-history returns the last 25 rows for a single account. The two reads overlap but serve different views: bootstrap powers period-status calculations across the whole hub; inventory-history powers the History tab in InventoryTool. Not deduplicated in this PR. Stage 1 schema design should consolidate to a single parameterized query.
+
+- **Architectural finding (broken out to a separate PR):** Audit #1 stated "no SA-auth concern in this file" because no JWT is hand-rolled. That is correct but missed a subtler issue: `route.js:42` defines a local `opsNotify(token, payload)` that writes via `appendRow` (user OAuth), while `src/lib/opsUtils.js:96` exports a canonical `opsNotify(payload)` that writes via `appendRowSA` (service account). The local version has 5 call sites in route.js. This is the same shape as Directory audit Concern 1: user OAuth used for a write that does not need it. Folding the dedup into Audit #2 would expand scope into labor-actuals (Audit #3 territory) and 3 other handlers. Pulled out into its own follow-up PR so Audit #2 stays surgical and Audit #3 can review labor-actuals with the canonical opsNotify in place. Tracked as a 2026-05-17 captain's log entry below.
+
+#### Data shape for Stage 1 migration design (inventory submission scope)
+
+`COLLECTION.inventory_submissions` - 13 columns:
+
+| Col | Field | Type today | Notes |
+|---|---|---|---|
+| 0 | uuid | string (UUID v4) | Written by submit-inventory. Read by submit-inventory (dedup check) post-Audit #2 and by inventory-history (row id) post-Audit #2. **PK candidate in Postgres.** |
+| 1 | timestamp | ISO string | Written but never returned. Audit-trail column. **TIMESTAMPTZ in Postgres.** |
+| 2 | email | string | Returned only by `bootstrap.inventoryLog`. Not returned by inventory-history. **FK to users table; symmetrize across reads in Stage 1.** |
+| 3 | account | string code | FK to `accounts.key`. |
+| 4 | period | string code (P1-P13) | FK to `periods.name`. |
+| 5 | date | string (YYYY-MM-DD) | Currently client-supplied local date post-Audit #2. **DATE in Postgres.** |
+| 6-10 | food, packaging, supplies, snacks, beverages | currency strings on read, numbers on write | `parseNum` parsed on read. **NUMERIC in Postgres - parseNum gone.** |
+| 11 | total | currency string on read, number on write | Currently server-recomputed at write post-Audit #2. **GENERATED column in Postgres - eliminates client-trust bug structurally.** |
+| 12 | notes | string | Free-text. **TEXT in Postgres.** |
+
+**Postgres design hints:**
+- `inventory_submissions` table: PK on `uuid`. FKs to `accounts(key)`, `periods(name)`. Numeric cols. `total` as generated column.
+- CHECK constraint: `food > 0 OR packaging > 0 OR supplies > 0` enforces the validation rule (see BUSINESS_NOTES `## Calculation methodology / Inventory submission validation rule`).
+- Account-level row-level security (Postgres RLS) replaces the server-side account filter from H1. Stage 1 should consider RLS policies keyed on `accounts.key` so the application layer no longer carries authorization logic for cross-account reads.
+- `inventory-history` query becomes `SELECT ... FROM inventory_submissions WHERE account = $1 ORDER BY timestamp DESC LIMIT 25` - the `.slice(-25).reverse()` problem disappears.
+- Consolidate `bootstrap.inventoryLog` and `inventory-history` to a single parameterized query in Stage 1 (cross-handler observation above).
+
+**Verdict:** Both actions function and now correctly handle the four floor-first risks (client-trusted total, UTC dates, double-tap, cross-account bleed). One architectural pattern (`opsNotify` duplicate) surfaced and broken out to a focused follow-up PR. Two BUSINESS_NOTES entries added (AP fanout, validation rule).
+
+- Shipped: PR #42 (this PR)
+
 **Remaining Ops Hub audit queue:**
-- Audit #2: Inventory submission flow (submit-inventory, inventory-history)
 - Audit #3: Season Tracker (labor-bootstrap, submit-labor-actuals, submit-sold-revenue, add-deep-clean, plus buildLaborContext/buildPDCContext helpers at file level)
 - Audit #4: Invoice Capture (10 invoice-* actions + handleInvoiceGet/Post helpers)
 - Audit #5: Vendor Portal (7 vendor-* actions + handleVendor* helpers)
@@ -704,3 +756,19 @@ These supplement the working agreements in \`MIGRATION.md\`:
   **Sheet tabs that fed the KPI Dashboard** (documented in `SUPABASE_MIGRATION.md:244` do-not-touch list): `HUB__Performance_*`, `COLL__Cycle_Review_*`, `COLL__WOW_*`, `COLL__Scorecards`. These don't get touched in code deletion (we don't modify sheets remotely), but they become candidates for not-migrating-to-Postgres in Phase 3. Worth a separate captain's log when KPI Dashboard deletion ships to update the do-not-touch list.
 
   **Not blocking any active work.** Same shape as the mojibake finding - real cleanup item, future PR, captured here so it doesn't get lost.
+
+- **2026-05-17 (during Audit #2 - inventory submission flow)** - opsNotify duplicate consolidation needed
+
+  `src/app/api/ops/route.js:42` defines a local `opsNotify(token, payload)` that writes via user-OAuth `appendRow`; `src/lib/opsUtils.js:96` exports a canonical `opsNotify(payload)` that writes via service-account `appendRowSA`. Five call sites in `route.js` use the local legacy version. Same shape as Directory audit Concern 1: user OAuth used for a write that does not need it.
+
+  **Corrective addendum to Audit #1:** Audit #1's "no SA-auth concern in this file" line is technically correct (no hand-rolled JWT), but it missed the user-OAuth-write-via-wrapper - the local `opsNotify` is the gap. That line in `SUPABASE_MIGRATION.md` (the Ops Hub dispatcher audit entry) gets a corrective addendum once the consolidation ships.
+
+  **Scope of the future consolidation PR:**
+  - Delete the local `opsNotify` definition in `route.js:42-55`.
+  - Import canonical `opsNotify` from `@/lib/opsUtils`.
+  - Drop the `token` arg at 5 call sites. Touches submit-inventory (just shipped in Audit #2), submit-labor-actuals (Audit #3 territory), and 3 other handlers (likely invoice + vendor adjacent).
+  - Update Audit #1 entry with the corrective addendum.
+
+  **Why a separate PR:** Folding into Audit #2 would expand scope into labor-actuals (Audit #3 territory) and 3 other handlers, blowing up the audit's surgical scope. Pulled into its own follow-up so Audit #2 ships clean and Audit #3 reviews labor-actuals against the canonical `opsNotify` in place.
+
+  **Not blocking any active work.** Same shape as the mojibake and KPI Dashboard findings - real cleanup item, future PR, captured here so it doesn't get lost.
