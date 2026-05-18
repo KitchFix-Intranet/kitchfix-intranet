@@ -67,6 +67,8 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
   const submit = () => {
     if (!form.category) { showToast("Category is required", "error"); return; }
     setSaving(true);
+    // F19b (Audit #4): per-submit-click UUID for server-side idempotency
+    const submitUuid = crypto.randomUUID();
     fetch("/api/ops", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,6 +87,7 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
         paymentTerms: form.paymentTerms,
         deliveryDays: form.deliveryDays.join(","),
         minOrder:     form.minOrder ? Number(form.minOrder) : "",
+        uuid:         submitUuid,
       }),
     })
       .then((r) => r.json())

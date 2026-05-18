@@ -222,6 +222,8 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   const handleSubmit = async () => {
     if (saving) return;
     setSaving(true);
+    // F19b (Audit #4): per-submit-click UUID for server-side idempotency
+    const submitUuid = crypto.randomUUID();
     try {
       const res = await fetch("/api/ops", {
         method: "POST",
@@ -247,6 +249,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
           paymentTerms:       form.paymentTerms,
           minOrder:           form.minOrder,
           existingVendorId:   form.existingVendorId || undefined,
+          uuid:               submitUuid,
         }),
       });
       const data = await res.json();

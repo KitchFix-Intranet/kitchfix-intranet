@@ -6,10 +6,11 @@
  * UPDATED: invoice-photo-gate now returns pageNumber / totalPages / pageNumberConfidence
  */
 
-import { readSheet, appendRow, appendRows, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheetSA, appendRows, appendRowSA, findRowByValueSA, updateCellSA, updateRangeSA, batchUpdateRangesSA, deleteRowSA, getSheetIdSA, safeRead, SHEET_IDS } from "@/lib/sheets";
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
+import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 
 // ─── Document Type Labels (Photo Gate) ───
 const DOC_TYPE_LABELS = {
@@ -303,11 +304,6 @@ function parseSubmissionRow(r) {
 
 export async function handleInvoiceGet(action, searchParams, token, email) {
 
-  const safeRead = async (id, tab) => {
-    try { return await readSheet(token, id, tab); }
-    catch (e) { console.warn(`[Invoice] Sheet "${tab}" error:`, e.message); return { headers: [], rows: [] }; }
-  };
-
   // ── Invoice Bootstrap ──
   if (action === "invoice-bootstrap") {
     const accountParam = searchParams.get("account");
@@ -364,7 +360,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       const tabName = getGLTabName(accountParam);
       if (tabName) {
         try {
-          const glRaw = await readSheet(token, SHEET_IDS.GL_CODES, tabName);
+          const glRaw = await readSheetSA(SHEET_IDS.GL_CODES, tabName);
           glCodes = parseGLCodes(glRaw.rows);
         } catch (e) {
           console.warn(`[Invoice] GL codes for "${tabName}" failed:`, e.message);
@@ -378,8 +374,8 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       recentSubmissions = subRaw.rows
         .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
         .map(parseSubmissionRow)
-        .reverse()
-        .slice(0, 200);
+        .slice(-200)
+        .reverse();
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
     }
@@ -405,8 +401,8 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
     const history = subRaw.rows
       .filter((r) => { const acct = String(r[3] || "").trim(); return accountParam ? acct === accountParam : true; })
       .map(parseSubmissionRow)
-      .reverse()
-      .slice(0, 200);
+      .slice(-200)
+      .reverse();
     return { success: true, history };
   }
 
@@ -737,10 +733,6 @@ INVOICE NUMBER RULES:
       let vendorMatch = null;
       if (parsed.vendorName) {
         try {
-          const safeRead = async (id, tab) => {
-            try { return await readSheet(token, id, tab); }
-            catch { return { headers: [], rows: [] }; }
-          };
           const vendorData = await safeRead(SHEET_IDS.HUB, "vendor_master");
           vendorMatch = fuzzyMatchVendor(parsed.vendorName, vendorData.rows);
         } catch (e) {
@@ -892,24 +884,65 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
       paymentTerms, minOrder, existingVendorId,
     } = body;
 
+    // F19b (Audit #4): client-UUID idempotency. Frontend sends body.uuid; same UUID = same submit-click.
+    // Stored at vendor_master col J (index 9) and vendor_accounts col X (index 23).
+    const clientUuid = body.uuid || crypto.randomUUID();
+
     let vendorId = existingVendorId;
 
     if (!vendorId) {
       if (!vendorName?.trim()) return { success: false, error: "Vendor name is required" };
+
+      const masterRead = await safeRead(SHEET_IDS.HUB, "vendor_master");
+
+      // F19b: short-circuit if this clientUuid already created a vendor_master row
+      const priorMaster = masterRead.rows.find((r) => String(r[9] || "") === clientUuid);
+      if (priorMaster) {
+        return {
+          success: true,
+          vendorId: String(priorMaster[0] || ""),
+          vendorName: String(priorMaster[1] || ""),
+          deduplicated: true,
+        };
+      }
+
+      // F19a (Audit #4): retry on vendor-ID collision. 900 possible suffixes per 3-letter prefix
+      // makes eventual collision statistically certain as KitchFix scales. Up to 5 retries.
       const prefix = vendorName.trim().substring(0, 3).toUpperCase().replace(/[^A-Z]/g, "X");
-      const suffix = String(Math.floor(Math.random() * 900) + 100);
-      vendorId = `${prefix}-${suffix}`;
+      const existingVendorIds = new Set(masterRead.rows.map((r) => String(r[0] || "").trim()).filter(Boolean));
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const candidate = `${prefix}-${Math.floor(Math.random() * 900) + 100}`;
+        if (!existingVendorIds.has(candidate)) { vendorId = candidate; break; }
+      }
+      if (!vendorId) {
+        return { success: false, error: `Failed to generate unique vendor ID after 5 attempts for prefix "${prefix}"` };
+      }
 
       const masterRow = [
         vendorId, vendorName.trim(), category || "", website || "", notes || "",
         email, new Date().toISOString(),
+        "", "",         // col H (lastInvoiceDate, unused), col I (aliases, populated later by learnVendorAlias)
+        clientUuid,     // col J: F19b idempotency key
       ];
 
-      const masterResult = await appendRow(token, SHEET_IDS.HUB, "vendor_master", masterRow);
+      const masterResult = await appendRowSA(SHEET_IDS.HUB, "vendor_master", masterRow);
       if (!masterResult.success) return { success: false, error: "Failed to create vendor: " + masterResult.error };
     }
 
     if (!account?.trim()) return { success: false, error: "Account is required" };
+
+    // F19b: dedup vendor_accounts insert when this clientUuid already linked a vendor-account pair
+    // (covers existingVendorId double-tap; new-vendor case usually caught by the master dedup above).
+    const accountsRead = await safeRead(SHEET_IDS.HUB, "vendor_accounts");
+    const priorAccount = accountsRead.rows.find((r) => String(r[23] || "") === clientUuid);
+    if (priorAccount) {
+      return {
+        success: true,
+        vendorId: String(priorAccount[1] || ""),
+        vendorName: body.vendorName || "",
+        deduplicated: true,
+      };
+    }
 
     const rowId = `${vendorId}_${account.split(" - ").slice(0, 2).join("-")}`;
     const accountRow = [
@@ -920,11 +953,12 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
       contactName || "", contactEmail || "", contactPhone || "",
       paymentTerms || "", minOrder || "", "TRUE",
       email, new Date().toISOString(),
-      "",
-      body.accountNotes || "",
+      "",                       // col V: unused per Phase 2 F11
+      body.accountNotes || "",  // col W
+      clientUuid,               // col X: F19b idempotency key
     ];
 
-    const accountResult = await appendRow(token, SHEET_IDS.HUB, "vendor_accounts", accountRow);
+    const accountResult = await appendRowSA(SHEET_IDS.HUB, "vendor_accounts", accountRow);
 
     if (accountResult.success && process.env.SLACK_VENDOR_WEBHOOK) {
       fetch(process.env.SLACK_VENDOR_WEBHOOK, {
@@ -958,7 +992,9 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       return { success: false, error: "At least one GL code is required" };
     }
 
-    const uuid = crypto.randomUUID();
+    // F25 (Audit #4): accept client-supplied UUID so retries of the same submit-click are idempotent.
+    // Falls back to server-generated for legacy clients that don't send uuid.
+    const uuid = body.uuid || crypto.randomUUID();
     const now = new Date();
     const type = formType || "invoice";
 
@@ -968,7 +1004,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       try {
         const glTabName = getGLTabName(account);
         if (glTabName) {
-          const glRaw = await readSheet(token, SHEET_IDS.GL_CODES, glTabName);
+          const glRaw = await readSheetSA(SHEET_IDS.GL_CODES, glTabName);
           const glGroups = parseGLCodes(glRaw.rows);
           const glLookup = {};
           for (const group of glGroups) {
@@ -1005,35 +1041,16 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         console.error("[Invoice] Raw PDF generation failed:", rawErr.message);
       }
 
-      // 2. Upload to Drive
-      let driveUrls = [];
-            try {
-        if (pdfBuffer) {
-          const pdfResult = await uploadStampedPDF(token, pdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "");
-          if (pdfResult.fileUrl) driveUrls = [pdfResult.fileUrl];
-        } else {
-          const driveResults = await uploadInvoicePages(token, pages, vendor, account, invoiceDate);
-          driveUrls = driveResults.filter((r) => r.fileUrl).map((r) => r.fileUrl);
-        }
-} catch (driveErr) {
-        console.error("[Invoice] Drive upload failed:", driveErr.message);
-      }
-
-      // 2b. Upload raw PDF archive
-      let rawDriveUrl = "";
+      // 2. F24+F25 (Audit #4): combined dedup check BEFORE Drive uploads to prevent orphan PDFs.
+      // F25 idempotency check (always): same clientUuid means same submit-click; return existing result.
+      // Field-based duplicate guard (skipped for corrections): same vendor+invoice+date+amount = block.
       try {
-        if (rawPdfBuffer) {
-          const rawResult = await uploadStampedPDF(token, rawPdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_RAW_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "RAW_");
-          if (rawResult.fileUrl) rawDriveUrl = rawResult.fileUrl;
+        const dupRead = await readSheetSA(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+        if (dupRead.rows.some((r) => String(r[0] || "") === uuid)) {
+          console.log(`[Invoice] F25 idempotency: clientUuid ${uuid.slice(0, 8)} already processed, returning dedup`);
+          return { success: true, uuid, deduplicated: true };
         }
-      } catch (rawUpErr) {
-        console.error("[Invoice] Raw PDF upload failed (non-blocking):", rawUpErr.message);
-      }
-
-      // 2c. Server-side duplicate guard (prevents race condition from double-tap)
-      if (!correctedFromUuid) {
-        try {
-          const dupRead = await readSheet(token, SHEET_IDS.COLLECTION, "invoice_submissions_26");
+        if (!correctedFromUuid) {
           const normalizeInv = (n) => String(n || "").trim().replace(/^[#\s]+/, "").replace(/^0+/, "") || "0";
           const inputNorm = normalizeInv(invoiceNumber);
           const dupFound = dupRead.rows.find((r) => {
@@ -1049,12 +1066,37 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
             console.warn(`[Invoice] Server-side duplicate blocked: ${vendor} #${invoiceNumber} ${invoiceDate}`);
             return { success: false, error: "Duplicate invoice detected — this invoice was already submitted. Check History for the existing submission." };
           }
-        } catch (dupErr) {
-          console.warn("[Invoice] Server-side dup check failed (non-blocking):", dupErr.message);
         }
+      } catch (dupErr) {
+        console.warn("[Invoice] Server-side dup check failed (non-blocking):", dupErr.message);
       }
 
-      // 3. Log to sheet
+      // 3. Upload to Drive (after dedup; orphan PDFs no longer possible on duplicate-blocked submissions)
+      let driveUrls = [];
+            try {
+        if (pdfBuffer) {
+          const pdfResult = await uploadStampedPDF(token, pdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "");
+          if (pdfResult.fileUrl) driveUrls = [pdfResult.fileUrl];
+        } else {
+          const driveResults = await uploadInvoicePages(token, pages, vendor, account, invoiceDate);
+          driveUrls = driveResults.filter((r) => r.fileUrl).map((r) => r.fileUrl);
+        }
+} catch (driveErr) {
+        console.error("[Invoice] Drive upload failed:", driveErr.message);
+      }
+
+      // 3b. Upload raw PDF archive
+      let rawDriveUrl = "";
+      try {
+        if (rawPdfBuffer) {
+          const rawResult = await uploadStampedPDF(token, rawPdfBuffer, vendor, account, invoiceDate, invoiceNumber, correctedFromUuid ? `FIXED_RESUBMITTED_RAW_${new Date().toISOString().slice(0,10).replace(/-/g,"")}_` : "RAW_");
+          if (rawResult.fileUrl) rawDriveUrl = rawResult.fileUrl;
+        }
+      } catch (rawUpErr) {
+        console.error("[Invoice] Raw PDF upload failed (non-blocking):", rawUpErr.message);
+      }
+
+      // 4. Log to sheet
       const row = [
         uuid, now.toISOString(), email, account, vendor,
         vendorId || "", invoiceNumber || "", invoiceDate,
@@ -1063,18 +1105,16 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
         "", "", "", "", correctedFromUuid || "",
       ];
 
-      const sheetResult = await appendRow(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", row);
+      const sheetResult = await appendRowSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", row);
       if (!sheetResult.success) return { success: false, error: "Failed to log submission: " + sheetResult.error };
 
-      // 3b. If this is a correction, mark the original as "corrected"
+      // 4b. If this is a correction, mark the original as "corrected"
       if (correctedFromUuid) {
         try {
-          const origRow = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, correctedFromUuid);
+          const origRow = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, correctedFromUuid);
           if (origRow) {
-            await Promise.all([
-              updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${origRow}`, "corrected"),
-              updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${origRow}`, now.toISOString()),
-            ]);
+            // Cols N,O contiguous → single range write
+            await updateRangeSA(SHEET_IDS.COLLECTION, `invoice_submissions_26!N${origRow}:O${origRow}`, [["corrected", now.toISOString()]]);
             console.log(`[Invoice] Marked original ${correctedFromUuid} as corrected`);
           }
         } catch (corrErr) {
@@ -1082,7 +1122,7 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
         }
       }
 
-      // 4. Send email to AP
+      // 5. Send email to AP
       let emailSent = false;
       try {
         const emailResult = await sendInvoiceEmail(token, email, {
@@ -1094,14 +1134,14 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
 
         emailSent = emailResult.success;
         if (emailSent) {
-          const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
-          if (rowNum) await updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!M${rowNum}`, "TRUE");
+          const rowNum = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+          if (rowNum) await updateCellSA(SHEET_IDS.COLLECTION, `invoice_submissions_26!M${rowNum}`, "TRUE");
         }
       } catch (emailErr) {
         console.error("[Invoice] Email failed:", emailErr.message);
       }
 
-      // 5. Fire async AI scan (non-blocking)
+      // 6. Fire async AI scan (non-blocking)
       triggerAIScan(token, email, uuid, pages, { account, vendor, invoiceNumber, invoiceDate, formType: type }).catch((err) => {
         console.error("[Invoice] AI scan trigger failed:", err.message);
       });
@@ -1149,11 +1189,6 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
   if (action === "invoice-duplicate-check") {
     const { vendor, invoiceNumber, invoiceDate, totalAmount } = body;
 
-    const safeRead = async (id, tab) => {
-      try { return await readSheet(token, id, tab); }
-      catch { return { headers: [], rows: [] }; }
-    };
-
     const { rows } = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
 // Normalize invoice numbers: strip #, leading/trailing spaces, leading zeros
     const normalizeInvNum = (n) => String(n || "").trim().replace(/^[#\s]+/, "").replace(/^0+/, "") || "0";
@@ -1184,12 +1219,7 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const { uuid, reasons, note } = body;
     if (!uuid || !note) return { success: false, error: "Missing uuid or note" };
 
-    const safeRead = async (id, tab) => {
-      try { return await readSheet(token, id, tab); }
-      catch { return { headers: [], rows: [] }; }
-    };
-
-    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    const rowNum = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
     if (!rowNum) return { success: false, error: "Submission not found" };
 
     // Read original row for notification context
@@ -1201,13 +1231,11 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const origTotal = Number(origRow?.[8]) || 0;
     const origSubmitter = String(origRow?.[2] || "");
 
-    await Promise.all([
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, "returned"),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${rowNum}`, new Date().toISOString()),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!R${rowNum}`, (reasons || []).join(", ")),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!S${rowNum}`, note),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!T${rowNum}`, email),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!U${rowNum}`, new Date().toISOString()),
+    // Cols N,O and R-U are two non-adjacent ranges on the same row → single batched API call
+    const rejectedAt = new Date().toISOString();
+    await batchUpdateRangesSA(SHEET_IDS.COLLECTION, [
+      { range: `invoice_submissions_26!N${rowNum}:O${rowNum}`, values: [["returned", rejectedAt]] },
+      { range: `invoice_submissions_26!R${rowNum}:U${rowNum}`, values: [[(reasons || []).join(", "), note, email, rejectedAt]] },
     ]);
 
     // Slack notification for rejection
@@ -1254,12 +1282,7 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const { uuid } = body;
     if (!uuid) return { success: false, error: "Missing uuid" };
 
-    const safeRead = async (id, tab) => {
-      try { return await readSheet(token, id, tab); }
-      catch { return { headers: [], rows: [] }; }
-    };
-
-    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    const rowNum = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
     if (!rowNum) return { success: false, error: "Submission not found" };
 
     const { rows: allRows } = await safeRead(SHEET_IDS.COLLECTION, "invoice_submissions_26");
@@ -1269,13 +1292,10 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const origInvNum = String(origRow?.[6] || "");
     const origAccount = String(origRow?.[3] || "");
 
-    await Promise.all([
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!N${rowNum}`, "sent"),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!O${rowNum}`, new Date().toISOString()),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!R${rowNum}`, ""),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!S${rowNum}`, ""),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!T${rowNum}`, ""),
-      updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!U${rowNum}`, ""),
+    // Cols N,O and R-U are two non-adjacent ranges on the same row → single batched API call
+    await batchUpdateRangesSA(SHEET_IDS.COLLECTION, [
+      { range: `invoice_submissions_26!N${rowNum}:O${rowNum}`, values: [["sent", new Date().toISOString()]] },
+      { range: `invoice_submissions_26!R${rowNum}:U${rowNum}`, values: [["", "", "", ""]] },
     ]);
 
     if (process.env.SLACK_INVOICE_WEBHOOK) {
@@ -1298,10 +1318,10 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const { uuid } = body;
     if (!uuid) return { success: false, error: "Missing uuid" };
 
-    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    const rowNum = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
     if (!rowNum) return { success: false, error: "Submission not found" };
 
-    await updateCell(token, SHEET_IDS.COLLECTION, `invoice_submissions_26!W${rowNum}`, "not_duplicate");
+    await updateCellSA(SHEET_IDS.COLLECTION, `invoice_submissions_26!W${rowNum}`, "not_duplicate");
     console.log(`[Invoice] Dupe dismissed for ${uuid} by ${email}`);
 
     return { success: true };
@@ -1312,39 +1332,16 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
     const { uuid, vendor, invoiceNumber, totalAmount } = body;
     if (!uuid) return { success: false, error: "Missing uuid" };
 
-    const rowNum = await findRowByValue(token, SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
+    const rowNum = await findRowByValueSA(SHEET_IDS.COLLECTION, "invoice_submissions_26", 0, uuid);
     if (!rowNum) return { success: false, error: "Submission not found" };
 
-    // Get the numeric sheet ID for the tab
-    const metaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_IDS.COLLECTION}?fields=sheets.properties`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!metaRes.ok) return { success: false, error: "Failed to read sheet metadata" };
-    const meta = await metaRes.json();
-    const tab = (meta.sheets || []).find(s => s.properties.title === "invoice_submissions_26");
-    if (!tab) return { success: false, error: "Submissions tab not found" };
+    const sheetId = await getSheetIdSA(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+    if (sheetId === null) return { success: false, error: "Submissions tab not found" };
 
-    const sheetId = tab.properties.sheetId;
-
-    // Delete the row (rowNum is 1-based, deleteDimension uses 0-based)
-    const deleteRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_IDS.COLLECTION}:batchUpdate`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requests: [{
-            deleteDimension: {
-              range: { sheetId, dimension: "ROWS", startIndex: rowNum - 1, endIndex: rowNum }
-            }
-          }]
-        }),
-      }
-    );
-    if (!deleteRes.ok) {
-      const errText = await deleteRes.text();
-      console.error(`[Invoice] Delete failed for ${uuid}:`, errText);
+    // Delete the row (rowNum is 1-based, deleteRowSA uses 0-based)
+    const deleteResult = await deleteRowSA(SHEET_IDS.COLLECTION, sheetId, rowNum - 1);
+    if (!deleteResult.success) {
+      console.error(`[Invoice] Delete failed for ${uuid}:`, deleteResult.error);
       return { success: false, error: "Failed to delete row" };
     }
 
@@ -1542,16 +1539,6 @@ async function updateScanStatus(token, uuid, status) {
 // VENDOR PORTAL — API HANDLERS v2
 // =============================================================================
 
-const VENDOR_ADMIN_EMAILS = [
-  "k.fietek@kitchfix.com",
-  "a.wasserman@kitchfix.com",
-  "britt@kitchfix.com",
-  "joe@kitchfix.com",
-  "josh@kitchfix.com",
-  "m.chavez@kitchfix.com",
-  "s.lynch@kitchfix.com",
-];
-
 // ── GET: vendor-list ──────────────────────────────────────────────────────────
 export async function handleVendorList(searchParams, token, email) {
   const accountKey   = searchParams.get("accountKey");
@@ -1565,8 +1552,8 @@ export async function handleVendorList(searchParams, token, email) {
   if (!accountKey && !allAccounts) return { success: false, error: "accountKey required" };
 
   const [masterResult, accountResult] = await Promise.all([
-    readSheet(token, SHEET_IDS.HUB, "vendor_master"),
-    readSheet(token, SHEET_IDS.HUB, "vendor_accounts"),
+    readSheetSA(SHEET_IDS.HUB, "vendor_master"),
+    readSheetSA(SHEET_IDS.HUB, "vendor_accounts"),
   ]);
 
   const linkMap = {};
@@ -1665,8 +1652,8 @@ export async function handleVendorGet(searchParams, token, email) {
   if (!vendorId) return { success: false, error: "vendorId required" };
 
   const [masterResult, accountResult] = await Promise.all([
-    readSheet(token, SHEET_IDS.HUB, "vendor_master"),
-    readSheet(token, SHEET_IDS.HUB, "vendor_accounts"),
+    readSheetSA(SHEET_IDS.HUB, "vendor_master"),
+    readSheetSA(SHEET_IDS.HUB, "vendor_accounts"),
   ]);
 
   const masterRow = masterResult.rows.find((r) => String(r[0] || "").trim() === vendorId);
@@ -1720,7 +1707,7 @@ export async function handleVendorUpdate(body, token, email) {
 
   if (!vendorId || !accountKey) return { success: false, error: "vendorId and accountKey required" };
 
-  const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_accounts");
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
   const rowIndex = rows.findIndex(
     (r) => String(r[1] || "").trim() === vendorId && String(r[2] || "").trim() === accountKey
   );
@@ -1746,10 +1733,10 @@ export async function handleVendorUpdate(body, token, email) {
     minOrder           ?? existing[17] ?? "",
   ]];
 
-  const cols = ["D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"];
+  // Cols D-R are contiguous (15 cells) → single batched range write. Col W is non-contiguous (separate call).
   await Promise.all([
-    ...cols.map((col, i) => updateCell(token, SHEET_IDS.HUB, `vendor_accounts!${col}${sheetRow}`, values[0][i])),
-    updateCell(token, SHEET_IDS.HUB, `vendor_accounts!W${sheetRow}`, accountNotes ?? existing[22] ?? ""),
+    updateRangeSA(SHEET_IDS.HUB, `vendor_accounts!D${sheetRow}:R${sheetRow}`, values),
+    updateCellSA(SHEET_IDS.HUB, `vendor_accounts!W${sheetRow}`, accountNotes ?? existing[22] ?? ""),
   ]);
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
@@ -1773,12 +1760,12 @@ export async function handleVendorMasterUpdate(body, token, email) {
   if (!vendorId) return { success: false, error: "vendorId required" };
   if (!name || !name.trim()) return { success: false, error: "Vendor name required" };
 
-  const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
   const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
   if (rowIndex === -1) return { success: false, error: "Vendor not found" };
 
   const sheetRow = rowIndex + 2;
-  // Cols B–E: name, category, website, notes; Col I: aliases
+  // Cols B-E: name, category, website, notes; Col I: aliases
   const masterCols = ["B","C","D","E","I"];
   const values = [
     name.trim(),
@@ -1787,7 +1774,7 @@ export async function handleVendorMasterUpdate(body, token, email) {
     notes?.trim() || "",
     aliases !== undefined ? String(aliases).trim() : String(rows[rowIndex][8] || "").trim(),
   ];
-  await Promise.all(masterCols.map((col, i) => updateCell(token, SHEET_IDS.HUB, `vendor_master!${col}${sheetRow}`, values[i])));
+  await Promise.all(masterCols.map((col, i) => updateCellSA(SHEET_IDS.HUB, `vendor_master!${col}${sheetRow}`, values[i])));
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
     fetch(process.env.SLACK_VENDOR_WEBHOOK, {
@@ -1804,9 +1791,13 @@ export async function handleVendorMasterUpdate(body, token, email) {
 }
 
 // ── POST: vendor-deactivate ───────────────────────────────────────────────────
+// Stopgap admin gate (F12, Audit #4): full chef-request-approval workflow is a follow-up PR.
 export async function handleVendorDeactivate(body, token, email) {
   const { vendorId, accountKey } = body;
   if (!vendorId || !accountKey) return { success: false, error: "vendorId and accountKey required" };
+  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+    return { success: false, error: "Vendor deactivation requires admin approval. Contact Kevin to deactivate a vendor." };
+  }
   return setVendorActive(vendorId, accountKey, false, token);
 }
 
@@ -1818,12 +1809,12 @@ export async function handleVendorReactivate(body, token, email) {
 }
 
 async function setVendorActive(vendorId, accountKey, active, token) {
-  const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_accounts");
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
   const rowIndex = rows.findIndex(
     (r) => String(r[1] || "").trim() === vendorId && String(r[2] || "").trim() === accountKey
   );
   if (rowIndex === -1) return { success: false, error: "Account link not found" };
-  await updateCell(token, SHEET_IDS.HUB, `vendor_accounts!S${rowIndex + 2}`, active ? "TRUE" : "FALSE");
+  await updateCellSA(SHEET_IDS.HUB, `vendor_accounts!S${rowIndex + 2}`, active ? "TRUE" : "FALSE");
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
     const actionLabel = active ? "Reactivated" : "Deactivated";
@@ -1844,7 +1835,7 @@ async function setVendorActive(vendorId, accountKey, active, token) {
 async function learnVendorAlias(vendorId, ocrName, token) {
   if (!vendorId || !ocrName) return;
   try {
-    const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+    const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
     const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
     if (rowIndex === -1) return;
 
@@ -1865,23 +1856,10 @@ async function learnVendorAlias(vendorId, ocrName, token) {
     // Append new alias
     const updated = aliasList.length > 0 ? `${existingAliases}|${ocrClean}` : ocrClean;
     const sheetRow = rowIndex + 2;
-    await updateCell(token, SHEET_IDS.HUB, `vendor_master!I${sheetRow}`, updated);
+    await updateCellSA(SHEET_IDS.HUB, `vendor_master!I${sheetRow}`, updated);
     console.log(`[Vendor Alias] Learned: "${ocrClean}" → ${vendorId} (${primaryName})`);
   } catch (e) {
     console.warn("[Vendor Alias] Non-fatal:", e.message);
-  }
-}
-
-// ── Helper: update lastInvoiceDate after invoice submission ───────────────────
-export async function updateVendorLastInvoiceDate(vendorId, isoTimestamp, token) {
-  if (!vendorId) return;
-  try {
-    const { rows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
-    const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
-    if (rowIndex === -1) return;
-    await updateCell(token, SHEET_IDS.HUB, `vendor_master!H${rowIndex + 2}`, isoTimestamp);
-  } catch (e) {
-    console.warn("[updateVendorLastInvoiceDate] Non-fatal:", e.message);
   }
 }
 
@@ -1890,39 +1868,37 @@ export async function handleVendorMerge(body, token, email) {
   const { keeperId, dupeIds } = body;
   if (!keeperId || !dupeIds?.length) return { success: false, error: "keeperId and dupeIds required" };
 
-  const { rows: masterRows } = await readSheet(token, SHEET_IDS.HUB, "vendor_master");
+  const { rows: masterRows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
 
-  // 1. Reassign vendor_accounts rows from dupeIds → keeperId
-  const { rows: acctRows } = await readSheet(token, SHEET_IDS.HUB, "vendor_accounts");
-  const acctUpdates = [];
+  // 1. Reassign vendor_accounts rows from dupeIds → keeperId (batched into one API call)
+  const { rows: acctRows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
+  const acctBatchData = [];
   acctRows.forEach((row, i) => {
     if (i === 0) return;
     const rowVendorId = String(row[1] || "").trim();
     if (dupeIds.includes(rowVendorId)) {
-      acctUpdates.push(updateCell(token, SHEET_IDS.HUB, `vendor_accounts!B${i + 2}`, keeperId));
+      acctBatchData.push({ range: `vendor_accounts!B${i + 2}`, values: [[keeperId]] });
     }
   });
-  if (acctUpdates.length > 0) await Promise.all(acctUpdates);
+  if (acctBatchData.length > 0) await batchUpdateRangesSA(SHEET_IDS.HUB, acctBatchData);
 
-  // 2. Collect dupe names to auto-add as aliases on keeper
+  // 2. Soft-delete dupes (B-E contiguous → one range per dupe, all batched in one API call) + collect names
   const dupeNames = [];
-  const masterUpdates = [];
+  const masterBatchData = [];
   masterRows.forEach((row, i) => {
     if (i === 0) return;
     const rowVendorId = String(row[0] || "").trim();
     if (dupeIds.includes(rowVendorId)) {
       const dupeName = String(row[1] || "").trim();
       if (dupeName) dupeNames.push(dupeName);
-      // Soft-delete dupe: blank name/category/website, mark notes as DELETED
-      masterUpdates.push(
-        updateCell(token, SHEET_IDS.HUB, `vendor_master!B${i + 2}`, ""),
-        updateCell(token, SHEET_IDS.HUB, `vendor_master!C${i + 2}`, ""),
-        updateCell(token, SHEET_IDS.HUB, `vendor_master!D${i + 2}`, ""),
-        updateCell(token, SHEET_IDS.HUB, `vendor_master!E${i + 2}`, "DELETED"),
-      );
+      // Soft-delete: blank name/category/website (B/C/D), mark notes (E) as DELETED
+      masterBatchData.push({
+        range: `vendor_master!B${i + 2}:E${i + 2}`,
+        values: [["", "", "", "DELETED"]],
+      });
     }
   });
-  if (masterUpdates.length > 0) await Promise.all(masterUpdates);
+  if (masterBatchData.length > 0) await batchUpdateRangesSA(SHEET_IDS.HUB, masterBatchData);
 
   // 3. Append dupe names as aliases on the keeper row
   if (dupeNames.length > 0) {
@@ -1936,7 +1912,7 @@ export async function handleVendorMerge(body, token, email) {
           aliasParts.push(dn);
         }
       }
-      await updateCell(token, SHEET_IDS.HUB, `vendor_master!I${keeperSheetRow}`, aliasParts.join("|"));
+      await updateCellSA(SHEET_IDS.HUB, `vendor_master!I${keeperSheetRow}`, aliasParts.join("|"));
     }
   }
 
@@ -1947,7 +1923,7 @@ export async function handleVendorMerge(body, token, email) {
       body: JSON.stringify({
         text: `Vendors merged: ${dupeIds.join(", ")} → ${keeperId}`,
         blocks: [{ type: "section", text: { type: "mrkdwn",
-          text: `*Vendors Merged*\n*Kept:* ${keeperId}\n*Removed:* ${dupeIds.join(", ")}\n*Aliases added:* ${dupeNames.join(", ") || "none"}\n*Accounts reassigned:* ${acctUpdates.length}\n*By:* ${email}` } }],
+          text: `*Vendors Merged*\n*Kept:* ${keeperId}\n*Removed:* ${dupeIds.join(", ")}\n*Aliases added:* ${dupeNames.join(", ") || "none"}\n*Accounts reassigned:* ${acctBatchData.length}\n*By:* ${email}` } }],
       }),
     }).catch(() => {});
   }
@@ -1956,8 +1932,8 @@ export async function handleVendorMerge(body, token, email) {
     success: true,
     keeperId,
     dupeIds,
-    accountRowsReassigned: acctUpdates.length,
-    vendorRowsDeleted: Math.floor(masterUpdates.length / 4),
+    accountRowsReassigned: acctBatchData.length,
+    vendorRowsDeleted: masterBatchData.length,
     aliasesAdded: dupeNames,
   };
 }

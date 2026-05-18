@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { readSheet, readSheetSA, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
 import { opsNotify } from "@/lib/opsUtils";
+import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import {
   handleInvoiceGet,
   handleInvoicePost,
@@ -26,16 +27,6 @@ import { NextResponse } from "next/server";
 
 // Strip currency formatting from Sheets values ("$20,309.00" → 20309)
 const parseNum = (v) => Number(String(v || 0).replace(/[$,]/g, '')) || 0;
-
-const OPS_LEADERSHIP_EMAILS = [
-  "k.fietek@kitchfix.com",
-  "a.wasserman@kitchfix.com",
-  "britt@kitchfix.com",
-  "joe@kitchfix.com",
-  "josh@kitchfix.com",
-  "m.chavez@kitchfix.com",
-  "s.lynch@kitchfix.com",
-];
 
 // File-level helper: safeRead wraps readSheetSA with a fail-soft fallback to {headers: [], rows: []}.
 // Hoisted from prior in-handler duplicates (Audit #3, PR #44).

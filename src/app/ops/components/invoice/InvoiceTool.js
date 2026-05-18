@@ -671,6 +671,9 @@ const handleSubmit = useCallback(() => {
     } catch {}
     glRows.filter((r) => r.code).forEach((r) => trackGLUsage(r.code));
     if (vendor?.vendorId) trackRecentVendor(vendor.vendorId);
+    // F25 (Audit #4): generate the submit-click UUID ONCE here. Stored in the offline queue payload
+    // so the eventual replay carries the same UUID → server dedups any retry.
+    const submissionUuid = crypto.randomUUID();
 const payload = {
       action: "invoice-submit", formType, account,
       vendor: vendor.name, vendorId: vendor.vendorId || "",
@@ -681,6 +684,7 @@ pages: pages.map((p) => ({ data: p.data, rotation: p.rotation || 0, type: p.type
 isCreditMemo,
       ocrVendorName: ocrResult?.vendorName || null,
       correctedFromUuid: resubmitSource?.uuid || null,
+      uuid: submissionUuid,
     };
         if (!navigator.onLine) {
       const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");

@@ -21,6 +21,14 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Account-level rules
 
+### GL_CODES per-account tab structure
+- **What:** GL codes live in a separate Google Sheet (`SHEET_IDS.GL_CODES`) where each account has its own tab. The tab name is resolved via `getGLTabName(accountKey)`. Invoice submissions read the relevant tab to populate the GL code dropdown.
+- **Why:** Different accounts have different GL code structures (Cardinals chart of accounts differs from Rangers, etc.). Per-tab isolation prevents code-pollution and lets accounts manage their own GL structure independently.
+- **Where:** `src/lib/invoiceActions.js` - `getGLTabName` helper, invoice-bootstrap GL codes load, invoice-submit GL lookup.
+- **Documented:** 2026-05-18 during Audit #4+#5 (Phase 1).
+- **Migration consideration:** In Postgres, flatten to a single `gl_codes` table with `account_key` FK. Index on `(account_key, code)` for lookups. The `getGLTabName` helper goes away; replaced with `WHERE account_key = $1`. Per-account isolation preserved at the row-filter level.
+- **Verification:** After migration, query GL codes for STL-MO. Confirm: same set of codes returned as the legacy STL-MO tab. Add a new code via admin UI. Confirm: visible to STL-MO invoice submissions, NOT visible to TXR-TX-H submissions.
+
 ### MLB/MiLB/AAA P3 Auto-Inclusion [PRESERVE THROUGH MIGRATION]
 - **What:** MLB, MiLB, and AAA accounts include `P3` in their `activePeriods` array even when no `labor_budgets` row exists for that `account_key + P3` combination. Non-MLB/MiLB/AAA accounts (e.g. PDCs) do not get this special treatment.
 - **Why:** P3 is the period when opening inventory submissions happen. Operators need P3 visible in the period dropdown during the opening-inventory window, even before their full labor budget for the season is loaded.
@@ -80,6 +88,30 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 - **Migration consideration:** In Postgres, streak can be a window function over the labor_plans table: `SUM(CASE WHEN variance >= 0 THEN 1 ELSE 0 END) OVER (PARTITION BY account ORDER BY homestand_sequence ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`. Alternatively, a generated column maintained by trigger on insert. Decision pending Stage 1.
 - **Verification:** After migration, for a chef with submissions in order HS1(+$100), HS2(-$50), HS3(+$200), HS4(+$300), confirm streak = 2 (HS3 and HS4 only). Then submit HS5(+$0) - confirm streak = 3.
 
+### Cut+Dry / "What Chefs Want" invoice-number rule [PRESERVE THROUGH MIGRATION]
+- **What:** For invoices from the vendor "Cut+Dry" (also known as "What Chefs Want"), the invoice-number field must be populated with the Reference # from the platform, NOT the Order #. The OCR prompt at `invoiceActions.js:681-682` explicitly instructs the model to handle this special case.
+- **Why:** Cut+Dry's vendor portal displays both an Order # (the purchase reference) and a Reference # (the invoice reference). Operationally, AP needs the Reference # because it's what matches the eventual payment record. Using Order # would cause invoice-payment mismatches downstream.
+- **Where:** `src/lib/invoiceActions.js:681-682` (in the invoice-ocr handler's prompt text).
+- **Documented:** 2026-05-18 during Audit #4+#5 (Phase 3 F32).
+- **Migration consideration:** Postgres `invoice_submissions` table should NOT collapse "Order #" and "Reference #" into a generic `invoice_number` field. Either preserve both as separate columns (`order_ref`, `invoice_ref`) with vendor-specific selection logic at write time, OR keep `invoice_number` as the canonical field but document which vendor source it came from. The OCR prompt logic must survive migration of the OCR pipeline.
+- **Verification:** After migration, OCR-process a sample Cut+Dry invoice with both Order # and Reference #. Confirm the `invoice_number` stored = Reference #, not Order #. Confirm a downstream payment matching against this row succeeds.
+
+### Invoice duplicate detection rule
+- **What:** An invoice is considered a duplicate of an existing submission when ALL FOUR of these match: vendor name (trimmed exact match), normalized invoice number (strip leading `#`/spaces/zeros), invoice date (string exact match), and total amount (within $0.01 to allow for rounding). Submissions with `status="corrected"` or with `correctedFromUuid` set are excluded from the duplicate check (they're intentional resubmissions).
+- **Why:** Floor-first protection. Chefs occasionally accidentally re-photograph the same invoice. The 4-criterion match catches genuine duplicates without false-positive-blocking legitimate similar invoices (same vendor, same date, different amount).
+- **Where:** `src/lib/invoiceActions.js` - invoice-submit handler dup guard, invoice-duplicate-check handler client-pre-check. Same logic in 2 places.
+- **Documented:** 2026-05-18 during Audit #4+#5 (Phase 3 F30).
+- **Migration consideration:** In Postgres, this becomes a UNIQUE INDEX with WHERE clause: `CREATE UNIQUE INDEX ON invoice_submissions (vendor, invoice_number_normalized, invoice_date, total_amount) WHERE status != 'corrected' AND corrected_from_uuid IS NULL`. The normalize function moves to a generated column or stored function.
+- **Verification:** After migration, submit two identical invoices (same vendor, normalized inv#, date, amount ± $0.005). Confirm Postgres rejects the second. Submit a correction submission with `correctedFromUuid` set. Confirm it succeeds despite matching an existing row.
+
+### Vendor alias auto-learning from OCR
+- **What:** When the OCR pipeline detects a vendor name on an invoice that matches an existing vendor_master row via `fuzzyMatchVendor`, the OCR'd name is appended to that vendor's aliases column (pipe-separated). Subsequent OCR passes match faster because the alias improves future fuzzy matches.
+- **Why:** Vendors print their names inconsistently on invoices (legal name vs DBA, abbreviations, formatting). Building an alias dictionary over time eliminates repeated false-mismatches.
+- **Where:** `src/lib/invoiceActions.js` - `learnVendorAlias` helper, called from invoice-submit's alias-auto-learn block.
+- **Documented:** 2026-05-18 during Audit #4+#5 (Phase 3 F33).
+- **Migration consideration:** In Postgres, aliases should be a separate `vendor_aliases` table (`vendor_id` FK + `alias` text + `first_seen_at` + `source = 'ocr' | 'manual'`), or a `TEXT[]` array column on `vendors`. Either supports better querying than the pipe-separated string. The auto-learning behavior should be preserved as a trigger or service-layer hook.
+- **Verification:** After migration, OCR-process an invoice from a known vendor with an unusual name variation (e.g. "ABC Foods, Inc." when vendor_master has "ABC Foods"). Confirm the variation gets added to that vendor's aliases. Subsequent OCR pass should match faster.
+
 ---
 
 ## Vendor-specific patterns
@@ -98,6 +130,14 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 - **Migration consideration:** Post-Postgres, AP could read the table directly via a dashboard or scheduled report. The email path could become optional/configurable. Until that flip is explicitly designed and shipped, the email path must be preserved through migration.
 - **Verification:** Submit a test inventory row post-migration. Confirm `ap@kitchfix.com` receives the formatted HTML email within 30 seconds.
 
+### Fail-open AI integrations (floor-first design)
+- **What:** Three AI integrations in invoice-submit fail OPEN (allow submission to proceed) when the Anthropic API fails or returns unexpected data: `invoice-photo-gate` (document type detection), `invoice-consistency-check` (multi-page consistency), and Drive upload / Gmail send failures inside invoice-submit. Only sheet append failures hard-block. Partial-success counts as success and falls through to next stage.
+- **Why:** Floor-first design philosophy. A chef in a walk-in cooler with wet hands cannot have their submission blocked because Anthropic's API is rate-limiting or Gmail had a transient hiccup. The recovery path is: sheet row exists + Slack notification + manual cleanup. Hard-blocking on every AI/Drive/Gmail failure would create a much worse user experience than allowing occasional degraded artifacts.
+- **Where:** `src/lib/invoiceActions.js` - `handleInvoicePost`. Multiple try/catch wrappers at the AI / Drive / Gmail boundaries, with `console.warn` on failure and falls-through-to-next.
+- **Documented:** 2026-05-18 during Audit #4+#5 (Phase 3 F21/F22/F29).
+- **Migration consideration:** Postgres migration MUST NOT "tighten error handling" by adding hard-blocking on AI/Drive/Gmail failures. The fail-open behavior is the intent, not a bug. Future refactors should preserve it explicitly. Consider documenting the recovery path (Slack notification → admin manual cleanup) as a runbook.
+- **Verification:** After migration, simulate an Anthropic API failure during invoice-photo-gate. Confirm: submission succeeds, `isWarning` is set true in the result, chef sees a non-blocking advisory, sheet row appears. Then simulate Drive upload failure during invoice-submit. Confirm: submission succeeds, sheet row appears with empty Drive URL, Slack notification fires.
+
 ---
 
 ## Historical context
@@ -112,6 +152,22 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
   - (b) Switch to UPDATE semantics with a separate `labor_plans_audit` table for history. Cleaner reads, requires explicit audit trail design.
   - Decision pending Stage 1.
 - **Verification:** After migration, submit an edit to a previously-submitted homestand. Confirm: the displayed values reflect the edit (latest wins), AND the prior version is recoverable from the audit trail or full table scan.
+
+### F25 client-UUID idempotency race window (Stage 1 atomicity target)
+- **What:** F25 idempotency in invoice-submit and F19b in vendor-add use a read-then-write pattern: read the sheet to check for existing UUID, then append the new row if not found. This is NOT atomic. If two requests arrive within the sub-second window before the first request's append is visible to the second request's read, both can pass the check and create duplicate rows.
+- **Why:** Sheets-era constraint. Sheets API has no UNIQUE constraint or compare-and-swap primitive. The race window is small (<1s typically) and chef double-tap UX is 1-3s, so practical risk is low. Floor-first lens: a single duplicate row from a true race is recoverable; a more defensive locking pattern would slow every legitimate submission.
+- **Where:** `src/lib/invoiceActions.js` - invoice-submit F25 check, vendor-add F19b checks at `vendor_master` and `vendor_accounts`.
+- **Documented:** 2026-05-18 during Audit #4+#5 (sub-phase 6 self-disclosure during patch review).
+- **Migration consideration:** Postgres UNIQUE constraint on the idempotency UUID column eliminates the race entirely. Schema design: `ALTER TABLE invoice_submissions ADD CONSTRAINT unique_client_uuid UNIQUE (client_uuid)`. Same for `vendor_master` and `vendor_accounts`. The read-then-write check becomes redundant once Postgres enforces uniqueness at write time.
+- **Verification:** After migration, simulate two parallel requests with the same `client_uuid`. Confirm one succeeds, the other receives a constraint-violation error which the application layer translates to `{success: true, deduplicated: true}`.
+
+### AI invoice line-item collection (Smart Inventory corpus)
+- **What:** Every successful invoice submission triggers an AI line-item extraction via `triggerAIScan`. Results are written to the `AI_LINE_ITEMS` spreadsheet (one tab per account, 9 tabs as of 2026-05-18). Schema: invoice UUID (FK) + timestamp, account, vendor, invoice #, invoice date, line #, item description, quantity, unit, unit price, extended price, AI category (10-bucket enum: produce, dry_goods, protein, dairy, other, beverage, supplies, packaging, cleaning, smallwares), confidence (currently always "high" in practice), and raw JSON for fallback. As of 2026-05-18, ~3,800 line items collected across all accounts spanning ~2 months of operations.
+- **Why:** This corpus is the substrate for the future Smart Inventory feature - per-account purchase frequency analysis, anomaly detection, "what does this account typically buy" pattern matching. Also serves invoice-level reporting (what categories are we spending in, by account).
+- **Where:** `src/lib/invoiceActions.js` - `triggerAIScan` + `ensureLineItemTab` (both out of scope for Audit #4+#5 - still use user-OAuth, follow-up PR scoped). `AI_LINE_ITEMS` spreadsheet ID stored as `SHEET_IDS.AI_LINE_ITEMS`.
+- **Documented:** 2026-05-18 during Audit #4+#5 (sub-phase 7, surfaced via Kevin's review of the AI corpus mid-audit).
+- **Migration consideration:** Becomes `invoice_line_items` table FK'd to `invoice_submissions` (UUID). The 10 categories should be a Postgres enum or FK to a `categories` lookup. Unit standardization is a Stage 1 cleanup target - currently has `ea` (10 rows) drift from `each` (385 rows), plus `other` (59 rows) as a unit fallback when the AI can't parse. The `confidence` column is currently a stored constant ("high" for all 3,803 rows surveyed) - either AI genuinely high-confidence on structured OCR, or threshold filters low-confidence rows out before write. Stage 1: drop the confidence column OR re-implement as real signal.
+- **Verification:** After migration, query "all produce line items for CIN-OH in the last 30 days." Confirm count matches the `produce` rows in the CIN-OH tab for the same date range.
 
 ---
 

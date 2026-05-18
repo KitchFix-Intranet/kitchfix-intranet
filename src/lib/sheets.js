@@ -205,6 +205,90 @@ export async function readRangeSA(spreadsheetId, range) {
   }
 }
 
+// ── Audit #4 additions: safeRead, updateCellSA, deleteRowSA, findRowByValueSA, getSheetIdSA ──
+
+/**
+ * Read a sheet tab with fail-soft fallback. Returns { headers: [], rows: [] } on error.
+ * Hoisted from invoiceActions.js during Audit #4 (PR #47).
+ */
+export async function safeRead(spreadsheetId, tabName) {
+  try {
+    return await readSheetSA(spreadsheetId, tabName);
+  } catch (e) {
+    console.warn(`[Sheets] safeRead error on tab "${tabName}":`, e.message);
+    return { headers: [], rows: [] };
+  }
+}
+
+/**
+ * Update a single cell via service account. Thin wrapper around updateRangeSA.
+ * Drop-in replacement for the user-OAuth updateCell(token, ...) at SA-eligible call sites.
+ */
+export async function updateCellSA(spreadsheetId, range, value) {
+  return updateRangeSA(spreadsheetId, range, [[value]]);
+}
+
+/**
+ * Find a row number by matching a value in a specific column, via service account.
+ * Mirrors findRowByValue but uses readSheetSA. Returns 1-indexed sheet row, or null.
+ */
+export async function findRowByValueSA(spreadsheetId, tabName, columnIndex, searchValue) {
+  const { rows } = await readSheetSA(spreadsheetId, tabName);
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][columnIndex] || "").trim() === String(searchValue).trim()) {
+      return i + 2; // +2 for 1-indexed + header row
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the numeric sheetId (gid) for a tab by name via service account.
+ * Needed before calling deleteRowSA (the underlying Sheets API takes gid, not tab name).
+ * Returns null if the tab is not found or the lookup fails.
+ */
+export async function getSheetIdSA(spreadsheetId, tabName) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    const response = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties" });
+    const tab = (response.data.sheets || []).find((s) => s.properties.title === tabName);
+    return tab ? tab.properties.sheetId : null;
+  } catch (error) {
+    console.error(`[SA] Error resolving sheetId for "${tabName}":`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Delete a row from a sheet tab via service account using batchUpdate deleteDimension.
+ * Added during Audit #4 to replace the user-OAuth direct fetch pattern in invoice-delete-dupe.
+ * Requires the numeric sheetId (gid), NOT the tab name. Caller must look it up first (e.g. via getSheetIdSA).
+ */
+export async function deleteRowSA(spreadsheetId, sheetId, rowIndex) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1,
+            },
+          },
+        }],
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[SA] Error deleting row ${rowIndex} on sheetId ${sheetId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * Append multiple rows at once (batch write — used by AI scanner)
  */
