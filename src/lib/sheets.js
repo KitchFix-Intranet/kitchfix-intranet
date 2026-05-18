@@ -206,6 +206,7 @@ export async function readRangeSA(spreadsheetId, range) {
 }
 
 // ── Audit #4 additions: safeRead, updateCellSA, deleteRowSA, findRowByValueSA, getSheetIdSA ──
+// ── Bundle 1 addition (post-PR-#47): createTabSA ──
 
 /**
  * Read a sheet tab with fail-soft fallback. Returns { headers: [], rows: [] } on error.
@@ -256,6 +257,27 @@ export async function getSheetIdSA(spreadsheetId, tabName) {
   } catch (error) {
     console.error(`[SA] Error resolving sheetId for "${tabName}":`, error.message);
     return null;
+  }
+}
+
+/**
+ * Create a new tab in a spreadsheet via service account using batchUpdate addSheet.
+ * Added during Bundle 1 (post-PR-#47) to replace the user-OAuth raw fetch in ensureLineItemTab.
+ * Caller is responsible for adding header rows after creation (use appendRowSA).
+ */
+export async function createTabSA(spreadsheetId, tabName) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: tabName } } }],
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[SA] Error creating tab "${tabName}":`, error.message);
+    return { success: false, error: error.message };
   }
 }
 

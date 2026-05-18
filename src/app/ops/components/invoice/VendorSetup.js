@@ -95,6 +95,25 @@ const emptyForm = () => ({
 });
 
 /* ═══════════════════════════════════════════════════
+   StepBar (module-level: lifted per react-hooks/static-components)
+   ═══════════════════════════════════════════════════ */
+function StepBar({ step }) {
+  return (
+    <div className="oh-inv-vs-stepper">
+      {STEPS.map((s, i) => (
+        <div key={s.key} className={`oh-inv-vs-step${i < step ? " oh-inv-vs-step--done" : ""}${i === step ? " oh-inv-vs-step--active" : ""}`}>
+          <div className="oh-inv-vs-step-dot">
+            {i < step ? <CheckIcon /> : <span>{i + 1}</span>}
+          </div>
+          <span className="oh-inv-vs-step-label">{s.label}</span>
+          {i < STEPS.length - 1 && <div className="oh-inv-vs-step-line" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    VendorSetup — Full Setup Only, 4-Step Stepper
    ═══════════════════════════════════════════════════ */
 export default function VendorSetup({ account, onClose, onCreated }) {
@@ -274,21 +293,6 @@ export default function VendorSetup({ account, onClose, onCreated }) {
       setSaving(false);
     }
   };
-
-  /* ── Step bar ─────────────────────────────────── */
-  const StepBar = () => (
-    <div className="oh-inv-vs-stepper">
-      {STEPS.map((s, i) => (
-        <div key={s.key} className={`oh-inv-vs-step${i < step ? " oh-inv-vs-step--done" : ""}${i === step ? " oh-inv-vs-step--active" : ""}`}>
-          <div className="oh-inv-vs-step-dot">
-            {i < step ? <CheckIcon /> : <span>{i + 1}</span>}
-          </div>
-          <span className="oh-inv-vs-step-label">{s.label}</span>
-          {i < STEPS.length - 1 && <div className="oh-inv-vs-step-line" />}
-        </div>
-      ))}
-    </div>
-  );
 
   /* ── Field helper ─────────────────────────────── */
   const renderField = (label, name, { type = "text", required, placeholder, fullWidth, children } = {}) => (
@@ -616,7 +620,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
         </div>
 
         {/* Stepper */}
-        <StepBar />
+        <StepBar step={step} />
 
         {/* Body */}
         <div className="oh-inv-vs-body" ref={bodyRef}>
