@@ -30,8 +30,10 @@ In this order, every session:
 3. `docs/GOTCHAS.md` - hard-won lessons. Read before debugging anything that smells familiar.
 4. `docs/MIGRATION.md` - the migration plan
 5. `docs/BUSINESS_NOTES.md` - living reference for niche business knowledge (domain rules, account-specific quirks, stakeholder preferences, calculation methodology, historical context). Consult before assuming business logic is wrong. Update when audits or debug sessions surface new rules. Items tagged [PRESERVE THROUGH MIGRATION] must survive Stage 1 schema design.
+6. `docs/TEAM_KNOWLEDGE.md` - NEW as of 2026-05-17 evening. Team-facing knowledge corpus (how-to, policy, glossary, account-specific, tool reference). Seed corpus for the future Sous AI intranet search feature. Feed organically when audits or work surface team-facing knowledge.
+7. `docs/SPEC_INTRANET_AI_SEARCH.md` - NEW as of 2026-05-17 evening. Passive brain dump for product thinking about the future Sous AI intranet search feature. Not a build spec yet; will be refined when Stage 1+ work begins. Drop things in when they come up.
 
-The first four documents are canonical for technical questions. BUSINESS_NOTES.md is canonical for domain rules. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
+The first four documents are canonical for technical questions. BUSINESS_NOTES.md is canonical for domain rules. TEAM_KNOWLEDGE.md is the seed corpus for the future Sous AI search feature. SPEC_INTRANET_AI_SEARCH.md is a parking lot for product thinking about that same feature. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
 
 ## Working agreement
 
