@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-18 (post-Bundle-1 work, pre-PR-#48 merge)
+**Last updated:** 2026-05-18 (post-PR-#49 work, pre-PR-#49 merge)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,14 +20,14 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 13 (since 2026-05-14)
-- **Stage 0 progress:** ~72%
-- **Items remaining:** 20 (in 5 bundles + 7 unbundled)
+- **PRs shipped:** 14 (since 2026-05-14)
+- **Stage 0 progress:** ~75%
+- **Items remaining:** 15 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
 
-## Done - 12 PRs shipped to main
+## Done - 15 PRs shipped to main
 
 | PR | Title | Date | Notes |
 |---|---|---|---|
@@ -43,13 +43,15 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #44 | Audit #3 - Season Tracker | 2026-05-17 | 3 bug fixes, 3 BUSINESS_NOTES entries |
 | #45 | EOD handoff doc | 2026-05-17 | 3 PRs + Audits #2+#3 summary |
 | #46 | Knowledge file scaffolding | 2026-05-18 | TEAM_KNOWLEDGE.md + SPEC_INTRANET_AI_SEARCH.md |
-| #47 | **Audit #4+#5 - Invoice + Vendor** | **2026-05-18** | **3 bug fixes, 17 knowledge entries, 5 new SA helpers** |
+| #47 | Audit #4+#5 - Invoice + Vendor | 2026-05-18 | 3 bug fixes, 17 knowledge entries, 5 new SA helpers |
+| #48 | Bundle 1: Audit #4+#5 follow-up cleanup + project dashboard | 2026-05-18 | triggerAIScan SA, ensureLineItemTab swap (createTabSA), 2 frontend static-components fixes, PROJECT_DASHBOARD.md established |
+| #49 | **Frontend lint cleanup pass + InvoiceTool bug fix** | **2026-05-18** | **12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems)** |
 
 ---
 
 ## Bundle 1 - Invoice + Vendor follow-up cleanup
 
-**Status:** READY FOR MERGE - PR #48
+**Status:** SHIPPED 2026-05-18 as PR #48
 **PR slot:** #48 candidate
 **Effort:** ~2-3 hours
 
@@ -140,14 +142,15 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 
 ## Recommended sequence
 
-1. ~~Bundle 1~~ - ✅ READY FOR MERGE as PR #48
-2. **PR #49** - Frontend lint cleanup pass (1-1.5 hr) - closes deferred items from Bundle 1
-3. **Bundle 2** - Audit close-out (next 1-2 weeks) - 3 audits
-4. **Bundle 3** - Data layer foundation (weeks 2-4)
-5. **Bundle 5** in parallel with Bundle 3
-6. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
-7. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
-8. **Stage 1 begins** - Supabase project, schema design, deploy
+1. ~~Bundle 1~~ - ✅ SHIPPED 2026-05-18 as PR #48
+2. ~~PR #49~~ - ✅ READY FOR MERGE 2026-05-18 - closed deferred items + 1 bug fix; discovered PR #50 scope
+3. **PR #50** - InvoiceTool.js React anti-pattern cleanup (2-3 hr) - closes 13 remaining lint problems in invoice flow
+4. **Bundle 2** - Audit close-out (next 1-2 weeks) - 3 audits
+5. **Bundle 3** - Data layer foundation (weeks 2-4)
+6. **Bundle 5** in parallel with Bundle 3
+7. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
+8. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
+9. **Stage 1 begins** - Supabase project, schema design, deploy
 
 ---
 
@@ -163,15 +166,23 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 
 These items surfaced during Bundle 1 execution but were deferred to keep PR scope clean. Each is queued for a future small PR.
 
-**PR #49 candidate - Frontend lint cleanup pass:**
-- VendorAddModal.js L37 `react-hooks/set-state-in-effect` (anti-pattern, requires useDeferredValue or derived-state refactor) - ~30 min
-- VendorSetup.js L127 same `react-hooks/set-state-in-effect` pattern - ~30 min
-- VendorSetup.js L374/L384/L397 `react/no-unescaped-entities` (5 errors, mechanical) - ~10 min
-- VendorSetup.js L799 `react-hooks/purity` warning - ~5 min
-- InvoiceTool.js L1289 `@next/next/no-img-element` warning - ~5 min
+**PR #49 - SHIPPED 2026-05-18: Frontend lint cleanup pass + InvoiceTool use-before-declare fix:**
+- [x] VendorAddModal.js L37 set-state-in-effect (resolved via derived-state pattern)
+- [x] VendorSetup.js L127 set-state-in-effect (resolved via `confirmedForName` name-aware derived state)
+- [x] VendorSetup.js L374/L384/L397 no-unescaped-entities (5 mechanical escapes)
+- [x] VendorSetup.js L799 react-hooks/purity (resolved as bonus from sub-phase 3 refactor)
+- [x] InvoiceTool.js L1289 (now L1294) no-img-element + L84 no-img-element (eslint-disable with runtime-dimensions justification)
+- [x] BONUS: InvoiceTool.js `resetForm` use-before-declare bug (real compilation-blocking error, fixed by moving declaration up)
 
-**Estimated total effort:** 1-1.5 hours
-**Estimated remaining lint count after PR #49:** 0 problems (25 → 0 for these 3 files)
+**Actual effort:** ~3 hours (scope grew when InvoiceTool.js was discovered to have 18 problems, not 1)
+**Actual lint result:** 25 → 13 problems remaining (all in InvoiceTool.js, deferred to PR #50)
+
+**PR #50 candidate - InvoiceTool.js React anti-pattern cleanup:**
+- 6 `set-state-in-effect` errors (L263, L316, L412, L753, L789, L811)
+- 4 `react-hooks/immutability` errors at L804-816 (`calc` function impure-during-render)
+- 3 `exhaustive-deps` warnings (L525, L586, L742)
+- Estimated 2-3 hours dedicated session
+- Discovered during PR #49 sub-phase 5 recon when InvoiceTool.js showed 18 total lint problems (not the 1 originally scoped)
 
 **Other discovered items:**
 - `updateScanStatus` and `ensureLineItemTab` helpers still accept unused `token` parameter (kept for signature consistency in Bundle 1; can drop in a future "drop dead token params" cleanup pass). Low priority, ~15 min.

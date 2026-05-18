@@ -127,7 +127,9 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   const [searchResults, setSearchResults]   = useState([]);
   const [searchLoading, setSearchLoading]   = useState(false);
   const [dupMatch, setDupMatch]             = useState(null);   // { vendorId, name, category, exactMatch }
-  const [confirmedDifferent, setConfirmedDifferent] = useState(false);
+  // confirmedDifferent: name-aware via derived state. confirmedForName stores the name string the user has
+  // confirmed; the derived boolean auto-resets when name changes (no setState-in-effect needed).
+  const [confirmedForName, setConfirmedForName] = useState("");
 
   const nameInputRef   = useRef(null);
   const bodyRef        = useRef(null);
@@ -139,15 +141,17 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   // Scroll body to top on step change
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [step]);
 
+  // Derived: gate visual state on the same condition the effect uses; no setState-in-effect needed.
+  const _searchGate = !form.vendorName.trim() || !!form.existingVendorId;
+  const displaySearchResults = _searchGate ? [] : searchResults;
+  const displayDupMatch      = _searchGate ? null : dupMatch;
+  // confirmedDifferent derived: true only when user has confirmed the CURRENT name. Auto-resets on name change.
+  const confirmedDifferent = !!form.vendorName.trim() && confirmedForName === form.vendorName.trim();
+
   // Single typeahead: vendor name drives both search results AND duplicate detection
   useEffect(() => {
     const name = form.vendorName.trim();
-    if (!name || form.existingVendorId) {
-      setSearchResults([]);
-      setDupMatch(null);
-      setConfirmedDifferent(false);
-      return;
-    }
+    if (!name || form.existingVendorId) return; // display* derived values + name-aware confirmedDifferent handle the visual gate
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       setSearchLoading(true);
@@ -179,7 +183,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
             }
           }
           setDupMatch(match);
-          setConfirmedDifferent(false);
+          setConfirmedForName(""); // new search results = clear any prior confirmation
           setSearchResults(vendors.slice(0, 5));
         })
         .catch(() => { setSearchResults([]); setDupMatch(null); })
@@ -235,7 +239,7 @@ export default function VendorSetup({ account, onClose, onCreated }) {
   const goBack = () => setStep(s => Math.max(s - 1, 0));
 
   // Blocked if exact match and user hasn't confirmed it's different
-  const dupBlocked = !!dupMatch && !form.existingVendorId && (dupMatch.exactMatch || !confirmedDifferent);
+  const dupBlocked = !!displayDupMatch && !form.existingVendorId && (displayDupMatch.exactMatch || !confirmedDifferent);
 
   /* ── Submit ───────────────────────────────────── */
   const handleSubmit = async () => {
@@ -351,15 +355,15 @@ export default function VendorSetup({ account, onClose, onCreated }) {
           </div>
 
           {/* Typeahead results — only show when no dup match is already flagged */}
-          {!dupMatch && form.vendorName.trim().length >= 2 && (searchLoading || searchResults.length > 0) && (
+          {!displayDupMatch && form.vendorName.trim().length >= 2 && (searchLoading || displaySearchResults.length > 0) && (
             <div className="oh-inv-vs-typeahead">
               {searchLoading && (
                 <div className="oh-inv-vs-typeahead-loading">Searching…</div>
               )}
-              {!searchLoading && searchResults.length > 0 && (
+              {!searchLoading && displaySearchResults.length > 0 && (
                 <>
                   <p className="oh-inv-vs-typeahead-label">Already in the system — link instead of creating a duplicate</p>
-                  {searchResults.map(v => (
+                  {displaySearchResults.map(v => (
                     <button
                       key={v.vendorId}
                       type="button"
@@ -375,37 +379,37 @@ export default function VendorSetup({ account, onClose, onCreated }) {
                       <span className="oh-inv-vs-typeahead-cta">Link to this account →</span>
                     </button>
                   ))}
-                  <p className="oh-inv-vs-typeahead-divider">Not what you're looking for? Continue below to create a new vendor.</p>
+                  <p className="oh-inv-vs-typeahead-divider">Not what you&apos;re looking for? Continue below to create a new vendor.</p>
                 </>
               )}
             </div>
           )}
 
           {/* Exact match hard block */}
-          {dupMatch?.exactMatch && !confirmedDifferent && (
+          {displayDupMatch?.exactMatch && !confirmedDifferent && (
             <div className="oh-inv-vs-dup-banner oh-inv-vs-dup-banner--hard">
               <div className="oh-inv-vs-dup-banner-text">
-                <p className="oh-inv-vs-dup-exact-label">⛔ Exact match — "{dupMatch.name}" already exists</p>
+                <p className="oh-inv-vs-dup-exact-label">⛔ Exact match — &quot;{displayDupMatch.name}&quot; already exists</p>
                 <p className="oh-inv-vs-dup-hint">Link the existing vendor to this account instead of creating a duplicate.</p>
               </div>
-              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(dupMatch)}>
+              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(displayDupMatch)}>
                 Link Vendor →
               </button>
             </div>
           )}
 
           {/* Fuzzy match warning — requires checkbox to proceed */}
-          {dupMatch && !dupMatch.exactMatch && (
+          {displayDupMatch && !displayDupMatch.exactMatch && (
             <div className="oh-inv-vs-dup-banner">
               <div className="oh-inv-vs-dup-banner-text">
-                <p className="oh-inv-vs-dup-warn-label">⚠ Similar vendor found — "{dupMatch.name}"</p>
+                <p className="oh-inv-vs-dup-warn-label">⚠ Similar vendor found — &quot;{displayDupMatch.name}&quot;</p>
                 <p className="oh-inv-vs-dup-hint">Is this the same vendor? If so, link it instead of creating a duplicate.</p>
                 <label className="oh-inv-vs-dup-confirm-row">
-                  <input type="checkbox" checked={confirmedDifferent} onChange={e => setConfirmedDifferent(e.target.checked)} />
+                  <input type="checkbox" checked={confirmedDifferent} onChange={e => setConfirmedForName(e.target.checked ? form.vendorName.trim() : "")} />
                   <span>This is a different vendor — create new</span>
                 </label>
               </div>
-              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(dupMatch)}>
+              <button type="button" className="oh-inv-vs-dup-btn" onClick={() => linkExistingVendor(displayDupMatch)}>
                 Link Vendor →
               </button>
             </div>
