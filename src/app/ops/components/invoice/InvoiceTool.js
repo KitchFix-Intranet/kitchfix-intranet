@@ -81,6 +81,7 @@ function PhotoLightbox({ src, rotation, onClose }) {
   return (
     <div className="oh-inv-lightbox" onClick={onClose}>
       <button className="oh-inv-lightbox-close" onClick={onClose}>✕</button>
+      {/* eslint-disable-next-line @next/next/no-img-element -- runtime data URL or Drive URL; next/image needs known dimensions */}
       <img src={src} alt="Invoice" style={{ transform: `rotate(${rotation || 0}deg)` }} onClick={(e) => e.stopPropagation()} />
     </div>
   );
@@ -279,6 +280,19 @@ const glTotalRaw = glRows.reduce((sum, r) => sum + Math.abs(Number(r.amount) || 
     return () => window.removeEventListener("keydown", handler);
   }, [showVendorSetup, lightboxIdx, reorderMode]);
 
+  // Moved up from below to fix use-before-declare on guardedNavigate's reference.
+  const resetForm = useCallback(() => {
+    setInvoiceNumber(""); setInvoiceDate("");
+    setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
+    setPages([]);
+    setErrors({});
+    setOcrStatus("idle"); setOcrResult(null);
+    setReorderMode(false); setSelectedPageIdx(null);
+    setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setVendor(null); setFormType("invoice"); setResubmitSource(null);
+  }, []);
+
   const originalOnNavigate = onNavigate;
   const guardedNavigate = useCallback((target) => {
     if (hasUnsavedChanges && activeTab === "form") {
@@ -286,7 +300,7 @@ const glTotalRaw = glRows.reduce((sum, r) => sum + Math.abs(Number(r.amount) || 
     } else {
       originalOnNavigate(target);
     }
-  }, [hasUnsavedChanges, activeTab, openConfirm, originalOnNavigate]);
+  }, [hasUnsavedChanges, activeTab, openConfirm, originalOnNavigate, resetForm]);
 
   useEffect(() => {
     if (typeof window !== "undefined") window.__kf_inv_navigate = guardedNavigate;
@@ -757,18 +771,6 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
       setOcrBannerFading(false);
     }
   }, [ocrStatus]);
-
-const resetForm = useCallback(() => {
-setInvoiceNumber(""); setInvoiceDate("");
-    setTotalAmount(""); setGlRows([{ code: "", name: "", amount: "" }]);
-setPages([]);
-setErrors({});
-    setOcrStatus("idle"); setOcrResult(null);
-setReorderMode(false); setSelectedPageIdx(null);
-    setConsistencyIssues([]); consistencyCheckKeyRef.current = "";
-if (fileInputRef.current) fileInputRef.current.value = "";
-    setVendor(null); setFormType("invoice"); setResubmitSource(null);
-    }, []);
 
   const loadHistoryForAccount = useCallback(async (acctKey) => {
     if (acctKey === "__current__") { setHistoryData(null); return; }
@@ -1291,6 +1293,7 @@ Invoice PDF / Scan <span className="oh-inv-req">*</span>
                           ].filter(Boolean).join(" ")}
                           onClick={() => handlePageTap(i)}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- runtime base64 data URL from chef's phone; next/image needs known dimensions */}
                           <img src={p.data} alt={`Page ${i + 1}`} style={{ transform: `rotate(${p.rotation}deg)` }} />
                           <div className="oh-inv-page-badge">{p.type === "pdf" ? "PDF" : "IMG"} · {i + 1}</div>
 

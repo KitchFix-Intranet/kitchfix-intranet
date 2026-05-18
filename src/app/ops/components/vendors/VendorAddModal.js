@@ -34,7 +34,7 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
 
   // Debounced duplicate check as user types
   useEffect(() => {
-    if (name.trim().length < 3) { setDuplicates([]); return; }
+    if (name.trim().length < 3) return; // displayDuplicates handles the visual gate; no synchronous setState here
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setCheckingDupe(true);
@@ -45,6 +45,9 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
         .finally(() => setCheckingDupe(false));
     }, 400);
   }, [name, accountKey]);
+
+  // Derived: gate duplicate chips on name length without cascading-render setState
+  const displayDuplicates = name.trim().length < 3 ? [] : duplicates;
 
   const toggleDay = (day) => {
     setForm((prev) => {
@@ -57,7 +60,7 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
 
   const proceed = () => {
     if (!name.trim()) { showToast("Vendor name is required", "error"); return; }
-    if (duplicates.length > 0 && !confirmedNew) {
+    if (displayDuplicates.length > 0 && !confirmedNew) {
       showToast("Confirm this is a new vendor, or select an existing one", "error");
       return;
     }
@@ -144,10 +147,10 @@ export default function VendorAddModal({ accountKey, accountName, userEmail, sho
               {checkingDupe && (
                 <p className="oh-vp-dupe-checking">Checking for existing vendors…</p>
               )}
-              {!checkingDupe && duplicates.length > 0 && (
+              {!checkingDupe && displayDuplicates.length > 0 && (
                 <div className="oh-vp-dupe-box">
                   <p className="oh-vp-dupe-title">⚠️ Similar vendors found</p>
-                  {duplicates.map((v) => (
+                  {displayDuplicates.map((v) => (
                     <div key={v.vendorId} className="oh-vp-dupe-row">
                       <span className="oh-vp-dupe-name">{v.name}</span>
                       <span className="oh-vp-dupe-cat">{v.category}</span>
