@@ -536,7 +536,7 @@ showToast(`${pagesToRender} page${pagesToRender > 1 ? "s" : ""} imported from PD
       console.error("[PDF] Processing error:", err);
       showToast("Couldn't read PDF — try re-exporting or uploading a different file", "error");
     }
-  }, [pages, showToast, invoiceNumber]);
+  }, [pages, showToast]);
 
   const processFiles = useCallback((files) => {
     const fileArr = Array.from(files);
@@ -588,7 +588,10 @@ if (data.success) {
             confidence: data.confidence,
           };
         });
-// Vendor auto-detect still fills (low risk for AP matching)
+// Vendor auto-detect still fills (low risk for AP matching).
+// NOTE: reads vendorRef.current (not `vendor` state) intentionally to avoid stale-closure bug — the OCR
+// fetch can resolve after `vendor` state has changed, and we want to check the CURRENT vendor selection.
+// This is why `vendor` is intentionally NOT in this callback's deps array.
 if (data.vendorMatch?.bestMatch && !vendorRef.current) {
           const matchedVendor = vendors.find((v) => v.vendorId === data.vendorMatch.bestMatch.vendorId);
           if (matchedVendor && data.vendorMatch.confidence !== "low") { setVendor(matchedVendor); trackRecentVendor(matchedVendor.vendorId); }
@@ -597,7 +600,7 @@ if (data.vendorMatch?.bestMatch && !vendorRef.current) {
         showToast("Smart Scan complete - enter invoice details to verify", "info");
             } else { setOcrStatus("idle"); }
         } catch { setOcrStatus("idle"); }
-  }, [account, invoiceNumber, vendors, vendor, showToast, trackRecentVendor]);
+  }, [account, vendors, showToast, trackRecentVendor]);
 
 // ═══ Progressive OCR: scan each new page for missing fields ═══
 const prevPageCountRef = useRef(0);
@@ -739,7 +742,11 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
     finally { setSubmitting(false); }
-}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, resubmitSource, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor]);
+    // PR #50: ocrResult?.vendorName and resetForm added per exhaustive-deps. Was a latent stale-closure
+    // bug masked by the UX flow (chefs always edit a required field between OCR completion and Submit,
+    // which triggered re-memo). Adding both deps is safe: resetForm has [] deps (stable), and ocrResult
+    // changes are infrequent enough that the extra memoization churn is negligible.
+}, [account, vendor, invoiceNumber, invoiceDate, totalAmount, glRows, pages, formType, isCreditMemo, resubmitSource, openConfirm, showToast, loadBootstrap, trackGLUsage, trackRecentVendor, ocrResult?.vendorName, resetForm]);
 
   const drainOfflineQueue = useCallback(async () => {
     const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
