@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-18 (post-PR-#49 work, pre-PR-#49 merge)
+**Last updated:** 2026-05-18 (post-PR-#50 work, pre-merge)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,14 +20,14 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 14 (since 2026-05-14)
-- **Stage 0 progress:** ~75%
-- **Items remaining:** 15 (in 5 bundles + 7 unbundled)
+- **PRs shipped:** 15 (since 2026-05-14)
+- **Stage 0 progress:** ~77%
+- **Items remaining:** 14 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
 
-## Done - 15 PRs shipped to main
+## Done - 16 PRs shipped to main
 
 | PR | Title | Date | Notes |
 |---|---|---|---|
@@ -45,7 +45,8 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #46 | Knowledge file scaffolding | 2026-05-18 | TEAM_KNOWLEDGE.md + SPEC_INTRANET_AI_SEARCH.md |
 | #47 | Audit #4+#5 - Invoice + Vendor | 2026-05-18 | 3 bug fixes, 17 knowledge entries, 5 new SA helpers |
 | #48 | Bundle 1: Audit #4+#5 follow-up cleanup + project dashboard | 2026-05-18 | triggerAIScan SA, ensureLineItemTab swap (createTabSA), 2 frontend static-components fixes, PROJECT_DASHBOARD.md established |
-| #49 | **Frontend lint cleanup pass + InvoiceTool bug fix** | **2026-05-18** | **12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems)** |
+| #49 | Frontend lint cleanup pass + InvoiceTool bug fix | 2026-05-18 | 12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems) |
+| #50 | **Latent stale-closure bug fix in invoice submit handler (+ 2 dead-dep cleanups)** | **2026-05-18** | **L742 handleConfirmedSubmit was missing ocrResult?.vendorName + resetForm in deps - real bug masked by UX flow, would have caused Supabase data integrity issue. Plus L539 + L600 dead-dep removals. InvoiceTool.js now warning-free; 10 errors remain in PR #51 backlog.** |
 
 ---
 
@@ -143,8 +144,8 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 ## Recommended sequence
 
 1. ~~Bundle 1~~ - ✅ SHIPPED 2026-05-18 as PR #48
-2. ~~PR #49~~ - ✅ READY FOR MERGE 2026-05-18 - closed deferred items + 1 bug fix; discovered PR #50 scope
-3. **PR #50** - InvoiceTool.js React anti-pattern cleanup (2-3 hr) - closes 13 remaining lint problems in invoice flow
+2. ~~PR #49~~ - ✅ SHIPPED 2026-05-18 - closed deferred items + 1 bug fix; verified live working
+3. ~~PR #50~~ - ✅ READY FOR MERGE 2026-05-18 - latent stale-closure bug fix in invoice submit handler + 2 dead-dep cleanups
 4. **Bundle 2** - Audit close-out (next 1-2 weeks) - 3 audits
 5. **Bundle 3** - Data layer foundation (weeks 2-4)
 6. **Bundle 5** in parallel with Bundle 3
@@ -177,12 +178,18 @@ These items surfaced during Bundle 1 execution but were deferred to keep PR scop
 **Actual effort:** ~3 hours (scope grew when InvoiceTool.js was discovered to have 18 problems, not 1)
 **Actual lint result:** 25 → 13 problems remaining (all in InvoiceTool.js, deferred to PR #50)
 
-**PR #50 candidate - InvoiceTool.js React anti-pattern cleanup:**
-- 6 `set-state-in-effect` errors (L263, L316, L412, L753, L789, L811)
+**PR #50 - SHIPPED 2026-05-18: Latent stale-closure bug fix + dead-dep cleanups (narrowed scope):**
+- [x] L539 `processPDFFile` - removed dead `invoiceNumber` dep
+- [x] L600 `tryOCRScan` - removed dead `invoiceNumber` + `vendor` deps + added protective comment documenting the anti-stale-closure ref pattern
+- [x] L742 `handleConfirmedSubmit` - added missing `ocrResult?.vendorName` + `resetForm` deps. **REAL LATENT BUG:** stale-closure that would have caused Supabase data integrity issue if UX changed. The lint rule did exactly what it exists for.
+
+**Outcome:** InvoiceTool.js dropped from 13 lint problems to 10 (all 3 warnings closed, 10 errors remain in PR #51 backlog). PR #50's narrowed scope was the right call - the highest-leverage 3 items shipped while the 10 lower-leverage items remain backlogged.
+
+**PR #51 candidate (deferred from PR #50 narrowing) - InvoiceTool.js React pattern cleanup:**
+- 6 `set-state-in-effect` errors (L263, L316, L412, L753, L789, L811) - will likely be absorbed into Bundle 3 data-layer refactor
 - 4 `react-hooks/immutability` errors at L804-816 (`calc` function impure-during-render)
-- 3 `exhaustive-deps` warnings (L525, L586, L742)
-- Estimated 2-3 hours dedicated session
-- Discovered during PR #49 sub-phase 5 recon when InvoiceTool.js showed 18 total lint problems (not the 1 originally scoped)
+- Estimated 2-3 hours if pursued as standalone; could be 0 hours if naturally absorbed into Bundle 3
+- Status: BACKLOG. Reassess after Bundle 3.
 
 **Other discovered items:**
 - `updateScanStatus` and `ensureLineItemTab` helpers still accept unused `token` parameter (kept for signature consistency in Bundle 1; can drop in a future "drop dead token params" cleanup pass). Low priority, ~15 min.
