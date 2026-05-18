@@ -118,6 +118,26 @@ ${glRows.length>0?`<div class="receipt-gl"><h3>GL Coding</h3><table><thead><tr><
 }
 
 // ═══════════════════════════════════════
+// SkeletonLoader (module-level: zero closure capture, lifted out per react-hooks/static-components)
+// ═══════════════════════════════════════
+function SkeletonLoader() {
+  return (
+    <div className="oh-inv-skeleton" aria-hidden="true">
+      <div className="oh-inv-skeleton-tabs"><div className="oh-inv-skeleton-pill oh-inv-skeleton-pill--active" /><div className="oh-inv-skeleton-pill" /></div>
+      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" /><div className="oh-inv-skeleton-input" /></div>
+      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"40%"}} /><div className="oh-inv-skeleton-page-zone" /></div>
+      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"25%"}} /><div className="oh-inv-skeleton-input" /></div>
+      <div className="oh-inv-skeleton-row-2">
+        <div className="oh-inv-skeleton-group" style={{flex:1}}><div className="oh-inv-skeleton-label" style={{width:"50%"}} /><div className="oh-inv-skeleton-input" /></div>
+        <div className="oh-inv-skeleton-group" style={{flex:1}}><div className="oh-inv-skeleton-label" style={{width:"50%"}} /><div className="oh-inv-skeleton-input" /></div>
+      </div>
+      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"30%"}} /><div className="oh-inv-skeleton-gl-row" /><div className="oh-inv-skeleton-gl-row" style={{opacity:0.5}} /></div>
+      <div className="oh-inv-skeleton-btn" />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════
 export default function InvoiceTool({ config, showToast, openConfirm, onNavigate }) {
@@ -826,21 +846,6 @@ if (fileInputRef.current) fileInputRef.current.value = "";
   // ═══════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════
-
-  const SkeletonLoader = () => (
-    <div className="oh-inv-skeleton" aria-hidden="true">
-      <div className="oh-inv-skeleton-tabs"><div className="oh-inv-skeleton-pill oh-inv-skeleton-pill--active" /><div className="oh-inv-skeleton-pill" /></div>
-      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" /><div className="oh-inv-skeleton-input" /></div>
-      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"40%"}} /><div className="oh-inv-skeleton-page-zone" /></div>
-      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"25%"}} /><div className="oh-inv-skeleton-input" /></div>
-      <div className="oh-inv-skeleton-row-2">
-        <div className="oh-inv-skeleton-group" style={{flex:1}}><div className="oh-inv-skeleton-label" style={{width:"50%"}} /><div className="oh-inv-skeleton-input" /></div>
-        <div className="oh-inv-skeleton-group" style={{flex:1}}><div className="oh-inv-skeleton-label" style={{width:"50%"}} /><div className="oh-inv-skeleton-input" /></div>
-      </div>
-      <div className="oh-inv-skeleton-group"><div className="oh-inv-skeleton-label" style={{width:"30%"}} /><div className="oh-inv-skeleton-gl-row" /><div className="oh-inv-skeleton-gl-row" style={{opacity:0.5}} /></div>
-      <div className="oh-inv-skeleton-btn" />
-    </div>
-  );
 
 const MAINTENANCE_MODE = false;
   const MAINTENANCE_BYPASS = ["k.fietek@kitchfix.com"];

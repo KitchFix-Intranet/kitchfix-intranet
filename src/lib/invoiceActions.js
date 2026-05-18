@@ -6,7 +6,7 @@
  * UPDATED: invoice-photo-gate now returns pageNumber / totalPages / pageNumberConfidence
  */
 
-import { readSheetSA, appendRows, appendRowSA, findRowByValueSA, updateCellSA, updateRangeSA, batchUpdateRangesSA, deleteRowSA, getSheetIdSA, safeRead, SHEET_IDS } from "@/lib/sheets";
+import { readSheetSA, appendRowSA, appendRowsSA, findRowByValueSA, updateCellSA, updateRangeSA, batchUpdateRangesSA, deleteRowSA, getSheetIdSA, createTabSA, safeRead, SHEET_IDS } from "@/lib/sheets";
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
@@ -123,40 +123,20 @@ const LINE_ITEM_HEADERS = [
 async function ensureLineItemTab(token, tabName) {
   const spreadsheetId = SHEET_IDS.AI_LINE_ITEMS;
   try {
-    const metaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-    );
-    if (!metaRes.ok) {
-      console.warn(`[ensureLineItemTab] Metadata fetch failed: ${metaRes.status}`);
-      return false;
-    }
-    const meta = await metaRes.json();
-    const exists = (meta.sheets || []).some(s => s.properties.title === tabName);
-    if (exists) return true;
+    const sheetId = await getSheetIdSA(spreadsheetId, tabName);
+    if (sheetId !== null) return true; // tab already exists
 
-    const createRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] }),
-      }
-    );
-    if (!createRes.ok) {
-      const errText = await createRes.text();
-      console.error(`[ensureLineItemTab] Tab creation failed for "${tabName}":`, errText);
+    const createResult = await createTabSA(spreadsheetId, tabName);
+    if (!createResult.success) {
+      console.error(`[ensureLineItemTab] Tab creation failed for "${tabName}":`, createResult.error);
       return false;
     }
 
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${tabName}'!A1`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ values: [LINE_ITEM_HEADERS] }),
-      }
-    );
+    // Header row missing is recoverable manually; don't fail the path if header append fails.
+    const headerResult = await appendRowSA(spreadsheetId, tabName, LINE_ITEM_HEADERS);
+    if (!headerResult.success) {
+      console.warn(`[ensureLineItemTab] Header append failed for "${tabName}":`, headerResult.error);
+    }
 
     console.log(`[ensureLineItemTab] Created new tab: "${tabName}"`);
     return true;
@@ -1513,10 +1493,10 @@ DUPLICATE DETECTION:
 const accountTab = metadata.account || "Uncategorized";
       const tabReady = await ensureLineItemTab(token, accountTab);
       if (tabReady) {
-        await appendRows(token, SHEET_IDS.AI_LINE_ITEMS, accountTab, lineRows);
+        await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountTab, lineRows);
       } else {
         console.warn(`[AI Scan] Tab "${accountTab}" not ready, falling back`);
-        await appendRows(token, SHEET_IDS.AI_LINE_ITEMS, "Invoice Uploads", lineRows);
+        await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, "Invoice Uploads", lineRows);
       }
         }
 
