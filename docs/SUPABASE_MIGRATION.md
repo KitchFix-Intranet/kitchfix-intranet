@@ -359,9 +359,132 @@ Three tables in scope:
 
 - Shipped: PR #44 (this PR)
 
+**Ops Hub Invoice Capture + Vendor Portal** (`/api/ops` - 17 handlers in `src/lib/invoiceActions.js`) - completed 2026-05-18
+- Bundled fourth + fifth of 6 planned Ops Hub audits. Bundle viability confirmed during 2026-05-17 recon: 10 invoice-* actions + 7 vendor-* actions share a single 1,962-line helper file. Largest audit by surface and depth in the run - 3-phase scoping (handleInvoiceGet, vendor block, handleInvoicePost), 19 findings F15-F33 from Phase 3 alone, ~3,200 lines of audit material consumed.
+- Audit posture: ASK before flagging cross-account visibility as bug (KitchFix data-visibility-is-intentional, Phase 1 lesson). Don't reflexively flag AI prompts / console logging as noise (production observability). Apply floor-first lens hardest on invoice-submit. Use Q? severity liberally for business-context-dependent findings.
+
+- **Drift fixes (inline with this PR):**
+  - `safeRead` hoisted from `invoiceActions.js` to `src/lib/sheets.js` (shared with `route.js` post Audit #3).
+  - 5 new SA helpers added to `sheets.js`: `safeRead`, `updateCellSA`, `deleteRowSA`, `findRowByValueSA`, `getSheetIdSA`. All client-supplied UUID-safe; all reusable across future Ops Hub audits.
+  - `OPS_LEADERSHIP_EMAILS` extracted to `src/lib/admin.js` (single source of truth). Inline duplicate in `route.js:30-38` deleted.
+  - Dead `VENDOR_ADMIN_EMAILS` constant deleted from `invoiceActions.js:1540-1548` (identical content to `OPS_LEADERSHIP_EMAILS`, zero callers across `src/` - drift bomb defused).
+  - Orphan `updateVendorLastInvoiceDate` function deleted (zero callers anywhere).
+  - Section comments renumbered in invoice-submit after F24/F25 reorder.
+  - Latent `Math.floor(masterUpdates.length / 4)` reporting bug fixed organically during `handleVendorMerge` refactor to `batchUpdateRangesSA`.
+  - `s.lynch@kitchfix.com` removed from `OPS_LEADERSHIP_EMAILS` (per user decision; s.lynch retains Invoice Admin + Labor Admin UI per intentional role separation - see TEAM_KNOWLEDGE.md "Three admin role scopes" entry).
+
+- **handleInvoiceGet audit (Phase 1):**
+  - **F4 + F5:** User-OAuth reads + duplicate local `safeRead` closure - fully service account via hoisted helpers. Affects invoice-bootstrap, vendor-search, invoice-history, invoice-admin-list paths.
+  - **F7:** Slice-then-reverse perf consistency at 2 sites (invoice-bootstrap recentSubmissions, invoice-history). Same pattern as Audit #2 H2.
+
+- **Vendor block audit (Phase 2):**
+  - **F8:** Orphan `updateVendorLastInvoiceDate` helper deleted.
+  - **F9:** All 7 vendor handlers + 2 internal helpers (`setVendorActive`, `learnVendorAlias`) swapped to service account (~30 call sites). Selective preservation: `handleVendorMerge` Slack notifications stay as-is (no token required).
+  - **F13:** safeRead consistency - no local closures left in vendor block.
+  - **F14:** Batching wins via `updateRangeSA` (handleVendorUpdate, cols D-R contiguous) + `batchUpdateRangesSA` (handleVendorMerge, dupe soft-deletes + account reassignments).
+  - **F12 (sub-phase 4):** Vendor-deactivate admin gate stopgap using `OPS_LEADERSHIP_EMAILS`. Chef-friendly error message: "Vendor deactivation requires admin approval. Contact Kevin to deactivate a vendor." Full chef-request approval workflow deferred to follow-up PR.
+
+- **handleInvoicePost audit (Phase 3):**
+  - **F15-F18, F20, F26 selective, F27:** Mechanical SA swaps across 10 actions + batching wins. F26 (invoice-submit) is the selective swap: sheet ops → SA, Drive uploads (`uploadStampedPDF`, `uploadInvoicePages`) STAY user-OAuth (chef identity in Drive audit trail), Gmail (`sendInvoiceEmail`, `sendRejectionEmail`) STAYS user-OAuth (email comes FROM chef/admin).
+  - **F17 (sub-phase 5):** 33-line raw Sheets v4 fetch in invoice-delete-dupe collapsed to 8-line `findRowByValueSA` + `getSheetIdSA` + `deleteRowSA` call. No more raw fetch + bearer-token gymnastics anywhere in handleInvoicePost.
+  - **F19a (sub-phase 6):** Vendor-ID collision retry loop. Pre-fetched existing vendor IDs from `vendor_master`. 5 attempts to find a non-colliding `${prefix}-NNN` candidate. Returns error if exhausted. Closes the statistical-certainty-at-scale gap from `Math.random() * 900` over a 3-letter prefix space.
+  - **F19b (sub-phase 6):** Vendor-add client-UUID idempotency at two checkpoints - `vendor_master` col J (idx 9) and `vendor_accounts` col X (idx 23). Schema expansion at the END of each existing schema; no conflict. Catches both "new vendor" and "existing vendor + new account link" double-taps.
+  - **F24 + F25 (sub-phase 6):** Invoice-submit client-UUID idempotency + REORDER so dedup check happens BEFORE Drive upload phase. F25 idempotency runs ALWAYS (catches correction double-tap). Existing field-based duplicate guard still suppressed for corrections (`!correctedFromUuid`). Combined into one sheet read serving both purposes. **Orphan PDFs from duplicate-blocked submissions are eliminated.**
+  - Frontend payload changes (3 files): `InvoiceTool.js`, `VendorAddModal.js`, `VendorSetup.js`. Generate UUID once per submit-click, include in payload. Offline-queue path in `InvoiceTool.js` preserves UUID through localStorage queue → replay flow.
+
+- **Findings documented but not fixed in this PR (deferred to Stage 1 or future PRs):**
+  - **F21/F22/F29:** Fail-open AI integrations + partial-success-is-success patterns (intentional floor-first design - documented in BUSINESS_NOTES.md to prevent accidental "tightening" in future refactors).
+  - **`triggerAIScan` and `updateScanStatus`** (out of audit scope - helpers, not action handlers) still use user-OAuth. Calls `appendRows(token, ...)` at L1466 and L1469. Small follow-up PR candidate.
+  - **`ensureLineItemTab` has 3 raw Sheets v4 fetch calls** (same F17 pattern, lives outside handleInvoicePost at L122). Follow-up cleanup PR candidate using the new `getSheetIdSA` + helpers.
+  - **3 frontend admin lists are intentionally distinct** (NOT a refactor target - role separation is design intent; see TEAM_KNOWLEDGE.md "Three admin role scopes").
+  - **Pre-existing React component-during-render warnings** in `InvoiceTool.js:843`, `VendorSetup.js:281-291`, `VendorAddModal.js:37` (separate frontend lint cleanup PR; not introduced by this audit).
+  - **F25 race window:** Read-then-write idempotency is sub-second-vulnerable in Sheets-era. Stage 1 Postgres UNIQUE constraint eliminates this. Documented in BUSINESS_NOTES.md "F25 race window" entry.
+  - **Chef-request vendor deactivation approval workflow** (full F12 fix beyond stopgap) - separate follow-up PR.
+  - **Invoice number storage format flag (potential data quality concern):** Kevin's review of the AI invoice line-item collection spreadsheet on 2026-05-18 surfaced that Cut+Dry invoice numbers appear in scientific notation (e.g. `9.06696945E8`) in the exported xlsx. This may be: (a) an xlsx export artifact (cell contains string, downloads as float), OR (b) actual cell value corruption (cell contains float, original string lost). Spot-check needed: open the Google Sheet (not xlsx export) and inspect one such cell. If the underlying cell is the float, Cut+Dry invoice references are being destroyed at storage write and the F32 [PRESERVE THROUGH MIGRATION] BUSINESS_NOTE just got more urgent - the OCR is doing the right thing per the prompt but the sheet write is losing data. Stage 1 schema must enforce `invoice_number` as TEXT (never numeric) regardless of cause.
+
+#### Data shape for Stage 1 migration design (Invoice + Vendor scope)
+
+Three tables in scope.
+
+**`COLLECTION.invoice_submissions_26`** - 23 columns (col 0 is the F25 client_uuid):
+
+| Col | Field | Type today | Notes |
+|---|---|---|---|
+| 0 | uuid / client_uuid | string (UUID v4) | F25 idempotency key. **PK candidate in Postgres. UNIQUE constraint eliminates race window.** |
+| 1 | timestamp | ISO string | Written at submit. **TIMESTAMPTZ.** |
+| 2 | email | string | submittedBy. **FK to users.** |
+| 3 | account | string code | **FK to `accounts.key`.** |
+| 4 | vendor | string | Display name. **FK to vendors via vendor_id.** |
+| 5 | vendorId | string (PREFIX-NNN) | **FK to vendors.id.** |
+| 6 | invoiceNumber | string | Normalized for dedup (see BUSINESS_NOTES). **TEXT + generated `invoice_number_normalized` column for the UNIQUE INDEX.** |
+| 7 | invoiceDate | string YYYY-MM-DD | **DATE.** |
+| 8 | totalAmount | number | **NUMERIC(12,2).** |
+| 9 | glRows | JSON string | **JSONB.** |
+| 10 | driveUrls | JSON string array | Stamped PDF Drive URLs. **TEXT[] or JSONB; consider replacing with storage refs post-migration.** |
+| 11 | pageCount | integer | Page count of original photos. |
+| 12 | aiScanComplete | "TRUE" / "FALSE" | Toggled when async AI scan finishes. **BOOLEAN.** |
+| 13 | status | enum-like ("sent", "returned", "corrected", "deleted") | **CHECK constraint or Postgres enum.** |
+| 14 | statusChangedAt | ISO string | **TIMESTAMPTZ.** |
+| 15 | formType | string | "invoice" / "credit_memo" / etc. |
+| 16 | rawDriveUrl | string | Raw (unstamped) archive PDF URL. **TEXT.** |
+| 17-20 | rejection fields | reason, note, rejectedBy, rejectedAt | **Move to separate `invoice_rejections` table FK'd to submissions.** |
+| 21 | correctedFromUuid | UUID string or empty | **FK to same table (`corrected_from_uuid REFERENCES invoice_submissions(uuid)`).** |
+| 22 | dupeDismissed | "not_duplicate" or empty | Single-cell admin override. **Optional BOOLEAN with default false.** |
+
+**Stage 1 changes for this table:**
+- Add `CREATE UNIQUE INDEX ON invoice_submissions (vendor, invoice_number_normalized, invoice_date, total_amount) WHERE status != 'corrected' AND corrected_from_uuid IS NULL` (Invoice duplicate detection rule from BUSINESS_NOTES).
+- `client_uuid` becomes UNIQUE constraint - eliminates F25 race window.
+- Rejection fields normalize to their own table.
+
+**`HUB.vendor_master`** - existing 9 cols + col J (idx 9) NEW for F19b:
+
+| Col | Field | Type today | Notes |
+|---|---|---|---|
+| 0 | vendorId | string (PREFIX-NNN) | F19a retry-on-collision today. **Stage 1 should use `gen_random_uuid()` or serial PK.** |
+| 1 | name | string | |
+| 2 | category | string | |
+| 3 | website | string | |
+| 4 | notes | string | "DELETED" sentinel for soft-deletes (vendor merge). **Replace with `deleted_at TIMESTAMPTZ`.** |
+| 5 | createdBy | email string | **FK to users.** |
+| 6 | createdAt | ISO string | **TIMESTAMPTZ.** |
+| 7 | lastInvoiceDate | unused | Dead column (was the orphan helper's target; helper deleted in this PR). **Drop in Stage 1.** |
+| 8 | aliases | string (pipe-separated) | Migrate to `TEXT[]` or separate `vendor_aliases` table. |
+| 9 | client_uuid (NEW Audit #4) | string (UUID v4) | F19b idempotency. **Stage 1: UNIQUE constraint.** |
+
+**`HUB.vendor_accounts`** - existing 23 cols + col X (idx 23) NEW for F19b:
+
+| Col | Field | Notes |
+|---|---|---|
+| 0 | rowId | `${vendorId}_${account-prefix}`. Functions as composite key. |
+| 1 | vendorId | **FK to vendor_master.** |
+| 2 | account | **FK to accounts.key.** |
+| 3-17 | contact + delivery + portal fields | per Phase 2 recon. Portal credentials in cols J/K/L are intentionally plaintext (TEAM_KNOWLEDGE entry). |
+| 18 | active | "TRUE" / "FALSE". **BOOLEAN.** |
+| 19 | createdBy | email. **FK users.** |
+| 20 | createdAt | ISO string. **TIMESTAMPTZ.** |
+| 21 | (blank) | Dead per Phase 2 F11. **Drop in Stage 1.** |
+| 22 | accountNotes | free text. |
+| 23 | client_uuid (NEW Audit #4) | F19b idempotency. **Stage 1: UNIQUE constraint.** |
+
+**Postgres design hints:**
+- **F25/F19b idempotency:** `client_uuid` columns become UNIQUE constraints, eliminating the read-then-write race window. Application layer translates Postgres constraint-violation errors to `{success: true, deduplicated: true}` for graceful retry semantics.
+- **F24 dedup-before-Drive-upload:** In Postgres, the dedup check becomes a SELECT before storage upload, but storage uploads can be triggered AFTER the row insert with the row's UUID for cleaner rollback semantics.
+- **Vendor soft-delete:** Replace "DELETED" sentinel with `deleted_at TIMESTAMPTZ`. Queries default to `deleted_at IS NULL`.
+- **Vendor alias auto-learning** becomes a trigger or service-layer hook on invoice_submissions INSERT.
+- **GL codes** flatten to a single `gl_codes` table with `account_key` FK (was per-account tab structure - see BUSINESS_NOTES "GL_CODES per-account tab structure").
+
+**Verdict:** Largest audit of the run by surface (3-phase, ~3,200 lines of audit material, 19 findings F15-F33 from Phase 3 alone). Three real bug fixes shipped (F24/F25 orphan-PDF race + invoice-submit idempotency, F19a vendor-ID collision, F19b vendor-add idempotency). Five new helpers added to `sheets.js` (foundation for Stage 1 ports). One stopgap admin gate (F12 vendor-deactivate) with follow-up PR scoped. Five BUSINESS_NOTES entries + nine TEAM_KNOWLEDGE entries capture migration-critical and team-facing knowledge that would otherwise have been lost. Three findings documented as intentional design (cross-account visibility, vendor portal credentials, three admin role scopes) to prevent future audit "fixes" of correct behavior.
+
+- Shipped: PR #47 (this PR)
+
 **Remaining Ops Hub audit queue:**
-- Audit #4 + #5 bundled: Invoice Capture + Vendor Portal (10 invoice-* + 7 vendor-* actions + handleInvoiceGet/Post + handleVendor* helpers from src/lib/invoiceActions.js, ~1,962-line helper file plus dispatcher cases; recon completed 2026-05-17 confirms bundle viability)
 - Audit #6: Smart Inventory (`/api/ops/inventory` subroute, 117 lines)
+
+**Audit #4+#5 follow-up backlog (post-PR-#47):**
+- Chef-request vendor deactivation approval workflow (F12 full fix beyond stopgap) - 1-2 day effort, ~3-4 files touched, follow-up to PR #47.
+- `triggerAIScan` + `updateScanStatus` user-OAuth swap (out of scope from Audit #4+#5 Phase 3) - small follow-up PR.
+- `ensureLineItemTab` raw Sheets v4 fetch swap to `getSheetIdSA` + helpers (same F17 pattern, different location) - small follow-up PR.
+- `InvoiceTool.js` / `VendorSetup.js` / `VendorAddModal.js` pre-existing React component-during-render warnings (lint cleanup PR) - separate frontend cleanup pass.
 
 #### Directory route architectural concerns (Stage 1 schema design must address)
 
