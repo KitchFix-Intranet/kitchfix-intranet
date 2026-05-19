@@ -208,7 +208,7 @@ await drive.files.copy({
 
 The old pattern (`process.env.INVENTORY_SHEET_ID || ""`) created two issues: (1) running `node -e` to inspect `SHEET_IDS` outside Next.js produced an empty string because Node's `require` doesn't load `.env.local` - misleading anyone debugging; (2) routes that imported `SHEET_IDS.INVENTORY` directly worked in Next.js runtime but silently broke if the env var was missing.
 
-**Note:** `src/lib/inventoryActions.js` still reads `process.env.INVENTORY_SHEET_ID` directly (~80 call sites) rather than importing `SHEET_IDS.INVENTORY`. Functional but inconsistent - a P3 refactor is to migrate those imports. Until then, the env var must remain set on Vercel to keep inventory writes working.
+**Fixed in PR #51 (2026-05-18):** `src/lib/inventoryActions.js` now imports `SHEET_IDS.INVENTORY` consistently. The local `const INVENTORY_SHEET_ID = process.env.INVENTORY_SHEET_ID;` shim at L12 was deleted; 94 call sites across the file were converted to `SHEET_IDS.INVENTORY`. Original-state note: prior to PR #51, this file reached the sheet via the env var directly (~80 call sites of inconsistency).
 
 **Lesson worth keeping:** if you find a "weird empty string" while debugging, check whether you're inspecting code inside the framework's runtime context vs. a bare `node -e` shell.
 

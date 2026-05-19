@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-18 (post-PR-#50 work, pre-merge)
+**Last updated:** 2026-05-18 (post-PR-#51 work, pre-merge)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,9 +20,9 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 15 (since 2026-05-14)
-- **Stage 0 progress:** ~77%
-- **Items remaining:** 14 (in 5 bundles + 7 unbundled)
+- **PRs shipped:** 16 (since 2026-05-14)
+- **Stage 0 progress:** ~82%
+- **Items remaining:** 13 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
@@ -46,7 +46,8 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #47 | Audit #4+#5 - Invoice + Vendor | 2026-05-18 | 3 bug fixes, 17 knowledge entries, 5 new SA helpers |
 | #48 | Bundle 1: Audit #4+#5 follow-up cleanup + project dashboard | 2026-05-18 | triggerAIScan SA, ensureLineItemTab swap (createTabSA), 2 frontend static-components fixes, PROJECT_DASHBOARD.md established |
 | #49 | Frontend lint cleanup pass + InvoiceTool bug fix | 2026-05-18 | 12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems) |
-| #50 | **Latent stale-closure bug fix in invoice submit handler (+ 2 dead-dep cleanups)** | **2026-05-18** | **L742 handleConfirmedSubmit was missing ocrResult?.vendorName + resetForm in deps - real bug masked by UX flow, would have caused Supabase data integrity issue. Plus L539 + L600 dead-dep removals. InvoiceTool.js now warning-free; 10 errors remain in PR #51 backlog.** |
+| #50 | Latent stale-closure bug fix in invoice submit handler (+ 2 dead-dep cleanups) | 2026-05-18 | L742 handleConfirmedSubmit was missing ocrResult?.vendorName + resetForm in deps - real bug masked by UX flow, would have caused Supabase data integrity issue. Plus L539 + L600 dead-dep removals. InvoiceTool.js now warning-free; 10 errors remain in PR #51 backlog. |
+| #51 | **Audit #6 - Smart Inventory (migration-readiness focus)** | **2026-05-18** | **30 handlers audited, 2 F-codes fixed (F33 fire-and-forget async forEach in handleMergeItems, F36 dropped reason+email in handleReviewDelete), 12 BUSINESS_NOTES entries + 1 updated, env var inconsistency cleaned (94 sites), new SMART_INVENTORY_DATA_MODEL.md (393 lines) captured for Stage 1 schema design. Stub triage deferred to product session post-migration.** |
 
 ---
 
@@ -145,13 +146,15 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 
 1. ~~Bundle 1~~ - ✅ SHIPPED 2026-05-18 as PR #48
 2. ~~PR #49~~ - ✅ SHIPPED 2026-05-18 - closed deferred items + 1 bug fix; verified live working
-3. ~~PR #50~~ - ✅ READY FOR MERGE 2026-05-18 - latent stale-closure bug fix in invoice submit handler + 2 dead-dep cleanups
-4. **Bundle 2** - Audit close-out (next 1-2 weeks) - 3 audits
-5. **Bundle 3** - Data layer foundation (weeks 2-4)
-6. **Bundle 5** in parallel with Bundle 3
-7. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
-8. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
-9. **Stage 1 begins** - Supabase project, schema design, deploy
+3. ~~PR #50~~ - ✅ SHIPPED 2026-05-18 - latent stale-closure bug fix in invoice submit handler + 2 dead-dep cleanups
+4. ~~Bundle 2 - Audit #6: Smart Inventory~~ - ✅ READY FOR MERGE 2026-05-18 as PR #51 - 2 F-codes fixed, 12 BUSINESS_NOTES + SMART_INVENTORY_DATA_MODEL.md captured for Stage 1
+5. **Bundle 2** - Service Calendar audit (queued)
+6. **Bundle 2** - Railway cron audit (queued)
+7. **Bundle 3** - Data layer foundation (weeks 2-4)
+8. **Bundle 5** in parallel with Bundle 3
+9. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
+10. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
+11. **Stage 1 begins** - Supabase project, schema design, deploy
 
 ---
 
@@ -190,6 +193,17 @@ These items surfaced during Bundle 1 execution but were deferred to keep PR scop
 - 4 `react-hooks/immutability` errors at L804-816 (`calc` function impure-during-render)
 - Estimated 2-3 hours if pursued as standalone; could be 0 hours if naturally absorbed into Bundle 3
 - Status: BACKLOG. Reassess after Bundle 3.
+
+**Smart Inventory stub triage deferred (PR #51 sub-phase 4):**
+- Sub-phase 4 stub triage (7 dead handlers) deferred from PR #51. Decision is product-scope (which features get built post-migration) not audit-scope. Revisit when Smart Inventory enters active development phase post-Supabase migration. Stubs and shells preserved as-is in PR #51.
+
+**E2E CI infrastructure fix (originally flagged 2026-05-15, re-confirmed during PR #50):**
+- `.github/workflows/e2e.yml` line 44 hardcodes `PLAYWRIGHT_BASE_URL` against production, not PR preview URLs
+- Impact: PR-side regressions can't be caught by CI (PR's code never runs in test). Any prod flake blocks unrelated PRs.
+- Confirmed during PR #50: vendor e2e tests failed despite PR #50 not touching vendor code. Re-run on identical commit passed in 75s. Investigation surfaced the same issue documented in SUPABASE_MIGRATION.md Captain's Log 2026-05-15.
+- Current workaround: re-run failed jobs on flake
+- Proper fix: 3 parts including cookie-domain change in auth danger zone. Batches with SA auth consolidation work.
+- Status: deferred until SA auth consolidation. Estimated 1-2 sessions when batched.
 
 **Other discovered items:**
 - `updateScanStatus` and `ensureLineItemTab` helpers still accept unused `token` parameter (kept for signature consistency in Bundle 1; can drop in a future "drop dead token params" cleanup pass). Low priority, ~15 min.
