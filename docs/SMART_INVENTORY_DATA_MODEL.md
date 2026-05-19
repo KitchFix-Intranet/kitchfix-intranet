@@ -353,6 +353,14 @@ These patterns recur across multiple tabs and are documented in `docs/BUSINESS_N
 
 ---
 
+## Companion system: Railway cron
+
+The catalog isn't only written by intranet handlers - the nightly Railway cron is the dominant writer (99.96% of catalog items, 99.2% of aliases). See `docs/BUSINESS_NOTES.md` "Railway cron invariants" entry for the cron's writes, attribution patterns, and Stage 1 migration considerations.
+
+The cron's writes follow the same schemas documented above. Idempotency is invoiceUuid-based at the cron level; the data model's UNIQUE constraints on (invoice_uuid, line_num) in a future line_items table replace the application-level membership check at Stage 1.
+
+---
+
 ## Open questions for Stage 1 schema design
 
 1. **Identity prefix normalization (F37).** Should `inv_` be split into `item_<uuid>` (item_catalog) vs `session_<uuid>` (count_sessions)? Should `loc_` be split into `loc_<uuid>` (storage_locations) vs `save_<uuid>` (count_items locationSaveId)? Or — since Postgres UUIDs replace the string-prefix scheme entirely — does this question become irrelevant at migration time? Likely moot post-migration since Postgres UUID primary keys replace the string-prefix scheme entirely. The question persists only for migration script design (how do old IDs map to new UUIDs?).

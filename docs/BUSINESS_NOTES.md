@@ -287,6 +287,35 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 - **Migration consideration:** Becomes `invoice_line_items` table FK'd to `invoice_submissions` (UUID). The 10 categories should be a Postgres enum or FK to a `categories` lookup. Unit standardization is a Stage 1 cleanup target - currently has `ea` (10 rows) drift from `each` (385 rows), plus `other` (59 rows) as a unit fallback when the AI can't parse. The `confidence` column is currently a stored constant ("high" for all 3,803 rows surveyed) - either AI genuinely high-confidence on structured OCR, or threshold filters low-confidence rows out before write. Stage 1: drop the confidence column OR re-implement as real signal.
 - **Verification:** After migration, query "all produce line items for CIN-OH in the last 30 days." Confirm count matches the `produce` rows in the CIN-OH tab for the same date range.
 
+### Railway cron invariants [PRESERVE THROUGH MIGRATION]
+
+- **What:** Nightly cron job at https://github.com/KitchFix-Intranet/kitchfix-inventory-cron processes invoice line items from AI_LINE_ITEMS into the INVENTORY catalog. Runs once per day at midnight CT on Railway infrastructure. Single index.js file, ~720 lines.
+- **Production impact:** 99.96% of inventory catalog items (2361 of 2362) are cron-created. 99.2% of aliases (3597 of 3627) are cron-created. The cron is the workhorse of the catalog system, not a peripheral tool.
+- **Why:** Invoices upload faster than chefs could manually categorize. The cron's nightly AI pass keeps the catalog growing automatically while preserving chef override authority via the review_queue + merge_history.
+- **Invariants that must survive migration:**
+  1. **Idempotency via invoiceUuid + price_history membership check.** The cron skips line items whose invoiceUuid is already present in price_history (any row, any item). Safe to re-run. Postgres equivalent: UNIQUE constraint on (invoice_uuid, line_num) in line_items table.
+  2. **Append-only writes to 4 tabs** (item_catalog, item_aliases, price_history, review_queue). Never updates existing rows, never deletes. EXCEPT: DEDUP=1 mode mutates by deactivating items + remapping references. DEDUP mode is the one mutation path.
+  3. **Per-account error isolation + per-batch error isolation within accounts.** If one account's Claude call fails, others continue. If one batch within an account fails, other batches continue. Postgres equivalent: per-batch transactions with savepoints.
+  4. **Two attribution patterns:** "ai_cron" for direct catalog/alias creates (3380 alias rows), "ai_cron_batch" for batch_match alias creates where Claude detected within-batch duplicates (217 alias rows). These distinguish two different code paths.
+  5. **MATCH_CONFIDENCE_THRESHOLD as the only tunable** (env var, default 90). Anything Claude scores at or above auto-approves to catalog. Anything below queues for chef review.
+  6. **Single-pass Claude prompt** does normalization + category mapping + variety grouping + matching + dedup. The prompt itself is critical infrastructure - JSON contract changes break the cron silently with no schema validation.
+- **Where:** kitchfix-inventory-cron repo, index.js. Key functions: readTab (line 51), callClaude (line 122), processAccount (line 220), dedupExistingCatalog (line 582).
+- **Documented:** 2026-05-19 during Railway cron audit-as-documentation pass.
+- **Migration consideration:** The cron's nightly job becomes a Supabase Edge Function or scheduled job running on the same nightly cadence. The Claude prompt migrates 1:1 (it doesn't care about the storage layer). The Sheets-specific patterns (column-A anchor at "tab!A1", invoiceUuid string-membership check) become Postgres-native (INSERT...ON CONFLICT DO NOTHING using UNIQUE constraints). The DEDUP mode becomes obsolete (Postgres CHECK constraints catch duplicates at write time).
+- **Verification post-migration:** Run nightly cron equivalent on Supabase. Confirm: same invoiceUuids processed (no duplicates inserted), same review_queue population, same attribution patterns preserved, MATCH_CONFIDENCE_THRESHOLD tunable still functional.
+
+### Railway cron F-codes (F43-F49) - documented, not fixed [LOW PRIORITY]
+
+The following F-codes were identified during 2026-05-19 audit-as-documentation pass. All are theoretical risks with no observable production impact across 408 invoices processed.
+
+- **F43 - Description-row filter fragility.** readTab at line 61 uses hardcoded string prefix matching ("One row", "Multiple", "Every ", "Per-account", "Append-only", "Pending") to skip description rows. Risk: a real catalog item starting with these prefixes would be silently dropped. Evidence: zero rows in production data have these prefixes. No fix needed unless real data later contains these prefixes.
+- **F44 - No retry on Claude API failure.** callClaude at line 122 is single-shot. Risk: transient Anthropic API failure loses a 50-item batch. Evidence: 408 invoices processed cleanly including 10 invoices that exceed BATCH_SIZE (split across 2+ batches). No observed losses. Fix would be small (~10 lines, retry-with-backoff) but not urgent.
+- **F45 - parseFloat silent zeros.** lineItems mapping at line 267 uses `parseFloat(r[8]) || 0` which converts non-numeric to 0. Risk: garbled OCR output creates qty=0 catalog entries. Evidence: zero NaN values in production data. Real qty=0 rows exist (returns/credits/totals) but Claude's prompt rules correctly skip them.
+- **F46 - DEDUP mode bypasses append-only safety.** The only path in the codebase that mutates existing data. Risk: accidental DEDUP=1 run during catalog-edit window could mass-deactivate items. Evidence: DEDUP mode not run in observable history. Stage 1 makes this obsolete (Postgres constraints catch duplicates at write).
+- **F47 - Recursive batch_match not handled.** Lines 478-516 don't detect when a batch_match references another batch_match. Risk: silent fallback to "create as new" creating duplicate catalog entries. Evidence: 217 ai_cron_batch entries created successfully, no observed duplicates.
+- **F48 - Magic column index in Slack digest.** Line 540 hardcodes column 9 for "pending" status check. Risk: review_queue schema shift breaks the digest silently. Evidence: schema stable since cron deployment. Stage 1 migration must update this reference.
+- **F49 - REBUILD UUID format coexists with standard UUIDs.** 138 of 170 STL-MO invoice UUIDs start with "REBUILD-" prefix (from prior repair script). Risk: Stage 1 migration must handle both formats or normalize. Documentation note for Stage 1, not a bug.
+
 ---
 
 ## Template for new entries
