@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-18 (post-PR-#51 work, pre-merge)
+**Last updated:** 2026-05-19 (post-PR-#51 merge, pre-Service Calendar tour)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,14 +20,14 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 16 (since 2026-05-14)
-- **Stage 0 progress:** ~82%
-- **Items remaining:** 13 (in 5 bundles + 7 unbundled)
+- **PRs shipped:** 17 (since 2026-05-14)
+- **Stage 0 progress:** ~87%
+- **Items remaining:** 11 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
 
-## Done - 16 PRs shipped to main
+## Done - 17 PRs shipped to main
 
 | PR | Title | Date | Notes |
 |---|---|---|---|
@@ -47,7 +47,8 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #48 | Bundle 1: Audit #4+#5 follow-up cleanup + project dashboard | 2026-05-18 | triggerAIScan SA, ensureLineItemTab swap (createTabSA), 2 frontend static-components fixes, PROJECT_DASHBOARD.md established |
 | #49 | Frontend lint cleanup pass + InvoiceTool bug fix | 2026-05-18 | 12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems) |
 | #50 | Latent stale-closure bug fix in invoice submit handler (+ 2 dead-dep cleanups) | 2026-05-18 | L742 handleConfirmedSubmit was missing ocrResult?.vendorName + resetForm in deps - real bug masked by UX flow, would have caused Supabase data integrity issue. Plus L539 + L600 dead-dep removals. InvoiceTool.js now warning-free; 10 errors remain in PR #51 backlog. |
-| #51 | **Audit #6 - Smart Inventory (migration-readiness focus)** | **2026-05-18** | **30 handlers audited, 2 F-codes fixed (F33 fire-and-forget async forEach in handleMergeItems, F36 dropped reason+email in handleReviewDelete), 12 BUSINESS_NOTES entries + 1 updated, env var inconsistency cleaned (94 sites), new SMART_INVENTORY_DATA_MODEL.md (393 lines) captured for Stage 1 schema design. Stub triage deferred to product session post-migration.** |
+| #51 | Audit #6 - Smart Inventory (migration-readiness focus) | 2026-05-18 | 30 handlers audited, 2 F-codes fixed (F33 fire-and-forget async forEach in handleMergeItems, F36 dropped reason+email in handleReviewDelete), 12 BUSINESS_NOTES entries + 1 updated, env var inconsistency cleaned (94 sites), new SMART_INVENTORY_DATA_MODEL.md (393 lines) captured for Stage 1 schema design. Stub triage deferred to product session post-migration. |
+| #52 | **Bundle 2 close-out + knowledge map v1** | **2026-05-19** | **Service Calendar deferred (50% built), Railway cron documented (audit-as-documentation, F43-F49 captured not fixed), CLAUDE_KNOWLEDGE_MAP.md v1 added, 2 BUSINESS_NOTES entries (Railway cron invariants + F43-F49 log), dashboard sync carry-forward. Stage 0 progress 82% → 87%.** |
 
 ---
 
@@ -147,10 +148,10 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 1. ~~Bundle 1~~ - ✅ SHIPPED 2026-05-18 as PR #48
 2. ~~PR #49~~ - ✅ SHIPPED 2026-05-18 - closed deferred items + 1 bug fix; verified live working
 3. ~~PR #50~~ - ✅ SHIPPED 2026-05-18 - latent stale-closure bug fix in invoice submit handler + 2 dead-dep cleanups
-4. ~~Bundle 2 - Audit #6: Smart Inventory~~ - ✅ READY FOR MERGE 2026-05-18 as PR #51 - 2 F-codes fixed, 12 BUSINESS_NOTES + SMART_INVENTORY_DATA_MODEL.md captured for Stage 1
-5. **Bundle 2** - Service Calendar audit (queued)
-6. **Bundle 2** - Railway cron audit (queued)
-7. **Bundle 3** - Data layer foundation (weeks 2-4)
+4. ~~Bundle 2 - Audit #6: Smart Inventory~~ - ✅ SHIPPED 2026-05-18 as PR #51 - 2 F-codes fixed, 12 BUSINESS_NOTES + SMART_INVENTORY_DATA_MODEL.md captured for Stage 1
+5. ~~Bundle 2 - Service Calendar audit~~ - DEFERRED 2026-05-19 - tour revealed ~50% complete development state, not production, not ready for migration-readiness audit. Revisit when Kevin signals Service Calendar is closer to stable.
+6. ~~Bundle 2 - Railway cron audit~~ - DOCUMENTED 2026-05-19 - production cron at kitchfix-inventory-cron repo is stable (408 invoices processed, zero observable data loss). F43-F49 captured but not fixed; no production impact evidence. Stage 1 invariants documented in BUSINESS_NOTES.
+7. **Bundle 3 - Data layer foundation (NEXT)** - ~75% pre-built from 6 SA helpers shipped across PRs #47/#48
 8. **Bundle 5** in parallel with Bundle 3
 9. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
 10. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
