@@ -9,8 +9,6 @@ import {
   getAllVendors, resolveVendorId, parseNum, generateId,
 } from "@/lib/opsUtils";
 
-const INVENTORY_SHEET_ID = process.env.INVENTORY_SHEET_ID;
-
 // Account labels in item_catalog may be short ("STL - MO") while bootstrap
 // uses full labels ("STL - MO - St Louis Cardinals"). Match flexibly.
 function accountMatch(rowAccount, activeAccount) {
@@ -32,7 +30,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     const activeAccount = account || accounts[0]?.label || "";
 
     // Read inventory tabs in parallel (fresh=true bypasses cache after save)
-    const inv = await batchRead(INVENTORY_SHEET_ID, [
+    const inv = await batchRead(SHEET_IDS.INVENTORY, [
       "item_catalog", "storage_locations", "count_sessions", "count_items",
       "review_queue", "price_history", "item_aliases",
     ], { fresh });
@@ -204,8 +202,8 @@ export async function handleStartSession({ account, period, email }) {
       sessionId, account, period, email, new Date().toISOString(),
       "draft", "", "", "", "", "", "", "", "", "", "", "", "",
     ];
-    await appendRowSA(INVENTORY_SHEET_ID, "count_sessions", row);
-    invalidateCache(INVENTORY_SHEET_ID, "count_sessions");
+    await appendRowSA(SHEET_IDS.INVENTORY, "count_sessions", row);
+    invalidateCache(SHEET_IDS.INVENTORY, "count_sessions");
     return { success: true, sessionId };
   } catch (error) {
     return { success: false, error: error.message };
@@ -228,8 +226,8 @@ export async function handleCountSave({ sessionId, locationId, items, email }) {
       locationId, email, savedAt, savedAt,
       item.noneOnHand ? "TRUE" : "FALSE",
     ]);
-    await appendRowsSA(INVENTORY_SHEET_ID, "count_items", rows);
-    invalidateCache(INVENTORY_SHEET_ID, "count_items");
+    await appendRowsSA(SHEET_IDS.INVENTORY, "count_items", rows);
+    invalidateCache(SHEET_IDS.INVENTORY, "count_items");
     return { success: true, locationSaveId, itemCount: rows.length };
   } catch (error) {
     return { success: false, error: error.message };
@@ -242,7 +240,7 @@ export async function handleCountSave({ sessionId, locationId, items, email }) {
 
 export async function handleCountSubmit({ sessionId, account, period, summary, email }) {
   try {
-    const inv = await batchRead(INVENTORY_SHEET_ID, ["count_sessions", "count_items", "item_catalog"], { fresh: true });
+    const inv = await batchRead(SHEET_IDS.INVENTORY, ["count_sessions", "count_items", "item_catalog"], { fresh: true });
     const sessions = inv.count_sessions?.rows || [];
     const now = new Date().toISOString();
 
@@ -270,7 +268,7 @@ export async function handleCountSubmit({ sessionId, account, period, summary, e
     });
 
     // Update session row: status, submittedBy, submittedAt, category totals, grandTotal
-    await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+    await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
       { range: `count_sessions!F${sessionRowNum}`, values: [["submitted"]] },
       { range: `count_sessions!G${sessionRowNum}`, values: [[email || ""]] },
       { range: `count_sessions!H${sessionRowNum}`, values: [[now]] },
@@ -299,7 +297,7 @@ export async function handleCountSubmit({ sessionId, account, period, summary, e
     if (priceUpdates.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < priceUpdates.length; i += CHUNK) {
-        await batchUpdateRangesSA(INVENTORY_SHEET_ID, priceUpdates.slice(i, i + CHUNK));
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, priceUpdates.slice(i, i + CHUNK));
       }
     }
 
@@ -310,8 +308,8 @@ export async function handleCountSubmit({ sessionId, account, period, summary, e
       try { await fetch(slackUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); } catch {}
     }
 
-    invalidateCache(INVENTORY_SHEET_ID, "count_sessions");
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "count_sessions");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true, grandTotal, catTotals, itemsCounted: countItems.length };
   } catch (error) {
     return { success: false, error: error.message };
@@ -324,7 +322,7 @@ export async function handleCountSubmit({ sessionId, account, period, summary, e
 
 export async function handleCatalogGet({ account }) {
   try {
-    const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases"]);
+    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases"]);
     const items = (inv.item_catalog?.rows || [])
       .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false)
       .map((r) => ({
@@ -349,19 +347,19 @@ export async function handleAddItem({ account, name, vendor, category, unit, pri
     const itemId = generateId("inv");
     const now = new Date().toISOString();
     const priceNum = parseNum(price);
-    await appendRowSA(INVENTORY_SHEET_ID, "item_catalog", [
+    await appendRowSA(SHEET_IDS.INVENTORY, "item_catalog", [
       itemId, account, name, category || "Uncategorized", unit || "each",
       locationId || "", vendor, priceNum || "", priceNum ? now.slice(0, 10) : "",
       priceNum ? vendor : "", 0, "TRUE", "FALSE", "FALSE",
       email || "manual", now, "", "", priceNum ? now.slice(0, 10) : "",
     ]);
     if (priceNum > 0) {
-      await appendRowSA(INVENTORY_SHEET_ID, "price_history", [
+      await appendRowSA(SHEET_IDS.INVENTORY, "price_history", [
         itemId, account, vendor, priceNum, now.slice(0, 10), "manual-add", now,
       ]);
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
-    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
     return { success: true, itemId };
   } catch (error) {
     return { success: false, error: error.message };
@@ -372,25 +370,25 @@ export async function handleVerifyPrice({ account, itemId, price, email }) {
   try {
     const priceNum = parseNum(price);
     if (!priceNum || priceNum <= 0) return { success: false, error: "Valid price required" };
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
         const now = new Date().toISOString();
         const vendor = rows[i][6] || "";
-        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
           { range: `item_catalog!H${i + 2}`, values: [[priceNum]] },
           { range: `item_catalog!I${i + 2}`, values: [[now.slice(0, 10)]] },
           { range: `item_catalog!J${i + 2}`, values: [[vendor]] },
           { range: `item_catalog!S${i + 2}`, values: [[now.slice(0, 10)]] },
         ]);
-        await appendRowSA(INVENTORY_SHEET_ID, "price_history", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "price_history", [
           itemId, account, vendor, priceNum, now.slice(0, 10), "manual-verify", now,
         ]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
-    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -403,7 +401,7 @@ export async function handleBatchMoveItems({ account, items }) {
   // items: [{itemId, newLocationId}]
   try {
     if (!items || items.length === 0) return { success: true, moved: 0 };
-    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     const rows = catalogData.rows || [];
 
     // Build batch of range updates
@@ -424,7 +422,7 @@ export async function handleBatchMoveItems({ account, items }) {
     let moved = 0;
     for (let c = 0; c < data.length; c += CHUNK) {
       const chunk = data.slice(c, c + CHUNK);
-      const result = await batchUpdateRangesSA(INVENTORY_SHEET_ID, chunk);
+      const result = await batchUpdateRangesSA(SHEET_IDS.INVENTORY, chunk);
       if (!result.success) {
         console.error(`[batch-move] Chunk failed at offset ${c}:`, result.error);
         return { success: false, moved, error: result.error };
@@ -432,7 +430,7 @@ export async function handleBatchMoveItems({ account, items }) {
       moved += chunk.length;
     }
 
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true, moved };
   } catch (error) {
     console.error("[inventoryActions] batch-move error:", error.message);
@@ -475,7 +473,7 @@ async function callClaude(prompt, maxTokens = 8192, retries = 3) {
 
 export async function handleAISimilarityCheck({ account }) {
   try {
-    const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases", "merge_history"], { fresh: true });
+    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases", "merge_history"], { fresh: true });
     const items = (inv.item_catalog?.rows || [])
       .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false && r[0] && r[2])
       .map((r) => ({ itemId: r[0], name: r[2], category: r[3] || "Food", unit: r[4] || "EA", vendor: r[6] || "", price: r[7] || "" }));
@@ -611,7 +609,7 @@ const raw = await callClaude(prompt, 16384);
 
 export async function handleMergeItems({ account, keeperItemId, mergedItemIds, canonicalName, category, unit, email }) {
   try {
-    const inv = await batchRead(INVENTORY_SHEET_ID, ["item_catalog", "item_aliases", "price_history"], { fresh: true });
+    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases", "price_history"], { fresh: true });
     const catalogRows = inv.item_catalog?.rows || [];
     const aliasRows = inv.item_aliases?.rows || [];
     const priceRows = inv.price_history?.rows || [];
@@ -626,9 +624,15 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
     if (!keeperRowNum) return { success: false, error: "Keeper item not found" };
 
     // Update keeper name/category/unit
-    await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!C${keeperRowNum}:E${keeperRowNum}`, [[canonicalName || keeperRow[2], category || keeperRow[3], unit || keeperRow[4]]]);
+    await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!C${keeperRowNum}:E${keeperRowNum}`, [[canonicalName || keeperRow[2], category || keeperRow[3], unit || keeperRow[4]]]);
 
     const mergedNames = [];
+    // F33 (PR #51 Audit #6): collect alias + price_history remap ops into batches.
+    // Prior code used `forEach(async ...)` which fired Promises without awaiting them - the merge
+    // returned success before the remaps completed, cache invalidated before writes landed, and
+    // the next read could see stale rows still pointing at the merged (now inactive) itemId.
+    const aliasRemapOps = [];
+    const priceRemapOps = [];
 
     for (const mergedId of mergedItemIds) {
       // Find merged row
@@ -638,31 +642,31 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
           mergedNames.push(catalogRows[i][2] || mergedId);
 
           // Deactivate merged item
-          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!L${rowNum}`, [["FALSE"]]);
+          await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!L${rowNum}`, [["FALSE"]]);
 
           // Create alias from merged name → keeper
-          await appendRowSA(INVENTORY_SHEET_ID, "item_aliases", [
+          await appendRowSA(SHEET_IDS.INVENTORY, "item_aliases", [
             generateId("alias"), catalogRows[i][2] || "", keeperItemId,
             catalogRows[i][6] || "", 100, email || "item_review", now, "item_review",
           ]);
 
-          // Remap aliases pointing to merged → keeper
-          aliasRows.forEach(async (a, ai) => {
+          // Collect alias remap ops (existing aliases pointing to merged → keeper). Fired in batch after the outer loop.
+          aliasRows.forEach((a, ai) => {
             if (a[2] === mergedId) {
-              await updateRangeSA(INVENTORY_SHEET_ID, `item_aliases!C${ai + 2}`, [[keeperItemId]]);
+              aliasRemapOps.push({ range: `item_aliases!C${ai + 2}`, values: [[keeperItemId]] });
             }
           });
 
-          // Remap price_history
-          priceRows.forEach(async (p, pi) => {
+          // Collect price_history remap ops. Same batching pattern.
+          priceRows.forEach((p, pi) => {
             if (p[0] === mergedId) {
-              await updateRangeSA(INVENTORY_SHEET_ID, `price_history!A${pi + 2}`, [[keeperItemId]]);
+              priceRemapOps.push({ range: `price_history!A${pi + 2}`, values: [[keeperItemId]] });
             }
           });
 
           // Copy locationId if keeper has none
           if (catalogRows[i][5] && !keeperRow[5]) {
-            await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${keeperRowNum}`, [[catalogRows[i][5]]]);
+            await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${keeperRowNum}`, [[catalogRows[i][5]]]);
             keeperRow[5] = catalogRows[i][5];
           }
 
@@ -673,7 +677,7 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
             const combined = keeperNotes
               ? `${keeperNotes}\n[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`
               : `[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`;
-            await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!R${keeperRowNum}`, [[combined.slice(0, 500)]]);
+            await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!R${keeperRowNum}`, [[combined.slice(0, 500)]]);
             keeperRow[17] = combined.slice(0, 500);
           }
           break;
@@ -681,17 +685,26 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
       }
     }
 
+    // F33 fix: fire collected remap ops as batched writes before logging merge_history or returning.
+    // N+M individual updateRangeSA calls collapse to 2 batched API calls.
+    if (aliasRemapOps.length > 0) {
+      await batchUpdateRangesSA(SHEET_IDS.INVENTORY, aliasRemapOps);
+    }
+    if (priceRemapOps.length > 0) {
+      await batchUpdateRangesSA(SHEET_IDS.INVENTORY, priceRemapOps);
+    }
+
     // Log merge decision
-    await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+    await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
       generateId("mrg"), account, now, email || "",
       keeperItemId, canonicalName || keeperRow[2],
       JSON.stringify(mergedItemIds), JSON.stringify(mergedNames),
       "merge", "",
     ]);
 
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
-    invalidateCache(INVENTORY_SHEET_ID, "item_aliases");
-    invalidateCache(INVENTORY_SHEET_ID, "price_history");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_aliases");
+    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
 
     return { success: true, merged: mergedItemIds.length };
   } catch (error) {
@@ -703,7 +716,7 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
 export async function handleKeepSeparate({ account, itemIds, itemNames, email }) {
   try {
     const now = new Date().toISOString();
-    await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+    await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
       generateId("mrg"), account, now, email || "",
       "", "",
       JSON.stringify(itemIds),
@@ -718,30 +731,30 @@ export async function handleKeepSeparate({ account, itemIds, itemNames, email })
 
 export async function handleReviewAccept({ account, itemId, name, category, unit, locationId, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
         const rowNum = i + 2;
         // Update name, category, unit, locationId
         const updates = [name || rows[i][2], category || rows[i][3], unit || rows[i][4]];
-        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!C${rowNum}:E${rowNum}`, [updates]);
+        await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!C${rowNum}:E${rowNum}`, [updates]);
         if (locationId) {
-          await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${rowNum}`, [[locationId]]);
+          await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${rowNum}`, [[locationId]]);
           // Log zone correction if different from AI suggestion
           const aiSuggested = rows[i][5] || "";
           if (aiSuggested && aiSuggested !== locationId) {
-            await appendRowSA(INVENTORY_SHEET_ID, "zone_corrections", [
+            await appendRowSA(SHEET_IDS.INVENTORY, "zone_corrections", [
               generateId("zc"), account, new Date().toISOString(), email || "",
               itemId, name || rows[i][2], aiSuggested, locationId, category || rows[i][3],
             ]);
           }
         }
         // Set reviewStatus (column Q, index 16)
-        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!Q${rowNum}`, [["reviewed"]]);
+        await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!Q${rowNum}`, [["reviewed"]]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -750,14 +763,26 @@ export async function handleReviewAccept({ account, itemId, name, category, unit
 
 export async function handleReviewDelete({ account, itemId, reason, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!L${i + 2}`, [["FALSE"]]);
+        const itemName = rows[i][2] || "";
+        // F36 (PR #51 Audit #6): handler was accepting `reason` and `email` from UI but
+        // writing neither. Now matches the dual-column + merge_history audit pattern used
+        // by handleArchiveItem and handleExcludeItem. reason lives in merge_history col 9
+        // (the previously-empty trailing column reserved across all current writes).
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
+          { range: `item_catalog!Q${i + 2}`, values: [["review_deleted"]] },
+        ]);
+        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
+          generateId("mrg"), account, new Date().toISOString(), email || "",
+          itemId, itemName, "", "", "review_delete", reason || "",
+        ]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -766,23 +791,23 @@ export async function handleReviewDelete({ account, itemId, reason, email }) {
 
 export async function handleExcludeItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
         // Set active=FALSE (col L) and reviewStatus=excluded (col Q)
-        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
           { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
           { range: `item_catalog!Q${i + 2}`, values: [["excluded"]] },
         ]);
         // Log to merge_history for cron exclusion reference
-        await appendRowSA(INVENTORY_SHEET_ID, "merge_history!A:A", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history!A:A", [
           generateId("mrg"), account, new Date().toISOString(), email,
           itemId, rows[i][2] || "", "", "", "exclude", "",
         ]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -792,10 +817,10 @@ export async function handleExcludeItem({ account, itemId, email }) {
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
 export async function handleSaveLocations({ account, locations, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
 
     // Ensure columns I & J headers exist (parentLocationId, color)
-    await updateRangeSA(INVENTORY_SHEET_ID, "storage_locations!I1:J1", [["parentLocationId", "color"]]);
+    await updateRangeSA(SHEET_IDS.INVENTORY, "storage_locations!I1:J1", [["parentLocationId", "color"]]);
 
     const existingRows = {};
     rows.forEach((r, i) => {
@@ -812,7 +837,7 @@ export async function handleSaveLocations({ account, locations, email }) {
     for (const loc of topLevel) {
       if (loc.locationId && existingRows[loc.locationId]) {
         const rowNum = existingRows[loc.locationId];
-        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!A${rowNum}:J${rowNum}`, [[
+        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!A${rowNum}:J${rowNum}`, [[
           loc.locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, "", loc.color || "",
         ]]);
@@ -821,7 +846,7 @@ export async function handleSaveLocations({ account, locations, email }) {
       } else {
         const locationId = generateId("loc");
         newIdMap[loc.name] = locationId; // for sub-zone parent resolution
-        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
           locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, "", loc.color || "",
         ]);
@@ -840,14 +865,14 @@ export async function handleSaveLocations({ account, locations, email }) {
 
       if (loc.locationId && existingRows[loc.locationId]) {
         const rowNum = existingRows[loc.locationId];
-        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!A${rowNum}:J${rowNum}`, [[
+        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!A${rowNum}:J${rowNum}`, [[
           loc.locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, parentId, loc.color || "",
         ]]);
         savedIds.add(loc.locationId);
       } else {
         const locationId = generateId("loc");
-        await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
           locationId, account, loc.name, loc.icon || "box",
           loc.sortOrder, "TRUE", email, now, parentId, loc.color || "",
         ]);
@@ -861,7 +886,7 @@ export async function handleSaveLocations({ account, locations, email }) {
     for (const [locId, rowNum] of Object.entries(existingRows)) {
       if (!savedIds.has(locId)) {
         console.log(`[save-locations] Deactivating removed location: ${locId} at row ${rowNum}`);
-        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!E${rowNum}:F${rowNum}`, [[999, "FALSE"]]);
+        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!E${rowNum}:F${rowNum}`, [[999, "FALSE"]]);
       }
     }
 
@@ -885,7 +910,7 @@ export async function handleSaveLocations({ account, locations, email }) {
       return savedLocations[0]?.locationId || "";
     }
 
-    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     const catalogRows = catalogData.rows || [];
     let assigned = 0;
 
@@ -919,7 +944,7 @@ export async function handleSaveLocations({ account, locations, email }) {
         // Keyword locationId → map to real location
         if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
           const realLocId = matchKeywordToLocation(currentLocId);
-          if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+          if (realLocId) { await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
         }
         // Empty or orphaned → assign by category
         if (!currentLocId || isOrphaned) {
@@ -930,16 +955,16 @@ export async function handleSaveLocations({ account, locations, email }) {
           if (["packaging", "supplies"].includes(cat)) keyword = "supplies";
           if (["snacks"].includes(cat)) keyword = "dry";
           const realLocId = matchKeywordToLocation(keyword);
-          if (realLocId) { await updateRangeSA(INVENTORY_SHEET_ID, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
+          if (realLocId) { await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
         }
       }
-      invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+      invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     } else {
       console.log(`[save-locations] No items need auto-assignment, skipping`);
     }
 
-    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     console.log(`[save-locations] ${account}: ${savedLocations.length} zones saved, ${subZones.length} sub-zones, ${assigned} items auto-assigned`);
     return { success: true, count: locations.length, assigned };
   } catch (error) {
@@ -951,7 +976,7 @@ export async function handleSaveSortOrder({ account, updates }) {
   // updates: [{ locationId, sortOrder }]
   try {
     if (!updates || updates.length === 0) return { success: true };
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
     const data = [];
     for (const u of updates) {
       for (let i = 0; i < rows.length; i++) {
@@ -961,8 +986,8 @@ export async function handleSaveSortOrder({ account, updates }) {
         }
       }
     }
-    if (data.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, data);
-    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    if (data.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, data);
+    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
     return { success: true, updated: data.length };
   } catch (error) {
     console.error("[inventoryActions] save-sort-order error:", error.message);
@@ -972,7 +997,7 @@ export async function handleSaveSortOrder({ account, updates }) {
 
 export async function handleAddSubZone({ account, parentLocationId, name, icon, color, email }) {
       try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
     // Count existing sub-zones for sortOrder
     let maxSort = -1;
     rows.forEach(r => {
@@ -983,11 +1008,11 @@ export async function handleAddSubZone({ account, parentLocationId, name, icon, 
     });
     const locationId = generateId("loc");
     const now = new Date().toISOString();
-    await appendRowSA(INVENTORY_SHEET_ID, "storage_locations!A:A", [
+    await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
 locationId, account, name, icon || "box",
       maxSort + 1, "TRUE", email, now, parentLocationId, color || "",
         ]);
-    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
     return { success: true, locationId, name };
   } catch (error) {
     console.error("[inventoryActions] add-subzone error:", error.message);
@@ -997,18 +1022,18 @@ locationId, account, name, icon || "box",
 
 export async function handleUpdateLocation({ account, locationId, fields }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === locationId && accountMatch(rows[i][1], account) && rows[i][5] !== "FALSE" && rows[i][5] !== false) {
         const updates = [];
         if (fields.name !== undefined) updates.push({ range: `storage_locations!C${i + 2}`, values: [[fields.name]] });
         if (fields.icon !== undefined) updates.push({ range: `storage_locations!D${i + 2}`, values: [[fields.icon]] });
         if (fields.color !== undefined) updates.push({ range: `storage_locations!J${i + 2}`, values: [[fields.color]] });
-        if (updates.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, updates);
+        if (updates.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, updates);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1017,11 +1042,11 @@ export async function handleUpdateLocation({ account, locationId, fields }) {
 
 export async function handleDeactivateLocation({ account, locationId }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "storage_locations");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === locationId && accountMatch(rows[i][1], account)) {
-        await updateRangeSA(INVENTORY_SHEET_ID, `storage_locations!E${i + 2}:F${i + 2}`, [[999, "FALSE"]]);
-        invalidateCache(INVENTORY_SHEET_ID, "storage_locations");
+        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!E${i + 2}:F${i + 2}`, [[999, "FALSE"]]);
+        invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
         return { success: true };
       }
     }
@@ -1043,9 +1068,9 @@ function normalizeCatalogName(name) {
 
 export async function handleDedupCatalog({ dryRun = true }) {
   try {
-    const catalogData = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
-    const aliasData = await readSheetSA(INVENTORY_SHEET_ID, "item_aliases");
-    const priceData = await readSheetSA(INVENTORY_SHEET_ID, "price_history");
+    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
+    const aliasData = await readSheetSA(SHEET_IDS.INVENTORY, "item_aliases");
+    const priceData = await readSheetSA(SHEET_IDS.INVENTORY, "price_history");
     const catalogRows = catalogData.rows || [];
     const aliasRows = aliasData.rows || [];
     const priceRows = priceData.rows || [];
@@ -1107,11 +1132,11 @@ export async function handleDedupCatalog({ dryRun = true }) {
 
     if (!dryRun && ops.length > 0) {
       for (const op of ops) {
-        await updateRangeSA(INVENTORY_SHEET_ID, op.range, op.values);
+        await updateRangeSA(SHEET_IDS.INVENTORY, op.range, op.values);
       }
-      invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
-      invalidateCache(INVENTORY_SHEET_ID, "item_aliases");
-      invalidateCache(INVENTORY_SHEET_ID, "price_history");
+      invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+      invalidateCache(SHEET_IDS.INVENTORY, "item_aliases");
+      invalidateCache(SHEET_IDS.INVENTORY, "price_history");
     }
 
     return {
@@ -1129,17 +1154,17 @@ export async function handleDedupCatalog({ dryRun = true }) {
 export async function handlePrint({ account }) { return { success: false, error: "Week 3" }; }
 export async function handleUpdateCatalogItem({ account, itemId, fields, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
         const updates = [];
         if (fields.category !== undefined) updates.push({ range: `item_catalog!D${i + 2}`, values: [[fields.category]] });
         if (fields.notes !== undefined) updates.push({ range: `item_catalog!R${i + 2}`, values: [[fields.notes]] });
-        if (updates.length > 0) await batchUpdateRangesSA(INVENTORY_SHEET_ID, updates);
+        if (updates.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, updates);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1147,21 +1172,21 @@ export async function handleUpdateCatalogItem({ account, itemId, fields, email }
 }
 export async function handleArchiveItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
           { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
           { range: `item_catalog!Q${i + 2}`, values: [["archived"]] },
         ]);
-        await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
           generateId("mrg"), account, new Date().toISOString(), email || "",
           itemId, rows[i][2] || "", "", "", "archive", "",
         ]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1170,21 +1195,21 @@ export async function handleArchiveItem({ account, itemId, email }) {
 
 export async function handleReactivateItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(INVENTORY_SHEET_ID, "item_catalog");
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
     for (let i = 0; i < rows.length; i++) {
       if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        await batchUpdateRangesSA(INVENTORY_SHEET_ID, [
+        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
           { range: `item_catalog!L${i + 2}`, values: [["TRUE"]] },
           { range: `item_catalog!Q${i + 2}`, values: [[""]] },
         ]);
-        await appendRowSA(INVENTORY_SHEET_ID, "merge_history", [
+        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
           generateId("mrg"), account, new Date().toISOString(), email || "",
           itemId, rows[i][2] || "", "", "", "reactivate", "",
         ]);
         break;
       }
     }
-    invalidateCache(INVENTORY_SHEET_ID, "item_catalog");
+    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
