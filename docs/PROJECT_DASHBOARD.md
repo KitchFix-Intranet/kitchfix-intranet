@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-19 (post-PR-#51 merge, pre-Service Calendar tour)
+**Last updated:** 2026-05-19 (post-PR-#52 merge, pre-Bundle-3-recon)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,14 +20,14 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 17 (since 2026-05-14)
+- **PRs shipped:** 18 (since 2026-05-14)
 - **Stage 0 progress:** ~87%
 - **Items remaining:** 11 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
 
-## Done - 17 PRs shipped to main
+## Done - 18 PRs shipped to main
 
 | PR | Title | Date | Notes |
 |---|---|---|---|
@@ -48,7 +48,8 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #49 | Frontend lint cleanup pass + InvoiceTool bug fix | 2026-05-18 | 12 lint issues closed, 2 set-state-in-effect refactors (Option B derived state), 1 use-before-declare bug fixed, PR #50 scope discovered (InvoiceTool.js still has 13 problems) |
 | #50 | Latent stale-closure bug fix in invoice submit handler (+ 2 dead-dep cleanups) | 2026-05-18 | L742 handleConfirmedSubmit was missing ocrResult?.vendorName + resetForm in deps - real bug masked by UX flow, would have caused Supabase data integrity issue. Plus L539 + L600 dead-dep removals. InvoiceTool.js now warning-free; 10 errors remain in PR #51 backlog. |
 | #51 | Audit #6 - Smart Inventory (migration-readiness focus) | 2026-05-18 | 30 handlers audited, 2 F-codes fixed (F33 fire-and-forget async forEach in handleMergeItems, F36 dropped reason+email in handleReviewDelete), 12 BUSINESS_NOTES entries + 1 updated, env var inconsistency cleaned (94 sites), new SMART_INVENTORY_DATA_MODEL.md (393 lines) captured for Stage 1 schema design. Stub triage deferred to product session post-migration. |
-| #52 | **Bundle 2 close-out + knowledge map v1** | **2026-05-19** | **Service Calendar deferred (50% built), Railway cron documented (audit-as-documentation, F43-F49 captured not fixed), CLAUDE_KNOWLEDGE_MAP.md v1 added, 2 BUSINESS_NOTES entries (Railway cron invariants + F43-F49 log), dashboard sync carry-forward. Stage 0 progress 82% → 87%.** |
+| #52 | Bundle 2 close-out + knowledge map v1 | 2026-05-19 | Service Calendar deferred (50% built), Railway cron documented (audit-as-documentation, F43-F49 captured not fixed), CLAUDE_KNOWLEDGE_MAP.md v1 added, 2 BUSINESS_NOTES entries (Railway cron invariants + F43-F49 log), dashboard sync carry-forward. Stage 0 progress 82% → 87%. |
+| #53 | **Bundle 3 sub-phase 0 recon (Sheets access inventory)** | **2026-05-19** | **17 Sheets-touching files classified across 6 categories (10 CONSOLIDATED / 1 DOWNSTREAM / 1 DIRECT-ONLY / 1 AUTH-BOUNDARY / 4 AD-HOC-HELPER). New docs/SHEETS_ACCESS_INVENTORY.md (178 lines) becomes Bundle 3 consolidation reference. Recommended 3-PR scope (~10-13 hr total): cron consolidation, directory migration, dashboard auth-boundary decision. Recon-only, no code changes.** |
 
 ---
 
