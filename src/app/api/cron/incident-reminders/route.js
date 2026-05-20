@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
+import { SHEET_IDS, readSheetSA, updateCellSA } from "@/lib/sheets";
 import { logEventSA } from "@/lib/analytics";
 import {
   INCIDENT_COLUMNS,
@@ -18,21 +19,11 @@ import {
 // Uses reminder_7day_sent_at to dedupe (never sends twice for the same incident).
 // ═══════════════════════════════════════════════════════════════
 
-const SHEET_IDS = {
-  DB: process.env.PEOPLE_DB_SHEET_ID || process.env.MASTER_HUB_SHEET_ID,
-};
-
-// Service account client setup (mirrors incidentActions.js)
-function getSheetsClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-  return google.sheets({ version: "v4", auth });
-}
+// Sheets I/O: consolidated through src/lib/sheets.js helpers in PR #54 (Bundle 3 PR A1).
+// Previously had a local SHEET_IDS const with a DB key + local getSheetsClient + local
+// readIncidents/updateCell helpers. The Gmail client below (getGmailClient) intentionally
+// stays as-is because it uses domain-wide delegation (subject impersonation) which the
+// canonical Sheets SA helper doesn't expose. See BUSINESS_NOTES "Gmail SA auth pattern".
 
 async function getGmailClient() {
   // Reuse the same pattern People uses for sending — we need impersonation
@@ -65,25 +56,6 @@ function buildEmailMime({ to, from, subject, html }) {
   return Buffer.from(`${headers}\r\n\r\n${body}`).toString("base64url");
 }
 
-// Read all incident rows
-async function readIncidents(sheets) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_IDS.DB,
-    range: `${INCIDENTS_TAB}!A:ZZ`,
-  });
-  return res.data.values || [];
-}
-
-// Update a single cell (1-indexed row + column)
-async function updateCell(sheets, sheetRow, colLetter, value) {
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_IDS.DB,
-    range: `${INCIDENTS_TAB}!${colLetter}${sheetRow}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[value]] },
-  });
-}
-
 // Convert a 1-indexed column number to spreadsheet letter (A, B, ..., Z, AA, AB...)
 function colToLetter(col) {
   let s = "";
@@ -106,14 +78,11 @@ export async function GET(request) {
   const log = [];
 
   try {
-    const sheets = getSheetsClient();
-    const allRows = await readIncidents(sheets);
-    if (allRows.length < 2) {
+    // readSheetSA returns {headers, rows} with rows already header-stripped.
+    const { rows: dataRows } = await readSheetSA(SHEET_IDS.COLLECTION, INCIDENTS_TAB);
+    if (dataRows.length === 0) {
       return NextResponse.json({ ok: true, scanned: 0, sent: 0, log: ["No incident rows to scan"] });
     }
-
-    // Skip header row (index 0)
-    const dataRows = allRows.slice(1);
     log.push(`Scanned ${dataRows.length} incident rows`);
 
     // Index columns
@@ -209,7 +178,7 @@ export async function GET(request) {
         const sheetRow = i + 2;
         const colNum = colIdx.reminder_7day_sent_at + 1; // 1-indexed
         const colLetter = colToLetter(colNum);
-        await updateCell(sheets, sheetRow, colLetter, new Date().toISOString());
+        await updateCellSA(SHEET_IDS.COLLECTION, `${INCIDENTS_TAB}!${colLetter}${sheetRow}`, new Date().toISOString());
 
         sent++;
         log.push(`Sent reminder for ${inc.incident_id} → ${recipients.join(", ")}`);

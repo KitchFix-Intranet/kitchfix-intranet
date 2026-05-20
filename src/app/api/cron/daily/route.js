@@ -1,107 +1,15 @@
 import { NextResponse } from "next/server";
+import { SHEET_IDS, readSheetSA, appendRowSA } from "@/lib/sheets";
 
 // ═══════════════════════════════════════
-// DAILY CRON — Notification Generator
+// DAILY CRON - Notification Generator
 // Schedule: Every day at 7:00 AM CT
 // Handles: Inventory countdowns, period starts, birthdays, anniversaries, news
+//
+// Auth + Sheets I/O: consolidated through src/lib/sheets.js helpers in PR #54
+// (Bundle 3 PR A1). Previously had ~55 lines of hand-rolled JWT crypto + local
+// readSheet/appendRow helpers + a duplicate local SHEET_IDS const.
 // ═══════════════════════════════════════
-
-const SHEET_IDS = {
-  HUB: process.env.MASTER_HUB_SHEET_ID,
-  DB: process.env.PEOPLE_DB_SHEET_ID || process.env.MASTER_HUB_SHEET_ID,
-};
-
-// ═══════════════════════════════════════
-// Service Account Auth (mirrors People route)
-// ═══════════════════════════════════════
-async function getAccessToken() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const keyRaw = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !keyRaw) throw new Error("Missing service account credentials");
-
-  const privateKey = keyRaw.replace(/\\n/g, "\n");
-  const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const now = Math.floor(Date.now() / 1000);
-  const claims = {
-    iss: email,
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-  };
-  const claimSet = btoa(JSON.stringify(claims));
-  const unsignedJwt = `${header}.${claimSet}`;
-  const cryptoKey = await importPrivateKey(privateKey);
-  const signature = await signJwt(unsignedJwt, cryptoKey);
-  const jwt = `${unsignedJwt}.${signature}`;
-
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!tokenRes.ok) throw new Error(`Token exchange failed: ${await tokenRes.text()}`);
-  const tokenData = await tokenRes.json();
-  return tokenData.access_token;
-}
-
-async function importPrivateKey(pem) {
-  const pemContents = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s/g, "");
-  const binaryDer = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
-  return crypto.subtle.importKey(
-    "pkcs8",
-    binaryDer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-}
-
-async function signJwt(input, key) {
-  const encoded = new TextEncoder().encode(input);
-  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, encoded);
-  return btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-// ═══════════════════════════════════════
-// Sheet Helpers
-// ═══════════════════════════════════════
-async function readSheet(spreadsheetId, sheetName) {
-  const token = await getAccessToken();
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    console.error(`[Cron] Sheet read failed (${sheetName}):`, res.status);
-    return [];
-  }
-  const json = await res.json();
-  const rows = json.values || [];
-  return rows.slice(1); // skip header
-}
-
-async function appendRow(spreadsheetId, sheetName, rowData) {
-  const token = await getAccessToken();
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ values: [rowData] }),
-  });
-  return res.ok;
-}
 
 // ═══════════════════════════════════════
 // Notification Writer
@@ -118,7 +26,7 @@ async function writeNotification(recipient, subject, eventType, relatedInfo) {
     "logged",
     relatedInfo || "",
   ];
-  const ok = await appendRow(SHEET_IDS.DB, "notification_log", row);
+  const { success: ok } = await appendRowSA(SHEET_IDS.COLLECTION, "notification_log", row);
   if (ok) console.log(`[Cron] ✅ ${eventType}: ${subject}`);
   else console.error(`[Cron] ❌ Failed to write: ${eventType}`);
   return ok;
@@ -189,12 +97,18 @@ export async function GET(request) {
   try {
 console.log("[Cron] Daily notification run starting...");
 
-     // Batch read all needed sheets
-    const [periodRows, celebrationRows, contactRows, notifRows] = await Promise.all([
-      readSheet(SHEET_IDS.HUB, "period_data"),
-      readSheet(SHEET_IDS.HUB, "personnel_celebrations"),
-      readSheet(SHEET_IDS.HUB, "contacts"),
-      readSheet(SHEET_IDS.DB, "notification_log"),
+     // Batch read all needed sheets. readSheetSA returns {headers, rows} per tab;
+     // destructure .rows to preserve the existing periodRows/celebrationRows/etc. names.
+    const [
+      { rows: periodRows },
+      { rows: celebrationRows },
+      { rows: contactRows },
+      { rows: notifRows },
+    ] = await Promise.all([
+      readSheetSA(SHEET_IDS.HUB, "period_data"),
+      readSheetSA(SHEET_IDS.HUB, "personnel_celebrations"),
+      readSheetSA(SHEET_IDS.HUB, "contacts"),
+      readSheetSA(SHEET_IDS.COLLECTION, "notification_log"),
     ]);
 
     const today = todayClean();

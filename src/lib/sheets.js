@@ -43,6 +43,23 @@ export function getServiceAccountSheetsClient() {
 }
 
 /**
+ * Service Account Drive client - same auth pattern as getServiceAccountSheetsClient
+ * but returns a google.drive client with drive scope. Added in PR #54 (Bundle 3 PR A1)
+ * for the backup-sheets cron which copies sheet files via Drive's files.copy endpoint.
+ * Accepts a scopes parameter for callers that need narrower scope (e.g. drive.file).
+ */
+export function getServiceAccountDriveClient(scopes = ["https://www.googleapis.com/auth/drive"]) {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes,
+  });
+  return google.drive({ version: "v3", auth });
+}
+
+/**
  * Read a sheet using the service account (no user token needed).
  */
 export async function readSheetSA(spreadsheetId, tabName) {

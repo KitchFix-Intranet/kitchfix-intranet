@@ -316,6 +316,32 @@ The following F-codes were identified during 2026-05-19 audit-as-documentation p
 - **F48 - Magic column index in Slack digest.** Line 540 hardcodes column 9 for "pending" status check. Risk: review_queue schema shift breaks the digest silently. Evidence: schema stable since cron deployment. Stage 1 migration must update this reference.
 - **F49 - REBUILD UUID format coexists with standard UUIDs.** 138 of 170 STL-MO invoice UUIDs start with "REBUILD-" prefix (from prior repair script). Risk: Stage 1 migration must handle both formats or normalize. Documentation note for Stage 1, not a bug.
 
+### Hand-rolled JWT consolidation (Bundle 3 PR A1) [CLOSED ISSUE]
+
+- **What:** Three cron files previously hand-rolled service-account JWT auth instead of using the canonical `getServiceAccountSheetsClient()` / `getServiceAccountDriveClient()` helpers from `src/lib/sheets.js`. PR A1 (2026-05-20) consolidated 3 of the 4 hand-rolled paths. The 4th path (people/route.js) is deferred to PR A2.
+- **Why:** CLAUDE.md item 1 has flagged "two parallel service-account implementations exist" since the 2026-05-11 calibration. Hand-rolled JWT paths fragment auth, complicate Stage 1 Postgres migration (every consolidated call site automatically swaps to the new store when the canonical helper is replaced), and risk drift from canonical helper behavior (e.g., scope changes, retry behavior, error handling).
+- **Where (removed):**
+  - `src/app/api/cron/backup-sheets/route.js` - removed local `getServiceAccountAuth` JWT helper (was L37-46). Now uses `getServiceAccountDriveClient()`.
+  - `src/app/api/cron/daily/route.js` - removed `getAccessToken` / `importPrivateKey` / `signJwt` block (was L17-71, ~55 LOC of `crypto.subtle` code) plus local `readSheet` / `appendRow` helpers (was L76-104). Now uses `readSheetSA` + `appendRowSA`.
+  - `src/app/api/cron/incident-reminders/route.js` - removed local `getSheetsClient` (was L26-35) plus local `readIncidents` (was L69-75) and `updateCell` (was L78-85) helpers. Now uses `readSheetSA` + `updateCellSA`.
+- **What stays:** `getGmailClient` in `cron/incident-reminders/route.js` (now ~L28) intentionally not consolidated. Different auth pattern - see "Gmail SA auth pattern (incident-reminders) [PRESERVE]" entry below.
+- **What's still pending:** `src/app/api/people/route.js` (2,056 lines) still has hand-rolled JWT at L79-156 (`getServiceToken` / `importPrivateKey` / `signJwt` plus local `readSheet` / `appendRow` / `updateCell` / `updateRow` helpers without the `SA` naming suffix). Deferred to PR A2 due to file size. After PR A2 merges, CLAUDE.md item 1 fully closes.
+- **Also in this PR:** New `getServiceAccountDriveClient(scopes)` helper added to `src/lib/sheets.js` (mirrors `getServiceAccountSheetsClient` but returns a Drive client). Drift-bomb duplicate local `SHEET_IDS` consts removed from `cron/daily` and `cron/incident-reminders` (the locals had a `DB` key referencing `PEOPLE_DB_SHEET_ID`; verified safe to migrate to canonical `SHEET_IDS.COLLECTION` because Kevin confirmed `PEOPLE_DB_SHEET_ID` env var = COLLECTION sheet ID `1itJh5x1YFBdyHTBr-dyKD_r_nRBfjwIBiR_bWiOyCzQ`).
+- **LOC impact:** -130 LOC across the 3 cron files (724 -> 594), +22 LOC in `sheets.js` (new Drive helper). Net -108 LOC.
+- **Documented:** 2026-05-20 during Bundle 3 PR A1 (sub-phase 6).
+- **Migration consideration:** All Sheets reads/writes from these 3 cron files now flow through the canonical SA pattern. Stage 1 swap of `getServiceAccountSheetsClient` to a Postgres-equivalent (or repointing of `readSheetSA` / `appendRowSA` / `updateCellSA` to query Postgres) will automatically pick up these files without per-file edits.
+- **Verification:** After merge, confirm the 3 cron jobs continue running successfully: (a) backup-sheets nightly Slack ping shows 5/5 backup success, (b) daily cron writes to `notification_log` in the COLLECTION sheet (inventory countdowns, birthdays, anniversaries, period starts), (c) incident-reminders sends Gmail + writes `reminder_7day_sent_at` timestamps to the incidents tab. All 3 must produce identical output to pre-PR behavior.
+
+### Gmail SA auth pattern (incident-reminders) [PRESERVE]
+
+- **What:** `src/app/api/cron/incident-reminders/route.js` uses `google.auth.JWT()` (~L28-38) with `subject: process.env.PEOPLE_OPS_FROM_EMAIL || "support@kitchfix.com"` for Gmail send operations. This is intentionally NOT consolidated into the `src/lib/sheets.js` helpers, even though PR A1 consolidated all the Sheets auth in this same file.
+- **Why:** Gmail send-as-user requires Google Workspace domain-wide delegation with subject impersonation. The service account acts AS `support@kitchfix.com`, not as itself, so the recipient sees a clean From: header. Sheets SA auth (in `getServiceAccountSheetsClient`) is non-impersonated - the SA acts as itself. These are fundamentally different auth patterns and should not share a single helper: consolidating them would either (a) force every Sheets call site to declare a subject they don't need, or (b) force the Gmail call site to bypass the helper to get impersonation back.
+- **Where:** `src/app/api/cron/incident-reminders/route.js` - `getGmailClient` function (~L28), called from the email-send path in the route's main handler (~L168). The `import { google } from "googleapis"` line at L2 is retained specifically for this client (the Sheets path no longer needs it).
+- **Documented:** 2026-05-20 during Bundle 3 PR A1 (sub-phase 2 recon surfaced the pattern; preserved per Decision 3).
+- **Migration consideration:** Stage 1 Postgres replaces Sheets storage but does NOT change Gmail send infrastructure. This auth pattern continues post-migration unchanged. The `PEOPLE_OPS_FROM_EMAIL` env var and the `gmail.send` scope on the SA's domain-wide delegation config must both survive Stage 1.
+- **Do not:** Try to consolidate Gmail send into `sheets.js` helpers, or rename the function to `getGmailClientSA` to match the SA naming convention - the convention specifically describes the Sheets-data pattern, and conflating Gmail auth with it obscures the impersonation requirement.
+- **Verification:** Send a test incident, wait 7 days before the check-in date, confirm the reminder email's From: header reads "KitchFix People Ops <support@kitchfix.com>" (not the SA email). If the From: header ever reverts to the SA address, impersonation has broken and the JWT `subject` parameter or the SA's domain-wide delegation scope needs investigation.
+
 ---
 
 ## Template for new entries
