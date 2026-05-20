@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
-import { SHEET_IDS } from "@/lib/sheets";
+import { SHEET_IDS, getServiceAccountDriveClient } from "@/lib/sheets";
 
 /**
  * BACKUP CRON — Daily Sheets Snapshot
@@ -33,17 +32,6 @@ const SHEETS_TO_BACKUP = [
   { name: "AI_LINE_ITEMS",  id: SHEET_IDS.AI_LINE_ITEMS },
   { name: "INVENTORY",      id: SHEET_IDS.INVENTORY },
 ];
-
-function getServiceAccountAuth() {
-  return new google.auth.JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-    scopes: [
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ],
-  });
-}
 
 function todayStamp() {
   // YYYY-MM-DD in UTC (deterministic regardless of cron host TZ)
@@ -82,8 +70,7 @@ export async function GET(request) {
     );
   }
 
-  const auth = getServiceAccountAuth();
-  const drive = google.drive({ version: "v3", auth });
+  const drive = getServiceAccountDriveClient();
   const stamp = todayStamp();
 
   const results = [];
