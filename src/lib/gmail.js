@@ -353,3 +353,98 @@ export async function sendRejectionEmail(accessToken, senderEmail, recipientEmai
     return { success: false, error: error.message };
   }
 }
+
+// ─────────────────────────────────────────────
+// SA-IMPERSONATED GMAIL (system notifications)
+// Different auth model from the user-OAuth helpers above. The service
+// account uses domain-wide delegation to send AS the `sender` mailbox
+// (subject of the JWT). The recipient sees `From: <displayName> <sender>`.
+// Used for system emails: PAF/new-hire notifications, incident alerts,
+// 7-day check-in reminders. Requires the SA to be on the Workspace
+// admin's domain-wide-delegation list for the `gmail.send` scope.
+// ─────────────────────────────────────────────
+
+// Byte-exact port of the subject encoder that lived in people/route.js's
+// sendEmail (PR A2b). Intentionally distinct from gmail.js's existing
+// `encodeSubject` above: that one uses a stricter "printable ASCII only"
+// test (0x20-0x7E), which would encode control chars; this one matches
+// the original sendEmail's looser "any non-ASCII" test (> 0x7F), which
+// passes control chars through unencoded.
+//
+// Equivalence proof for the base64 step:
+//   btoa(unescape(encodeURIComponent(s)))      // original, Web idiom
+//   === Buffer.from(s, "utf-8").toString("base64")  // Node-native idiom
+// Both produce base64 (with padding) of the UTF-8 byte representation of `s`.
+//
+// Follow-up cleanup tracked in BUSINESS_NOTES: unify with encodeSubject once
+// the invoice-email path can absorb the stricter-test behavior change.
+function encodeSubjectSA(subject) {
+  if (!/[^\x00-\x7F]/.test(subject)) return subject;
+  const encoded = Buffer.from(subject, "utf-8").toString("base64");
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
+/**
+ * Send a system email via service-account-impersonated Gmail.
+ *
+ * Faithful port of the MIME logic that previously lived in
+ * `src/app/api/people/route.js` sendEmail (RFC 2047 subject encoding,
+ * multipart/alternative + base64-encoded HTML body, optional Reply-To).
+ * Returns "sent" | "failed" string (NOT object) to match the legacy
+ * contract that incidentActions.js relies on via the sendEmail-by-reference
+ * pattern.
+ *
+ * Added in PR A2b (Bundle 3) - canonicalizes the SA-impersonated Gmail
+ * pattern that previously had two separate implementations in
+ * people/route.js (hand-rolled crypto.subtle JWT + raw fetch) and
+ * cron/incident-reminders (google.auth.JWT + googleapis client).
+ *
+ * @param {Object} args
+ * @param {string} args.sender - impersonated mailbox (e.g. "support@kitchfix.com"). Must be on the SA's domain-wide-delegation list.
+ * @param {string} args.displayName - From header display name (e.g. "KitchFix People Ops")
+ * @param {string|string[]} args.to - recipient(s)
+ * @param {string} args.subject - subject (auto-RFC-2047-encoded for non-ASCII via encodeSubjectSA)
+ * @param {string} args.html - HTML body (base64-encoded inside multipart/alternative)
+ * @param {string} [args.replyTo] - optional Reply-To header
+ * @returns {Promise<"sent"|"failed">}
+ */
+export async function sendEmailSA({ sender, displayName, to, subject, html, replyTo }) {
+  try {
+    const auth = new google.auth.JWT({
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      scopes: ["https://www.googleapis.com/auth/gmail.send"],
+      subject: sender,
+    });
+    const gmail = google.gmail({ version: "v1", auth });
+
+    const recipients = Array.isArray(to) ? to : [to];
+    const boundary = "boundary_" + Date.now();
+    const htmlBody = Buffer.from(html).toString("base64");
+
+    const mimeLines = [
+      `From: ${displayName} <${sender}>`,
+      `To: ${recipients.join(", ")}`,
+      `Subject: ${encodeSubjectSA(subject)}`,
+      ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      htmlBody,
+      `--${boundary}--`,
+    ];
+    const rawMessage = mimeLines.join("\r\n");
+    const raw = Buffer.from(rawMessage).toString("base64url");
+
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+    console.log(`[Gmail SA] Email sent to ${recipients.join(", ")}: ${subject}`);
+    return "sent";
+  } catch (e) {
+    console.error("[Gmail SA] Send failed:", e.message);
+    return "failed";
+  }
+}

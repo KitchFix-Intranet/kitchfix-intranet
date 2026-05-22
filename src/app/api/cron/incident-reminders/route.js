@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { SHEET_IDS, readSheetSA, updateCellSA } from "@/lib/sheets";
+import { sendEmailSA } from "@/lib/gmail";
 import { logEventSA } from "@/lib/analytics";
 import {
   INCIDENT_COLUMNS,
@@ -19,42 +19,12 @@ import {
 // Uses reminder_7day_sent_at to dedupe (never sends twice for the same incident).
 // ═══════════════════════════════════════════════════════════════
 
-// Sheets I/O: consolidated through src/lib/sheets.js helpers in PR #54 (Bundle 3 PR A1).
-// Previously had a local SHEET_IDS const with a DB key + local getSheetsClient + local
-// readIncidents/updateCell helpers. The Gmail client below (getGmailClient) intentionally
-// stays as-is because it uses domain-wide delegation (subject impersonation) which the
-// canonical Sheets SA helper doesn't expose. See BUSINESS_NOTES "Gmail SA auth pattern".
-
-async function getGmailClient() {
-  // Reuse the same pattern People uses for sending — we need impersonation
-  // of support@kitchfix.com so the From: header reads correctly.
-  const auth = new google.auth.JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/gmail.send"],
-    subject: process.env.PEOPLE_OPS_FROM_EMAIL || "support@kitchfix.com",
-  });
-  return google.gmail({ version: "v1", auth });
-}
-
-function buildEmailMime({ to, from, subject, html }) {
-  const boundary = "kf_inc_reminder_" + Math.random().toString(36).slice(2);
-  const headers = [
-    `From: KitchFix People Ops <${from}>`,
-    `To: ${to.join(", ")}`,
-    `Subject: ${subject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-  ].join("\r\n");
-  const body = [
-    `--${boundary}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    ``,
-    html,
-    `--${boundary}--`,
-  ].join("\r\n");
-  return Buffer.from(`${headers}\r\n\r\n${body}`).toString("base64url");
-}
+// Sheets I/O + Gmail send both flow through canonical helpers from src/lib/sheets.js
+// (readSheetSA, updateCellSA, etc., consolidated in PR #54) and src/lib/gmail.js
+// (sendEmailSA, consolidated in PR A2b). Previously had a local Gmail client +
+// MIME builder here that did SA-impersonated send for support@kitchfix.com;
+// the canonical sendEmailSA preserves that exact behavior. See BUSINESS_NOTES
+// "Gmail SA canonicalization (Bundle 3 PR A2b)".
 
 // Convert a 1-indexed column number to spreadsheet letter (A, B, ..., Z, AA, AB...)
 function colToLetter(col) {
@@ -165,14 +135,14 @@ export async function GET(request) {
       </div>`;
 
       try {
-        const gmail = await getGmailClient();
-        const fromEmail = process.env.PEOPLE_OPS_FROM_EMAIL || "support@kitchfix.com";
-        await gmail.users.messages.send({
-          userId: "me",
-          requestBody: {
-            raw: buildEmailMime({ to: recipients, from: fromEmail, subject, html }),
-          },
+        const status = await sendEmailSA({
+          sender: process.env.PEOPLE_OPS_FROM_EMAIL || "support@kitchfix.com",
+          displayName: "KitchFix People Ops",
+          to: recipients,
+          subject,
+          html,
         });
+        if (status !== "sent") throw new Error("Gmail send failed (see [Gmail SA] log)");
 
         // Mark as sent (dedupe). Sheet row index = i + 2 (header + 0-indexed)
         const sheetRow = i + 2;

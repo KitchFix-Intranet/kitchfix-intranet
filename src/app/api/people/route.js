@@ -20,6 +20,7 @@ import {
   buildIncidentPdf,
 } from "@/lib/incidentActions";
 import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRangeSA, getServiceAccountSheetsClient, SHEET_IDS } from "@/lib/sheets";
+import { sendEmailSA } from "@/lib/gmail";
 
 // ═══════════════════════════════════════
 // PEOPLE PORTAL API
@@ -69,82 +70,6 @@ const GMAIL_SENDER = "support@kitchfix.com";
 const GMAIL_SENDER_NAME = "KitchFix People Ops";
 
 // ═══════════════════════════════════════
-// Auth: Service Account → Access Token
-// ═══════════════════════════════════════
-async function getAccessToken() {
-  return getServiceToken("https://www.googleapis.com/auth/spreadsheets");
-}
-
-async function getGmailToken() {
-  return getServiceToken("https://www.googleapis.com/auth/gmail.send", GMAIL_SENDER);
-}
-
-// Shared JWT flow — optional `sub` for domain-wide delegation (impersonation)
-async function getServiceToken(scope, sub) {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const keyRaw = process.env.GOOGLE_PRIVATE_KEY;
-
-  if (!email || !keyRaw) {
-    throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY in .env.local");
-  }
-
-  const privateKey = keyRaw.replace(/\\n/g, "\n");
-  const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const now = Math.floor(Date.now() / 1000);
-  const claims = {
-    iss: email,
-    scope,
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-  };
-  if (sub) claims.sub = sub; // impersonate this user
-  const claimSet = btoa(JSON.stringify(claims));
-  const unsignedJwt = `${header}.${claimSet}`;
-  const cryptoKey = await importPrivateKey(privateKey);
-  const signature = await signJwt(unsignedJwt, cryptoKey);
-  const jwt = `${unsignedJwt}.${signature}`;
-
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!tokenRes.ok) {
-    const errText = await tokenRes.text();
-    throw new Error(`Token exchange failed (${scope}): ${errText}`);
-  }
-
-  const tokenData = await tokenRes.json();
-  return tokenData.access_token;
-}
-
-async function importPrivateKey(pem) {
-  const pemContents = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s/g, "");
-  const binaryDer = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
-  return crypto.subtle.importKey(
-    "pkcs8",
-    binaryDer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-}
-
-async function signJwt(input, key) {
-  const encoded = new TextEncoder().encode(input);
-  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, encoded);
-  return btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-// ═══════════════════════════════════════
 // NOTIFICATION ENGINE
 // ═══════════════════════════════════════
 
@@ -180,71 +105,13 @@ async function getNotificationRecipients(actionKey) {
   }
 }
 
-// Send email via Gmail API — returns "sent" or "failed"
-async function sendEmail(to, subject, html, replyTo) {
-  try {
-    const token = await getGmailToken();
-    const recipients = Array.isArray(to) ? to : [to];
-
-    // MIME-encode Subject if it contains non-ASCII (emoji, accented chars, etc.)
-    // Without this, Gmail/Outlook fall back to Latin-1 interpretation and the
-    // subject renders as mojibake (e.g. 🚨 becomes "Ã°ÂŸÂ¨").
-    // Per RFC 2047: =?UTF-8?B?<base64>?= for non-ASCII.
-    const hasNonAscii = /[^\x00-\x7F]/.test(subject);
-    const subjectHeader = hasNonAscii
-      ? `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`
-      : subject;
-
-    // Build RFC 2822 MIME message
-    const boundary = "boundary_" + Date.now();
-    const mimeLines = [
-      `From: ${GMAIL_SENDER_NAME} <${GMAIL_SENDER}>`,
-      `To: ${recipients.join(", ")}`,
-      `Subject: ${subjectHeader}`,
-      ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
-      "MIME-Version: 1.0",
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      "",
-      `--${boundary}`,
-      "Content-Type: text/html; charset=UTF-8",
-      "Content-Transfer-Encoding: base64",
-      "",
-      btoa(unescape(encodeURIComponent(html))),
-      `--${boundary}--`,
-    ];
-    const rawMessage = mimeLines.join("\r\n");
-
-    // Gmail API requires URL-safe base64
-    const encoded = btoa(unescape(encodeURIComponent(rawMessage)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    const res = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/${GMAIL_SENDER}/messages/send`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ raw: encoded }),
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error("[Notifications] Gmail API error:", res.status, err);
-      return "failed";
-    }
-
-    console.log(`[Notifications] Email sent to ${recipients.join(", ")}: ${subject}`);
-    return "sent";
-  } catch (e) {
-    console.error("[Notifications] Send failed:", e.message);
-    return "failed";
-  }
-}
+// sendEmail adapter: closes over the sender + display name and forwards to canonical
+// sendEmailSA in src/lib/gmail.js. Preserves the (to, subject, html, replyTo) =>
+// "sent"|"failed" contract that incidentActions.js's by-reference plumbing relies on
+// (notifyIncident + notifyStatusChange accept sendEmail as a parameter). PR A2b
+// consolidation.
+const sendEmail = (to, subject, html, replyTo) =>
+  sendEmailSA({ sender: GMAIL_SENDER, displayName: GMAIL_SENDER_NAME, to, subject, html, replyTo });
 
 // ─── Email Templates ───
 const EmailTemplates = {
