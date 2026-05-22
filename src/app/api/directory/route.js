@@ -251,6 +251,25 @@ export async function POST(request) {
     const token = session.accessToken;
     if (!token)  return NextResponse.json({ error: "No access token" }, { status: 400 });
 
+    // ── INTERIM ADMIN GATE (PR B1, 2026-05-22) ───────────────────────────
+    // Directory is Kevin-only for now via DIRECTORY_ADMIN_EMAILS (comma-
+    // separated env var). This deliberately does NOT use the admins tab,
+    // which has an inconsistent flag model across modules (people/route.js
+    // requires col A + col C "hr"=TRUE; directory bootstrap checks col A
+    // only). See BUSINESS_NOTES "Directory POST admin gate (interim, PR B1)".
+    // Replaced by the Supabase role model + admin dashboard in Stage 1
+    // (part of the auth strategy decision - the last Stage 0 gate).
+    // Fail-closed: if DIRECTORY_ADMIN_EMAILS is unset or empty, nobody
+    // passes - directory POST locks until the env var is configured.
+    const directoryAdmins = String(process.env.DIRECTORY_ADMIN_EMAILS || "")
+      .split(",")
+      .map(s => s.toLowerCase().trim())
+      .filter(Boolean);
+    const requesterEmail = session.user?.email?.toLowerCase().trim() || "";
+    if (!directoryAdmins.includes(requesterEmail)) {
+      return NextResponse.json({ error: "Admin authorization required" }, { status: 403 });
+    }
+
     const body   = await request.json();
     const action = body.action;
 
