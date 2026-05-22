@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { readSheet, readSheetSA, appendRow, appendRows, appendRowSA, findRowByValue, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheetSA, appendRowSA, SHEET_IDS } from "@/lib/sheets";
 import { opsNotify } from "@/lib/opsUtils";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import {

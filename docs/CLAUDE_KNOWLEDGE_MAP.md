@@ -14,6 +14,18 @@ The doc is in the repo so Kevin can read it whenever. The primary audience is st
 
 Most recent first. Format: `YYYY-MM-DD: [what I was wrong about]. [What was actually true]. [Lesson].`
 
+- **2026-05-22**: Estimated PR A2 as "swap ~80 lines of JWT" from the CLAUDE.md callout. Reality: 270 LOC across 64 call sites, 5 local helpers, JWT shared with Gmail (not Sheets-only like cron/daily). Lesson: file size (2,056 lines) correlates with hidden scope; line-count proxies from CLAUDE.md callouts underestimate when there are many local helpers in the file.
+
+- **2026-05-22**: PR A1's "Gmail SA pattern PRESERVE" decision was correct in A1's context (don't consolidate Gmail INTO Sheets helpers) but did NOT mean "every Gmail caller hand-rolls JWT forever." A future-me reading PR A1's BUSINESS_NOTES entry could have left the hand-rolled crypto.subtle code in place indefinitely. Lesson: "preserve" decisions can be local to one PR's scope; re-examine them when scope changes.
+
+- **2026-05-22**: Split-vs-unified pattern. PR A grew from "1 PR for hand-rolled JWT consolidation" to A1 + A2, then A2 grew to A2a + A2b. Each split was the right call when scope revealed itself. Lesson: when recon reveals >2-3x estimated scope, split. Cost of an extra PR (context-switching) is much less than cost of a bloated PR (review fatigue, mid-PR bugs).
+
+- **2026-05-22**: PR #54 added `getServiceAccountDriveClient` to sheets.js WITHOUT sweeping pre-existing local duplicates in `drive.js` and `incidentActions.js`. The pattern audit caught them a session later. Lesson: when adding a canonical helper, grep for pre-existing local equivalents BEFORE the PR closes. Half-done consolidation recreates the drift the helper was meant to eliminate.
+
+- **2026-05-22**: PR #53's recon was a CATEGORIZATION pass (how each file talks to Sheets). The pattern audit was a PATTERN-AUDIT pass (specific anti-patterns across files). Files can be CONSOLIDATED in one dimension (Sheets) and have issues in another (Gmail variants, dead imports). Lesson: when asked "what about file X?", look at the file, don't rely on a 1-line recon summary.
+
+- **2026-05-22**: Session close-out protocol now includes CLAUDE_KNOWLEDGE_MAP updates as a STANDARD item, not an afterthought. (Kevin had to prompt for it last session.) Lesson: end-of-session checklist includes CLAUDE_KNOWLEDGE_MAP alongside BUSINESS_NOTES and PROJECT_DASHBOARD.
+
 - **2026-05-19**: Came into Service Calendar tour assuming it was production-ready audit material like Smart Inventory. Reality: ~50% built, not deployed, zero users, actively being developed daily. Required full reset of approach. Lesson: verify development status before assuming the audit framing applies. "Is this shipped?" is the first question, not the third.
 
 - **2026-05-19**: Recommended CC push dashboard sync directly to main, framing as "pure docs maintenance." GitHub branch protection rejected the push. The repo requires PR + green Playwright for everything to main. Lesson: respect branch protection. Memory rule #9's "dashboard discipline at session boundaries" doesn't mean "separate commit at boundaries" - it means "captured within whatever PR is next." Carry forward the edits, don't isolate them.
@@ -111,6 +123,11 @@ Each entry: topic + current state + trigger for action.
   - Can answer: session-start/end protocol, when to render visual vs read text, branch-protection interaction (learned 2026-05-19)
   - Cannot answer: whether protocol scales past Stage 0
 
+- **people/route.js** (1,891 lines post-A2a; was 2,056)
+  - Built depth: PR A2a end-to-end read + 66 call-site migration + drift-bomb removal + ensureIncidentsTab refactor
+  - Can answer: full Sheets call-site landscape (GET handler 8 actions, POST handler 12 actions), local SHEETS const tab-to-pillar mapping, SUB column-index const for submissions sheet, incident-tab auto-create orchestration (addSheet + frozen-row + 42 headers), notify dispatcher pattern, EmailTemplates structure, why getAccessToken became orphan (Sheets-only wrapper; getGmailToken calls getServiceToken directly), why ensureIncidentsTab stays local (frozen-row preserved through canonical inline batchUpdate per D2), PEOPLE_DB_SHEET_ID drift-bomb history and removal
+  - Cannot answer: real production traffic patterns for each action, which actions chefs/admins exercise most often, the history of why this file accumulated 7 local helpers + its own JWT layer (vs. being built on sheets.js from day one)
+
 ### Working (read parts, broad patterns clear)
 
 - ARCHITECTURE.md five-pillar sheet model - read multiple times, haven't memorized every nuance
@@ -126,6 +143,8 @@ Each entry: topic + current state + trigger for action.
 - Service Calendar product intent + UI design (today's tour - month view, year heatmap, day overlay, billing-system-of-record framing)
 - Service Calendar Drive structure (parent → MiLB/MLB/PDC subfolders → per-account 2026 sheet with 3 tabs)
 - BUSINESS_NOTES contents for Smart Inventory + Railway cron specifically (14+ entries authored in PR #51-#52)
+- **Pattern audit methodology** (established 2026-05-20 evening, applied to Bundle 3 readiness check): 10-pattern grep sweep across `src/` covering hand-rolled JWT (crypto.subtle), Gmail client variants, auth client construction (`google.auth.*`), env var fallback chains, dead helper imports, direct API calls bypassing helpers, user-OAuth writes potentially SA-able, mixed-auth files, hardcoded sheet IDs, inline range strings. Each pattern produces a severity-rated finding list (P0 bug / P1 fix-in-bundle / P2 doc-or-defer / P3 ignore). Reusable for future "before-Stage-N" readiness sweeps.
+- **Drive/Calendar client landscape** (post-PR-A2a snapshot): Drive client construction is now canonical-only (one definition in sheets.js, 5 importers). Calendar client construction is NOT canonicalized yet - 3 inline constructions exist (incidentActions.js L60 impersonated + L73 fallback, wowPlanActions.js L309). Mirrors the pre-PR-#54 Drive state; pending a future consolidation PR.
 
 ### Surface (know exists, haven't read)
 
@@ -133,7 +152,7 @@ Each entry: topic + current state + trigger for action.
 - ItemReview.js, LocationSetup.js, ProductPlacement.js, ItemCatalog.js, QuickTour.js (Smart Inventory UI siblings)
 - InventoryManager.js (364 lines - Smart Inventory shell)
 - DashboardView.js (home dashboard)
-- People Portal modules (PAF, new hire wizard, admin queue, action center, cancel/withdraw flows)
+- People Portal FRONTEND modules (PAF wizard, new hire wizard, admin queue, action center, cancel/withdraw flows) - backend route is Deep (see people/route.js above), frontend components not yet read
 - Service Calendar codebase (saw UI today, not the code)
 - Season Tracker (MLB labor budget tracking)
 - Team Directory (account cards, contact management)

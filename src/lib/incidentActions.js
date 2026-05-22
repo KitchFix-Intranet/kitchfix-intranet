@@ -21,20 +21,7 @@ import {
   SR_DIR_OPS_EMAIL,
   formatAttachmentLabel,
 } from "./incidentSchema";
-
-// ─────────────────────────────────────────────
-// Drive client (service account)
-// ─────────────────────────────────────────────
-function getServiceAccountDriveClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    },
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-  return google.drive({ version: "v3", auth });
-}
+import { getServiceAccountDriveClient } from "@/lib/sheets";
 
 // ─────────────────────────────────────────────
 // Calendar client (service account, P4C)
