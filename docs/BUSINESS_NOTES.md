@@ -342,6 +342,52 @@ The following F-codes were identified during 2026-05-19 audit-as-documentation p
 - **Do not:** Try to consolidate Gmail send into `sheets.js` helpers, or rename the function to `getGmailClientSA` to match the SA naming convention - the convention specifically describes the Sheets-data pattern, and conflating Gmail auth with it obscures the impersonation requirement.
 - **Verification:** Send a test incident, wait 7 days before the check-in date, confirm the reminder email's From: header reads "KitchFix People Ops <support@kitchfix.com>" (not the SA email). If the From: header ever reverts to the SA address, impersonation has broken and the JWT `subject` parameter or the SA's domain-wide delegation scope needs investigation.
 
+### people/route.js Sheets consolidation (Bundle 3 PR A2a) [PARTIAL CLOSE OF CLAUDE.md ITEM 1]
+
+- **What:** `src/app/api/people/route.js` (2,056 lines) migrated from 7 local Sheets helpers + hand-rolled SA JWT auth to canonical SA helpers from `src/lib/sheets.js`. 66 call sites converted (29 `readSheet`, 4 `appendRow`, 27 `updateCell`, 3 `updateRow`, 1 `clearRow`, 2 `appendRowAnchored`). Local `SHEET_IDS` const dropped; canonical `SHEET_IDS.COLLECTION` used for all writes. `ensureIncidentsTab` kept local per D2 but its internals refactored to use canonical inline batchUpdate (for frozen-row addSheet) + canonical `updateRangeSA` (for 42-col header write).
+- **Why:** Closes the Sheets-path portion of CLAUDE.md item 1 ("two parallel service-account implementations exist"). The Gmail-path JWT block stays alive until PR A2b. Also eliminates a P0 drift bomb (see Drift-bomb point below).
+- **Where:** `src/app/api/people/route.js` (66 call sites + 7 local helpers + local `SHEET_IDS` const removed). `src/lib/sheets.js` gained 2 new exported helpers (`clearRangeSA`, `updateCellByRowColSA`) + 1 internal helper (`colToLetter`).
+- **What stays (queued for PR A2b):** The Gmail send path - `sendEmail`, `getGmailToken`, `getServiceToken`, `importPrivateKey`, `signJwt`. Note: `getAccessToken` is now ORPHAN (0 callers) - it was always a Sheets-only wrapper, and `getGmailToken` calls `getServiceToken` directly. PR A2b removes the whole block including this dead member.
+- **Drift bomb removed (D6 / P0):** Local `SHEET_IDS.DB` had a fallback chain `process.env.PEOPLE_DB_SHEET_ID || process.env.MASTER_HUB_SHEET_ID`. If `PEOPLE_DB_SHEET_ID` were ever unset, every write would land in the read-only HUB sheet and corrupt it. After PR A2a all writes flow to canonical `SHEET_IDS.COLLECTION` (hardcoded) - the env var is orphaned (see separate "PEOPLE_DB_SHEET_ID env var orphaned" entry below).
+- **Anchoring guarantee preserved:** The old local `appendRowAnchored` pinned writes to `!A:A` to prevent column-shift on variable-width rows. Canonical `appendRowSA` already auto-anchors bare tab names to `!A:A` (sheets.js L127), so the anchoring guarantee is preserved automatically with no caller changes.
+- **Latent bug removed:** The old local `updateCell` used 2-letter-max column math that breaks above col 702 ("ZZ"). The new canonical `updateCellByRowColSA` uses iterative col-to-letter math that handles arbitrary depth (col 703 → "AAA"). No production call hit col > 26 in practice, so this was a latent risk not an active bug.
+- **LOC impact:** -165 LOC in `people/route.js` (2,056 → 1,891). +49 LOC in `sheets.js`. Net -116 LOC.
+- **Lint debt NOT addressed:** 5 pre-existing `no-assign-module-variable` errors (local vars named `module` shadowing Next.js module global). Out of scope for a consolidation PR. They pre-date PR A2a and remain after.
+- **Documented:** 2026-05-22 during Bundle 3 PR A2a sub-phase 8.
+- **Migration consideration:** All Sheets reads/writes from `people/route.js` now flow through canonical SA helpers. Stage 1 Postgres swap (repointing canonical helpers to query Postgres) will pick up this file automatically without per-file edits.
+- **Verification post-merge:** Exercise the People Portal end-to-end: submit a PAF, submit a new hire, save+load+delete a draft, file an incident with attachments, change an incident's status, add an investigation note. All paths exercise the migrated helpers. Also: verify the incident reminder cron's "tab missing" auto-create path by spot-checking the Incidents tab structure (frozen header row 1, 42 columns A through AP).
+
+### Drive client consolidation (Bundle 3 PR A2a sub-phase 7.5)
+
+- **What:** PR #54 added canonical `getServiceAccountDriveClient(scopes)` to `src/lib/sheets.js` but didn't sweep pre-existing local duplicates. The pattern audit (2026-05-20) found 2: `drive.js` L20 and `incidentActions.js` L29. Both were file-private (not exported) and functionally identical to canonical. PR A2a consolidated both to import from sheets.js.
+- **Why:** Three definitions of the same Drive client construction is drift risk - if one diverges (e.g. scope change for narrower access), the others silently don't follow. Single canonical source eliminates the drift surface.
+- **Where:** `src/lib/drive.js` (L20 def + 2 internal call sites); `src/lib/incidentActions.js` (L29 def + 2 internal call sites). Both files now import from `@/lib/sheets`.
+- **What stays:** `incidentActions.js` still imports `google` from "googleapis" - used by 2 Calendar client constructions (impersonated + non-impersonated fallback) which are deferred (see separate "Calendar SA client patterns" entry).
+- **Bonus cleanup:** `drive.js`'s `import { google } from "googleapis"` was dead after removing the local def (the function was its only consumer). Removed alongside the consolidation.
+- **LOC impact:** -27 LOC (drive.js -13, incidentActions.js -14).
+- **Documented:** 2026-05-22 during Bundle 3 PR A2a sub-phase 7.5.
+- **Migration consideration:** None - Drive client behavior is unchanged. The canonical helper's optional `scopes` parameter (default `["drive"]`) is strictly more flexible than the locals' hardcoded scope, so future callers can pass narrower scopes like `drive.file` if needed.
+- **Verification post-merge:** Invoice page-upload (drive.js path) and incident folder/file creation (incidentActions.js path) continue working. Both paths get exercised on real user submissions.
+
+### Calendar SA client patterns [PRE-CANONICAL] [DEFERRED]
+
+- **What:** The pattern audit (2026-05-20) found 3 inline SA Calendar client constructions across 2 lib files: `incidentActions.js` L60 (impersonated, `subject = m.chavez@kitchfix.com` for 30-day incident check-in events), `incidentActions.js` L73 (non-impersonated fallback when domain-wide delegation isn't configured), `wowPlanActions.js` L309 (non-impersonated, inline + dynamic import inside the function).
+- **Why:** No canonical `getServiceAccountCalendarClient` helper exists in `sheets.js` yet. This mirrors the pre-PR-#54 state of `getServiceAccountDriveClient` (multiple inline constructions, no canonical layer).
+- **Where:** `src/lib/incidentActions.js` L60 and L73; `src/lib/wowPlanActions.js` L309.
+- **Status:** DEFERRED to a post-Bundle-3 PR. Calendar is not Sheets data and not Stage 1 critical. When built, mirror the Drive consolidation pattern: add canonical `getServiceAccountCalendarClient({ scopes, subject? })` with optional impersonation, rewire the 3 sites. Estimated LOC reduction: ~30 LOC.
+- **Documented:** 2026-05-22 during Bundle 3 PR A2a sub-phase 8 (catalogued from the pattern audit).
+- **Migration consideration:** Calendar is not migrating in Stage 1 (Calendar API is not data storage). This consolidation is pure code-hygiene, no migration dependency.
+- **Do not:** Add the canonical Calendar helper to `sheets.js` (wrong file). Create `src/lib/calendar.js` when consolidating, OR add to a future `src/lib/google-clients.js` if the eventual decision is to consolidate all Google API client construction in one place.
+
+### PEOPLE_DB_SHEET_ID env var orphaned after PR A2a [CLEANUP]
+
+- **What:** After PR A2a removes the local `SHEET_IDS` const in `people/route.js`, NO code in the codebase reads `process.env.PEOPLE_DB_SHEET_ID`. The env var becomes orphaned.
+- **Why:** `PEOPLE_DB_SHEET_ID` was the env var the People Portal used to point at the COLLECTION sheet (`1itJh5x1YFBdyHTBr-dyKD_r_nRBfjwIBiR_bWiOyCzQ`). Verified in PR A1 (2026-05-20) that `PEOPLE_DB_SHEET_ID` resolves to the same physical sheet as canonical `SHEET_IDS.COLLECTION`. After PR A2a migrates all writes to canonical `SHEET_IDS.COLLECTION` (hardcoded), the env var is no longer read.
+- **Where:** Vercel project env vars (Production / Preview / Development).
+- **Action:** Remove from Vercel via `vercel env rm PEOPLE_DB_SHEET_ID production` (and same for preview + development), OR via the Vercel dashboard. Non-urgent - no functional impact while it sits unused. Update `docs/ENV_VARS.md` (drop the entry) when removing.
+- **Documented:** 2026-05-22 during Bundle 3 PR A2a sub-phase 8.
+- **Migration consideration:** Stage 1 Postgres uses different env vars entirely (SUPABASE_*). `PEOPLE_DB_SHEET_ID` was always a Sheets-era variable, retired before Stage 1.
+
 ---
 
 ## Template for new entries

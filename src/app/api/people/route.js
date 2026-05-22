@@ -19,6 +19,7 @@ import {
   createIncident30DayEvent,
   buildIncidentPdf,
 } from "@/lib/incidentActions";
+import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRangeSA, getServiceAccountSheetsClient, SHEET_IDS } from "@/lib/sheets";
 
 // ═══════════════════════════════════════
 // PEOPLE PORTAL API
@@ -31,11 +32,6 @@ import {
 // be raised here — large uploads are handled by the chunking strategy
 // described in the incident submission handler.
 export const maxDuration = 60;
-
-const SHEET_IDS = {
-  HUB: process.env.MASTER_HUB_SHEET_ID,
-  DB: process.env.PEOPLE_DB_SHEET_ID || process.env.MASTER_HUB_SHEET_ID,
-};
 
 const SHEETS = {
   HERO: "hero_images",
@@ -149,126 +145,6 @@ async function signJwt(input, key) {
 }
 
 // ═══════════════════════════════════════
-// Sheet helpers
-// ═══════════════════════════════════════
-async function readSheet(spreadsheetId, sheetName) {
-  try {
-    if (!spreadsheetId) {
-      console.error(`[People] Missing spreadsheetId for sheet: ${sheetName}`);
-      return { rows: [] };
-    }
-    const token = await getAccessToken();
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[People] Sheet read failed (${sheetName}):`, res.status, errText);
-      return { rows: [] };
-    }
-    const json = await res.json();
-    const rows = json.values || [];
-    return { rows: rows.slice(1) };
-  } catch (e) {
-    console.error(`[People] Sheet read error (${sheetName}):`, e.message);
-    return { rows: [] };
-  }
-}
-
-async function appendRow(spreadsheetId, sheetName, rowData) {
-  try {
-    const token = await getAccessToken();
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ values: [rowData] }),
-    });
-    return { success: res.ok };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-// Update an entire existing row in-place (for Fix & Resubmit)
-async function updateRow(spreadsheetId, sheetName, rowIndex, rowData) {
-  try {
-    const token = await getAccessToken();
-    // Calculate end column letter
-    const numCols = rowData.length;
-    let endCol;
-    if (numCols <= 26) {
-      endCol = String.fromCharCode(64 + numCols);
-    } else {
-      const first = Math.floor((numCols - 1) / 26);
-      const second = ((numCols - 1) % 26) + 1;
-      endCol = String.fromCharCode(64 + first) + String.fromCharCode(64 + second);
-    }
-    const range = `${sheetName}!A${rowIndex}:${endCol}${rowIndex}`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-    const res = await fetch(url, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ values: [rowData] }),
-    });
-    return { success: res.ok };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-async function updateCell(spreadsheetId, sheetName, row, col, value) {
-  try {
-    const token = await getAccessToken();
-    // Handle columns beyond Z (e.g., col 27 = AA, col 30 = AD)
-    let colLetter;
-    if (col <= 26) {
-      colLetter = String.fromCharCode(64 + col);
-    } else {
-      const first = Math.floor((col - 1) / 26);
-      const second = ((col - 1) % 26) + 1;
-      colLetter = String.fromCharCode(64 + first) + String.fromCharCode(64 + second);
-    }
-    const range = `${sheetName}!${colLetter}${row}`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-    await fetch(url, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ values: [[value]] }),
-    });
-  } catch (e) {
-    console.error(`[People] Cell update error:`, e.message);
-  }
-}
-
-// Clear a row's contents (used for deleting drafts)
-async function clearRow(spreadsheetId, sheetName, rowIndex, numCols) {
-  try {
-    const token = await getAccessToken();
-    const endCol = String.fromCharCode(64 + numCols);
-    const range = `${sheetName}!A${rowIndex}:${endCol}${rowIndex}`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`;
-    await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    console.error(`[People] Clear row error:`, e.message);
-  }
-}
-
-// ═══════════════════════════════════════
 // NOTIFICATION ENGINE
 // ═══════════════════════════════════════
 
@@ -276,7 +152,7 @@ async function clearRow(spreadsheetId, sheetName, rowIndex, numCols) {
 // Sheet format: [actionKey, enabled1, email1, enabled2, email2, enabled3, email3, enabled4, email4]
 async function getNotificationRecipients(actionKey) {
   try {
-    const { rows } = await readSheet(SHEET_IDS.HUB, SHEETS.NOTIFICATIONS);
+    const { rows } = await readSheetSA(SHEET_IDS.HUB, SHEETS.NOTIFICATIONS);
     const searchKey = String(actionKey).trim().toLowerCase().replace(/\s+/g, "_");
     const recipients = [];
 
@@ -550,7 +426,7 @@ const EmailTemplates = {
 // Log a notification to the notification_log sheet
 async function logNotification(recipient, channel, subject, eventType, status, relatedInfo) {
   try {
-    await appendRow(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG, [
+    await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, [
       new Date().toISOString(),
       Array.isArray(recipient) ? recipient.join(", ") : recipient,
       channel,
@@ -635,12 +511,12 @@ export async function GET(request) {
 
 if (action === "bootstrap") {
          const [accounts, contacts, admins, submissions, heroImages, drafts] = await Promise.all([
-                  readSheet(SHEET_IDS.HUB, SHEETS.ACCOUNTS),
-        readSheet(SHEET_IDS.HUB, SHEETS.CONTACTS),
-        readSheet(SHEET_IDS.HUB, SHEETS.ADMINS),
-        readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS),
-        readSheet(SHEET_IDS.HUB, SHEETS.HERO),
-        readSheet(SHEET_IDS.DB, SHEETS.DRAFTS),
+                  readSheetSA(SHEET_IDS.HUB, SHEETS.ACCOUNTS),
+        readSheetSA(SHEET_IDS.HUB, SHEETS.CONTACTS),
+        readSheetSA(SHEET_IDS.HUB, SHEETS.ADMINS),
+        readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS),
+        readSheetSA(SHEET_IDS.HUB, SHEETS.HERO),
+        readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS),
       ]);
 
       // Admin = email in admins tab with hr column (C) set to TRUE
@@ -732,7 +608,7 @@ if (action === "bootstrap") {
       // Fails silently — wizard falls back to a Library tab link if no URL.
       let appendixCUrl = null;
       try {
-        const libResult = await readSheet(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
+        const libResult = await readSheetSA(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
         const libRows = libResult?.rows || [];
         const match = libRows.find((row) => {
           const title = String(row[2] || "").toLowerCase();
@@ -767,7 +643,7 @@ if (action === "bootstrap") {
     }
 
     if (action === "history") {
-      const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
+      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
 
       const history = [];
 
@@ -799,7 +675,7 @@ if (action === "bootstrap") {
 
       // ─── Append user's incidents (Bucket A4: own submissions only) ───
       try {
-        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        let { rows: incRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
         if (!incRows) incRows = [];
         incRows.forEach((r) => {
           const inc = rowToIncident(r);
@@ -837,7 +713,7 @@ if (action === "bootstrap") {
     // ─── Draft: Load ───
     if (action === "load-draft") {
       const module = searchParams.get("module"); // "nh" or "paf"
-      const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.DRAFTS);
+      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS);
       const match = rows.find(
         (r) => String(r[0] || "").toLowerCase().trim() === userEmail.toLowerCase() && String(r[1]) === module
       );
@@ -849,7 +725,7 @@ if (action === "bootstrap") {
 
     // ─── Notification Center: Get user's notifications ───
     if (action === "my-notifications") {
-      const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG);
+      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG);
       const notifications = [];
       const email = userEmail.toLowerCase();
 
@@ -879,7 +755,7 @@ rows.forEach((row, i) => {
     }
 
     if (action === "admin-queue") {
-      const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
+      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
 
       const queue = [];
 
@@ -915,7 +791,7 @@ rows.forEach((row, i) => {
 
       // ─── Append all open (non-closed) incidents (Bucket B5: location filter respects site) ───
       try {
-        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        let { rows: incRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
         if (!incRows) incRows = [];
         incRows.forEach((r) => {
           const inc = rowToIncident(r);
@@ -969,7 +845,7 @@ return NextResponse.json({ success: true, queue });
       // ── Submissions: PAFs + New Hires that are no longer pending ──
       // (Approved / Complete / Rejected — anything that's left the active queue)
       try {
-        const { rows: subRows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
+        const { rows: subRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
         if (subRows) {
           subRows.forEach((row, i) => {
             const status = String(row[SUB.STATUS] || "Pending").trim();
@@ -1010,7 +886,7 @@ return NextResponse.json({ success: true, queue });
 
       // ── Incidents: status === "closed" ──
       try {
-        let { rows: incRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        let { rows: incRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
         if (!incRows) incRows = [];
         incRows.forEach((r) => {
           const inc = rowToIncident(r);
@@ -1048,7 +924,7 @@ return NextResponse.json({ success: true, queue });
 
     // ─── Incident: list all (admin queue) ───
     if (action === "incident-list") {
-      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      let { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
       if (!rows) rows = [];
       const incidents = rows
         .map(rowToIncident)
@@ -1066,7 +942,7 @@ return NextResponse.json({ success: true, queue });
     if (action === "library-list") {
       let rows;
       try {
-        const result = await readSheet(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
+        const result = await readSheetSA(SHEET_IDS.HUB, SHEETS.LIBRARY_MANIFEST);
         rows = result?.rows;
       } catch (e) {
         // Tab missing - that's fine, return empty so client shows stub
@@ -1166,8 +1042,8 @@ const employeeName = `${f.firstName} ${f.lastName}`.trim();
       ];
 
       const result = isEdit
-        ? await updateRow(SHEET_IDS.DB, SHEETS.SUBMISSIONS, f.rowIndex, row)
-        : await appendRow(SHEET_IDS.DB, SHEETS.SUBMISSIONS, row);
+        ? await updateRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.SUBMISSIONS}!A${f.rowIndex}:${String.fromCharCode(64 + row.length)}${f.rowIndex}`, [row])
+        : await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, row);
 
       // 🔔 Notification: new hire submitted or resubmitted
 if (result.success) {
@@ -1227,8 +1103,8 @@ if (action === "submit-paf") {
       ];
 
       const result = isEdit
-        ? await updateRow(SHEET_IDS.DB, SHEETS.SUBMISSIONS, f.rowIndex, row)
-        : await appendRow(SHEET_IDS.DB, SHEETS.SUBMISSIONS, row);
+        ? await updateRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.SUBMISSIONS}!A${f.rowIndex}:${String.fromCharCode(64 + row.length)}${f.rowIndex}`, [row])
+        : await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, row);
 
       // 🔔 Notification: PAF submitted or resubmitted
 if (result.success) {
@@ -1294,16 +1170,16 @@ if (f.actionType === "rate_change") {
     // ─── Draft: Save (upsert) ───
 if (action === "save-draft") {
        const { email, module, payload } = body; // module: "nh" or "paf"
-       const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.DRAFTS);
+       const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS);
       const existingIdx = rows.findIndex(
         (r) => String(r[0] || "").toLowerCase().trim() === email.toLowerCase() && String(r[1]) === module
       );
 
       const newRow = [email, module, new Date().toISOString(), JSON.stringify(payload)];
       if (existingIdx >= 0) {
-        await updateRow(SHEET_IDS.DB, SHEETS.DRAFTS, existingIdx + 2, newRow); // +2 for header + 0-index
+        await updateRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.DRAFTS}!A${existingIdx + 2}:${String.fromCharCode(64 + newRow.length)}${existingIdx + 2}`, [newRow]); // +2 for header + 0-index
       } else {
-        await appendRow(SHEET_IDS.DB, SHEETS.DRAFTS, newRow);
+        await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS, newRow);
       }
       return NextResponse.json({ success: true });
     }
@@ -1311,13 +1187,13 @@ if (action === "save-draft") {
     // ─── Draft: Delete ───
 if (action === "delete-draft") {
        const { email, module } = body;
-       const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.DRAFTS);
+       const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS);
 
       const existingIdx = rows.findIndex(
         (r) => String(r[0] || "").toLowerCase().trim() === email.toLowerCase() && String(r[1]) === module
       );
       if (existingIdx >= 0) {
-        await clearRow(SHEET_IDS.DB, SHEETS.DRAFTS, existingIdx + 2, 4);
+        await clearRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.DRAFTS}!A${existingIdx + 2}:D${existingIdx + 2}`);
       }
       return NextResponse.json({ success: true });
     }
@@ -1325,20 +1201,20 @@ if (action === "delete-draft") {
     // ─── Notification Center: Mark one as read ───
 if (action === "mark-notification-read") {
        const { notificationId } = body;
-       await updateCell(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG, notificationId, 8, "TRUE");
+       await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, notificationId, 8, "TRUE");
       return NextResponse.json({ success: true });
     }
 
     // ─── Notification Center: Mark all as read ───
 if (action === "mark-all-read") {
        const { email } = body;
-       const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG);
+       const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG);
       const updates = [];
 rows.forEach((row, i) => {
         const recipients = String(row[1] || "").toLowerCase().trim();
         const isMatch = recipients === "all" || recipients.includes(email.toLowerCase());
         if (isMatch && String(row[7] || "").toUpperCase() !== "TRUE") {
-                    updates.push(updateCell(SHEET_IDS.DB, SHEETS.NOTIFICATION_LOG, i + 2, 8, "TRUE"));
+                    updates.push(updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, i + 2, 8, "TRUE"));
         }
       });
       await Promise.all(updates);
@@ -1350,9 +1226,9 @@ rows.forEach((row, i) => {
       const { itemId, email } = body;
       const rowIndex = parseInt(itemId.split("-")[1]);
       const newStatus = action === "cancel-submission" ? "Cancelled" : "Withdrawn";
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, `[${newStatus} by ${email}]`);
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, `[${newStatus} by ${email}]`);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
       return NextResponse.json({ success: true });
     }
     
@@ -1361,16 +1237,16 @@ rows.forEach((row, i) => {
       // Unified format: sub-{rowIndex}
       const rowIndex = parseInt(itemId.split("-")[1]);
 const newStatus = adminAction === "approve" ? "Complete" : "Rejected";
-        await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
               const noteText = reason
         ? `[${newStatus} by ${adminEmail}] ${reason}`
         : `[${newStatus} by ${adminEmail}]`;
-await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, noteText);
-      await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
+await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, noteText);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
 
       // 🔔 Notification: admin approved/rejected
       try {
-        const { rows } = await readSheet(SHEET_IDS.DB, SHEETS.SUBMISSIONS);
+        const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
         const row = rows[rowIndex - 2]; // rows array is 0-indexed, sheet is 1-indexed + header
         if (row) {
           notify("status_update", {
@@ -1450,7 +1326,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       }
 
       // Read existing rows for ID sequence
-      let { rows: existingRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      let { rows: existingRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
       if (!existingRows) existingRows = [];
 
       const submittedAt = new Date();
@@ -1600,12 +1476,12 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
 
       // Append row (with tab-create fallback)
       const row = incidentToRow(incident);
-      let appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
+      let appendOk = (await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, row)).success;
       if (!appendOk) {
         console.log(`[Incident] First append failed, trying to create "${INCIDENTS_TAB}" tab`);
-        const tabOk = await ensureIncidentsTab(SHEET_IDS.DB);
+        const tabOk = await ensureIncidentsTab(SHEET_IDS.COLLECTION);
         if (tabOk) {
-          appendOk = await appendRowAnchored(SHEET_IDS.DB, SHEETS.INCIDENTS, row);
+          appendOk = (await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, row)).success;
         }
       }
       if (!appendOk) {
@@ -1688,7 +1564,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
         return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
       }
 
-      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      let { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
       if (!rows) rows = [];
       const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
       if (idx === -1) {
@@ -1720,24 +1596,24 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       INCIDENT_COLUMNS.forEach((c, i) => { col[c] = i + 1; });
 
       // Always: status + last_updated audit
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.status, newStatus);
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.status, newStatus);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
 
       // Stage-entry timestamps (only the stage being entered — no backfill)
       if (newStatus === "acknowledged") {
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.acknowledged_by, adminEmail);
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.acknowledged_at, nowIso);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.acknowledged_by, adminEmail);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.acknowledged_at, nowIso);
       } else if (newStatus === "investigating") {
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigating_assignee, adminEmail);
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigating_started_at, nowIso);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.investigating_assignee, adminEmail);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.investigating_started_at, nowIso);
       } else if (newStatus === "closed") {
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.closed_by, adminEmail);
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.closed_at, nowIso);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.closed_by, adminEmail);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.closed_at, nowIso);
         // Edge case: leaving CA stage means CA is by definition complete.
         // Only stamp when we ACTUALLY came from CA (honest gaps for jumps).
         if (previousStatus === "corrective_action") {
-          await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.corrective_action_completed_at, nowIso);
+          await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.corrective_action_completed_at, nowIso);
         }
       }
       // submitted, corrective_action: no stage-specific timestamps
@@ -1749,7 +1625,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       try {
         // Re-read the row so the notification reflects the freshly-saved state
         // (status, timestamps, etc) rather than the pre-update snapshot.
-        const { rows: postRows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+        const { rows: postRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
         const updated = postRows && postRows[idx] ? rowToIncident(postRows[idx]) : { ...currentIncident, status: newStatus };
         const appUrl = process.env.AUTH_URL || "http://localhost:3000";
         await notifyStatusChange({
@@ -1774,7 +1650,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
         return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
       }
 
-      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      let { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
       if (!rows) rows = [];
       const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
       if (idx === -1) {
@@ -1792,9 +1668,9 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       const updatedNotes = currentNotes ? `${currentNotes}\n${newEntry}` : newEntry;
 
       const nowIso = new Date().toISOString();
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.internal_notes, updatedNotes);
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.internal_notes, updatedNotes);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
 
       return NextResponse.json({ success: true });
     }
@@ -1818,7 +1694,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
         "preventive_action_completed_at",
       ];
 
-      let { rows } = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS);
+      let { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS);
       if (!rows) rows = [];
       const idx = rows.findIndex((r) => (r[0] || "") === incidentId);
       if (idx === -1) {
@@ -1841,28 +1717,28 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
       for (const key of EDITABLE) {
         if (Object.prototype.hasOwnProperty.call(fields, key)) {
           const val = fields[key] == null ? "" : String(fields[key]);
-          await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col[key], val);
+          await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col[key], val);
           updated.push(key);
         }
       }
 
       const nowIso = new Date().toISOString();
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
-      await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_at, nowIso);
+      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.last_updated_by, adminEmail);
 
       // P4C: lifecycle actions
       let statusAdvanced = false;
       if (isFirstSave) {
         // First save — record investigation_saved_at and auto-advance to investigated
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.investigation_saved_at, nowIso);
-        await updateCell(SHEET_IDS.DB, SHEETS.INCIDENTS, sheetRow, col.status, "investigated");
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.investigation_saved_at, nowIso);
+        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS, sheetRow, col.status, "investigated");
         statusAdvanced = true;
 
         // Fire Slack + email-to-submitter via existing notifyStatusChange.
         // Build a fresh incident object reflecting the updated fields so the
         // notifications carry the latest data (especially status).
         try {
-          const updatedRow = await readSheet(SHEET_IDS.DB, SHEETS.INCIDENTS).then((r) => (r.rows || [])[idx]);
+          const updatedRow = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.INCIDENTS).then((r) => (r.rows || [])[idx]);
           const refreshedIncident = updatedRow ? rowToIncident(updatedRow) : { ...existingIncident, status: "investigated" };
           const appUrl = process.env.AUTH_URL || "http://localhost:3000";
           await notifyStatusChange({
@@ -1886,8 +1762,8 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
           log = [];
         }
         log.push({ at: nowIso, by: adminEmail });
-        await updateCell(
-          SHEET_IDS.DB,
+        await updateCellByRowColSA(
+          SHEET_IDS.COLLECTION,
           SHEETS.INCIDENTS,
           sheetRow,
           col.investigation_edit_log,
@@ -1926,7 +1802,7 @@ await updateCell(SHEET_IDS.DB, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, note
 // accounts sheet uses "STL - MO" but our SITES uses "STL-MO".
 async function getSiteRegion(siteCode) {
   try {
-    const { rows } = await readSheet(SHEET_IDS.HUB, SHEETS.ACCOUNTS);
+    const { rows } = await readSheetSA(SHEET_IDS.HUB, SHEETS.ACCOUNTS);
     const target = String(siteCode || "").replace(/\s+/g, "").toUpperCase();
     if (!target) return null;
     for (const row of rows) {
@@ -1958,66 +1834,34 @@ function parseIncidentDate(str) {
   return new Date(Date.UTC(yyyy, mm - 1, dd));
 }
 
-// Anchored append: pins to !A:A so variable-width rows can't column-shift
-// (per Kevin's saved learning — this bug has bitten other tabs before)
-async function appendRowAnchored(spreadsheetId, sheetName, rowData) {
-  try {
-    const token = await getAccessToken();
-    const range = `${sheetName}!A:A`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ values: [rowData] }),
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[People] Anchored append failed (${sheetName}):`, res.status, errText);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error(`[People] Anchored append error (${sheetName}):`, e.message);
-    return false;
-  }
-}
-
 // Auto-create the Incidents tab with 42 column headers if missing.
 // Called as a fallback when first append fails (likely cause: tab doesn't exist).
 async function ensureIncidentsTab(spreadsheetId) {
   try {
-    const token = await getAccessToken();
-
-    // Step 1: addSheet via batchUpdate (frozen header row)
-    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-    const addRes = await fetch(batchUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        requests: [{
-          addSheet: {
-            properties: {
-              title: INCIDENTS_TAB,
-              gridProperties: { frozenRowCount: 1 },
+    // Step 1: addSheet with frozen header row.
+    // Inline batchUpdate (not createTabSA) because we need gridProperties.frozenRowCount,
+    // which createTabSA deliberately omits. Per D2, createTabSA's signature stays minimal.
+    const sheets = getServiceAccountSheetsClient();
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: INCIDENTS_TAB,
+                gridProperties: { frozenRowCount: 1 },
+              },
             },
-          },
-        }],
-      }),
-    });
-
-    if (!addRes.ok) {
-      const errText = await addRes.text();
-      // Race condition: another writer just created it — treat as success
-      if (errText.includes("already exists")) {
+          }],
+        },
+      });
+    } catch (e) {
+      // Race condition: another writer just created it - treat as success.
+      if (String(e?.message || "").includes("already exists")) {
         console.log(`[Incident] Tab "${INCIDENTS_TAB}" already exists, skipping create`);
       } else {
-        console.error(`[Incident] Failed to create tab "${INCIDENTS_TAB}":`, addRes.status, errText);
+        console.error(`[Incident] Failed to create tab "${INCIDENTS_TAB}":`, e.message);
         return false;
       }
     }
@@ -2033,18 +1877,9 @@ async function ensureIncidentsTab(spreadsheetId) {
       endCol = String.fromCharCode(64 + first) + String.fromCharCode(64 + second);
     }
     const headerRange = `${INCIDENTS_TAB}!A1:${endCol}1`;
-    const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=USER_ENTERED`;
-    const headerRes = await fetch(headerUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ values: [INCIDENT_COLUMNS] }),
-    });
-    if (!headerRes.ok) {
-      const errText = await headerRes.text();
-      console.error(`[Incident] Failed to write headers:`, headerRes.status, errText);
+    const headerResult = await updateRangeSA(spreadsheetId, headerRange, [INCIDENT_COLUMNS]);
+    if (!headerResult.success) {
+      console.error(`[Incident] Failed to write headers:`, headerResult.error);
       return false;
     }
 

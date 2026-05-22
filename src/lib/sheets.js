@@ -247,6 +247,55 @@ export async function updateCellSA(spreadsheetId, range, value) {
 }
 
 /**
+ * Clear all values in a range via service account.
+ * Empties cells but does not delete them (no row/column shift).
+ * `range` is A1 notation, e.g. "drafts!A5:D5" or "submissions!A2:J2".
+ * Added in PR A2a (Bundle 3) to replace people/route.js's local clearRow helper
+ * for drafts deletion + future range-clearing operations.
+ */
+export async function clearRangeSA(spreadsheetId, range) {
+  const sheets = getServiceAccountSheetsClient();
+  try {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[SA] Error clearing range ${range}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Internal: 1-indexed column number to A1 column letters.
+// Handles arbitrary depth: 1 -> "A", 26 -> "Z", 27 -> "AA", 53 -> "BA", 703 -> "AAA".
+function colToLetter(col) {
+  let s = "";
+  let n = col;
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+/**
+ * Update a single cell via service account using 1-indexed row + col integers.
+ * Computes A1-notation range internally; handles columns beyond Z (AA, AB, etc).
+ * Composes on top of updateCellSA.
+ *
+ * Added in PR A2a (Bundle 3) to replace people/route.js's local updateCell helper,
+ * which carried the row+col indexing pattern at 27 call sites. Inline range
+ * construction at each site would duplicate the col-to-letter math; this helper
+ * extracts that math to the canonical layer.
+ */
+export async function updateCellByRowColSA(spreadsheetId, sheetName, row, col, value) {
+  const range = `${sheetName}!${colToLetter(col)}${row}`;
+  return updateCellSA(spreadsheetId, range, value);
+}
+
+/**
  * Find a row number by matching a value in a specific column, via service account.
  * Mirrors findRowByValue but uses readSheetSA. Returns 1-indexed sheet row, or null.
  */
