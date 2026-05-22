@@ -1,6 +1,6 @@
 # KitchFix Migration Project Dashboard
 
-**Last updated:** 2026-05-22 (PR A2a complete in working tree, pre-merge)
+**Last updated:** 2026-05-22 (PR A2b complete in working tree, pre-merge; CLAUDE.md item 1 CLOSED)
 **Stage:** 0 (Audit + Abstraction Layer, ~70% complete)
 **Next milestone:** Stage 1 (Supabase Setup + Schema Design)
 
@@ -20,14 +20,14 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ## Summary metrics
 
-- **PRs shipped:** 20 (since 2026-05-14)
-- **Stage 0 progress:** ~88%
+- **PRs shipped:** 21 (since 2026-05-14)
+- **Stage 0 progress:** ~91%
 - **Items remaining:** 11 (in 5 bundles + 7 unbundled)
 - **Calendar estimate to Stage 1:** 2-3 months at sustainable pace
 
 ---
 
-## Done - 20 PRs shipped to main
+## Done - 21 PRs shipped to main
 
 | PR | Title | Date | Notes |
 |---|---|---|---|
@@ -51,7 +51,8 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 | #52 | Bundle 2 close-out + knowledge map v1 | 2026-05-19 | Service Calendar deferred (50% built), Railway cron documented (audit-as-documentation, F43-F49 captured not fixed), CLAUDE_KNOWLEDGE_MAP.md v1 added, 2 BUSINESS_NOTES entries (Railway cron invariants + F43-F49 log), dashboard sync carry-forward. Stage 0 progress 82% → 87%. |
 | #53 | Bundle 3 sub-phase 0 recon (Sheets access inventory) | 2026-05-19 | 17 Sheets-touching files classified across 6 categories (10 CONSOLIDATED / 1 DOWNSTREAM / 1 DIRECT-ONLY / 1 AUTH-BOUNDARY / 4 AD-HOC-HELPER). New docs/SHEETS_ACCESS_INVENTORY.md (178 lines) becomes Bundle 3 consolidation reference. Recommended 3-PR scope (~10-13 hr total): cron consolidation, directory migration, dashboard auth-boundary decision. Recon-only, no code changes. |
 | #54 | Bundle 3 PR A1 - cron consolidation (3 files) | 2026-05-20 | 3 of 4 hand-rolled JWT paths consolidated to canonical getServiceAccountSheetsClient / getServiceAccountDriveClient helpers. New getServiceAccountDriveClient(scopes) helper added to sheets.js (+22 LOC). cron/backup-sheets, cron/daily, cron/incident-reminders all migrated; drift-bomb duplicate SHEET_IDS consts removed. Gmail SA pattern in cron/incident-reminders intentionally preserved (domain-wide delegation, different from Sheets SA). Net -108 LOC. people/route.js (2056 lines) remains for PR A2 to fully close CLAUDE.md item 1. 2 BUSINESS_NOTES entries added (Hand-rolled JWT consolidation [CLOSED ISSUE], Gmail SA auth pattern [PRESERVE]). |
-| **A2a** | **Bundle 3 PR A2a - people/route.js Sheets consolidation (READY FOR MERGE)** | **2026-05-22** | **Sheets-path portion of CLAUDE.md item 1 closed. 66 call sites in people/route.js migrated to canonical SA helpers (29 readSheet, 4 appendRow, 27 updateCell, 3 updateRow, 1 clearRow, 2 appendRowAnchored). 7 local Sheets helpers removed; ensureIncidentsTab refactored in place to use canonical primitives (D2: keep local). Local SHEET_IDS const dropped, drift-bomb (PEOPLE_DB_SHEET_ID fallback to MASTER_HUB) removed (P0). 2 new canonical helpers added to sheets.js (clearRangeSA, updateCellByRowColSA). Drive client consolidation: 2 duplicate getServiceAccountDriveClient definitions in drive.js + incidentActions.js consolidated to canonical (PR #54 incomplete sweep finished). ops/route.js dead-import cleanup (5 unused imports dropped). Net -143 LOC across 5 files. 4 BUSINESS_NOTES entries + 6 CLAUDE_KNOWLEDGE_MAP anti-knowledge entries added. Gmail JWT block stays alive for PR A2b (getAccessToken now orphan, removed in A2b).** |
+| #55 | Bundle 3 PR A2a - people/route.js Sheets consolidation + Drive client consolidation | 2026-05-22 | Sheets-path portion of CLAUDE.md item 1 closed. 66 call sites in people/route.js migrated to canonical SA helpers (29 readSheet, 4 appendRow, 27 updateCell, 3 updateRow, 1 clearRow, 2 appendRowAnchored). 7 local Sheets helpers removed; ensureIncidentsTab refactored in place to use canonical primitives (D2: keep local). Local SHEET_IDS const dropped, drift-bomb (PEOPLE_DB_SHEET_ID fallback to MASTER_HUB) removed (P0). 2 new canonical helpers added to sheets.js (clearRangeSA, updateCellByRowColSA). Drive client consolidation: 2 duplicate getServiceAccountDriveClient definitions in drive.js + incidentActions.js consolidated to canonical (PR #54 incomplete sweep finished). ops/route.js dead-import cleanup (5 unused imports dropped). Net -143 LOC across 5 code files. 4 BUSINESS_NOTES entries + 6 CLAUDE_KNOWLEDGE_MAP anti-knowledge entries added. Gmail JWT block stays alive for PR A2b (getAccessToken now orphan, removed in A2b). |
+| **A2b** | **Bundle 3 PR A2b - Gmail SA canonicalization (READY FOR MERGE) [CLOSES CLAUDE.md ITEM 1]** | **2026-05-22** | **CLAUDE.md item 1 fully closed - zero active hand-rolled crypto.subtle JWT remains in the codebase. New canonical sendEmailSA({ sender, displayName, to, subject, html, replyTo }) in src/lib/gmail.js consolidates the two SA-impersonated Gmail implementations: people/route.js (hand-rolled crypto.subtle JWT + raw fetch) + cron/incident-reminders (google.auth.JWT + local MIME builder). 3 encodings byte-equivalence-proven before swap (subject via encodeSubjectSA byte-exact port, HTML body standard padded base64, raw message base64url unpadded - empirically verified across 4 forced-character test inputs). people/route.js: removed full ~72 LOC JWT block (5 functions) + 66-LOC local sendEmail; replaced with 1-line adapter closing over GMAIL_SENDER + GMAIL_SENDER_NAME consts; incidentActions.js by-reference contract preserved (0 lines touched there). cron/incident-reminders: removed local getGmailClient + buildEmailMime + dead googleapis import. Two intentional behavior changes to cron emails REQUIRE post-merge verification (RFC 2047 subject encoding + base64 body now applied; previously plain). Two subject encoders coexist in gmail.js as follow-up cleanup (encodeSubject vs encodeSubjectSA differ on control chars; unify later). Net -68 LOC across 3 code files (gmail.js +95, cron -30, people/route.js -133). 1 new + 2 updated BUSINESS_NOTES entries + 4 new CLAUDE_KNOWLEDGE_MAP anti-knowledge entries + Gmail layer added to client landscape.** |
 
 ---
 
@@ -154,7 +155,7 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 4. ~~Bundle 2 - Audit #6: Smart Inventory~~ - ✅ SHIPPED 2026-05-18 as PR #51 - 2 F-codes fixed, 12 BUSINESS_NOTES + SMART_INVENTORY_DATA_MODEL.md captured for Stage 1
 5. ~~Bundle 2 - Service Calendar audit~~ - DEFERRED 2026-05-19 - tour revealed ~50% complete development state, not production, not ready for migration-readiness audit. Revisit when Kevin signals Service Calendar is closer to stable.
 6. ~~Bundle 2 - Railway cron audit~~ - DOCUMENTED 2026-05-19 - production cron at kitchfix-inventory-cron repo is stable (408 invoices processed, zero observable data loss). F43-F49 captured but not fixed; no production impact evidence. Stage 1 invariants documented in BUSINESS_NOTES.
-7. ~~Bundle 3 sub-phase 0 (recon)~~ - ✅ SHIPPED 2026-05-19 as PR #53. ~~Bundle 3 PR A1 (cron consolidation, 3 files)~~ - ✅ SHIPPED 2026-05-20 as PR #54. **Bundle 3 PR A2a (people/route.js Sheets consolidation + Drive consolidation + ops dead-imports) - READY FOR MERGE 2026-05-22 (working tree, awaiting commit + PR). Next: PR A2b (Gmail canonicalization + crypto.subtle JWT block removal, ~90 LOC across people/route.js + cron/incident-reminders), then PR B (directory/route.js), then PR C (dashboard/route.js). Calendar SA helper consolidation deferred to post-Bundle-3.**
+7. ~~Bundle 3 sub-phase 0 (recon)~~ - ✅ SHIPPED 2026-05-19 as PR #53. ~~Bundle 3 PR A1 (cron consolidation, 3 files)~~ - ✅ SHIPPED 2026-05-20 as PR #54. ~~Bundle 3 PR A2a (people/route.js Sheets consolidation + Drive consolidation + ops dead-imports)~~ - ✅ SHIPPED 2026-05-22 as PR #55. ~~Bundle 3 PR A2b (Gmail SA canonicalization + crypto.subtle JWT block removal)~~ - READY FOR MERGE 2026-05-22 (working tree, awaiting commit + PR). **The Bundle 3 hand-rolled-JWT-consolidation sub-bundle (PR A1 + A2a + A2b) is now COMPLETE - CLAUDE.md item 1 CLOSED.** Next: PR B (directory/route.js, 13 direct API calls), then PR C (dashboard/route.js, Scenario B user-OAuth → SA migration). Calendar SA helper consolidation deferred to post-Bundle-3.
 8. **Bundle 5** in parallel with Bundle 3
 9. **Bundle 4** - Knowledge synthesis (after audits + abstraction settle)
 10. **Unbundled items** spread throughout - auth strategy decision is the LAST gate
