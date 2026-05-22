@@ -484,6 +484,15 @@ The following F-codes were identified during 2026-05-19 audit-as-documentation p
 - **Documented:** 2026-05-22 during Bundle 3 PR C sub-phase 7.
 - **Migration consideration:** Stage 1 swaps canonical SA helpers to Postgres-backed equivalents. The `news_interactions` table becomes a per-user-per-post engagement log row with explicit primary key (post_id, user_email) - the current Sheets schema already matches that model with cols A+B as the natural key.
 
+### Auth model DECIDED (Stage 1 spec) [CLOSES LAST STAGE 0 GATE]
+
+- **What:** Auth strategy decided 2026-05-22; specced in `docs/AUTH_MODEL.md`. Two orthogonal concepts (is_admin capability + role identity), 6 roles, 3 tables (users, user_accounts, accounts), one rule (`is_admin OR role-grants-domain OR account-in-mapped-list`), one helper (`getVisibleAccounts`), one scoping layer. Closes the LAST Stage 0 gate (the auth strategy decision sequence step). Schema work happens in Stage 1; this entry is the canonical pointer to the spec.
+- **What this retires (after Stage 1 build):** directory B1 interim env-var gate (`DIRECTORY_ADMIN_EMAILS` → `is_admin` in users table); people.js "hr" flag (col A + col C "hr"=TRUE → Corporate HR role check); analytics Kevin-only hardcode (→ `is_admin`); the current per-module authorization fudge generally.
+- **Phasing:** schema first → corporate domain gating second (simpler axis, replaces hr-flag + analytics hardcode) → field-role account scoping third (module by module, finance-sensitive first). NOT a single platform-wide flip. See AUTH_MODEL.md phasing section.
+- **TODO before Stage 1 schema work:** Kevin to fill in the user_accounts mappings (explicit lists per Site Leader / Regional / Director). See AUTH_MODEL.md "TODO" section.
+- **Where:** `docs/AUTH_MODEL.md` (the spec). All future Stage 1 auth work references that doc.
+- **Documented:** 2026-05-22.
+
 ---
 
 ## Template for new entries
