@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { readSheet, readSheetSA, appendRow, updateCell, SHEET_IDS } from "@/lib/sheets";
+import { readSheetSA, appendRowSA, updateCellSA, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
 
 export async function GET(request) {
@@ -8,8 +8,6 @@ export async function GET(request) {
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-
-  const token = session.accessToken;
 
   // ── Action routing ──
   const { searchParams } = new URL(request.url);
@@ -319,11 +317,6 @@ export async function POST(request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const token = session.accessToken;
-  if (!token) {
-    return NextResponse.json({ error: "No access token" }, { status: 400 });
-  }
-
   const email = session.user?.email?.toLowerCase().trim();
 
   try {
@@ -338,18 +331,18 @@ export async function POST(request) {
 
     // ── Mark all read (batch) ──
     if (action === "news-mark-all-read" && postIds?.length) {
-      const ixRaw = await readSheet(token, SHEET_IDS.COLLECTION, "news_interactions");
+      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
       const now = new Date().toISOString();
       const writes = [];
 
       for (const pid of postIds) {
-        const rowIdx = ixRaw.rows.findIndex(r => String(r[0] || "") === pid && String(r[1] || "").toLowerCase().trim() === email);
+        const rowIdx = rows.findIndex(r => String(r[0] || "") === pid && String(r[1] || "").toLowerCase().trim() === email);
         if (rowIdx >= 0) {
           const sheetRow = rowIdx + 2;
-          writes.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `C${sheetRow}`, "TRUE"));
-          writes.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `D${sheetRow}`, now));
+          writes.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
+          writes.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
         } else {
-          writes.push(appendRow(token, SHEET_IDS.COLLECTION, "news_interactions", [
+          writes.push(appendRowSA(SHEET_IDS.COLLECTION, "news_interactions", [
             pid, email, "TRUE", now, "FALSE", "FALSE"
           ]));
         }
@@ -359,8 +352,8 @@ export async function POST(request) {
     }
 
     // ── Single post interactions ──
-    const ixRaw = await readSheet(token, SHEET_IDS.COLLECTION, "news_interactions");
-    const rowIdx = ixRaw.rows.findIndex(r => String(r[0] || "") === postId && String(r[1] || "").toLowerCase().trim() === email);
+    const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
+    const rowIdx = rows.findIndex(r => String(r[0] || "") === postId && String(r[1] || "").toLowerCase().trim() === email);
     const now = new Date().toISOString();
 
     if (rowIdx >= 0) {
@@ -368,16 +361,16 @@ export async function POST(request) {
       const updates = [];
 
       if (action === "news-read") {
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `C${sheetRow}`, "TRUE"));
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `D${sheetRow}`, now));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
       }
       if (action === "news-save") {
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `E${sheetRow}`, saved ? "TRUE" : "FALSE"));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!E${sheetRow}`, saved ? "TRUE" : "FALSE"));
       }
       if (action === "news-ack") {
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `C${sheetRow}`, "TRUE"));
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `D${sheetRow}`, now));
-        updates.push(updateCell(token, SHEET_IDS.COLLECTION, "news_interactions", `F${sheetRow}`, acknowledged ? "TRUE" : "FALSE"));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
+        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!F${sheetRow}`, acknowledged ? "TRUE" : "FALSE"));
       }
 
       if (updates.length) await Promise.all(updates);
@@ -390,7 +383,7 @@ export async function POST(request) {
         action === "news-save" ? (saved ? "TRUE" : "FALSE") : "FALSE",
         action === "news-ack" ? (acknowledged ? "TRUE" : "FALSE") : "FALSE",
       ];
-      await appendRow(token, SHEET_IDS.COLLECTION, "news_interactions", newRow);
+      await appendRowSA(SHEET_IDS.COLLECTION, "news_interactions", newRow);
     }
 
     return NextResponse.json({ ok: true });
