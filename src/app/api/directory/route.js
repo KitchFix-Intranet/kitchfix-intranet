@@ -1,18 +1,11 @@
 import { auth } from "@/lib/auth";
-import { readSheet, SHEET_IDS } from "@/lib/sheets";
-import { google } from "googleapis";
+import { readSheetSA, getSheetIdSA, updateRangeSA, updateCellSA, appendRowSA, appendRowsSA, clearRangeSA, deleteRowSA, getServiceAccountDriveClient, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
 // ═══════════════════════════════════════
 // TEAM DIRECTORY API — v1.0
 // Actions: bootstrap, drive-image
 // Sheets: HUB (accounts, links, contacts — read-only)
 // ═══════════════════════════════════════
-
-function getDriveClient(accessToken) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  return google.drive({ version: "v3", auth });
-}
 
 function getDriveFileId(url) {
   if (!url) return null;
@@ -37,61 +30,22 @@ const safeId = (key) =>
     .trim()
     .replace(/[^a-zA-Z0-9-_]/g, "-");
 
-// Module-level sheet reader — usable in both GET and POST
-async function safeReadSheet(token, sheetId, tab) {
-  try {
-    const result = await readSheet(token, sheetId, tab);
-    // readSheet returns { headers, rows } — we want the rows array
-    return Array.isArray(result) ? result : (result?.rows || []);
-  } catch (e) {
-    console.warn(`[Directory] Sheet "${tab}" error:`, e.message);
-    return [];
-  }
-}
-
-// Build authenticated Sheets client from a user token
-function getSheetsClient(token) {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: token });
-  return google.sheets({ version: "v4", auth });
-}
-
-// Helper: get numeric sheetId for batchUpdate
-async function getSheetTabId(sheetsClient, spreadsheetId, tabName) {
-  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets.find(s => s.properties.title === tabName);
-  return sheet?.properties?.sheetId ?? 0;
-}
-
-
 export async function GET(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const token = session.accessToken;
-  if (!token) return NextResponse.json({ error: "No access token" }, { status: 400 });
-
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
-
-  const safeRead = async (id, tab) => {
-    try {
-      return await readSheet(token, id, tab);
-    } catch (e) {
-      console.warn(`[Directory] Sheet "${tab}" error:`, e.message);
-      return { headers: [], rows: [] };
-    }
-  };
 
   try {
     // ── Bootstrap: load all teams from HUB ──
     if (action === "bootstrap") {
       const [accountsRaw, linksRaw, contactsRaw, heroRaw, adminsRaw] = await Promise.all([
-        safeRead(SHEET_IDS.HUB, "accounts"),
-        safeRead(SHEET_IDS.HUB, "dir_links"),
-        safeRead(SHEET_IDS.HUB, "contacts"),
-        safeRead(SHEET_IDS.HUB, "hero_images"),
-        safeRead(SHEET_IDS.HUB, "admins"),
+        readSheetSA(SHEET_IDS.HUB, "accounts"),
+        readSheetSA(SHEET_IDS.HUB, "dir_links"),
+        readSheetSA(SHEET_IDS.HUB, "contacts"),
+        readSheetSA(SHEET_IDS.HUB, "hero_images"),
+        readSheetSA(SHEET_IDS.HUB, "admins"),
       ]);
 
       // Hero image — random pick from all rows
@@ -190,8 +144,9 @@ const userEmail = session.user?.email?.toLowerCase().trim() || "";
     }
 
     // ── Drive Image Proxy ──
-    // Fetches a Drive-restricted image server-side using the user's OAuth token
-    // Returns { data: "data:image/jpeg;base64,..." } or { data: null } on failure
+    // Fetches a Drive-restricted image server-side using the canonical service account.
+    // PR B2 D.3a (2026-05-22) confirmed all 12 gmapImg files in production are SA-readable.
+    // Returns { data: "data:image/jpeg;base64,..." } or { data: null } on failure.
     if (action === "drive-image") {
       const url = searchParams.get("url");
       if (!url) return NextResponse.json({ data: null }, { status: 400 });
@@ -200,7 +155,7 @@ const userEmail = session.user?.email?.toLowerCase().trim() || "";
       if (!fileId) return NextResponse.json({ data: null }, { status: 400 });
 
       try {
-        const drive = getDriveClient(token);
+        const drive = getServiceAccountDriveClient();
 
         // Two parallel calls: metadata (for MIME type) + file bytes
         const [meta, file] = await Promise.all([
@@ -228,8 +183,7 @@ const userEmail = session.user?.email?.toLowerCase().trim() || "";
 
     // ── hero-list: return all hero image URLs for admin panel ──
     if (action === "hero-list") {
-      const raw  = await safeRead(SHEET_IDS.HUB, "hero_images");
-      const rows = Array.isArray(raw) ? raw : (raw?.rows || []);
+      const { rows } = await readSheetSA(SHEET_IDS.HUB, "hero_images");
       const urls = rows.map(r => String(r[0] || "").trim()).filter(Boolean);
       return NextResponse.json({ success: true, urls });
     }
@@ -248,8 +202,6 @@ export async function POST(request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    const token = session.accessToken;
-    if (!token)  return NextResponse.json({ error: "No access token" }, { status: 400 });
 
     // ── INTERIM ADMIN GATE (PR B1, 2026-05-22) ───────────────────────────
     // Directory is Kevin-only for now via DIRECTORY_ADMIN_EMAILS (comma-
@@ -273,12 +225,10 @@ export async function POST(request) {
     const body   = await request.json();
     const action = body.action;
 
-    const sheets = getSheetsClient(token);
-
     // ── admin-update-account ──────────────────────────────────────────────
     if (action === "admin-update-account") {
       const { accountId, fields, links } = body;
-      const rows = await safeReadSheet(token, SHEET_IDS.HUB, "accounts");
+      const { rows } = await readSheetSA(SHEET_IDS.HUB, "accounts");
       const rowIdx = rows.findIndex(r => safeId(String(r[0] || "").trim()) === accountId);
       if (rowIdx === -1) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -306,21 +256,16 @@ export async function POST(request) {
       ];
 
       const sheetRow = rowIdx + 2;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_IDS.HUB,
-        range: `accounts!A${sheetRow}:R${sheetRow}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [updated] },
-      });
+      await updateRangeSA(SHEET_IDS.HUB, `accounts!A${sheetRow}:R${sheetRow}`, [updated]);
 
       // ── Update work_locations tab ──
-      await upsertWorkLocation(sheets, token, sheetKey,
+      await upsertWorkLocation(sheetKey,
         fields.name  ?? r[1]  ?? "",
         fields.city  ?? r[3]  ?? "",
         fields.state ?? r[4]  ?? "");
 
       // ── Update links tab ──
-      if (links) await writeLinks(sheets, token, sheetKey, links);
+      if (links) await writeLinks(sheetKey, links);
 
       return NextResponse.json({ success: true });
     }
@@ -340,18 +285,13 @@ export async function POST(request) {
         fields.gmapImg || "",
       ];
 
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_IDS.HUB,
-        range: "accounts!A:R",
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [newRow] },
-      });
+      await appendRowSA(SHEET_IDS.HUB, "accounts", newRow);
 
       // ── Add to work_locations tab ──
-      await upsertWorkLocation(sheets, token, fields.rawKey, fields.name, fields.city, fields.state);
+      await upsertWorkLocation(fields.rawKey, fields.name, fields.city, fields.state);
 
       // ── Append links ──
-      if (links) await writeLinks(sheets, token, fields.rawKey, links);
+      if (links) await writeLinks(fields.rawKey, links);
 
       return NextResponse.json({ success: true });
     }
@@ -359,7 +299,7 @@ export async function POST(request) {
     // ── admin-deactivate-account ──────────────────────────────────────────
     if (action === "admin-deactivate-account") {
       const { accountId } = body;
-      const rows = await safeReadSheet(token, SHEET_IDS.HUB, "accounts");
+      const { rows } = await readSheetSA(SHEET_IDS.HUB, "accounts");
       const rowIdx = rows.findIndex(r => safeId(String(r[0] || "").trim()) === accountId);
       if (rowIdx === -1) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -367,16 +307,11 @@ export async function POST(request) {
       const sheetKey = String(r[0] || "").trim();
       const sheetRow = rowIdx + 2;
 
-      // Write FALSE to col S (Active) only — preserve all other data intact
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_IDS.HUB,
-        range: `accounts!S${sheetRow}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [["FALSE"]] },
-      });
+      // Write FALSE to col S (Active) only - preserve all other data intact
+      await updateCellSA(SHEET_IDS.HUB, `accounts!S${sheetRow}`, "FALSE");
 
       // Remove from work_locations
-      await removeWorkLocation(sheets, token, sheetKey);
+      await removeWorkLocation(sheetKey);
 
       return NextResponse.json({ success: true });
     }
@@ -384,7 +319,7 @@ export async function POST(request) {
     // ── admin-reactivate-account ──────────────────────────────────────────
     if (action === "admin-reactivate-account") {
       const { accountId } = body;
-      const rows = await safeReadSheet(token, SHEET_IDS.HUB, "accounts");
+      const { rows } = await readSheetSA(SHEET_IDS.HUB, "accounts");
       const rowIdx = rows.findIndex(r => safeId(String(r[0] || "").trim()) === accountId);
       if (rowIdx === -1) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -393,15 +328,10 @@ export async function POST(request) {
       const sheetRow = rowIdx + 2;
 
       // Write TRUE to col S (Active)
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_IDS.HUB,
-        range: `accounts!S${sheetRow}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [["TRUE"]] },
-      });
+      await updateCellSA(SHEET_IDS.HUB, `accounts!S${sheetRow}`, "TRUE");
 
       // Re-add to work_locations
-      await upsertWorkLocation(sheets, token, sheetKey,
+      await upsertWorkLocation(sheetKey,
         String(r[1] || "").trim(),
         String(r[3] || "").trim(),
         String(r[4] || "").trim());
@@ -412,35 +342,25 @@ export async function POST(request) {
     // ── admin-update-contacts ─────────────────────────────────────────────
 if (action === "admin-update-contacts") {
        const { accountId, contacts } = body;
-       const rows = await safeReadSheet(token, SHEET_IDS.HUB, "contacts");
+       const { rows } = await readSheetSA(SHEET_IDS.HUB, "contacts");
        
       const toDelete = rows
         .map((r, i) => safeId(String(r[0] || "").trim()) === accountId ? i + 2 : null)
         .filter(Boolean)
         .reverse();
 
-      const tabId = await getSheetTabId(sheets, SHEET_IDS.HUB, "contacts");
+      const tabId = await getSheetIdSA(SHEET_IDS.HUB, "contacts");
 
+      // Delete bottom-up (toDelete is reversed above) - prevents index shift
       for (const rowNum of toDelete) {
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId: SHEET_IDS.HUB,
-          requestBody: {
-            requests: [{ deleteDimension: {
-              range: { sheetId: tabId, dimension: "ROWS", startIndex: rowNum - 1, endIndex: rowNum },
-            }}],
-          },
-        });
+        await deleteRowSA(SHEET_IDS.HUB, tabId, rowNum - 1);
       }
 
       // Resolve real sheet key from first remaining row or the deleted ones
       const realKey = rows.find(r => safeId(String(r[0]||"").trim()) === accountId)?.[0]?.trim() || accountId;
       if (contacts.length > 0) {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_IDS.HUB,
-          range: "contacts!A:F",
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: contacts.map(c => [realKey, c.role, c.name, c.email, c.phone, c.slack]) },
-        });
+        await appendRowsSA(SHEET_IDS.HUB, "contacts",
+          contacts.map(c => [realKey, c.role, c.name, c.email, c.phone, c.slack]));
       }
 
       return NextResponse.json({ success: true });
@@ -450,18 +370,11 @@ if (action === "admin-update-contacts") {
     if (action === "admin-update-heroes") {
       const { urls } = body;
 
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId: SHEET_IDS.HUB,
-        range: "hero_images!A:A",
-      });
+      await clearRangeSA(SHEET_IDS.HUB, "hero_images!A:A");
 
       if (urls.length > 0) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_IDS.HUB,
-          range: "hero_images!A1",
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: urls.map(u => [u]) },
-        });
+        // Column write: 2D array of N rows x 1 col, range "A1" extends downward
+        await updateRangeSA(SHEET_IDS.HUB, "hero_images!A1", urls.map(u => [u]));
       }
 
       return NextResponse.json({ success: true });
@@ -475,7 +388,7 @@ if (action === "admin-update-contacts") {
 }
 
 // ── Write links rows (upsert by accountId + sheetKey) ─────────────────────
-async function writeLinks(sheets, token, rawTeamKey, links) {
+async function writeLinks(rawTeamKey, links) {
   // Wide format: A=TeamKey B=Homestand C=SLA D=ServiceCalendars E=Drive
   const newRow = [
     rawTeamKey,
@@ -485,65 +398,38 @@ async function writeLinks(sheets, token, rawTeamKey, links) {
     links["Drive"]                         || "",
   ];
 
-  const rows = await safeReadSheet(token, SHEET_IDS.HUB, "dir_links");
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, "dir_links");
   const idx  = rows.findIndex(r => String(r[0] || "").trim() === rawTeamKey);
 
   if (idx !== -1) {
     // Update existing row
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_IDS.HUB,
-      range: `dir_links!A${idx + 2}:E${idx + 2}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [newRow] },
-    });
+    await updateRangeSA(SHEET_IDS.HUB, `dir_links!A${idx + 2}:E${idx + 2}`, [newRow]);
   } else {
     // Append new row
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_IDS.HUB,
-      range: "dir_links!A:E",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [newRow] },
-    });
+    await appendRowSA(SHEET_IDS.HUB, "dir_links", newRow);
   }
 }
 
 // ── Upsert a row in work_locations [A=location name, B=TeamKey, C=Team Name]
-async function upsertWorkLocation(sheets, token, teamKey, teamName, city, state) {
-  const rows = await safeReadSheet(token, SHEET_IDS.HUB, "work_locations");
+async function upsertWorkLocation(teamKey, teamName, city, state) {
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, "work_locations");
   const locationName = [city, state ? `(${teamName})` : teamName].filter(Boolean).join(", ");
   const newRow = [locationName, teamKey, teamName];
 
   const idx = rows.findIndex(r => String(r[1] || "").trim() === teamKey);
   if (idx !== -1) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_IDS.HUB,
-      range: `work_locations!A${idx + 2}:C${idx + 2}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [newRow] },
-    });
+    await updateRangeSA(SHEET_IDS.HUB, `work_locations!A${idx + 2}:C${idx + 2}`, [newRow]);
   } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_IDS.HUB,
-      range: "work_locations!A:C",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [newRow] },
-    });
+    await appendRowSA(SHEET_IDS.HUB, "work_locations", newRow);
   }
 }
 
 // ── Remove a row from work_locations by teamKey ────────────────────────────
-async function removeWorkLocation(sheets, token, teamKey) {
-  const rows  = await safeReadSheet(token, SHEET_IDS.HUB, "work_locations");
+async function removeWorkLocation(teamKey) {
+  const { rows }  = await readSheetSA(SHEET_IDS.HUB, "work_locations");
   const idx   = rows.findIndex(r => String(r[1] || "").trim() === teamKey);
   if (idx === -1) return;
 
-  const tabId = await getSheetTabId(sheets, SHEET_IDS.HUB, "work_locations");
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_IDS.HUB,
-    requestBody: {
-      requests: [{ deleteDimension: {
-        range: { sheetId: tabId, dimension: "ROWS", startIndex: idx + 1, endIndex: idx + 2 },
-      }}],
-    },
-  });
+  const tabId = await getSheetIdSA(SHEET_IDS.HUB, "work_locations");
+  await deleteRowSA(SHEET_IDS.HUB, tabId, idx + 1);
 }
