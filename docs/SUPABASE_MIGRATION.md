@@ -6,6 +6,12 @@
 > **Estimated duration:** 3-5 months calendar time, depending on weekly capacity.
 > **Approach:** Strangler fig - staged migration by data category, not big-bang cutover.
 
+> ## Operating mode update (2026-05-26)
+>
+> The pacing assumption in this doc ("3-5 months", capacity-not-speed) was superseded on 2026-05-26 by a fast-as-safe operating mode. The strategic plan here is still canonical for the "what"; the new mode governs the "how/when/pace."
+>
+> **Read `docs/MIGRATION_APPROACH.md` for the current operating mode.** Friday is a progress checkpoint.
+
 ---
 
 ## How to use this doc
