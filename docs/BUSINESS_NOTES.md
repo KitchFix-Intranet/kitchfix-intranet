@@ -493,6 +493,27 @@ The following F-codes were identified during 2026-05-19 audit-as-documentation p
 - **Where:** `docs/AUTH_MODEL.md` (the spec). All future Stage 1 auth work references that doc.
 - **Documented:** 2026-05-22.
 
+### Stage 1 dual-write scaffolding + news_interactions upsert (PR 1) [STAGE 1 KICKOFF]
+
+- **What:** Stage 1 begins. Dual-write infrastructure shipped: `src/lib/supabase.js` (lazy service-role client), `src/lib/cutover.js` (per-table flag dispatch), `src/lib/dataStore.js` (logical data layer with the first table's adapters). `dashboard/route.js` news_interactions paths rewired through `dataStore` (Sheets-only behavior preserved with flags off, byte-identical to PR #59 post-merge). Supabase project live; 3 tables created (`news_interactions`, `users`, `user_accounts`) per the AUTH_MODEL.md spec + the dual-write target. The actual cutover (flag flip) is pending - happens in Vercel env, not in code.
+- **Upsert-only model (the architectural shift):** news_interactions moves from cell-addressing (the model that produced the #59 bug) to upsert semantics. The dataStore exposes `getNewsInteractions({userEmail})` and `upsertNewsInteraction(key, partial)`. Both Sheets and Postgres adapters speak the same logical contract; cell-letter arithmetic disappears from the handler entirely. Why: Postgres has no concept of "row N, column C" - it addresses by primary key. Forcing the cell model into a PG bridge would have been the F.1 problem from the recon (sheetRow identity propagation across read+update). Upsert sidesteps the whole class.
+- **Cutover flag mechanism (two flags, three states per table):**
+  - Neither flag set = OFF (Sheets-only, default on merge)
+  - `DUAL_WRITE_TABLES=news_interactions` only = DUAL-WRITE ONLY (writes to BOTH, reads from Sheets - PG mirror being populated, Sheets still source of truth)
+  - `DUAL_WRITE_TABLES=news_interactions` + `READ_FROM_POSTGRES=news_interactions` = CUT OVER (writes to BOTH, reads from PG - PG is source of truth, Sheets stays as rollback target)
+  - Eventually drop from `DUAL_WRITE_TABLES` = PG-only (Sheets becomes frozen backup)
+  - See `src/lib/cutover.js` for the canonical state machine + comments.
+- **Three Supabase tables created (DDL ran in SQL editor, copy-paste-ready in chat for future reference):**
+  - `news_interactions(post_id, user_email, read, read_at, saved, acknowledged)` PK `(post_id, user_email)` - the first migration target
+  - `users(email, is_admin, role)` PK `email`, role CHECK constraint on the 6 AUTH_MODEL.md roles - the auth users table (populated later)
+  - `user_accounts(email, account)` PK `(email, account)` - the field-scoping spine (populated by Kevin per AUTH_MODEL.md TODO)
+  - All three tables: RLS deferred, explicit `GRANT TO service_role` (because project setting is "automatically expose new tables OFF")
+- **Lazy Supabase client construction:** `getServiceClient()` is exported from `supabase.js` but never called at module-load time. Called only inside the 2 PG-adapter bodies in `dataStore.js` (`readNewsInteractionsPostgres`, `upsertNewsInteractionPostgres`), each gated by a flag check at the public-API layer. With flags off, the Supabase client is never constructed; `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` could be absent and the app would still run cleanly. (They're not absent - Kevin wired them - but the dormancy guarantee holds independently.)
+- **Staged cutover plan (when ready):** (1) flip `DUAL_WRITE_TABLES=news_interactions` in Vercel; PG starts getting writes for new interactions; reads stay on Sheets. (2) Watch for write errors / PG-vs-Sheets divergence. (3) After confidence, flip `READ_FROM_POSTGRES=news_interactions`; reads move to PG, Sheets stays mirrored. (4) Days later, drop from `DUAL_WRITE_TABLES`; Sheets becomes a frozen backup. Each step is a Vercel env edit (no code change), reversible by flipping back. Backfill of historical Sheets rows into PG is a separate one-time SQL operation (deferred until step 1 has stable dual-writes - then the gap to backfill is finite and known).
+- **Where:** `src/lib/supabase.js`, `src/lib/cutover.js`, `src/lib/dataStore.js`, `src/app/api/dashboard/route.js` (news_interactions paths only).
+- **Zero-merge-risk guarantee:** with `DUAL_WRITE_TABLES` + `READ_FROM_POSTGRES` empty (current Vercel state on merge), the news_interactions code path is Sheets-only and byte-identical to PR #59 post-merge. Verified per-action: 9 sub-paths (existing-row + no-existing-row branches across mark-all-read, news-read, news-save, news-ack) all produce identical Sheets writes to the pre-rewrite logic. The Postgres path is present but DORMANT.
+- **Documented:** 2026-05-26 during Stage 1 PR 1 sub-phase 3c.
+
 ---
 
 ## Template for new entries

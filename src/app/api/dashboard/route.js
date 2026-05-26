@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
-import { readSheetSA, appendRowSA, updateCellSA, SHEET_IDS } from "@/lib/sheets";
+import { readSheetSA, SHEET_IDS } from "@/lib/sheets";
+import { getNewsInteractions, upsertNewsInteraction } from "@/lib/dataStore";
 import { NextResponse } from "next/server";
 
 export async function GET(request) {
@@ -41,19 +42,15 @@ export async function GET(request) {
         }))
         .sort((a, b) => (b.publishDate || "").localeCompare(a.publishDate || ""));
 
-      // Read interactions from COLLECTION (all users for this is fine — small table)
-      const ixRaw = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
-
-      // Filter to current user
-      const interactions = ixRaw.rows
-        .filter(r => String(r[1] || "").toLowerCase().trim() === email)
-        .map(r => ({
-          postId:       String(r[0] || ""),
-          read:         String(r[2] || "") === "TRUE",
-          readAt:       String(r[3] || ""),
-          saved:        String(r[4] || "") === "TRUE",
-          acknowledged: String(r[5] || "") === "TRUE",
-        }));
+      // Read interactions for the current user via dataStore (Sheets-only with flags off).
+      // dataStore returns 6-field records; strip userEmail to preserve the existing
+      // 5-field client API shape (postId, read, readAt, saved, acknowledged).
+      const allInteractions = await getNewsInteractions({ userEmail: email });
+      const interactions = allInteractions.map(
+        ({ postId, read, readAt, saved, acknowledged }) => ({
+          postId, read, readAt, saved, acknowledged,
+        })
+      );
 
       return NextResponse.json({ posts, interactions });
     } catch (error) {
@@ -330,60 +327,33 @@ export async function POST(request) {
     const { postId, saved, acknowledged, postIds } = body;
 
     // ── Mark all read (batch) ──
+    // Per-post upsert with the same field-set news-read uses ({ read, readAt }).
+    // dataStore handles existing-row vs new-row internally + dispatches to Sheets
+    // (and optionally Postgres when DUAL_WRITE_TABLES includes news_interactions).
     if (action === "news-mark-all-read" && postIds?.length) {
-      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
       const now = new Date().toISOString();
-      const writes = [];
-
-      for (const pid of postIds) {
-        const rowIdx = rows.findIndex(r => String(r[0] || "") === pid && String(r[1] || "").toLowerCase().trim() === email);
-        if (rowIdx >= 0) {
-          const sheetRow = rowIdx + 2;
-          writes.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
-          writes.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
-        } else {
-          writes.push(appendRowSA(SHEET_IDS.COLLECTION, "news_interactions", [
-            pid, email, "TRUE", now, "FALSE", "FALSE"
-          ]));
-        }
-      }
-      await Promise.all(writes);
+      await Promise.all(
+        postIds.map((pid) =>
+          upsertNewsInteraction({ postId: pid, userEmail: email }, { read: true, readAt: now })
+        )
+      );
       return NextResponse.json({ ok: true });
     }
 
     // ── Single post interactions ──
-    const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, "news_interactions");
-    const rowIdx = rows.findIndex(r => String(r[0] || "") === postId && String(r[1] || "").toLowerCase().trim() === email);
+    // Per-action partial upsert. Field-sets preserved exactly:
+    //   news-read  -> { read, readAt }
+    //   news-save  -> { saved }           (NOT touching read/readAt/ack)
+    //   news-ack   -> { read, readAt, acknowledged }
     const now = new Date().toISOString();
+    const key = { postId, userEmail: email };
 
-    if (rowIdx >= 0) {
-      const sheetRow = rowIdx + 2;
-      const updates = [];
-
-      if (action === "news-read") {
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
-      }
-      if (action === "news-save") {
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!E${sheetRow}`, saved ? "TRUE" : "FALSE"));
-      }
-      if (action === "news-ack") {
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!C${sheetRow}`, "TRUE"));
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!D${sheetRow}`, now));
-        updates.push(updateCellSA(SHEET_IDS.COLLECTION, `news_interactions!F${sheetRow}`, acknowledged ? "TRUE" : "FALSE"));
-      }
-
-      if (updates.length) await Promise.all(updates);
-    } else {
-      const newRow = [
-        postId,
-        email,
-        action === "news-read" || action === "news-ack" ? "TRUE" : "FALSE",
-        action === "news-read" || action === "news-ack" ? now : "",
-        action === "news-save" ? (saved ? "TRUE" : "FALSE") : "FALSE",
-        action === "news-ack" ? (acknowledged ? "TRUE" : "FALSE") : "FALSE",
-      ];
-      await appendRowSA(SHEET_IDS.COLLECTION, "news_interactions", newRow);
+    if (action === "news-read") {
+      await upsertNewsInteraction(key, { read: true, readAt: now });
+    } else if (action === "news-save") {
+      await upsertNewsInteraction(key, { saved });
+    } else if (action === "news-ack") {
+      await upsertNewsInteraction(key, { read: true, readAt: now, acknowledged });
     }
 
     return NextResponse.json({ ok: true });
