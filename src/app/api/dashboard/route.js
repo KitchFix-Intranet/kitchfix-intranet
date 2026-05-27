@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { readSheetSA, SHEET_IDS } from "@/lib/sheets";
-import { getNewsInteractions, upsertNewsInteraction } from "@/lib/dataStore";
+import { getNewsInteractions, upsertNewsInteraction, getSubmissions } from "@/lib/dataStore";
 import { NextResponse } from "next/server";
 
 export async function GET(request) {
@@ -79,16 +79,20 @@ export async function GET(request) {
       }
     };
 
-    // Internal fetch for People Portal metrics (uses service account, separate sheet)
+    // Internal fetch for People Portal metrics. Routed through the
+    // dataStore so the dashboard's submissions read can flip to
+    // Postgres independently of the people module via the
+    // READ_FROM_POSTGRES_DASHBOARD env flag. With flags off, the
+    // dataStore's Sheets adapter does the same readSheetSA call that
+    // this code used to do directly, returning the canonical shape
+    // instead of positional rows.
     const safePeopleFetch = async () => {
       try {
-        const subs = await readSheetSA(SHEET_IDS.COLLECTION, "submissions");
+        const subs = await getSubmissions({ module: "dashboard" });
         const metrics = { pending: 0, rejected: 0, completedTotal: 0 };
-        for (const row of subs.rows) {
-          if (row.length < 9) continue;
-          const submitter = String(row[1] || "").toLowerCase().trim();
-          if (submitter !== email) continue;
-          const status = String(row[8] || "").trim();
+        for (const sub of subs) {
+          if (sub.submitter.toLowerCase().trim() !== email) continue;
+          const status = sub.status;
           if (status === "Pending") metrics.pending++;
           else if (status === "Rejected") metrics.rejected++;
           else if (status === "Complete" || status === "Approved") metrics.completedTotal++;
