@@ -1722,10 +1722,15 @@ async function upsertSubmissionSheets(token, fields) {
   }
 }
 
-async function updateSubmissionStatusSheets(token, status, notes) {
+async function updateSubmissionStatusSheets(token, status, notes, adminActionAt) {
   const sheetRow = resolveTokenSheets(token);
   // Status transition: I (status), J (notes), K (admin_action_at).
   // Three independent cell updates - matches pre-PR-B handler.
+  //
+  // adminActionAt is normally passed in by the orchestrator
+  // (updateSubmissionStatus) so the same event-moment lands in
+  // Sheets col K and PG admin_action_at. Fallback to a fresh
+  // timestamp if a future caller forgets to pass it.
   await updateCellSA(
     SHEET_IDS.COLLECTION,
     `${SUBMISSIONS_TAB}!I${sheetRow}`,
@@ -1739,7 +1744,7 @@ async function updateSubmissionStatusSheets(token, status, notes) {
   await updateCellSA(
     SHEET_IDS.COLLECTION,
     `${SUBMISSIONS_TAB}!K${sheetRow}`,
-    new Date().toISOString()
+    adminActionAt || new Date().toISOString()
   );
 }
 
@@ -1866,7 +1871,7 @@ async function upsertSubmissionPostgres(token, fields) {
   }
 }
 
-async function updateSubmissionStatusPostgres(token, status, notes) {
+async function updateSubmissionStatusPostgres(token, status, notes, adminActionAt) {
   const supabase = getServiceClient();
   const id = await resolveTokenPostgres(token);
   // Patch I/J/K columns: status, notes, admin_action_at. status is
@@ -1876,11 +1881,16 @@ async function updateSubmissionStatusPostgres(token, status, notes) {
   // (see TIMESTAMP DUAL-COLUMN DESIGN block comment - this is a
   // deliberate divergence from strict Sheets-parity which would
   // leave col A untouched on admin transitions).
+  //
+  // admin_action_at uses the orchestrator-supplied adminActionAt so
+  // it matches Sheets col K byte-for-byte. submitted_at and
+  // updated_at are PG-only metadata and stay on a fresh local now
+  // (no parallel Sheets timestamp to coordinate with).
   const now = new Date().toISOString();
   const payload = {
     status:          status || "Pending",
     notes:           notes  || "",
-    admin_action_at: now,
+    admin_action_at: adminActionAt || now,
     submitted_at:    now,
     updated_at:      now,
   };
@@ -1944,9 +1954,19 @@ export async function getSubmissionByToken(token, opts = {}) {
  * comment for the full design rationale.
  */
 export async function upsertSubmission(token, fields) {
-  await upsertSubmissionSheets(token, fields);
+  // Stamp createdAt ONCE before dispatching so both adapters write
+  // the same timestamp. Without this, each adapter independently
+  // calls new Date().toISOString() and the wall-clock between the
+  // two sequential calls (~100-300ms) becomes a drift between
+  // Sheets col A and PG created_at/submitted_at, breaking the
+  // invariant that the two stores represent the same event-moment.
+  const fieldsWithTs = {
+    ...fields,
+    createdAt: fields.createdAt || new Date().toISOString(),
+  };
+  await upsertSubmissionSheets(token, fieldsWithTs);
   if (isDualWrite(SUBMISSIONS_TAB)) {
-    await upsertSubmissionPostgres(token, fields);
+    await upsertSubmissionPostgres(token, fieldsWithTs);
   }
 }
 
@@ -1957,8 +1977,12 @@ export async function upsertSubmission(token, fields) {
  * Does NOT touch created_at or any other column.
  */
 export async function updateSubmissionStatus(token, status, notes) {
-  await updateSubmissionStatusSheets(token, status, notes);
+  // Stamp adminActionAt ONCE before dispatching so both adapters
+  // write the same event-moment to Sheets col K and PG
+  // admin_action_at. Same drift-class fix as upsertSubmission.
+  const adminActionAt = new Date().toISOString();
+  await updateSubmissionStatusSheets(token, status, notes, adminActionAt);
   if (isDualWrite(SUBMISSIONS_TAB)) {
-    await updateSubmissionStatusPostgres(token, status, notes);
+    await updateSubmissionStatusPostgres(token, status, notes, adminActionAt);
   }
 }
