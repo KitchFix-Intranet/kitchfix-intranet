@@ -8,9 +8,15 @@
 // hit based on cutover.js flags.
 //
 // Per-table logical API:
-//   getNewsInteractions({ userEmail })   - read records for a user
-//   upsertNewsInteraction({ postId, userEmail }, partial)
-//                                          - upsert with partial update
+//   news_interactions:
+//     getNewsInteractions({ userEmail })   - read records for a user
+//     upsertNewsInteraction({ postId, userEmail }, partial)
+//                                            - upsert with partial update
+//   directory module (Stage 1 module 2, PR A - DORMANT):
+//     getAccounts()                        - read all accounts
+//     upsertAccount(teamKey, partial)      - upsert with partial update
+//     getHeroImages()                      - read flat global hero list
+//     replaceHeroImages(urls)              - replace the global hero pool
 //
 // Dispatch rules (per table, via cutover.js):
 //   READ:
@@ -23,7 +29,18 @@
 // With both flags off (the default on merge), this layer is
 // Sheets-only and behaves identically to the pre-Stage-1 helpers.
 
-import { readSheetSA, appendRowSA, updateCellSA, SHEET_IDS } from "@/lib/sheets";
+import {
+  readSheetSA,
+  appendRowSA,
+  appendRowsSA,
+  updateCellSA,
+  updateRangeSA,
+  batchUpdateRangesSA,
+  clearRangeSA,
+  deleteRowSA,
+  getSheetIdSA,
+  SHEET_IDS,
+} from "@/lib/sheets";
 import { isDualWrite, isReadFromPostgres } from "@/lib/cutover";
 import { getServiceClient } from "@/lib/supabase";
 
@@ -230,5 +247,724 @@ export async function upsertNewsInteraction(key, partial) {
   // Optionally mirror to Postgres.
   if (isDualWrite(NEWS_INTERACTIONS_TAB)) {
     await upsertNewsInteractionPostgres(key, partial);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// DIRECTORY MODULE - accounts + hero_images (Stage 1 module 2 PR A)
+// ═══════════════════════════════════════════════════════════════
+//
+// DORMANT INFRASTRUCTURE: this section adds dataStore adapters
+// and shared primitives for the directory module. The directory
+// handler (src/app/api/directory/route.js) is NOT rewired in this
+// PR; that happens in PR B. With cutover flags OFF (the default
+// state on merge), nothing in this section is called and the
+// directory module behaves byte-identical to today.
+//
+// Tabs covered in PR A:
+//   accounts       - getAccounts + upsertAccount
+//   hero_images    - getHeroImages + replaceHeroImages
+//
+// Tabs deferred to PR B:
+//   contacts       - get / upsert / replaceContactsForAccount
+//   work_locations - get / upsert / deleteWorkLocation
+//
+// Three new primitives (foundation - some unused until PR B):
+//   coordinatedWrite   - multi-table Sheets-first PG-best-effort
+//   deleteRecord       - Sheets row delete + optional PG DELETE
+//   replaceScope       - replace-list flow (clear + bulk insert)
+//
+// PG schema source: docs/SHEETS_AUDIT_SYNTHESIS.md LIVE verdicts.
+// Build rule: only LIVE columns migrate. DEAD cols (accounts
+// N/O/P/Q) and REFERENCE cols (contacts H/I/J) are absent from
+// the dataStore's canonical shapes.
+
+const ACCOUNTS_TAB    = "accounts";
+const DIR_LINKS_TAB   = "dir_links";
+const HERO_IMAGES_TAB = "hero_images";
+
+
+// ───────────────────────────────────────────────────────────────
+// Accounts schema mapping
+// ───────────────────────────────────────────────────────────────
+// Sheet cols A-T -> canonical camelCase field names.
+// Cols N/O/P/Q (wifi_ssid, wifi_pass, gate_code, door_code) DROPPED
+// per audit DEAD verdict (0/12 filled in Sheet, never read by code).
+// Col T (region) is READ but NEVER WRITTEN by this dataStore. The
+// latent-blanking-risk fix from the directory design: region is
+// populated externally (Apps Script / manual), and the upsert path
+// only writes fields explicitly in the partial. region is excluded
+// from the writeable set entirely.
+// dir_links B-E (URL fields) are read from the dir_links tab and
+// joined on the Sheets path; on the PG path they are columns on
+// accounts (folded per the schema design).
+
+const ACCOUNTS_SHEET_COL = {
+  // canonical field -> Sheet col letter (writeable fields only)
+  name:              "B",
+  level:             "C",
+  city:              "D",
+  state:             "E",
+  season:            "F",
+  stadium:           "G",
+  stadiumHeaderUrl:  "H",
+  logoUrl:           "I",
+  address:           "J",
+  lat:               "K",
+  longitude:         "L",
+  timezone:          "M",
+  // N (wifi_ssid), O (wifi_pass), P (gate_code), Q (door_code) DROPPED
+  gmapUrl:           "R",
+  active:            "S",
+  // T (region) intentionally absent - never written by upsertAccount
+};
+
+// Sheet row positional indices for the READ side (0-indexed).
+// SKIPS the dead cols 13-16 (wifi/gate/door).
+const ACCOUNTS_IDX = {
+  teamKey: 0, name: 1, level: 2, city: 3, state: 4, season: 5,
+  stadium: 6, stadiumHeaderUrl: 7, logoUrl: 8, address: 9,
+  lat: 10, longitude: 11, timezone: 12,
+  // 13-16 (wifi/gate/door) intentionally absent
+  gmapUrl: 17, active: 18, region: 19,
+};
+
+// dir_links Sheet positional indices.
+const DIR_LINKS_IDX = {
+  teamKey: 0, homestandUrl: 1, slaUrl: 2,
+  serviceCalendarsUrl: 3, driveUrl: 4,
+};
+
+// Set of canonical fields that map to columns on dir_links rather
+// than accounts (in the Sheets layout). On PG these all live on
+// accounts as folded-in columns.
+const DIR_LINKS_FIELDS = new Set([
+  "homestandUrl", "slaUrl", "serviceCalendarsUrl", "driveUrl",
+]);
+
+
+// ── Type coercion: accounts.active (Sheet TRUE/FALSE strings) ──
+// The current bootstrap treats blank as TRUE (only "FALSE" is
+// falsy). Preserved here for byte-identical read behavior.
+
+function sheetActiveToBool(s) {
+  return String(s || "").trim().toUpperCase() !== "FALSE";
+}
+function boolToSheetActive(b) {
+  return b ? "TRUE" : "FALSE";
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// SHARED PRIMITIVES (foundation for directory + future modules)
+// ═══════════════════════════════════════════════════════════════
+//
+// These primitives are internal to dataStore.js. They are not
+// exported; callers compose with the per-table adapter functions
+// (getAccounts, upsertAccount, replaceHeroImages, etc.).
+
+/**
+ * Coordinated multi-table write helper.
+ *
+ * Runs operations sequentially. Each op is { name, run }; run is
+ * an async function that performs the write. On failure, the
+ * primitive LOGS LOUDLY and continues to the next op (does NOT
+ * throw mid-flight). Returns a summary { allSuccess, results }
+ * so the caller can decide how to respond to partial failure.
+ *
+ * Per directory design: Sheets is source of truth during the
+ * dual-write window. Postgres mirrors are best-effort. If a PG
+ * write fails partway through a multi-table action, the system
+ * logs the divergence (which surfaces on the next read once
+ * READ_FROM_POSTGRES is flipped) and the action continues. The
+ * Sheets state remains consistent, which is what production
+ * reads from today.
+ *
+ * Sequential (not parallel) to avoid Sheets per-doc write rate
+ * limits in the common case where multiple ops hit the same
+ * spreadsheet.
+ */
+async function coordinatedWrite(operations) {
+  const results = [];
+  for (const op of operations) {
+    try {
+      const result = await op.run();
+      results.push({ name: op.name, success: true, result });
+    } catch (e) {
+      const msg = e?.message ?? String(e);
+      results.push({ name: op.name, success: false, error: msg });
+      console.error(`[dataStore.coordinatedWrite] ${op.name} FAILED:`, msg);
+    }
+  }
+  return {
+    allSuccess: results.every((r) => r.success),
+    results,
+  };
+}
+
+/**
+ * Generic delete: removes a row from a Sheets tab (by key lookup
+ * in the specified positional column) and optionally from Postgres
+ * (by PK column name + value) if dual-write is on for the tab.
+ *
+ * Used by directory's work_locations removal (PR B) and the
+ * delete-half of replaceScope flows. Symmetric Sheets / PG
+ * semantics modulo the dual-write flag.
+ *
+ * If the key is absent from Sheets, this is treated as a no-op
+ * success rather than an error (idempotent delete).
+ */
+async function deleteRecord({
+  spreadsheetId,
+  tabName,
+  sheetsKeyColIdx,
+  key,
+  pgTable,
+  pgKeyCol,
+}) {
+  // Sheets: find row by key, delete if found
+  const { rows } = await readSheetSA(spreadsheetId, tabName);
+  const rowIdx = rows.findIndex(
+    (r) => String(r[sheetsKeyColIdx] || "").trim() === String(key).trim()
+  );
+  if (rowIdx >= 0) {
+    const tabId = await getSheetIdSA(spreadsheetId, tabName);
+    if (tabId == null) {
+      throw new Error(
+        `[dataStore.deleteRecord] could not resolve sheet gid for ${tabName}`
+      );
+    }
+    // deleteRowSA expects 0-indexed row position (header at 0).
+    // rowIdx is 0-indexed into data rows, so the actual position is rowIdx + 1.
+    await deleteRowSA(spreadsheetId, tabId, rowIdx + 1);
+  }
+
+  // Postgres: only if dual-write is on for this tab
+  if (isDualWrite(tabName)) {
+    const supabase = getServiceClient();
+    const { error } = await supabase.from(pgTable).delete().eq(pgKeyCol, key);
+    if (error) {
+      // Per directory design: log loudly, do not throw - Sheets succeeded
+      console.error(
+        `[dataStore.deleteRecord] PG delete failed (${pgTable} ${pgKeyCol}=${key}):`,
+        error.message
+      );
+    }
+  }
+}
+
+/**
+ * Replace all rows matching a scope in Sheets and (if dual-write
+ * is on) in Postgres. Used for "replace all contacts for an
+ * account" (PR B) and similar replace-list flows.
+ *
+ * Sheets path: find matching rows by positional key match, delete
+ * bottom-up (avoids index shift), then bulk-append the new set.
+ *
+ * Postgres path: DELETE WHERE scope = value (or IS NULL), then
+ * bulk INSERT new rows.
+ *
+ * scopeValue == null means "scope cell is empty in Sheets / IS
+ * NULL in Postgres" (supports the per-account future where some
+ * rows have NULL scope = global pool).
+ *
+ * Caller provides two row builders: one for Sheets (returns
+ * positional array) and one for PG (returns object). This keeps
+ * the primitive table-shape-agnostic.
+ */
+async function replaceScope({
+  spreadsheetId,
+  tabName,
+  sheetsScopeColIdx,
+  scopeValue,
+  sheetsRowBuilder,
+  pgTable,
+  pgScopeCol,
+  pgRowBuilder,
+  items,
+}) {
+  // Sheets: find matching rows, delete bottom-up, then bulk append
+  const { rows } = await readSheetSA(spreadsheetId, tabName);
+  const matchingRowIdxs = [];
+  rows.forEach((r, i) => {
+    const cellValue = String(r[sheetsScopeColIdx] || "").trim();
+    const matches =
+      scopeValue == null
+        ? cellValue === ""
+        : cellValue === String(scopeValue).trim();
+    if (matches) matchingRowIdxs.push(i + 1); // +1 to convert data-row idx to row position (header at 0)
+  });
+
+  if (matchingRowIdxs.length > 0) {
+    const tabId = await getSheetIdSA(spreadsheetId, tabName);
+    if (tabId == null) {
+      throw new Error(
+        `[dataStore.replaceScope] could not resolve sheet gid for ${tabName}`
+      );
+    }
+    // Bottom-up delete order to avoid row-index shift on the API side
+    const sorted = [...matchingRowIdxs].sort((a, b) => b - a);
+    for (const rowPos of sorted) {
+      await deleteRowSA(spreadsheetId, tabId, rowPos);
+    }
+  }
+
+  if (items.length > 0) {
+    const newRows = items.map(sheetsRowBuilder);
+    await appendRowsSA(spreadsheetId, tabName, newRows);
+  }
+
+  if (isDualWrite(tabName)) {
+    const supabase = getServiceClient();
+    let deleteQuery = supabase.from(pgTable).delete();
+    deleteQuery =
+      scopeValue == null
+        ? deleteQuery.is(pgScopeCol, null)
+        : deleteQuery.eq(pgScopeCol, scopeValue);
+    const { error: delErr } = await deleteQuery;
+    if (delErr) {
+      console.error(
+        `[dataStore.replaceScope] PG delete failed (${pgTable} scope=${scopeValue}):`,
+        delErr.message
+      );
+      return;
+    }
+    if (items.length > 0) {
+      const pgRows = items.map(pgRowBuilder);
+      const { error: insErr } = await supabase.from(pgTable).insert(pgRows);
+      if (insErr) {
+        console.error(
+          `[dataStore.replaceScope] PG insert failed (${pgTable}):`,
+          insErr.message
+        );
+      }
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ACCOUNTS adapters
+// ═══════════════════════════════════════════════════════════════
+//
+// Canonical record shape (what handlers consume; same for both
+// Sheets and PG read paths):
+//   {
+//     teamKey, name, level, city, state, season, stadium,
+//     stadiumHeaderUrl, logoUrl, address, lat, longitude, timezone,
+//     gmapUrl, active (boolean), region,
+//     homestandUrl, slaUrl, serviceCalendarsUrl, driveUrl,
+//   }
+//
+// Notes:
+//   * active is a boolean in the canonical shape (TRUE/FALSE strings
+//     are coerced at the Sheets boundary; PG stores as BOOLEAN).
+//   * region is READ but NOT WRITTEN by upsertAccount. To change
+//     region, the caller must update the Sheet directly (today) or
+//     write a separate updateRegion primitive (future).
+//   * lat / longitude are TEXT throughout (mirrors Sheet storage;
+//     dataStore is identity-coercion for these).
+
+// ── Sheets adapter ──
+
+async function readAccountsSheets() {
+  const [accountsRes, dirLinksRes] = await Promise.all([
+    readSheetSA(SHEET_IDS.HUB, ACCOUNTS_TAB),
+    readSheetSA(SHEET_IDS.HUB, DIR_LINKS_TAB),
+  ]);
+
+  // Build dir_links lookup by team_key for the join
+  const dirLinksByKey = new Map();
+  for (const r of dirLinksRes.rows) {
+    const key = String(r[DIR_LINKS_IDX.teamKey] || "").trim();
+    if (!key) continue;
+    dirLinksByKey.set(key, {
+      homestandUrl:        String(r[DIR_LINKS_IDX.homestandUrl]        || "").trim(),
+      slaUrl:              String(r[DIR_LINKS_IDX.slaUrl]              || "").trim(),
+      serviceCalendarsUrl: String(r[DIR_LINKS_IDX.serviceCalendarsUrl] || "").trim(),
+      driveUrl:            String(r[DIR_LINKS_IDX.driveUrl]            || "").trim(),
+    });
+  }
+
+  return accountsRes.rows
+    .filter((r) => String(r[ACCOUNTS_IDX.teamKey] || "").trim())
+    .map((r) => {
+      const teamKey = String(r[ACCOUNTS_IDX.teamKey] || "").trim();
+      const links = dirLinksByKey.get(teamKey) || {};
+      return {
+        teamKey,
+        name:             String(r[ACCOUNTS_IDX.name]             || "").trim(),
+        level:            String(r[ACCOUNTS_IDX.level]            || "").trim(),
+        city:             String(r[ACCOUNTS_IDX.city]             || "").trim(),
+        state:            String(r[ACCOUNTS_IDX.state]            || "").trim(),
+        season:           String(r[ACCOUNTS_IDX.season]           || "").trim(),
+        stadium:          String(r[ACCOUNTS_IDX.stadium]          || "").trim(),
+        stadiumHeaderUrl: String(r[ACCOUNTS_IDX.stadiumHeaderUrl] || "").trim(),
+        logoUrl:          String(r[ACCOUNTS_IDX.logoUrl]          || "").trim(),
+        address:          String(r[ACCOUNTS_IDX.address]          || "").trim(),
+        lat:              String(r[ACCOUNTS_IDX.lat]              || "").trim(),
+        longitude:        String(r[ACCOUNTS_IDX.longitude]        || "").trim(),
+        timezone:         String(r[ACCOUNTS_IDX.timezone]         || "").trim(),
+        gmapUrl:          String(r[ACCOUNTS_IDX.gmapUrl]          || "").trim(),
+        active:           sheetActiveToBool(r[ACCOUNTS_IDX.active]),
+        region:           String(r[ACCOUNTS_IDX.region]           || "").trim(),
+        homestandUrl:        links.homestandUrl        || "",
+        slaUrl:              links.slaUrl              || "",
+        serviceCalendarsUrl: links.serviceCalendarsUrl || "",
+        driveUrl:            links.driveUrl            || "",
+      };
+    });
+}
+
+async function upsertAccountSheets(teamKey, partial) {
+  const { rows: accountRows } = await readSheetSA(SHEET_IDS.HUB, ACCOUNTS_TAB);
+  const rowIdx = accountRows.findIndex(
+    (r) => String(r[ACCOUNTS_IDX.teamKey] || "").trim() === teamKey
+  );
+
+  if (rowIdx >= 0) {
+    // Existing row: collect per-field updates and fire ONE
+    // batchUpdateRangesSA call. ONLY provided fields are written.
+    // Cols N/O/P/Q (dead) and col T (region) are never touched -
+    // that is the latent-blanking-risk fix.
+    // Batch vs Promise.all: 18 fields = 18 writes/save on parallel;
+    // batchUpdateRangesSA collapses to 1 API call, avoiding the
+    // Sheets per-user 60-write/min rate limit and aligning with the
+    // coordinatedWrite design (sequential, single-doc-safe).
+    const sheetRow = rowIdx + 2; // +1 header + 1-indexed
+    const updates = [];
+
+    const queueField = (field, value) => {
+      const col = ACCOUNTS_SHEET_COL[field];
+      if (!col) return;
+      updates.push({
+        range: `${ACCOUNTS_TAB}!${col}${sheetRow}`,
+        values: [[value]],
+      });
+    };
+
+    if ("name" in partial)             queueField("name",             partial.name || "");
+    if ("level" in partial)            queueField("level",            partial.level || "");
+    if ("city" in partial)             queueField("city",             partial.city || "");
+    if ("state" in partial)            queueField("state",            partial.state || "");
+    if ("season" in partial)           queueField("season",           partial.season || "");
+    if ("stadium" in partial)          queueField("stadium",          partial.stadium || "");
+    if ("stadiumHeaderUrl" in partial) queueField("stadiumHeaderUrl", partial.stadiumHeaderUrl || "");
+    if ("logoUrl" in partial)          queueField("logoUrl",          partial.logoUrl || "");
+    if ("address" in partial)          queueField("address",          partial.address || "");
+    if ("lat" in partial)              queueField("lat",              partial.lat || "");
+    if ("longitude" in partial)        queueField("longitude",        partial.longitude || "");
+    if ("timezone" in partial)         queueField("timezone",         partial.timezone || "");
+    if ("gmapUrl" in partial)          queueField("gmapUrl",          partial.gmapUrl || "");
+    if ("active" in partial)           queueField("active",           boolToSheetActive(partial.active));
+    // region intentionally NOT queued
+
+    if (updates.length > 0) {
+      await batchUpdateRangesSA(SHEET_IDS.HUB, updates);
+    }
+  } else {
+    // New account: append a row covering A-R (18 cells) for parity
+    // with the current handler's admin-add-account append. Col S
+    // (active) is left blank; the dataStore's sheetActiveToBool
+    // coercion reads blank as TRUE, matching today's behavior.
+    // Cols N/O/P/Q (dead) appear as blank padding to preserve
+    // column alignment in the Sheet. Col T (region) is also blank
+    // (set externally by Apps Script / manual entry after creation).
+    const newRow = [
+      teamKey,                                                   // A
+      partial.name             || "",                            // B
+      partial.level            || "",                            // C
+      partial.city             || "",                            // D
+      partial.state            || "",                            // E
+      partial.season           || "",                            // F
+      partial.stadium          || "",                            // G
+      partial.stadiumHeaderUrl || "",                            // H
+      partial.logoUrl          || "",                            // I
+      partial.address          || "",                            // J
+      partial.lat              || "",                            // K
+      partial.longitude        || "",                            // L
+      partial.timezone         || "",                            // M
+      "", "", "", "",                                            // N-Q dead padding
+      partial.gmapUrl          || "",                            // R
+    ];
+    await appendRowSA(SHEET_IDS.HUB, ACCOUNTS_TAB, newRow);
+  }
+
+  // dir_links upsert (separate tab on the Sheets path)
+  const hasDirLinks =
+    "homestandUrl"        in partial ||
+    "slaUrl"              in partial ||
+    "serviceCalendarsUrl" in partial ||
+    "driveUrl"            in partial;
+  if (hasDirLinks) {
+    await upsertDirLinksSheets(teamKey, partial);
+  }
+}
+
+// Helper: upsert dir_links row for a team (Sheets path only; on PG
+// path these fields are columns on accounts and are written in
+// upsertAccountPostgres directly).
+async function upsertDirLinksSheets(teamKey, partial) {
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, DIR_LINKS_TAB);
+  const idx = rows.findIndex(
+    (r) => String(r[DIR_LINKS_IDX.teamKey] || "").trim() === teamKey
+  );
+
+  if (idx >= 0) {
+    // Existing dir_links row: batch up to 4 cell updates into one
+    // API call (same rationale as upsertAccountSheets).
+    const sheetRow = idx + 2;
+    const updates = [];
+    if ("homestandUrl" in partial)
+      updates.push({ range: `${DIR_LINKS_TAB}!B${sheetRow}`, values: [[partial.homestandUrl || ""]] });
+    if ("slaUrl" in partial)
+      updates.push({ range: `${DIR_LINKS_TAB}!C${sheetRow}`, values: [[partial.slaUrl || ""]] });
+    if ("serviceCalendarsUrl" in partial)
+      updates.push({ range: `${DIR_LINKS_TAB}!D${sheetRow}`, values: [[partial.serviceCalendarsUrl || ""]] });
+    if ("driveUrl" in partial)
+      updates.push({ range: `${DIR_LINKS_TAB}!E${sheetRow}`, values: [[partial.driveUrl || ""]] });
+    if (updates.length > 0) {
+      await batchUpdateRangesSA(SHEET_IDS.HUB, updates);
+    }
+  } else {
+    const newRow = [
+      teamKey,
+      partial.homestandUrl        || "",
+      partial.slaUrl              || "",
+      partial.serviceCalendarsUrl || "",
+      partial.driveUrl            || "",
+    ];
+    await appendRowSA(SHEET_IDS.HUB, DIR_LINKS_TAB, newRow);
+  }
+}
+
+// ── Postgres adapter ──
+
+async function readAccountsPostgres() {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("accounts")
+    .select(
+      "team_key, name, level, city, state, season, stadium_name, " +
+      "stadium_header_url, logo_url, address, lat, longitude, timezone, " +
+      "gmap_url, active, region, " +
+      "homestand_url, sla_url, service_calendars_url, drive_url"
+    );
+  if (error) {
+    throw new Error(`[dataStore.pg] getAccounts: ${error.message}`);
+  }
+  return (data || []).map((row) => ({
+    teamKey:             row.team_key,
+    name:                row.name              || "",
+    level:               row.level             || "",
+    city:                row.city              || "",
+    state:               row.state             || "",
+    season:              row.season            || "",
+    stadium:             row.stadium_name      || "",
+    stadiumHeaderUrl:    row.stadium_header_url|| "",
+    logoUrl:             row.logo_url          || "",
+    address:             row.address           || "",
+    lat:                 row.lat               || "",
+    longitude:           row.longitude         || "",
+    timezone:            row.timezone          || "",
+    gmapUrl:             row.gmap_url          || "",
+    active:              !!row.active,
+    region:              row.region            || "",
+    homestandUrl:        row.homestand_url        || "",
+    slaUrl:              row.sla_url              || "",
+    serviceCalendarsUrl: row.service_calendars_url|| "",
+    driveUrl:            row.drive_url            || "",
+  }));
+}
+
+async function upsertAccountPostgres(teamKey, partial) {
+  const supabase = getServiceClient();
+  const payload = { team_key: teamKey };
+
+  if ("name" in partial)                payload.name                  = partial.name || "";
+  if ("level" in partial)               payload.level                 = partial.level || "";
+  if ("city" in partial)                payload.city                  = partial.city || "";
+  if ("state" in partial)               payload.state                 = partial.state || "";
+  if ("season" in partial)              payload.season                = partial.season || "";
+  if ("stadium" in partial)             payload.stadium_name          = partial.stadium || "";
+  if ("stadiumHeaderUrl" in partial)    payload.stadium_header_url    = partial.stadiumHeaderUrl || "";
+  if ("logoUrl" in partial)             payload.logo_url              = partial.logoUrl || "";
+  if ("address" in partial)             payload.address               = partial.address || "";
+  if ("lat" in partial)                 payload.lat                   = partial.lat || "";
+  if ("longitude" in partial)           payload.longitude             = partial.longitude || "";
+  if ("timezone" in partial)            payload.timezone              = partial.timezone || "";
+  if ("gmapUrl" in partial)             payload.gmap_url              = partial.gmapUrl || "";
+  if ("active" in partial)              payload.active                = !!partial.active;
+  // region intentionally NOT in payload (latent blanking fix; matches Sheets behavior)
+  if ("homestandUrl" in partial)        payload.homestand_url         = partial.homestandUrl || "";
+  if ("slaUrl" in partial)              payload.sla_url               = partial.slaUrl || "";
+  if ("serviceCalendarsUrl" in partial) payload.service_calendars_url = partial.serviceCalendarsUrl || "";
+  if ("driveUrl" in partial)            payload.drive_url             = partial.driveUrl || "";
+
+  payload.updated_at = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("accounts")
+    .upsert(payload, { onConflict: "team_key", ignoreDuplicates: false });
+  if (error) {
+    throw new Error(`[dataStore.pg] upsertAccount: ${error.message}`);
+  }
+}
+
+// ── Public API: dispatched by cutover flags ──
+
+/**
+ * Read all accounts as an array of canonical records.
+ *
+ * With READ_FROM_POSTGRES off for accounts (default): reads from
+ * Sheets (accounts tab + dir_links tab, joined by team_key).
+ * With READ_FROM_POSTGRES on: reads from Postgres (folded shape).
+ *
+ * Either path returns the same canonical record shape.
+ */
+export async function getAccounts() {
+  if (isReadFromPostgres(ACCOUNTS_TAB)) {
+    return readAccountsPostgres();
+  }
+  return readAccountsSheets();
+}
+
+/**
+ * Upsert an account by team_key with a partial update.
+ *
+ *   teamKey: the natural PK (e.g. "CIN - OH")
+ *   partial: any subset of the writeable canonical fields:
+ *     name, level, city, state, season, stadium, stadiumHeaderUrl,
+ *     logoUrl, address, lat, longitude, timezone, gmapUrl, active,
+ *     homestandUrl, slaUrl, serviceCalendarsUrl, driveUrl
+ *
+ * NOT WRITEABLE here: region (latent-blanking-risk fix; region is
+ * populated externally).
+ *
+ * Always writes to Sheets (the rollback target). With DUAL_WRITE_TABLES
+ * on for accounts: ALSO writes to Postgres.
+ */
+export async function upsertAccount(teamKey, partial) {
+  await upsertAccountSheets(teamKey, partial);
+  if (isDualWrite(ACCOUNTS_TAB)) {
+    await upsertAccountPostgres(teamKey, partial);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// HERO_IMAGES adapters
+// ═══════════════════════════════════════════════════════════════
+//
+// Canonical record shape: { url, teamKey, ordinal }
+// In this build, teamKey is ALWAYS NULL on write (dormant per-
+// account infrastructure - see PG schema notes in DDL).
+//
+// Sheets shape: flat single column (col A holds URLs).
+// PG shape: rows with (id UUID, team_key NULL today, url, ordinal).
+
+// ── Sheets adapter ──
+
+async function readHeroImagesSheets() {
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, HERO_IMAGES_TAB);
+  return rows
+    .map((r) => String(r[0] || "").trim())
+    .filter(Boolean)
+    .map((url) => ({ url, teamKey: null, ordinal: null }));
+}
+
+async function replaceHeroImagesSheets(urls) {
+  await clearRangeSA(SHEET_IDS.HUB, `${HERO_IMAGES_TAB}!A:A`);
+  if (urls.length > 0) {
+    await updateRangeSA(
+      SHEET_IDS.HUB,
+      `${HERO_IMAGES_TAB}!A1`,
+      urls.map((u) => [u])
+    );
+  }
+}
+
+// ── Postgres adapter ──
+
+async function readHeroImagesPostgres() {
+  // PR A: read only the global pool (team_key IS NULL). Per-account
+  // is dormant infrastructure; future PR adds account-scoped reads.
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("hero_images")
+    .select("url, team_key, ordinal")
+    .is("team_key", null);
+  if (error) {
+    throw new Error(`[dataStore.pg] getHeroImages: ${error.message}`);
+  }
+  return (data || []).map((row) => ({
+    url:     row.url,
+    teamKey: row.team_key,
+    ordinal: row.ordinal,
+  }));
+}
+
+async function replaceHeroImagesPostgres(urls) {
+  const supabase = getServiceClient();
+  // Delete the global pool (team_key IS NULL); per-account rows
+  // are not touched (none exist today; future PR may add some).
+  const { error: delErr } = await supabase
+    .from("hero_images")
+    .delete()
+    .is("team_key", null);
+  if (delErr) {
+    console.error(
+      `[dataStore.pg] replaceHeroImages: PG delete failed:`,
+      delErr.message
+    );
+    return;
+  }
+  if (urls.length > 0) {
+    // team_key always NULL in this build (dormant per-account infra)
+    const rows = urls.map((url) => ({ url, team_key: null, ordinal: null }));
+    const { error: insErr } = await supabase.from("hero_images").insert(rows);
+    if (insErr) {
+      console.error(
+        `[dataStore.pg] replaceHeroImages: PG insert failed:`,
+        insErr.message
+      );
+    }
+  }
+}
+
+// ── Public API: dispatched by cutover flags ──
+
+/**
+ * Read all hero images. Returns array of { url, teamKey, ordinal }.
+ *
+ * In this build, all returned rows have teamKey = null (global pool).
+ * Per-account rows are dormant infrastructure for a future feature.
+ *
+ * With READ_FROM_POSTGRES off (default): reads from Sheets.
+ * With it on: reads from Postgres (filtered to team_key IS NULL).
+ */
+export async function getHeroImages() {
+  if (isReadFromPostgres(HERO_IMAGES_TAB)) {
+    return readHeroImagesPostgres();
+  }
+  return readHeroImagesSheets();
+}
+
+/**
+ * Replace the global hero pool with a new list of URLs.
+ *
+ *   urls: array of URL strings (may be empty)
+ *
+ * Sheets: clear col A then write the new list down from A1.
+ * Postgres (if dual-write on): DELETE WHERE team_key IS NULL,
+ * then INSERT new rows with team_key = NULL.
+ *
+ * Per-account hero rows (future) are NOT touched by this function.
+ */
+export async function replaceHeroImages(urls) {
+  await replaceHeroImagesSheets(urls);
+  if (isDualWrite(HERO_IMAGES_TAB)) {
+    await replaceHeroImagesPostgres(urls);
   }
 }
