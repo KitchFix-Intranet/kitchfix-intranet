@@ -1497,30 +1497,50 @@ export async function deleteWorkLocation(teamKey) {
 //   UUID directly to the frontend, deprecate "sub-{N}" tokens. Keep
 //   them for backwards compatibility during the cutover window.
 //
-// CREATED_AT STABILITY (DESIGN NOTE - flag for review):
-//   On Sheets path, col A (TIMESTAMP) is OVERWRITTEN with a fresh
-//   timestamp on every edit (admin-update via submit-newhire/paf with
-//   isEdit=true). This means today's "createdAt" semantically is
-//   "last submitted/edited timestamp" for rows that have been edited,
-//   not the original creation.
+// TIMESTAMP DUAL-COLUMN DESIGN (created_at + submitted_at):
+//   The Sheet has ONE timestamp column (col A) that mirrors two
+//   logically-distinct semantics:
+//     - "when this submission was first created" (immutable origin)
+//     - "when this submission was last submitted/edited" (mutable activity)
+//   The pre-migration handler overwrites col A on every edit
+//   (submit-newhire/paf with isEdit=true), conflating the two.
+//   PG splits this into two columns so the data model is clean AND
+//   user-facing display behavior is byte-identical at cutover.
 //
-//   On Postgres path, this dataStore intentionally does NOT update
-//   created_at on edits. Reasoning: the token math (OFFSET in
-//   created_at ASC) depends on stable ordering. If created_at moved
-//   on every edit, edited rows would shift to the end of the
-//   ordering and break the sub-{N} -> row mapping.
+//     created_at    immutable. Set once on first INSERT. Drives the
+//                   sub-{N} token math (OFFSET in created_at ASC).
+//                   Never updated.
+//     submitted_at  mutable. Mirrors the Sheets col A "last touched"
+//                   semantic. Updated on every upsertSubmission edit
+//                   (matching today's full-row Sheets writes) AND on
+//                   every updateSubmissionStatus transition (per the
+//                   design call: status transitions count as activity).
 //
-//   Consequence: after the PG cutover (READ_FROM_POSTGRES_PEOPLE flip),
-//   the displayed "submitted on X" date for rows that have been
-//   re-submitted post-rejection will show the ORIGINAL creation date,
-//   not the last-edit date. For new submissions never edited, the
-//   displayed date matches today exactly.
+//   On the Sheets path, col A is the only timestamp source, so the
+//   canonical record exposes BOTH createdAt and submittedAt as the
+//   SAME value (col A). The Sheets path cannot tell them apart.
 //
-//   This is a subtle user-facing change at cutover time. Flagging for
-//   explicit ack: if we want strict byte-identity here, the schema
-//   needs a separate "last_submitted_at" column and the canonical
-//   shape exposes that as createdAt. Not done in PR A; can be added
-//   in a follow-up if needed before the cutover step.
+//   On the PG path, the two columns diverge intentionally:
+//     - Token math reads created_at (stable ordering preserved)
+//     - The canonical createdAt field reads created_at
+//     - The canonical submittedAt field reads submitted_at
+//
+//   USER-FACING IMPACT AT CUTOVER:
+//   The frontend's "submitted on X" date should display submittedAt,
+//   NOT createdAt. With submittedAt populated correctly on every
+//   write, the displayed date matches today's Sheets behavior
+//   exactly. No user-facing divergence.
+//
+//   STATUS TRANSITION NOTE:
+//   In the Sheets handler, admin-process / withdraw / cancel write to
+//   cols I/J/K only; they do NOT touch col A. Strict Sheets-parity
+//   would mean submitted_at also not updated on those transitions.
+//   We deliberately diverge here: updateSubmissionStatus on PG bumps
+//   submitted_at. The data-model argument (activity tracking) was
+//   chosen over strict Sheets-parity. Frontend impact is minimal
+//   (the displayed date may shift slightly forward when an admin
+//   processes a row, vs Sheets where it would have stayed at the
+//   submit time).
 //
 // STATUS DEFAULT GOTCHA (PG semantics):
 //   The PG column has DEFAULT 'Pending'. This default fires ONLY on
@@ -1629,10 +1649,18 @@ async function resolveTokenPostgres(token) {
 
 // Build canonical record from a Sheets row array + its 0-indexed
 // position in the rows array (used to compute the sub-{N} token).
+//
+// TIMESTAMP NOTE: on the Sheets path, col A is the only timestamp
+// source. createdAt and submittedAt are exposed as the SAME value
+// (col A); the Sheets path cannot tell them apart. On the PG path
+// they diverge intentionally - see the TIMESTAMP DUAL-COLUMN DESIGN
+// block comment above for full details.
 function canonicalFromSheetsRow(r, dataIdx) {
+  const ts = String(r[SUBMISSIONS_IDX.timestamp] || "");
   return {
     token:       `sub-${dataIdx + 2}`,  // header at row 1; first data row = sub-2
-    createdAt:   String(r[SUBMISSIONS_IDX.timestamp]  || ""),
+    createdAt:   ts,
+    submittedAt: ts,                    // same as createdAt on Sheets path
     submitter:   String(r[SUBMISSIONS_IDX.submitter]  || ""),
     module:      String(r[SUBMISSIONS_IDX.module]     || ""),
     employee:    String(r[SUBMISSIONS_IDX.employee]   || ""),
@@ -1683,9 +1711,11 @@ async function upsertSubmissionSheets(token, fields) {
   } else {
     // Existing - update A:J range at the resolved Sheet row.
     // NOTE: this overwrites col A (TIMESTAMP) with the new timestamp,
-    // matching pre-PR-B handler behavior on isEdit. See the
-    // "CREATED_AT STABILITY" design note above for the PG-side
-    // divergence this introduces.
+    // matching pre-PR-B handler behavior on isEdit. The Sheets path
+    // exposes that updated col A as BOTH createdAt and submittedAt
+    // in the canonical record (the Sheet has only one timestamp
+    // column). See the TIMESTAMP DUAL-COLUMN DESIGN block comment
+    // for how PG splits this into two columns.
     const sheetRow = resolveTokenSheets(token);
     const range = `${SUBMISSIONS_TAB}!A${sheetRow}:J${sheetRow}`;
     await updateRangeSA(SHEET_IDS.COLLECTION, range, [row]);
@@ -1718,10 +1748,17 @@ async function updateSubmissionStatusSheets(token, status, notes) {
 // Build canonical record from a PG row + its 0-indexed position in
 // the ORDER BY created_at ASC result set. The position determines
 // the sub-{N} token.
+//
+// TIMESTAMP NOTE: createdAt and submittedAt are distinct on the PG
+// path. created_at is immutable (drives token math); submitted_at
+// is mutable (matches the Sheets col A "last touched" semantic).
+// See the TIMESTAMP DUAL-COLUMN DESIGN block comment for the full
+// rationale.
 function canonicalFromPgRow(row, dataIdx) {
   return {
     token:       `sub-${dataIdx + 2}`,
     createdAt:   row.created_at || "",
+    submittedAt: row.submitted_at || "",  // mutable, matches Sheets col A
     submitter:   row.submitter_email || "",
     module:      row.module || "",
     employee:    row.employee_name || "",
@@ -1741,8 +1778,9 @@ async function readSubmissionsPostgres() {
   const { data, error } = await supabase
     .from(SUBMISSIONS_TAB)
     .select(
-      "id, created_at, submitter_email, module, employee_name, " +
-        "location, action_type, effective_date, payload, status, notes"
+      "id, created_at, submitted_at, submitter_email, module, " +
+        "employee_name, location, action_type, effective_date, " +
+        "payload, status, notes"
     )
     .order("created_at", { ascending: true });
   if (error) {
@@ -1759,8 +1797,9 @@ async function readSubmissionByTokenPostgres(token) {
   const { data, error } = await supabase
     .from(SUBMISSIONS_TAB)
     .select(
-      "id, created_at, submitter_email, module, employee_name, " +
-        "location, action_type, effective_date, payload, status, notes"
+      "id, created_at, submitted_at, submitter_email, module, " +
+        "employee_name, location, action_type, effective_date, " +
+        "payload, status, notes"
     )
     .order("created_at", { ascending: true })
     .range(offset, offset);
@@ -1797,8 +1836,13 @@ async function upsertSubmissionPostgres(token, fields) {
   }
 
   if (token === null || token === undefined) {
-    // New submission - INSERT with fresh created_at.
-    payload.created_at = fields.createdAt || new Date().toISOString();
+    // New submission - INSERT. Set BOTH created_at and submitted_at
+    // to the same timestamp (the row's origin moment). created_at
+    // never changes after this; submitted_at can be bumped on edits
+    // and status transitions.
+    const ts = fields.createdAt || new Date().toISOString();
+    payload.created_at = ts;
+    payload.submitted_at = ts;
     const { error } = await supabase.from(SUBMISSIONS_TAB).insert(payload);
     if (error) {
       throw new Error(`[dataStore.pg] upsertSubmission insert: ${error.message}`);
@@ -1806,7 +1850,11 @@ async function upsertSubmissionPostgres(token, fields) {
   } else {
     // Existing - resolve UUID via token offset, then UPDATE everything
     // EXCEPT created_at (preserving the stable ordering that the token
-    // math relies on; see CREATED_AT STABILITY design note above).
+    // math relies on). DO bump submitted_at to now() - this is the
+    // mutable "last submitted/edited" timestamp that mirrors Sheets
+    // col A behavior. See the TIMESTAMP DUAL-COLUMN DESIGN block
+    // comment for the full design rationale.
+    payload.submitted_at = new Date().toISOString();
     const id = await resolveTokenPostgres(token);
     const { error } = await supabase
       .from(SUBMISSIONS_TAB)
@@ -1824,11 +1872,17 @@ async function updateSubmissionStatusPostgres(token, status, notes) {
   // Patch I/J/K columns: status, notes, admin_action_at. status is
   // expected non-empty here (it's a transition write; "Pending" or
   // similar terminal value), but defensive coerce just in case.
+  // Also bump submitted_at: status transitions count as activity
+  // (see TIMESTAMP DUAL-COLUMN DESIGN block comment - this is a
+  // deliberate divergence from strict Sheets-parity which would
+  // leave col A untouched on admin transitions).
+  const now = new Date().toISOString();
   const payload = {
-    status: status || "Pending",
-    notes:  notes  || "",
-    admin_action_at: new Date().toISOString(),
-    updated_at:      new Date().toISOString(),
+    status:          status || "Pending",
+    notes:           notes  || "",
+    admin_action_at: now,
+    submitted_at:    now,
+    updated_at:      now,
   };
   const { error } = await supabase
     .from(SUBMISSIONS_TAB)
@@ -1884,9 +1938,10 @@ export async function getSubmissionByToken(token, opts = {}) {
  * includes "submissions", also writes to Postgres.
  *
  * On Sheets path, updates overwrite col A with a fresh timestamp
- * (matches pre-PR-B behavior). On PG path, updates preserve
- * created_at (token math stability). See CREATED_AT STABILITY
- * design note above for the divergence this introduces at read time.
+ * (matches pre-PR-B behavior). On PG path, created_at is set ONCE
+ * on INSERT and never changed; submitted_at is set on INSERT and
+ * bumped on every UPDATE. See TIMESTAMP DUAL-COLUMN DESIGN block
+ * comment for the full design rationale.
  */
 export async function upsertSubmission(token, fields) {
   await upsertSubmissionSheets(token, fields);
