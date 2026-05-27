@@ -20,6 +20,12 @@ import {
   buildIncidentPdf,
 } from "@/lib/incidentActions";
 import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRangeSA, getServiceAccountSheetsClient, SHEET_IDS } from "@/lib/sheets";
+import {
+  getSubmissions,
+  getSubmissionByToken,
+  upsertSubmission,
+  updateSubmissionStatus,
+} from "@/lib/dataStore";
 import { sendEmailSA } from "@/lib/gmail";
 
 // ═══════════════════════════════════════
@@ -381,7 +387,7 @@ if (action === "bootstrap") {
                   readSheetSA(SHEET_IDS.HUB, SHEETS.ACCOUNTS),
         readSheetSA(SHEET_IDS.HUB, SHEETS.CONTACTS),
         readSheetSA(SHEET_IDS.HUB, SHEETS.ADMINS),
-        readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS),
+        getSubmissions({ module: "people" }),
         readSheetSA(SHEET_IDS.HUB, SHEETS.HERO),
         readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS),
       ]);
@@ -394,10 +400,10 @@ if (action === "bootstrap") {
       );
 
       const counts = { paf: 0, newHire: 0, actionRequired: 0, completedTotal: 0 };
-      submissions.rows.forEach((row) => {
-        if (String(row[SUB.SUBMITTER] || "").toLowerCase().trim() !== userEmail.toLowerCase()) return;
-        const module = String(row[SUB.MODULE] || "");
-        const status = String(row[SUB.STATUS] || "Pending");
+      submissions.forEach((sub) => {
+        if (sub.submitter.toLowerCase().trim() !== userEmail.toLowerCase()) return;
+        const module = sub.module;
+        const status = sub.status;
         if (/Rejected|Action/i.test(status)) counts.actionRequired++;
         else if (/Pending/i.test(status)) {
           if (module === "newhire") counts.newHire++;
@@ -510,28 +516,29 @@ if (action === "bootstrap") {
     }
 
     if (action === "history") {
-      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
+      const submissions = await getSubmissions({ module: "people" });
 
       const history = [];
 
-      rows.forEach((row, i) => {
-        if (String(row[SUB.SUBMITTER] || "").toLowerCase().trim() !== userEmail.toLowerCase()) return;
-        const module = String(row[SUB.MODULE] || "paf");
-        const employeeName = String(row[SUB.EMPLOYEE] || "");
-        const actionType = String(row[SUB.ACTION_TYPE] || "");
-        const status = String(row[SUB.STATUS] || "Pending");
-        const notes = String(row[SUB.NOTES] || "");
-        const payload = row[SUB.PAYLOAD] && String(row[SUB.PAYLOAD]).startsWith("{") ? row[SUB.PAYLOAD] : "{}";
+      submissions.forEach((sub) => {
+        if (sub.submitter.toLowerCase().trim() !== userEmail.toLowerCase()) return;
+        const module = sub.module || "paf";
+        const employeeName = sub.employee;
+        const actionType = sub.actionType;
+        const status = sub.status;
+        const notes = sub.notes;
+        const payload = sub.payload && sub.payload.startsWith("{") ? sub.payload : "{}";
 
         // Build subtitle from action type or module
         let subtitle = actionType;
         if (module === "newhire") subtitle = "New Hire Onboarding";
 
+        const rowIndex = parseInt(sub.token.slice("sub-".length), 10);
         history.push({
-          id: "sub-" + (i + 2),
-          rowIndex: i + 2,
+          id: sub.token,
+          rowIndex,
           module,
-          date: row[SUB.TIMESTAMP] ? new Date(row[SUB.TIMESTAMP]).toISOString() : new Date().toISOString(),
+          date: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
           title: employeeName || "Request",
           subtitle,
           status,
@@ -622,18 +629,18 @@ rows.forEach((row, i) => {
     }
 
     if (action === "admin-queue") {
-      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
+      const submissions = await getSubmissions({ module: "people" });
 
       const queue = [];
 
-      rows.forEach((row, i) => {
-        const status = String(row[SUB.STATUS] || "Pending").trim().toLowerCase();
+      submissions.forEach((sub) => {
+        const status = sub.status.trim().toLowerCase();
         if (status !== "pending") return;
 
-        const module = String(row[SUB.MODULE] || "paf");
-        const employeeName = String(row[SUB.EMPLOYEE] || "");
-        const actionType = String(row[SUB.ACTION_TYPE] || "");
-        const payload = row[SUB.PAYLOAD] && String(row[SUB.PAYLOAD]).startsWith("{") ? row[SUB.PAYLOAD] : "{}";
+        const module = sub.module || "paf";
+        const employeeName = sub.employee;
+        const actionType = sub.actionType;
+        const payload = sub.payload && sub.payload.startsWith("{") ? sub.payload : "{}";
 
         // Build subtitle
         let subtitle = actionType;
@@ -645,13 +652,13 @@ rows.forEach((row, i) => {
         }
 
         queue.push({
-          id: "sub-" + (i + 2),
+          id: sub.token,
           type: module,
-          submitter: String(row[SUB.SUBMITTER] || ""),
-          location: String(row[SUB.LOCATION] || "Unknown"),
+          submitter: sub.submitter,
+          location: sub.location || "Unknown",
           title: employeeName || "Request",
           subtitle,
-          date: row[SUB.TIMESTAMP] ? new Date(row[SUB.TIMESTAMP]).toISOString() : new Date().toISOString(),
+          date: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
           details: payload,
         });
       });
@@ -712,18 +719,18 @@ return NextResponse.json({ success: true, queue });
       // ── Submissions: PAFs + New Hires that are no longer pending ──
       // (Approved / Complete / Rejected — anything that's left the active queue)
       try {
-        const { rows: subRows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
-        if (subRows) {
-          subRows.forEach((row, i) => {
-            const status = String(row[SUB.STATUS] || "Pending").trim();
+        const submissions = await getSubmissions({ module: "people" });
+        if (submissions) {
+          submissions.forEach((sub) => {
+            const status = sub.status.trim();
             const statusLower = status.toLowerCase();
             // Closed = not pending. Action Required is still an open state.
             if (statusLower === "pending" || /action/i.test(status)) return;
 
-            const module = String(row[SUB.MODULE] || "paf");
-            const employeeName = String(row[SUB.EMPLOYEE] || "");
-            const actionType = String(row[SUB.ACTION_TYPE] || "");
-            const payload = row[SUB.PAYLOAD] && String(row[SUB.PAYLOAD]).startsWith("{") ? row[SUB.PAYLOAD] : "{}";
+            const module = sub.module || "paf";
+            const employeeName = sub.employee;
+            const actionType = sub.actionType;
+            const payload = sub.payload && sub.payload.startsWith("{") ? sub.payload : "{}";
 
             let subtitle = actionType;
             if (module === "newhire") {
@@ -734,13 +741,13 @@ return NextResponse.json({ success: true, queue });
             }
 
             queue.push({
-              id: "sub-" + (i + 2),
+              id: sub.token,
               type: module,
-              submitter: String(row[SUB.SUBMITTER] || ""),
-              location: String(row[SUB.LOCATION] || "Unknown"),
+              submitter: sub.submitter,
+              location: sub.location || "Unknown",
               title: employeeName || "Request",
               subtitle,
-              date: row[SUB.TIMESTAMP] ? new Date(row[SUB.TIMESTAMP]).toISOString() : new Date().toISOString(),
+              date: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
               details: payload,
               // W4 — surface terminal status so the closed-list UI can show "Approved" vs "Rejected"
               closedStatus: status,
@@ -895,22 +902,24 @@ export async function POST(request) {
       delete cleanPayload.rowIndex;
 
 const employeeName = `${f.firstName} ${f.lastName}`.trim();
-    const row = [
-              new Date().toISOString(),        // Timestamp
-        f.submitterEmail,                // Submitter Email
-        "newhire",                       // Module
-        employeeName,                    // Employee Name
-        f.operation || "",               // Location
-        "new_hire",                      // Action Type
-        f.startDate || "",               // Effective Date
-        JSON.stringify(cleanPayload),    // JSON Payload
-        "Pending",                       // Status
-        "",                              // HR Notes
-      ];
-
-      const result = isEdit
-        ? await updateRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.SUBMISSIONS}!A${f.rowIndex}:${String.fromCharCode(64 + row.length)}${f.rowIndex}`, [row])
-        : await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, row);
+      const token = isEdit ? `sub-${f.rowIndex}` : null;
+      let result;
+      try {
+        await upsertSubmission(token, {
+          submitter:  f.submitterEmail,
+          module:     "newhire",
+          employee:   employeeName,
+          location:   f.operation || "",
+          actionType: "new_hire",
+          effective:  f.startDate || "",
+          payload:    JSON.stringify(cleanPayload),
+          status:     "Pending",
+          notes:      "",
+        });
+        result = { success: true };
+      } catch (e) {
+        result = { success: false, error: e.message };
+      }
 
       // 🔔 Notification: new hire submitted or resubmitted
 if (result.success) {
@@ -956,22 +965,24 @@ if (action === "submit-paf") {
       delete cleanPayload.isEdit;
       delete cleanPayload.rowIndex;
 
-      const row = [
-        new Date().toISOString(),                                          // Timestamp
-        f.submitterEmail,                                                  // Submitter Email
-        "paf",                                                             // Module
-        f.employeeName || "",                                              // Employee Name
-        f.locationName ? `${f.locationKey} - ${f.locationName}` : f.locationKey || "",  // Location
-        f.actionType || "",                                                // Action Type
-        f.effectiveDate || "",                                             // Effective Date
-        JSON.stringify(cleanPayload),                                      // JSON Payload
-        "Pending",                                                         // Status
-        "",                                                                // HR Notes
-      ];
-
-      const result = isEdit
-        ? await updateRangeSA(SHEET_IDS.COLLECTION, `${SHEETS.SUBMISSIONS}!A${f.rowIndex}:${String.fromCharCode(64 + row.length)}${f.rowIndex}`, [row])
-        : await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, row);
+      const token = isEdit ? `sub-${f.rowIndex}` : null;
+      let result;
+      try {
+        await upsertSubmission(token, {
+          submitter:  f.submitterEmail,
+          module:     "paf",
+          employee:   f.employeeName || "",
+          location:   f.locationName ? `${f.locationKey} - ${f.locationName}` : f.locationKey || "",
+          actionType: f.actionType || "",
+          effective:  f.effectiveDate || "",
+          payload:    JSON.stringify(cleanPayload),
+          status:     "Pending",
+          notes:      "",
+        });
+        result = { success: true };
+      } catch (e) {
+        result = { success: false, error: e.message };
+      }
 
       // 🔔 Notification: PAF submitted or resubmitted
 if (result.success) {
@@ -1091,35 +1102,27 @@ rows.forEach((row, i) => {
 // ─── Withdraw / Cancel: submitter removes their own item ───
     if (action === "withdraw-submission" || action === "cancel-submission") {
       const { itemId, email } = body;
-      const rowIndex = parseInt(itemId.split("-")[1]);
       const newStatus = action === "cancel-submission" ? "Cancelled" : "Withdrawn";
-      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
-      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, `[${newStatus} by ${email}]`);
-      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
+      await updateSubmissionStatus(itemId, newStatus, `[${newStatus} by ${email}]`);
       return NextResponse.json({ success: true });
     }
-    
+
     if (action === "admin-process") {
       const { itemId, adminAction, reason, adminEmail } = body;
-      // Unified format: sub-{rowIndex}
-      const rowIndex = parseInt(itemId.split("-")[1]);
-const newStatus = adminAction === "approve" ? "Complete" : "Rejected";
-        await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.STATUS_COL, newStatus);
-              const noteText = reason
+      const newStatus = adminAction === "approve" ? "Complete" : "Rejected";
+      const noteText = reason
         ? `[${newStatus} by ${adminEmail}] ${reason}`
         : `[${newStatus} by ${adminEmail}]`;
-await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.NOTES_COL, noteText);
-      await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS, rowIndex, SUB.ADMIN_ACTION_COL, new Date().toISOString());
+      await updateSubmissionStatus(itemId, newStatus, noteText);
 
       // 🔔 Notification: admin approved/rejected
       try {
-        const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.SUBMISSIONS);
-        const row = rows[rowIndex - 2]; // rows array is 0-indexed, sheet is 1-indexed + header
-        if (row) {
+        const sub = await getSubmissionByToken(itemId, { module: "people" });
+        if (sub) {
           notify("status_update", {
-            submitterEmail: row[SUB.SUBMITTER],
-            employeeName: row[SUB.EMPLOYEE],
-            actionType: row[SUB.ACTION_TYPE],
+            submitterEmail: sub.submitter,
+            employeeName: sub.employee,
+            actionType: sub.actionType,
             status: newStatus,
             adminNotes: reason || "",
           }).catch(() => {});
