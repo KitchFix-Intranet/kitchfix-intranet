@@ -580,7 +580,10 @@ async function replaceScope({
 
 // ── Sheets adapter ──
 
-async function readAccountsSheets() {
+// Exported for direct Sheets-source reads (e.g. backfill scripts) that
+// must bypass the dispatch wrappers (which route to PG when flags are
+// set). Direct callers should not be used in the runtime handler path.
+export async function readAccountsSheets() {
   const [accountsRes, dirLinksRes] = await Promise.all([
     readSheetSA(SHEET_IDS.HUB, ACCOUNTS_TAB),
     readSheetSA(SHEET_IDS.HUB, DIR_LINKS_TAB),
@@ -898,7 +901,8 @@ export async function upsertAccount(teamKey, partial) {
 
 // ── Sheets adapter ──
 
-async function readHeroImagesSheets() {
+// Exported for direct Sheets-source reads (backfill scripts).
+export async function readHeroImagesSheets() {
   const { rows } = await readSheetSA(SHEET_IDS.HUB, HERO_IMAGES_TAB);
   return rows
     .map((r) => String(r[0] || "").trim())
@@ -1062,7 +1066,8 @@ function normalizeEmailForKey(e) {
 
 // ── Sheets adapter ──
 
-async function readContactsSheets() {
+// Exported for direct Sheets-source reads (backfill scripts).
+export async function readContactsSheets() {
   const { rows } = await readSheetSA(SHEET_IDS.HUB, CONTACTS_TAB);
   return rows
     .filter((r) => String(r[CONTACTS_IDX.teamKey] || "").trim())
@@ -1309,7 +1314,8 @@ const WORK_LOCATIONS_IDX = {
 
 // ── Sheets adapter ──
 
-async function readWorkLocationsSheets() {
+// Exported for direct Sheets-source reads (backfill scripts).
+export async function readWorkLocationsSheets() {
   const { rows } = await readSheetSA(SHEET_IDS.HUB, WORK_LOCATIONS_TAB);
   return rows
     .filter((r) => String(r[WORK_LOCATIONS_IDX.teamKey] || "").trim())
