@@ -175,7 +175,7 @@ const TABLES = {
 
   hero_images: {
     sheetTabName: "hero_images",
-    expectedFirstHeader: null, // flat URL list, no documented header
+    expectedFirstHeader: "ImageURL", // header added to fix PR #69 latent reader-drops-row-1 bug
     readSheets: readHeroImagesSheets,
     pgTable: "hero_images",
     transformToPg: (r) => ({

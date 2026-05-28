@@ -911,11 +911,17 @@ export async function readHeroImagesSheets() {
 }
 
 async function replaceHeroImagesSheets(urls) {
-  await clearRangeSA(SHEET_IDS.HUB, `${HERO_IMAGES_TAB}!A:A`);
+  // Preserve the A1 header row; clear and rewrite data rows only (A2:A).
+  // hero_images uses "ImageURL" as the column header; the code intentionally
+  // does NOT hard-code this text - the Sheet owns the header content. This
+  // pattern fixes a latent bug from PR #69 where the canonical reader was
+  // silently dropping row 1 because readSheetSA() treats it as headers; the
+  // pre-PR fix wrote URLs from A1, conflicting with that contract.
+  await clearRangeSA(SHEET_IDS.HUB, `${HERO_IMAGES_TAB}!A2:A`);
   if (urls.length > 0) {
     await updateRangeSA(
       SHEET_IDS.HUB,
-      `${HERO_IMAGES_TAB}!A1`,
+      `${HERO_IMAGES_TAB}!A2`,
       urls.map((u) => [u])
     );
   }
