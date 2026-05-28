@@ -86,6 +86,16 @@
 //   directory module       2026-05-27 afternoon (per-module flag)
 //   submissions            2026-05-27 evening (per-module flag)
 //   All currently stable in state 3. State 4 has not been used.
+//
+// KNOWN FLAG TABLE NAMES (passive documentation)
+//   These are the Sheet tab names recognized by orchestrators. The
+//   flag values are tab names; the orchestrator-internal PG table
+//   names may differ (e.g. vendor_master tab -> vendors PG table).
+//
+//   Cut over:    news_interactions, accounts, contacts, hero_images,
+//                work_locations, submissions
+//   Dormant (PR 5.1, awaiting handler rewire in PR 5.2):
+//                vendor_master, vendor_accounts, vendor_aliases
 
 function parseTableSet(envValue) {
   if (!envValue) return new Set();
