@@ -471,7 +471,7 @@ CREATE TABLE review_queue (
   invoice_uuid        UUID REFERENCES invoice_submissions(id),
   invoice_date        DATE,
   account_key         TEXT NOT NULL,
-  matched_item_id     TEXT REFERENCES inventory_items(id),                    -- probable match from AI; null if action='new'
+  matched_item_id     TEXT REFERENCES inventory_items(id) ON DELETE SET NULL, -- probable match from AI; null if action='new'; SET NULL preserves the review_queue row for audit if the item later gets merged/deleted
   canonical_name      TEXT,                                                   -- cron's suggested clean name
   confidence          NUMERIC NOT NULL,
   status              TEXT NOT NULL DEFAULT 'pending'
@@ -794,7 +794,7 @@ Same shape as Module 5. Watch for AI scan dependency: any new submission during 
 
 #### PR 7.1: PG schema + dataStore/inventory.js adapters (dormant)
 
-**Goal:** DDL for 8 tables + zone_corrections. Dormant adapters.
+**Goal:** DDL for 9 tables (the original 8 lift-and-shift tables + zone_corrections discovered during audit). Dormant adapters.
 
 **Changes:**
 - Supabase SQL: 8 CREATE TABLE statements + indexes.
@@ -818,7 +818,7 @@ Same shape as Module 5. Watch for AI scan dependency: any new submission during 
 
 #### PR 7.3: Backfill
 
-**Goal:** Populate 8+ inventory tables.
+**Goal:** Populate 9 inventory tables.
 
 **Changes:**
 - `scripts/backfill-inventory.mjs` using shared runner.
@@ -874,6 +874,7 @@ Critical ordering with cron:
 - All 4 helpers swap to Supabase client.
 - `getTabNames` becomes `SELECT DISTINCT account_key FROM ai_line_items`.
 - Drop `googleapis` dependency from cron package.json.
+- **Drop the `DEDUP=1` mode entirely** (dedupExistingCatalog function at line 582). BR4 retires both dedup tools; cron-side cleanup is symmetric with intranet-side removal of handleDedupCatalog (PR 7.2).
 
 **Verification:**
 - Manual Railway run. Verify accounts processed, rows written to PG.
@@ -999,50 +1000,37 @@ In addition, this migration explicitly preserves:
 
 ## 8. Open Items After Planning
 
-These need Kevin's input before specific PRs can ship:
+All 6 open items resolved during plan review (2026-05-28).
 
-### RLS policy decision (BLOCKS no PR; needed before AUTH_MODEL.md follow-up)
+### Resolved during plan review (2026-05-28)
+
+#### RLS policy decision
 
 - **Today:** all finance PG tables accessible only via service_role (default). No RLS policies on the tables.
 - **Stage 2 (future):** RLS based on `users.role` per AUTH_MODEL.md.
-- **Project 3 decision:** stay with service-role-only access. Application layer admin gates (OPS_LEADERSHIP_EMAILS) remain authoritative.
+- **DECISION: CONFIRMED.** Service-role-only access during Project 3. Application layer admin gates (OPS_LEADERSHIP_EMAILS) remain authoritative. RLS migration is a separate AUTH_MODEL.md follow-up.
 
-This is the working assumption. Confirm before PR 5.1 ships.
-
-### primary_vendor resolution during backfill (BLOCKS PR 7.3)
+#### primary_vendor resolution during backfill
 
 - **Q1 decision:** primary_vendor is FK to vendors.id.
 - **Backfill challenge:** today's item_catalog.primaryVendor is freeform string. Some strings won't resolve to any vendor (typos, dropped vendors).
-- **Decision needed:** for unresolvable strings, do we:
-  - (a) Leave null + log for Kevin to manually fix?
-  - (b) Auto-create a "placeholder" vendor for each unique unresolvable string?
-  - (c) Reject the inventory_items row entirely and require Kevin to resolve before cutover?
-- **Recommendation: (a)** - log loudly, leave null, run cutover, fix manually post-cutover.
+- **DECISION: OPTION (a).** For unresolvable strings, log loudly + leave the FK null. Kevin fixes manually post-cutover.
 
-Confirm before PR 7.3 ships.
-
-### BR4 dedup constraint timing (BLOCKS PR 7.1)
+#### BR4 dedup constraint timing
 
 - **Decision:** retire both dedup tools. Add UNIQUE (account_key, lower(name)) on inventory_items.
 - **Backfill challenge:** Sheets data may already have duplicates that violate this constraint.
-- **Decision needed:** how do we handle existing duplicates during backfill?
-  - (a) Backfill in two phases: load without constraint, run a dedup pass, then add the constraint
-  - (b) Resolve duplicates manually before backfill (Kevin reviews + merges them via ai-similarity-check)
-  - (c) Add the constraint as DEFERRABLE INITIALLY DEFERRED + let the backfill transaction roll up duplicates
-- **Recommendation: (a) or (b)**. (a) is automated but yields stale audit trail (merges happen without merge_history records). (b) is manual but cleaner.
+- **DECISION: OPTION (b).** Manual pre-backfill cleanup. Kevin reviews + merges existing duplicates via ai-similarity-check BEFORE PR 7.3 runs the backfill. Yields proper merge_history audit trail (option (a) would have skipped audit).
 
-Confirm before PR 7.1 ships.
-
-### Cutover order: Module 5 before Module 6, or together?
+#### Cutover ordering
 
 - **Default:** sequential (Module 5 fully cut over, then Module 6 starts).
-- **Alternative:** Module 5 PRs and Module 6 PRs can ship in parallel since their tables don't share dependencies (invoice_submissions FK to vendors but the FK doesn't activate until both are migrated).
-- **Decision needed:** prefer sequential (safer, easier rollback) or parallel (faster but more cognitive load)?
-- **Recommendation: sequential**, but ship Module 6 PR 6.1 (schema only) concurrent with Module 5 to save calendar time.
+- **Alternative:** parallel.
+- **DECISION: SEQUENTIAL** with PR 6.1 (schema only) running concurrent with end of Module 5 to save calendar time. Same pattern available for Module 7 PR 7.1 concurrent with end of Module 6.
 
-### Stub handler explicit list (informational; no PR blocked)
+#### Stub handler explicit list
 
-Per BR3, the 7 stub handlers stay as stubs. The plan needs to be explicit about which ones:
+Per BR3, the 7 stub handlers stay as stubs. **DECISION: CONFIRMED as listed.** Final list:
 
 1. `handleUpdateItem` (line 398): returns "Week 3"
 2. `handleScan` (line 1060): returns "Week 3"
@@ -1054,15 +1042,13 @@ Per BR3, the 7 stub handlers stay as stubs. The plan needs to be explicit about 
 
 All stay returning the same response strings post-migration.
 
-### `is_purchasing` classification rule (BLOCKS PR 6.3)
+#### `is_purchasing` classification rule
 
 - **Q8 decision:** add `is_purchasing` to gl_codes.
-- **Classification rule:** today the runtime filter excludes:
-  - Categories: `income`, `kitchen labor costs`, `meal service`, `wages`, `insurance`, `professional fees`
-  - Items: `telephone expense`, `paid time off`, `medical/dental/vision`, `charitable contributions`
-- **Decision needed:** confirm this classification rule for backfill. Any additional categories/items to exclude?
-
-Confirm before PR 6.3 ships.
+- **DECISION: CONFIRMED** with existing exclusion rules:
+  - Categories excluded (`is_purchasing = false`): `income`, `kitchen labor costs`, `meal service`, `wages`, `insurance`, `professional fees`
+  - Items excluded (`is_purchasing = false`): `telephone expense`, `paid time off`, `medical/dental/vision`, `charitable contributions`
+- No additional exclusions. Backfill script applies these rules to classify each code row.
 
 ---
 
