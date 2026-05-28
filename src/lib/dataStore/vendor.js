@@ -33,12 +33,15 @@ import crypto from "node:crypto";
 //   modules' flag conventions. Sheet tabs "vendor_accounts" and
 //   "vendor_aliases" map to PG tables of the same name.
 //
-// Public API (8 orchestrators):
+// Public API (10 orchestrators - 8 shipped in PR 5.1 + getVendor +
+// getVendorsForMatching added in PR 5.2):
 //
-//   Reads (3):
+//   Reads (5):
 //     getVendorsForList(opts)          - paginated list for vendor admin UI
 //     getVendorsForBootstrap(accountKey, opts) - active vendors for invoice tool
-//     searchVendors(query, accountKey, opts)   - fuzzy match typeahead
+//     searchVendors(query, opts)       - fuzzy match typeahead
+//     getVendor(vendorId, accountKey, opts) - single vendor by id (PR 5.2)
+//     getVendorsForMatching(opts)      - all vendors + aliases for OCR fuzzy match (PR 5.2)
 //
 //   Writes (5):
 //     upsertVendor(input)              - create/update vendor (F19a + F19b)
@@ -303,6 +306,9 @@ async function readVendorBootstrapSheets(accountKey) {
     }))
     .filter((v) => v.vendorId && v.name);
 
+  // Enriched account links (PR 5.2): handler needs the full account-link
+  // fields, not just the (vendorId, accountKey) pair the PR 5.1 stub
+  // returned. The bootstrap response shape is determined by the handler.
   const accountVendors = vendorAccountsRaw.rows
     .filter((r) => {
       const acct = String(r[VA_IDX.accountKey] || "").trim();
@@ -310,8 +316,21 @@ async function readVendorBootstrapSheets(accountKey) {
       return acct === accountKey && active !== "FALSE";
     })
     .map((r) => ({
-      vendorId:   String(r[VA_IDX.vendorId] || "").trim(),
-      accountKey: String(r[VA_IDX.accountKey] || "").trim(),
+      rowId:              String(r[VA_IDX.rowId] || "").trim(),
+      vendorId:           String(r[VA_IDX.vendorId] || "").trim(),
+      accountKey:         String(r[VA_IDX.accountKey] || "").trim(),
+      customerAccountNum: String(r[VA_IDX.customerAccountNum] || "").trim(),
+      salesRepName:       String(r[VA_IDX.salesRepName] || "").trim(),
+      salesRepPhone:      String(r[VA_IDX.salesRepPhone] || "").trim(),
+      salesRepEmail:      String(r[VA_IDX.salesRepEmail] || "").trim(),
+      deliveryDays:       String(r[VA_IDX.deliveryDays] || "").trim(),
+      cutoffTime:         String(r[VA_IDX.cutoffTime] || "").trim(),
+      deliveryMethod:     String(r[VA_IDX.deliveryMethod] || "").trim(),
+      portalUrl:          String(r[VA_IDX.portalUrl] || "").trim(),
+      portalUsername:     String(r[VA_IDX.portalUsername] || "").trim(),  // Q6 plaintext intentional
+      portalPassword:     String(r[VA_IDX.portalPassword] || "").trim(),  // Q6 plaintext intentional
+      paymentTerms:       String(r[VA_IDX.paymentTerms] || "").trim(),
+      minOrder:           String(r[VA_IDX.minOrder] || "").trim(),
     }));
 
   return { vendorMaster, accountVendors };
@@ -328,6 +347,66 @@ async function readVendorSearchSheets(query) {
     }))
     .filter((v) => v.name && v.name.toLowerCase().includes(q))
     .slice(0, VENDOR_SEARCH_LIMIT);
+}
+
+// Single-vendor read with optional accountKey scope.
+// Returns null if vendor not found. If accountKey provided, returns
+// the vendor with the matching account_link fields populated; if not,
+// vendor-only fields are populated and account-link fields are blank.
+// Read all vendors with their aliases for the OCR fuzzy matcher.
+// Returns the canonical shape that fuzzyMatchVendor (in
+// src/lib/vendorMatching.js) consumes: [{ vendorId, name, category,
+// aliases (pipe-string) }]. Aliases are intentionally returned as
+// the pipe-separated string so the matcher's internal split/normalize
+// logic stays unchanged across the Sheets vs PG path.
+async function readVendorsForMatchingSheets() {
+  const { rows } = await readSheetSA(SHEET_IDS.HUB, VENDOR_MASTER_TAB);
+  return rows
+    .map((r) => ({
+      vendorId: String(r[VM_IDX.vendorId] || "").trim(),
+      name:     String(r[VM_IDX.name] || "").trim(),
+      category: String(r[VM_IDX.category] || "").trim(),
+      aliases:  String(r[VM_IDX.aliases] || "").trim(),
+    }))
+    .filter((v) => v.vendorId && v.name);
+}
+
+async function readVendorByIdSheets(vendorId, accountKey) {
+  const [masterResult, accountResult] = await Promise.all([
+    readSheetSA(SHEET_IDS.HUB, VENDOR_MASTER_TAB),
+    readSheetSA(SHEET_IDS.HUB, VENDOR_ACCOUNTS_TAB),
+  ]);
+
+  const masterRow = masterResult.rows.find((r) => String(r[VM_IDX.vendorId] || "").trim() === vendorId);
+  if (!masterRow) return null;
+
+  const allLinks    = accountResult.rows.filter((r) => String(r[VA_IDX.vendorId] || "").trim() === vendorId);
+  const accountLink = accountKey ? allLinks.find((r) => String(r[VA_IDX.accountKey] || "").trim() === accountKey) : null;
+
+  return {
+    vendorId:           String(masterRow[VM_IDX.vendorId] || "").trim(),
+    name:               String(masterRow[VM_IDX.name] || "").trim(),
+    category:           String(masterRow[VM_IDX.category] || "").trim(),
+    website:            String(masterRow[VM_IDX.website] || "").trim(),
+    notes:              String(masterRow[VM_IDX.notes] || "").trim(),
+    createdBy:          String(masterRow[VM_IDX.createdBy] || "").trim(),
+    createdAt:          String(masterRow[VM_IDX.createdAt] || "").trim(),
+    customerAccountNum: String(accountLink?.[VA_IDX.customerAccountNum] || "").trim(),
+    salesRepName:       String(accountLink?.[VA_IDX.salesRepName] || "").trim(),
+    salesRepPhone:      String(accountLink?.[VA_IDX.salesRepPhone] || "").trim(),
+    salesRepEmail:      String(accountLink?.[VA_IDX.salesRepEmail] || "").trim(),
+    deliveryDays:       String(accountLink?.[VA_IDX.deliveryDays] || "").trim(),
+    cutoffTime:         String(accountLink?.[VA_IDX.cutoffTime] || "").trim(),
+    deliveryMethod:     String(accountLink?.[VA_IDX.deliveryMethod] || "").trim(),
+    portalUrl:          String(accountLink?.[VA_IDX.portalUrl] || "").trim(),
+    portalUsername:     String(accountLink?.[VA_IDX.portalUsername] || "").trim(),
+    portalPassword:     String(accountLink?.[VA_IDX.portalPassword] || "").trim(),
+    paymentTerms:       String(accountLink?.[VA_IDX.paymentTerms] || "").trim(),
+    minOrder:           String(accountLink?.[VA_IDX.minOrder] || "").trim(),
+    accountNotes:       String(accountLink?.[VA_IDX.accountNotes] || "").trim(),
+    active:             accountLink ? sheetActiveToBool(accountLink[VA_IDX.active]) : true,
+    linkedAccounts:     allLinks.map((r) => String(r[VA_IDX.accountKey] || "").trim()),
+  };
 }
 
 // ── Writes ──
@@ -679,7 +758,10 @@ async function readVendorBootstrapPostgres(accountKey) {
       .select("id, name, category, website, notes")
       .is("deleted_at", null),
     supabase.from("vendor_accounts")
-      .select("vendor_id, account_key, active")
+      .select("id, vendor_id, account_key, customer_account_num, sales_rep_name, " +
+              "sales_rep_phone, sales_rep_email, delivery_days, cutoff_time, " +
+              "delivery_method, portal_url, portal_username, portal_password, " +
+              "payment_terms, min_order, active")
       .eq("account_key", accountKey)
       .eq("active", true),
   ]);
@@ -696,9 +778,25 @@ async function readVendorBootstrapPostgres(accountKey) {
     }))
     .filter((v) => v.vendorId && v.name);
 
+  // Enriched shape (PR 5.2): matches the Sheets adapter return.
+  // PG has no Sheets-only rowId column; use the PG UUID as the
+  // equivalent stable identifier.
   const accountVendors = (accountsRes.data || []).map((r) => ({
-    vendorId:   r.vendor_id,
-    accountKey: r.account_key,
+    rowId:              r.id,
+    vendorId:           r.vendor_id,
+    accountKey:         r.account_key,
+    customerAccountNum: r.customer_account_num || "",
+    salesRepName:       r.sales_rep_name || "",
+    salesRepPhone:      r.sales_rep_phone || "",
+    salesRepEmail:      r.sales_rep_email || "",
+    deliveryDays:       r.delivery_days || "",
+    cutoffTime:         r.cutoff_time || "",
+    deliveryMethod:     r.delivery_method || "",
+    portalUrl:          r.portal_url || "",
+    portalUsername:     r.portal_username || "",  // Q6 plaintext intentional
+    portalPassword:     r.portal_password || "",  // Q6 plaintext intentional
+    paymentTerms:       r.payment_terms || "",
+    minOrder:           r.min_order || "",
   }));
 
   return { vendorMaster, accountVendors };
@@ -719,6 +817,84 @@ async function readVendorSearchPostgres(query) {
     name:     v.name || "",
     category: v.category || "",
   }));
+}
+
+async function readVendorsForMatchingPostgres() {
+  const supabase = getServiceClient();
+  // Fetch vendors + their aliases. Reconstruct the pipe-separated
+  // alias string so the canonical return shape matches Sheets path
+  // and the matcher's split logic is path-agnostic.
+  const [vendorsRes, aliasesRes] = await Promise.all([
+    supabase.from("vendors")
+      .select("id, name, category")
+      .is("deleted_at", null),
+    supabase.from("vendor_aliases")
+      .select("vendor_id, alias_text"),
+  ]);
+  if (vendorsRes.error) throw new Error(`[dataStore.vendor.pg] readVendorsForMatching vendors: ${vendorsRes.error.message}`);
+  if (aliasesRes.error) throw new Error(`[dataStore.vendor.pg] readVendorsForMatching aliases: ${aliasesRes.error.message}`);
+
+  const aliasesByVendor = {};
+  for (const a of aliasesRes.data || []) {
+    if (!aliasesByVendor[a.vendor_id]) aliasesByVendor[a.vendor_id] = [];
+    aliasesByVendor[a.vendor_id].push(String(a.alias_text || "").trim());
+  }
+
+  return (vendorsRes.data || []).map((v) => ({
+    vendorId: v.id,
+    name:     v.name || "",
+    category: v.category || "",
+    aliases:  (aliasesByVendor[v.id] || []).filter(Boolean).join("|"),
+  }));
+}
+
+async function readVendorByIdPostgres(vendorId, accountKey) {
+  const supabase = getServiceClient();
+  const [vendorRes, accountsRes] = await Promise.all([
+    supabase.from("vendors")
+      .select("id, name, category, website, notes, created_by, created_at")
+      .eq("id", vendorId)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase.from("vendor_accounts")
+      .select("account_key, customer_account_num, sales_rep_name, sales_rep_phone, " +
+              "sales_rep_email, delivery_days, cutoff_time, delivery_method, " +
+              "portal_url, portal_username, portal_password, payment_terms, " +
+              "min_order, account_notes, active")
+      .eq("vendor_id", vendorId),
+  ]);
+  if (vendorRes.error) throw new Error(`[dataStore.vendor.pg] readVendorById vendor: ${vendorRes.error.message}`);
+  if (accountsRes.error) throw new Error(`[dataStore.vendor.pg] readVendorById accounts: ${accountsRes.error.message}`);
+  if (!vendorRes.data) return null;
+
+  const v = vendorRes.data;
+  const allLinks = accountsRes.data || [];
+  const accountLink = accountKey ? allLinks.find((r) => r.account_key === accountKey) : null;
+
+  return {
+    vendorId:           v.id,
+    name:               v.name || "",
+    category:           v.category || "",
+    website:            v.website || "",
+    notes:              v.notes || "",
+    createdBy:          v.created_by || "",
+    createdAt:          v.created_at || "",
+    customerAccountNum: accountLink?.customer_account_num || "",
+    salesRepName:       accountLink?.sales_rep_name || "",
+    salesRepPhone:      accountLink?.sales_rep_phone || "",
+    salesRepEmail:      accountLink?.sales_rep_email || "",
+    deliveryDays:       accountLink?.delivery_days || "",
+    cutoffTime:         accountLink?.cutoff_time || "",
+    deliveryMethod:     accountLink?.delivery_method || "",
+    portalUrl:          accountLink?.portal_url || "",
+    portalUsername:     accountLink?.portal_username || "",  // Q6 plaintext intentional
+    portalPassword:     accountLink?.portal_password || "",  // Q6 plaintext intentional
+    paymentTerms:       accountLink?.payment_terms || "",
+    minOrder:           accountLink?.min_order || "",
+    accountNotes:       accountLink?.account_notes || "",
+    active:             accountLink ? !!accountLink.active : true,
+    linkedAccounts:     allLinks.map((r) => r.account_key),
+  };
 }
 
 // ── Writes ──
@@ -993,6 +1169,36 @@ export async function searchVendors(query, opts = {}) {
     return readVendorSearchPostgres(query);
   }
   return readVendorSearchSheets(query);
+}
+
+/**
+ * Single-vendor read by vendorId.
+ *   vendorId:   the natural vendor key (e.g. "FRE-448")
+ *   accountKey: optional - if provided, populates account_link fields
+ *               for that account; otherwise all account fields blank
+ *   opts:       { module? }
+ * Returns: canonical vendor record (same shape as getVendorsForList
+ * row) or null if not found.
+ */
+export async function getVendor(vendorId, accountKey, opts = {}) {
+  if (isReadFromPostgres(VENDOR_MASTER_TAB, opts.module)) {
+    return readVendorByIdPostgres(vendorId, accountKey);
+  }
+  return readVendorByIdSheets(vendorId, accountKey);
+}
+
+/**
+ * Read all vendors with aliases for the OCR fuzzy matcher.
+ *   opts: { module? }
+ * Returns: [{ vendorId, name, category, aliases }, ...]
+ * `aliases` is the pipe-separated string (reconstructed from the
+ * vendor_aliases table on the PG path).
+ */
+export async function getVendorsForMatching(opts = {}) {
+  if (isReadFromPostgres(VENDOR_MASTER_TAB, opts.module)) {
+    return readVendorsForMatchingPostgres();
+  }
+  return readVendorsForMatchingSheets();
 }
 
 // ── Writes ──

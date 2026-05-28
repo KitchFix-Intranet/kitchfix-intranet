@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { CATEGORIES, CATEGORY_COLORS, DELIVERY_METHODS, PAYMENT_TERMS } from "@/lib/vendorEnums";
 
 /* ── Icons ──────────────────────────────────────── */
 const CloseIcon = () => (
@@ -55,23 +56,7 @@ const STEPS = [
   { key: "review",   label: "Review"            },
 ];
 
-const CATEGORIES = [
-  "Produce", "Protein", "Dairy", "Dry Goods", "Beverage",
-  "Packaging", "Cleaning", "Supplies", "Equipment", "Linen",
-  "Specialty", "Broadliner", "Other",
-];
-
-const CATEGORY_COLORS = {
-  Produce: "#16a34a", Protein: "#dc2626", Dairy: "#2563eb",
-  "Dry Goods": "#d97706", Beverage: "#7c3aed", Packaging: "#0891b2",
-  Cleaning: "#0d9488", Supplies: "#ca8a04", Equipment: "#475569",
-  Linen: "#9d174d", Specialty: "#db2777", Broadliner: "#9333ea",
-  Other: "#64748b",
-};
-
 const DAYS            = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DELIVERY_METHODS = ["Direct Delivery", "Will Call / Pickup", "Shipped (Common Carrier)", "Drop Ship"];
-const PAYMENT_TERMS   = ["Net 7", "Net 10", "Net 14", "Net 15", "Net 30", "Net 45", "Net 60", "COD", "Prepaid", "Credit Card", "I don't know"];
 
 const emptyForm = () => ({
   vendorName:         "",

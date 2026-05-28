@@ -74,6 +74,8 @@ export {
   getVendorsForList,
   getVendorsForBootstrap,
   searchVendors,
+  getVendor,
+  getVendorsForMatching,
   upsertVendor,
   upsertVendorAccount,
   deactivateVendorAccount,

@@ -1,22 +1,6 @@
 "use client";
 import { useState } from "react";
-
-// ── Authoritative 13-category color map ──
-const CATEGORY_COLORS = {
-  Produce:     "#16a34a",
-  Protein:     "#dc2626",
-  Dairy:       "#2563eb",
-  "Dry Goods": "#d97706",
-  Beverage:    "#7c3aed",
-  Packaging:   "#0891b2",
-  Cleaning:    "#0d9488",
-  Supplies:    "#ca8a04",
-  Equipment:   "#475569",
-  Linen:       "#9d174d",
-  Specialty:   "#db2777",
-  Broadliner:  "#9333ea",
-  Other:       "#64748b",
-};
+import { CATEGORY_COLORS } from "@/lib/vendorEnums";
 
 function catColor(cat) {
   return CATEGORY_COLORS[cat] || "#64748b";

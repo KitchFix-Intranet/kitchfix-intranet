@@ -11,6 +11,19 @@ import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { fuzzyMatchVendor } from "@/lib/vendorMatching";
+import {
+  getVendorsForList,
+  getVendorsForBootstrap,
+  searchVendors,
+  getVendor,
+  getVendorsForMatching,
+  upsertVendor,
+  upsertVendorAccount,
+  deactivateVendorAccount,
+  learnVendorAlias,
+  mergeVendors,
+} from "@/lib/dataStore";
 
 // ─── Document Type Labels (Photo Gate) ───
 const DOC_TYPE_LABELS = {
@@ -164,90 +177,8 @@ function buildPdfFilename(vendor, invoiceDate, invoiceNumber) {
 }
 
 
-// ═══════════════════════════════════════
-// VENDOR FUZZY MATCH ENGINE (Feature #21)
-// ═══════════════════════════════════════
-
-function fuzzyMatchVendor(detectedName, vendorRows) {
-  if (!detectedName || !vendorRows?.length) return null;
-
-  const detected = detectedName.toLowerCase().trim();
-  const noise = ["inc", "llc", "ltd", "corp", "co", "company", "foods", "food", "supply", "supplies", "distributors", "distribution", "services"];
-
-  function normalize(str) {
-    return str.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").split(/\s+/).filter((w) => !noise.includes(w)).join(" ").trim();
-  }
-
-  const detectedNorm = normalize(detected);
-  const detectedWords = detectedNorm.split(/\s+/);
-
-const candidates = vendorRows
-    .map((r) => ({
-      vendorId: String(r[0] || "").trim(),
-      name: String(r[1] || "").trim(),
-      category: String(r[2] || "").trim(),
-      aliases: String(r[8] || "").trim(),
-    }))
-    .filter((v) => v.vendorId && v.name)
-    .map((v) => {
-      const name = v.name.toLowerCase().trim();
-      const nameNorm = normalize(name);
-      const nameWords = nameNorm.split(/\s+/);
-      let score = 0;
-
-      // Check aliases first — exact alias match = 100
-      if (v.aliases) {
-        const aliasList = v.aliases.split("|").map((a) => a.trim().toLowerCase()).filter(Boolean);
-        for (const alias of aliasList) {
-          const aliasNorm = normalize(alias);
-          if (alias === detected || aliasNorm === detectedNorm) {
-            score = 100;
-            break;
-          }
-          if (alias.includes(detected) || detected.includes(alias)) {
-            score = Math.max(score, 90);
-          }
-          if (aliasNorm.includes(detectedNorm) || detectedNorm.includes(aliasNorm)) {
-            score = Math.max(score, 85);
-          }
-        }
-      }
-
-      // If alias didn't match, check primary name
-      if (score === 0) {
-        if (name === detected || nameNorm === detectedNorm) {
-          score = 100;
-        } else if (name.includes(detected) || detected.includes(name)) {
-          score = 85;
-        } else if (nameNorm.includes(detectedNorm) || detectedNorm.includes(nameNorm)) {
-          score = 80;
-        } else {
-          const matchedWords = detectedWords.filter((dw) =>
-            nameWords.some((nw) => nw === dw || (nw.length >= 4 && dw.length >= 4 && (nw.includes(dw) || dw.includes(nw))))
-          );
-          if (matchedWords.length > 0) {
-            score = Math.round((matchedWords.length / Math.max(detectedWords.length, nameWords.length)) * 70);
-            if (detectedWords[0] && nameWords[0] && (detectedWords[0] === nameWords[0] || detectedWords[0].includes(nameWords[0]) || nameWords[0].includes(detectedWords[0]))) {
-              score += 15;
-            }
-          }
-        }
-      }
-
-      return { ...v, score };
-    })
-    .filter((v) => v.score >= 30)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-
-  if (candidates.length === 0) return null;
-
-  return {
-    bestMatch: candidates[0],
-    confidence: candidates[0].score >= 80 ? "high" : candidates[0].score >= 50 ? "medium" : "low",
-    alternatives: candidates.slice(1),
-  };
-}
+// fuzzyMatchVendor moved to src/lib/vendorMatching.js (S1 consolidation, PR 5.2).
+// Import is at the top of the file.
 
 
 // ═══════════════════════════════════════
@@ -288,47 +219,40 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
   if (action === "invoice-bootstrap") {
     const accountParam = searchParams.get("account");
 
-    const [vendorMasterRaw, vendorAccountsRaw] = await Promise.all([
-      safeRead(SHEET_IDS.HUB, "vendor_master"),
-      safeRead(SHEET_IDS.HUB, "vendor_accounts"),
-    ]);
+    // PR 5.2: routes through dataStore/vendor.js orchestrator. Flags off
+    // by default = byte-identical to direct sheet read. The orchestrator
+    // returns enriched accountVendors with the full account-link shape
+    // the handler needs. accountVendors includes the `account` field
+    // under its new canonical name `accountKey`; rename back to `account`
+    // here for response shape parity.
+    const { vendorMaster, accountVendors: accountVendorsRaw } =
+      await getVendorsForBootstrap(accountParam || "");
 
-    const vendorMaster = vendorMasterRaw.rows
-      .map((r) => ({
-        vendorId: String(r[0] || "").trim(),
-        name: String(r[1] || "").trim(),
-        category: String(r[2] || "").trim(),
-        website: String(r[3] || "").trim(),
-        notes: String(r[4] || "").trim(),
-      }))
-      .filter((v) => v.vendorId && v.name);
-
-    const accountVendors = vendorAccountsRaw.rows
-      .filter((r) => {
-        const acct = String(r[2] || "").trim();
-        const active = String(r[18] || "TRUE").trim().toUpperCase();
-        return (accountParam ? acct === accountParam : true) && active !== "FALSE";
-      })
-      .map((r) => ({
-        rowId: String(r[0] || "").trim(),
-        vendorId: String(r[1] || "").trim(),
-        account: String(r[2] || "").trim(),
-        customerAccountNum: String(r[3] || "").trim(),
-        salesRepName: String(r[4] || "").trim(),
-        salesRepPhone: String(r[5] || "").trim(),
-        salesRepEmail: String(r[6] || "").trim(),
-        deliveryDays: String(r[7] || "").trim(),
-        cutoffTime: String(r[8] || "").trim(),
-        deliveryMethod: String(r[9] || "").trim(),
-        portalUrl: String(r[10] || "").trim(),
-        portalUsername: String(r[11] || "").trim(),
-        portalPassword: String(r[12] || "").trim(),
-        contactName: String(r[13] || "").trim(),
-        contactEmail: String(r[14] || "").trim(),
-        contactPhone: String(r[15] || "").trim(),
-        paymentTerms: String(r[16] || "").trim(),
-        minOrder: String(r[17] || "").trim(),
-      }));
+    const accountVendors = accountVendorsRaw.map((av) => ({
+      rowId:              av.rowId,
+      vendorId:           av.vendorId,
+      account:            av.accountKey,
+      customerAccountNum: av.customerAccountNum,
+      salesRepName:       av.salesRepName,
+      salesRepPhone:      av.salesRepPhone,
+      salesRepEmail:      av.salesRepEmail,
+      deliveryDays:       av.deliveryDays,
+      cutoffTime:         av.cutoffTime,
+      deliveryMethod:     av.deliveryMethod,
+      portalUrl:          av.portalUrl,
+      portalUsername:     av.portalUsername,
+      portalPassword:     av.portalPassword,
+      // contactName/Email/Phone (vendor_accounts cols N/O/P) are
+      // DEAD per the audit (0/54 fills); orchestrator drops them.
+      // Emit as empty strings here to preserve byte-equal response
+      // shape vs the pre-PR-5.2 handler (in case any frontend
+      // consumer uses `'contactName' in bootstrap` checks).
+      contactName:        "",
+      contactEmail:       "",
+      contactPhone:       "",
+      paymentTerms:       av.paymentTerms,
+      minOrder:           av.minOrder,
+    }));
 
     const vendors = accountVendors.map((av) => {
       const master = vendorMaster.find((m) => m.vendorId === av.vendorId) || {};
@@ -365,12 +289,8 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
 
   // ── Vendor Search ──
   if (action === "vendor-search") {
-    const query = (searchParams.get("q") || "").toLowerCase().trim();
-    const { rows } = await safeRead(SHEET_IDS.HUB, "vendor_master");
-    const results = rows
-      .map((r) => ({ vendorId: String(r[0] || "").trim(), name: String(r[1] || "").trim(), category: String(r[2] || "").trim() }))
-      .filter((v) => v.name && v.name.toLowerCase().includes(query))
-      .slice(0, 20);
+    const query = searchParams.get("q") || "";
+    const results = await searchVendors(query);
     return { success: true, vendors: results };
   }
 
@@ -709,12 +629,13 @@ INVOICE NUMBER RULES:
         };
       }
 
-      // Feature #21: Vendor auto-detect via fuzzy matching
+      // Feature #21: Vendor auto-detect via fuzzy matching (PR 5.2:
+      // routes through dataStore orchestrator + shared matcher lib)
       let vendorMatch = null;
       if (parsed.vendorName) {
         try {
-          const vendorData = await safeRead(SHEET_IDS.HUB, "vendor_master");
-          vendorMatch = fuzzyMatchVendor(parsed.vendorName, vendorData.rows);
+          const vendors = await getVendorsForMatching();
+          vendorMatch = fuzzyMatchVendor(parsed.vendorName, vendors);
         } catch (e) {
           console.warn("[Invoice OCR] Vendor matching failed:", e.message);
         }
@@ -860,87 +781,76 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
       customerAccountNum, salesRepName, salesRepPhone, salesRepEmail,
       deliveryDays, cutoffTime, deliveryMethod,
       portalUrl, portalUsername, portalPassword,
-      contactName, contactEmail, contactPhone,
       paymentTerms, minOrder, existingVendorId,
     } = body;
 
-    // F19b (Audit #4): client-UUID idempotency. Frontend sends body.uuid; same UUID = same submit-click.
-    // Stored at vendor_master col J (index 9) and vendor_accounts col X (index 23).
+    // F19b (Audit #4): client-UUID idempotency. Frontend sends body.uuid;
+    // same UUID = same submit-click. PR 5.2: idempotency now handled by
+    // the dataStore orchestrators (clientUuid stored at vendor_master
+    // col J / vendor_accounts col X on Sheets; client_uuid UNIQUE
+    // constraint on PG).
     const clientUuid = body.uuid || crypto.randomUUID();
-
-    let vendorId = existingVendorId;
-
-    if (!vendorId) {
-      if (!vendorName?.trim()) return { success: false, error: "Vendor name is required" };
-
-      const masterRead = await safeRead(SHEET_IDS.HUB, "vendor_master");
-
-      // F19b: short-circuit if this clientUuid already created a vendor_master row
-      const priorMaster = masterRead.rows.find((r) => String(r[9] || "") === clientUuid);
-      if (priorMaster) {
-        return {
-          success: true,
-          vendorId: String(priorMaster[0] || ""),
-          vendorName: String(priorMaster[1] || ""),
-          deduplicated: true,
-        };
-      }
-
-      // F19a (Audit #4): retry on vendor-ID collision. 900 possible suffixes per 3-letter prefix
-      // makes eventual collision statistically certain as KitchFix scales. Up to 5 retries.
-      const prefix = vendorName.trim().substring(0, 3).toUpperCase().replace(/[^A-Z]/g, "X");
-      const existingVendorIds = new Set(masterRead.rows.map((r) => String(r[0] || "").trim()).filter(Boolean));
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const candidate = `${prefix}-${Math.floor(Math.random() * 900) + 100}`;
-        if (!existingVendorIds.has(candidate)) { vendorId = candidate; break; }
-      }
-      if (!vendorId) {
-        return { success: false, error: `Failed to generate unique vendor ID after 5 attempts for prefix "${prefix}"` };
-      }
-
-      const masterRow = [
-        vendorId, vendorName.trim(), category || "", website || "", notes || "",
-        email, new Date().toISOString(),
-        "", "",         // col H (lastInvoiceDate, unused), col I (aliases, populated later by learnVendorAlias)
-        clientUuid,     // col J: F19b idempotency key
-      ];
-
-      const masterResult = await appendRowSA(SHEET_IDS.HUB, "vendor_master", masterRow);
-      if (!masterResult.success) return { success: false, error: "Failed to create vendor: " + masterResult.error };
-    }
 
     if (!account?.trim()) return { success: false, error: "Account is required" };
 
-    // F19b: dedup vendor_accounts insert when this clientUuid already linked a vendor-account pair
-    // (covers existingVendorId double-tap; new-vendor case usually caught by the master dedup above).
-    const accountsRead = await safeRead(SHEET_IDS.HUB, "vendor_accounts");
-    const priorAccount = accountsRead.rows.find((r) => String(r[23] || "") === clientUuid);
-    if (priorAccount) {
-      return {
-        success: true,
-        vendorId: String(priorAccount[1] || ""),
-        vendorName: body.vendorName || "",
-        deduplicated: true,
-      };
+    let vendorId = existingVendorId;
+    let resolvedVendorName = vendorName;
+    let deduplicated = false;
+
+    if (!vendorId) {
+      if (!vendorName?.trim()) return { success: false, error: "Vendor name is required" };
+      try {
+        // F19a vendor ID generation is lifted to the orchestrator level
+        // for cross-store coordination (PR #78 pattern). F19b dedup is
+        // checked inside the orchestrator: same clientUuid -> short-
+        // circuit return.
+        const result = await upsertVendor({
+          name:        vendorName.trim(),
+          category:    category || "",
+          website:     website  || "",
+          notes:       notes    || "",
+          createdBy:   email,
+          clientUuid,
+        });
+        vendorId = result.vendorId;
+        resolvedVendorName = result.vendorName || vendorName;
+        if (result.deduplicated) {
+          return { success: true, vendorId, vendorName: resolvedVendorName, deduplicated: true };
+        }
+      } catch (e) {
+        return { success: false, error: "Failed to create vendor: " + e.message };
+      }
     }
 
-    const rowId = `${vendorId}_${account.split(" - ").slice(0, 2).join("-")}`;
-    const accountRow = [
-      rowId, vendorId, account,
-      customerAccountNum || "", salesRepName || "", salesRepPhone || "", salesRepEmail || "",
-      deliveryDays || "", cutoffTime || "", deliveryMethod || "",
-      portalUrl || "", portalUsername || "", portalPassword || "",
-      contactName || "", contactEmail || "", contactPhone || "",
-      paymentTerms || "", minOrder || "", "TRUE",
-      email, new Date().toISOString(),
-      "",                       // col V: unused per Phase 2 F11
-      body.accountNotes || "",  // col W
-      clientUuid,               // col X: F19b idempotency key
-    ];
+    // F19b account-side check is handled inside upsertVendorAccount;
+    // if a prior row matched the clientUuid, the orchestrator returns
+    // deduplicated: true and the handler short-circuits.
+    try {
+      const acctResult = await upsertVendorAccount({
+        vendorId,
+        accountKey:         account,
+        customerAccountNum: customerAccountNum || "",
+        salesRepName:       salesRepName       || "",
+        salesRepPhone:      salesRepPhone      || "",
+        salesRepEmail:      salesRepEmail      || "",
+        deliveryDays:       deliveryDays       || "",
+        cutoffTime:         cutoffTime         || "",
+        deliveryMethod:     deliveryMethod     || "",
+        portalUrl:          portalUrl          || "",
+        portalUsername:     portalUsername     || "",
+        portalPassword:     portalPassword     || "",
+        paymentTerms:       paymentTerms       || "",
+        minOrder:           minOrder           || "",
+        accountNotes:       body.accountNotes  || "",
+        createdBy:          email,
+        clientUuid,
+      });
+      deduplicated = !!acctResult.deduplicated;
+    } catch (e) {
+      return { success: false, vendorId, vendorName: resolvedVendorName || "", error: e.message };
+    }
 
-    const accountResult = await appendRowSA(SHEET_IDS.HUB, "vendor_accounts", accountRow);
-
-    if (accountResult.success && process.env.SLACK_VENDOR_WEBHOOK) {
+    if (!deduplicated && process.env.SLACK_VENDOR_WEBHOOK) {
       fetch(process.env.SLACK_VENDOR_WEBHOOK, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -957,7 +867,12 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
       }).catch(() => {});
     }
 
-    return { success: accountResult.success, vendorId, vendorName: body.vendorName || "", error: accountResult.error };
+    return {
+      success:      true,
+      vendorId,
+      vendorName:   body.vendorName || resolvedVendorName || "",
+      ...(deduplicated ? { deduplicated: true } : {}),
+    };
   }
 
 
@@ -1149,9 +1064,9 @@ pages.length, "FALSE", "sent", "", type, rawDriveUrl,
         }).catch(() => {});
       }
 
-// Auto-learn vendor alias from OCR detection
+// Auto-learn vendor alias from OCR detection (PR 5.2: orchestrator)
       if (body.ocrVendorName && vendorId) {
-        learnVendorAlias(vendorId, body.ocrVendorName, token).catch((err) => {
+        learnVendorAlias({ vendorId, ocrName: body.ocrVendorName, learnedBy: email }).catch((err) => {
           console.warn("[Invoice] Alias learning failed (non-blocking):", err.message);
         });
       }
@@ -1523,7 +1438,7 @@ async function updateScanStatus(token, uuid, status) {
 export async function handleVendorList(searchParams, token, email) {
   const accountKey   = searchParams.get("accountKey");
   const category     = searchParams.get("category");
-  const search       = (searchParams.get("search") || "").toLowerCase().trim();
+  const search       = searchParams.get("search") || "";
   const page         = parseInt(searchParams.get("page") || "1", 10);
   const pageSize     = parseInt(searchParams.get("pageSize") || "10", 10);
   const showInactive = searchParams.get("active") === "false";
@@ -1531,98 +1446,36 @@ export async function handleVendorList(searchParams, token, email) {
 
   if (!accountKey && !allAccounts) return { success: false, error: "accountKey required" };
 
-  const [masterResult, accountResult] = await Promise.all([
-    readSheetSA(SHEET_IDS.HUB, "vendor_master"),
-    readSheetSA(SHEET_IDS.HUB, "vendor_accounts"),
-  ]);
+  // PR 5.2: routes through dataStore/vendor.js orchestrator. The
+  // orchestrator owns the master + accounts join, filtering, and
+  // pagination logic identically to the pre-PR-5.2 handler. With
+  // flags off (default), behavior is byte-identical.
+  const result = await getVendorsForList({
+    accountKey, allAccounts, category, search,
+    page, pageSize, showInactive,
+  });
 
-  const linkMap = {};
-  for (const r of accountResult.rows) {
-    const vId = String(r[1] || "").trim();
-    if (!vId) continue;
-    if (!linkMap[vId]) linkMap[vId] = [];
-    linkMap[vId].push({
-      rowId:              String(r[0]  || "").trim(),
-      accountKey:         String(r[2]  || "").trim(),
-      customerAccountNum: String(r[3]  || "").trim(),
-      salesRepName:       String(r[4]  || "").trim(),
-      salesRepPhone:      String(r[5]  || "").trim(),
-      salesRepEmail:      String(r[6]  || "").trim(),
-      deliveryDays:       String(r[7]  || "").trim(),
-      cutoffTime:         String(r[8]  || "").trim(),
-      deliveryMethod:     String(r[9]  || "").trim(),
-      portalUrl:          String(r[10] || "").trim(),
-      portalUsername:     String(r[11] || "").trim(),
-      portalPassword:     String(r[12] || "").trim(),
-      contactName:        String(r[13] || "").trim(),
-      contactEmail:       String(r[14] || "").trim(),
-      contactPhone:       String(r[15] || "").trim(),
-      paymentTerms:       String(r[16] || "").trim(),
-      minOrder:           String(r[17] || "").trim(),
-      active:             String(r[18] || "TRUE").trim().toUpperCase() !== "FALSE",
-      createdBy:          String(r[19] || "").trim(),
-      createdAt:          String(r[20] || "").trim(),
-      accountNotes:       String(r[22] || "").trim(),
-    });
-  }
+  // Add contactName/Email/Phone empty-string keys for backwards-
+  // compatible response shape (dead vendor_accounts cols N/O/P are
+  // dropped by the orchestrator but the handler historically emitted
+  // them as empty strings; preserve that for any frontend consumer
+  // doing `'contactName' in row` checks).
+  const vendors = result.vendors.map((v) => ({
+    ...v,
+    contactName:  "",
+    contactEmail: "",
+    contactPhone: "",
+  }));
 
-  let vendors = masterResult.rows
-    .filter((r) => r[0])
-    .map((r) => {
-      const vendorId    = String(r[0]).trim();
-      const links       = linkMap[vendorId] || [];
-      const accountLink = accountKey ? links.find((l) => l.accountKey === accountKey) : null;
-      return {
-        vendorId,
-        name:               String(r[1] || "").trim(),
-        category:           String(r[2] || "").trim(),
-        website:            String(r[3] || "").trim(),
-        notes:              String(r[4] || "").trim(),
-        createdBy:          String(r[5] || "").trim(),
-        createdAt:          String(r[6] || "").trim(),
-        customerAccountNum: accountLink?.customerAccountNum || "",
-        salesRepName:       accountLink?.salesRepName       || "",
-        salesRepPhone:      accountLink?.salesRepPhone      || "",
-        salesRepEmail:      accountLink?.salesRepEmail      || "",
-        deliveryDays:       accountLink?.deliveryDays       || "",
-        cutoffTime:         accountLink?.cutoffTime         || "",
-        deliveryMethod:     accountLink?.deliveryMethod     || "",
-        portalUrl:          accountLink?.portalUrl          || "",
-        portalUsername:     accountLink?.portalUsername     || "",
-        portalPassword:     accountLink?.portalPassword     || "",
-        contactName:        accountLink?.contactName        || "",
-        contactEmail:       accountLink?.contactEmail       || "",
-        contactPhone:       accountLink?.contactPhone       || "",
-        paymentTerms:       accountLink?.paymentTerms       || "",
-        minOrder:           accountLink?.minOrder           || "",
-        accountNotes:       accountLink?.accountNotes       || "",
-        active:             accountLink ? accountLink.active : true,
-        linkedAccounts:     links.map((l) => l.accountKey),
-      };
-    });
-
-  if (!allAccounts && accountKey) {
-    vendors = vendors.filter((v) => (linkMap[v.vendorId] || []).some((l) => l.accountKey === accountKey));
-  }
-
-  vendors = vendors.filter((v) => showInactive ? !v.active : v.active !== false);
-  if (category && category !== "All") vendors = vendors.filter((v) => v.category === category);
-  if (search) vendors = vendors.filter((v) => v.name.toLowerCase().includes(search));
-
-  const inactiveCount = accountKey
-    ? masterResult.rows.filter((r) => {
-        const vId  = String(r[0] || "").trim();
-        const link = (linkMap[vId] || []).find((l) => l.accountKey === accountKey);
-        return link && !link.active;
-      }).length
-    : 0;
-
-  const total   = vendors.length;
-  const start   = (page - 1) * pageSize;
-  const paged   = vendors.slice(start, start + pageSize);
-  const hasMore = start + pageSize < total;
-
-  return { success: true, vendors: paged, total, inactiveCount, hasMore, page, pageSize };
+  return {
+    success:       true,
+    vendors,
+    total:         result.total,
+    inactiveCount: result.inactiveCount,
+    hasMore:       result.hasMore,
+    page:          result.page,
+    pageSize:      result.pageSize,
+  };
 }
 
 // ── GET: vendor-get ───────────────────────────────────────────────────────────
@@ -1631,45 +1484,20 @@ export async function handleVendorGet(searchParams, token, email) {
   const accountKey = searchParams.get("accountKey");
   if (!vendorId) return { success: false, error: "vendorId required" };
 
-  const [masterResult, accountResult] = await Promise.all([
-    readSheetSA(SHEET_IDS.HUB, "vendor_master"),
-    readSheetSA(SHEET_IDS.HUB, "vendor_accounts"),
-  ]);
+  // PR 5.2: routes through dataStore/vendor.js orchestrator. The
+  // orchestrator returns the canonical vendor record or null.
+  const vendor = await getVendor(vendorId, accountKey);
+  if (!vendor) return { success: false, error: "Vendor not found" };
 
-  const masterRow = masterResult.rows.find((r) => String(r[0] || "").trim() === vendorId);
-  if (!masterRow) return { success: false, error: "Vendor not found" };
-
-  const allLinks    = accountResult.rows.filter((r) => String(r[1] || "").trim() === vendorId);
-  const accountLink = accountKey ? allLinks.find((r) => String(r[2] || "").trim() === accountKey) : null;
-
+  // Add contactName/Email/Phone empty strings for response shape parity
+  // (dead vendor_accounts cols N/O/P; orchestrator drops them).
   return {
     success: true,
     vendor: {
-      vendorId:           String(masterRow[0] || "").trim(),
-      name:               String(masterRow[1] || "").trim(),
-      category:           String(masterRow[2] || "").trim(),
-      website:            String(masterRow[3] || "").trim(),
-      notes:              String(masterRow[4] || "").trim(),
-      createdBy:          String(masterRow[5] || "").trim(),
-      createdAt:          String(masterRow[6] || "").trim(),
-      customerAccountNum: String(accountLink?.[3]  || "").trim(),
-      salesRepName:       String(accountLink?.[4]  || "").trim(),
-      salesRepPhone:      String(accountLink?.[5]  || "").trim(),
-      salesRepEmail:      String(accountLink?.[6]  || "").trim(),
-      deliveryDays:       String(accountLink?.[7]  || "").trim(),
-      cutoffTime:         String(accountLink?.[8]  || "").trim(),
-      deliveryMethod:     String(accountLink?.[9]  || "").trim(),
-      portalUrl:          String(accountLink?.[10] || "").trim(),
-      portalUsername:     String(accountLink?.[11] || "").trim(),
-      portalPassword:     String(accountLink?.[12] || "").trim(),
-      contactName:        String(accountLink?.[13] || "").trim(),
-      contactEmail:       String(accountLink?.[14] || "").trim(),
-      contactPhone:       String(accountLink?.[15] || "").trim(),
-      paymentTerms:       String(accountLink?.[16] || "").trim(),
-      minOrder:           String(accountLink?.[17] || "").trim(),
-      accountNotes:       String(accountLink?.[22] || "").trim(),
-      active:             String(accountLink?.[18] || "TRUE").trim().toUpperCase() !== "FALSE",
-      linkedAccounts:     allLinks.map((r) => String(r[2] || "").trim()),
+      ...vendor,
+      contactName:  "",
+      contactEmail: "",
+      contactPhone: "",
     },
   };
 }
@@ -1681,43 +1509,36 @@ export async function handleVendorUpdate(body, token, email) {
     customerAccountNum, salesRepName, salesRepPhone, salesRepEmail,
     deliveryDays, cutoffTime, deliveryMethod,
     portalUrl, portalUsername, portalPassword,
-    contactName, contactEmail, contactPhone,
     paymentTerms, minOrder, accountNotes,
   } = body;
 
   if (!vendorId || !accountKey) return { success: false, error: "vendorId and accountKey required" };
 
-  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
-  const rowIndex = rows.findIndex(
-    (r) => String(r[1] || "").trim() === vendorId && String(r[2] || "").trim() === accountKey
-  );
-  if (rowIndex === -1) return { success: false, error: "Account link not found" };
+  // PR 5.2: routes through dataStore/vendor.js orchestrator. The
+  // orchestrator's upsertVendorAccount handles the read-existing /
+  // partial-update flow that the pre-PR-5.2 handler did inline.
+  // Only fields present in the body propagate; absent fields preserve
+  // the existing values in both stores.
+  const payload = { vendorId, accountKey };
+  if (customerAccountNum !== undefined) payload.customerAccountNum = customerAccountNum;
+  if (salesRepName       !== undefined) payload.salesRepName       = salesRepName;
+  if (salesRepPhone      !== undefined) payload.salesRepPhone      = salesRepPhone;
+  if (salesRepEmail      !== undefined) payload.salesRepEmail      = salesRepEmail;
+  if (deliveryDays       !== undefined) payload.deliveryDays       = deliveryDays;
+  if (cutoffTime         !== undefined) payload.cutoffTime         = cutoffTime;
+  if (deliveryMethod     !== undefined) payload.deliveryMethod     = deliveryMethod;
+  if (portalUrl          !== undefined) payload.portalUrl          = portalUrl;
+  if (portalUsername     !== undefined) payload.portalUsername     = portalUsername;
+  if (portalPassword     !== undefined) payload.portalPassword     = portalPassword;
+  if (paymentTerms       !== undefined) payload.paymentTerms       = paymentTerms;
+  if (minOrder           !== undefined) payload.minOrder           = minOrder;
+  if (accountNotes       !== undefined) payload.accountNotes       = accountNotes;
 
-  const sheetRow = rowIndex + 2;
-  const existing = rows[rowIndex];
-  const values = [[
-    customerAccountNum ?? existing[3]  ?? "",
-    salesRepName       ?? existing[4]  ?? "",
-    salesRepPhone      ?? existing[5]  ?? "",
-    salesRepEmail      ?? existing[6]  ?? "",
-    deliveryDays       ?? existing[7]  ?? "",
-    cutoffTime         ?? existing[8]  ?? "",
-    deliveryMethod     ?? existing[9]  ?? "",
-    portalUrl          ?? existing[10] ?? "",
-    portalUsername     ?? existing[11] ?? "",
-    portalPassword     ?? existing[12] ?? "",
-    contactName        ?? existing[13] ?? "",
-    contactEmail       ?? existing[14] ?? "",
-    contactPhone       ?? existing[15] ?? "",
-    paymentTerms       ?? existing[16] ?? "",
-    minOrder           ?? existing[17] ?? "",
-  ]];
-
-  // Cols D-R are contiguous (15 cells) → single batched range write. Col W is non-contiguous (separate call).
-  await Promise.all([
-    updateRangeSA(SHEET_IDS.HUB, `vendor_accounts!D${sheetRow}:R${sheetRow}`, values),
-    updateCellSA(SHEET_IDS.HUB, `vendor_accounts!W${sheetRow}`, accountNotes ?? existing[22] ?? ""),
-  ]);
+  try {
+    await upsertVendorAccount(payload);
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
     fetch(process.env.SLACK_VENDOR_WEBHOOK, {
@@ -1740,21 +1561,23 @@ export async function handleVendorMasterUpdate(body, token, email) {
   if (!vendorId) return { success: false, error: "vendorId required" };
   if (!name || !name.trim()) return { success: false, error: "Vendor name required" };
 
-  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
-  const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
-  if (rowIndex === -1) return { success: false, error: "Vendor not found" };
-
-  const sheetRow = rowIndex + 2;
-  // Cols B-E: name, category, website, notes; Col I: aliases
-  const masterCols = ["B","C","D","E","I"];
-  const values = [
-    name.trim(),
-    category || "",
-    website?.trim() || "",
-    notes?.trim() || "",
-    aliases !== undefined ? String(aliases).trim() : String(rows[rowIndex][8] || "").trim(),
-  ];
-  await Promise.all(masterCols.map((col, i) => updateCellSA(SHEET_IDS.HUB, `vendor_master!${col}${sheetRow}`, values[i])));
+  // PR 5.2: routes through dataStore/vendor.js orchestrator.
+  // upsertVendor with existing vendorId performs the update path
+  // (Sheets: cells B/C/D/E/I; PG: matching columns). Aliases is the
+  // pipe-string per existing convention.
+  try {
+    await upsertVendor({
+      vendorId,
+      name:     name.trim(),
+      category: category || "",
+      website:  website?.trim() || "",
+      notes:    notes?.trim() || "",
+      ...(aliases !== undefined ? { aliases } : {}),
+      createdBy: email,
+    });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
     fetch(process.env.SLACK_VENDOR_WEBHOOK, {
@@ -1778,23 +1601,26 @@ export async function handleVendorDeactivate(body, token, email) {
   if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
     return { success: false, error: "Vendor deactivation requires admin approval. Contact Kevin to deactivate a vendor." };
   }
-  return setVendorActive(vendorId, accountKey, false, token);
+  return setVendorActiveViaOrchestrator(vendorId, accountKey, false, email);
 }
 
 // ── POST: vendor-reactivate ───────────────────────────────────────────────────
 export async function handleVendorReactivate(body, token, email) {
   const { vendorId, accountKey } = body;
   if (!vendorId || !accountKey) return { success: false, error: "vendorId and accountKey required" };
-  return setVendorActive(vendorId, accountKey, true, token);
+  return setVendorActiveViaOrchestrator(vendorId, accountKey, true, email);
 }
 
-async function setVendorActive(vendorId, accountKey, active, token) {
-  const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
-  const rowIndex = rows.findIndex(
-    (r) => String(r[1] || "").trim() === vendorId && String(r[2] || "").trim() === accountKey
-  );
-  if (rowIndex === -1) return { success: false, error: "Account link not found" };
-  await updateCellSA(SHEET_IDS.HUB, `vendor_accounts!S${rowIndex + 2}`, active ? "TRUE" : "FALSE");
+// Shared adapter for de/reactivate: shells to the orchestrator and
+// fires the Slack notification on success. The legacy setVendorActive
+// helper was deleted in PR 5.2; this is its replacement and only the
+// 2 vendor handlers above call it.
+async function setVendorActiveViaOrchestrator(vendorId, accountKey, active, email) {
+  try {
+    await deactivateVendorAccount({ vendorId, accountKey, active });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
     const actionLabel = active ? "Reactivated" : "Deactivated";
@@ -1803,7 +1629,7 @@ async function setVendorActive(vendorId, accountKey, active, token) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: `Vendor ${actionLabel.toLowerCase()}: ${vendorId}`,
-        blocks: [{ type: "section", text: { type: "mrkdwn", text: `*Vendor ${actionLabel}*\n*Vendor ID:* ${vendorId}\n*Account:* ${accountKey}` } }],
+        blocks: [{ type: "section", text: { type: "mrkdwn", text: `*Vendor ${actionLabel}*\n*Vendor ID:* ${vendorId}\n*Account:* ${accountKey}\n*By:* ${email}` } }],
       }),
     }).catch(() => {});
   }
@@ -1811,89 +1637,29 @@ async function setVendorActive(vendorId, accountKey, active, token) {
   return { success: true };
 }
 
-// ── Helper: auto-learn vendor alias from OCR detection ───────────────────
-async function learnVendorAlias(vendorId, ocrName, token) {
-  if (!vendorId || !ocrName) return;
-  try {
-    const { rows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
-    const rowIndex = rows.findIndex((r) => String(r[0] || "").trim() === vendorId);
-    if (rowIndex === -1) return;
-
-    const primaryName = String(rows[rowIndex][1] || "").trim().toLowerCase();
-    const ocrClean = ocrName.trim();
-    const ocrLower = ocrClean.toLowerCase();
-
-    // Don't save if it matches the primary name
-    if (ocrLower === primaryName) return;
-
-    // Check existing aliases
-    const existingAliases = String(rows[rowIndex][8] || "").trim();
-    const aliasList = existingAliases ? existingAliases.split("|").map((a) => a.trim()) : [];
-
-    // Don't save if alias already exists (case-insensitive)
-    if (aliasList.some((a) => a.toLowerCase() === ocrLower)) return;
-
-    // Append new alias
-    const updated = aliasList.length > 0 ? `${existingAliases}|${ocrClean}` : ocrClean;
-    const sheetRow = rowIndex + 2;
-    await updateCellSA(SHEET_IDS.HUB, `vendor_master!I${sheetRow}`, updated);
-    console.log(`[Vendor Alias] Learned: "${ocrClean}" → ${vendorId} (${primaryName})`);
-  } catch (e) {
-    console.warn("[Vendor Alias] Non-fatal:", e.message);
-  }
-}
+// learnVendorAlias helper deleted - replaced by orchestrator import
+// at the top of this file. Call site (invoice-submit, ~L1070) uses
+// the orchestrator's { vendorId, ocrName, learnedBy } signature.
 
 // ── POST: vendor-merge ────────────────────────────────────────────────────────
+// BR1 (Audit #4): admin-only. Same OPS_LEADERSHIP gate as
+// handleVendorDeactivate. Added in PR 5.2.
 export async function handleVendorMerge(body, token, email) {
   const { keeperId, dupeIds } = body;
   if (!keeperId || !dupeIds?.length) return { success: false, error: "keeperId and dupeIds required" };
+  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+    return { success: false, error: "Vendor merge requires admin approval. Contact Kevin to merge vendors." };
+  }
 
-  const { rows: masterRows } = await readSheetSA(SHEET_IDS.HUB, "vendor_master");
-
-  // 1. Reassign vendor_accounts rows from dupeIds → keeperId (batched into one API call)
-  const { rows: acctRows } = await readSheetSA(SHEET_IDS.HUB, "vendor_accounts");
-  const acctBatchData = [];
-  acctRows.forEach((row, i) => {
-    if (i === 0) return;
-    const rowVendorId = String(row[1] || "").trim();
-    if (dupeIds.includes(rowVendorId)) {
-      acctBatchData.push({ range: `vendor_accounts!B${i + 2}`, values: [[keeperId]] });
-    }
-  });
-  if (acctBatchData.length > 0) await batchUpdateRangesSA(SHEET_IDS.HUB, acctBatchData);
-
-  // 2. Soft-delete dupes (B-E contiguous → one range per dupe, all batched in one API call) + collect names
-  const dupeNames = [];
-  const masterBatchData = [];
-  masterRows.forEach((row, i) => {
-    if (i === 0) return;
-    const rowVendorId = String(row[0] || "").trim();
-    if (dupeIds.includes(rowVendorId)) {
-      const dupeName = String(row[1] || "").trim();
-      if (dupeName) dupeNames.push(dupeName);
-      // Soft-delete: blank name/category/website (B/C/D), mark notes (E) as DELETED
-      masterBatchData.push({
-        range: `vendor_master!B${i + 2}:E${i + 2}`,
-        values: [["", "", "", "DELETED"]],
-      });
-    }
-  });
-  if (masterBatchData.length > 0) await batchUpdateRangesSA(SHEET_IDS.HUB, masterBatchData);
-
-  // 3. Append dupe names as aliases on the keeper row
-  if (dupeNames.length > 0) {
-    const keeperIndex = masterRows.findIndex((r) => String(r[0] || "").trim() === keeperId);
-    if (keeperIndex !== -1) {
-      const keeperSheetRow = keeperIndex + 2;
-      const existingAliases = String(masterRows[keeperIndex][8] || "").trim();
-      const aliasParts = existingAliases ? existingAliases.split("|").map((a) => a.trim()).filter(Boolean) : [];
-      for (const dn of dupeNames) {
-        if (!aliasParts.some((a) => a.toLowerCase() === dn.toLowerCase())) {
-          aliasParts.push(dn);
-        }
-      }
-      await updateCellSA(SHEET_IDS.HUB, `vendor_master!I${keeperSheetRow}`, aliasParts.join("|"));
-    }
+  // PR 5.2: routes through dataStore/vendor.js orchestrator. The
+  // orchestrator handles the 3-step Sheets sequence + the
+  // (sequential, non-atomic in PR 5.1; transactional in PR 5.3) PG
+  // sequence. Returns the same counts the old handler reported.
+  let result;
+  try {
+    result = await mergeVendors({ keeperId, dupeIds, email });
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 
   if (process.env.SLACK_VENDOR_WEBHOOK) {
@@ -1901,19 +1667,19 @@ export async function handleVendorMerge(body, token, email) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: `Vendors merged: ${dupeIds.join(", ")} → ${keeperId}`,
+        text: `Vendors merged: ${dupeIds.join(", ")} -> ${keeperId}`,
         blocks: [{ type: "section", text: { type: "mrkdwn",
-          text: `*Vendors Merged*\n*Kept:* ${keeperId}\n*Removed:* ${dupeIds.join(", ")}\n*Aliases added:* ${dupeNames.join(", ") || "none"}\n*Accounts reassigned:* ${acctBatchData.length}\n*By:* ${email}` } }],
+          text: `*Vendors Merged*\n*Kept:* ${keeperId}\n*Removed:* ${dupeIds.join(", ")}\n*Aliases added:* ${result.aliasesAdded.join(", ") || "none"}\n*Accounts reassigned:* ${result.accountRowsReassigned}\n*By:* ${email}` } }],
       }),
     }).catch(() => {});
   }
 
   return {
-    success: true,
-    keeperId,
-    dupeIds,
-    accountRowsReassigned: acctBatchData.length,
-    vendorRowsDeleted: masterBatchData.length,
-    aliasesAdded: dupeNames,
+    success:               true,
+    keeperId:              result.keeperId,
+    dupeIds:               result.dupeIds,
+    accountRowsReassigned: result.accountRowsReassigned,
+    vendorRowsDeleted:     result.vendorRowsDeleted,
+    aliasesAdded:          result.aliasesAdded,
   };
 }

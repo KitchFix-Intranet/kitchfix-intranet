@@ -2,8 +2,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import VendorCard from "./VendorCard";
 import VendorEditModal from "./VendorEditModal";
+import { CATEGORIES as VENDOR_CATEGORIES } from "@/lib/vendorEnums";
 
-const CATEGORIES = ["All", "Produce", "Protein", "Dairy", "Dry Goods", "Beverage", "Packaging", "Cleaning", "Equipment", "Specialty", "Broadliner", "Other"];
+// VendorList prefixes "All" as a filter-UI sentinel; the canonical
+// CATEGORIES list (13 items) lives in src/lib/vendorEnums.js.
+const CATEGORIES = ["All", ...VENDOR_CATEGORIES];
 const PAGE_SIZE  = 12;
 
 function SearchIcon() {
