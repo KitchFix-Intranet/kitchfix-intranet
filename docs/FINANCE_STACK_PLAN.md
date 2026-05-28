@@ -68,6 +68,8 @@ That's 16 tables, not 13. The plan covers all of them; the "13" figure in the us
 
 All tables use `gen_random_uuid()` for surrogate keys (Postgres extension `pgcrypto`). All timestamps are `TIMESTAMPTZ`. All BOOLEAN columns default sensibly. Soft-delete via `deleted_at TIMESTAMPTZ` per Q5.
 
+**GRANT requirement (added 2026-05-28 during PR 5.1 verification):** All new tables MUST include GRANT statements matching the existing convention - `service_role` gets full DML (`SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE`); `anon` and `authenticated` get metadata-only access (`REFERENCES, TRIGGER, TRUNCATE`, no DML). The Supabase project does not have a default-privileges grant configured, so PostgREST queries (which is what supabase-js uses) fail with "permission denied" on ungranted tables, even with RLS disabled. See `docs/migrations/pr-5-1-vendor-schema.sql` for the canonical GRANT block. The DDL examples in this section show schema only; the GRANT block is identical across all tables and is included in the per-PR migration files.
+
 #### `vendors`
 
 ```sql

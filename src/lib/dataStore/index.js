@@ -69,3 +69,14 @@ export {
   upsertSubmission,
   updateSubmissionStatus,
 } from "./submissions.js";
+
+export {
+  getVendorsForList,
+  getVendorsForBootstrap,
+  searchVendors,
+  upsertVendor,
+  upsertVendorAccount,
+  deactivateVendorAccount,
+  learnVendorAlias,
+  mergeVendors,
+} from "./vendor.js";
