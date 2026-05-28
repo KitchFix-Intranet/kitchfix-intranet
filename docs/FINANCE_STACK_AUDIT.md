@@ -41,213 +41,286 @@ Companion sheets read live for header + sample row verification (column-position
 
 The 5 most important findings, in priority order for the planning artifact:
 
-1. **`opsUtils.getAllVendors` and `resolveVendorId` have positional-index drift (DRIFT H1, H2).** `getAllVendors` returns `shortName: r[2]` but col 2 is `category`, and the `active: r[3] !== "FALSE"` check is on `website` column (not `active` - which doesn't exist on vendor_master). The functions are imported by inventoryActions.js. **Inventory bootstrap may be returning wrong/inconsistent vendor data today.** Fix is one-line per function but must be made carefully (which behavior was intended).
+1. **`opsUtils.getAllVendors` and `resolveVendorId` are LATENT bugs (zero live callers).** The functions have positional-index drift - `shortName: r[2]` returns category, `active: r[3]` checks the website column. Imported by inventoryActions.js (line 9) but the **verified-via-grep call count is ZERO** across the entire src/ tree. The functions are imported alongside `parseNum` + `generateId` (which ARE called). Bug exists but no user-facing impact today. NOT a hotfix; recommended cleanup during vendor migration PR B: delete the unused exports + drop the unused imports. Severity downgraded from HIGH to LOW.
 
-2. **`zone_corrections` tab written by `handleReviewAccept` but NOT documented in any brief.** Inventory's PG schema design is incomplete without this table - schema must be captured before design phase.
+2. **`zone_corrections` tab EXISTS, schema captured live.** Header verified: 9 columns `[correctionId, account, timestamp, email, itemId, itemName, aiSuggestedZone, actualZone, itemCategory]`. Currently 0 rows (feature never used in production OR rows get cleared). Schema design for Smart Inventory PG migration now has the data it needs. See Section 6 for full schema.
 
-3. **Multiple sources of truth for shared logic (5-7 vendor matchers, 5 CATEGORIES lists, 4 CATEGORY_COLORS maps, 2 accountMatch implementations).** Maintenance burden today; opportunity to consolidate during migration OR defer to cleanup PRs. Scope decision needed before planning.
+3. **Multiple sources of truth for shared logic (5-7 vendor matchers, 5 CATEGORIES lists, 4 CATEGORY_COLORS maps, 2 accountMatch implementations).** Maintenance burden today; opportunity to consolidate during migration OR defer to cleanup PRs. Resolved in Section 9: CATEGORIES unifies during vendor PR B; other consolidations stay deferred to backlog.
 
 4. **`handleVendorMerge` has NO server-side admin gate (DRIFT H5).** Brief flags as P2. Any authenticated user can theoretically call the merge endpoint via direct API call. Fix is a one-line `OPS_LEADERSHIP_EMAILS.includes(email)` check.
 
 5. **Cron + intranet share 5 INVENTORY tables (item_catalog, item_aliases, price_history, review_queue, merge_history) with one-way coupling (intranet writes exclude markers, cron reads them).** Migration phasing matters - cron is in a separate repo with its own deploy cycle. Cutover sequence requires intranet dual-write enabled BEFORE cron PR, then read-flip + cron read-swap last.
 
-### Subsection ordering note
-
-Section 2's subsections appear in reverse-physical order due to incremental write pattern (2E. Railway cron appears first, 2A. Shared infrastructure appears last). Content is correct; physical ordering is a polish item to fix in a follow-up.
-
 ---
 
 ## 2. Per-file audit
 
-### 2E. Railway cron (kitchfix-inventory-cron/index.js)
+### 2A. Shared infrastructure
 
-**Lines:** 720
-**Purpose:** Nightly AI catalog reconciliation. Reads new AI_LINE_ITEMS rows per account, matches against item_catalog via Claude, auto-approves >=90% confidence matches (writes item_catalog + item_aliases + price_history) or queues lower confidence (writes review_queue). Posts Slack digest.
-**Reads:**
-  - `readTab(AI_LINE_ITEMS, accountTab)` per account tab.
-  - `readTab(INVENTORY, "item_catalog")` per account.
-  - `readTab(INVENTORY, "item_aliases")` per account.
-  - `readTab(INVENTORY, "price_history")` per account (idempotency check).
-  - `readTab(INVENTORY, "merge_history")` per account (excluded items filter).
-  - `readTab(INVENTORY, "review_queue")` for Slack digest counts.
-  - `getTabNames(AI_LINE_ITEMS_SHEET_ID)` for account discovery.
-**Writes:**
-  - `appendRows(INVENTORY, "item_catalog!A1", rows)` - new items (linkedToInvoice=TRUE).
-  - `appendRows(INVENTORY, "item_aliases!A1", rows)` - new aliases.
-  - `appendRows(INVENTORY, "price_history!A1", rows)` - new price rows (with invoiceUuid as idempotency key).
-  - `appendRows(INVENTORY, "review_queue!A1", rows)` - low-confidence rows.
-  - `updateRange(INVENTORY, "item_catalog!L{r}", "FALSE")` - dedup-mode deactivation (gated by DEDUP=1 env).
-  - `updateRange(INVENTORY, "item_aliases!C{r}", keeperId)` - dedup-mode alias remap.
-  - `updateRange(INVENTORY, "price_history!A{r}", keeperId)` - dedup-mode price remap.
-**AI calls:**
-  - `callClaude(prompt, maxTokens=8192)` via `fetch("https://api.anthropic.com/v1/messages")` - line 123. Model `claude-sonnet-4-20250514`. One call per account per run with batches of 50 items.
-**External calls:**
-  - Anthropic Claude API.
-  - Slack webhook `SLACK_RECAP_WEBHOOK`.
-  - No HTTP coupling to intranet.
-  - No shared modules with intranet (zero code dependency between cron and main repo).
+### src/lib/sheets.js
+
+**Lines:** 443
+**Purpose:** Google Sheets API abstraction layer. Exports SHEET_IDS constants + parallel user-OAuth and service-account helpers.
+**Reads:** N/A (helper module - this is the layer that does reads for everyone else).
+**Writes:** N/A (helper module).
+**AI calls:** none.
+**External calls:** googleapis (Sheets v4 + Drive v3).
 **Cross-file dependencies:**
-  - Imports: `googleapis` (and uses `google.auth.GoogleAuth` + `google.sheets` directly).
-  - NOT imported by anything (standalone Node script).
-**Brief alignment:**
-  - AGREES with SMART_INVENTORY brief Section "How invoice data gets into the system" Step 3 + "How the count flow uses the catalog and prices" + future Stage 2 loop description.
-  - **DRIFT (MEDIUM):** brief THREESYSTEMS Section 1 lists `dedupExistingCatalog` as part of the cron. Verified - lives at line 582 of cron index.js, gated by `DEDUP=1` env. Cron-side dedup is functional but manual (Kevin sets DEDUP=1 and runs).
-  - **DRIFT (LOW):** SMART_INVENTORY brief says cron "Roughly 3,800 line items across approximately 2 months of operations as of mid-May 2026" - data volume estimate, not code.
+  - Imported by: every file in `src/lib/`, every API route in `src/app/api/`, the dataStore.js dual-write orchestrators, opsUtils.js.
+  - Imports: `googleapis`, `process.env` (`GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`).
+**Brief alignment:** AGREES with THREESYSTEMS brief ("Universal patterns shared by all three systems"): all sheet writes go through service account, user OAuth is identity-only. Helper inventory matches what the briefs reference.
 **Undocumented behaviors:**
-  - Tab filter skips: "Invoice Uploads" (catch-all), "Sheet1", "_metadata", and anything starting with "_" (line 689). Account discovery is everything else.
-  - Excluded items per account: reads `merge_history` filtered by action="exclude" + accountMatch (line 295). Builds Set of names to never auto-add even if a new invoice line item arrives.
-  - `MATCH_CONFIDENCE_THRESHOLD` defaults to 90 but is env-configurable.
-  - 50-item batches with 2-second delays between batches (Claude rate limit accommodation).
-  - 1-second delay between accounts.
-  - Slack digest only fires if any account had `processed > 0` OR if it's Monday (catalog health digest always posts on Monday per line 535).
-  - Idempotency: `processedInvoices = new Set(priceHistoryRows.map(...))` - all UUIDs already in price_history are skipped. First-run = process all (backfill). Subsequent runs = incremental.
-  - `dedupExistingCatalog` (line 582) is a SEPARATE one-shot mode - not part of nightly flow. Gated by `DEDUP=1` env var. Has its own `DEDUP_DRY_RUN` env (defaults to true).
-  - `HUB_SHEET_ID` env var declared at line 27 but **NOT USED anywhere else in the file**. Dead config.
-  - v1.2 header (lines 12-19) lists fixes from production fires:
-    - appendRows uses explicit "tab!A1" range (prevents offset column writes)
-    - Account matching uses startsWith (handles short vs full account labels)
-    - Excluded items check via merge_history (prevents re-importing excluded items)
-    - active column filter handles both boolean false and string "FALSE"
-    - readTab skips blank/description rows (rows 2-3)
+  - `SHEET_IDS.GAME` (line 17) is declared but commented "Paused - gamification pilot from the AppScript era. Not in active use; intentionally excluded from the backup-sheets cron." Worth knowing.
+  - Sheet IDs `AI_LINE_ITEMS` and `INVENTORY` (lines 19, 20) both contain capital `O` not `0`. THREESYSTEMS brief calls this out ("This is a common typo source"). Code matches brief.
+  - `appendRowSA` (line 124) auto-adds `!A:A` if the tab name is bare - prevents the "appendRows uses explicit tab!A1 range" bug the cron's `v1.2` comment header mentions. Defensive fix.
+  - Two parallel API surfaces: user-OAuth helpers (`readSheet`, `appendRow`, `updateCell`, `findRowByValue`, `appendRows`) remain in the file but per the migration history (PR #54-#59) all production code now uses the SA variants. The user-OAuth helpers are vestigial but not yet removed.
 **Migration considerations:**
-  - Cron data layer: 4 helpers (`readTab`, `appendRows`, `updateRange`, `getTabNames`). PG migration changes these 4 functions to hit Supabase instead of Sheets.
-  - Cron is in a SEPARATE repo - changing it requires a separate deploy.
-  - Cron migration phasing (per Project 3 recon):
-    1. Intranet-side dual-write enabled.
-    2. Backfill PG tables.
-    3. Cron PR: helpers dual-write (Sheets + PG).
-    4. Cron deploy and verify dual-write for one full run.
-    5. Intranet flag flip (READ_FROM_POSTGRES).
-    6. Cron PR (final): PG-only reads + writes.
-  - Cutover coordination: cron fires at 6am UTC. Flip flags during the 23-hour idle window (NOT around the fire time).
-  - `accountMatch` cron-side duplicates the intranet `accountMatch` in inventoryActions.js. Two implementations of the same rule. PG migration normalizes account_key format to remove the need for both.
-  - `getTabNames` for account discovery becomes `SELECT DISTINCT account_key FROM ai_line_items`.
-  - Idempotency: `invoiceUuid` filter against `price_history` becomes PG UNIQUE constraint on `(item_id, source_or_invoice_id)`.
-  - `dedupExistingCatalog` (the cron-side dedup mode) - decide whether to migrate the manual one-shot or accept that it becomes obsolete once PG constraints prevent duplicates from forming in the first place.
+  - sheets.js is foundation infrastructure. Migration does NOT replace sheets.js; the dataStore.js dispatch routes calls to either sheets.js (Sheets path) or supabase.js (PG path).
+  - When all finance tables are cut over, the SA helpers will still be called from the orchestrators for Sheets-side writes during the dual-write window.
 **Risk surface:**
-  - Cron + intranet have IDENTICAL `accountMatch` rules duplicated in two repos. Drift risk if one changes.
-  - 6am UTC fire window means cutover coordination matters. Bad-state windows possible.
-  - No retry mid-account on failure. Failure of one account's writes is permanent until the next nightly run (idempotency saves but data lags).
-  - No transactions: multi-table append (item_catalog + item_aliases + price_history) is 3 separate API calls. Partial failure means inconsistent state until next run picks it up.
-  - Tab name filter (`_metadata`, `_` prefix) could exclude legitimate accounts if naming convention drifts.
+  - The 14 SA helpers are universal. Any change to their behavior (e.g., adding caching, error semantics) would affect every consumer.
+  - GAME sheet ID exists but is excluded from backups - if revived, backup wiring needs updating.
+
+### src/lib/cutover.js
+
+**Lines:** 193 (post PR #82 doc fix)
+**Purpose:** Stage 1 dual-write control plane. Two env vars (`DUAL_WRITE_TABLES`, `READ_FROM_POSTGRES`) plus per-module variants (`READ_FROM_POSTGRES_<MODULE>`). Three boolean helpers: `isDualWrite`, `isReadFromPostgres`, `getCutoverState`.
+**Reads:** `process.env.DUAL_WRITE_TABLES`, `process.env.READ_FROM_POSTGRES`, `process.env.READ_FROM_POSTGRES_*` at module load time.
+**Writes:** none.
+**AI calls:** none.
+**External calls:** none.
+**Cross-file dependencies:** Imported by dataStore.js (all dispatch sites). No imports.
+**Brief alignment:** N/A - cutover.js is migration infrastructure not covered by the briefs (predates briefs as a Stage 1 mechanism).
+**Undocumented behaviors:**
+  - `isReadFromPostgres(tabName, moduleName)` second arg supports per-module scoping (added for directory PR B). OR-composes global + per-module flag.
+  - Per-module env var discovery is generic: any `READ_FROM_POSTGRES_<MODULE>` is auto-discovered at module load. No code change required to add new modules - just set the env var.
+  - The "implicit invariant" (READ_FROM_POSTGRES implies DUAL_WRITE_TABLES) is operator-maintained, NOT enforced at runtime. Per the PR #82 doc fix, the comment block now explicitly documents this and the misconfiguration state. State 4 (READ_FROM_POSTGRES only, no DUAL_WRITE) silently produces stale reads.
+**Migration considerations:**
+  - cutover.js is the control plane for the finance stack migration. Each new finance module (vendor, invoice, inventory, AI_LINE_ITEMS) gets dispatch sites in dataStore.js that check these flags.
+  - The DECOMMISSION NOTE (KNOWN LIMITATION) section explains that removing tables from DUAL_WRITE_TABLES does NOT stop Sheets writes (orchestrators write Sheets unconditionally). For the cron migration, this matters: the cron can be cleanly swapped because it's a separate repo, but the intranet orchestrators retain Sheets writes indefinitely unless code changes invert the pattern.
+**Risk surface:**
+  - Env var typo (e.g., `READ_FROM_POSTGRES_FINANCE` instead of `READ_FROM_POSTGRES_OPS`) silently does nothing. No error surface.
+
+### src/lib/dataStore.js
+
+**Lines:** 1994
+**Purpose:** Logical data layer for Stage 1 dual-write. Per-table orchestrators dispatch reads/writes between Sheets and Postgres based on cutover flags.
+**Reads:** Composed of per-table read functions (readNewsInteractionsSheets/Postgres, readAccountsSheets/Postgres, etc.). Reads include all migrated tables (news_interactions, accounts, contacts, hero_images, work_locations, submissions).
+**Writes:** Composed of per-table write functions. All orchestrators follow Sheets-first-then-conditional-PG pattern.
+**AI calls:** none.
+**External calls:** none (delegates to sheets.js + supabase.js).
+**Cross-file dependencies:**
+  - Imports: `readSheetSA`, `appendRowSA`, `appendRowsSA`, `updateCellSA`, `updateRangeSA`, `batchUpdateRangesSA`, `clearRangeSA`, `deleteRowSA`, `getSheetIdSA`, `SHEET_IDS` from `@/lib/sheets`. `isDualWrite`, `isReadFromPostgres` from `@/lib/cutover`. `getServiceClient` from `@/lib/supabase`.
+  - Imported by: route handlers for migrated modules (dashboard/route.js for news_interactions, directory/route.js for accounts+contacts+hero_images+work_locations, people/route.js for submissions). Also imported by the backfill scripts.
+**Brief alignment:** N/A - dataStore.js is migration infrastructure not in the briefs.
+**Undocumented behaviors:**
+  - Three shared primitives at lines 400-557 (`coordinatedWrite`, `deleteRecord`, `replaceScope`) - reusable for future modules. NOT exported - composed inline by adapter functions.
+  - `coordinatedWrite` is sequential not parallel - explicit choice to avoid Sheets per-doc write rate limits. Log-and-continue on failure (does NOT throw mid-flight).
+  - `deleteRecord` is idempotent - if key absent from Sheets, treated as no-op success rather than error.
+  - `replaceScope` deletes Sheets rows BOTTOM-UP to avoid row-index shift bug in the Sheets API.
+  - The submissions module (PR A through D, lines 1458-1994) is the most mature pattern: sub-{N} token translation, dual-column timestamp design (created_at immutable + submitted_at mutable), per-module dispatch (`getSubmissions({ module: "people" })` vs `{ module: "dashboard" }`), STATUS DEFAULT GOTCHA, drift fix from PR #78 (orchestrators stamp event-moment ONCE).
+**Migration considerations:**
+  - Finance stack adds 8 new tables to dataStore.js: vendor_master, vendor_accounts, invoice_submissions_26, AI_LINE_ITEMS, item_catalog, storage_locations, count_sessions, count_items, item_aliases, price_history, merge_history, review_queue, plus the GL_CODES table.
+  - Pattern to follow: submissions module (cleanest current example).
+  - Shared primitives (`coordinatedWrite`, `deleteRecord`, `replaceScope`) likely reusable for vendor-merge (multi-table coordinated write) and Smart Inventory item-merge.
+  - File size: 1994 LOC today. Adding finance modules will push past 3000 LOC. Consider splitting into per-module files (e.g., `src/lib/dataStore/vendor.js`, `src/lib/dataStore/invoice.js`) before it becomes unmanageable. OUT OF SCOPE for this audit but flag for the planning artifact.
+**Risk surface:**
+  - The orchestrator pattern is now consistent across all migrated modules. Any new module that deviates from this pattern (e.g., conditional Sheets writes for the cron-aware paths) needs explicit documentation.
+  - Per the PR #78 drift fix: orchestrators MUST stamp event-moment timestamps once before dispatching to adapters. Per-adapter `new Date().toISOString()` produces ~226ms drift. Future finance orchestrators must follow this pattern.
+
+### src/lib/opsUtils.js
+
+**Lines:** 123
+**Purpose:** Shared utility helpers for the Ops Hub: cached reads, account/period lookups, vendor lookups, notifications, formatting.
+**Reads:**
+  - `getAccountConfigs()` reads `HUB.accounts` (cols A/B/C = key, name, level). Cached 60s.
+  - `getPeriods()` reads `HUB.period_data` (cols A/B/C/D = name, start, end, due). Cached 60s.
+  - `getAllVendors()` reads `HUB.vendor_master` (cols 0/1/2/3). Cached 60s. **DRIFT - see below.**
+  - `resolveVendorId(vendorId)` reads `HUB.vendor_master`. Cached 60s.
+**Writes:**
+  - `opsNotify({recipient, subject, eventType, relatedInfo})` appends to `COLLECTION.notification_log` (7-col row: timestamp, recipient, channel='bell', subject, eventType, status='logged', relatedInfo).
+**AI calls:** none.
+**External calls:** `postSlack(webhookUrl, text)` posts a JSON `{text}` to a Slack webhook URL.
+**Cross-file dependencies:**
+  - Imports: `SHEET_IDS`, `readSheetSA`, `appendRowSA` from `@/lib/sheets`.
+  - Imported by: inventoryActions.js (`getAccountConfigs`, `getCurrentPeriod`, `getPeriods`), invoice + vendor handlers (`getAllVendors`, `resolveVendorId`, `opsNotify`, `parseNum`, `formatCurrency`, `generateId`), service-calendar/route.js, dashboard/route.js (via opsNotify), incidentActions.js, etc.
+**Brief alignment:** Mostly AGREES with THREESYSTEMS brief. The brief mentions `getAccountConfigs()` and `getCurrentPeriod()` from "src/lib/accounts.js" but that file does not exist - the functions live in opsUtils.js. **Brief drift: file path incorrect.**
+**Undocumented behaviors:**
+  - **CRITICAL DRIFT: `getAllVendors()` (line 79) reads vendor_master at positional indices that no longer match the schema.**
+    - Code: `{ id: r[0], name: r[1], shortName: r[2] || r[1], active: r[3] !== "FALSE" }`
+    - Actual schema per SHEETS_AUDIT.md + VENDOR_WIDGET brief: `[0]=vendorId, [1]=name, [2]=category, [3]=website, [4]=notes, ...` No `shortName` column. No `active` column on vendor_master (active lives on vendor_accounts col S).
+    - Effect: `shortName` returns category. `active` check on `r[3] !== "FALSE"` is on website column - returns true unless website is literally "FALSE" (essentially always true).
+    - **This means `getAllVendors()` filter never excludes anything, AND the returned `shortName` is wrong.**
+    - Need to grep for callers - if anything depends on shortName being a shortName (not category), behavior is broken today.
+  - `resolveVendorId(vendorId)` (line 86) returns `row[2] || row[1] || vendorId` - returns category if present, else name. Same drift. Comment claims to resolve "shortName" but col 2 is category.
+  - Cache layer with `_cache` Map + 60s TTL + `invalidateCache(spreadsheetId, tabName)`. NOT cleared on writes by default - callers must invalidate explicitly. Used by inventory-bootstrap; not used by vendor-list (which calls readSheetSA directly).
+  - `generateId(prefix)` generates 32-char hex IDs (16 random bytes pattern). Used by Smart Inventory for catalog item IDs, location IDs, session IDs.
+**Migration considerations:**
+  - `getAccountConfigs` + `getPeriods` + `getCurrentPeriod` become PG queries on `accounts` and `periods` tables. Already partially migrated: accounts is on PG (Module 2 directory cutover). `periods` table NOT yet migrated.
+  - **`getAllVendors` and `resolveVendorId` are wrong today.** Fixing them is in-scope for the vendor migration (PR B handler rewire). The fix is one-line per function: correct positional indices.
+  - Cache layer (`cachedRead`, `batchRead`, `invalidateCache`) can be dropped once Postgres is the read path - no need for in-memory caching.
+  - `opsNotify` writes to `COLLECTION.notification_log` - this table is multi-writer (people, opsUtils, cron-daily). NOT in scope for this audit's finance migration, but worth flagging for the dashboard's Module 4+ planning.
+**Risk surface:**
+  - The vendor filter bug (`getAllVendors`) silently returns all vendors regardless of active state. If any caller is using this for "active vendors only" display, the count is wrong.
+  - Cache TTL is 60s. Writes from another deployment (or admin direct sheet edit) won't be reflected for up to 60s. Acceptable today; PG cutover removes this concern.
 
 ---
 
-### 2D. Smart Inventory
+### 2B. Vendor system
 
-### src/lib/inventoryActions.js
+### src/lib/invoiceActions.js (vendor section, lines 1523-1919)
 
-**Lines:** 1216
-**Purpose:** Backend handlers for all Smart Inventory actions. 30+ exported handlers covering bootstrap, count flow (start/save/submit), catalog mutations, location/zone management, AI similarity check, merges, archive/exclude/reactivate.
-**Reads:**
-  - `batchRead(INVENTORY, [item_catalog, storage_locations, count_sessions, count_items, review_queue, price_history, item_aliases])` - bootstrap.
-  - `cachedRead(INVENTORY, "item_catalog")`, etc. - via opsUtils cache (60s TTL).
-  - `getAccountConfigs()`, `getPeriods()`, `getCurrentPeriod()` - from opsUtils.
-  - `getAllVendors()`, `resolveVendorId()` - from opsUtils (DRIFT - see 2A).
-**Writes:**
-  - `appendRowSA(INVENTORY, "count_sessions", ...)` - new session.
-  - `appendRowsSA(INVENTORY, "count_items", rows)` - per-zone count save (one row per item).
-  - `batchUpdateRangesSA(INVENTORY, ...)` - count-submit category totals (chunked at 500 per call), price snapshots on item_catalog.K (priceAtLastCount).
-  - `appendRowSA(INVENTORY, "item_catalog", ...)` - add item; also writes `price_history` row if price > 0.
-  - `updateRangeSA(INVENTORY, "item_catalog!H{r}:J{r}", ...)` - verify-price (cols H/I/J = price, priceDate, priceVendor) + col S (lastVerified).
-  - `batchUpdateRangesSA(INVENTORY, ...)` - batch-move-items (locationId updates).
-  - `updateRangeSA(INVENTORY, "item_catalog!{cols}{r}", ...)` - merge keeper update (cols C/D/E).
-  - `updateRangeSA(INVENTORY, "item_catalog!L{r}", "FALSE")` - merge deactivate dupes (col L = active).
-  - `appendRowSA(INVENTORY, "item_aliases", ...)` - alias on merge.
-  - `batchUpdateRangesSA(INVENTORY, ...)` - alias remap + price_history remap on merge (rewrite col C / col A to keeper itemId).
-  - `appendRowSA(INVENTORY, "merge_history", ...)` - merge audit row (action="merge" | "keep_separate" | "exclude").
-  - `updateRangeSA(INVENTORY, "item_catalog!{various}", ...)` - archive/exclude/reactivate (col L active, col Q status).
-  - `appendRowSA(INVENTORY, "zone_corrections", ...)` - new tab not in brief, used in review-accept (line 746).
-  - Location writes: bulk save via batchUpdateRangesSA, single update via updateRangeSA, soft-delete via active=FALSE.
-**AI calls:**
-  - `callClaude(prompt, maxTokens=8192, retries=3)` - generic Claude wrapper (line 446). Used by `ai-similarity-check` (handleAISimilarityCheck) and `dedup-existing-catalog` (handleDedupCatalog, gated by env). Model: `claude-sonnet-4-20250514`. Retry with exponential backoff.
-**External calls:** none direct (cron is a separate repo).
+**Lines:** 397 of 1918 (vendor section is ~21% of the file; invoice section is the other ~79%)
+**Purpose:** Backend handlers for vendor CRUD and the OCR-driven alias learning. Lives in the same file as invoice handlers for historical reasons (per VENDOR_WIDGET brief Section 2.1: "Vendor handlers live in invoiceActions.js for historical reasons - the Vendor Portal grew out of Invoice Capture's vendor management needs").
+**Reads (vendor):**
+  - `handleVendorList`: parallel readSheetSA on HUB!vendor_master + HUB!vendor_accounts. Builds linkMap by vendorId, joins master + account-specific link. Page + pageSize pagination. Returns inactiveCount separately. Filter logic: `masterResult.rows.filter((r) => r[0])` filters out rows where vendorId is blank.
+  - `handleVendorGet`: same dual read, single vendor lookup.
+  - `setVendorActive` (internal): reads vendor_accounts to find rowIndex by (vendorId, accountKey).
+  - `learnVendorAlias` (internal): reads vendor_master, finds rowIndex by vendorId.
+  - `handleVendorMerge`: reads both tables.
+**Writes (vendor):**
+  - `handleVendorUpdate` (POST `vendor-update`): vendor_accounts D:R (15 cells range) + W (cell, accountNotes). Two separate calls in parallel via Promise.all.
+  - `handleVendorMasterUpdate` (POST `vendor-master-update`): vendor_master B/C/D/E/I (5 separate updateCellSA via Promise.all - NOT batched, would benefit from batchUpdateRangesSA).
+  - `setVendorActive` (POST `vendor-deactivate` / `vendor-reactivate`): vendor_accounts!S{row}.
+  - `learnVendorAlias` (internal, fire-and-forget from invoice-submit): vendor_master!I{row} (aliases append).
+  - `handleVendorMerge` (POST `vendor-merge`): batchUpdateRangesSA on vendor_accounts!B (vendorId reassignment) + batchUpdateRangesSA on vendor_master!B:E (soft-delete blanking) + updateCellSA on vendor_master!I (keeper aliases append). Three sequential batched ops.
+  - vendor-add (separate handler inside `handleInvoicePost` around line ~900): appendRowSA on both tables, F19a vendorId collision retry, F19b client_uuid idempotency.
+**AI calls:** none directly. `learnVendorAlias` is triggered after OCR fuzzy-matches a vendor.
+**External calls:** Slack webhook `SLACK_VENDOR_WEBHOOK` (fire-and-forget on every write). No Drive, Gmail.
 **Cross-file dependencies:**
-  - Imports: sheets.js helpers, opsUtils.js helpers including the buggy `getAllVendors`/`resolveVendorId`.
-  - Called by: src/app/api/ops/route.js dispatcher.
-**Brief alignment:** Strongly AGREES with SMART_INVENTORY brief and THREESYSTEMS brief Section 1.
-  - **DRIFT (HIGH):** brief THREESYSTEMS Section 1 lists `dedupExistingCatalog` as a separate-cron-mode feature. The same logic is ALSO in inventoryActions.js as `handleDedupCatalog` (line 1069) - this is the IN-APP version run via `/api/ops?action=dedup-catalog`. Brief mentions only the cron-side. Two implementations of dedup exist.
-  - **DRIFT (MEDIUM):** SMART_INVENTORY brief mentions `handleScan`, `handleHistoryGet`, `handleReviewQueueGet`, `handleAdminCorrect`, `handlePrint`, `handleResolveQueue`, `handleUpdateItem` as STUBS (returns "Week 3" / "Week 4"). Confirmed at lines 398, 817, 1059-1062, 1154. All 7 are placeholder stubs. Brief Section "What it does NOT do today" mentions some but not all.
+  - Imports: sheets.js helpers, drive.js, gmail.js, stampInvoice.js (for the invoice section), `OPS_LEADERSHIP_EMAILS` from `@/lib/admin`.
+  - Called by: `src/app/api/ops/route.js` (the route dispatcher), specifically the `handleInvoiceGet` and `handleInvoicePost` orchestrators.
+**Brief alignment:**
+  - AGREES with VENDOR_WIDGET brief Section 4 (API endpoints), Section 6 (data flows), Section 9 (duplicate prevention).
+  - **DRIFT (HIGH):** brief Section 12 P2: "vendor-merge: No server-side admin gate. Relies on UI hiding Admin tab. Should be gated by OPS_LEADERSHIP_EMAILS check in handler." Verified at lines 1847-1849: `handleVendorMerge` does NOT check OPS_LEADERSHIP_EMAILS. Only `handleVendorDeactivate` has the server-side gate. Documented but not fixed.
+  - **DRIFT (MEDIUM):** brief Section 12 P2: "fuzzyMatchVendor() (used by OCR) does not search aliases. vendor-search does." Need to verify against fuzzyMatchVendor implementation (lines 171-250 per brief).
 **Undocumented behaviors:**
-  - `accountMatch` (line 14): handles short vs full account label mismatch. Same pattern as the cron's `accountMatch`. Two implementations of the same rule (cron + intranet) - drift risk.
-  - **NEW TAB NOT IN BRIEF: `zone_corrections`** at line 746 (in `handleReviewAccept`). Per-correction audit row. Brief Section 3 / schema reference does NOT mention this tab.
-  - Cache invalidation calls (`invalidateCache`) sprinkled after every write. 30+ invalidate calls across handlers. If any are missed, stale reads possible.
-  - `handleCountSubmit` chunks price updates at 500 per `batchUpdateRangesSA` call to stay under Sheets API request size limit.
-  - `merge_history` is written by multiple action types: action="merge" (handleMergeItems), action="keep_separate" (handleKeepSeparate), action="exclude" (handleExcludeItem).
-  - `handleExcludeItem` (line 792) writes `merge_history!A:A` with explicit !A:A range (line 803) - special case of the bare-tab-name auto-add pattern.
+  - `handleVendorList` filter quirk: merged dupe vendor_master rows have vendorId (col A) preserved but B/C/D blanked + E="DELETED". The `r[0]` truthy filter doesn't exclude them. They appear in vendor-list with name="" if `allAccounts=true` (admin view). In per-account view, the subsequent linkMap filter excludes them (their links were reassigned to keeper). Brief mentions soft-delete blanks B-D but doesn't note the admin-view leak.
+  - `setVendorActive` reads vendor_accounts even when input is just (vendorId, accountKey) - could be a direct lookup via `findRowByValueSA` with compound key but uses the iterate-and-find pattern.
+  - `handleVendorMasterUpdate` uses 5 parallel `updateCellSA` calls instead of one `batchUpdateRangesSA` even though B-E are contiguous. Minor performance.
 **Migration considerations:**
-  - 8 PG tables: `item_catalog`, `storage_locations`, `count_sessions`, `count_items`, `item_aliases`, `price_history`, `merge_history`, `review_queue` + `zone_corrections` (new from audit).
-  - Per SMART_INVENTORY brief: lift-and-shift, not redesign. Schema mirrors Sheets columns; Kevin continues building post-migration.
-  - Cache layer (`cachedRead`, `batchRead`, `invalidateCache` from opsUtils) gets dropped post-PG cutover.
-  - `accountMatch` tolerance becomes unnecessary if PG enforces single account_key format (canonical = spaces "CIN - OH").
-  - `count_items` is append-only with replay semantics (latest locationSaveId wins) - preserve as PG audit log.
-  - `extendedPrice` on count_items can become PG GENERATED column (qty * priceAtCount).
-  - The 7 stub handlers don't need migration; they remain stubs (or get implemented post-migration).
-  - `merge_history.mergedItemIds` is a JSON-stringified array - becomes JSONB.
+  - Vendor handlers will move to dataStore.js orchestrators following the submissions pattern.
+  - `learnVendorAlias` is the OCR-driven async write - needs an orchestrator that preserves its "fire-and-forget on invoice-submit" semantics.
+  - `vendor-merge` is the multi-table coordinated write that maps cleanly to the existing `coordinatedWrite` primitive in dataStore.js (with a PG transaction wrapping all 3 ops).
+  - `vendor-deactivate` admin gate logic moves either to RLS or stays in the orchestrator. The OPS_LEADERSHIP_EMAILS allow-list should become a `users.role` column per AUTH_MODEL.md (already specced).
+  - `vendor-merge` missing admin gate: fix in PR B handler rewire.
 **Risk surface:**
-  - 30+ invalidateCache calls: missing one creates stale-data bugs. Migration removes this entire class of risk.
-  - 6 different tables can be written in a single user action (count-submit, merge-items). Atomicity concerns.
-  - `zone_corrections` tab not in brief - schema design risk.
-  - Bootstrap reads 7 tabs in parallel - large I/O. PG migration consolidates to fewer queries.
-  - `getAllVendors`/`resolveVendorId` drift from opsUtils flows into inventory bootstrap - `primaryVendor` field on catalog items is freeform string, not FK to vendor_master.
+  - Merge atomicity: 3 sequential operations today, partial failure possible. PG transaction would close this.
+  - `learnVendorAlias` is fire-and-forget - if it fails silently, aliases don't accumulate. Today logs warn-level only.
+  - Soft-delete via column blanking is fragile: any future code that queries vendor_master without filtering blanks will see "ghost" entries.
 
-### src/app/ops/components/inventory-manager/InventoryManager.js
+### src/app/ops/components/vendors/VendorPortal.js
 
-**Lines:** 364
-**Purpose:** Shell component. Account selector, sub-tool nav. Dispatches actions for all child components via callbacks. Handles 16+ action dispatches.
-**Reads:** `inventory-bootstrap` on mount (returns the full payload).
-**Writes:** All inventory POST actions dispatched here (see component grep results).
-**Brief alignment:** AGREES with brief.
-**Migration considerations:** UI doesn't change; backend dispatches go through dataStore.js.
-**Risk surface:** Single orchestrator means many concerns in one component.
+**Lines:** 165
+**Purpose:** Shell component. Renders account selector dropdown, sub-nav (Directory / Admin), mounts VendorList or VendorAdminView based on view, hosts the Add Vendor modal (via VendorSetup).
+**Reads:** none directly (delegates to children).
+**Writes:** none directly.
+**Cross-file:** Imports VendorList, VendorAdminView, VendorSetup. Mounted from `src/app/ops/page.js` with `config` prop (isAdmin, email, accounts[]).
+**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 2.2.
+**Migration considerations:** No data layer changes. Children handle data access.
+**Risk surface:** none.
 
-### src/app/ops/components/inventory-manager/CountSheet.js
+### src/app/ops/components/vendors/VendorList.js
 
-**Lines:** 1008
-**Purpose:** Count flow UI + state machine (v5.1 Warm Precision). Focus card, Apply Last shortcut, variance warning, none-on-hand flag, category grouping, counted drawer, sticky footer, zone-complete celebration, confirm-to-next flow.
-**Reads:** Receives bootstrap data via props. No direct fetches.
-**Writes:** None directly - emits onSaveCount, onSubmit, etc. callbacks to InventoryManager.
-**Brief alignment:** AGREES with SMART_INVENTORY brief "Widget logic worth knowing".
+**Lines:** 409
+**Purpose:** Paginated vendor list with search, filter, split-pane layout. Fetches via `GET /api/ops?action=vendor-list`.
+**Reads:** Calls `vendor-list` action (paginated, with category + search filters). Calls `vendor-get` on row click for full detail.
+**Writes:** Calls `vendor-deactivate` / `vendor-reactivate` POST actions via confirm dialog.
+**Brief alignment:**
+  - **DRIFT (HIGH) - confirmed in audit:** brief Section 12 P2 - "Local `categoryColor` function only has 11 entries - missing Supplies and Linen." Verified at lines 249-264: missing `Supplies` and `Linen`. Also `CATEGORIES` const at line 6 missing both.
+  - **DRIFT (MEDIUM):** VendorList's local `categoryColor` duplicates `CATEGORY_COLORS` from VendorCard / VendorAdminView / VendorSetup. 4 separate sources of truth for the same color map.
 **Undocumented behaviors:**
-  - Local React state for in-progress counts (autosave gap noted in brief). Writes only on zone transitions or submit.
-  - 420ms confirm flash, 240ms card activation, 180ms variance grow-in, 450ms checkmark draw (motion vocabulary).
-  - iOS Safari soft-keyboard programmatic focus issue noted in brief - "tested workaround is unresolved".
+  - Debounced search at 350ms (line 156-160).
+  - Pagination uses `append` mode for "Load more" - rows are appended client-side, not paginated server-side after page 1.
+**Migration considerations:** UI doesn't change; the underlying `vendor-list` endpoint switches reads to PG via the dispatch layer.
+**Risk surface:**
+  - Inactive vendors filtered out by default unless user toggles "Show inactive". Migration must preserve.
+  - Search is client-substring-only in the API filter loop (line 1610: `v.name.toLowerCase().includes(search)`); aliases NOT searched here, only in `vendor-search`.
+
+### src/app/ops/components/vendors/VendorCard.js
+
+**Lines:** 265
+**Purpose:** Read-only detail panel. Renders vendor name, category chip, sales rep contacts, delivery schedule, ordering portal link, portal username/password (masked, with reveal toggle), site notes (collapsible), Edit + Deactivate buttons.
+**Reads:** Receives `vendor` prop from VendorList (fetched via vendor-get).
+**Writes:** Triggers `onEdit` (opens VendorEditModal), `onDeactivate` / `onReactivate` (parent handles fetch).
+**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.1.
+**Undocumented behaviors:**
+  - `CATEGORY_COLORS` constant at line 5 - one of the 4 duplicates of the color map.
+  - Portal password reveal: rendered as `••••••••` by default, click to toggle. Tab-index excluded.
+  - Password is server-returned in cleartext (per VENDOR_WIDGET brief Section 10: intentional for shift continuity).
 **Migration considerations:** No data layer changes.
-**Risk surface:** Autosave gap means in-progress counts can be lost on browser crash before zone transition.
+**Risk surface:** Plaintext credential display matches design intent; access-control hardening is a future PR per brief.
 
-### src/app/ops/components/inventory-manager/ItemCatalog.js
+### src/app/ops/components/vendors/VendorEditModal.js
 
-**Lines:** 323
-**Purpose:** Catalog browser. Add/edit/archive items.
-**Reads:** Receives catalog data from bootstrap.
-**Writes:** Emits add-item, update-catalog-item, archive-item, verify-price callbacks.
-**Brief alignment:** AGREES.
-**Migration considerations:** UI no change.
+**Lines:** 618
+**Purpose:** Two-tab edit modal. Tab 1 = Account Settings (per-account fields, saves to vendor_accounts via `vendor-update`). Tab 2 = Vendor Info (global fields, saves to vendor_master via `vendor-master-update`).
+**Reads:** Receives `vendor` prop pre-populated.
+**Writes:** `vendor-update` (line 177-181), `vendor-master-update` (line 238-242). Independent saves per tab.
+**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.3.
+**Undocumented behaviors:**
+  - Dirty-state tracking: switching tabs with unsaved changes triggers a "SwitchWarning" prompt.
+  - Time inputs (cutoffTime) have helper functions `formatTimeTo12h` / `formatTimeTo24h` for AM/PM display.
+  - Has its own `CATEGORIES` const at line 7 (13 entries - correct, matches brief).
+**Migration considerations:**
+  - Two saves to two tables - currently in-flight via separate handlers. PG migration can preserve the split or unify.
+**Risk surface:**
+  - Dirty-state warning preserves user intent across tab switches; ensure UX preserved.
 
-### src/app/ops/components/inventory-manager/ItemReview.js
+### src/app/ops/components/vendors/VendorAddModal.js
 
-**Lines:** 530
-**Purpose:** AI similarity review queue. Merge / keep-separate UI for AI-suggested groups.
-**Reads:** Calls `ai-similarity-check` action on Run Scan.
-**Writes:** Calls `merge-items`, `keep-separate`, `review-accept`.
-**Brief alignment:** AGREES with SMART_INVENTORY brief.
-**Migration considerations:** Backend actions migrate; UI no change.
+**Lines:** 292
+**Purpose:** Older 2-step add modal (step 1 = name + duplicate check, step 2 = full form). Per VENDOR_WIDGET brief Section 10.3: "Separate, older add modal still in the codebase. It is NOT imported by VendorPortal (which uses VendorSetup). It may be used by InvoiceTool directly in some code paths."
+**Reads:** `vendor-search` GET (debounced 400ms).
+**Writes:** `vendor-add` POST.
+**Brief alignment:** AGREES with brief; brief flags as "Audit before Supabase migration" (P3).
+**Undocumented behaviors:**
+  - Has its own `CATEGORIES` const at line 4 (13 entries - correct).
+  - Has its own `PAYMENT_TERMS` const at line 5: `["NET30", "NET15", "NET7", "COD", "Prepaid", "Other"]` - 6 entries.
+**Brief alignment:** **DRIFT (HIGH):** VENDOR_WIDGET brief Section 5.2 specifies 11 payment terms: `Net 7, Net 10, Net 14, Net 15, Net 30, Net 45, Net 60, COD, Prepaid, Credit Card, I don't know`. VendorAddModal has only 6 with different formatting (`NET30` vs `Net 30`).
+**Migration considerations:**
+  - Confirm via grep whether InvoiceTool.js or any other consumer still uses this older modal. If yes, migration must preserve. If no, deletion candidate (vestigial code).
+**Risk surface:**
+  - Payment terms drift: data written via this modal would have non-canonical values (`NET30` not `Net 30`) which would not match the brief's enum.
 
-### src/app/ops/components/inventory-manager/LocationSetup.js
+### src/app/ops/components/vendors/VendorAdminView.js
 
-**Lines:** 466
-**Purpose:** Zone hierarchy editor. Sort order via drag-reorder. Sub-zones.
-**Reads:** Bootstrap data via props.
-**Writes:** Emits save-locations, save-sort-order, add-sub-zone, update-location, deactivate-location callbacks.
-**Brief alignment:** AGREES.
+**Lines:** 529
+**Purpose:** Admin-only view. Two sub-views: "All Vendors" table (read all vendors, allow inline category edit via `vendor-master-update`) and "Duplicate Detector" (Levenshtein scan + merge UI).
+**Reads:** `vendor-list?allAccounts=true&pageSize=500` (line 31, 254 - twice for the two sub-views).
+**Writes:** `vendor-master-update` (line 75, category edits), `vendor-merge` (line 315).
+**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.5.
+**Undocumented behaviors:**
+  - Has its own `CATEGORY_COLORS` const at line 4 + `CATEGORIES` const at line 12.
+  - Levenshtein duplicate detector is client-side - reads pageSize=500, runs the scan in browser.
+  - "Dismiss" stored in localStorage (not server-side).
+**Migration considerations:**
+  - PG migration enables server-side fuzzy match via `pg_trgm` (Postgres trigram extension) or similar - could replace client-side Levenshtein.
+  - Dismissed pairs in localStorage are per-browser - if you want server-side persistence, that becomes a schema decision.
+**Risk surface:**
+  - 500-row limit on vendor-list?allAccounts=true: today 35 vendors fits comfortably; growth to >500 vendors breaks the dedup detector silently.
 
-### src/app/ops/components/inventory-manager/ProductPlacement.js
+### src/app/ops/components/invoice/VendorSetup.js
 
-**Lines:** 609
-**Purpose:** Drag-and-drop item-to-zone assignment. Bulk locationId updates.
-**Reads:** Bootstrap data via props.
-**Writes:** Emits batch-move-items callback (bulk locationId update in one `batchUpdateRangesSA`).
-**Brief alignment:** AGREES.
+**Lines:** 671
+**Purpose:** 4-step add/link wizard. Step 0 = vendor name + duplicate check + link existing option. Step 1 = ordering & portal. Step 2 = sales rep. Step 3 = review + notes + submit. Used by BOTH VendorPortal (as the "+ Add Vendor" modal) AND InvoiceTool (when "New vendor" is selected mid-invoice).
+**Reads:** `vendor-search` GET (debounced).
+**Writes:** `vendor-add` POST (line 251-255).
+**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.2 and 10.2.
+**Undocumented behaviors:**
+  - Has its own `CATEGORIES` (line 58) + `CATEGORY_COLORS` (line 64) - the 4th duplicate.
+  - F19a/F19b idempotency is server-side (in vendor-add handler), but the client generates the clientUuid that gets passed. Client-side: random UUID per form mount.
+  - "Link existing vendor" path (skips master insert) jumps to step 1 with `existingVendorId` set.
+**Migration considerations:**
+  - The vendor-add path through this wizard is the primary write path for new vendors today.
+  - F19b idempotency check (read-then-write on clientUuid) becomes redundant once PG UNIQUE constraint enforces it.
+**Risk surface:**
+  - Cross-surface usage (VendorPortal AND InvoiceTool): any change must be tested in both.
+  - 4 sources of truth for category color map (this file + VendorCard + VendorAdminView + InvoiceTool indirectly): maintenance burden.
+
+### src/lib/opsUtils.js (vendor section)
+
+See 2A. Shared Infrastructure for full audit. Vendor-relevant functions: `getAllVendors`, `resolveVendorId` (both have positional-index DRIFT - shortName returns category, active checks website column, see 2A).
 
 ---
 
@@ -439,272 +512,195 @@ Section 2's subsections appear in reverse-physical order due to incremental writ
 
 ---
 
-### 2B. Vendor system
+### 2D. Smart Inventory
 
-### src/lib/invoiceActions.js (vendor section, lines 1523-1919)
+### src/lib/inventoryActions.js
 
-**Lines:** 397 of 1918 (vendor section is ~21% of the file; invoice section is the other ~79%)
-**Purpose:** Backend handlers for vendor CRUD and the OCR-driven alias learning. Lives in the same file as invoice handlers for historical reasons (per VENDOR_WIDGET brief Section 2.1: "Vendor handlers live in invoiceActions.js for historical reasons - the Vendor Portal grew out of Invoice Capture's vendor management needs").
-**Reads (vendor):**
-  - `handleVendorList`: parallel readSheetSA on HUB!vendor_master + HUB!vendor_accounts. Builds linkMap by vendorId, joins master + account-specific link. Page + pageSize pagination. Returns inactiveCount separately. Filter logic: `masterResult.rows.filter((r) => r[0])` filters out rows where vendorId is blank.
-  - `handleVendorGet`: same dual read, single vendor lookup.
-  - `setVendorActive` (internal): reads vendor_accounts to find rowIndex by (vendorId, accountKey).
-  - `learnVendorAlias` (internal): reads vendor_master, finds rowIndex by vendorId.
-  - `handleVendorMerge`: reads both tables.
-**Writes (vendor):**
-  - `handleVendorUpdate` (POST `vendor-update`): vendor_accounts D:R (15 cells range) + W (cell, accountNotes). Two separate calls in parallel via Promise.all.
-  - `handleVendorMasterUpdate` (POST `vendor-master-update`): vendor_master B/C/D/E/I (5 separate updateCellSA via Promise.all - NOT batched, would benefit from batchUpdateRangesSA).
-  - `setVendorActive` (POST `vendor-deactivate` / `vendor-reactivate`): vendor_accounts!S{row}.
-  - `learnVendorAlias` (internal, fire-and-forget from invoice-submit): vendor_master!I{row} (aliases append).
-  - `handleVendorMerge` (POST `vendor-merge`): batchUpdateRangesSA on vendor_accounts!B (vendorId reassignment) + batchUpdateRangesSA on vendor_master!B:E (soft-delete blanking) + updateCellSA on vendor_master!I (keeper aliases append). Three sequential batched ops.
-  - vendor-add (separate handler inside `handleInvoicePost` around line ~900): appendRowSA on both tables, F19a vendorId collision retry, F19b client_uuid idempotency.
-**AI calls:** none directly. `learnVendorAlias` is triggered after OCR fuzzy-matches a vendor.
-**External calls:** Slack webhook `SLACK_VENDOR_WEBHOOK` (fire-and-forget on every write). No Drive, Gmail.
+**Lines:** 1216
+**Purpose:** Backend handlers for all Smart Inventory actions. 30+ exported handlers covering bootstrap, count flow (start/save/submit), catalog mutations, location/zone management, AI similarity check, merges, archive/exclude/reactivate.
+**Reads:**
+  - `batchRead(INVENTORY, [item_catalog, storage_locations, count_sessions, count_items, review_queue, price_history, item_aliases])` - bootstrap.
+  - `cachedRead(INVENTORY, "item_catalog")`, etc. - via opsUtils cache (60s TTL).
+  - `getAccountConfigs()`, `getPeriods()`, `getCurrentPeriod()` - from opsUtils.
+  - `getAllVendors()`, `resolveVendorId()` - from opsUtils (DRIFT - see 2A).
+**Writes:**
+  - `appendRowSA(INVENTORY, "count_sessions", ...)` - new session.
+  - `appendRowsSA(INVENTORY, "count_items", rows)` - per-zone count save (one row per item).
+  - `batchUpdateRangesSA(INVENTORY, ...)` - count-submit category totals (chunked at 500 per call), price snapshots on item_catalog.K (priceAtLastCount).
+  - `appendRowSA(INVENTORY, "item_catalog", ...)` - add item; also writes `price_history` row if price > 0.
+  - `updateRangeSA(INVENTORY, "item_catalog!H{r}:J{r}", ...)` - verify-price (cols H/I/J = price, priceDate, priceVendor) + col S (lastVerified).
+  - `batchUpdateRangesSA(INVENTORY, ...)` - batch-move-items (locationId updates).
+  - `updateRangeSA(INVENTORY, "item_catalog!{cols}{r}", ...)` - merge keeper update (cols C/D/E).
+  - `updateRangeSA(INVENTORY, "item_catalog!L{r}", "FALSE")` - merge deactivate dupes (col L = active).
+  - `appendRowSA(INVENTORY, "item_aliases", ...)` - alias on merge.
+  - `batchUpdateRangesSA(INVENTORY, ...)` - alias remap + price_history remap on merge (rewrite col C / col A to keeper itemId).
+  - `appendRowSA(INVENTORY, "merge_history", ...)` - merge audit row (action="merge" | "keep_separate" | "exclude").
+  - `updateRangeSA(INVENTORY, "item_catalog!{various}", ...)` - archive/exclude/reactivate (col L active, col Q status).
+  - `appendRowSA(INVENTORY, "zone_corrections", ...)` - new tab not in brief, used in review-accept (line 746).
+  - Location writes: bulk save via batchUpdateRangesSA, single update via updateRangeSA, soft-delete via active=FALSE.
+**AI calls:**
+  - `callClaude(prompt, maxTokens=8192, retries=3)` - generic Claude wrapper (line 446). Used by `ai-similarity-check` (handleAISimilarityCheck) and `dedup-existing-catalog` (handleDedupCatalog, gated by env). Model: `claude-sonnet-4-20250514`. Retry with exponential backoff.
+**External calls:** none direct (cron is a separate repo).
 **Cross-file dependencies:**
-  - Imports: sheets.js helpers, drive.js, gmail.js, stampInvoice.js (for the invoice section), `OPS_LEADERSHIP_EMAILS` from `@/lib/admin`.
-  - Called by: `src/app/api/ops/route.js` (the route dispatcher), specifically the `handleInvoiceGet` and `handleInvoicePost` orchestrators.
-**Brief alignment:**
-  - AGREES with VENDOR_WIDGET brief Section 4 (API endpoints), Section 6 (data flows), Section 9 (duplicate prevention).
-  - **DRIFT (HIGH):** brief Section 12 P2: "vendor-merge: No server-side admin gate. Relies on UI hiding Admin tab. Should be gated by OPS_LEADERSHIP_EMAILS check in handler." Verified at lines 1847-1849: `handleVendorMerge` does NOT check OPS_LEADERSHIP_EMAILS. Only `handleVendorDeactivate` has the server-side gate. Documented but not fixed.
-  - **DRIFT (MEDIUM):** brief Section 12 P2: "fuzzyMatchVendor() (used by OCR) does not search aliases. vendor-search does." Need to verify against fuzzyMatchVendor implementation (lines 171-250 per brief).
+  - Imports: sheets.js helpers, opsUtils.js helpers including the buggy `getAllVendors`/`resolveVendorId`.
+  - Called by: src/app/api/ops/route.js dispatcher.
+**Brief alignment:** Strongly AGREES with SMART_INVENTORY brief and THREESYSTEMS brief Section 1.
+  - **DRIFT (HIGH):** brief THREESYSTEMS Section 1 lists `dedupExistingCatalog` as a separate-cron-mode feature. The same logic is ALSO in inventoryActions.js as `handleDedupCatalog` (line 1069) - this is the IN-APP version run via `/api/ops?action=dedup-catalog`. Brief mentions only the cron-side. Two implementations of dedup exist.
+  - **DRIFT (MEDIUM):** SMART_INVENTORY brief mentions `handleScan`, `handleHistoryGet`, `handleReviewQueueGet`, `handleAdminCorrect`, `handlePrint`, `handleResolveQueue`, `handleUpdateItem` as STUBS (returns "Week 3" / "Week 4"). Confirmed at lines 398, 817, 1059-1062, 1154. All 7 are placeholder stubs. Brief Section "What it does NOT do today" mentions some but not all.
 **Undocumented behaviors:**
-  - `handleVendorList` filter quirk: merged dupe vendor_master rows have vendorId (col A) preserved but B/C/D blanked + E="DELETED". The `r[0]` truthy filter doesn't exclude them. They appear in vendor-list with name="" if `allAccounts=true` (admin view). In per-account view, the subsequent linkMap filter excludes them (their links were reassigned to keeper). Brief mentions soft-delete blanks B-D but doesn't note the admin-view leak.
-  - `setVendorActive` reads vendor_accounts even when input is just (vendorId, accountKey) - could be a direct lookup via `findRowByValueSA` with compound key but uses the iterate-and-find pattern.
-  - `handleVendorMasterUpdate` uses 5 parallel `updateCellSA` calls instead of one `batchUpdateRangesSA` even though B-E are contiguous. Minor performance.
+  - `accountMatch` (line 14): handles short vs full account label mismatch. Same pattern as the cron's `accountMatch`. Two implementations of the same rule (cron + intranet) - drift risk.
+  - **NEW TAB NOT IN BRIEF: `zone_corrections`** at line 746 (in `handleReviewAccept`). Per-correction audit row. Brief Section 3 / schema reference does NOT mention this tab.
+  - Cache invalidation calls (`invalidateCache`) sprinkled after every write. 30+ invalidate calls across handlers. If any are missed, stale reads possible.
+  - `handleCountSubmit` chunks price updates at 500 per `batchUpdateRangesSA` call to stay under Sheets API request size limit.
+  - `merge_history` is written by multiple action types: action="merge" (handleMergeItems), action="keep_separate" (handleKeepSeparate), action="exclude" (handleExcludeItem).
+  - `handleExcludeItem` (line 792) writes `merge_history!A:A` with explicit !A:A range (line 803) - special case of the bare-tab-name auto-add pattern.
 **Migration considerations:**
-  - Vendor handlers will move to dataStore.js orchestrators following the submissions pattern.
-  - `learnVendorAlias` is the OCR-driven async write - needs an orchestrator that preserves its "fire-and-forget on invoice-submit" semantics.
-  - `vendor-merge` is the multi-table coordinated write that maps cleanly to the existing `coordinatedWrite` primitive in dataStore.js (with a PG transaction wrapping all 3 ops).
-  - `vendor-deactivate` admin gate logic moves either to RLS or stays in the orchestrator. The OPS_LEADERSHIP_EMAILS allow-list should become a `users.role` column per AUTH_MODEL.md (already specced).
-  - `vendor-merge` missing admin gate: fix in PR B handler rewire.
+  - 8 PG tables: `item_catalog`, `storage_locations`, `count_sessions`, `count_items`, `item_aliases`, `price_history`, `merge_history`, `review_queue` + `zone_corrections` (new from audit).
+  - Per SMART_INVENTORY brief: lift-and-shift, not redesign. Schema mirrors Sheets columns; Kevin continues building post-migration.
+  - Cache layer (`cachedRead`, `batchRead`, `invalidateCache` from opsUtils) gets dropped post-PG cutover.
+  - `accountMatch` tolerance becomes unnecessary if PG enforces single account_key format (canonical = spaces "CIN - OH").
+  - `count_items` is append-only with replay semantics (latest locationSaveId wins) - preserve as PG audit log.
+  - `extendedPrice` on count_items can become PG GENERATED column (qty * priceAtCount).
+  - The 7 stub handlers don't need migration; they remain stubs (or get implemented post-migration).
+  - `merge_history.mergedItemIds` is a JSON-stringified array - becomes JSONB.
 **Risk surface:**
-  - Merge atomicity: 3 sequential operations today, partial failure possible. PG transaction would close this.
-  - `learnVendorAlias` is fire-and-forget - if it fails silently, aliases don't accumulate. Today logs warn-level only.
-  - Soft-delete via column blanking is fragile: any future code that queries vendor_master without filtering blanks will see "ghost" entries.
+  - 30+ invalidateCache calls: missing one creates stale-data bugs. Migration removes this entire class of risk.
+  - 6 different tables can be written in a single user action (count-submit, merge-items). Atomicity concerns.
+  - `zone_corrections` tab not in brief - schema design risk.
+  - Bootstrap reads 7 tabs in parallel - large I/O. PG migration consolidates to fewer queries.
+  - `getAllVendors`/`resolveVendorId` drift from opsUtils flows into inventory bootstrap - `primaryVendor` field on catalog items is freeform string, not FK to vendor_master.
 
-### src/app/ops/components/vendors/VendorPortal.js
+### src/app/ops/components/inventory-manager/InventoryManager.js
 
-**Lines:** 165
-**Purpose:** Shell component. Renders account selector dropdown, sub-nav (Directory / Admin), mounts VendorList or VendorAdminView based on view, hosts the Add Vendor modal (via VendorSetup).
-**Reads:** none directly (delegates to children).
-**Writes:** none directly.
-**Cross-file:** Imports VendorList, VendorAdminView, VendorSetup. Mounted from `src/app/ops/page.js` with `config` prop (isAdmin, email, accounts[]).
-**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 2.2.
-**Migration considerations:** No data layer changes. Children handle data access.
-**Risk surface:** none.
+**Lines:** 364
+**Purpose:** Shell component. Account selector, sub-tool nav. Dispatches actions for all child components via callbacks. Handles 16+ action dispatches.
+**Reads:** `inventory-bootstrap` on mount (returns the full payload).
+**Writes:** All inventory POST actions dispatched here (see component grep results).
+**Brief alignment:** AGREES with brief.
+**Migration considerations:** UI doesn't change; backend dispatches go through dataStore.js.
+**Risk surface:** Single orchestrator means many concerns in one component.
 
-### src/app/ops/components/vendors/VendorList.js
+### src/app/ops/components/inventory-manager/CountSheet.js
 
-**Lines:** 409
-**Purpose:** Paginated vendor list with search, filter, split-pane layout. Fetches via `GET /api/ops?action=vendor-list`.
-**Reads:** Calls `vendor-list` action (paginated, with category + search filters). Calls `vendor-get` on row click for full detail.
-**Writes:** Calls `vendor-deactivate` / `vendor-reactivate` POST actions via confirm dialog.
-**Brief alignment:**
-  - **DRIFT (HIGH) - confirmed in audit:** brief Section 12 P2 - "Local `categoryColor` function only has 11 entries - missing Supplies and Linen." Verified at lines 249-264: missing `Supplies` and `Linen`. Also `CATEGORIES` const at line 6 missing both.
-  - **DRIFT (MEDIUM):** VendorList's local `categoryColor` duplicates `CATEGORY_COLORS` from VendorCard / VendorAdminView / VendorSetup. 4 separate sources of truth for the same color map.
+**Lines:** 1008
+**Purpose:** Count flow UI + state machine (v5.1 Warm Precision). Focus card, Apply Last shortcut, variance warning, none-on-hand flag, category grouping, counted drawer, sticky footer, zone-complete celebration, confirm-to-next flow.
+**Reads:** Receives bootstrap data via props. No direct fetches.
+**Writes:** None directly - emits onSaveCount, onSubmit, etc. callbacks to InventoryManager.
+**Brief alignment:** AGREES with SMART_INVENTORY brief "Widget logic worth knowing".
 **Undocumented behaviors:**
-  - Debounced search at 350ms (line 156-160).
-  - Pagination uses `append` mode for "Load more" - rows are appended client-side, not paginated server-side after page 1.
-**Migration considerations:** UI doesn't change; the underlying `vendor-list` endpoint switches reads to PG via the dispatch layer.
-**Risk surface:**
-  - Inactive vendors filtered out by default unless user toggles "Show inactive". Migration must preserve.
-  - Search is client-substring-only in the API filter loop (line 1610: `v.name.toLowerCase().includes(search)`); aliases NOT searched here, only in `vendor-search`.
-
-### src/app/ops/components/vendors/VendorCard.js
-
-**Lines:** 265
-**Purpose:** Read-only detail panel. Renders vendor name, category chip, sales rep contacts, delivery schedule, ordering portal link, portal username/password (masked, with reveal toggle), site notes (collapsible), Edit + Deactivate buttons.
-**Reads:** Receives `vendor` prop from VendorList (fetched via vendor-get).
-**Writes:** Triggers `onEdit` (opens VendorEditModal), `onDeactivate` / `onReactivate` (parent handles fetch).
-**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.1.
-**Undocumented behaviors:**
-  - `CATEGORY_COLORS` constant at line 5 - one of the 4 duplicates of the color map.
-  - Portal password reveal: rendered as `••••••••` by default, click to toggle. Tab-index excluded.
-  - Password is server-returned in cleartext (per VENDOR_WIDGET brief Section 10: intentional for shift continuity).
+  - Local React state for in-progress counts (autosave gap noted in brief). Writes only on zone transitions or submit.
+  - 420ms confirm flash, 240ms card activation, 180ms variance grow-in, 450ms checkmark draw (motion vocabulary).
+  - iOS Safari soft-keyboard programmatic focus issue noted in brief - "tested workaround is unresolved".
 **Migration considerations:** No data layer changes.
-**Risk surface:** Plaintext credential display matches design intent; access-control hardening is a future PR per brief.
+**Risk surface:** Autosave gap means in-progress counts can be lost on browser crash before zone transition.
 
-### src/app/ops/components/vendors/VendorEditModal.js
+### src/app/ops/components/inventory-manager/ItemCatalog.js
 
-**Lines:** 618
-**Purpose:** Two-tab edit modal. Tab 1 = Account Settings (per-account fields, saves to vendor_accounts via `vendor-update`). Tab 2 = Vendor Info (global fields, saves to vendor_master via `vendor-master-update`).
-**Reads:** Receives `vendor` prop pre-populated.
-**Writes:** `vendor-update` (line 177-181), `vendor-master-update` (line 238-242). Independent saves per tab.
-**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.3.
-**Undocumented behaviors:**
-  - Dirty-state tracking: switching tabs with unsaved changes triggers a "SwitchWarning" prompt.
-  - Time inputs (cutoffTime) have helper functions `formatTimeTo12h` / `formatTimeTo24h` for AM/PM display.
-  - Has its own `CATEGORIES` const at line 7 (13 entries - correct, matches brief).
-**Migration considerations:**
-  - Two saves to two tables - currently in-flight via separate handlers. PG migration can preserve the split or unify.
-**Risk surface:**
-  - Dirty-state warning preserves user intent across tab switches; ensure UX preserved.
+**Lines:** 323
+**Purpose:** Catalog browser. Add/edit/archive items.
+**Reads:** Receives catalog data from bootstrap.
+**Writes:** Emits add-item, update-catalog-item, archive-item, verify-price callbacks.
+**Brief alignment:** AGREES.
+**Migration considerations:** UI no change.
 
-### src/app/ops/components/vendors/VendorAddModal.js
+### src/app/ops/components/inventory-manager/ItemReview.js
 
-**Lines:** 292
-**Purpose:** Older 2-step add modal (step 1 = name + duplicate check, step 2 = full form). Per VENDOR_WIDGET brief Section 10.3: "Separate, older add modal still in the codebase. It is NOT imported by VendorPortal (which uses VendorSetup). It may be used by InvoiceTool directly in some code paths."
-**Reads:** `vendor-search` GET (debounced 400ms).
-**Writes:** `vendor-add` POST.
-**Brief alignment:** AGREES with brief; brief flags as "Audit before Supabase migration" (P3).
-**Undocumented behaviors:**
-  - Has its own `CATEGORIES` const at line 4 (13 entries - correct).
-  - Has its own `PAYMENT_TERMS` const at line 5: `["NET30", "NET15", "NET7", "COD", "Prepaid", "Other"]` - 6 entries.
-**Brief alignment:** **DRIFT (HIGH):** VENDOR_WIDGET brief Section 5.2 specifies 11 payment terms: `Net 7, Net 10, Net 14, Net 15, Net 30, Net 45, Net 60, COD, Prepaid, Credit Card, I don't know`. VendorAddModal has only 6 with different formatting (`NET30` vs `Net 30`).
-**Migration considerations:**
-  - Confirm via grep whether InvoiceTool.js or any other consumer still uses this older modal. If yes, migration must preserve. If no, deletion candidate (vestigial code).
-**Risk surface:**
-  - Payment terms drift: data written via this modal would have non-canonical values (`NET30` not `Net 30`) which would not match the brief's enum.
+**Lines:** 530
+**Purpose:** AI similarity review queue. Merge / keep-separate UI for AI-suggested groups.
+**Reads:** Calls `ai-similarity-check` action on Run Scan.
+**Writes:** Calls `merge-items`, `keep-separate`, `review-accept`.
+**Brief alignment:** AGREES with SMART_INVENTORY brief.
+**Migration considerations:** Backend actions migrate; UI no change.
 
-### src/app/ops/components/vendors/VendorAdminView.js
+### src/app/ops/components/inventory-manager/LocationSetup.js
 
-**Lines:** 529
-**Purpose:** Admin-only view. Two sub-views: "All Vendors" table (read all vendors, allow inline category edit via `vendor-master-update`) and "Duplicate Detector" (Levenshtein scan + merge UI).
-**Reads:** `vendor-list?allAccounts=true&pageSize=500` (line 31, 254 - twice for the two sub-views).
-**Writes:** `vendor-master-update` (line 75, category edits), `vendor-merge` (line 315).
-**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.5.
-**Undocumented behaviors:**
-  - Has its own `CATEGORY_COLORS` const at line 4 + `CATEGORIES` const at line 12.
-  - Levenshtein duplicate detector is client-side - reads pageSize=500, runs the scan in browser.
-  - "Dismiss" stored in localStorage (not server-side).
-**Migration considerations:**
-  - PG migration enables server-side fuzzy match via `pg_trgm` (Postgres trigram extension) or similar - could replace client-side Levenshtein.
-  - Dismissed pairs in localStorage are per-browser - if you want server-side persistence, that becomes a schema decision.
-**Risk surface:**
-  - 500-row limit on vendor-list?allAccounts=true: today 35 vendors fits comfortably; growth to >500 vendors breaks the dedup detector silently.
+**Lines:** 466
+**Purpose:** Zone hierarchy editor. Sort order via drag-reorder. Sub-zones.
+**Reads:** Bootstrap data via props.
+**Writes:** Emits save-locations, save-sort-order, add-sub-zone, update-location, deactivate-location callbacks.
+**Brief alignment:** AGREES.
 
-### src/app/ops/components/invoice/VendorSetup.js
+### src/app/ops/components/inventory-manager/ProductPlacement.js
 
-**Lines:** 671
-**Purpose:** 4-step add/link wizard. Step 0 = vendor name + duplicate check + link existing option. Step 1 = ordering & portal. Step 2 = sales rep. Step 3 = review + notes + submit. Used by BOTH VendorPortal (as the "+ Add Vendor" modal) AND InvoiceTool (when "New vendor" is selected mid-invoice).
-**Reads:** `vendor-search` GET (debounced).
-**Writes:** `vendor-add` POST (line 251-255).
-**Brief alignment:** AGREES with VENDOR_WIDGET brief Section 6.2 and 10.2.
-**Undocumented behaviors:**
-  - Has its own `CATEGORIES` (line 58) + `CATEGORY_COLORS` (line 64) - the 4th duplicate.
-  - F19a/F19b idempotency is server-side (in vendor-add handler), but the client generates the clientUuid that gets passed. Client-side: random UUID per form mount.
-  - "Link existing vendor" path (skips master insert) jumps to step 1 with `existingVendorId` set.
-**Migration considerations:**
-  - The vendor-add path through this wizard is the primary write path for new vendors today.
-  - F19b idempotency check (read-then-write on clientUuid) becomes redundant once PG UNIQUE constraint enforces it.
-**Risk surface:**
-  - Cross-surface usage (VendorPortal AND InvoiceTool): any change must be tested in both.
-  - 4 sources of truth for category color map (this file + VendorCard + VendorAdminView + InvoiceTool indirectly): maintenance burden.
-
-### src/lib/opsUtils.js (vendor section)
-
-See 2A. Shared Infrastructure for full audit. Vendor-relevant functions: `getAllVendors`, `resolveVendorId` (both have positional-index DRIFT - shortName returns category, active checks website column, see 2A).
+**Lines:** 609
+**Purpose:** Drag-and-drop item-to-zone assignment. Bulk locationId updates.
+**Reads:** Bootstrap data via props.
+**Writes:** Emits batch-move-items callback (bulk locationId update in one `batchUpdateRangesSA`).
+**Brief alignment:** AGREES.
 
 ---
 
-### 2A. Shared infrastructure
+### 2E. Railway cron (kitchfix-inventory-cron/index.js)
 
-### src/lib/sheets.js
-
-**Lines:** 443
-**Purpose:** Google Sheets API abstraction layer. Exports SHEET_IDS constants + parallel user-OAuth and service-account helpers.
-**Reads:** N/A (helper module - this is the layer that does reads for everyone else).
-**Writes:** N/A (helper module).
-**AI calls:** none.
-**External calls:** googleapis (Sheets v4 + Drive v3).
-**Cross-file dependencies:**
-  - Imported by: every file in `src/lib/`, every API route in `src/app/api/`, the dataStore.js dual-write orchestrators, opsUtils.js.
-  - Imports: `googleapis`, `process.env` (`GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`).
-**Brief alignment:** AGREES with THREESYSTEMS brief ("Universal patterns shared by all three systems"): all sheet writes go through service account, user OAuth is identity-only. Helper inventory matches what the briefs reference.
-**Undocumented behaviors:**
-  - `SHEET_IDS.GAME` (line 17) is declared but commented "Paused - gamification pilot from the AppScript era. Not in active use; intentionally excluded from the backup-sheets cron." Worth knowing.
-  - Sheet IDs `AI_LINE_ITEMS` and `INVENTORY` (lines 19, 20) both contain capital `O` not `0`. THREESYSTEMS brief calls this out ("This is a common typo source"). Code matches brief.
-  - `appendRowSA` (line 124) auto-adds `!A:A` if the tab name is bare - prevents the "appendRows uses explicit tab!A1 range" bug the cron's `v1.2` comment header mentions. Defensive fix.
-  - Two parallel API surfaces: user-OAuth helpers (`readSheet`, `appendRow`, `updateCell`, `findRowByValue`, `appendRows`) remain in the file but per the migration history (PR #54-#59) all production code now uses the SA variants. The user-OAuth helpers are vestigial but not yet removed.
-**Migration considerations:**
-  - sheets.js is foundation infrastructure. Migration does NOT replace sheets.js; the dataStore.js dispatch routes calls to either sheets.js (Sheets path) or supabase.js (PG path).
-  - When all finance tables are cut over, the SA helpers will still be called from the orchestrators for Sheets-side writes during the dual-write window.
-**Risk surface:**
-  - The 14 SA helpers are universal. Any change to their behavior (e.g., adding caching, error semantics) would affect every consumer.
-  - GAME sheet ID exists but is excluded from backups - if revived, backup wiring needs updating.
-
-### src/lib/cutover.js
-
-**Lines:** 193 (post PR #82 doc fix)
-**Purpose:** Stage 1 dual-write control plane. Two env vars (`DUAL_WRITE_TABLES`, `READ_FROM_POSTGRES`) plus per-module variants (`READ_FROM_POSTGRES_<MODULE>`). Three boolean helpers: `isDualWrite`, `isReadFromPostgres`, `getCutoverState`.
-**Reads:** `process.env.DUAL_WRITE_TABLES`, `process.env.READ_FROM_POSTGRES`, `process.env.READ_FROM_POSTGRES_*` at module load time.
-**Writes:** none.
-**AI calls:** none.
-**External calls:** none.
-**Cross-file dependencies:** Imported by dataStore.js (all dispatch sites). No imports.
-**Brief alignment:** N/A - cutover.js is migration infrastructure not covered by the briefs (predates briefs as a Stage 1 mechanism).
-**Undocumented behaviors:**
-  - `isReadFromPostgres(tabName, moduleName)` second arg supports per-module scoping (added for directory PR B). OR-composes global + per-module flag.
-  - Per-module env var discovery is generic: any `READ_FROM_POSTGRES_<MODULE>` is auto-discovered at module load. No code change required to add new modules - just set the env var.
-  - The "implicit invariant" (READ_FROM_POSTGRES implies DUAL_WRITE_TABLES) is operator-maintained, NOT enforced at runtime. Per the PR #82 doc fix, the comment block now explicitly documents this and the misconfiguration state. State 4 (READ_FROM_POSTGRES only, no DUAL_WRITE) silently produces stale reads.
-**Migration considerations:**
-  - cutover.js is the control plane for the finance stack migration. Each new finance module (vendor, invoice, inventory, AI_LINE_ITEMS) gets dispatch sites in dataStore.js that check these flags.
-  - The DECOMMISSION NOTE (KNOWN LIMITATION) section explains that removing tables from DUAL_WRITE_TABLES does NOT stop Sheets writes (orchestrators write Sheets unconditionally). For the cron migration, this matters: the cron can be cleanly swapped because it's a separate repo, but the intranet orchestrators retain Sheets writes indefinitely unless code changes invert the pattern.
-**Risk surface:**
-  - Env var typo (e.g., `READ_FROM_POSTGRES_FINANCE` instead of `READ_FROM_POSTGRES_OPS`) silently does nothing. No error surface.
-
-### src/lib/dataStore.js
-
-**Lines:** 1994
-**Purpose:** Logical data layer for Stage 1 dual-write. Per-table orchestrators dispatch reads/writes between Sheets and Postgres based on cutover flags.
-**Reads:** Composed of per-table read functions (readNewsInteractionsSheets/Postgres, readAccountsSheets/Postgres, etc.). Reads include all migrated tables (news_interactions, accounts, contacts, hero_images, work_locations, submissions).
-**Writes:** Composed of per-table write functions. All orchestrators follow Sheets-first-then-conditional-PG pattern.
-**AI calls:** none.
-**External calls:** none (delegates to sheets.js + supabase.js).
-**Cross-file dependencies:**
-  - Imports: `readSheetSA`, `appendRowSA`, `appendRowsSA`, `updateCellSA`, `updateRangeSA`, `batchUpdateRangesSA`, `clearRangeSA`, `deleteRowSA`, `getSheetIdSA`, `SHEET_IDS` from `@/lib/sheets`. `isDualWrite`, `isReadFromPostgres` from `@/lib/cutover`. `getServiceClient` from `@/lib/supabase`.
-  - Imported by: route handlers for migrated modules (dashboard/route.js for news_interactions, directory/route.js for accounts+contacts+hero_images+work_locations, people/route.js for submissions). Also imported by the backfill scripts.
-**Brief alignment:** N/A - dataStore.js is migration infrastructure not in the briefs.
-**Undocumented behaviors:**
-  - Three shared primitives at lines 400-557 (`coordinatedWrite`, `deleteRecord`, `replaceScope`) - reusable for future modules. NOT exported - composed inline by adapter functions.
-  - `coordinatedWrite` is sequential not parallel - explicit choice to avoid Sheets per-doc write rate limits. Log-and-continue on failure (does NOT throw mid-flight).
-  - `deleteRecord` is idempotent - if key absent from Sheets, treated as no-op success rather than error.
-  - `replaceScope` deletes Sheets rows BOTTOM-UP to avoid row-index shift bug in the Sheets API.
-  - The submissions module (PR A through D, lines 1458-1994) is the most mature pattern: sub-{N} token translation, dual-column timestamp design (created_at immutable + submitted_at mutable), per-module dispatch (`getSubmissions({ module: "people" })` vs `{ module: "dashboard" }`), STATUS DEFAULT GOTCHA, drift fix from PR #78 (orchestrators stamp event-moment ONCE).
-**Migration considerations:**
-  - Finance stack adds 8 new tables to dataStore.js: vendor_master, vendor_accounts, invoice_submissions_26, AI_LINE_ITEMS, item_catalog, storage_locations, count_sessions, count_items, item_aliases, price_history, merge_history, review_queue, plus the GL_CODES table.
-  - Pattern to follow: submissions module (cleanest current example).
-  - Shared primitives (`coordinatedWrite`, `deleteRecord`, `replaceScope`) likely reusable for vendor-merge (multi-table coordinated write) and Smart Inventory item-merge.
-  - File size: 1994 LOC today. Adding finance modules will push past 3000 LOC. Consider splitting into per-module files (e.g., `src/lib/dataStore/vendor.js`, `src/lib/dataStore/invoice.js`) before it becomes unmanageable. OUT OF SCOPE for this audit but flag for the planning artifact.
-**Risk surface:**
-  - The orchestrator pattern is now consistent across all migrated modules. Any new module that deviates from this pattern (e.g., conditional Sheets writes for the cron-aware paths) needs explicit documentation.
-  - Per the PR #78 drift fix: orchestrators MUST stamp event-moment timestamps once before dispatching to adapters. Per-adapter `new Date().toISOString()` produces ~226ms drift. Future finance orchestrators must follow this pattern.
-
-### src/lib/opsUtils.js
-
-**Lines:** 123
-**Purpose:** Shared utility helpers for the Ops Hub: cached reads, account/period lookups, vendor lookups, notifications, formatting.
+**Lines:** 720
+**Purpose:** Nightly AI catalog reconciliation. Reads new AI_LINE_ITEMS rows per account, matches against item_catalog via Claude, auto-approves >=90% confidence matches (writes item_catalog + item_aliases + price_history) or queues lower confidence (writes review_queue). Posts Slack digest.
 **Reads:**
-  - `getAccountConfigs()` reads `HUB.accounts` (cols A/B/C = key, name, level). Cached 60s.
-  - `getPeriods()` reads `HUB.period_data` (cols A/B/C/D = name, start, end, due). Cached 60s.
-  - `getAllVendors()` reads `HUB.vendor_master` (cols 0/1/2/3). Cached 60s. **DRIFT - see below.**
-  - `resolveVendorId(vendorId)` reads `HUB.vendor_master`. Cached 60s.
+  - `readTab(AI_LINE_ITEMS, accountTab)` per account tab.
+  - `readTab(INVENTORY, "item_catalog")` per account.
+  - `readTab(INVENTORY, "item_aliases")` per account.
+  - `readTab(INVENTORY, "price_history")` per account (idempotency check).
+  - `readTab(INVENTORY, "merge_history")` per account (excluded items filter).
+  - `readTab(INVENTORY, "review_queue")` for Slack digest counts.
+  - `getTabNames(AI_LINE_ITEMS_SHEET_ID)` for account discovery.
 **Writes:**
-  - `opsNotify({recipient, subject, eventType, relatedInfo})` appends to `COLLECTION.notification_log` (7-col row: timestamp, recipient, channel='bell', subject, eventType, status='logged', relatedInfo).
-**AI calls:** none.
-**External calls:** `postSlack(webhookUrl, text)` posts a JSON `{text}` to a Slack webhook URL.
+  - `appendRows(INVENTORY, "item_catalog!A1", rows)` - new items (linkedToInvoice=TRUE).
+  - `appendRows(INVENTORY, "item_aliases!A1", rows)` - new aliases.
+  - `appendRows(INVENTORY, "price_history!A1", rows)` - new price rows (with invoiceUuid as idempotency key).
+  - `appendRows(INVENTORY, "review_queue!A1", rows)` - low-confidence rows.
+  - `updateRange(INVENTORY, "item_catalog!L{r}", "FALSE")` - dedup-mode deactivation (gated by DEDUP=1 env).
+  - `updateRange(INVENTORY, "item_aliases!C{r}", keeperId)` - dedup-mode alias remap.
+  - `updateRange(INVENTORY, "price_history!A{r}", keeperId)` - dedup-mode price remap.
+**AI calls:**
+  - `callClaude(prompt, maxTokens=8192)` via `fetch("https://api.anthropic.com/v1/messages")` - line 123. Model `claude-sonnet-4-20250514`. One call per account per run with batches of 50 items.
+**External calls:**
+  - Anthropic Claude API.
+  - Slack webhook `SLACK_RECAP_WEBHOOK`.
+  - No HTTP coupling to intranet.
+  - No shared modules with intranet (zero code dependency between cron and main repo).
 **Cross-file dependencies:**
-  - Imports: `SHEET_IDS`, `readSheetSA`, `appendRowSA` from `@/lib/sheets`.
-  - Imported by: inventoryActions.js (`getAccountConfigs`, `getCurrentPeriod`, `getPeriods`), invoice + vendor handlers (`getAllVendors`, `resolveVendorId`, `opsNotify`, `parseNum`, `formatCurrency`, `generateId`), service-calendar/route.js, dashboard/route.js (via opsNotify), incidentActions.js, etc.
-**Brief alignment:** Mostly AGREES with THREESYSTEMS brief. The brief mentions `getAccountConfigs()` and `getCurrentPeriod()` from "src/lib/accounts.js" but that file does not exist - the functions live in opsUtils.js. **Brief drift: file path incorrect.**
+  - Imports: `googleapis` (and uses `google.auth.GoogleAuth` + `google.sheets` directly).
+  - NOT imported by anything (standalone Node script).
+**Brief alignment:**
+  - AGREES with SMART_INVENTORY brief Section "How invoice data gets into the system" Step 3 + "How the count flow uses the catalog and prices" + future Stage 2 loop description.
+  - **DRIFT (MEDIUM):** brief THREESYSTEMS Section 1 lists `dedupExistingCatalog` as part of the cron. Verified - lives at line 582 of cron index.js, gated by `DEDUP=1` env. Cron-side dedup is functional but manual (Kevin sets DEDUP=1 and runs).
+  - **DRIFT (LOW):** SMART_INVENTORY brief says cron "Roughly 3,800 line items across approximately 2 months of operations as of mid-May 2026" - data volume estimate, not code.
 **Undocumented behaviors:**
-  - **CRITICAL DRIFT: `getAllVendors()` (line 79) reads vendor_master at positional indices that no longer match the schema.**
-    - Code: `{ id: r[0], name: r[1], shortName: r[2] || r[1], active: r[3] !== "FALSE" }`
-    - Actual schema per SHEETS_AUDIT.md + VENDOR_WIDGET brief: `[0]=vendorId, [1]=name, [2]=category, [3]=website, [4]=notes, ...` No `shortName` column. No `active` column on vendor_master (active lives on vendor_accounts col S).
-    - Effect: `shortName` returns category. `active` check on `r[3] !== "FALSE"` is on website column - returns true unless website is literally "FALSE" (essentially always true).
-    - **This means `getAllVendors()` filter never excludes anything, AND the returned `shortName` is wrong.**
-    - Need to grep for callers - if anything depends on shortName being a shortName (not category), behavior is broken today.
-  - `resolveVendorId(vendorId)` (line 86) returns `row[2] || row[1] || vendorId` - returns category if present, else name. Same drift. Comment claims to resolve "shortName" but col 2 is category.
-  - Cache layer with `_cache` Map + 60s TTL + `invalidateCache(spreadsheetId, tabName)`. NOT cleared on writes by default - callers must invalidate explicitly. Used by inventory-bootstrap; not used by vendor-list (which calls readSheetSA directly).
-  - `generateId(prefix)` generates 32-char hex IDs (16 random bytes pattern). Used by Smart Inventory for catalog item IDs, location IDs, session IDs.
+  - Tab filter skips: "Invoice Uploads" (catch-all), "Sheet1", "_metadata", and anything starting with "_" (line 689). Account discovery is everything else.
+  - Excluded items per account: reads `merge_history` filtered by action="exclude" + accountMatch (line 295). Builds Set of names to never auto-add even if a new invoice line item arrives.
+  - `MATCH_CONFIDENCE_THRESHOLD` defaults to 90 but is env-configurable.
+  - 50-item batches with 2-second delays between batches (Claude rate limit accommodation).
+  - 1-second delay between accounts.
+  - Slack digest only fires if any account had `processed > 0` OR if it's Monday (catalog health digest always posts on Monday per line 535).
+  - Idempotency: `processedInvoices = new Set(priceHistoryRows.map(...))` - all UUIDs already in price_history are skipped. First-run = process all (backfill). Subsequent runs = incremental.
+  - `dedupExistingCatalog` (line 582) is a SEPARATE one-shot mode - not part of nightly flow. Gated by `DEDUP=1` env var. Has its own `DEDUP_DRY_RUN` env (defaults to true).
+  - `HUB_SHEET_ID` env var declared at line 27 but **NOT USED anywhere else in the file**. Dead config.
+  - v1.2 header (lines 12-19) lists fixes from production fires:
+    - appendRows uses explicit "tab!A1" range (prevents offset column writes)
+    - Account matching uses startsWith (handles short vs full account labels)
+    - Excluded items check via merge_history (prevents re-importing excluded items)
+    - active column filter handles both boolean false and string "FALSE"
+    - readTab skips blank/description rows (rows 2-3)
 **Migration considerations:**
-  - `getAccountConfigs` + `getPeriods` + `getCurrentPeriod` become PG queries on `accounts` and `periods` tables. Already partially migrated: accounts is on PG (Module 2 directory cutover). `periods` table NOT yet migrated.
-  - **`getAllVendors` and `resolveVendorId` are wrong today.** Fixing them is in-scope for the vendor migration (PR B handler rewire). The fix is one-line per function: correct positional indices.
-  - Cache layer (`cachedRead`, `batchRead`, `invalidateCache`) can be dropped once Postgres is the read path - no need for in-memory caching.
-  - `opsNotify` writes to `COLLECTION.notification_log` - this table is multi-writer (people, opsUtils, cron-daily). NOT in scope for this audit's finance migration, but worth flagging for the dashboard's Module 4+ planning.
+  - Cron data layer: 4 helpers (`readTab`, `appendRows`, `updateRange`, `getTabNames`). PG migration changes these 4 functions to hit Supabase instead of Sheets.
+  - Cron is in a SEPARATE repo - changing it requires a separate deploy.
+  - Cron migration phasing (per Project 3 recon):
+    1. Intranet-side dual-write enabled.
+    2. Backfill PG tables.
+    3. Cron PR: helpers dual-write (Sheets + PG).
+    4. Cron deploy and verify dual-write for one full run.
+    5. Intranet flag flip (READ_FROM_POSTGRES).
+    6. Cron PR (final): PG-only reads + writes.
+  - Cutover coordination: cron fires at 6am UTC. Flip flags during the 23-hour idle window (NOT around the fire time).
+  - `accountMatch` cron-side duplicates the intranet `accountMatch` in inventoryActions.js. Two implementations of the same rule. PG migration normalizes account_key format to remove the need for both.
+  - `getTabNames` for account discovery becomes `SELECT DISTINCT account_key FROM ai_line_items`.
+  - Idempotency: `invoiceUuid` filter against `price_history` becomes PG UNIQUE constraint on `(item_id, source_or_invoice_id)`.
+  - `dedupExistingCatalog` (the cron-side dedup mode) - decide whether to migrate the manual one-shot or accept that it becomes obsolete once PG constraints prevent duplicates from forming in the first place.
 **Risk surface:**
-  - The vendor filter bug (`getAllVendors`) silently returns all vendors regardless of active state. If any caller is using this for "active vendors only" display, the count is wrong.
-  - Cache TTL is 60s. Writes from another deployment (or admin direct sheet edit) won't be reflected for up to 60s. Acceptable today; PG cutover removes this concern.
+  - Cron + intranet have IDENTICAL `accountMatch` rules duplicated in two repos. Drift risk if one changes.
+  - 6am UTC fire window means cutover coordination matters. Bad-state windows possible.
+  - No retry mid-account on failure. Failure of one account's writes is permanent until the next nightly run (idempotency saves but data lags).
+  - No transactions: multi-table append (item_catalog + item_aliases + price_history) is 3 separate API calls. Partial failure means inconsistent state until next run picks it up.
+  - Tab name filter (`_metadata`, `_` prefix) could exclude legitimate accounts if naming convention drifts.
 
 ---
 
@@ -795,11 +791,16 @@ These helpers must stay stable during migration:
 
 | # | Where | Brief says | Code does | Recommended resolution |
 |---|---|---|---|---|
-| H1 | `opsUtils.js` `getAllVendors` | (no brief documents this fn) | `r[3] !== "FALSE"` checks website column (always true); `r[2]` returned as shortName is actually category | Fix during PR B vendor handler rewire. Replace with PG query or correct positional indices. |
-| H2 | `opsUtils.js` `resolveVendorId` | Returns vendor shortName | Returns `r[2]` (category) | Same fix. |
 | H3 | VendorList.js `CATEGORIES` | VENDOR_WIDGET Section 5.1 lists 13 categories | 11 + "All" (missing Supplies, Linen) | Single shared constant. Fix as part of vendor migration. |
 | H4 | VendorAddModal.js `PAYMENT_TERMS` | VENDOR_WIDGET Section 5.2 lists 11 enum values including "Net 30" formatting | 6 entries with "NET30" formatting | Single shared constant; reformat existing data. Note: VendorAddModal may be deletable (see O5). |
 | H5 | `handleVendorMerge` admin gate | VENDOR_WIDGET Section 12 P2: "should be gated by OPS_LEADERSHIP_EMAILS check in handler" | NO server-side gate; relies on UI hiding Admin tab | Add OPS_LEADERSHIP_EMAILS check in handler. Single-line fix. |
+
+### LATENT (downgraded from HIGH after consumer-grep verification)
+
+| # | Where | Brief says | Code does | Live impact | Recommended resolution |
+|---|---|---|---|---|---|
+| H1->L8 | `opsUtils.js` `getAllVendors` | (no brief documents this fn) | `r[3] !== "FALSE"` checks website column (always true); `r[2]` returned as shortName is actually category | **ZERO live callers.** Imported only by inventoryActions.js line 9, never invoked. Bug exists but does not affect production. | Delete the export from opsUtils.js + drop unused import in inventoryActions.js during vendor PR B cleanup. NOT a hotfix. |
+| H2->L9 | `opsUtils.js` `resolveVendorId` | Returns vendor shortName | Returns `r[2]` (category) | **ZERO live callers.** Same as L8. | Same fix. |
 
 ### MEDIUM severity (worth knowing)
 
@@ -1042,7 +1043,27 @@ Per brief, no major drift identified. PG schemas straightforward.
 ### zone_corrections (INVENTORY)
 
 - **NOT IN BRIEF** - discovered in inventoryActions.js line 746.
-- Schema needs live inspection. Open question O3 below.
+- **Schema captured via live read 2026-05-28:**
+  - Headers (9 cols): `["correctionId", "account", "timestamp", "email", "itemId", "itemName", "aiSuggestedZone", "actualZone", "itemCategory"]`
+  - Row count: 0 (feature never invoked OR rows get cleared)
+- **Production status:** The handler that writes this tab (`handleReviewAccept`) runs when an admin accepts an AI similarity suggestion in the Item Review tool. Zero rows suggests either (a) admins haven't used the review tool in a way that produces zone corrections, OR (b) the write path is rarely exercised in practice.
+
+PG design:
+```
+zone_corrections (
+  id UUID PRIMARY KEY,           -- was correctionId (likely a generateId('corr')-style string)
+  account_key TEXT NOT NULL,
+  email TEXT,
+  item_id TEXT REFERENCES inventory_items(id),
+  item_name TEXT,
+  ai_suggested_zone TEXT,
+  actual_zone TEXT,
+  item_category TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+)
+```
+
+Note: tab is auto-created lazy-on-first-write if it doesn't exist yet on any sheet variant (mirrors AI_LINE_ITEMS per-account tab pattern). Confirm during PR A schema creation.
 
 ---
 
@@ -1160,44 +1181,51 @@ Only invoiceActions.js writes. No multi-writer concern.
 
 ## 9. Open questions
 
-### Schema decisions
+### Resolved decisions (2026-05-28)
+
+Kevin's answers, captured during audit review:
+
+| # | Decision |
+|---|---|
+| Q3 | **Resolved by live recon.** zone_corrections tab schema captured: 9 columns (correctionId, account, timestamp, email, itemId, itemName, aiSuggestedZone, actualZone, itemCategory), 0 rows. See Section 6. |
+| Q4 | **DROP `vendor_master.lastInvoiceDate` (col H)** per audit recommendation. 0/35 fills. Not in PG schema. |
+| Q5 | **Use `deleted_at TIMESTAMPTZ` pattern** across all migrated tables. Drop the `notes='DELETED'` sentinel. |
+| Q6 | **Plaintext portal credentials STAY** per TEAM_KNOWLEDGE intentional design (shift continuity). No change in migration. |
+| BR3 | **Smart Inventory stub handlers REMAIN AS STUBS.** Migration is lift-and-shift; Kevin continues building post-migration. The 7 "Week 3"/"Week 4" handlers stay returning the same error strings. |
+| S2 | **Unify CATEGORIES constant during vendor PR B.** Five separate declarations consolidate to one shared const. |
+| BR2 | **DEFER filename format unification.** Add to backlog. drive.js + invoiceActions.js continue to have duplicate filename builders for now. |
+| D2 | **DROP `HUB_SHEET_ID` dead config during cron migration PR 1.** Vestigial env var. |
+| D4 | **DEFER two subject encoders unification.** Add to backlog. `encodeSubject` + `encodeSubjectSA` continue to coexist for now. |
+
+### Schema decisions (still open)
 
 | # | Question | Affects |
 |---|---|---|
 | Q1 | `inventory_items.primary_vendor`: FK to `vendors.id` or freeform text? | Smart Inventory PG schema |
 | Q2 | `merge_history.mergedItemIds`: JSONB or normalize to junction table? | Smart Inventory PG schema |
-| Q3 | `zone_corrections` schema: what columns? Need live inspection. | NEW table not in brief |
-| Q4 | `vendor_master.lastInvoiceDate` (col H, 0/35): drop in PG? Brief says drop. | Vendor PG schema |
-| Q5 | Soft-delete: deleted_at TIMESTAMPTZ vs is_deleted BOOLEAN? Brief mentions both styles. | All migrated tables |
-| Q6 | Plaintext portal credentials: stay plaintext in PG with RLS, or encrypt at rest? | Vendor PG schema |
 | Q7 | `count_items` PK: composite (session, save, item) or surrogate UUID? | Inventory PG schema |
 | Q8 | `gl_codes` flat table: parse `parseGLCodes` business rules into PG or migrate raw? | GL_CODES PG migration |
 
-### Business rules
+### Business rules (still open)
 
 | # | Question | Affects |
 |---|---|---|
 | BR1 | Should `vendor-merge` get an admin gate now (drift H5) or in a separate PR? | Vendor PR B |
-| BR2 | Should the duplicate stamp filename format (drive.js vs invoiceActions.js) be unified now? | Invoice PR B |
-| BR3 | Should the 7 stub inventory handlers (Week 3/Week 4) be implemented as part of migration or kept as stubs? | Smart Inventory scope |
 | BR4 | Do we migrate the cron-side `dedupExistingCatalog` (DEDUP=1 mode) and intranet-side `handleDedupCatalog`? Both, one, neither (PG constraints replace)? | Cron + Smart Inventory scope |
 
-### Deferred work
+### Deferred work (still open)
 
 | # | Question | Affects |
 |---|---|---|
 | D1 | `VendorAddModal.js` still imported? Brief says "audit before delete". | Vendor cleanup |
-| D2 | `HUB_SHEET_ID` cron env: drop now or keep until next cron change? | Cron migration |
 | D3 | Vestigial user-OAuth helpers in sheets.js: keep or remove? | Shared infra cleanup |
-| D4 | Two subject encoders in gmail.js: unify now or post-migration? | Invoice migration scope |
 | D5 | `dataStore.js` size (1994 LOC, will exceed 3000 with finance modules): split now or after? | Code organization decision |
 
-### Scope decisions
+### Scope decisions (still open)
 
 | # | Question | Affects |
 |---|---|---|
 | S1 | The 5-7 vendor name matching implementations: consolidate during this migration or after? | Migration scope |
-| S2 | The 5 `CATEGORIES` constant declarations: unify to one shared constant during PR B vendor rewire? | Vendor migration scope |
 | S3 | `accountMatch` rule duplication (cron + intranet): does PG normalization make both obsolete? | Schema decision |
 
 ---
