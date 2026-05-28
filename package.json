@@ -12,7 +12,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:setup": "playwright test --project=setup",
     "backfill:directory": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-directory.mjs",
-    "backfill:submissions": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-submissions.mjs"
+    "backfill:submissions": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-submissions.mjs",
+    "backfill:vendor": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-vendor.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "10.53.1",
