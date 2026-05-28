@@ -60,6 +60,9 @@ import { readSheetSA } from "../../src/lib/sheets.js";
 
 export async function runBackfill(config) {
   const MODE = config.execute ? "LIVE" : "DRY-RUN";
+  // If npmCommand already contains "--" (per-module CLI args), don't add
+  // another one - npm only needs the first "--" as the script-arg separator.
+  const executeFlag = config.npmCommand.includes(" -- ") ? "--execute" : "-- --execute";
 
   console.log("=".repeat(70));
   console.log(`${config.moduleLabel} backfill - ${MODE}`);
@@ -108,7 +111,7 @@ export async function runBackfill(config) {
   if (canonicalRecords.length === 0) {
     console.log("(empty source - nothing to backfill)");
     if (!config.execute) {
-      console.log(`To execute for real: ${config.npmCommand} -- --execute`);
+      console.log(`To execute for real: ${config.npmCommand} ${executeFlag}`);
     }
     return;
   }
@@ -154,7 +157,7 @@ export async function runBackfill(config) {
       `Strategy: ${config.strategy}` +
         (config.onConflict ? ` (ON CONFLICT ${config.onConflict})` : "")
     );
-    console.log(`To execute for real: ${config.npmCommand} -- --execute`);
+    console.log(`To execute for real: ${config.npmCommand} ${executeFlag}`);
     return;
   }
 

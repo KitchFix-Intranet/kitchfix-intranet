@@ -1,15 +1,23 @@
 // ════════════════════════════════════════════════════════════════════════════
-// One-time-per-table backfill: copy Sheets data into Postgres for the
-// directory module's 4 tables. Same shape as
-// scripts/backfill-news-interactions.mjs from PR #63.
+// One-time backfill: copy directory tables from Sheets into Postgres.
+// Second consumer of the shared runner at scripts/_lib/backfill-runner.mjs.
 //
 // PURPOSE
-//   The directory module's PG tables (accounts, contacts, work_locations,
-//   hero_images) are empty until backfilled. This script populates them
-//   from the Sheets source-of-truth before the directory cutover. Run
-//   AFTER setting DUAL_WRITE_TABLES (which starts mirroring live edits
-//   to PG) but BEFORE setting READ_FROM_POSTGRES_DIRECTORY (which flips
-//   directory's reads to PG).
+//   The directory module's 4 PG tables (accounts, contacts, work_locations,
+//   hero_images) are populated from the Sheets source before the directory
+//   cutover. Already used end-to-end for the Module 2 cutover (2026-05-27).
+//   Re-runnable: upsert strategies are idempotent, replace-null-pool wipes
+//   the global hero pool before re-inserting.
+//
+// MIGRATION HISTORY
+//   This script originally embedded its own orchestration runner (~150
+//   lines: header check, read, transform, sample preview, dry-run gate,
+//   supabase client setup, write-strategy dispatch, post-write count).
+//   PR #77 (submissions cutover) extracted that orchestration into
+//   scripts/_lib/backfill-runner.mjs and made backfill-submissions.mjs
+//   its first consumer. This script now uses the same shared engine,
+//   leaving directory as a thin per-table config catalog. No behavior
+//   change. The runner is unchanged.
 //
 // USAGE
 //   Dry run (default):
@@ -23,47 +31,46 @@
 //
 //   TABLE: one of accounts, contacts, work_locations, hero_images.
 //
-//   The --import flag preloads scripts/_setup/register-aliases.mjs which
-//   teaches Node to resolve @/lib/* path aliases (mirrors jsconfig.json),
-//   needed because src/lib/dataStore.js imports from @/lib/sheets etc.
+// STRATEGIES (per table)
+//   accounts        upsert ON CONFLICT (team_key) DO UPDATE
+//   contacts        upsert ON CONFLICT (team_key, email) DO UPDATE
+//   work_locations  upsert ON CONFLICT (team_key) DO UPDATE
+//   hero_images     replace-null-pool (DELETE WHERE team_key IS NULL + INSERT)
+//                   Cannot upsert: the partial unique index on (url) WHERE
+//                   team_key IS NULL is not addressable via Supabase's
+//                   onConflict parameter; delete-then-insert matches
+//                   replaceHeroImagesPostgres semantics.
+//
+// SHEET READS
+//   Uses the exported readXSheets functions from src/lib/dataStore.js so
+//   the transform logic lives in one place. Bypasses the dispatch wrappers
+//   (getX) which would route to PG if READ_FROM_POSTGRES_* flags are set;
+//   the backfill must always read from Sheets.
+//
+// HERO_IMAGES URL DEDUPE
+//   The hero_images config wraps readHeroImagesSheets() with a dedupe
+//   filter. Preserved from pre-runner-migration logic; no known
+//   duplicates today after PR #80, but the check is cheap insurance.
 //
 // SAFETY
 //   * Default mode is dry-run. Live mode requires --execute.
-//   * Live mode uses idempotent upserts with appropriate ON CONFLICT
-//     clauses, so the script is safe to re-run. Re-running after
-//     dual-write has populated some rows reconciles instead of
-//     erroring; re-running after a successful backfill is a no-op for
-//     unchanged rows and a refresh for changed rows.
-//   * This script does NOT touch the Sheets tabs. Sheets remains source
-//     of truth until READ_FROM_POSTGRES_DIRECTORY flips post-backfill.
-//   * This script does NOT flip any cutover flags. Flag flips happen
-//     manually in the Vercel env, separately from this script.
-//
-// SHEET READS
-//   Uses the exported readXSheets functions from src/lib/dataStore.js
-//   so the transform logic lives in one place. Bypasses the dispatch
-//   wrappers (getX) which would route to PG if READ_FROM_POSTGRES_*
-//   flags are set - the backfill must always read from Sheets.
-//
-// PG WRITE STRATEGIES
-//   accounts        - upsert ON CONFLICT (team_key) DO UPDATE
-//   contacts        - upsert ON CONFLICT (team_key, email) DO UPDATE
-//   work_locations  - upsert ON CONFLICT (team_key) DO UPDATE
-//   hero_images     - DELETE WHERE team_key IS NULL + INSERT
-//                     (the partial unique index on (url) WHERE team_key
-//                     IS NULL cannot be addressed by Supabase's
-//                     onConflict parameter; delete-then-insert matches
-//                     replaceHeroImagesPostgres semantics)
+//   * Upsert strategies are idempotent. Re-running after dual-write has
+//     populated some rows reconciles instead of erroring.
+//   * replace-null-pool deletes the global hero pool before re-inserting.
+//     Any concurrent admin edits between DELETE and INSERT could be lost;
+//     acceptable because hero_images edits are rare.
+//   * This script does NOT touch the Sheets tabs.
+//   * This script does NOT flip any cutover flags.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { createClient } from "@supabase/supabase-js";
-import { readSheetSA, SHEET_IDS } from "../src/lib/sheets.js";
+import { SHEET_IDS } from "../src/lib/sheets.js";
 import {
   readAccountsSheets,
   readContactsSheets,
   readWorkLocationsSheets,
   readHeroImagesSheets,
 } from "../src/lib/dataStore.js";
+import { runBackfill } from "./_lib/backfill-runner.mjs";
 
 // ── Arg parsing ──
 const args = process.argv.slice(2);
@@ -85,23 +92,7 @@ if (!tableArg || !VALID_TABLES.includes(tableArg)) {
   process.exit(1);
 }
 
-const MODE = EXECUTE ? "LIVE" : "DRY-RUN";
-
-// ── Per-table config ──
-//
-// Each table config defines:
-//   sheetTabName        - the tab in HUB to read for the header check
-//   expectedFirstHeader - col A header to verify before any write
-//                         (null = skip header check; used for hero_images
-//                         since the tab has no documented header name)
-//   readSheets          - the dataStore function returning canonical
-//                         records from Sheets (bypasses dispatch)
-//   pgTable             - target PG table name
-//   transformToPg       - canonical record -> PG row object
-//   strategy            - "upsert" or "replace-null-pool" (hero_images)
-//   onConflict          - column list for ON CONFLICT (upsert strategy)
-//   countScope          - extra WHERE clause for the post-write count
-//                         verification (null = no filter)
+// ── Per-table configs ──
 
 const TABLES = {
   accounts: {
@@ -175,8 +166,29 @@ const TABLES = {
 
   hero_images: {
     sheetTabName: "hero_images",
-    expectedFirstHeader: "ImageURL", // header added to fix PR #69 latent reader-drops-row-1 bug
-    readSheets: readHeroImagesSheets,
+    expectedFirstHeader: "ImageURL",
+    // Defensive dedupe: preserved from pre-runner-migration logic. The
+    // source Sheet historically had duplicate URLs that needed filtering;
+    // no known duplicates today after PR #80, but the check is cheap
+    // insurance against future data drift. Logs the count delta when
+    // dedupe actually filters anything (silent when there's nothing to
+    // remove).
+    readSheets: async () => {
+      const records = await readHeroImagesSheets();
+      const seen = new Set();
+      const deduped = records.filter((r) => {
+        const u = String(r.url || "").trim();
+        if (!u || seen.has(u)) return false;
+        seen.add(u);
+        return true;
+      });
+      if (deduped.length < records.length) {
+        console.log(
+          `hero_images dedupe: ${records.length} -> ${deduped.length} unique URLs.`
+        );
+      }
+      return deduped;
+    },
     pgTable: "hero_images",
     transformToPg: (r) => ({
       team_key: null,
@@ -185,7 +197,7 @@ const TABLES = {
     }),
     strategy: "replace-null-pool",
     onConflict: null,
-    // Count only the global pool (team_key IS NULL) - per-account rows
+    // Count only the global pool (team_key IS NULL); per-account rows
     // are dormant infrastructure and not touched by this backfill.
     countScope: "team_key IS NULL",
   },
@@ -193,157 +205,17 @@ const TABLES = {
 
 const config = TABLES[tableArg];
 
-// ── Main ──
+// ── Invoke the shared runner ──
 
-async function main() {
-  console.log("=".repeat(70));
-  console.log(`directory backfill - table=${tableArg} - ${MODE}`);
-  console.log("=".repeat(70));
-  console.log();
-
-  // ── 1. Header check (where applicable) ──
-  if (config.expectedFirstHeader) {
-    const { headers } = await readSheetSA(SHEET_IDS.HUB, config.sheetTabName);
-    if (headers[0] !== config.expectedFirstHeader) {
-      console.error(
-        `FATAL: header A1 of '${config.sheetTabName}' is "${headers[0]}", ` +
-        `expected "${config.expectedFirstHeader}". The column mapping in ` +
-        `the dataStore assumes specific Sheet positions; if the header ` +
-        `shifted, the backfill would write the wrong data. STOP.`
-      );
-      process.exit(1);
-    }
-    console.log(`Header check OK: '${config.sheetTabName}' A1 = "${headers[0]}"`);
-  } else {
-    console.log(`Header check skipped for '${config.sheetTabName}' (no documented header).`);
-  }
-  console.log();
-
-  // ── 2. Read canonical records via dataStore ──
-  const records = await config.readSheets();
-  console.log(`Read ${records.length} canonical records from Sheets via dataStore.`);
-  console.log();
-
-  if (records.length === 0) {
-    console.log("(empty source - nothing to backfill)");
-    if (!EXECUTE) {
-      console.log(`To execute for real: npm run backfill:directory -- --table=${tableArg} --execute`);
-    }
-    return;
-  }
-
-  // ── 3. Transform + dedupe (hero_images only) ──
-  let pgRows = records.map(config.transformToPg);
-
-  if (tableArg === "hero_images") {
-    // Dedupe by URL: the partial unique index would reject duplicates,
-    // and the source Sheet COULD theoretically have dupes.
-    const seen = new Set();
-    const before = pgRows.length;
-    pgRows = pgRows.filter((r) => {
-      const u = String(r.url || "").trim();
-      if (!u || seen.has(u)) return false;
-      seen.add(u);
-      return true;
-    });
-    if (pgRows.length < before) {
-      console.log(`hero_images dedupe: ${before} -> ${pgRows.length} unique URLs.`);
-    }
-  }
-
-  console.log(`Transformed: ${pgRows.length} rows ready to write.`);
-  console.log();
-
-  console.log("Sample of transformed rows (first 3):");
-  pgRows.slice(0, 3).forEach((row, i) => {
-    console.log(`  [${i}]`, JSON.stringify(row));
+try {
+  await runBackfill({
+    ...config,
+    moduleLabel: `directory.${tableArg}`,
+    sheetId:     SHEET_IDS.HUB,
+    npmCommand:  `npm run backfill:directory -- --table=${tableArg}`,
+    execute:     EXECUTE,
   });
-  console.log();
-
-  // ── 4. DRY-RUN: stop here ──
-  if (!EXECUTE) {
-    console.log("DRY-RUN: not connecting to Postgres. Nothing written.");
-    console.log(`Strategy: ${config.strategy}` +
-      (config.onConflict ? ` (ON CONFLICT ${config.onConflict})` : ""));
-    console.log(
-      `To execute for real: npm run backfill:directory -- --table=${tableArg} --execute`
-    );
-    return;
-  }
-
-  // ── 5. LIVE: construct supabase client ──
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.error("FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local.");
-    process.exit(1);
-  }
-  const supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // ── 6. LIVE: write per strategy ──
-  console.log(`LIVE: writing to ${config.pgTable} via ${config.strategy} strategy...`);
-
-  if (config.strategy === "upsert") {
-    const { error } = await supabase
-      .from(config.pgTable)
-      .upsert(pgRows, {
-        onConflict: config.onConflict,
-        ignoreDuplicates: false,
-      });
-    if (error) {
-      console.error(`Upsert failed:`, error);
-      process.exit(1);
-    }
-    console.log(`Upsert OK: ${pgRows.length} rows reconciled.`);
-  } else if (config.strategy === "replace-null-pool") {
-    // hero_images: DELETE WHERE team_key IS NULL, then INSERT new rows
-    const { error: delErr } = await supabase
-      .from(config.pgTable)
-      .delete()
-      .is("team_key", null);
-    if (delErr) {
-      console.error(`Delete (global pool) failed:`, delErr);
-      process.exit(1);
-    }
-    if (pgRows.length > 0) {
-      const { error: insErr } = await supabase
-        .from(config.pgTable)
-        .insert(pgRows);
-      if (insErr) {
-        console.error(`Insert failed:`, insErr);
-        process.exit(1);
-      }
-    }
-    console.log(`Replace OK: deleted prior NULL-team_key rows + inserted ${pgRows.length} fresh rows.`);
-  } else {
-    console.error(`FATAL: unknown strategy "${config.strategy}"`);
-    process.exit(1);
-  }
-
-  // ── 7. Post-write count verification ──
-  let countQuery = supabase
-    .from(config.pgTable)
-    .select("*", { count: "exact", head: true });
-  if (config.countScope === "team_key IS NULL") {
-    countQuery = countQuery.is("team_key", null);
-  }
-  const { count, error: countErr } = await countQuery;
-  if (countErr) {
-    console.warn("Post-write count check failed:", countErr.message);
-  } else {
-    const scopeNote = config.countScope ? ` (${config.countScope})` : "";
-    console.log(`Postgres ${config.pgTable} now has ${count} total rows${scopeNote}.`);
-    if (count < pgRows.length) {
-      console.warn(
-        `WARNING: expected at least ${pgRows.length} rows, got ${count}. Investigate.`
-      );
-    }
-  }
-}
-
-main().catch((e) => {
+} catch (e) {
   console.error("FAILED:", e);
   process.exit(1);
-});
+}
