@@ -621,7 +621,7 @@ All 17 decisions plus 8 resolved during audit review (PR #83). Format: ID | Deci
 
 ## 4. Migration Sequence
 
-5 modules, ~13 PRs, ~105-145 hours total. Each module ships its PRs in order; modules can overlap if review bandwidth allows.
+5 modules, 12 PRs, 105-145 hours total. Parallelism rules below save ~5-7 days calendar time vs strict sequential.
 
 ### Module 4: dataStore.js refactor (PRE-REQUISITE)
 
@@ -694,35 +694,27 @@ Prepares the file for the 3 new finance modules. Pure refactor; no behavior chan
 
 **Estimated: 8-12 hours**
 
-#### PR 5.3: Backfill script
+#### PR 5.3: Backfill + vendor-merge atomicity
 
-**Goal:** Populate `vendors`, `vendor_accounts`, `vendor_aliases` from Sheets.
+**Goal:** (a) Populate `vendors`, `vendor_accounts`, `vendor_aliases` from Sheets. (b) Wrap the 3-step vendor merge in a PG transaction (today: 3 sequential Sheets calls, not atomic).
 
-**Changes:**
+**Changes (backfill):**
 - `scripts/backfill-vendor.mjs` using the shared runner.
 - 3-table sequential backfill (vendors -> vendor_accounts -> vendor_aliases).
 - vendor_aliases backfill splits the pipe-string into individual rows.
 - Idempotency: ON CONFLICT DO NOTHING for vendor_aliases (UNIQUE constraint catches duplicates).
 
-**Verification:**
-- Dry-run: expect 35 vendors, 54 vendor_accounts, ~150+ aliases (sum of pipe-split aliases across all vendors).
-- Execute: verify counts in PG match.
-- Spot check: pick 3 vendors, verify all their accounts + aliases backfilled correctly.
-
-**Estimated: 2-3 hours**
-
-#### PR 5.4: Vendor-merge atomicity
-
-**Goal:** Wrap the 3-step vendor merge in a PG transaction (today: 3 sequential Sheets calls, not atomic).
-
-**Changes:**
+**Changes (atomicity):**
 - `dataStore/vendor.js` `mergeVendors` orchestrator wraps PG side in a transaction (BEGIN/COMMIT).
 - Sheets side stays 3 sequential calls (best we can do; Sheets has no transaction primitive).
 
 **Verification:**
+- Dry-run backfill: expect 35 vendors, 54 vendor_accounts, ~150+ aliases (sum of pipe-split aliases across all vendors).
+- Execute backfill: verify counts in PG match.
+- Spot check: pick 3 vendors, verify all their accounts + aliases backfilled correctly.
 - Trigger a merge on test vendor pair. Verify either all 3 PG ops succeed or all roll back.
 
-**Estimated: 2-3 hours**
+**Estimated: 3-5 hours**
 
 #### Cutover sequence (Module 5)
 
@@ -891,14 +883,28 @@ Critical ordering with cron:
 | Module | PRs | Estimated hours |
 |---|---|---|
 | 4. dataStore split | 1 | 6-8 |
-| 5. Vendor | 4 | 20-28 |
+| 5. Vendor | 3 | 20-28 |
 | 6. Invoice | 3 | 28-38 |
 | 7. Smart Inventory | 3 | 30-40 |
 | 8. Cron (separate repo) | 2 | 11-14 |
 | Buffer (PR D equivalents) | - | 8-12 |
-| **TOTAL** | **13** | **105-145** |
+| **TOTAL** | **12** | **105-145** |
 
 Buffer accounts for cutover-verification finds (like PR #78 timestamp drift in submissions migration).
+
+### Parallelism rules
+
+Modules ship in sequence (Module 4 -> 5 -> 6 -> 7 -> 8) for cutover ordering safety. Within that, PRs run in parallel wherever dependencies allow. The rules:
+
+- **Schema PR for next module starts as soon as previous module's handler PR is in review.** PR 6.1 (Invoice schema + dormant adapters) can be drafted while PR 5.2 (Vendor handler rewire) is in review. Same for PR 7.1 vs PR 6.2.
+
+- **Backfill scripts drafted in dry-run mode while previous PR is in review.** PR 5.3 backfill drafted while PR 5.2 ships. PR 6.3 backfill drafted while PR 6.2 ships. PR 7.3 drafted while PR 7.2 ships. Dry-run does not touch production; can be drafted as soon as schema is locked.
+
+- **Cutover verification of one module can overlap with handler-rewire of next module.** While verifying Module 5 cutover in production, Module 6 handler-rewire PR (6.2) can be in drafting/review.
+
+- **Cron module (Module 8) is the firm exception.** Cron PR 1 must ship AFTER Module 7 is fully cut over (intranet dual-write enabled, read-flip done). Cron PR 2 must ship AFTER Cron PR 1 has been verified in production for at least one full nightly cycle. No parallelism shortcuts on cron - production safety overrides calendar savings.
+
+Calendar time savings from parallelism: approximately 5-7 days vs strict sequential. Total focused-work hours unchanged - parallelism is about overlap, not reduction.
 
 ---
 
