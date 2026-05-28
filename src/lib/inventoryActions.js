@@ -6,7 +6,7 @@ import { SHEET_IDS, readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, batch
 import {
   cachedRead, batchRead, invalidateCache,
   getAccountConfigs, getPeriods, getCurrentPeriod,
-  getAllVendors, resolveVendorId, parseNum, generateId,
+  parseNum, generateId,
 } from "@/lib/opsUtils";
 
 // Account labels in item_catalog may be short ("STL - MO") while bootstrap

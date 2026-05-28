@@ -72,22 +72,9 @@ export async function getCurrentPeriod() {
   return periods[periods.length - 1] || null;
 }
 
-// ═══════════════════════════════════════
-// 3. VENDOR
-// ═══════════════════════════════════════
-
-export async function getAllVendors() {
-  const { rows } = await cachedRead(SHEET_IDS.HUB, "vendor_master");
-  return rows.map((r) => ({
-    id: r[0], name: r[1], shortName: r[2] || r[1], active: r[3] !== "FALSE",
-  })).filter((v) => v.active);
-}
-
-export async function resolveVendorId(vendorId) {
-  const { rows } = await cachedRead(SHEET_IDS.HUB, "vendor_master");
-  const row = rows.find((r) => r[0] === vendorId);
-  return row ? (row[2] || row[1] || vendorId) : vendorId;
-}
+// getAllVendors + resolveVendorId deleted in PR 5.2 (L8/L9): zero
+// live callers (only inventoryActions.js imported them; never invoked).
+// Vendor data access lives in src/lib/dataStore/vendor.js orchestrators.
 
 // ═══════════════════════════════════════
 // 4. NOTIFICATION
