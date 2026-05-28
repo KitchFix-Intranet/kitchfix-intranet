@@ -38,6 +38,12 @@
 //   pgTable:              PG target table name
 //   strategy:             "upsert" | "insert-if-empty" | "replace-null-pool"
 //   onConflict:           string | null. For "upsert" strategy.
+//   ignoreDuplicates:     boolean | undefined. For "upsert" strategy.
+//                         Defaults to false (ON CONFLICT DO UPDATE EXCLUDED).
+//                         Set true for ON CONFLICT DO NOTHING semantics
+//                         (e.g., when an existing row's metadata such as
+//                         source/learned_by should be preserved across
+//                         re-runs even if the natural-key columns match).
 //   countScope:           string | null. Extra WHERE clause for the
 //                         pre-flight and post-write count queries. Only
 //                         "team_key IS NULL" is recognized currently.
@@ -178,15 +184,17 @@ export async function runBackfill(config) {
   console.log(`LIVE: writing to ${config.pgTable} via ${config.strategy} strategy...`);
 
   if (config.strategy === "upsert") {
+    const ignoreDuplicates = !!config.ignoreDuplicates;
     const { error } = await supabase.from(config.pgTable).upsert(pgRows, {
       onConflict: config.onConflict,
-      ignoreDuplicates: false,
+      ignoreDuplicates,
     });
     if (error) {
       console.error("Upsert failed:", error);
       process.exit(1);
     }
-    console.log(`Upsert OK: ${pgRows.length} rows reconciled.`);
+    const verb = ignoreDuplicates ? "inserted (existing rows preserved)" : "reconciled";
+    console.log(`Upsert OK: ${pgRows.length} rows ${verb}.`);
   } else if (config.strategy === "insert-if-empty") {
     // Pre-flight: count rows in target table. Abort if non-zero so we
     // never clobber rows that may have arrived via dual-write.

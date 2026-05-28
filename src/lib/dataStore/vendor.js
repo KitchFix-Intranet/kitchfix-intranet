@@ -1071,59 +1071,25 @@ async function learnVendorAliasPostgres(vendorId, ocrName, learnedBy) {
 }
 
 async function mergeVendorsPostgres(keeperId, dupeIds, email) {
-  // PR 5.1: sequential 3-statement (NOT atomic). PR 5.3 upgrades
-  // this to a true BEGIN/COMMIT transaction (via stored function or
-  // pg client transaction). Per the plan, this is best-effort during
-  // the dual-write window: Sheets remains source of truth, so a
-  // partial PG failure is recoverable by re-running the merge (the
-  // operations are idempotent at the row level).
+  // PR 5.3: atomic via PL/pgSQL stored function merge_vendors.
+  // All three side-effects (accounts reassign + vendors soft-delete +
+  // aliases insert) commit-or-roll-back together inside the function's
+  // implicit transaction. Partial failures leave the database in the
+  // pre-call state.
+  //
+  // DDL: docs/migrations/pr-5-3-vendor-merge-function.sql
+  //   (CREATE OR REPLACE FUNCTION merge_vendors(text, text[], text)
+  //    + GRANT EXECUTE TO service_role)
   const supabase = getServiceClient();
-
-  // 1. Reassign vendor_accounts.vendor_id from dupes -> keeper
-  const { error: reassignErr } = await supabase
-    .from("vendor_accounts")
-    .update({ vendor_id: keeperId })
-    .in("vendor_id", dupeIds);
-  if (reassignErr) {
-    throw new Error(`[dataStore.vendor.pg] mergeVendors reassign: ${reassignErr.message}`);
+  const { data, error } = await supabase.rpc("merge_vendors", {
+    p_keeper_id: keeperId,
+    p_dupe_ids:  dupeIds,
+    p_email:     email || "system",
+  });
+  if (error) {
+    throw new Error(`[dataStore.vendor.pg] mergeVendors RPC: ${error.message}`);
   }
-
-  // 2. Read dupe names (for alias backfill) then soft-delete
-  const { data: dupes, error: dupeReadErr } = await supabase
-    .from("vendors")
-    .select("id, name")
-    .in("id", dupeIds);
-  if (dupeReadErr) {
-    throw new Error(`[dataStore.vendor.pg] mergeVendors dupe read: ${dupeReadErr.message}`);
-  }
-  const dupeNames = (dupes || []).map((d) => String(d.name || "").trim()).filter(Boolean);
-
-  const { error: softDelErr } = await supabase
-    .from("vendors")
-    .update({ deleted_at: new Date().toISOString() })
-    .in("id", dupeIds);
-  if (softDelErr) {
-    throw new Error(`[dataStore.vendor.pg] mergeVendors soft-delete: ${softDelErr.message}`);
-  }
-
-  // 3. Append dupe names as aliases on keeper (ON CONFLICT DO NOTHING)
-  const aliasRows = dupeNames.map((n) => ({
-    vendor_id:  keeperId,
-    alias_text: n,
-    source:     "merge",
-    learned_by: email || "system",
-  }));
-  if (aliasRows.length > 0) {
-    const { error: aliasErr } = await supabase
-      .from("vendor_aliases")
-      .insert(aliasRows);
-    // 23505 = unique_violation (alias already exists for keeper). Non-fatal.
-    if (aliasErr && aliasErr.code !== "23505") {
-      throw new Error(`[dataStore.vendor.pg] mergeVendors aliases: ${aliasErr.message}`);
-    }
-  }
-
-  return { dupeNames };
+  return { dupeNames: data?.dupe_names || [] };
 }
 
 // ═══════════════════════════════════════════════════════════════
