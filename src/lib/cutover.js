@@ -2,46 +2,90 @@
 // CUTOVER CONFIG (Stage 1 dual-write control plane)
 // ═══════════════════════════════════════════════════════════════
 //
-// Two flags, three states per table:
+// Two flags govern per-table behavior in the dataStore orchestrators.
+// Both are comma-separated lists of TAB NAMES, parsed once at module
+// load. Default empty = OFF.
 //
-//   1. table NOT in DUAL_WRITE_TABLES, NOT in READ_FROM_POSTGRES
+//   DUAL_WRITE_TABLES        gates the PG write side of orchestrators
+//   READ_FROM_POSTGRES       gates whether reads come from PG
+//                            (plus READ_FROM_POSTGRES_<MODULE> variants
+//                             for per-caller scoping; see below)
+//
+// Both are checked via boolean helpers (isDualWrite, isReadFromPostgres)
+// at every orchestrator call site. The helpers are pure lookups; they
+// do NOT enforce any cross-flag invariant at runtime.
+//
+// ORCHESTRATOR PATTERN (relevant to states 2-4 below)
+//   Every dataStore upsertX / replaceX / updateXStatus orchestrator
+//   writes Sheets UNCONDITIONALLY, then optionally mirrors to PG when
+//   isDualWrite(tab) returns true. There is no third branch where
+//   Sheets writes are skipped. This is what determines the per-state
+//   behavior described below.
+//
+// FOUR STATES (3 supported + 1 misconfiguration)
+//
+//   1. NEITHER flag set
 //      = OFF. Reads from Sheets. Writes to Sheets only. Postgres is
-//        not touched (Supabase client is never constructed).
-//        This is the default state on merge. Zero behavior change.
+//        not touched (Supabase client never constructed).
+//        Default state on merge. Zero behavior change.
 //
-//   2. table in DUAL_WRITE_TABLES, NOT in READ_FROM_POSTGRES
-//      = DUAL-WRITE ONLY. Reads from Sheets (still authoritative).
-//        Writes go to BOTH Sheets AND Postgres. Sheets stays the
-//        source of truth; Postgres is a shadow being populated.
-//        Used to build confidence that PG writes succeed without
-//        flipping reads yet.
+//   2. DUAL_WRITE_TABLES only
+//      = DUAL-WRITE BUILDING. Reads from Sheets (still authoritative).
+//        Writes go to BOTH Sheets AND Postgres. Sheets stays source
+//        of truth; Postgres is a shadow being populated. Used to
+//        build confidence in PG writes before flipping reads.
 //
-//   3. table in DUAL_WRITE_TABLES AND in READ_FROM_POSTGRES
+//   3. DUAL_WRITE_TABLES + READ_FROM_POSTGRES
 //      = CUT OVER. Reads from Postgres (PG is now source of truth).
-//        Writes go to BOTH for the cutover window. Sheets stays
-//        populated as the rollback target. After the cutover window
-//        proves stable, the table is removed from DUAL_WRITE_TABLES
-//        too and Sheets writes stop (Sheets becomes a frozen backup).
+//        Writes still go to BOTH. Sheets stays current as the
+//        rollback target. This is the steady state for the 3
+//        modules migrated to date.
 //
-// Read-only without dual-write (READ_FROM_POSTGRES set but
-// DUAL_WRITE_TABLES not) is an illegal state - reading from Postgres
-// while writes only hit Sheets would make PG stale immediately.
-// isReadFromPostgres asserts isDualWrite is also true at call time.
+//   4. READ_FROM_POSTGRES only (no DUAL_WRITE_TABLES)
+//      = MISCONFIGURATION. Reads from PG but writes only reach
+//        Sheets (orchestrator pattern above). PG goes stale on the
+//        next user write; subsequent reads return outdated data.
+//        NOTHING IN THE CODE PREVENTS THIS STATE. The implicit
+//        invariant "READ_FROM_POSTGRES implies DUAL_WRITE_TABLES"
+//        must be maintained operationally by whoever sets the env
+//        vars. State 4 manifests silently as data loss, not as a
+//        runtime error.
 //
-// Both env vars are comma-separated lists of TAB NAMES (not table
-// IDs - the natural key matches how every helper in sheets.js takes
-// (spreadsheetId, tabName)). Whitespace tolerated. Case-sensitive on
-// the tab name itself (Sheets is case-sensitive on tab names).
+// DECOMMISSION NOTE (KNOWN LIMITATION)
+//   An earlier version of this doc described a "final" cutover step
+//   of removing a table from DUAL_WRITE_TABLES so "Sheets writes
+//   stop (Sheets becomes a frozen backup)." That step is NOT
+//   achievable with the current code. Per the orchestrator pattern
+//   above, removing a table from DUAL_WRITE_TABLES stops PG writes,
+//   not Sheets writes - producing state 4, with PG going stale.
 //
-// Example deploy state for the first table:
-//   Tuesday morning (this PR merges): both flags empty - off.
-//   Wednesday morning:                 DUAL_WRITE_TABLES=news_interactions
-//                                       (Postgres mirror starts filling)
-//   Wednesday afternoon, confidence built:
-//                                       READ_FROM_POSTGRES=news_interactions
-//                                       (PG becomes source of truth)
-//   Days later, stable:                remove from DUAL_WRITE_TABLES
-//                                       (Sheets becomes frozen backup)
+//   To actually decommission a table (make PG the sole writer and
+//   freeze Sheets), the orchestrators would need to invert their
+//   semantics: skip the Sheets write when the table is in
+//   READ_FROM_POSTGRES but not in DUAL_WRITE_TABLES, OR introduce
+//   a third flag (e.g., FREEZE_SHEETS_TABLES). Neither change
+//   exists today. Flagged as future work if/when the dual-write
+//   maintenance burden becomes meaningful in practice.
+//
+//   Practical impact today: small but non-zero. Maintaining Sheets
+//   writes after the read flip keeps the rollback net current with
+//   negligible quota cost. The one operational tradeoff: Sheets API
+//   availability gates write availability for all dual-write tables
+//   (orchestrator writes Sheets first, throws if Sheets fails, never
+//   reaches PG). Has not been a problem in practice; flagged here so
+//   the dependency is documented.
+//
+// TAB NAME PARSING
+//   Tab names are case-sensitive (Sheets is case-sensitive on tab
+//   names). Whitespace is tolerated in env values. The natural key
+//   matches how every helper in sheets.js takes (spreadsheetId,
+//   tabName).
+//
+// HISTORICAL CUTOVER SEQUENCE (modules at state 3)
+//   news_interactions      2026-05-27 morning
+//   directory module       2026-05-27 afternoon (per-module flag)
+//   submissions            2026-05-27 evening (per-module flag)
+//   All currently stable in state 3. State 4 has not been used.
 
 function parseTableSet(envValue) {
   if (!envValue) return new Set();
