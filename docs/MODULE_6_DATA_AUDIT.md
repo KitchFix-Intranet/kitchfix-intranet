@@ -410,7 +410,7 @@ historical_invoice_ref TEXT  -- preserves synthetic IDs like "REBUILD-204842-00-
 
 **`invoice_submissions`:**
 - Add `ai_scan_status TEXT` column (CHECK `ai_scan_status IS NULL OR ai_scan_status IN ('pending', 'complete', 'failed', 'photo-only')`). `ai_scan_status` is the single source of truth.
-- Add `ai_scan_complete BOOLEAN GENERATED ALWAYS AS (ai_scan_status = 'complete') STORED` for backwards compatibility with any code reading the old column shape; auto-derived from `ai_scan_status`.
+- Add `ai_scan_complete BOOLEAN GENERATED ALWAYS AS (COALESCE(ai_scan_status, '') = 'complete') STORED` for backwards compatibility with any code reading the old column shape; auto-derived from `ai_scan_status`. The COALESCE guards against SQL three-valued logic: when `ai_scan_status IS NULL` (new submissions before AI scans), the naive `ai_scan_status = 'complete'` would evaluate to NULL, breaking the old `BOOLEAN NOT NULL DEFAULT false` semantics. With COALESCE, NULL -> FALSE, matching the old default behavior so queries like `WHERE ai_scan_complete = FALSE` still find submissions awaiting scan.
 - Backfill 590 rows: for each, examine col N value:
   - If value in `('sent', 'returned', 'corrected', 'deleted')`: `status=<value>`, `ai_scan_status=NULL`, `is_historical=TRUE`.
   - If value in `('complete', 'failed', 'pending', 'photo-only')`: `status='sent'`, `ai_scan_status=<value>`, `is_historical=TRUE`.

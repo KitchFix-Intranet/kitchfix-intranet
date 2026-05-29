@@ -35,7 +35,7 @@ Strict integrity constraints (UNIQUE, NOT NULL FK, status enum, F24 dedup) becom
 
 Additional per-table touches:
 
-- **`invoice_submissions`**: adds `ai_scan_status TEXT` for the 4 historical AI states (`pending/complete/failed/photo-only`) + `ai_scan_complete BOOLEAN GENERATED ALWAYS AS (ai_scan_status = 'complete') STORED` for backwards compatibility. Status CHECK is `is_historical = TRUE OR status IN ('sent','returned','corrected','deleted')`. F24 partial UNIQUE INDEX excludes historical rows.
+- **`invoice_submissions`**: adds `ai_scan_status TEXT` for the 4 historical AI states (`pending/complete/failed/photo-only`) + `ai_scan_complete BOOLEAN GENERATED ALWAYS AS (COALESCE(ai_scan_status, '') = 'complete') STORED` for backwards compatibility (COALESCE makes NULL `ai_scan_status` derive to FALSE, matching the old `BOOLEAN NOT NULL DEFAULT false` semantics for queries like `WHERE ai_scan_complete = FALSE`). Status CHECK is `is_historical = TRUE OR status IN ('sent','returned','corrected','deleted')`. F24 partial UNIQUE INDEX excludes historical rows.
 - **`ai_line_items`**: `invoice_uuid` becomes NULLable + FK. Adds `historical_invoice_ref TEXT` for synthetic IDs like `REBUILD-204842-00-1` (138 rows from a 2026-04-03 batch re-extraction) and for original UUIDs of parent-deleted rows (71 valid-UUID orphans). UNIQUE (invoice_uuid, line_num) becomes partial on `is_historical = FALSE`. Two CHECKs enforce new rows have a real parent + historical rows have either parent or `historical_invoice_ref`.
 - **`gl_codes`**: just the 2 base columns. Master Template + Class Overview tabs SKIPPED per Q6 (admin-reference Sheets-only).
 

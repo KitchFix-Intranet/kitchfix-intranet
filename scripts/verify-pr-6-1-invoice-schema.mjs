@@ -93,12 +93,17 @@ if (probeInsert.error) {
     fail("invoice_submissions defaults",
       `got is_historical=${probeRow?.is_historical} data_provenance=${probeRow?.data_provenance}`);
   }
-  // Verify ai_scan_complete is null when ai_scan_status is null (GENERATED behavior)
-  if (probeRow?.ai_scan_status === null && probeRow?.ai_scan_complete === null) {
-    pass("ai_scan_complete is GENERATED + null when ai_scan_status null");
+  // Verify ai_scan_complete is FALSE (not NULL) when ai_scan_status is NULL.
+  // The GENERATED expression uses COALESCE(ai_scan_status, '') = 'complete' to
+  // guard against SQL three-valued logic - a naive `ai_scan_status = 'complete'`
+  // would evaluate NULL when status is NULL, breaking the old BOOLEAN NOT NULL
+  // DEFAULT false semantics. With COALESCE, NULL coalesces to '' which is not
+  // 'complete' so the boolean is FALSE.
+  if (probeRow?.ai_scan_status === null && probeRow?.ai_scan_complete === false) {
+    pass("ai_scan_complete = FALSE (not NULL) when ai_scan_status NULL (COALESCE guard)");
   } else {
-    fail("ai_scan_complete GENERATED behavior",
-      `ai_scan_status=${probeRow?.ai_scan_status} ai_scan_complete=${probeRow?.ai_scan_complete}`);
+    fail("ai_scan_complete GENERATED behavior (NULL ai_scan_status)",
+      `expected ai_scan_complete=false, got ai_scan_status=${probeRow?.ai_scan_status} ai_scan_complete=${probeRow?.ai_scan_complete}`);
   }
 }
 

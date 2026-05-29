@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS invoice_submissions (
   ai_scan_status              TEXT
                                 CHECK (ai_scan_status IS NULL OR ai_scan_status IN
                                   ('pending', 'complete', 'failed', 'photo-only')),
-  ai_scan_complete            BOOLEAN GENERATED ALWAYS AS (ai_scan_status = 'complete') STORED,
+  ai_scan_complete            BOOLEAN GENERATED ALWAYS AS (
+                                COALESCE(ai_scan_status, '') = 'complete'
+                              ) STORED,
   is_historical               BOOLEAN NOT NULL DEFAULT FALSE,
   data_provenance             TEXT NOT NULL DEFAULT 'app_scan'
                                 CHECK (data_provenance IN

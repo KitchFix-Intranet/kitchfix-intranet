@@ -188,7 +188,9 @@ CREATE TABLE invoice_submissions (
   dupe_override               BOOLEAN NOT NULL DEFAULT false,
   ai_scan_status              TEXT
                                 CHECK (ai_scan_status IS NULL OR ai_scan_status IN ('pending','complete','failed','photo-only')),
-  ai_scan_complete            BOOLEAN GENERATED ALWAYS AS (ai_scan_status = 'complete') STORED,
+  ai_scan_complete            BOOLEAN GENERATED ALWAYS AS (
+                                COALESCE(ai_scan_status, '') = 'complete'
+                              ) STORED,
   is_historical               BOOLEAN NOT NULL DEFAULT FALSE,
   data_provenance             TEXT NOT NULL DEFAULT 'app_scan'
                                 CHECK (data_provenance IN ('app_scan','batch_rebuild','manual_entry','unknown')),
@@ -219,7 +221,7 @@ Notes:
 - Rejection metadata (cols R-U) factored to `invoice_rejections`.
 - `is_historical` + `data_provenance` are the preservation-first columns. ALL 590 backfilled rows get `is_historical=TRUE`, `data_provenance='app_scan'`.
 - `ai_scan_status` separates the AI scan info from the workflow status. Backfill mapping per MODULE_6_DATA_AUDIT Section 8: if col N is workflow (sent/returned/corrected/deleted), `status=<value>` + `ai_scan_status=NULL`. If col N is AI state (complete/failed/pending/photo-only), `status='sent'` + `ai_scan_status=<value>`. 101 of 590 rows take the second branch.
-- `ai_scan_complete` is a GENERATED column (`ai_scan_status = 'complete'`). The boolean is auto-derived for backwards compatibility with any read site expecting the old column shape; `ai_scan_status` is the single source of truth.
+- `ai_scan_complete` is a GENERATED column. The expression uses `COALESCE(ai_scan_status, '') = 'complete'` rather than the naive `ai_scan_status = 'complete'` to handle SQL three-valued logic correctly: when `ai_scan_status IS NULL` (new submissions before AI scans run), the COALESCE makes the comparison evaluate to FALSE rather than NULL. This preserves the old `BOOLEAN NOT NULL DEFAULT false` semantics so callers writing `WHERE ai_scan_complete = FALSE` (to find submissions awaiting scan) still match those rows. `ai_scan_status` remains the single source of truth; `ai_scan_complete` is auto-derived for backwards compatibility.
 
 #### `invoice_rejections`
 
