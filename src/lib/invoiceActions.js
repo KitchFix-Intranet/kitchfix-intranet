@@ -226,7 +226,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
     // under its new canonical name `accountKey`; rename back to `account`
     // here for response shape parity.
     const { vendorMaster, accountVendors: accountVendorsRaw } =
-      await getVendorsForBootstrap(accountParam || "");
+      await getVendorsForBootstrap(accountParam || "", { module: "ops" });
 
     const accountVendors = accountVendorsRaw.map((av) => ({
       rowId:              av.rowId,
@@ -290,7 +290,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
   // ── Vendor Search ──
   if (action === "vendor-search") {
     const query = searchParams.get("q") || "";
-    const results = await searchVendors(query);
+    const results = await searchVendors(query, { module: "ops" });
     return { success: true, vendors: results };
   }
 
@@ -634,7 +634,7 @@ INVOICE NUMBER RULES:
       let vendorMatch = null;
       if (parsed.vendorName) {
         try {
-          const vendors = await getVendorsForMatching();
+          const vendors = await getVendorsForMatching({ module: "ops" });
           vendorMatch = fuzzyMatchVendor(parsed.vendorName, vendors);
         } catch (e) {
           console.warn("[Invoice OCR] Vendor matching failed:", e.message);
@@ -1453,6 +1453,7 @@ export async function handleVendorList(searchParams, token, email) {
   const result = await getVendorsForList({
     accountKey, allAccounts, category, search,
     page, pageSize, showInactive,
+    module: "ops",
   });
 
   // Add contactName/Email/Phone empty-string keys for backwards-
@@ -1486,7 +1487,7 @@ export async function handleVendorGet(searchParams, token, email) {
 
   // PR 5.2: routes through dataStore/vendor.js orchestrator. The
   // orchestrator returns the canonical vendor record or null.
-  const vendor = await getVendor(vendorId, accountKey);
+  const vendor = await getVendor(vendorId, accountKey, { module: "ops" });
   if (!vendor) return { success: false, error: "Vendor not found" };
 
   // Add contactName/Email/Phone empty strings for response shape parity
