@@ -1,14 +1,14 @@
 # Invoice Module
 
-> **Status:** Pre-cutover. Schema + dormant adapters shipping in PR 6.1 (this PR). Handler rewire in PR 6.2. Backfill + cutover in PR 6.3.
+> **Status:** Pre-cutover (handlers rewired, flags off). PR 6.1 shipped the schema + dormant adapters; PR 6.2 (this PR) rewires every Sheet I/O site through the dataStore orchestrators, bundles 9 cross-cutting cleanups, and switches `invoice-delete-dupe` from hard-delete to admin-gated soft-delete. Backfill + cutover in PR 6.3.
 
 ## Overview
 
 The invoice module captures vendor invoices submitted through the People Portal and the Ops site. Each submission carries metadata (vendor, date, total), a GL breakdown (which expense codes the amount splits across), drive references to scanned pages, and an async AI line item extraction. Admins can reject submissions, correct earlier ones, mark dupe overrides, and view per-account history.
 
-Backend: `src/lib/invoiceActions.js` (1689 LOC, 9 exported handlers, 18 distinct action sub-routes). Frontend: `src/app/ops/components/invoice/*` plus invoice tooling in People Portal flows.
+Backend: `src/lib/invoiceActions.js` (~1500 LOC post-PR-6.2, 9 exported handlers, 14 distinct action sub-routes). Frontend: `src/app/ops/components/invoice/*` plus invoice tooling in People Portal flows.
 
-PR 6.1 ships the dormant data layer. With cutover flags off (default), the existing handlers continue to read/write Sheets directly.
+PR 6.1 shipped the dormant data layer. PR 6.2 rewired all 13 invoice-specific Sheet I/O sites through the dataStore orchestrators (vendor sub-routes were already on the orchestrator from Module 5). With cutover flags off (default), every orchestrator dispatches to its Sheets adapter so behavior remains byte-equivalent to the pre-PR-6.2 handler.
 
 ## Schema reality
 
@@ -55,11 +55,15 @@ Per Kevin's decision #6, orchestrators do NOT default-filter by `is_historical`.
 
 ## Common pitfalls
 
-*Discovered during cutover. To be populated post-PR 6.3.*
+*Cutover (PR 6.3) findings to be appended here. Anticipated based on Module 5 cutover experience:*
 
-Anticipated based on Module 5 cutover experience:
 - **Vercel env changes require no-cache redeploys** for fresh Lambda cold-starts (Module 5 lesson #2).
 - **PG schema constraints surface latent Sheets data issues** (Module 5 lesson #3). For invoice the audit caught 138 REBUILD-* synthetics, 71 orphans, 4 line-num dupes, 5 typo dates - all now handled via the is_historical pattern.
+- **`module: "ops"` propagation** (Module 5 lesson #1). PR 6.2 passes `module: "ops"` at every orchestrator call site in `invoiceActions.js`. Forget the opts arg and `READ_FROM_POSTGRES_OPS` silently no-ops at cutover.
+- **F24 dedup keys on `vendorId`, not vendor name**. PR 6.2 swapped the legacy invoice-name match for the orchestrator-level vendor_id match (matches the PG partial UNIQUE INDEX). Frontend `invoice-duplicate-check` now sends `vendorId` alongside vendor name. A vendor without a `vendor.vendorId` (rare; orphan UI state) silently bypasses the field-based dedup; the F25 `client_uuid` retry guard still applies.
+- **`invoice-delete-dupe` is a soft delete** (PR 6.2 C10). Status flips to `'deleted'`; handler-side filter in `invoice-history` + `invoice-admin-list` hides these rows to match pre-PR-6.2 hard-delete UX. Restricted to `OPS_LEADERSHIP_EMAILS` via the BR1 admin gate added in this PR.
+- **AI scan line item write requires `metadata.account`**. The `'Invoice Uploads'` junk-drawer fallback was removed (PR 6.2 L1). Submissions without an account on metadata now skip the line item write with a warning rather than spraying into a fallback tab.
+- **`ai_scan_status` propagation via `updateInvoiceFields`**. The Sheets path has no column for it (FIELD_TO_COL silently skips); the PG path writes `ai_scan_status` once dual-write is on. Pre-PR-6.2 `updateScanStatus` was a console-only stub - removed.
 
 ## Handler reference
 
@@ -79,7 +83,39 @@ Anticipated based on Module 5 cutover experience:
 | 10 | `unrejectInvoice(submissionUuid, by, opts)` | invoice_rejections | Sheets path reverts col N=sent + clears R-U; PG path updates most-recent row |
 | 11 | `insertAILineItems(invoiceUuid, lineItems[], opts)` | ai_line_items | Bulk insert post-AI-scan |
 
-Handler call sites in `invoiceActions.js` to be rewired in PR 6.2: ~22 across 12 invoice-specific action sub-routes (invoice-bootstrap, invoice-history, invoice-admin-list, invoice-submit, invoice-duplicate-check, invoice-reject, invoice-unreject, invoice-dismiss-dupe, invoice-delete-dupe, invoice-ocr, invoice-photo-gate, invoice-consistency-check). Vendor sub-routes (`vendor-search`, `vendor-add`, vendor admin) are already migrated via Module 5.
+### PR 6.2 handler rewire map
+
+All 13 invoice-specific Sheet I/O sites now route through the orchestrators above. `module: "ops"` is passed at every call site so `READ_FROM_POSTGRES_OPS` works end-to-end. `invoice-photo-gate`, `invoice-ocr`, and `invoice-consistency-check` are AI-only and have no Sheet I/O (untouched).
+
+| Sub-route | Pre-PR-6.2 Sheet ops | Orchestrator call |
+|---|---|---|
+| `invoice-bootstrap` (GET) | `readSheetSA(GL_CODES, tab) → parseGLCodes`, `safeRead(invoice_submissions_26)` | `getGLCodes({accountKey, module})` + `regroupGLCodes` (C5), `getInvoiceSubmissions({accountKey, pageSize:200, scope:"all", module})` |
+| `invoice-history` (GET) | `safeRead(invoice_submissions_26) + parseSubmissionRow` | `getInvoiceSubmissions({accountKey, pageSize:200, scope:"all", module})` + soft-delete filter |
+| `invoice-admin-list` (GET) | `safeRead + parseSubmissionRow` | `getInvoiceSubmissions({period, pageSize:5000, scope:"all", module})` + soft-delete filter |
+| `invoice-submit` GL enrich | `readSheetSA(GL_CODES) → parseGLCodes` | `getGLCodes({accountKey, module})` |
+| `invoice-submit` F25/F24 pre-check | `readSheetSA + inline normalizeInv` | `getInvoiceSubmissionByUuid` + `findDuplicateSubmission` (orphan-PDF guard) |
+| `invoice-submit` row write | `appendRowSA` | `upsertInvoiceSubmission` (returns `{submission, deduplicated}` race-guard) |
+| `invoice-submit` correction mark | `findRowByValueSA + updateRangeSA(N:O)` | `updateInvoiceFields(correctedFromUuid, {status, statusUpdatedAt})` |
+| `invoice-submit` email-sent flag | `findRowByValueSA + updateCellSA(M)` | `updateInvoiceFields(uuid, {emailSent:true})` |
+| `invoice-duplicate-check` | `safeRead + inline match by vendor name` | `findDuplicateSubmission({vendorId, ...})` (frontend now sends `vendorId`) |
+| `invoice-reject` | `findRowByValueSA + safeRead + batchUpdateRangesSA(N:O,R:U)` | `getInvoiceSubmissionByUuid` + `insertInvoiceRejection` |
+| `invoice-unreject` | `findRowByValueSA + safeRead + batchUpdateRangesSA` | `getInvoiceSubmissionByUuid` + `unrejectInvoice` |
+| `invoice-dismiss-dupe` | `findRowByValueSA + updateCellSA(W)` | `updateInvoiceFields(uuid, {dupeOverride:"not_duplicate"})` |
+| `invoice-delete-dupe` | `findRowByValueSA + getSheetIdSA + deleteRowSA` (hard delete) | `updateInvoiceFields(uuid, {status:"deleted", statusUpdatedAt})` (BR1 admin gate + C10 soft delete) |
+| `triggerAIScan` line item write | `ensureLineItemTab + appendRowsSA + "Invoice Uploads" fallback` | `insertAILineItems(uuid, lineItems, {accountKey, module})`; fallback dropped (L1) |
+| `triggerAIScan` scan status | `updateScanStatus` (console-only stub) | `updateInvoiceFields(uuid, {aiScanStatus})` (S4) |
+
+### PR 6.2 cleanups bundled
+
+- **BR1**: `invoice-delete-dupe` admin gate via `OPS_LEADERSHIP_EMAILS`.
+- **S1**: removed GL helpers (`parseGLCodes`, `GL_TAB_MAP`, `getGLTabName`, `EXCLUDED_CATEGORIES`, `SECTION_MARKERS`, `EXCLUDED_ITEMS`, `flattenGLCodes`) from `invoiceActions.js`. GL categorization now happens in the orchestrator + `regroupGLCodes` at the handler boundary (C5).
+- **S2**: removed `parseSubmissionRow`; canonical-to-legacy translation lives in `toLegacySubmission` at the top of `invoiceActions.js`.
+- **S3**: removed local `normalizeInvNum` helpers in two sites; `findDuplicateSubmission` owns normalization.
+- **S4**: removed `updateScanStatus` no-op stub; replaced with `markScanStatus` that calls `updateInvoiceFields({aiScanStatus})`.
+- **D1**: moved `ensureLineItemTab` + `LINE_ITEM_HEADERS` from `invoiceActions.js` into `src/lib/dataStore/invoice.js` as a Sheets-adapter internal.
+- **L1**: dropped the `"Invoice Uploads"` fallback tab path in `triggerAIScan`. Missing `metadata.account` now logs and skips rather than writing to a junk drawer.
+- **L2**: pruned `LINE_ITEM_HEADERS` from `invoiceActions.js` (moved with D1).
+- **L3**: pruned unused Sheets imports (`readSheetSA, appendRowSA, appendRowsSA, findRowByValueSA, updateCellSA, updateRangeSA, batchUpdateRangesSA, deleteRowSA, getSheetIdSA, createTabSA, safeRead, SHEET_IDS`) from `invoiceActions.js`.
 
 ## Cross-module dependencies
 
@@ -94,9 +130,9 @@ Post-Module-7 (Smart Inventory), there will also be a cron worker that reads `ai
 
 ## Cutover history
 
-- **PR 6.1** (this PR, 2026-05-29): PG schema + dormant adapters. 4 tables + 11 orchestrators. Build + lint clean. Verification script 9 checks PASSED. No production behavior change.
-- PR 6.2 (planned): handler rewire across 12 action sub-routes + ~22 Sheet I/O sites. Remove "Invoice Uploads" fallback in `triggerAIScan`. Add `module: "ops"` at every orchestrator call site.
-- PR 6.3 (planned): backfill 590 submissions / 27 rejections / 5438 line items / 393 leaf GL codes. All marked `is_historical = TRUE` with provenance tags per audit Section 8 mapping logic.
+- **PR 6.1** (2026-05-29): PG schema + dormant adapters. 4 tables + 11 orchestrators. Build + lint clean. Verification script 9 checks PASSED. No production behavior change.
+- **PR 6.2** (this PR, 2026-05-29): handler rewire across 13 invoice Sheet I/O sites + 9 cross-cutting cleanups (BR1, S1-S4, D1, L1-L3). Orchestrators now own dedup signal (`upsertInvoiceSubmission` returns `{submission, deduplicated}` per locked decision C6). `ensureLineItemTab` moved to dataStore as Sheets-adapter internal (C4). `invoice-delete-dupe` switched from hard delete to admin-gated soft delete (BR1 + C10). `module: "ops"` passed at every orchestrator call site. Build + lint clean. Behavior byte-equivalent to PR 6.1 with cutover flags off.
+- PR 6.3 (planned): backfill 590 submissions / 27 rejections / 5438 line items / 393 leaf GL codes. All marked `is_historical = TRUE` with provenance tags per audit Section 8 mapping logic. Then flip `DUAL_WRITE_INVOICE_SUBMISSIONS` + sibling flags on; two-week dual-write window; then `READ_FROM_POSTGRES_OPS = invoice_submissions,...`.
 
 ## See also
 

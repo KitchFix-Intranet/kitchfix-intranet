@@ -695,7 +695,7 @@ const handleSubmit = useCallback(() => {
       // Skip duplicate check for Fix & Resubmit — it's expected to match the original
       if (!resubmitSource) {
                   const dupRes = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
+        body: JSON.stringify({ action: "invoice-duplicate-check", vendor: vendor.name, vendorId: vendor.vendorId || "", account, invoiceNumber, invoiceDate, totalAmount: Number(totalAmount) }) });
       const dupData = await dupRes.json();
       if (dupData.isDuplicate) {
         const proceed = await new Promise((resolve) => {
