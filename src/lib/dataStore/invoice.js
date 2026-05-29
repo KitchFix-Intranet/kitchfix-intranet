@@ -6,6 +6,8 @@ import {
   updateRangeSA,
   batchUpdateRangesSA,
   findRowByValueSA,
+  getSheetIdSA,
+  createTabSA,
   safeRead,
   SHEET_IDS,
 } from "@/lib/sheets";
@@ -285,6 +287,44 @@ function normalizeInvoiceNumber(raw) {
   return String(raw || "").replace(/^#?0*/, "");
 }
 
+// AI_LINE_ITEMS per-account-tab header row. Used by ensureLineItemTab
+// when lazy-creating a missing tab during the dual-write window.
+// Mirrors the column order of LINE_IDX above + LINE_ITEM_HEADERS that
+// previously lived in invoiceActions.js (moved here in PR 6.2 per
+// decision C4). Becomes dead code once Sheets is decommissioned.
+const LINE_ITEM_HEADERS = [
+  "Invoice UUID", "Timestamp", "Account", "Vendor", "Invoice #",
+  "Invoice Date", "Line #", "Item Description", "Quantity", "Unit",
+  "Unit Price", "Extended Price", "Category", "Confidence", "Raw JSON",
+];
+
+// Lazy-create the per-account AI_LINE_ITEMS tab if it does not exist.
+// Returns true on existing-or-created success; false on failure (caller
+// should skip the write + log a warning rather than fail the request).
+// Header row append failures are non-fatal (recoverable manually).
+async function ensureLineItemTab(tabName) {
+  const spreadsheetId = SHEET_IDS.AI_LINE_ITEMS;
+  try {
+    const sheetId = await getSheetIdSA(spreadsheetId, tabName);
+    if (sheetId !== null) return true;
+
+    const createResult = await createTabSA(spreadsheetId, tabName);
+    if (!createResult.success) {
+      console.error(`[dataStore.invoice] ensureLineItemTab: tab creation failed for "${tabName}":`, createResult.error);
+      return false;
+    }
+    const headerResult = await appendRowSA(spreadsheetId, tabName, LINE_ITEM_HEADERS);
+    if (!headerResult.success) {
+      console.warn(`[dataStore.invoice] ensureLineItemTab: header append failed for "${tabName}":`, headerResult.error);
+    }
+    console.log(`[dataStore.invoice] ensureLineItemTab: created new tab "${tabName}"`);
+    return true;
+  } catch (e) {
+    console.error(`[dataStore.invoice] ensureLineItemTab error:`, e.message);
+    return false;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SHEETS ADAPTERS
 // ═══════════════════════════════════════════════════════════════
@@ -485,12 +525,23 @@ function buildSheetsRow(input, now) {
 }
 
 async function upsertInvoiceSubmissionSheets(input) {
+  // F25 pre-check (PR 6.2 decision C6 Option A): scan existing rows by
+  // client_uuid. If a row already exists, return the dedup signal
+  // without re-appending. Mirrors the pre-rewire handler-level pattern
+  // at invoiceActions.js (pre-PR-6.2) that read invoice_submissions_26
+  // and tested `r[0] === uuid` before appending.
+  const { rows } = await safeRead(SHEET_IDS.COLLECTION, INVOICE_SUBMISSIONS_TAB);
+  const existing = rows.find((r) => String(r[SUB_IDX.uuid] || "") === input.uuid);
+  if (existing) {
+    return { deduplicated: true, submission: canonicalFromSheetsRow(existing) };
+  }
   const now = new Date();
   const row = buildSheetsRow(input, now);
   const result = await appendRowSA(SHEET_IDS.COLLECTION, INVOICE_SUBMISSIONS_TAB, row);
   if (!result?.success) {
     throw new Error(`[dataStore.invoice] upsertInvoiceSubmissionSheets append failed: ${result?.error || "unknown"}`);
   }
+  return { deduplicated: false, submission: canonicalFromSheetsRow(row) };
 }
 
 // Map canonical field name -> {column letter, transform-to-sheet-cell-value}.
@@ -565,8 +616,14 @@ async function unrejectInvoiceSheets(submissionUuid, _by) {
 }
 
 async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
-  const accountKey = opts.accountKey || "Invoice Uploads";
+  const accountKey = opts.accountKey;
+  if (!accountKey) {
+    throw new Error("[dataStore.invoice] insertAILineItemsSheets: opts.accountKey required (PR 6.2 dropped the 'Invoice Uploads' fallback)");
+  }
   if (!lineItems || lineItems.length === 0) return;
+  // PR 6.2 (D1 + L1): tab existence is now this adapter's responsibility.
+  // ensureLineItemTab is a no-op when the per-account tab already exists.
+  await ensureLineItemTab(accountKey);
   const now = new Date().toISOString();
   const rows = lineItems.map((item) => [
     invoiceUuid,
@@ -585,9 +642,6 @@ async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
     item.confidence || "high",
     item.rawJson || JSON.stringify(item),
   ]);
-  // PR 6.1 keeps the per-account tab structure on the Sheets side.
-  // PR 6.2 handler rewire removes the "Invoice Uploads" fallback path
-  // since PG collapses per-account tabs into a single table.
   await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
 }
 
@@ -750,9 +804,35 @@ async function readGLCodesPostgres(opts = {}) {
 
 async function upsertInvoiceSubmissionPostgres(input) {
   const supabase = getServiceClient();
-  // F25: client_uuid UNIQUE handles dedup at DB level. Use upsert with
-  // ON CONFLICT (client_uuid) DO NOTHING (ignoreDuplicates) so retries
-  // are idempotent.
+  // F25 pre-check (PR 6.2 decision C6 Option A): explicit SELECT by
+  // client_uuid before INSERT, so we can return the dedup signal up to
+  // the orchestrator and from there to the handler. We could also do
+  // INSERT ... ON CONFLICT DO NOTHING + check affected count, but the
+  // client_uuid UNIQUE index makes this lookup O(1) and the pre-check
+  // pattern is consistent with the Sheets adapter.
+  const { data: existing, error: lookupErr } = await supabase
+    .from("invoice_submissions")
+    .select("*")
+    .eq("client_uuid", input.uuid)
+    .maybeSingle();
+  if (lookupErr) throw new Error(`[dataStore.invoice.pg] upsertInvoiceSubmission lookup: ${lookupErr.message}`);
+  if (existing) {
+    return { deduplicated: true, submission: canonicalFromPgRow(existing) };
+  }
+
+  // ─── Correction case (decision C7): resolve correctedFromUuid (a
+  // client_uuid string) to the parent's PG id (UUID FK). ───
+  let correctedFromId = null;
+  if (input.correctedFromUuid) {
+    const { data: parent, error: parentErr } = await supabase
+      .from("invoice_submissions")
+      .select("id")
+      .eq("client_uuid", input.correctedFromUuid)
+      .maybeSingle();
+    if (parentErr) throw new Error(`[dataStore.invoice.pg] upsertInvoiceSubmission corrected_from lookup: ${parentErr.message}`);
+    correctedFromId = parent?.id || null;
+  }
+
   const payload = {
     client_uuid:         input.uuid,
     submitter_email:     input.submitterEmail || "",
@@ -770,14 +850,17 @@ async function upsertInvoiceSubmissionPostgres(input) {
     status_updated_at:   canonicalTimestampToPg(input.statusUpdatedAt),
     type:                input.type || "invoice",
     raw_drive_url:       input.rawDriveUrl || null,
-    corrected_from_uuid: input.correctedFromUuid || null,
+    corrected_from_uuid: correctedFromId,
     dupe_override:       input.dupeOverride === "not_duplicate",
     // is_historical + data_provenance: PG defaults FALSE + 'app_scan' fire automatically
   };
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from("invoice_submissions")
-    .upsert(payload, { onConflict: "client_uuid", ignoreDuplicates: true });
+    .insert(payload)
+    .select("*")
+    .single();
   if (error) throw new Error(`[dataStore.invoice.pg] upsertInvoiceSubmission: ${error.message}`);
+  return { deduplicated: false, submission: canonicalFromPgRow(inserted) };
 }
 
 async function updateInvoiceFieldsPostgres(uuid, fields) {
@@ -1000,6 +1083,13 @@ export async function getGLCodes(opts = {}) {
  *     driveUrls, pageCount, type, rawDriveUrl, correctedFromUuid?,
  *   }
  *
+ *   Returns: { submission, deduplicated }
+ *     - submission: canonical row (existing on dedup hit, freshly
+ *       inserted otherwise)
+ *     - deduplicated: TRUE when the F25 client_uuid already existed.
+ *       Handler treats this as a no-op (no email, no AI scan, no row
+ *       updates) - mirrors pre-PR-6.2 behavior.
+ *
  * Sheets first (rollback target). PG conditional on isDualWrite.
  * Note: uuid here is what the frontend supplies as F25 idempotency
  * key. PG stores it as client_uuid (UNIQUE); the PG row's id is a
@@ -1009,10 +1099,21 @@ export async function upsertInvoiceSubmission(input) {
   if (!input.uuid) {
     throw new Error("[dataStore.invoice] upsertInvoiceSubmission: uuid required for F25 idempotency");
   }
-  await upsertInvoiceSubmissionSheets(input);
+  // Sheets is the rollback target and the authority for the dedup
+  // signal. PG path runs only if dual-write is on; its dedup result is
+  // checked for divergence but does not override the Sheets result.
+  const sheetsResult = await upsertInvoiceSubmissionSheets(input);
   if (isDualWrite(INVOICE_SUBMISSIONS_TAB)) {
-    await upsertInvoiceSubmissionPostgres(input);
+    const pgResult = await upsertInvoiceSubmissionPostgres(input);
+    if (pgResult.deduplicated !== sheetsResult.deduplicated) {
+      console.warn(
+        `[dataStore.invoice] dedup signal divergence for uuid=${input.uuid}: ` +
+          `sheets=${sheetsResult.deduplicated} pg=${pgResult.deduplicated}. ` +
+          `Sheets result wins (rollback authority).`
+      );
+    }
   }
+  return sheetsResult;
 }
 
 /**
@@ -1080,12 +1181,13 @@ export async function unrejectInvoice(submissionUuid, by, _opts = {}) {
  *   lineItems: [{ lineNum, description, quantity, unit, unitPrice,
  *                 extendedPrice, category, confidence, rawJson,
  *                 vendorName?, invoiceNumber?, invoiceDate? }]
- *   opts: { accountKey } (REQUIRED on Sheets path to locate per-account tab)
+ *   opts: { accountKey } (REQUIRED on Sheets path to locate per-account
+ *         tab; orchestrator throws if missing. PG path stores
+ *         account_key flat on the row.)
  *
- * Note: PR 6.1's Sheets adapter preserves the "Invoice Uploads"
- * fallback tab when accountKey is missing. PR 6.2 handler rewire
- * removes the fallback (PG schema collapses per-account tabs into
- * single ai_line_items table with account_key column).
+ * Note: PR 6.2 dropped the legacy "Invoice Uploads" fallback path.
+ * The Sheets adapter now lazy-creates the per-account tab via
+ * ensureLineItemTab when needed.
  */
 export async function insertAILineItems(invoiceUuid, lineItems, opts = {}) {
   if (!invoiceUuid) {
