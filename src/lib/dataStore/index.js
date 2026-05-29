@@ -82,3 +82,17 @@ export {
   learnVendorAlias,
   mergeVendors,
 } from "./vendor.js";
+
+export {
+  getInvoiceSubmissions,
+  getInvoiceSubmissionByUuid,
+  findDuplicateSubmission,
+  getInvoiceRejectionsForSubmission,
+  getAILineItemsForInvoice,
+  getGLCodes,
+  upsertInvoiceSubmission,
+  updateInvoiceFields,
+  insertInvoiceRejection,
+  unrejectInvoice,
+  insertAILineItems,
+} from "./invoice.js";
