@@ -28,6 +28,18 @@ This doc supplements `docs/SUPABASE_MIGRATION.md` (the long-form migration plan)
 
 ---
 
+## Documentation Tiering Policy (Project 3 onward)
+
+Every PR specifies which tier it falls into in the PR description:
+
+- **Tier 1 (Architectural):** PRs that introduce new patterns, modify schema, change cutover sequences, or affect multiple modules. MUST include "Docs updated: X, Y, Z" in PR body listing files. If no docs are updated, MUST include rationale "Doc update deferred to PR #N because [reason]."
+- **Tier 2 (Module work):** PRs that touch existing patterns within a module. SHOULD include "Docs updated: X" if applicable, or "No doc update needed because [reason]" if not.
+- **Tier 3 (Maintenance):** Typo fixes, dependency bumps, comment cleanup, revert PRs. No doc requirement.
+
+Doc updates ride INSIDE the same PR (not separate PRs) so code change + documentation merge atomically. CC self-assigns the tier when opening a PR; Chat-Claude challenges the tier in review if it seems wrong.
+
+---
+
 ## Done - 58 PRs shipped to main
 
 | PR | Title | Date | Notes |
