@@ -1537,6 +1537,8 @@ export async function handleVendorUpdate(body, token, email) {
   try {
     await upsertVendorAccount(payload);
   } catch (e) {
+    // TEMP DEBUG (Module 5 cutover diagnosis)
+    console.error(`[debug.handleVendorUpdate CATCH] vendorId=${body.vendorId} accountKey=${body.accountKey} message=${e.message} stack=${e.stack?.slice(0, 500)}`);
     return { success: false, error: e.message };
   }
 
@@ -1576,6 +1578,8 @@ export async function handleVendorMasterUpdate(body, token, email) {
       createdBy: email,
     });
   } catch (e) {
+    // TEMP DEBUG (Module 5 cutover diagnosis)
+    console.error(`[debug.handleVendorMasterUpdate CATCH] vendorId=${body.vendorId} message=${e.message} stack=${e.stack?.slice(0, 500)}`);
     return { success: false, error: e.message };
   }
 
