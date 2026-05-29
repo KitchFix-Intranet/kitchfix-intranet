@@ -1242,10 +1242,7 @@ export async function upsertVendor(input) {
   };
 
   await upsertVendorSheets(fullInput);
-  // TEMP DEBUG (revert after Module 5 cutover diagnosis): log dispatch state
-  const _dwMaster = isDualWrite(VENDOR_MASTER_TAB);
-  console.log(`[debug.upsertVendor] vendorId=${vendorId} isCreate=${isCreate} isDualWrite("vendor_master")=${_dwMaster}`);
-  if (_dwMaster) {
+  if (isDualWrite(VENDOR_MASTER_TAB)) {
     await upsertVendorPostgres(fullInput);
   }
   return { vendorId, deduplicated: false };
@@ -1286,10 +1283,7 @@ export async function upsertVendorAccount(input) {
   }
 
   await upsertVendorAccountSheets(input);
-  // TEMP DEBUG (revert after Module 5 cutover diagnosis): log dispatch state
-  const _dwAccounts = isDualWrite(VENDOR_ACCOUNTS_TAB);
-  console.log(`[debug.upsertVendorAccount] vendorId=${input.vendorId} accountKey=${input.accountKey} isDualWrite("vendor_accounts")=${_dwAccounts}`);
-  if (_dwAccounts) {
+  if (isDualWrite(VENDOR_ACCOUNTS_TAB)) {
     await upsertVendorAccountPostgres(input);
   }
   return { vendorId: input.vendorId, accountKey: input.accountKey, deduplicated: false };

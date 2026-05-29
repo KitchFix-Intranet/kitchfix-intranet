@@ -150,18 +150,6 @@ const dualWriteTables = parseTableSet(process.env.DUAL_WRITE_TABLES);
 const readFromPostgresTables = parseTableSet(process.env.READ_FROM_POSTGRES);
 const readFromPostgresPerModule = parsePerModuleReadFromPostgres();
 
-// TEMP DEBUG (revert after Module 5 cutover diagnosis): log parsed
-// dual-write state at module boot. Fires once per Lambda cold-start.
-// Reveals (a) whether the env var reached the runtime, (b) the exact
-// parsed Set contents, (c) which Lambda instance is serving traffic
-// (Vercel multiplexes; multiple boot logs from same deploy = multiple
-// instances).
-console.log(
-  `[debug.cutover.boot] DUAL_WRITE_TABLES env present=${process.env.DUAL_WRITE_TABLES !== undefined} ` +
-    `length=${(process.env.DUAL_WRITE_TABLES || "").length} ` +
-    `parsed=${JSON.stringify(Array.from(dualWriteTables))}`
-);
-
 /**
  * Does this table have dual-write enabled?
  * (writes go to BOTH Sheets and Postgres)
