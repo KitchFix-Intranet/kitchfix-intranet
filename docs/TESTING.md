@@ -34,7 +34,7 @@ When we add the first write test, we'll need:
 - A helper in `src/lib/sheets.js` that returns the correct sheet ID based on `TEST_MODE`
 - All `SHEET_IDS.HUB` and `SHEET_IDS.COLLECTION` references audited and routed through that helper
 
-Scoped at ~2 hours of dev work plus a Kevin-managed step to clone HUB. Tracked in `docs/MIGRATION.md` as a follow-up to Phase 1 Task 1.
+Scoped at ~2 hours of dev work plus a Kevin-managed step to clone HUB. Tracked in `docs/archive/migration/MIGRATION.md` as a follow-up to Phase 1 Task 1 (the original Phase 1-5 plan; partially superseded by `docs/SUPABASE_MIGRATION.md` but this follow-up still applies).
 
 ## Test sheet IDs (reserved)
 

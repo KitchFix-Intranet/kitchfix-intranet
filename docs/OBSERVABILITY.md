@@ -188,7 +188,7 @@ If you can't fix something right now, **archive** instead of resolve. Resolving 
 
 ## Phase B - Sheets API health (NOT YET BUILT)
 
-Sentry's Phase A catches errors in code that ran. Phase B handles a different class of failure: the Sheets API rate-limit issue (R12 in MIGRATION.md).
+Sentry's Phase A catches errors in code that ran. Phase B handles a different class of failure: the Sheets API rate-limit issue (R12 in `docs/archive/migration/MIGRATION.md`; Phase B itself was reframed by the Supabase migration - see `docs/SUPABASE_MIGRATION.md`).
 
 **The problem:** Google Sheets API has a 60 reads/minute per-project quota. When exceeded, calls return 429 errors. The dashboard handles this gracefully by returning \`{count: 0}\` data instead of crashing - meaning users see broken UIs with no error to debug. Sentry won't catch this because no exception is thrown.
 
@@ -197,7 +197,7 @@ Sentry's Phase A catches errors in code that ran. Phase B handles a different cl
 - \`/api/health\` endpoint exposes current read counts + estimated quota usage
 - Custom Sentry instrumentation: when a 429 fires, send a Sentry event with quota state
 - Slack alert at 70% quota threshold
-- See R12 in \`docs/MIGRATION.md\` for risk context
+- See R12 in `docs/archive/migration/MIGRATION.md` for risk context
 
 **Boundary:** Phase B is visibility-only. Caching, request coalescing, and quota increases are separate work (Phase B+, not yet scoped).
 
