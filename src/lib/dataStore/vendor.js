@@ -920,13 +920,17 @@ async function findVendorIdsPostgres() {
 }
 
 async function upsertVendorPostgres(input) {
+  // TEMP DEBUG (Module 5 cutover diagnosis)
+  console.log(`[debug.upsertVendorPostgres ENTRY] vendorId=${input.vendorId} name=${String(input.name || "").slice(0, 30)}`);
   const supabase = getServiceClient();
   // Probe for existing row by id to decide insert vs update
+  console.log(`[debug.upsertVendorPostgres PRE-LOOKUP] vendorId=${input.vendorId}`);
   const { data: existing, error: lookupErr } = await supabase
     .from("vendors")
     .select("id, aliases:id")  // selecting id only is enough; alias check uses sheets pipe
     .eq("id", input.vendorId)
     .maybeSingle();
+  console.log(`[debug.upsertVendorPostgres POST-LOOKUP] vendorId=${input.vendorId} existing=${JSON.stringify(existing)} lookupErr=${JSON.stringify(lookupErr)}`);
   if (lookupErr) throw new Error(`[dataStore.vendor.pg] upsertVendor lookup: ${lookupErr.message}`);
 
   if (!existing) {
@@ -941,7 +945,9 @@ async function upsertVendorPostgres(input) {
       created_at:  input.createdAt || new Date().toISOString(),
       client_uuid: input.clientUuid || null,
     };
-    const { error } = await supabase.from("vendors").insert(payload);
+    console.log(`[debug.upsertVendorPostgres PRE-WRITE INSERT] vendorId=${input.vendorId} payload=${JSON.stringify(payload).slice(0, 500)}`);
+    const { data: insData, error } = await supabase.from("vendors").insert(payload).select();
+    console.log(`[debug.upsertVendorPostgres POST-WRITE INSERT] vendorId=${input.vendorId} error=${JSON.stringify(error)} data=${JSON.stringify(insData)?.slice(0, 200)}`);
     if (error) throw new Error(`[dataStore.vendor.pg] upsertVendor insert: ${error.message}`);
   } else {
     // Update (subset of fields - matches handleVendorMasterUpdate behavior)
@@ -951,9 +957,12 @@ async function upsertVendorPostgres(input) {
       website:  String(input.website || "").trim() || null,
       notes:    String(input.notes || "").trim() || null,
     };
-    const { error } = await supabase.from("vendors").update(payload).eq("id", input.vendorId);
+    console.log(`[debug.upsertVendorPostgres PRE-WRITE UPDATE] vendorId=${input.vendorId} payload=${JSON.stringify(payload).slice(0, 500)}`);
+    const { data: updData, error } = await supabase.from("vendors").update(payload).eq("id", input.vendorId).select();
+    console.log(`[debug.upsertVendorPostgres POST-WRITE UPDATE] vendorId=${input.vendorId} error=${JSON.stringify(error)} data=${JSON.stringify(updData)?.slice(0, 200)}`);
     if (error) throw new Error(`[dataStore.vendor.pg] upsertVendor update: ${error.message}`);
   }
+  console.log(`[debug.upsertVendorPostgres EXIT] vendorId=${input.vendorId} returning normally`);
 }
 
 async function findVendorAccountByClientUuidPostgres(clientUuid) {
@@ -970,13 +979,17 @@ async function findVendorAccountByClientUuidPostgres(clientUuid) {
 }
 
 async function upsertVendorAccountPostgres(input) {
+  // TEMP DEBUG (Module 5 cutover diagnosis)
+  console.log(`[debug.upsertVendorAccountPostgres ENTRY] vendorId=${input.vendorId} accountKey=${input.accountKey}`);
   const supabase = getServiceClient();
+  console.log(`[debug.upsertVendorAccountPostgres PRE-LOOKUP] vendorId=${input.vendorId} accountKey=${input.accountKey}`);
   const { data: existing, error: lookupErr } = await supabase
     .from("vendor_accounts")
     .select("id")
     .eq("vendor_id", input.vendorId)
     .eq("account_key", input.accountKey)
     .maybeSingle();
+  console.log(`[debug.upsertVendorAccountPostgres POST-LOOKUP] vendorId=${input.vendorId} existing=${JSON.stringify(existing)} lookupErr=${JSON.stringify(lookupErr)}`);
   if (lookupErr) throw new Error(`[dataStore.vendor.pg] upsertVendorAccount lookup: ${lookupErr.message}`);
 
   if (!existing) {
@@ -1001,7 +1014,9 @@ async function upsertVendorAccountPostgres(input) {
       account_notes:        input.accountNotes       || null,
       client_uuid:          input.clientUuid         || null,
     };
-    const { error } = await supabase.from("vendor_accounts").insert(payload);
+    console.log(`[debug.upsertVendorAccountPostgres PRE-WRITE INSERT] vendorId=${input.vendorId} payload=${JSON.stringify(payload).slice(0, 500)}`);
+    const { data: insData, error } = await supabase.from("vendor_accounts").insert(payload).select();
+    console.log(`[debug.upsertVendorAccountPostgres POST-WRITE INSERT] vendorId=${input.vendorId} error=${JSON.stringify(error)} data=${JSON.stringify(insData)?.slice(0, 200)}`);
     if (error) throw new Error(`[dataStore.vendor.pg] upsertVendorAccount insert: ${error.message}`);
   } else {
     // Partial update - only fields actually present in input
@@ -1019,14 +1034,21 @@ async function upsertVendorAccountPostgres(input) {
     if ("paymentTerms" in input)       payload.payment_terms        = input.paymentTerms       || null;
     if ("minOrder" in input)           payload.min_order            = input.minOrder           || null;
     if ("accountNotes" in input)       payload.account_notes        = input.accountNotes       || null;
-    if (Object.keys(payload).length === 0) return;
-    const { error } = await supabase
+    if (Object.keys(payload).length === 0) {
+      console.log(`[debug.upsertVendorAccountPostgres EXIT-EMPTY-PAYLOAD] vendorId=${input.vendorId} accountKey=${input.accountKey} (no fields in input, skipping update)`);
+      return;
+    }
+    console.log(`[debug.upsertVendorAccountPostgres PRE-WRITE UPDATE] vendorId=${input.vendorId} payload=${JSON.stringify(payload).slice(0, 500)}`);
+    const { data: updData, error } = await supabase
       .from("vendor_accounts")
       .update(payload)
       .eq("vendor_id", input.vendorId)
-      .eq("account_key", input.accountKey);
+      .eq("account_key", input.accountKey)
+      .select();
+    console.log(`[debug.upsertVendorAccountPostgres POST-WRITE UPDATE] vendorId=${input.vendorId} error=${JSON.stringify(error)} data=${JSON.stringify(updData)?.slice(0, 200)}`);
     if (error) throw new Error(`[dataStore.vendor.pg] upsertVendorAccount update: ${error.message}`);
   }
+  console.log(`[debug.upsertVendorAccountPostgres EXIT] vendorId=${input.vendorId} accountKey=${input.accountKey} returning normally`);
 }
 
 async function deactivateVendorAccountPostgres(vendorId, accountKey, active) {
