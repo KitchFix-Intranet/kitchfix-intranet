@@ -9,7 +9,9 @@
 
 ### Headline
 
-Module 6 source data is **mostly clean** but has three real data-quality issues plus one significant schema-drift discovery that requires plan amendments before PR 6.1.
+Module 6 source data has **218 row-level historical artifacts** plus one significant schema-drift discovery. Per Kevin's locked decision (Section 8), the artifacts are PRESERVED via an `is_historical` schema pattern rather than cleaned. Strict integrity constraints (UNIQUE, NOT NULL FK, status enum) apply only to `is_historical=FALSE` future rows. Sheets-era data carries `is_historical=TRUE` and bypasses the strict constraints while remaining queryable and auditable. See Section 8 for the full preservation-first architecture.
+
+The ONE cleanup performed: 5 typo `invoice_date` corrections in Sheets (a different class of issue - human typos, not accumulated schema drift).
 
 | Severity | Finding | Count | Action |
 |---|---|---|---|
@@ -213,16 +215,18 @@ Master Template       :  78 (reference)
 
 The plan's `invoice_rejections` separate table extraction from these 27 rows is clean (no missing fields).
 
-## 3. Required Sheets Cleanups BEFORE Backfill
+## 3. Sheets Cleanups Performed + Deferred
 
-| # | Cleanup | Affected rows | Effort |
+**Post-decision (Section 8 preservation-first architecture)**, the only Sheets-side cleanup is item (d). All other listed items are handled at the PG schema layer via `is_historical=TRUE` tagging.
+
+| # | Cleanup | Affected | Status |
 |---|---|---|---|
-| (a) | **Plan amendment for status enum** (doc-only, no Sheets touch). See Section 4 schema implications. | n/a | 5 min dashboard / plan update |
-| (b) | **Decide AI_LINE_ITEMS orphan disposition**: delete 209 rows OR change PG FK to NULLable. | 209 rows | Decision call; if delete: 209 row deletes (likely batch script) |
-| (c) | **Resolve 4 duplicate (invoice_uuid, line_num) AI_LINE_ITEMS pairs**: pick which to keep per pair, delete the other. | 4 row deletes | 15 min manual review + script |
-| (d) | **Review 5 unparseable invoice_date rows**: correct OR change PG schema to allow NULL invoice_date. | 5 rows | 15 min manual review |
-| (e) | **Optional: extend invoice_submissions_26 header row** from 15 to 23 cols for documentation clarity. Does NOT block migration; the data is already there. | 1 row (header) | 5 min Sheets edit |
-| (f) | **Optional: clean 1 short description, 1 garbage line item, 1 empty-name GL code row**. Cosmetic. | 3 cells | 5 min |
+| ~~(a)~~ | ~~Plan amendment for status enum~~ | n/a | SUPERSEDED: status CHECK becomes `is_historical=TRUE OR status IN (...)`. Historical rows can carry any value; new writes get strict enum. See Section 8. |
+| ~~(b)~~ | ~~Decide AI_LINE_ITEMS orphan disposition~~ | 209 rows | SUPERSEDED: all 209 preserved as `is_historical=TRUE` with `invoice_uuid=NULL` + `historical_invoice_ref=<original>`. See Section 8. |
+| ~~(c)~~ | ~~Resolve 4 duplicate (invoice_uuid, line_num) pairs~~ | 4 rows | SUPERSEDED: both rows in each pair preserved as `is_historical=TRUE`; partial UNIQUE INDEX only enforces uniqueness when `is_historical=FALSE`. See Section 8. |
+| **(d)** | **5 typo invoice_date corrections** | 5 rows | **DONE 2026-05-29**: Cell-level Sheets updates applied + verified (0206->2026, 4x 201X->202X). Typos are a different class of issue than accumulated schema drift; corrected in Sheets so PG receives clean DATE values. |
+| ~~(e)~~ | ~~Optional: extend invoice_submissions_26 header row~~ | 1 row | DEFERRED per Q7. Low priority. |
+| ~~(f)~~ | ~~Optional: cosmetic cleanups (short desc / garbage / empty GL name)~~ | 3 cells | DEFERRED. Will land in PG as-is with `is_historical=TRUE`. |
 
 ## 4. Schema Design Implications
 
@@ -331,26 +335,122 @@ The 23-col data structure is in active production use even though only 15 cols a
 
 | Source | Rows | Notes |
 |---|---|---|
-| invoice_submissions_26 | 590 | 0 dedup violations, 101 status-enum drift rows, 5 bad invoice_date, 27 rejections embedded |
-| AI_LINE_ITEMS (9 tabs) | 5438 | 209 orphans, 4 line_num dupes, 0 timestamp errors |
-| GL_CODES (14 tabs total: 12 account + 2 utility) | 746 rows / 393 leaf codes | 0 (account, code) dupes, 0 GL orphan refs from submissions, 1 missing name |
-| invoice_rejections | 27 (embedded in cols R-U) | 0 missing required fields, clean extraction path |
+| invoice_submissions_26 | 590 | 0 dedup violations, 101 status-enum drift rows (preserve), 27 rejections embedded. 5 typo invoice_dates CORRECTED 2026-05-29. |
+| AI_LINE_ITEMS (9 tabs) | 5438 | 209 historical orphans (138 REBUILD-* + 71 valid-UUID-but-parent-gone), 4 line_num dupes. All preserved per Section 8. |
+| GL_CODES (14 tabs total: 12 account + 2 utility) | 746 rows / 393 leaf codes | 12 per-account tabs migrate as `is_historical=TRUE`. Master Template + Class Overview SKIPPED per Q6 (admin reference, Sheets-only post-cutover). |
+| invoice_rejections | 27 (embedded in cols R-U) | 0 missing required fields, clean extraction path. All migrated as `is_historical=TRUE`. |
 
-**Total violations requiring action before PR 6.x backfill: 218 row-level + 1 plan amendment.**
+**Preservation-first migration design (Section 8): all 218 historical artifacts preserved in PG with `is_historical=TRUE` + `data_provenance` provenance tag. ZERO data deleted from Sheets pre-backfill (except the 5 typo date corrections, which are not data integrity issues but human typos).**
 
-- 209 orphan AI line items (decision needed: delete or schema flex)
-- 4 duplicate AI line items (Sheets cleanup needed)
-- 5 unparseable invoice_dates (decision: review/correct OR NULL)
-- 1 plan amendment for the status enum split (no Sheets change)
-
-Everything else is clean enough for direct migration.
+| Artifact category | Count | Disposition |
+|---|---|---|
+| Status-enum-drift submissions (complete/failed/pending/photo-only) | 101 | Preserved: `status='sent'` + `ai_scan_status=<original>` + `is_historical=TRUE` |
+| Orphan AI line items (138 REBUILD-* + 71 valid-UUID-orphans) | 209 | Preserved: `invoice_uuid=NULL` + `historical_invoice_ref=<original>` + `is_historical=TRUE` |
+| Duplicate (invoice_uuid, line_num) line items | 4 | Both rows in each pair preserved: `is_historical=TRUE` bypasses partial UNIQUE INDEX |
+| Typo invoice_dates corrected in Sheets | 5 | Cleanly migrated as valid DATE values + `is_historical=TRUE` |
+| Cosmetic (short desc / garbage / empty GL name) | 3 | Migrate as-is with `is_historical=TRUE`. Backlog for future cleanup project. |
 
 ## 7. Migration Sequence Implication for PR 6.x
 
-Per the plan (FINANCE_STACK_PLAN.md Section 4), Module 6 is 3 PRs: 6.1 (schema + dormant adapters), 6.2 (handler rewire + cleanups), 6.3 (backfill). This audit's findings affect:
+Per the plan (`docs/FINANCE_STACK_PLAN.md` Section 4), Module 6 is 3 PRs: 6.1 (schema + dormant adapters), 6.2 (handler rewire + cleanups), 6.3 (backfill). This audit's findings - and Kevin's locked Section 8 preservation-first decision - affect each PR:
 
-- **PR 6.1 schema PR**: amend the status CHECK constraint per Section 4.1 recommendation. Add `ai_scan_status` column per open question 1 (if option b chosen). Resolve ai_line_items FK strictness per Section 4.2.
-- **PR 6.2 handler rewire**: no impact from this audit. Standard rewire per Module 5 pattern.
-- **PR 6.3 backfill**: handle the 4 dedup violations + 209 orphans + 5 bad dates per chosen Section 5 decisions. Add the status-mapping function to the transform.
+**PR 6.1 schema PR** - adopt the `is_historical` schema pattern across all 4 invoice tables:
+- All 4 tables add: `is_historical BOOLEAN NOT NULL DEFAULT FALSE`, `data_provenance TEXT NOT NULL DEFAULT 'app_scan' CHECK IN ('app_scan', 'batch_rebuild', 'manual_entry', 'unknown')`
+- `invoice_submissions`: status CHECK becomes `CHECK (is_historical = TRUE OR status IN ('sent', 'returned', 'corrected', 'deleted'))`. Add `ai_scan_status TEXT` column.
+- `ai_line_items`: change `invoice_uuid` to NULLable + FK with ON DELETE CASCADE. Add `historical_invoice_ref TEXT` for synthetic IDs. UNIQUE (invoice_uuid, line_num) becomes partial index `WHERE is_historical = FALSE`. Add CHECK ensuring new rows have either real parent FK or historical ref.
+- `invoice_rejections`: only adds the 2 base columns.
+- `gl_codes`: only adds the 2 base columns. Master Template + Class Overview tabs SKIPPED per Q6.
 
-**Estimated additional work** beyond the plan's 28-38 hour Module 6 estimate: **+2-4 hours** for the audit-driven changes (mostly in PR 6.1 schema amendment + PR 6.3 backfill cleanup logic).
+See FINANCE_STACK_PLAN.md Section 2.2 (amended in PR #94) for full DDL.
+
+**PR 6.2 handler rewire** - no direct impact from this audit. Standard rewire per Module 5 pattern. Handlers must pass `module: "ops"` to orchestrators (Module 5 lesson #1 - PR #92).
+
+**PR 6.3 backfill** - all existing rows tagged `is_historical=TRUE`:
+- `invoice_submissions`: 590 rows. Apply status -> {status, ai_scan_status} split per Section 4.1 mapping function. Set `data_provenance='app_scan'` for all (provenance was always app).
+- `ai_line_items`: 5438 rows. For 138 REBUILD-* rows: `invoice_uuid=NULL`, `historical_invoice_ref="REBUILD-{n}-{i}"`, `data_provenance='batch_rebuild'`. For 71 valid-UUID orphans: `invoice_uuid=NULL`, `historical_invoice_ref=<original UUID as TEXT>`, `data_provenance='unknown'`. For 5158 in-bounds rows: `invoice_uuid=<resolved>`, `data_provenance='app_scan'`. The 4 dupe pairs both migrate cleanly because partial UNIQUE INDEX only enforces on `is_historical=FALSE`.
+- `invoice_rejections`: 27 rows. Extract cols R-U from `invoice_submissions_26` rows. `data_provenance='app_scan'` (admin rejection flow is in-app).
+- `gl_codes`: 393 leaf codes from 12 per-account tabs. `data_provenance='manual_entry'` (sheet-edited by admins).
+
+**Estimated additional work** beyond the plan's 28-38 hour Module 6 estimate: **+3-5 hours** for PR 6.1 schema amendment + PR 6.3 backfill transform logic. Less than the original +2-4 estimate because we are not writing cleanup scripts.
+
+## 8. Locked Architecture: Preservation-First Migration Design
+
+### Rationale
+
+The 218 row-level artifacts surfaced in Sections 2 + 3 represent **accumulated schema drift from app evolution**, not garbage:
+- The 101 status-enum-drift rows reflect a column whose semantics changed over time (workflow status conflated with AI scan status). Real workflow events; just stored in a way that fails the planned strict enum.
+- The 138 REBUILD-* line items reflect a 2026-04-03 batch re-extraction of 10 Kuna invoices, 9 of which have surviving submission parents. Real AI extraction work product; just appended with synthetic IDs instead of resolving to original UUIDs.
+- The 71 valid-UUID orphan line items reflect submissions that were subsequently deleted from the Sheet. Real historical AI extractions; parent is gone.
+- The 4 duplicate (invoice_uuid, line_num) pairs reflect AI emitting collide-on-line-num within a single scan. Both rows are real items; just mis-numbered.
+
+**Cleaning these means deleting real work product.** Preserving them with a tag means PG retains 100% of the historical signal while letting the strict-integrity constraints apply only to future writes.
+
+### Pattern: Three Columns + Conditional Constraints
+
+All 4 invoice tables in Module 6 schema (invoice_submissions, invoice_rejections, ai_line_items, gl_codes) get:
+
+```sql
+is_historical     BOOLEAN NOT NULL DEFAULT FALSE
+data_provenance   TEXT    NOT NULL DEFAULT 'app_scan'
+                  CHECK (data_provenance IN ('app_scan', 'batch_rebuild', 'manual_entry', 'unknown'))
+```
+
+`ai_line_items` additionally gets:
+```sql
+historical_invoice_ref TEXT  -- preserves synthetic IDs like "REBUILD-204842-00-1" or original UUID-as-text for parent-deleted rows
+```
+
+**Strict constraints become conditional on `is_historical = FALSE`** via partial indexes and CHECK predicates. Pattern examples:
+
+- Status enum: `CHECK (is_historical = TRUE OR status IN ('sent', 'returned', 'corrected', 'deleted'))`. Historical rows can carry any value.
+- Line-number uniqueness: `CREATE UNIQUE INDEX idx_x ON ai_line_items (invoice_uuid, line_num) WHERE is_historical = FALSE`. Historical pairs may share keys.
+- Parent FK: `invoice_uuid UUID REFERENCES invoice_submissions(id) ON DELETE CASCADE` with `CHECK (is_historical = TRUE OR invoice_uuid IS NOT NULL)`. Historical rows may have NULL parent (use `historical_invoice_ref` instead).
+
+### Per-Table Effects
+
+**`invoice_submissions`:**
+- Add `ai_scan_status TEXT` column (CHECK `ai_scan_status IS NULL OR ai_scan_status IN ('pending', 'complete', 'failed', 'photo-only')`).
+- Backfill 590 rows: for each, examine col N value:
+  - If value in `('sent', 'returned', 'corrected', 'deleted')`: `status=<value>`, `ai_scan_status=NULL`, `is_historical=TRUE`.
+  - If value in `('complete', 'failed', 'pending', 'photo-only')`: `status='sent'`, `ai_scan_status=<value>`, `is_historical=TRUE`.
+  - All rows: `data_provenance='app_scan'`.
+
+**`ai_line_items`:**
+- 138 REBUILD-* rows: `invoice_uuid=NULL`, `historical_invoice_ref="REBUILD-{n}-{i}"`, `data_provenance='batch_rebuild'`, `is_historical=TRUE`.
+- 71 valid-UUID orphans: `invoice_uuid=NULL`, `historical_invoice_ref=<original UUID as TEXT>`, `data_provenance='unknown'`, `is_historical=TRUE`.
+- 5158 in-bounds rows: `invoice_uuid=<resolved>`, `historical_invoice_ref=NULL`, `data_provenance='app_scan'`, `is_historical=TRUE`.
+- 4 dupe pairs: both rows preserved. Partial UNIQUE INDEX only fires on `is_historical=FALSE`.
+
+**`invoice_rejections`:**
+- 27 rows: `is_historical=TRUE`, `data_provenance='app_scan'`. Add the 2 base columns.
+
+**`gl_codes`:**
+- 393 leaf codes from 12 per-account tabs: `is_historical=TRUE`, `data_provenance='manual_entry'`. Add the 2 base columns.
+- Master Template (78 codes) + Class Overview (15 codes): SKIPPED per Q6. They are admin-reference Sheets-only; PG `gl_codes` table only mirrors operational per-account data.
+
+### Tradeoffs
+
+**What we give up:**
+- Most app queries must add `WHERE is_historical = FALSE` to ignore historical rows. ~2-5 chars per query, minor cost.
+- "Bad" pre-existing data persists in PG, tagged as historical. It never affects live queries but lives in the table.
+- Schema complexity: 2 extra columns + conditional constraints on each table.
+
+**What we gain:**
+- 100% data preservation. Zero pre-migration data loss decisions to defend.
+- Strict integrity for new writes (status enum, FK, UNIQUE) applies to `is_historical=FALSE` rows.
+- Audit trail via `data_provenance` (where did the row originate?).
+- Zero cutover risk from cleanup mistakes. We do not delete 209 rows pre-backfill and then discover one mattered.
+- Future cleanup is optional and decoupled from migration. Separate decision, separate project, separate scrutiny.
+
+### Future Cleanup Path
+
+Deferred indefinitely. If a future project wants to clean up historical data:
+1. Inspect `WHERE is_historical = TRUE` slice of each table.
+2. For each slice, decide: delete / promote to current / leave.
+3. Run separately from any active migration so blast radius is small.
+
+No commitment made now to ever do this cleanup. The whole point of the preservation-first design is that we don't have to.
+
+### Why This Pattern Will Outlive Module 6
+
+Modules 7 (Smart Inventory) and beyond will encounter the same class of historical accumulation. The `is_historical` + `data_provenance` pattern is a reusable convention for any Sheets-to-PG migration where the source data has accumulated drift the app's strict rules wouldn't accept. Recommended for all subsequent Project 3 modules.
