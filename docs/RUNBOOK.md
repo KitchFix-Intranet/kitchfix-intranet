@@ -140,7 +140,7 @@ curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
 
 The custom analytics system was decommissioned 2026-05-15 in PRs #31/#32/#33. There is no `/analytics` dashboard, no analytics cron, and no `logEvent*` writes anywhere in production code. `src/lib/analytics.js` exists only as a no-op stub (kept while `src/lib/auth.js` and `src/app/api/cron/incident-reminders/route.js` still import `logEventSA`; touching those files is out of scope for now).
 
-Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned - see `docs/MIGRATION.md → Phase 3 commentary`.
+Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned - see `docs/archive/migration/MIGRATION.md → Phase 3 commentary` (note: the original Phase 1-5 plan; partially superseded by `docs/SUPABASE_MIGRATION.md`).
 
 ## How to check production health
 

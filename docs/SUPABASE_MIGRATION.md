@@ -18,7 +18,7 @@
 
 **This is a living document.** It is the single source of truth for migration state. Read at the start of every session, update at the end of every session, commit to the repo as part of the work it describes.
 
-**This doc supplements \`docs/MIGRATION.md\`.** The original migration plan described phases 0-5 of broader architectural work. Phase 4 (Database Migration) is now pulled forward and reshaped into this dedicated plan. The other phases either continue, defer, or are absorbed into this migration. See "Impact on the original migration plan" below.
+**This doc supplements `docs/archive/migration/MIGRATION.md` (archived 2026-05-29; was the original Phase 1-5 plan).** That original plan described phases 0-5 of broader architectural work. Phase 4 (Database Migration) is now pulled forward and reshaped into this dedicated plan. The other phases either continue, defer, or are absorbed into this migration. See "Impact on the original migration plan" below.
 
 **Stale doc = broken doc.** If the "last updated" date is more than 2 weeks old, treat with suspicion and verify against the actual repo and Supabase state.
 
@@ -732,7 +732,7 @@ This work happens **before** any Supabase code is written. The abstraction is th
 
 ---
 
-## Impact on the original migration plan (docs/MIGRATION.md)
+## Impact on the original migration plan (docs/archive/migration/MIGRATION.md)
 
 Today's commitment reshapes the original Phase 1-5 plan:
 
@@ -851,7 +851,7 @@ These work items are removed from the active backlog:
 
 ## Working agreements (specific to migration)
 
-These supplement the working agreements in \`MIGRATION.md\`:
+These supplement the working agreements in `docs/archive/migration/MIGRATION.md`:
 
 1. **The migration is the priority.** When in doubt, work on migration tasks, not feature requests.
 2. **Don't add features to features being migrated.** When working on Ops Hub data migration, don't add new Ops Hub features. They get rewritten anyway.

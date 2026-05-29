@@ -160,8 +160,8 @@ Rationale: Code + docs ship together. 5 helpers from PR #47 form 70% of this. St
 **Effort:** 5-8 sessions
 
 Items:
-- [ ] Cross-reference all reads with actual sheet contents (T1)
-- [ ] Create docs/DATA_MODEL.md - source of truth for Stage 1 schema (T1)
+- [x] ~~Cross-reference all reads with actual sheet contents (T1)~~ - ✅ SHIPPED 2026-05-26 as PR #65 (`docs/SHEETS_AUDIT*.md` three-part reference)
+- [x] ~~Create docs/DATA_MODEL.md - source of truth for Stage 1 schema (T1)~~ - ✅ SUPERSEDED 2026-05-28: schema source-of-truth split across `docs/SHEETS_AUDIT_SYNTHESIS.md` (verdicts), `docs/FINANCE_STACK_PLAN.md` (16 PG tables + DDL for the finance stack), and per-module READMEs under `docs/modules/` (per-table schema reality). The single-doc plan was replaced by this split during the Project 3 scoping work.
 - [ ] Audit findings rollup document (T2)
 - [ ] Image hosting catalog for Stage 2a.5 prep (T2)
 

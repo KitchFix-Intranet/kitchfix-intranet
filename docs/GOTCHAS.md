@@ -157,6 +157,19 @@ npm run dev
 
 When something is "stuck" - old code running, hot reload not picking up changes, weird import errors - clear the `.next` cache before suspecting a deeper bug. 80% of "this should work but doesn't" turns out to be stale build cache.
 
+### Positional-arg drift on shared helpers rots silently
+
+When a shared helper is called positionally from many sites, signature drift (caller adds an extra arg, or the helper drops one) does NOT throw. JavaScript silently maps args left-to-right and drops or undefines the extras. When the helper also (a) catches and returns `{success: false}` instead of throwing and (b) callers do `await Promise.all(...)` without inspecting returns, the silence becomes total. The bug lives in production for as long as the underlying state stays observable-only-after-effect.
+
+**Canonical example**: pre-PR-#59, `dashboard/route.js` called `updateCell(token, COLLECTION, "news_interactions", \`C${row}\`, "TRUE")` against a 4-arg `updateCell(accessToken, spreadsheetId, range, value)`. The tab name landed in the `range` slot; the intended `C${row}` landed in the `value` slot; the real value was silently dropped as the unbound 5th arg. Every cell update wrote the intended range string into A1 of the tab. The bug lived in production for ~2 months. Full forensics in `docs/BUSINESS_NOTES.md` under the PR #59 entry.
+
+**Defenses**:
+- Prefer named-arg / object-arg calls for helpers with 3+ parameters: `updateCell({ accessToken, spreadsheetId, range, value })` is drift-resistant.
+- Helpers that mutate production data must throw on error, not return a status object that callers can ignore.
+- During helper consolidation, walk every call site and confirm signature alignment - do not trust grep counts alone.
+
+**Lesson generalized 2026-05-29** during the `docs/folder-audit` cleanup; specific PR #59 incident captured in `BUSINESS_NOTES.md`.
+
 ---
 
 ## Auth & Permissions
