@@ -158,6 +158,8 @@ Notes:
 
 #### `invoice_submissions`
 
+**Schema design note (amended 2026-05-29 per MODULE_6_DATA_AUDIT.md Section 8):** The status column carries 7 values in production today (4 workflow + 3-4 AI scan), with 101 of 590 rows (17%) outside the strict 4-state workflow enum. Rather than cleaning the source data, the schema adopts the **preservation-first design**: strict enum constraints apply only to `is_historical=FALSE` (future writes). Historical rows can carry any value the source Sheet had. `ai_scan_status` becomes a first-class column to separate AI scan state from workflow state going forward.
+
 ```sql
 CREATE TABLE invoice_submissions (
   id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -177,33 +179,46 @@ CREATE TABLE invoice_submissions (
   drive_urls                  TEXT[] NOT NULL DEFAULT '{}',
   page_count                  INTEGER NOT NULL DEFAULT 1,
   email_sent                  BOOLEAN NOT NULL DEFAULT false,
-  status                      TEXT NOT NULL DEFAULT 'sent'
-                                CHECK (status IN ('sent','returned','corrected','deleted')),
+  status                      TEXT NOT NULL DEFAULT 'sent',
   status_updated_at           TIMESTAMPTZ,
   type                        TEXT NOT NULL DEFAULT 'invoice'
                                 CHECK (type IN ('invoice','credit')),
   raw_drive_url               TEXT,
   corrected_from_uuid         UUID REFERENCES invoice_submissions(id),
   dupe_override               BOOLEAN NOT NULL DEFAULT false,
-  ai_scan_complete            BOOLEAN NOT NULL DEFAULT false
+  ai_scan_complete            BOOLEAN NOT NULL DEFAULT false,
+  ai_scan_status              TEXT
+                                CHECK (ai_scan_status IS NULL OR ai_scan_status IN ('pending','complete','failed','photo-only')),
+  is_historical               BOOLEAN NOT NULL DEFAULT FALSE,
+  data_provenance             TEXT NOT NULL DEFAULT 'app_scan'
+                                CHECK (data_provenance IN ('app_scan','batch_rebuild','manual_entry','unknown')),
+
+  -- Status enum applies only to new writes; historical rows can carry any value
+  CONSTRAINT chk_status_enum CHECK (
+    is_historical = TRUE OR status IN ('sent','returned','corrected','deleted')
+  )
 );
 
--- F24 field-based dedup as partial unique index
+-- F24 field-based dedup as partial unique index. Also gated on is_historical=FALSE
+-- so backfilled dupes (if any creep in from app evolution) don't block migration.
 CREATE UNIQUE INDEX invoice_submissions_field_dedup_idx
   ON invoice_submissions (vendor_id, invoice_number_normalized, invoice_date, total_amount)
-  WHERE status NOT IN ('corrected','deleted')
+  WHERE is_historical = FALSE
+    AND status NOT IN ('corrected','deleted')
     AND corrected_from_uuid IS NULL
     AND dupe_override = false;
 
 CREATE INDEX invoice_submissions_account_idx ON invoice_submissions (account_key, submitted_at DESC);
-CREATE INDEX invoice_submissions_status_idx ON invoice_submissions (status, submitted_at DESC);
+CREATE INDEX invoice_submissions_status_idx ON invoice_submissions (status, submitted_at DESC) WHERE is_historical = FALSE;
+CREATE INDEX invoice_submissions_historical_idx ON invoice_submissions (is_historical, account_key, submitted_at DESC) WHERE is_historical = TRUE;
 ```
 
 Notes:
 - `client_uuid` UNIQUE replaces F25 read-then-write idempotency check.
-- `invoice_number_normalized` is the GENERATED form for F24 dedup (strips leading '#' and leading zeros). The partial UNIQUE INDEX enforces F24 at DB level.
+- `invoice_number_normalized` is the GENERATED form for F24 dedup (strips leading '#' and leading zeros). The partial UNIQUE INDEX enforces F24 at DB level for new writes only.
 - Rejection metadata (cols R-U) factored to `invoice_rejections`.
-- Status enum replaces the freeform string today.
+- `is_historical` + `data_provenance` are the preservation-first columns. ALL 590 backfilled rows get `is_historical=TRUE`, `data_provenance='app_scan'`.
+- `ai_scan_status` separates the AI scan info from the workflow status. Backfill mapping per MODULE_6_DATA_AUDIT Section 8: if col N is workflow (sent/returned/corrected/deleted), `status=<value>` + `ai_scan_status=NULL`. If col N is AI state (complete/failed/pending/photo-only), `status='sent'` + `ai_scan_status=<value>`. 101 of 590 rows take the second branch.
 
 #### `invoice_rejections`
 
@@ -217,6 +232,9 @@ CREATE TABLE invoice_rejections (
   note                TEXT,
   unrejected_at       TIMESTAMPTZ,                                       -- set when admin un-rejects
   unrejected_by       TEXT,
+  is_historical       BOOLEAN NOT NULL DEFAULT FALSE,
+  data_provenance     TEXT NOT NULL DEFAULT 'app_scan'
+                        CHECK (data_provenance IN ('app_scan','batch_rebuild','manual_entry','unknown')),
 
   UNIQUE (submission_id, rejected_at)                                    -- allow re-rejection history
 );
@@ -227,38 +245,65 @@ CREATE INDEX invoice_rejections_submission_idx ON invoice_rejections (submission
 Notes:
 - Today rejection lives on the submission row (cols R-U). Migration moves to dedicated history table.
 - Unreject becomes a column update on the most-recent row, not a row delete (audit trail).
+- `is_historical` + `data_provenance` per Section 8. ALL 27 backfilled rejection rows: `is_historical=TRUE`, `data_provenance='app_scan'`.
 
 #### `ai_line_items`
 
+**Schema design note (amended 2026-05-29 per MODULE_6_DATA_AUDIT.md Section 8):** 209 of 5438 source rows (3.8%) are historical orphans - 138 REBUILD-* synthetic IDs from a 2026-04-03 batch re-extraction, plus 71 valid UUIDs whose parent submissions have been deleted. 4 (invoice_uuid, line_num) dupes also exist from AI emitting collide-on-line-num within single scans. All 218 artifacts are preserved via the preservation-first design: `invoice_uuid` becomes NULLable + FK; `historical_invoice_ref TEXT` preserves the original synthetic ID; partial UNIQUE INDEX only enforces uniqueness on `is_historical=FALSE`.
+
 ```sql
 CREATE TABLE ai_line_items (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  invoice_uuid    UUID NOT NULL REFERENCES invoice_submissions(id) ON DELETE CASCADE,
-  account_key     TEXT NOT NULL,                                         -- collapses per-account tab structure
-  vendor_name     TEXT NOT NULL,
-  invoice_number  TEXT,
-  invoice_date    DATE,
-  line_num        INTEGER NOT NULL,
-  description     TEXT NOT NULL,
-  quantity        NUMERIC,
-  unit            TEXT,
-  unit_price      NUMERIC,
-  extended_price  NUMERIC,
-  category        TEXT,                                                   -- 10-bucket OCR enum
-  confidence      TEXT,
-  raw_json        JSONB,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_uuid           UUID REFERENCES invoice_submissions(id) ON DELETE CASCADE,
+  account_key            TEXT NOT NULL,                                         -- collapses per-account tab structure
+  vendor_name            TEXT NOT NULL,
+  invoice_number         TEXT,
+  invoice_date           DATE,
+  line_num               INTEGER NOT NULL,
+  description            TEXT NOT NULL,
+  quantity               NUMERIC,
+  unit                   TEXT,
+  unit_price             NUMERIC,
+  extended_price         NUMERIC,
+  category               TEXT,                                                   -- 10-bucket OCR enum
+  confidence             TEXT,
+  raw_json               JSONB,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  historical_invoice_ref TEXT,                                                   -- preserves "REBUILD-..." synthetic IDs or original UUID-as-text for parent-deleted rows
+  is_historical          BOOLEAN NOT NULL DEFAULT FALSE,
+  data_provenance        TEXT NOT NULL DEFAULT 'app_scan'
+                           CHECK (data_provenance IN ('app_scan','batch_rebuild','manual_entry','unknown')),
 
-  UNIQUE (invoice_uuid, line_num)                                         -- cron idempotency at write time
+  -- New writes MUST have a real parent FK. Historical rows may use NULL
+  -- invoice_uuid + populate historical_invoice_ref instead.
+  CONSTRAINT chk_new_rows_have_parent CHECK (
+    is_historical = TRUE OR invoice_uuid IS NOT NULL
+  ),
+  CONSTRAINT chk_historical_rows_have_parent_ref CHECK (
+    is_historical = FALSE OR invoice_uuid IS NOT NULL OR historical_invoice_ref IS NOT NULL
+  )
 );
 
+-- Cron idempotency UNIQUE applies only to new writes. Historical dupes pass through.
+CREATE UNIQUE INDEX ai_line_items_new_dedup_idx
+  ON ai_line_items (invoice_uuid, line_num)
+  WHERE is_historical = FALSE;
+
 CREATE INDEX ai_line_items_account_invoice_idx ON ai_line_items (account_key, invoice_date DESC);
-CREATE INDEX ai_line_items_invoice_idx ON ai_line_items (invoice_uuid);
+CREATE INDEX ai_line_items_invoice_idx ON ai_line_items (invoice_uuid) WHERE invoice_uuid IS NOT NULL;
+CREATE INDEX ai_line_items_historical_lookup_idx
+  ON ai_line_items (account_key, historical_invoice_ref, line_num)
+  WHERE is_historical = TRUE;
 ```
 
 Notes:
 - Per-account tabs collapse to a single table. `account_key` carries the per-account distinction.
-- UNIQUE (invoice_uuid, line_num) closes the cron re-processing race at the schema level.
+- UNIQUE partial index closes the cron re-processing race for new writes; does not block backfill of the 4 historical dupes.
+- Backfill mapping per MODULE_6_DATA_AUDIT Section 8:
+  - 138 REBUILD-* rows: `invoice_uuid=NULL`, `historical_invoice_ref="REBUILD-{n}-{i}"`, `data_provenance='batch_rebuild'`.
+  - 71 valid-UUID orphans (parent deleted): `invoice_uuid=NULL`, `historical_invoice_ref=<original UUID as TEXT>`, `data_provenance='unknown'`.
+  - 5158 in-bounds rows: `invoice_uuid=<resolved>`, `historical_invoice_ref=NULL`, `data_provenance='app_scan'`.
+  - All 5438 rows: `is_historical=TRUE`.
 
 #### `gl_codes`
 
@@ -272,6 +317,9 @@ CREATE TABLE gl_codes (
   is_purchasing   BOOLEAN NOT NULL DEFAULT true,                          -- Q8: replaces parseGLCodes business-rule filter
   active          BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  is_historical   BOOLEAN NOT NULL DEFAULT FALSE,
+  data_provenance TEXT NOT NULL DEFAULT 'app_scan'
+                    CHECK (data_provenance IN ('app_scan','batch_rebuild','manual_entry','unknown')),
 
   UNIQUE (account_key, code)
 );
@@ -282,6 +330,8 @@ CREATE INDEX gl_codes_account_idx ON gl_codes (account_key) WHERE active = true 
 Notes:
 - Per Q8: migrate raw, then add `is_purchasing` boolean. Existing `parseGLCodes` filter logic (EXCLUDED_CATEGORIES, EXCLUDED_ITEMS, SECTION_MARKERS) becomes a backfill-time classification rather than runtime.
 - Application layer queries with `WHERE is_purchasing = true` to get the same filter behavior.
+- `is_historical` + `data_provenance` per Section 8. ALL 393 backfilled leaf codes from the 12 per-account tabs: `is_historical=TRUE`, `data_provenance='manual_entry'` (sheet-edited by admins).
+- **Master Template (78 codes) + Class Overview (15 codes) SKIPPED per Q6 (MODULE_6_DATA_AUDIT.md Section 5)**. These tabs are admin-reference Sheets-only; PG `gl_codes` table only mirrors operational per-account data. Code that reads Master Template at runtime continues to read from Sheets post-cutover.
 
 #### `inventory_items`
 
