@@ -82,11 +82,13 @@
 .pb-stub-email strong { color: var(--kf-navy); font-weight: 700; }
 
 /* ─── Hero band ─────────────────────────────────────────────────────────── */
+/* PR 7.3 Batch A item 3 — tightened ~25% so documents reach above the fold
+   faster. Was 28/22 mobile, 36/28 desktop; now 20/14 mobile, 24/18 desktop. */
 .pb-hero {
   background: linear-gradient(135deg, var(--kf-navy) 0%, #1a4580 100%);
   border-radius: 20px;
-  padding: 28px 20px 22px;
-  margin-bottom: 18px;
+  padding: 20px 20px 14px;
+  margin-bottom: 16px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(15, 48, 87, 0.15);
@@ -110,8 +112,8 @@
 .pb-hero-sub {
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
-  line-height: 1.45;
-  margin: 0 0 18px;
+  line-height: 1.4;
+  margin: 0 0 12px;
   max-width: 560px;
 }
 .pb-ask-bar {
@@ -149,10 +151,10 @@
 .pb-ask-clear:hover { background: #e2e8f0; }
 
 @media (min-width: 640px) {
-  .pb-hero { padding: 36px 28px 28px; }
-  .pb-hero-tag { font-size: 32px; }
+  .pb-hero { padding: 24px 28px 18px; }
+  .pb-hero-tag { font-size: 28px; }
   .pb-hero-sub { font-size: 14px; }
-  .pb-ask-bar { padding: 14px 16px; }
+  .pb-ask-bar { padding: 12px 16px; }
   .pb-ask-input { font-size: 15px; }
 }
 
@@ -195,28 +197,209 @@
   opacity: 0.6;
 }
 
-/* ─── Shelves ───────────────────────────────────────────────────────────── */
-.pb-shelves { display: flex; flex-direction: column; gap: 24px; }
+/* ─── Layout: rail + shelves (PR 7.3 Batch A item 2) ───────────────────── */
+.pb-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 768px) {
+  .pb-layout {
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+  }
+}
 
-.pb-shelf { background: transparent; }
+/* ─── Sticky left rail ──────────────────────────────────────────────────── */
+/* PR 7.3 Batch A finish:
+   - top: 72px clears the sticky TopNav (56px inner height + breathing room).
+     Bug 1 fix — was 16px, which let the rail tuck behind TopNav.
+   - Card panel container (white bg + faint border + small shadow) so the rail
+     reads as a navigation panel, not floating text. Item 6.
+   - Collapsed variant (.pb-rail--collapsed) drops the panel + shrinks to a
+     thin handle so the cards reclaim the column width. Item 5. */
+.pb-rail { display: none; }
+@media (min-width: 768px) {
+  .pb-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+    padding: 8px;
+    background: white;
+    border: 1px solid var(--kf-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  }
+  .pb-rail--collapsed {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 4px 0;
+    align-items: center;
+  }
+  .pb-layout[data-rail-collapsed="true"] {
+    grid-template-columns: 32px 1fr;
+    gap: 16px;
+  }
+}
+
+.pb-rail-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  align-self: flex-end;
+  color: #94a3b8;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.pb-rail-toggle:hover {
+  background: #f1f5f9;
+  color: var(--kf-navy);
+}
+.pb-rail--collapsed .pb-rail-toggle {
+  align-self: center;
+  padding: 4px;
+}
+
+.pb-rail-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.pb-rail-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.15s;
+}
+.pb-rail-link:hover {
+  background: #f1f5f9;
+  color: var(--kf-navy);
+}
+.pb-rail-link--active {
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  font-weight: 800;
+}
+.pb-rail-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pb-rail-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: white;
+  border: 1px solid var(--kf-border);
+  padding: 1px 7px;
+  border-radius: 999px;
+  min-width: 20px;
+  text-align: center;
+}
+.pb-rail-link--active .pb-rail-count {
+  color: var(--kf-playbook-teal-dark);
+  background: white;
+  border-color: rgba(15, 110, 86, 0.25);
+}
+
+/* ─── Shelves ───────────────────────────────────────────────────────────── */
+.pb-shelves { display: flex; flex-direction: column; gap: 18px; }
+
+.pb-shelf {
+  background: transparent;
+  /* Account for TopNav (56px sticky) + a few px breathing room when jumped to
+     via the rail (smooth scroll respects this margin). Bug 1 fix — was 72px,
+     which still allowed the shelf top to tuck slightly under the TopNav. */
+  scroll-margin-top: 80px;
+}
+
+/* Shelf title — button now (collapse toggle). Was an h2 in v1. */
 .pb-shelf-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: #475569;
-  margin: 0 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin: 0 0 8px;
+  padding: 4px 0;
+  transition: color 0.12s;
 }
-.pb-shelf-title::after {
-  content: '';
+.pb-shelf-title:hover { color: var(--kf-navy); }
+.pb-shelf-title:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pb-shelf-name { flex-shrink: 0; }
+
+.pb-shelf-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 999px;
+  letter-spacing: 0;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+.pb-shelf-rule {
   flex: 1;
   height: 1px;
   background: var(--kf-border);
+  margin: 0 4px;
 }
+
+.pb-shelf-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: #94a3b8;
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+.pb-shelf-title[aria-expanded="false"] .pb-shelf-chevron {
+  transform: rotate(-90deg);
+}
+
 /* Inline empty-shelf marker — small grey text next to the shelf name,
    no card-sized white box. Applies to genuinely empty shelves (Finance)
    AND to shelves emptied by an active filter ("no matches"). */
@@ -228,6 +411,7 @@
   text-transform: none;
   letter-spacing: 0.2px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pb-card-grid {

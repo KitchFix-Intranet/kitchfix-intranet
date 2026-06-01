@@ -10,7 +10,7 @@
 // OPD_CC_HANDOFF.md design notes.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import "./playbook.css";
 
 // ─── Locked maps ────────────────────────────────────────────────────────────
@@ -148,6 +148,166 @@ function ComingSoonStub({ email }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Per-user UI hooks: collapse-state + scroll-spy (PR 7.3 Batch A items 1, 2)
+// ════════════════════════════════════════════════════════════════════════════
+const COLLAPSED_STORAGE_KEY = "kf_playbook_collapsed";
+
+function slugify(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// Persist which shelves are collapsed across page loads. Default: all expanded.
+// Wider app pattern (TopNav.js stores kf_user_email in localStorage) — casual
+// browser-level UI state. No server roundtrip; OK to lose on browser-clear.
+function useCollapsedShelves() {
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) setCollapsed(new Set(arr));
+    } catch { /* ignore parse / quota errors — fall back to all-expanded */ }
+  }, []);
+  const toggle = useCallback((name) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch { /* ignore quota errors */ }
+      return next;
+    });
+  }, []);
+  return [collapsed, toggle];
+}
+
+// Scroll-spy: which shelf is currently active in the viewport.
+//
+// PR 7.3 Batch A finish (bug 3): swapped from IntersectionObserver to a direct
+// scroll-position scan. IO's "entry/exit" semantics left gaps — during the
+// transition from one shelf to the next, neither was reported as intersecting,
+// so `active` stuck on the previous value. The scan approach reads each
+// shelf's `rect.top` directly on every scroll (rAF-throttled) and picks the
+// topmost shelf that's at or above the active line (~100px from viewport top,
+// just under TopNav). Robust against collapse/expand layout shifts too.
+//
+// Returns [active, setActive] so rail clicks can set the value immediately
+// (bug 3a) without waiting for scroll to catch up.
+function useActiveShelf(shelves) {
+  const [active, setActive] = useState(shelves[0] || null);
+  const key = shelves.join("|");
+  useEffect(() => {
+    let rafId = null;
+    const ACTIVE_LINE = 100; // px from viewport top — under TopNav (56px)
+
+    const update = () => {
+      rafId = null;
+      const sections = document.querySelectorAll("[data-pb-shelf]");
+      if (sections.length === 0) return;
+      // Pick the shelf whose top is closest to (but at or above) the active line.
+      let candidate = null;
+      let candidateTop = -Infinity;
+      sections.forEach((s) => {
+        const top = s.getBoundingClientRect().top;
+        if (top <= ACTIVE_LINE && top > candidateTop) {
+          candidate = s.dataset.pbShelf;
+          candidateTop = top;
+        }
+      });
+      // No shelf has scrolled past the line yet → page is above all shelves,
+      // default active to the first one.
+      if (!candidate) candidate = sections[0].dataset.pbShelf;
+      setActive(candidate);
+    };
+
+    const onScroll = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(update);
+    };
+
+    update(); // initial pass
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [key]);
+  return [active, setActive];
+}
+
+// Persist whether the left rail is collapsed across page loads. Mirrors
+// useCollapsedShelves's pattern but holds a single boolean (item 5).
+const RAIL_COLLAPSED_KEY = "kf_playbook_rail_collapsed";
+function useRailCollapsed() {
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RAIL_COLLAPSED_KEY);
+      if (raw === "1") setCollapsed(true);
+    } catch { /* ignore */ }
+  }, []);
+  const toggle = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(RAIL_COLLAPSED_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  return [collapsed, toggle];
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sticky left rail (PR 7.3 Batch A items 2 + 5 + 6)
+// ════════════════════════════════════════════════════════════════════════════
+function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollapse }) {
+  // Chevron points LEFT when expanded (click to collapse) and RIGHT when
+  // collapsed (click to expand). Two polyline configs in one element.
+  const chevronPoints = collapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6";
+  return (
+    <nav
+      className={`pb-rail${collapsed ? " pb-rail--collapsed" : ""}`}
+      aria-label="Shelf navigation"
+    >
+      <button
+        type="button"
+        className="pb-rail-toggle"
+        onClick={onToggleCollapse}
+        aria-label={collapsed ? "Expand shelf navigation" : "Collapse shelf navigation"}
+        aria-expanded={!collapsed}
+        title={collapsed ? "Expand navigation" : "Collapse navigation"}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points={chevronPoints} />
+        </svg>
+      </button>
+      {!collapsed && (
+        <div className="pb-rail-links">
+          {shelves.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onJump(s)}
+              className={`pb-rail-link${active === s ? " pb-rail-link--active" : ""}`}
+              aria-current={active === s ? "true" : undefined}
+            >
+              <span className="pb-rail-name">{s}</span>
+              <span className="pb-rail-count">{counts[s] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Playbook page (owner view)
 // ════════════════════════════════════════════════════════════════════════════
 function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, setOpenDocId }) {
@@ -174,7 +334,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
     return out;
   }, [documents, filter, query]);
 
-  // Group by shelf
+  // Group by shelf (preserves API order: pinned DESC, sort_order ASC, title ASC)
   const docsByShelf = useMemo(() => {
     const map = Object.fromEntries(shelves.map((s) => [s, []]));
     for (const d of filteredDocs) {
@@ -183,20 +343,72 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
     return map;
   }, [filteredDocs, shelves]);
 
+  // Per-shelf visible counts (post-filter, post-search) — rail + header chip read this.
+  const counts = useMemo(() => {
+    const c = {};
+    for (const s of shelves) c[s] = (docsByShelf[s] || []).length;
+    return c;
+  }, [docsByShelf, shelves]);
+
+  const [collapsed, toggleCollapsed] = useCollapsedShelves();
+  const [activeShelf, setActiveShelf] = useActiveShelf(shelves);
+  const [railCollapsed, toggleRailCollapsed] = useRailCollapsed();
+
+  // jumpToShelf needs to: (a) immediately mark the target active so the rail
+  // highlight responds at click-time (bug 3a), (b) force-expand the target if
+  // currently collapsed (bug 2), then (c) scroll to it AFTER React has flushed
+  // the expand to the DOM (otherwise scrollIntoView measures against the
+  // still-collapsed layout). We queue (c) via a "pendingJump" state that
+  // triggers a useEffect post-render — by then DOM has the new layout.
+  const [pendingJump, setPendingJump] = useState(null);
+
+  const jumpToShelf = useCallback(
+    (name) => {
+      setActiveShelf(name); // (a) immediate visual feedback
+      if (collapsed.has(name)) {
+        toggleCollapsed(name); // (b) expand the target shelf
+      }
+      setPendingJump(name); // (c) queue scroll for next render
+    },
+    [collapsed, toggleCollapsed, setActiveShelf]
+  );
+
+  useEffect(() => {
+    if (!pendingJump) return;
+    const el = document.getElementById(`shelf-${slugify(pendingJump)}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPendingJump(null);
+  }, [pendingJump]);
+
   return (
     <div className="pb-wrap">
       <Hero query={query} setQuery={setQuery} />
       <FilterChipsBar filter={filter} setFilter={setFilter} />
-      <div className="pb-shelves">
-        {shelves.map((shelfName) => (
-          <Shelf
-            key={shelfName}
-            name={shelfName}
-            docs={docsByShelf[shelfName]}
-            onOpen={(id) => setOpenDocId(id)}
-            isSearching={isSearching}
-          />
-        ))}
+      <div
+        className="pb-layout"
+        data-rail-collapsed={railCollapsed ? "true" : "false"}
+      >
+        <ShelfRail
+          shelves={shelves}
+          counts={counts}
+          active={activeShelf}
+          onJump={jumpToShelf}
+          collapsed={railCollapsed}
+          onToggleCollapse={toggleRailCollapsed}
+        />
+        <div className="pb-shelves">
+          {shelves.map((shelfName) => (
+            <Shelf
+              key={shelfName}
+              name={shelfName}
+              docs={docsByShelf[shelfName]}
+              onOpen={(id) => setOpenDocId(id)}
+              isSearching={isSearching}
+              isCollapsed={collapsed.has(shelfName)}
+              onToggle={toggleCollapsed}
+            />
+          ))}
+        </div>
       </div>
 
       {openDocId && (
@@ -272,19 +484,36 @@ function FilterChipsBar({ filter, setFilter }) {
 // ════════════════════════════════════════════════════════════════════════════
 // Shelves + cards
 // ════════════════════════════════════════════════════════════════════════════
-function Shelf({ name, docs, onOpen, isSearching }) {
+function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle }) {
   const empty = docs.length === 0;
+  const count = docs.length;
   return (
-    <section className="pb-shelf">
-      <h2 className="pb-shelf-title">
-        {name}
+    <section
+      className="pb-shelf"
+      data-pb-shelf={name}
+      id={`shelf-${slugify(name)}`}
+    >
+      <button
+        type="button"
+        className="pb-shelf-title"
+        onClick={() => onToggle(name)}
+        aria-expanded={!isCollapsed}
+      >
+        <span className="pb-shelf-name">{name}</span>
+        <span className="pb-shelf-count" aria-label={`${count} documents`}>{count}</span>
         {empty && (
           <span className="pb-shelf-empty-inline">
             — {isSearching ? "no matches" : "no documents yet"}
           </span>
         )}
-      </h2>
-      {!empty && (
+        <span className="pb-shelf-rule" aria-hidden="true" />
+        <span className="pb-shelf-chevron" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
+      {!isCollapsed && !empty && (
         <div className="pb-card-grid">
           {docs.map((d) => (
             <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
