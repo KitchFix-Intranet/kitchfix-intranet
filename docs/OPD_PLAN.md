@@ -258,7 +258,7 @@ The chain of decisions: keep the page narrow until either (a) the catalog is sta
 ### Open items to surface back (not blockers)
 
 - **STD-005 needs a small rev.** The catalog field is `shelf` in the schema; STD-005 §10.2 calls it `hub`. `CHK` was added to `doc_class` here but is missing from STD-005 §10.2's nine-class legend. Flagged in handoff §10 — for the Architect's next STD-005 pass.
-- **Relationships are a partial set.** 38 edges reconstructed from the tracker's References Map, not the lost 54. Expand as cross-refs are confirmed.
+- **Relationships are a partial set.** 36 edges reconstructed from the tracker's References Map, not the lost 54. Expand as cross-refs are confirmed.
 - **Auth dependency.** Once the page widens past owner-only, the audience rule starts mattering for real — confirm `users` table exists or keep the `contacts`-derived rule active.
 - **`pr-7-*` PR family preserved for filename sort order only.** The "Module 7" phrase was retired across all OPD file headers + this plan pre-apply because Project 3 uses "Module 7" for Smart Inventory. OPD PRs are referred to as PR 7.1 / 7.2 / 7.3 (or "Project OPD PR 1/2/3" prose-style) instead. Project 3 schema lives at `pr-7-*-inventory-*.sql`, OPD at `pr-7-*-opd-*.sql` — no code-level collision then or now.
 
