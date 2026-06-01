@@ -419,14 +419,14 @@ historical_invoice_ref TEXT  -- preserves synthetic IDs like "REBUILD-204842-00-
 **`ai_line_items`:**
 - 138 REBUILD-* rows: `invoice_uuid=NULL`, `historical_invoice_ref="REBUILD-{n}-{i}"`, `data_provenance='batch_rebuild'`, `is_historical=TRUE`.
 - 71 valid-UUID orphans: `invoice_uuid=NULL`, `historical_invoice_ref=<original UUID as TEXT>`, `data_provenance='unknown'`, `is_historical=TRUE`.
-- 5158 in-bounds rows: `invoice_uuid=<resolved>`, `historical_invoice_ref=NULL`, `data_provenance='app_scan'`, `is_historical=TRUE`.
+- 5229 in-bounds rows: `invoice_uuid=<resolved>`, `historical_invoice_ref=NULL`, `data_provenance='app_scan'`, `is_historical=TRUE`. (Math: 5438 total - 138 REBUILD - 71 valid-UUID-orphans = 5229. Section originally read "5158" which was a transcription slip; corrected 2026-06-01 during PR 6.3 backfill recon.)
 - 4 dupe pairs: both rows preserved. Partial UNIQUE INDEX only fires on `is_historical=FALSE`.
 
 **`invoice_rejections`:**
 - 27 rows: `is_historical=TRUE`, `data_provenance='app_scan'`. Add the 2 base columns.
 
 **`gl_codes`:**
-- 393 leaf codes from 12 per-account tabs: `is_historical=TRUE`, `data_provenance='manual_entry'`. Add the 2 base columns.
+- 300 leaf codes from 12 per-account tabs: `is_historical=TRUE`, `data_provenance='manual_entry'`. Add the 2 base columns. (Math: per-tab sum from Section 2.3 is 31+28+22+22+21+21+35+16+31+27+24+22 = 300. The 393 total figure includes the 2 utility tabs (Class Overview 15 + Master Template 78 = 93) which are SKIPPED per Q6; section originally read "393 leaf codes from 12 per-account tabs" conflating the totals, corrected 2026-06-01 during PR 6.3 backfill recon.)
 - Master Template (78 codes) + Class Overview (15 codes): SKIPPED per Q6. They are admin-reference Sheets-only; PG `gl_codes` table only mirrors operational per-account data.
 
 ### Tradeoffs
