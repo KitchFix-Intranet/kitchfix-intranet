@@ -217,14 +217,17 @@
   height: 1px;
   background: var(--kf-border);
 }
-.pb-shelf-empty {
-  background: white;
-  border: 1px dashed var(--kf-border);
-  border-radius: 12px;
-  padding: 16px 18px;
+/* Inline empty-shelf marker — small grey text next to the shelf name,
+   no card-sized white box. Applies to genuinely empty shelves (Finance)
+   AND to shelves emptied by an active filter ("no matches"). */
+.pb-shelf-empty-inline {
+  font-family: 'Mulish', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
   color: #94a3b8;
-  font-size: 13px;
-  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .pb-card-grid {
@@ -358,6 +361,20 @@
   font-size: 11px;
   font-weight: 600;
   color: #94a3b8;
+}
+
+/* Quiet "no file yet" marker in the card foot — receded, italic, very light,
+   pushed to the right edge with margin-left:auto so it doesn't compete with
+   the status pill on the left. The slide-over reader's pb-nofile-chip
+   (heavier styling) is unchanged because that context warrants more weight. */
+.pb-nofile-marker {
+  font-family: 'Mulish', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  font-style: italic;
+  color: #cbd5e1;
+  margin-left: auto;
+  letter-spacing: 0.2px;
 }
 
 /* ─── Slide-over reader ─────────────────────────────────────────────────── */

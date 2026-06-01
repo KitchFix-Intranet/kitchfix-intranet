@@ -273,26 +273,24 @@ function FilterChipsBar({ filter, setFilter }) {
 // Shelves + cards
 // ════════════════════════════════════════════════════════════════════════════
 function Shelf({ name, docs, onOpen, isSearching }) {
-  if (docs.length === 0) {
-    return (
-      <section className="pb-shelf">
-        <h2 className="pb-shelf-title">{name}</h2>
-        <div className="pb-shelf-empty">
-          {isSearching
-            ? "No matches on this shelf."
-            : "No documents on this shelf yet."}
-        </div>
-      </section>
-    );
-  }
+  const empty = docs.length === 0;
   return (
     <section className="pb-shelf">
-      <h2 className="pb-shelf-title">{name}</h2>
-      <div className="pb-card-grid">
-        {docs.map((d) => (
-          <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
-        ))}
-      </div>
+      <h2 className="pb-shelf-title">
+        {name}
+        {empty && (
+          <span className="pb-shelf-empty-inline">
+            — {isSearching ? "no matches" : "no documents yet"}
+          </span>
+        )}
+      </h2>
+      {!empty && (
+        <div className="pb-card-grid">
+          {docs.map((d) => (
+            <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -309,14 +307,10 @@ function DocumentCard({ doc, onOpen }) {
     >
       <div className="pb-card-head">
         <span className="pb-class-chip">{classLabel}</span>
-        {doc.critical && (
-          <span className="pb-critical-chip" title="Safety-critical">⚠ Critical</span>
-        )}
-        {noFile && (
-          <span className="pb-nofile-chip" title="No Drive file attached yet">
-            No file yet
-          </span>
-        )}
+        {/* Critical: red left-edge stripe (pb-card--critical) is sufficient on card.
+            The "⚠ Critical" text chip is surfaced in the slide-over reader instead. */}
+        {/* No-file: dropped from the card head — moved to a quiet inline marker in
+            the card foot below, so it doesn't compete with the class chip. */}
         <span className="pb-card-icons">
           {doc.pinned && (
             <span className="pb-pin" aria-label="Pinned" title="Pinned">★</span>
@@ -342,6 +336,11 @@ function DocumentCard({ doc, onOpen }) {
           {doc.status}
         </span>
         {doc.version && <span className="pb-version">{doc.version}</span>}
+        {noFile && (
+          <span className="pb-nofile-marker" title="No Drive file attached yet">
+            no file yet
+          </span>
+        )}
       </div>
     </button>
   );

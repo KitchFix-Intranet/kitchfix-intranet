@@ -167,6 +167,43 @@ async function applyTable(table, rows) {
 }
 
 await applyTable("documents", docs);
+
+// Class-weighted sort_order curation — mirrors the seed's closing UPDATE
+// (see docs/migrations/pr-7-2-opd-seed.sql). The INSERT above does not set
+// sort_order; this assigns curated values per class so the cards within each
+// shelf read in importance order (STD first, CHK last) rather than falling
+// through to title-ASC. Keeps the live DB in lockstep with the seed's final
+// state when re-applied via supabase-js.
+const CLASS_SORT_ORDER = {
+  STD:  10,
+  SOP:  20,
+  POL:  30,
+  AGR:  40,
+  PB:   50,
+  REF:  60,
+  TPL:  70,
+  FORM: 80,
+  POST: 90,
+  CHK:  95,
+};
+
+async function applyClassWeightedSortOrder() {
+  console.log("  applying class-weighted sort_order to documents...");
+  for (const [cls, weight] of Object.entries(CLASS_SORT_ORDER)) {
+    const { error } = await sb
+      .from("documents")
+      .update({ sort_order: weight })
+      .eq("doc_class", cls);
+    if (error) {
+      console.error(`  FAILED setting sort_order=${weight} for class=${cls}: ${error.message}`);
+      process.exit(1);
+    }
+  }
+  console.log(`  ok — sort_order curated for ${Object.keys(CLASS_SORT_ORDER).length} doc classes`);
+}
+
+await applyClassWeightedSortOrder();
+
 await applyTable("document_relationships", rels);
 await applyTable("document_surfaces", surs);
 

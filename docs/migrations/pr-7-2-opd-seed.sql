@@ -308,7 +308,46 @@ INSERT INTO document_surfaces (doc_id, surface) VALUES
 UPDATE document_surfaces SET is_historical = TRUE, data_provenance = 'batch_rebuild';
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Class-weighted sort_order curation (PR 7.3 polish pass).
+-- The seed INSERT above does NOT set sort_order (it falls through to the
+-- schema default of 100). This CASE assigns a class-weighted curated value
+-- so cards within a shelf read in importance order (governance first, postings
+-- last) rather than falling through to title-ASC alphabetical. The 10-step
+-- intervals leave room for per-doc overrides between class bands later.
+--
+--   STD = 10 (governance — documentation system)
+--   SOP = 20 (binding procedure)
+--   POL = 30 (policy)
+--   AGR = 40 (signed agreement)
+--   PB  = 50 (playbook / operator narrative)
+--   REF = 60 (reference / worked example)
+--   TPL = 70 (template)
+--   FORM = 80 (form)
+--   POST = 90 (wall posting)
+--   CHK = 95 (checklist)
+--
+-- scripts/apply-pr-7-2-opd-seed.mjs mirrors the same map after insert so a
+-- re-seed via supabase-js produces the same final state.
+-- ─────────────────────────────────────────────────────────────────────────────
+UPDATE documents SET sort_order = CASE doc_class
+  WHEN 'STD'  THEN 10
+  WHEN 'SOP'  THEN 20
+  WHEN 'POL'  THEN 30
+  WHEN 'AGR'  THEN 40
+  WHEN 'PB'   THEN 50
+  WHEN 'REF'  THEN 60
+  WHEN 'TPL'  THEN 70
+  WHEN 'FORM' THEN 80
+  WHEN 'POST' THEN 90
+  WHEN 'CHK'  THEN 95
+  ELSE 100
+END;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- End pr-7-2. 41 documents · 36 relationships · 10 surfaces.
 -- All docs at Pending/Draft/Placeholder/Retired — nothing Live until review pass.
+-- Class-weighted sort_order curated above (STD=10 → CHK=95) so each shelf
+-- reads governance → procedure → playbook → reference → template → form →
+-- posting → checklist, with title-ASC as the within-class tiebreaker.
 -- Next: manifest backfill attaches source_drive_id to the 7 matchable rows.
 -- ─────────────────────────────────────────────────────────────────────────────
