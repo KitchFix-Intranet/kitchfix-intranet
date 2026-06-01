@@ -59,10 +59,18 @@ async function checkConstraints() {
 }
 
 async function grants() {
-  const { data, error } = await sb.rpc('exec_sql', { sql:
-    `SELECT table_name, count(*) AS n FROM information_schema.role_table_grants
-     WHERE grantee='service_role' AND table_name = ANY($1) GROUP BY table_name`
-  }).catch(() => ({ data: null, error: { message: 'exec_sql rpc unavailable' } }));
+  // Supabase's .rpc() returns a PostgrestBuilder (thenable on await, NOT a real
+  // Promise with .catch). The previous .catch() chain threw TypeError before the
+  // RPC even fired. Use try/catch around the await instead — same soft-skip
+  // semantics, no TypeError.
+  let data, error;
+  try {
+    ({ data, error } = await sb.rpc('exec_sql', { sql:
+      `SELECT table_name, count(*) AS n FROM information_schema.role_table_grants
+       WHERE grantee='service_role' AND table_name = ANY($1) GROUP BY table_name` }));
+  } catch (e) {
+    error = { message: e.message || 'exec_sql rpc unavailable' };
+  }
   if (error || !data) {
     console.log('  note GRANT check skipped (no exec_sql rpc) — verify in Studio: service_role has 7 privs per table');
     return;
