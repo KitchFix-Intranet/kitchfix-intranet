@@ -3,81 +3,17 @@
 // ════════════════════════════════════════════════════════════════════════════
 // PlaybookClient · Project OPD · The Playbook
 // ════════════════════════════════════════════════════════════════════════════
-// One-shot bootstrap → render hero + ask bar + filter chips + 6 shelves + cards.
-// Card click opens slide-over reader (metadata always, Drive iframe when
-// source_drive_id present, "No file yet" state otherwise). Slide-over carries
-// the report-issue form. CSS prefix pb-. See OPD_PLAN.md §5 (gating) + the
-// OPD_CC_HANDOFF.md design notes.
+// One-shot bootstrap → render hero + ask bar + filter chips + 6 shelves +
+// cards or list rows. Card/row click opens the slide-over reader (imported
+// from ./SlideOverReader — same component the admin dashboard uses).
+// Shared data maps live in ./_shared. CSS prefix pb-.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import "./playbook.css";
-
-// ─── Locked maps ────────────────────────────────────────────────────────────
-const CLASS_LABELS = {
-  PB:   "Playbook",
-  SOP:  "SOP",
-  TPL:  "Template",
-  REF:  "Reference",
-  STD:  "Standard",
-  POL:  "Policy",
-  AGR:  "Agreement",
-  FORM: "Form",
-  POST: "Poster",
-  CHK:  "Checklist",
-};
-
-// Class chip color family — 4 grouped tints (CSS .pb-class-chip--{family})
-// for scan-by-color rather than 10 separate colors. Subtle paletted bgs that
-// don't fight navy/teal:
-//   gov  = STD, POL, AGR   (governance — navy family)
-//   proc = PB, SOP         (procedures — teal family, page house color)
-//   tool = TPL, FORM, CHK  (work tools — sand/amber)
-//   ref  = POST, REF       (postings & references — slate)
-const CLASS_FAMILY = {
-  STD:  "gov",
-  POL:  "gov",
-  AGR:  "gov",
-  PB:   "proc",
-  SOP:  "proc",
-  TPL:  "tool",
-  FORM: "tool",
-  CHK:  "tool",
-  POST: "ref",
-  REF:  "ref",
-};
-
-// Status palette — Pending is the ghost (transparent fill, faint border) so
-// it recedes in build-out where it's the default state with 22+ docs. The
-// other statuses get slightly more saturated tints so they pop against the
-// Pending wallpaper. Placeholder uses soft lavender — calm, distinct from
-// Draft (amber) and Pending (ghost), and quieter than alarm-leaning Blocked
-// (red). Communicates "stub, not built yet" without reading as an error.
-const STATUS_COLORS = {
-  "Live":        { bg: "#a7f3d0", color: "#065f46", ghost: false },
-  "In Build":    { bg: "#bfdbfe", color: "#1e3a8a", ghost: false },
-  "Draft":       { bg: "#fde68a", color: "#92400e", ghost: false },
-  "Pending":     { bg: "transparent", color: "#94a3b8", ghost: true },
-  "Placeholder": { bg: "#e9e3f5", color: "#6b46c1", ghost: false },
-  "Blocked":     { bg: "#fecaca", color: "#991b1b", ghost: false },
-};
-
-const RELATIONSHIP_LABELS_OUT = {
-  references:    "References",
-  implements:    "Implements",
-  supersedes:    "Supersedes",
-  superseded_by: "Superseded by",
-  derived_from:  "Derived from",
-  related:       "Related to",
-};
-const RELATIONSHIP_LABELS_IN = {
-  references:    "Referenced by",
-  implements:    "Implemented by",
-  supersedes:    "Replaces (older)",
-  superseded_by: "Replacement for",
-  derived_from:  "Source for",
-  related:       "Related to",
-};
+import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
+import SlideOverReader from "./SlideOverReader";
 
 const FILTER_CHIPS = [
   { id: "all",      label: "All" },
@@ -307,6 +243,24 @@ function useRailCollapsed() {
   return [collapsed, toggle];
 }
 
+// Persist card vs list view choice. Same casual-browser-state pattern as
+// rail/shelf collapse — display preference, not server-persisted.
+const VIEW_STORAGE_KEY = "kf_playbook_view";
+function useViewMode() {
+  const [view, setView] = useState("cards");
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (raw === "list" || raw === "cards") setView(raw);
+    } catch { /* ignore */ }
+  }, []);
+  const set = useCallback((mode) => {
+    setView(mode);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* ignore */ }
+  }, []);
+  return [view, set];
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Sticky left rail (PR 7.3 Batch A items 2 + 5 + 6)
 // ════════════════════════════════════════════════════════════════════════════
@@ -354,7 +308,7 @@ function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollaps
 // Playbook page (owner view)
 // ════════════════════════════════════════════════════════════════════════════
 function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, setOpenDocId }) {
-  const { documents, shelves } = bootstrap;
+  const { documents, shelves, isOwner } = bootstrap;
   const isSearching = !!query.trim() || filter !== "all";
 
   // Search + filter
@@ -396,6 +350,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
   const [collapsed, toggleCollapsed] = useCollapsedShelves();
   const [activeShelf, setActiveShelf] = useActiveShelf(shelves);
   const [railCollapsed, toggleRailCollapsed] = useRailCollapsed();
+  const [viewMode, setViewMode] = useViewMode();
 
   // jumpToShelf needs to: (a) immediately mark the target active so the rail
   // highlight responds at click-time (bug 3a), (b) force-expand the target if
@@ -425,8 +380,11 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
 
   return (
     <div className="pb-wrap">
-      <Hero query={query} setQuery={setQuery} />
-      <FilterChipsBar filter={filter} setFilter={setFilter} />
+      <Hero query={query} setQuery={setQuery} isOwner={isOwner} />
+      <div className="pb-controls-row">
+        <FilterChipsBar filter={filter} setFilter={setFilter} />
+        <ViewToggle view={viewMode} setView={setViewMode} />
+      </div>
       {documents.length === 0 ? (
         <EmptyState />
       ) : (
@@ -448,6 +406,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
                 key={shelfName}
                 name={shelfName}
                 docs={docsByShelf[shelfName]}
+                view={viewMode}
                 onOpen={(id) => setOpenDocId(id)}
                 isSearching={isSearching}
                 isCollapsed={collapsed.has(shelfName)}
@@ -471,9 +430,23 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
 // ════════════════════════════════════════════════════════════════════════════
 // Hero band + ask bar
 // ════════════════════════════════════════════════════════════════════════════
-function Hero({ query, setQuery }) {
+function Hero({ query, setQuery, isOwner }) {
   return (
     <div className="pb-hero">
+      {/* Owner-only link to the build dashboard. Operators never see this.
+          Gated on the bootstrap's isOwner (which the API computed from the
+          actual signed-in email, not anything client-supplied). */}
+      {isOwner && (
+        <Link href="/playbook/admin" className="pb-admin-link" prefetch={false}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 3h7v7H3z" />
+            <path d="M14 3h7v7h-7z" />
+            <path d="M14 14h7v7h-7z" />
+            <path d="M3 14h7v7H3z" />
+          </svg>
+          Build dashboard
+        </Link>
+      )}
       <div className="pb-hero-content">
         <h1 className="pb-hero-tag">The Playbook</h1>
         <p className="pb-hero-sub">
@@ -529,9 +502,51 @@ function FilterChipsBar({ filter, setFilter }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// View-mode toggle — segmented Cards / List control
+// ════════════════════════════════════════════════════════════════════════════
+function ViewToggle({ view, setView }) {
+  return (
+    <div className="pb-view-toggle" role="group" aria-label="View mode">
+      <button
+        type="button"
+        className={`pb-view-btn${view === "cards" ? " pb-view-btn--on" : ""}`}
+        onClick={() => setView("cards")}
+        aria-pressed={view === "cards"}
+        title="Card view"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+        <span>Cards</span>
+      </button>
+      <button
+        type="button"
+        className={`pb-view-btn${view === "list" ? " pb-view-btn--on" : ""}`}
+        onClick={() => setView("list")}
+        aria-pressed={view === "list"}
+        title="List view"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        <span>List</span>
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Shelves + cards
 // ════════════════════════════════════════════════════════════════════════════
-function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle }) {
+function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view }) {
   const empty = docs.length === 0;
   const count = docs.length;
   return (
@@ -561,11 +576,19 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle }) {
         </span>
       </button>
       {!isCollapsed && !empty && (
-        <div className="pb-card-grid">
-          {docs.map((d) => (
-            <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
-          ))}
-        </div>
+        view === "list" ? (
+          <div className="pb-list-grid">
+            {docs.map((d) => (
+              <DocumentListRow key={d.id} doc={d} onOpen={onOpen} />
+            ))}
+          </div>
+        ) : (
+          <div className="pb-card-grid">
+            {docs.map((d) => (
+              <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
+            ))}
+          </div>
+        )
       )}
     </section>
   );
@@ -631,299 +654,55 @@ function DocumentCard({ doc, onOpen }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Slide-over reader
+// List-view row — denser rendering of the same grouped/filtered docs as
+// DocumentCard. Toggled via ViewToggle; clicking a row opens the same
+// slide-over reader. Same data wiring, different presentation.
 // ════════════════════════════════════════════════════════════════════════════
-function SlideOverReader({ docId, onClose }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const [reportOpen, setReportOpen] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/playbook?action=document&id=${encodeURIComponent(docId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) setError(d.error);
-        else setData(d);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [docId]);
-
-  // ESC closes the slide-over.
-  useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  // Body scroll lock while open.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  return (
-    <>
-      <div className="pb-slide-backdrop" onClick={onClose} />
-      <aside className="pb-slide" role="dialog" aria-modal="true" aria-label="Document reader">
-        <div className="pb-slide-head">
-          <button className="pb-slide-close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-        {loading ? (
-          <div className="pb-slide-loading">Loading document…</div>
-        ) : error ? (
-          <div className="pb-slide-error">Error: {error}</div>
-        ) : data ? (
-          <SlideOverContent
-            data={data}
-            reportOpen={reportOpen}
-            setReportOpen={setReportOpen}
-          />
-        ) : null}
-      </aside>
-    </>
-  );
-}
-
-function SlideOverContent({ data, reportOpen, setReportOpen }) {
-  const {
-    document: doc,
-    relationships,
-    surfaces,
-    drive_view_url,
-    drive_preview_url,
-  } = data;
+function DocumentListRow({ doc, onOpen }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  const hasFile = !!drive_preview_url;
-
+  const noFile = !doc.source_drive_id;
   return (
-    <div className="pb-slide-body">
-      {/* Header block */}
-      <div className="pb-slide-head-block">
-        <div className="pb-slide-class-row">
-          <span className={`pb-class-chip pb-class-chip--lg pb-class-chip--${classFamily}`}>
-            {classLabel}
+    <button
+      className={`pb-list-row${doc.critical ? " pb-list-row--critical" : ""}`}
+      onClick={() => onOpen(doc.id)}
+      aria-label={`Open ${doc.title}`}
+    >
+      <span className={`pb-class-chip pb-class-chip--${classFamily}`}>
+        {classLabel}
+      </span>
+      <span className="pb-list-title">{doc.title}</span>
+      <span className="pb-list-meta">
+        {doc.pinned && (
+          <span className="pb-pin" aria-label="Pinned" title="Pinned">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M14 4v5l2 3v2h-5v7l-1 1-1-1v-7H4v-2l2-3V4c0-.55.45-1 1-1h6c.55 0 1 .45 1 1z" />
+            </svg>
           </span>
-          {doc.critical && <span className="pb-critical-chip">⚠ Critical</span>}
-          {!hasFile && <span className="pb-nofile-chip">No file yet</span>}
-        </div>
-        <h2 className="pb-slide-title">{doc.title}</h2>
-        {doc.card_line && <p className="pb-slide-cardline">{doc.card_line}</p>}
-        <div className="pb-slide-meta">
-          <span
-            className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
-            style={{ background: status.bg, color: status.color }}
-          >
-            {doc.status}
-          </span>
-          {doc.version && <span>· {doc.version}</span>}
-          {doc.owner && <span>· {doc.owner}</span>}
-          <span className="pb-slide-id">· {doc.id}</span>
-        </div>
-      </div>
-
-      {/* Reader frame */}
-      <div className="pb-reader-frame">
-        {hasFile ? (
-          <iframe
-            src={drive_preview_url}
-            className="pb-reader-iframe"
-            title={`PDF preview: ${doc.title}`}
-            allow="autoplay"
-          />
-        ) : (
-          <div className="pb-no-file">
-            <div className="pb-no-file-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-            </div>
-            <h3>No file attached yet</h3>
-            <p>This document is catalogued, but no Drive PDF has been linked.</p>
-          </div>
         )}
-      </div>
-
-      {/* Actions */}
-      <div className="pb-slide-actions">
-        <a
-          className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
-          href={drive_view_url || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!hasFile}
-          onClick={(e) => { if (!hasFile) e.preventDefault(); }}
+        {doc.print_required && (
+          <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+          </span>
+        )}
+        <span
+          className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
+          style={{ background: status.bg, color: status.color }}
         >
-          Open in Drive
-        </a>
-        <a
-          className={`pb-action${hasFile ? "" : " pb-action--disabled"}`}
-          href={drive_view_url || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!hasFile}
-          onClick={(e) => { if (!hasFile) e.preventDefault(); }}
-          title="Open in Drive to print"
-        >
-          Print
-        </a>
-        <button
-          className="pb-action pb-action--ghost"
-          onClick={() => setReportOpen((r) => !r)}
-        >
-          🚩 Report issue
-        </button>
-      </div>
-
-      {reportOpen && (
-        <ReportIssueForm
-          docId={doc.id}
-          onCancel={() => setReportOpen(false)}
-          onSuccess={() => setReportOpen(false)}
-        />
-      )}
-
-      {/* Summary */}
-      {doc.summary && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Summary</h3>
-          <p className="pb-slide-text">{doc.summary}</p>
-        </div>
-      )}
-
-      {/* Keywords */}
-      {Array.isArray(doc.keywords) && doc.keywords.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Keywords</h3>
-          <div className="pb-tag-row">
-            {doc.keywords.map((kw) => (
-              <span key={kw} className="pb-tag">{kw}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Surfaces */}
-      {Array.isArray(surfaces) && surfaces.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Surfaces</h3>
-          <div className="pb-tag-row">
-            {surfaces.map((s) => (
-              <span key={s} className="pb-tag pb-tag--surface">#{s}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Relationships */}
-      {Array.isArray(relationships) && relationships.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Relationships</h3>
-          <ul className="pb-rel-list">
-            {relationships.map((r, i) => {
-              const label =
-                r.direction === "out"
-                  ? RELATIONSHIP_LABELS_OUT[r.rel_type] || r.rel_type
-                  : RELATIONSHIP_LABELS_IN[r.rel_type] || r.rel_type;
-              return (
-                <li key={`${r.rel_type}-${r.other_id}-${i}`} className="pb-rel-item">
-                  <span className="pb-rel-type">
-                    {r.direction === "out" ? `${label} →` : `← ${label}`}
-                  </span>
-                  <span className="pb-rel-other">
-                    <code className="pb-rel-id">{r.other_id}</code>{" "}
-                    {r.other_title}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      {/* Footer meta */}
-      <div className="pb-slide-section">
-        <h3 className="pb-slide-section-title">Catalog details</h3>
-        <div className="pb-footer-meta-row"><span>Owner</span><strong>{doc.owner || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Approver</span><strong>{doc.approver || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Audience</span><strong>{doc.audience || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Classification</span><strong>{doc.classification || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Effective</span><strong>{doc.effective_date || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Last reviewed</span><strong>{doc.last_reviewed || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Next review</span><strong>{doc.next_review || "—"}</strong></div>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Report-issue inline form
-// ════════════════════════════════════════════════════════════════════════════
-function ReportIssueForm({ docId, onCancel, onSuccess }) {
-  const [text, setText]       = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError]     = useState(null);
-  const [done, setDone]       = useState(false);
-
-  const submit = async () => {
-    if (!text.trim() || sending) return;
-    setSending(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/playbook?action=report-issue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc_id: docId, issue_text: text }),
-      });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.error || "Submit failed");
-      setDone(true);
-      setTimeout(onSuccess, 1500);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  if (done) {
-    return <div className="pb-report-success">Filed — thanks. Slack ping sent.</div>;
-  }
-
-  return (
-    <div className="pb-report-form">
-      <textarea
-        className="pb-report-textarea"
-        placeholder="Describe the issue — typo, outdated info, broken link, missing context, etc."
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={3}
-        autoFocus
-      />
-      {error && <div className="pb-report-error">{error}</div>}
-      <div className="pb-report-actions">
-        <button
-          type="button"
-          className="pb-action pb-action--ghost"
-          onClick={onCancel}
-          disabled={sending}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="pb-action pb-action--primary"
-          onClick={submit}
-          disabled={sending || !text.trim()}
-        >
-          {sending ? "Filing…" : "File issue"}
-        </button>
-      </div>
-    </div>
+          {doc.status}
+        </span>
+        {doc.version && <span className="pb-version">{doc.version}</span>}
+        {noFile && (
+          <span className="pb-nofile-marker" title="No Drive file attached yet">
+            no file yet
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

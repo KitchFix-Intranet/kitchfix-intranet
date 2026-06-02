@@ -158,6 +158,93 @@
   .pb-ask-input { font-size: 15px; }
 }
 
+/* ─── Owner-only "Build dashboard" link in the hero ──────────────────────── */
+/* Visible only when bootstrap.isOwner === true (gated in JSX). Sits in the
+   hero's top-right corner so it's discoverable to the owner but doesn't
+   shout — small chip-style, white-on-navy. Operators never see this. */
+.pb-admin-link {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 5px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pb-admin-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.pb-admin-link:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* ─── Controls row: chips + view toggle on one line ──────────────────────── */
+.pb-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pb-controls-row .pb-chip-row {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── View toggle (Cards / List) ─────────────────────────────────────────── */
+.pb-view-toggle {
+  display: inline-flex;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 999px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.pb-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 5px 11px;
+  border-radius: 999px;
+  transition: all 0.15s;
+}
+.pb-view-btn:hover { color: var(--kf-navy); }
+.pb-view-btn--on {
+  background: var(--kf-playbook-teal);
+  color: white;
+}
+.pb-view-btn--on:hover { color: white; }
+.pb-view-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+/* Hide the text label on narrow viewports - icon alone is enough. */
+@media (max-width: 520px) {
+  .pb-view-btn span { display: none; }
+  .pb-view-btn { padding: 5px 8px; }
+}
+
 /* ─── Filter chip row ───────────────────────────────────────────────────── */
 .pb-chip-row {
   display: flex;
@@ -473,6 +560,75 @@
 }
 @media (min-width: 640px)  { .pb-card-grid { grid-template-columns: 1fr 1fr; gap: 12px; } }
 @media (min-width: 960px)  { .pb-card-grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+/* List grid - one row per doc, single column at every breakpoint. */
+.pb-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* ─── Document list row (compact alt to .pb-card) ────────────────────────── */
+.pb-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 10px;
+  padding: 9px 14px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+  position: relative;
+  overflow: hidden;
+}
+.pb-list-row:hover {
+  border-color: var(--kf-playbook-teal);
+  box-shadow: 0 2px 8px rgba(15, 48, 87, 0.06);
+}
+.pb-list-row:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+.pb-list-row--critical::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--kf-red);
+}
+.pb-list-title {
+  flex: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.pb-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* Mobile - allow meta items to wrap so the row stays usable at 375px. */
+@media (max-width: 520px) {
+  .pb-list-row {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .pb-list-title {
+    width: 100%;
+    white-space: normal;
+    line-height: 1.3;
+  }
+}
 
 /* ─── Document card ─────────────────────────────────────────────────────── */
 .pb-card {

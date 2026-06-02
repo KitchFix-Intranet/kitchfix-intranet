@@ -1,0 +1,371 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   /playbook/admin · Build Dashboard
+   Reuses .pb-wrap, .pb-class-chip, .pb-status-pill, etc. from playbook.css.
+   This file adds .pb-admin-* classes for the dashboard's denser layout.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pb-admin {
+  /* Tighter top spacing than the catalog - no big hero band. */
+  padding-top: 14px;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.pb-admin-head {
+  margin-bottom: 20px;
+}
+.pb-admin-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kf-playbook-teal-dark);
+  text-decoration: none;
+  margin-bottom: 10px;
+  transition: color 0.15s;
+}
+.pb-admin-back:hover { color: var(--kf-navy); }
+.pb-admin-back:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.pb-admin-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+.pb-admin-sub {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ─── Metrics row ────────────────────────────────────────────────────────── */
+.pb-admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pb-metric {
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.pb-metric-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.pb-metric-of {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pb-metric-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+}
+/* Progress card spans two grid cells on wide layouts so the bar reads
+   honestly without being squeezed. */
+.pb-metric--wide {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.pb-metric-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.pb-metric-progress-bar {
+  height: 100%;
+  background: var(--kf-playbook-teal);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.pb-metric-progress-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pb-metric-value-inline {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--kf-navy);
+}
+.pb-metric-progress-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+}
+
+@media (max-width: 600px) {
+  /* Drop the span-2 on the progress card on phones so all four metrics
+     stack cleanly. */
+  .pb-metric--wide { grid-column: span 1; }
+}
+
+/* ─── Status rollup chips ────────────────────────────────────────────────── */
+.pb-admin-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.pb-admin-status-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.pb-admin-status-chip strong {
+  margin-left: 4px;
+  font-weight: 800;
+}
+
+/* ─── Gaps & blockers ───────────────────────────────────────────────────── */
+.pb-admin-gaps {
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 14px 18px 16px;
+  margin-bottom: 24px;
+}
+.pb-admin-gaps h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-navy);
+  margin: 0 0 10px;
+}
+.pb-admin-gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pb-admin-gap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #475569;
+  flex-wrap: wrap;
+}
+.pb-admin-gap-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.pb-admin-gap--priority .pb-admin-gap-label {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--kf-red);
+}
+.pb-admin-gap-link {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font-family: inherit;
+}
+button.pb-admin-gap-link:hover {
+  color: var(--kf-playbook-teal-dark);
+  text-decoration: underline;
+}
+button.pb-admin-gap-link:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.pb-admin-gap-link--plain {
+  cursor: default;
+}
+.pb-admin-gap-note {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.pb-admin-gap--ok {
+  color: var(--kf-playbook-teal-dark);
+  font-style: italic;
+}
+
+/* ─── Worklist table ────────────────────────────────────────────────────── */
+.pb-admin-worklist {
+  margin-bottom: 40px;
+}
+.pb-admin-worklist-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.pb-admin-worklist h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-navy);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pb-admin-worklist-count {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #94a3b8;
+}
+.pb-admin-worklist-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.pb-admin-table-wrap {
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.pb-admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.pb-admin-th {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--kf-border);
+  white-space: nowrap;
+  transition: color 0.12s, background 0.12s;
+}
+.pb-admin-th:hover { color: var(--kf-navy); background: #eef2f7; }
+.pb-admin-th--active { color: var(--kf-playbook-teal-dark); }
+.pb-admin-th:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: -2px;
+}
+.pb-admin-th-arrow {
+  margin-left: 6px;
+  font-size: 10px;
+  display: inline-block;
+  min-width: 8px;
+}
+
+.pb-admin-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.pb-admin-row:hover { background: #f8fafc; }
+.pb-admin-row:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: -2px;
+}
+.pb-admin-cell {
+  padding: 8px 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  color: #475569;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.pb-admin-row:last-child .pb-admin-cell { border-bottom: 0; }
+.pb-admin-cell-id {
+  font-family: 'Inter', monospace;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.pb-admin-cell-title {
+  font-weight: 700;
+  color: var(--kf-navy);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pb-admin-cell-version {
+  font-family: 'Inter', monospace;
+  font-size: 11.5px;
+  color: #64748b;
+  white-space: nowrap;
+}
+.pb-admin-cell-linked {
+  text-align: center;
+  color: #cbd5e1;
+}
+.pb-admin-cell-linked--yes {
+  color: var(--kf-playbook-teal);
+}
+
+/* Screen-reader-only text for the linked column's icon-only cell. */
+.pb-admin-sr-only {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Mobile - table scrolls horizontally rather than reflowing, keeps the
+   sortable header pattern usable on phones. */
+@media (max-width: 720px) {
+  .pb-admin-table-wrap {
+    overflow-x: auto;
+  }
+  .pb-admin-table {
+    min-width: 720px;
+  }
+  .pb-admin-cell-title {
+    max-width: 240px;
+  }
+}
