@@ -57,6 +57,9 @@
   border: 1px solid var(--kf-border);
   border-radius: 12px;
   padding: 14px 16px;
+  /* Match .pb-card's resting shadow so the dashboard cards read as the
+     same kit as the catalog cards. */
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
 }
 .pb-metric-value {
   font-family: 'Inter', sans-serif;
@@ -149,6 +152,8 @@
   border-radius: 12px;
   padding: 14px 18px 16px;
   margin-bottom: 24px;
+  /* Same resting shadow as the catalog cards + metric cards. */
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
 }
 .pb-admin-gaps h2 {
   font-family: 'Inter', sans-serif;
@@ -265,6 +270,8 @@ button.pb-admin-gap-link:focus-visible {
   border: 1px solid var(--kf-border);
   border-radius: 12px;
   overflow: hidden;
+  /* Same resting shadow as the catalog cards + metric cards + gaps panel. */
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
 }
 .pb-admin-table {
   width: 100%;

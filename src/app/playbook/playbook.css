@@ -278,22 +278,6 @@
   border-color: var(--kf-playbook-teal);
   color: white;
 }
-/* Owner-only marker: a thin separator bar plus a small "owner" tag inside the
-   chip. The vertical bar reads as attribution (like a byline), not a second
-   competing label, so the chip is one balanced row instead of two items
-   fighting in one pill. */
-.pb-chip--owner-only::after {
-  content: 'owner';
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid currentColor;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  opacity: 0.45;
-}
-
 /* ─── Layout: rail + shelves (PR 7.3 Batch A item 2) ───────────────────── */
 .pb-layout {
   display: grid;
@@ -565,19 +549,25 @@
 .pb-list-grid {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 /* ─── Document list row (compact alt to .pb-card) ────────────────────────── */
+/* Density tuned for scanning - row padding kept just enough to give the
+   status pill / version / nofile cluster vertical breathing room without
+   feeling card-tall. Title is NOT flex-grow:1 (the previous layout caused
+   a wide empty gap between title text and the right-anchored meta cluster);
+   instead, title is content-sized with an ellipsis cap so the meta items
+   sit tight to the title text. */
 .pb-list-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   background: white;
   border: 1px solid var(--kf-border);
-  border-radius: 10px;
-  padding: 9px 14px;
+  border-radius: 8px;
+  padding: 5px 12px;
   text-align: left;
   font-family: inherit;
   cursor: pointer;
@@ -601,7 +591,6 @@
   background: var(--kf-red);
 }
 .pb-list-title {
-  flex: 1;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 700;
@@ -610,21 +599,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  /* No flex-grow - title is content-sized so the meta cluster sits next to
+     the text, not at the row's right edge. Cap with max-width so very long
+     titles ellipsize before pushing meta off-screen. */
+  flex: 0 1 auto;
+  max-width: 480px;
 }
 .pb-list-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 /* Mobile - allow meta items to wrap so the row stays usable at 375px. */
 @media (max-width: 520px) {
   .pb-list-row {
     flex-wrap: wrap;
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
   .pb-list-title {
     width: 100%;
+    max-width: 100%;
     white-space: normal;
     line-height: 1.3;
   }

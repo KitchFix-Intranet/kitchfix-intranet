@@ -15,13 +15,13 @@ import "./playbook.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
 
+// Operator-facing catalog filters. The previous "Needs Drive link" owner-only
+// chip was removed once /playbook/admin shipped — the dashboard's worklist
+// (sortable by Linked) is now the place to find unlinked docs.
 const FILTER_CHIPS = [
   { id: "all",      label: "All" },
   { id: "critical", label: "Critical" },
   { id: "pinned",   label: "Pinned" },
-  // Owner-only filter (hidden when page widens to operators — exposes internal
-  // plumbing about catalog completeness).
-  { id: "no-file",  label: "Needs Drive link", ownerOnly: true },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -316,7 +316,6 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
     let out = documents;
     if (filter === "critical") out = out.filter((d) => d.critical);
     if (filter === "pinned")   out = out.filter((d) => d.pinned);
-    if (filter === "no-file")  out = out.filter((d) => !d.source_drive_id);
 
     const q = query.trim().toLowerCase();
     if (q) {
@@ -492,7 +491,7 @@ function FilterChipsBar({ filter, setFilter }) {
           role="tab"
           aria-selected={filter === c.id}
           onClick={() => setFilter(c.id)}
-          className={`pb-chip${filter === c.id ? " pb-chip--on" : ""}${c.ownerOnly ? " pb-chip--owner-only" : ""}`}
+          className={`pb-chip${filter === c.id ? " pb-chip--on" : ""}`}
         >
           {c.label}
         </button>
