@@ -76,6 +76,18 @@ const INVOICE_REJECTIONS_TAB  = "invoice_rejections";   // PG-only; embedded in 
 const AI_LINE_ITEMS_TAB       = "ai_line_items";        // PG-only; per-account tabs in AI_LINE_ITEMS spreadsheet
 const GL_CODES_TAB            = "gl_codes";             // PG-only; per-account tabs in GL_CODES spreadsheet
 
+// PR 6.4 hotfix two-constant pattern:
+// The Sheets tab `invoice_submissions_26` carries a legacy version
+// suffix that the Sheets API requires for safeRead / appendRowSA to
+// find the right tab. The dual-write + read-flag dispatch uses the
+// CANONICAL name (matches DUAL_WRITE_TABLES env var token + PG table
+// name). The other 3 invoice tabs happen to have identical Sheets-side
+// and flag-side names, so they only need one constant each. Without
+// this split, isDualWrite("invoice_submissions_26") returns false for
+// an env containing "invoice_submissions" and dual-write silently
+// no-ops. See docs/architecture/CUTOVER_PLAYBOOK.md common pitfalls.
+const INVOICE_SUBMISSIONS_FLAG = "invoice_submissions";
+
 // Sheet positional indices for invoice_submissions_26 (0-indexed).
 // Matches parseSubmissionRow in invoiceActions.js. The Sheet header
 // documents only cols A-O (15 cols) but cols P-W are in active use;
@@ -994,7 +1006,7 @@ function safeParseJson(s) {
  * module read flag. PR 6.2 handlers MUST pass module: "ops".
  */
 export async function getInvoiceSubmissions(opts = {}) {
-  if (isReadFromPostgres(INVOICE_SUBMISSIONS_TAB, opts.module)) {
+  if (isReadFromPostgres(INVOICE_SUBMISSIONS_FLAG, opts.module)) {
     return readInvoiceSubmissionsPostgres(opts);
   }
   return readInvoiceSubmissionsSheets(opts);
@@ -1008,7 +1020,7 @@ export async function getInvoiceSubmissions(opts = {}) {
  * module read flag.
  */
 export async function getInvoiceSubmissionByUuid(uuid, opts = {}) {
-  if (isReadFromPostgres(INVOICE_SUBMISSIONS_TAB, opts.module)) {
+  if (isReadFromPostgres(INVOICE_SUBMISSIONS_FLAG, opts.module)) {
     return readInvoiceSubmissionByUuidPostgres(uuid);
   }
   return readInvoiceSubmissionByUuidSheets(uuid);
@@ -1023,7 +1035,7 @@ export async function getInvoiceSubmissionByUuid(uuid, opts = {}) {
  * module read flag.
  */
 export async function findDuplicateSubmission(input, opts = {}) {
-  if (isReadFromPostgres(INVOICE_SUBMISSIONS_TAB, opts.module)) {
+  if (isReadFromPostgres(INVOICE_SUBMISSIONS_FLAG, opts.module)) {
     return findDuplicateSubmissionPostgres(input);
   }
   return findDuplicateSubmissionSheets(input);
@@ -1103,7 +1115,7 @@ export async function upsertInvoiceSubmission(input) {
   // signal. PG path runs only if dual-write is on; its dedup result is
   // checked for divergence but does not override the Sheets result.
   const sheetsResult = await upsertInvoiceSubmissionSheets(input);
-  if (isDualWrite(INVOICE_SUBMISSIONS_TAB)) {
+  if (isDualWrite(INVOICE_SUBMISSIONS_FLAG)) {
     const pgResult = await upsertInvoiceSubmissionPostgres(input);
     if (pgResult.deduplicated !== sheetsResult.deduplicated) {
       console.warn(
@@ -1133,7 +1145,7 @@ export async function updateInvoiceFields(uuid, fields, _opts = {}) {
   if (!uuid) throw new Error("[dataStore.invoice] updateInvoiceFields: uuid required");
   if (!fields || Object.keys(fields).length === 0) return;
   await updateInvoiceFieldsSheets(uuid, fields);
-  if (isDualWrite(INVOICE_SUBMISSIONS_TAB)) {
+  if (isDualWrite(INVOICE_SUBMISSIONS_FLAG)) {
     await updateInvoiceFieldsPostgres(uuid, fields);
   }
 }
