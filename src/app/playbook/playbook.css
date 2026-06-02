@@ -793,6 +793,15 @@
 .pb-status-pill--ghost {
   border-color: #e2e8f0;
 }
+/* Large variant — used in the slide-over reader's header class-row so the
+   status pill reads at the same weight as the class chip (--lg). Status is
+   one of the most important things about a doc, so it lives up top here
+   instead of buried in the small meta line. */
+.pb-status-pill--lg {
+  font-size: 11px;
+  padding: 4px 11px;
+  letter-spacing: 0.4px;
+}
 .pb-version {
   font-family: 'Inter', sans-serif;
   font-size: 11px;
@@ -850,11 +859,41 @@
 
 .pb-slide-head {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   padding: 12px 12px 0;
   flex-shrink: 0;
 }
+/* Back button - appears when the relationship-navigation stack has more than
+   one doc on it. Small teal-tinted pill on the left of the head; close stays
+   pinned to the right via margin-left:auto so single-button layouts also
+   render with close on the right. */
+.pb-slide-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border: 1px solid var(--kf-border);
+  color: var(--kf-playbook-teal-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.pb-slide-back:hover {
+  border-color: var(--kf-playbook-teal);
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-slide-back:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
 .pb-slide-close {
+  margin-left: auto;
   background: #f1f5f9;
   border: none;
   width: 32px; height: 32px;
@@ -888,7 +927,13 @@
   padding: 8px 0 16px;
   border-bottom: 1px solid var(--kf-border);
 }
-.pb-slide-class-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.pb-slide-class-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 .pb-slide-title {
   font-family: 'Inter', sans-serif;
   font-size: 19px;
@@ -1048,6 +1093,54 @@
   text-align: center;
 }
 
+/* ─── SousAI doc-scoped affordance (UI-only placeholder) ─────────────────── */
+/* This is intentionally NOT a functioning control - the wire-up lands in a
+   future change. Designed as aspirational so it reads as "coming, by design"
+   rather than "broken button":
+     - Dashed teal border + faint teal-tinted ground = clearly different from
+       any of the working .pb-action buttons (which have solid borders)
+     - Italic muted placeholder text inside (mirrors how disabled inputs read)
+     - "Coming soon" tag on the right pinpoints the state explicitly
+     - cursor: not-allowed + aria-disabled=true for accessibility honesty */
+.pb-sousai {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(15, 110, 86, 0.04);
+  border: 1px dashed var(--kf-playbook-teal);
+  border-radius: 10px;
+  color: var(--kf-playbook-teal-dark);
+  cursor: not-allowed;
+  margin-bottom: 18px;
+  user-select: none;
+}
+.pb-sousai-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--kf-playbook-teal);
+  flex-shrink: 0;
+}
+.pb-sousai-text {
+  flex: 1;
+  font-family: 'Mulish', sans-serif;
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.pb-sousai-tag {
+  flex-shrink: 0;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
 /* ─── Slide-over sections ────────────────────────────────────────────────── */
 .pb-slide-section {
   padding: 16px 0;
@@ -1071,6 +1164,7 @@
 }
 
 .pb-tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Keyword tag - filled, rounded pill. Pure search-term semantic. */
 .pb-tag {
   background: #f1f5f9;
   color: #64748b;
@@ -1079,7 +1173,26 @@
   padding: 4px 9px;
   border-radius: 6px;
 }
-.pb-tag--surface { background: var(--kf-playbook-teal-light); color: var(--kf-playbook-teal-dark); }
+/* Surface tag - outlined, squared-off chip with a leading layout-grid icon.
+   Surfaces describe PLACEMENT (where the doc appears in the intranet); the
+   shape + icon makes them visibly different from keywords without relying
+   on a "#" prefix that read as "just another tag". */
+.pb-tag--surface {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: white;
+  color: var(--kf-playbook-teal-dark);
+  border: 1px solid var(--kf-playbook-teal);
+  border-radius: 4px;
+  padding: 3px 9px 3px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pb-tag--surface svg {
+  color: var(--kf-playbook-teal);
+  flex-shrink: 0;
+}
 
 .pb-rel-list {
   list-style: none;
@@ -1087,13 +1200,38 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .pb-rel-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  list-style: none;
   font-size: 12px;
+}
+/* Relationship row is now a clickable button — clicking navigates the reader
+   in place to the related doc (no slide-over close/reopen). The border + hover
+   background make it visibly interactive; the trailing chevron signals "this
+   leads somewhere." */
+.pb-rel-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+.pb-rel-link:hover {
+  background: #f8fafc;
+  border-color: var(--kf-border);
+}
+.pb-rel-link:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
 }
 .pb-rel-type {
   font-family: 'Inter', sans-serif;
@@ -1102,10 +1240,14 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  flex-shrink: 0;
+  min-width: 110px;
 }
 .pb-rel-other {
   color: #475569;
   font-size: 13px;
+  flex: 1;
+  min-width: 0;
 }
 .pb-rel-id {
   font-family: 'Inter', monospace;
@@ -1115,6 +1257,17 @@
   font-size: 11px;
   color: #475569;
   font-weight: 600;
+}
+.pb-rel-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  color: #cbd5e1;
+  flex-shrink: 0;
+  transition: color 0.12s, transform 0.12s;
+}
+.pb-rel-link:hover .pb-rel-chevron {
+  color: var(--kf-playbook-teal);
+  transform: translateX(2px);
 }
 
 .pb-footer-meta-row {

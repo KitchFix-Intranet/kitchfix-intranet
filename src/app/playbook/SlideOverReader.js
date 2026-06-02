@@ -23,21 +23,48 @@ import {
 } from "./_shared";
 
 export default function SlideOverReader({ docId, onClose }) {
+  // Nav stack supports relationship click-through: clicking a related doc
+  // pushes its id onto the stack; back pops. The fetch effect keys off the
+  // top of the stack so the panel swaps docs in place. Stack initialized
+  // with the prop docId so back doesn't unmount the panel - it just stops
+  // navigating when there's nothing left to pop.
+  const [navStack, setNavStack] = useState([docId]);
+  const currentDocId = navStack[navStack.length - 1];
+  const canGoBack = navStack.length > 1;
+
+  const navigateTo = (nextId) => {
+    if (!nextId || nextId === currentDocId) return;
+    setNavStack((s) => [...s, nextId]);
+  };
+  const goBack = () => {
+    setNavStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+  };
+
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
 
+  // Refetch on currentDocId change. Resets per-doc transient state (loading,
+  // data, error, report form) so a navigation never carries over the previous
+  // doc's payload while the new one is in flight.
   useEffect(() => {
-    fetch(`/api/playbook?action=document&id=${encodeURIComponent(docId)}`)
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setData(null);
+    setReportOpen(false);
+    fetch(`/api/playbook?action=document&id=${encodeURIComponent(currentDocId)}`)
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;
         if (d.error) setError(d.error);
         else setData(d);
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [docId]);
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [currentDocId]);
 
   // ESC closes the slide-over.
   useEffect(() => {
@@ -58,6 +85,20 @@ export default function SlideOverReader({ docId, onClose }) {
       <div className="pb-slide-backdrop" onClick={onClose} />
       <aside className="pb-slide" role="dialog" aria-modal="true" aria-label="Document reader">
         <div className="pb-slide-head">
+          {canGoBack && (
+            <button
+              type="button"
+              className="pb-slide-back"
+              onClick={goBack}
+              aria-label="Back to previous document"
+              title="Back"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+          )}
           <button className="pb-slide-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         {loading ? (
@@ -69,6 +110,7 @@ export default function SlideOverReader({ docId, onClose }) {
             data={data}
             reportOpen={reportOpen}
             setReportOpen={setReportOpen}
+            navigateTo={navigateTo}
           />
         ) : null}
       </aside>
@@ -76,7 +118,7 @@ export default function SlideOverReader({ docId, onClose }) {
   );
 }
 
-function SlideOverContent({ data, reportOpen, setReportOpen }) {
+function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo }) {
   const {
     document: doc,
     relationships,
@@ -91,11 +133,19 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
 
   return (
     <div className="pb-slide-body">
-      {/* Header block */}
+      {/* Header block — status sits in the top class-row alongside the class
+          chip so it's the second thing the eye lands on, not buried in the
+          small meta line. */}
       <div className="pb-slide-head-block">
         <div className="pb-slide-class-row">
           <span className={`pb-class-chip pb-class-chip--lg pb-class-chip--${classFamily}`}>
             {classLabel}
+          </span>
+          <span
+            className={`pb-status-pill pb-status-pill--lg${status.ghost ? " pb-status-pill--ghost" : ""}`}
+            style={{ background: status.bg, color: status.color }}
+          >
+            {doc.status}
           </span>
           {doc.critical && <span className="pb-critical-chip">⚠ Critical</span>}
           {!hasFile && <span className="pb-nofile-chip">No file yet</span>}
@@ -103,13 +153,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
         <h2 className="pb-slide-title">{doc.title}</h2>
         {doc.card_line && <p className="pb-slide-cardline">{doc.card_line}</p>}
         <div className="pb-slide-meta">
-          <span
-            className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
-            style={{ background: status.bg, color: status.color }}
-          >
-            {doc.status}
-          </span>
-          {doc.version && <span>· {doc.version}</span>}
+          {doc.version && <span>{doc.version}</span>}
           {doc.owner && <span>· {doc.owner}</span>}
           <span className="pb-slide-id">· {doc.id}</span>
         </div>
@@ -169,6 +213,27 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
         </button>
       </div>
 
+      {/* SousAI doc-scoped affordance — UI placeholder, NOT wired yet.
+          Rendered as a dashed-border aspirational tile so it reads as
+          designed-but-coming, not a broken button. The hero's global ask-bar
+          is separate; this one is scoped to the open doc. Wire-up lands in
+          a future change. */}
+      <div
+        className="pb-sousai"
+        role="button"
+        aria-disabled="true"
+        tabIndex={-1}
+        title="SousAI is coming soon — this doc-scoped chat isn't wired yet"
+      >
+        <span className="pb-sousai-icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+          </svg>
+        </span>
+        <span className="pb-sousai-text">Ask SousAI about this doc…</span>
+        <span className="pb-sousai-tag">Coming soon</span>
+      </div>
+
       {reportOpen && (
         <ReportIssueForm
           docId={doc.id}
@@ -197,19 +262,34 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
         </div>
       )}
 
-      {/* Surfaces */}
+      {/* Surfaces — visually distinct from Keywords. Surfaces describe
+          PLACEMENT (where the doc appears in the intranet); keywords are
+          just search terms. The leading layout-icon + outlined teal chip
+          communicates "this is a route/placement," not a tag. */}
       {Array.isArray(surfaces) && surfaces.length > 0 && (
         <div className="pb-slide-section">
           <h3 className="pb-slide-section-title">Surfaces</h3>
           <div className="pb-tag-row">
             {surfaces.map((s) => (
-              <span key={s} className="pb-tag pb-tag--surface">#{s}</span>
+              <span key={s} className="pb-tag pb-tag--surface">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="3" y1="9" x2="21" y2="9" />
+                  <line x1="9" y1="21" x2="9" y2="9" />
+                </svg>
+                {s}
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Relationships */}
+      {/* Relationships — each row is a button that swaps the reader to the
+          related doc in place (navigateTo pushes onto the reader's nav stack
+          and the parent's fetch effect re-runs). The other doc may have no
+          source_drive_id; the reader's "No file attached yet" state handles
+          that gracefully, so click-through never produces an error or blank
+          iframe even on stub docs. */}
       {Array.isArray(relationships) && relationships.length > 0 && (
         <div className="pb-slide-section">
           <h3 className="pb-slide-section-title">Relationships</h3>
@@ -221,13 +301,25 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
                   : RELATIONSHIP_LABELS_IN[r.rel_type] || r.rel_type;
               return (
                 <li key={`${r.rel_type}-${r.other_id}-${i}`} className="pb-rel-item">
-                  <span className="pb-rel-type">
-                    {r.direction === "out" ? `${label} →` : `← ${label}`}
-                  </span>
-                  <span className="pb-rel-other">
-                    <code className="pb-rel-id">{r.other_id}</code>{" "}
-                    {r.other_title}
-                  </span>
+                  <button
+                    type="button"
+                    className="pb-rel-link"
+                    onClick={() => navigateTo(r.other_id)}
+                    aria-label={`Open ${r.other_id} ${r.other_title}`}
+                  >
+                    <span className="pb-rel-type">
+                      {r.direction === "out" ? `${label} →` : `← ${label}`}
+                    </span>
+                    <span className="pb-rel-other">
+                      <code className="pb-rel-id">{r.other_id}</code>{" "}
+                      {r.other_title}
+                    </span>
+                    <span className="pb-rel-chevron" aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </span>
+                  </button>
                 </li>
               );
             })}
@@ -235,17 +327,32 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
         </div>
       )}
 
-      {/* Footer meta */}
-      <div className="pb-slide-section">
-        <h3 className="pb-slide-section-title">Catalog details</h3>
-        <div className="pb-footer-meta-row"><span>Owner</span><strong>{doc.owner || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Approver</span><strong>{doc.approver || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Audience</span><strong>{doc.audience || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Classification</span><strong>{doc.classification || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Effective</span><strong>{doc.effective_date || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Last reviewed</span><strong>{doc.last_reviewed || "—"}</strong></div>
-        <div className="pb-footer-meta-row"><span>Next review</span><strong>{doc.next_review || "—"}</strong></div>
-      </div>
+      {/* Catalog details — fields with no value are hidden entirely (no wall
+          of em-dashes). If every field is empty the whole section is omitted.
+          Real values appear automatically as docs get filled in. */}
+      {(() => {
+        const details = [
+          { label: "Owner",          value: doc.owner },
+          { label: "Approver",       value: doc.approver },
+          { label: "Audience",       value: doc.audience },
+          { label: "Classification", value: doc.classification },
+          { label: "Effective",      value: doc.effective_date },
+          { label: "Last reviewed",  value: doc.last_reviewed },
+          { label: "Next review",    value: doc.next_review },
+        ].filter((d) => d.value);
+        if (details.length === 0) return null;
+        return (
+          <div className="pb-slide-section">
+            <h3 className="pb-slide-section-title">Catalog details</h3>
+            {details.map((d) => (
+              <div key={d.label} className="pb-footer-meta-row">
+                <span>{d.label}</span>
+                <strong>{d.value}</strong>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
