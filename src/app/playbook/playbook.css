@@ -182,19 +182,29 @@
   transition: all 0.15s;
 }
 .pb-chip:hover { border-color: var(--kf-playbook-teal); color: var(--kf-playbook-teal); }
+.pb-chip:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
 .pb-chip--on {
   background: var(--kf-playbook-teal);
   border-color: var(--kf-playbook-teal);
   color: white;
 }
+/* Owner-only marker: a thin separator bar plus a small "owner" tag inside the
+   chip. The vertical bar reads as attribution (like a byline), not a second
+   competing label, so the chip is one balanced row instead of two items
+   fighting in one pill. */
 .pb-chip--owner-only::after {
   content: 'owner';
-  margin-left: 6px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid currentColor;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.6;
+  letter-spacing: 0.7px;
+  opacity: 0.45;
 }
 
 /* ─── Layout: rail + shelves (PR 7.3 Batch A item 2) ───────────────────── */
@@ -207,6 +217,7 @@
   .pb-layout {
     grid-template-columns: 180px 1fr;
     gap: 24px;
+    transition: grid-template-columns 0.2s ease, gap 0.2s ease;
   }
 }
 
@@ -232,41 +243,65 @@
     border: 1px solid var(--kf-border);
     border-radius: 12px;
     box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+    /* Floor for the rail's box height so the absolute-positioned toggle has
+       a visible anchor in the collapsed state (when the panel chrome is gone
+       and the rail-links are unmounted, intrinsic height collapses to 0). */
+    min-height: 48px;
   }
   .pb-rail--collapsed {
     background: transparent;
     border: none;
     box-shadow: none;
-    padding: 4px 0;
-    align-items: center;
+    padding: 0;
   }
   .pb-layout[data-rail-collapsed="true"] {
-    grid-template-columns: 32px 1fr;
-    gap: 16px;
+    /* Thin rail-spacer (16px) + 20px gap keeps the toggle's right edge clear
+       of the content column's left edge — 5px clearance so the toggle never
+       overlaps shelf-header text. Cards still reclaim ~168px of the previous
+       180+24 lane (down to 36px total) — visibly wider card area without the
+       header-collision tradeoff. */
+    grid-template-columns: 16px 1fr;
+    gap: 20px;
   }
 }
 
+/* Circular floating toggle near the top of the rail panel (top:16px, not
+   vertical center) so it stays clear of shelf-header y-positions as they
+   scroll past. Position absolute against .pb-rail (which is position:sticky
+   → forms a containing block). Same right:-15px in both states so the
+   toggle is always centered on the rail's right edge; collapsed-mode
+   horizontal clearance comes from the rail-column lane (see .pb-layout). */
 .pb-rail-toggle {
-  background: transparent;
-  border: none;
+  position: absolute;
+  top: 16px;
+  right: -15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid var(--kf-border);
+  box-shadow: 0 2px 6px rgba(15, 48, 87, 0.08);
+  color: #475569;
   cursor: pointer;
-  padding: 6px;
-  align-self: flex-end;
-  color: #94a3b8;
-  border-radius: 6px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: border-color 0.15s, box-shadow 0.2s, color 0.15s;
+  z-index: 5;
 }
 .pb-rail-toggle:hover {
-  background: #f1f5f9;
   color: var(--kf-navy);
+  border-color: var(--kf-playbook-teal);
+  box-shadow: 0 4px 10px rgba(15, 48, 87, 0.12);
 }
-.pb-rail--collapsed .pb-rail-toggle {
-  align-self: center;
-  padding: 4px;
+.pb-rail-toggle:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
 }
+/* One chevron, rotated 180° when collapsed. Smooth ~200ms swap. */
+.pb-rail-toggle svg { transition: transform 0.2s ease; }
+.pb-rail--collapsed .pb-rail-toggle svg { transform: rotate(180deg); }
 
 .pb-rail-links {
   display: flex;
@@ -284,7 +319,10 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 7px 10px;
+  /* Right-padding bumped from 10px → 24px so each count pill sits well clear
+     of the rail's right-edge toggle (the toggle is absolute-positioned on
+     the rail and slightly overlaps the panel's right edge near top:12px). */
+  padding: 7px 24px 7px 10px;
   border-radius: 8px;
   text-align: left;
   font-family: 'Inter', sans-serif;
@@ -308,21 +346,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pb-rail-count {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
-  background: white;
-  border: 1px solid var(--kf-border);
-  padding: 1px 7px;
-  border-radius: 999px;
-  min-width: 20px;
-  text-align: center;
-}
 .pb-rail-link--active .pb-rail-count {
   color: var(--kf-playbook-teal-dark);
-  background: white;
   border-color: rgba(15, 110, 86, 0.25);
 }
 
@@ -337,7 +362,11 @@
   scroll-margin-top: 80px;
 }
 
-/* Shelf title — button now (collapse toggle). Was an h2 in v1. */
+/* Shelf title — anchored navy header with a 3px teal vertical bar on the
+   left of the name. Heavier than v1 (was 13px slate; now 14px navy) so the
+   shelf banners read as section anchors when scrolling, not floating labels.
+   The teal bar is the page's one consistent accent — see also active rail
+   link and primary action button. */
 .pb-shelf-title {
   display: flex;
   align-items: center;
@@ -348,38 +377,61 @@
   cursor: pointer;
   text-align: left;
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #475569;
+  color: var(--kf-navy);
   margin: 0 0 8px;
   padding: 4px 0;
   transition: color 0.12s;
 }
-.pb-shelf-title:hover { color: var(--kf-navy); }
+.pb-shelf-title:hover { color: var(--kf-playbook-teal-dark); }
 .pb-shelf-title:focus-visible {
   outline: 2px solid var(--kf-playbook-teal);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-.pb-shelf-name { flex-shrink: 0; }
+.pb-shelf-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.pb-shelf-name::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--kf-playbook-teal);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
 
-.pb-shelf-count {
+/* Unified count pill — shared between shelf headers and rail nav. White
+   ground + 1px border so a count looks the same wherever it appears.
+   Previously: shelf count was grey-filled, rail count was bordered — two
+   designs for the same datum. */
+.pb-shelf-count,
+.pb-rail-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 18px;
-  padding: 0 8px;
-  font-size: 10px;
-  font-weight: 800;
-  color: #64748b;
-  background: #f1f5f9;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: white;
+  border: 1px solid var(--kf-border);
+  padding: 1px 8px;
   border-radius: 999px;
+  min-width: 22px;
+  height: 18px;
   letter-spacing: 0;
   text-transform: none;
   flex-shrink: 0;
+  text-align: center;
 }
 
 .pb-shelf-rule {
@@ -439,11 +491,19 @@
   position: relative;
   overflow: hidden;
   width: 100%;
+  /* Min-height plus margin-top:auto on .pb-card-foot below give all cards in
+     a row a shared baseline regardless of card_line length. Grid's default
+     stretch then matches taller cards too. */
+  min-height: 156px;
 }
 .pb-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 14px rgba(15, 48, 87, 0.1);
   border-color: var(--kf-playbook-teal);
+}
+.pb-card:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
 }
 .pb-card--critical::before {
   content: '';
@@ -459,6 +519,15 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+/* Class chip — 4 family tints for scan-by-color. Each family lands in a
+   clearly different hue so they're distinguishable at a glance (vs. the
+   previous round which read as slightly-different greys). Still on-brand
+   and subtle — bg saturation kept modest, text dark enough for legibility.
+   Mapped in JS via CLASS_FAMILY:
+     gov   = STD, POL, AGR        (governance — blue/navy family)
+     proc  = PB, SOP              (procedures — teal, page house color)
+     tool  = TPL, FORM, CHK       (work tools — warm sand/amber)
+     ref   = POST, REF            (postings & references — manilla/beige) */
 .pb-class-chip {
   font-family: 'Inter', sans-serif;
   font-size: 10px;
@@ -467,10 +536,14 @@
   letter-spacing: 0.5px;
   padding: 3px 8px;
   border-radius: 6px;
-  background: var(--kf-playbook-teal-light);
-  color: var(--kf-playbook-teal);
+  background: #eef0f4;
+  color: #475569;
   white-space: nowrap;
 }
+.pb-class-chip--gov  { background: #c9d8ea; color: #163454; }
+.pb-class-chip--proc { background: var(--kf-playbook-teal-light); color: var(--kf-playbook-teal-dark); }
+.pb-class-chip--tool { background: #f5dab1; color: #6b4520; }
+.pb-class-chip--ref  { background: #e8dcc8; color: #5a4525; }
 .pb-class-chip--lg {
   font-size: 11px;
   padding: 4px 10px;
@@ -503,8 +576,27 @@
   gap: 6px;
   color: #94a3b8;
 }
-.pb-pin { color: #d97706; font-size: 14px; line-height: 1; }
-.pb-print { color: #94a3b8; }
+/* Pin — muted amber SVG pushpin, smaller than the previous ★ character. Reads
+   as metadata, not as the most saturated thing on the card. */
+.pb-pin {
+  display: inline-flex;
+  align-items: center;
+  color: #cba14a;
+}
+/* Poster mark — printer icon in a warm-tinted chip. The class chip already
+   carries the "Poster" word; the orange chip background here just signals
+   "print and post on the wall" as a doc attribute (not a UI button). Toned
+   amber/sienna so it doesn't compete with the class chip as the loudest
+   thing on the card. */
+.pb-poster-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #a05a23;
+  background: rgba(160, 90, 35, 0.08);
+  padding: 3px;
+  border-radius: 5px;
+}
 
 .pb-card-title {
   font-family: 'Inter', sans-serif;
@@ -529,7 +621,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
+  /* Pin the foot to the bottom of the card so cards with shorter card_line
+     content still align their foots — gives the grid row a clean baseline. */
+  margin-top: auto;
+  padding-top: 4px;
   flex-wrap: wrap;
 }
 .pb-status-pill {
@@ -539,6 +634,13 @@
   padding: 3px 9px;
   border-radius: 999px;
   letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+/* Ghost variant for Pending — the default expected status with 22+ docs in
+   build-out. Recedes to a faint outlined chip so the eye can scan past it
+   and the non-Pending statuses (Draft, Placeholder, Blocked) catch attention. */
+.pb-status-pill--ghost {
+  border-color: #e2e8f0;
 }
 .pb-version {
   font-family: 'Inter', sans-serif;
@@ -547,18 +649,27 @@
   color: #94a3b8;
 }
 
-/* Quiet "no file yet" marker in the card foot — receded, italic, very light,
-   pushed to the right edge with margin-left:auto so it doesn't compete with
-   the status pill on the left. The slide-over reader's pb-nofile-chip
-   (heavier styling) is unchanged because that context warrants more weight. */
+/* Quiet "no file yet" marker — sits in the card-foot cluster (left-aligned
+   with status + version) so the foot reads as one coherent zone, not two
+   disconnected items. Italic + light slate so it recedes against the status
+   pill but stays scannable for owner-only "missing Drive link" sweeps. */
 .pb-nofile-marker {
   font-family: 'Mulish', sans-serif;
   font-size: 10px;
   font-weight: 500;
   font-style: italic;
-  color: #cbd5e1;
-  margin-left: auto;
+  color: #94a3b8;
   letter-spacing: 0.2px;
+}
+/* Mid-dot separator between version and "no file yet" — renders only when
+   both are present (JSX conditional). Quiet slate dot, no extra width
+   beyond the standard flex gap, just punctuation so the two facts read
+   distinct instead of running on. */
+.pb-foot-sep {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
 }
 
 /* ─── Slide-over reader ─────────────────────────────────────────────────── */
@@ -869,4 +980,39 @@
 @media (max-width: 520px) {
   .pb-slide { max-width: 100vw; }
   .pb-reader-frame { aspect-ratio: 3 / 4; min-height: 240px; }
+}
+
+/* ─── Empty-state (zero docs in catalog) ─────────────────────────────────── */
+.pb-empty-state {
+  text-align: center;
+  padding: 64px 24px 80px;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pb-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.pb-empty-state h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: #475569;
+  margin: 0;
+}
+.pb-empty-state p {
+  font-size: 13px;
+  margin: 0;
+  max-width: 360px;
+  line-height: 1.5;
 }

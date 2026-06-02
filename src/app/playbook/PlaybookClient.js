@@ -27,13 +27,39 @@ const CLASS_LABELS = {
   CHK:  "Checklist",
 };
 
+// Class chip color family — 4 grouped tints (CSS .pb-class-chip--{family})
+// for scan-by-color rather than 10 separate colors. Subtle paletted bgs that
+// don't fight navy/teal:
+//   gov  = STD, POL, AGR   (governance — navy family)
+//   proc = PB, SOP         (procedures — teal family, page house color)
+//   tool = TPL, FORM, CHK  (work tools — sand/amber)
+//   ref  = POST, REF       (postings & references — slate)
+const CLASS_FAMILY = {
+  STD:  "gov",
+  POL:  "gov",
+  AGR:  "gov",
+  PB:   "proc",
+  SOP:  "proc",
+  TPL:  "tool",
+  FORM: "tool",
+  CHK:  "tool",
+  POST: "ref",
+  REF:  "ref",
+};
+
+// Status palette — Pending is the ghost (transparent fill, faint border) so
+// it recedes in build-out where it's the default state with 22+ docs. The
+// other statuses get slightly more saturated tints so they pop against the
+// Pending wallpaper. Placeholder uses soft lavender — calm, distinct from
+// Draft (amber) and Pending (ghost), and quieter than alarm-leaning Blocked
+// (red). Communicates "stub, not built yet" without reading as an error.
 const STATUS_COLORS = {
-  "Live":        { bg: "#d1fae5", color: "#065f46" },
-  "In Build":    { bg: "#dbeafe", color: "#1e40af" },
-  "Draft":       { bg: "#fef3c7", color: "#92400e" },
-  "Pending":     { bg: "#f1f5f9", color: "#475569" },
-  "Placeholder": { bg: "#fafafa", color: "#94a3b8" },
-  "Blocked":     { bg: "#fee2e2", color: "#991b1b" },
+  "Live":        { bg: "#a7f3d0", color: "#065f46", ghost: false },
+  "In Build":    { bg: "#bfdbfe", color: "#1e3a8a", ghost: false },
+  "Draft":       { bg: "#fde68a", color: "#92400e", ghost: false },
+  "Pending":     { bg: "transparent", color: "#94a3b8", ghost: true },
+  "Placeholder": { bg: "#e9e3f5", color: "#6b46c1", ghost: false },
+  "Blocked":     { bg: "#fecaca", color: "#991b1b", ghost: false },
 };
 
 const RELATIONSHIP_LABELS_OUT = {
@@ -120,6 +146,24 @@ function ErrorState({ message }) {
       <div style={{ fontSize: 24, marginBottom: 8 }}>⚠</div>
       <div style={{ fontWeight: 700, color: "#0f3057" }}>Couldn&apos;t load The Playbook</div>
       <div>{message}</div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="pb-empty-state">
+      <div className="pb-empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />
+          <path d="M4 19.5V22h16" />
+        </svg>
+      </div>
+      <h2>The catalog is empty.</h2>
+      <p>
+        No documents have been seeded yet. Check back once the first batch lands,
+        or contact the playbook owner to populate the shelves.
+      </p>
     </div>
   );
 }
@@ -267,9 +311,8 @@ function useRailCollapsed() {
 // Sticky left rail (PR 7.3 Batch A items 2 + 5 + 6)
 // ════════════════════════════════════════════════════════════════════════════
 function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollapse }) {
-  // Chevron points LEFT when expanded (click to collapse) and RIGHT when
-  // collapsed (click to expand). Two polyline configs in one element.
-  const chevronPoints = collapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6";
+  // Single chevron icon — CSS rotates 180° via .pb-rail--collapsed so the
+  // open/close animation is one smooth control, not two swapped points.
   return (
     <nav
       className={`pb-rail${collapsed ? " pb-rail--collapsed" : ""}`}
@@ -284,7 +327,7 @@ function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollaps
         title={collapsed ? "Expand navigation" : "Collapse navigation"}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points={chevronPoints} />
+          <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
       {!collapsed && (
@@ -384,32 +427,36 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
     <div className="pb-wrap">
       <Hero query={query} setQuery={setQuery} />
       <FilterChipsBar filter={filter} setFilter={setFilter} />
-      <div
-        className="pb-layout"
-        data-rail-collapsed={railCollapsed ? "true" : "false"}
-      >
-        <ShelfRail
-          shelves={shelves}
-          counts={counts}
-          active={activeShelf}
-          onJump={jumpToShelf}
-          collapsed={railCollapsed}
-          onToggleCollapse={toggleRailCollapsed}
-        />
-        <div className="pb-shelves">
-          {shelves.map((shelfName) => (
-            <Shelf
-              key={shelfName}
-              name={shelfName}
-              docs={docsByShelf[shelfName]}
-              onOpen={(id) => setOpenDocId(id)}
-              isSearching={isSearching}
-              isCollapsed={collapsed.has(shelfName)}
-              onToggle={toggleCollapsed}
-            />
-          ))}
+      {documents.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div
+          className="pb-layout"
+          data-rail-collapsed={railCollapsed ? "true" : "false"}
+        >
+          <ShelfRail
+            shelves={shelves}
+            counts={counts}
+            active={activeShelf}
+            onJump={jumpToShelf}
+            collapsed={railCollapsed}
+            onToggleCollapse={toggleRailCollapsed}
+          />
+          <div className="pb-shelves">
+            {shelves.map((shelfName) => (
+              <Shelf
+                key={shelfName}
+                name={shelfName}
+                docs={docsByShelf[shelfName]}
+                onOpen={(id) => setOpenDocId(id)}
+                isSearching={isSearching}
+                isCollapsed={collapsed.has(shelfName)}
+                onToggle={toggleCollapsed}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {openDocId && (
         <SlideOverReader
@@ -527,6 +574,7 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle }) {
 function DocumentCard({ doc, onOpen }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
+  const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
   const noFile = !doc.source_drive_id;
   return (
     <button
@@ -535,18 +583,22 @@ function DocumentCard({ doc, onOpen }) {
       aria-label={`Open ${doc.title}`}
     >
       <div className="pb-card-head">
-        <span className="pb-class-chip">{classLabel}</span>
+        <span className={`pb-class-chip pb-class-chip--${classFamily}`}>
+          {classLabel}
+        </span>
         {/* Critical: red left-edge stripe (pb-card--critical) is sufficient on card.
             The "⚠ Critical" text chip is surfaced in the slide-over reader instead. */}
-        {/* No-file: dropped from the card head — moved to a quiet inline marker in
-            the card foot below, so it doesn't compete with the class chip. */}
         <span className="pb-card-icons">
           {doc.pinned && (
-            <span className="pb-pin" aria-label="Pinned" title="Pinned">★</span>
+            <span className="pb-pin" aria-label="Pinned" title="Pinned">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M14 4v5l2 3v2h-5v7l-1 1-1-1v-7H4v-2l2-3V4c0-.55.45-1 1-1h6c.55 0 1 .45 1 1z" />
+              </svg>
+            </span>
           )}
           {doc.print_required && (
-            <span className="pb-print" aria-label="Print required" title="Print required">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="6 9 6 2 18 2 18 9" />
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                 <rect x="6" y="14" width="12" height="8" />
@@ -559,12 +611,15 @@ function DocumentCard({ doc, onOpen }) {
       {doc.card_line && <p className="pb-card-line">{doc.card_line}</p>}
       <div className="pb-card-foot">
         <span
-          className="pb-status-pill"
+          className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
           style={{ background: status.bg, color: status.color }}
         >
           {doc.status}
         </span>
         {doc.version && <span className="pb-version">{doc.version}</span>}
+        {doc.version && noFile && (
+          <span className="pb-foot-sep" aria-hidden="true">·</span>
+        )}
         {noFile && (
           <span className="pb-nofile-marker" title="No Drive file attached yet">
             no file yet
@@ -642,6 +697,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
   } = data;
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
+  const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
   const hasFile = !!drive_preview_url;
 
   return (
@@ -649,7 +705,9 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
       {/* Header block */}
       <div className="pb-slide-head-block">
         <div className="pb-slide-class-row">
-          <span className="pb-class-chip pb-class-chip--lg">{classLabel}</span>
+          <span className={`pb-class-chip pb-class-chip--lg pb-class-chip--${classFamily}`}>
+            {classLabel}
+          </span>
           {doc.critical && <span className="pb-critical-chip">⚠ Critical</span>}
           {!hasFile && <span className="pb-nofile-chip">No file yet</span>}
         </div>
@@ -657,7 +715,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen }) {
         {doc.card_line && <p className="pb-slide-cardline">{doc.card_line}</p>}
         <div className="pb-slide-meta">
           <span
-            className="pb-status-pill"
+            className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
             style={{ background: status.bg, color: status.color }}
           >
             {doc.status}
