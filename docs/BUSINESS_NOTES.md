@@ -234,7 +234,18 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Vendor-specific patterns
 
-*(empty - to be populated as audits find them)*
+### SAM-956 orphan invoice (vendor soft-delete edge case) [RESOLVED 2026-06-01]
+- **What:** SAM-956 was a duplicate Samuels Seafood Co. vendor record (mistakenly created, not a separate vendor). It was correctly soft-deleted 2026-05-28 by w.hofmann@kitchfix.com; the vendor_master row carries notes='DELETED' with a replacement reference to 69b001d6-e432-4994-bb98-65bfa3f1c26f. SAM-470 is the canonical Samuels record. One real Samuels Seafood Co. invoice (client_uuid `38a56cc8-7cc2-484d-b296-f8af72659736`, $2213.35, invoice_number 439043, invoice_date 2026-05-27) had already been submitted against SAM-956 the day before the deletion landed; the deletion left the invoice orphaned.
+- **Why it surfaced:** PR 6.3 (#101) Module 6 invoice backfill enforced the planned `invoice_submissions.vendor_id REFERENCES vendors(id)` FK. PR 5.3 vendor backfill correctly filtered DELETED vendor_master rows so SAM-956 never entered PG `vendors`. The orphan invoice failed the FK at INSERT and was skipped per the Phase 2 Path 3 decision. Full forensic record at `scripts/backfill-invoice-skipped-rows.log` line 8.
+- **Why we accepted the skip:** Resurrecting SAM-956 as a ghost vendor would add permanent schema noise (a row that exists only to satisfy an FK from one historical mis-attributed invoice). The invoice was effectively mis-attributed at submission time; the canonical Samuels record (SAM-470) is the correct historical owner. The Sheets row remains intact as the forensic record. If AP ever needs the invoice for downstream reporting, it can be manually re-attributed to SAM-470 (a one-time Sheets update).
+- **Where:**
+  - `scripts/backfill-invoice-skipped-rows.log` line 8 (forensic JSONL record)
+  - `docs/PROJECT_DASHBOARD.md` Item 11 backlog (e) (resolution documented + closed)
+  - `docs/PROJECT_DASHBOARD.md` Item 11 backlog (h) (the underlying handler gap captured separately)
+  - Sheets `invoice_submissions_26` row 578 (1-indexed; client_uuid `38a56cc8`)
+- **Documented:** 2026-06-01 post-PR-6.3 backfill.
+- **Distinct from the PR #93 note about SAM-470/STL-FL:** That was a separate `vendor_accounts` botched-merge artifact (`handleVendorMerge` updates col B `vendor_id` but not col A `rowId`, leaving 2 rows pointing at the same `(vendor_id, account_key)` pair). Two unrelated incidents at the same vendor name family. Do not conflate.
+- **Underlying handler gap (not addressed here):** vendor soft-delete leaves orphan invoices when a vendor with pending or recent invoices is deleted. Captured as Module 5 backlog item (h); standalone follow-up PR.
 
 ---
 
