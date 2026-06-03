@@ -1,9 +1,6 @@
 # Invoice Module
 
-> **Status:** WAIT_WINDOW. READ flag flipped 2026-06-03; declares LIVE on or after 2026-06-04.
-> **Dual-write:** Active since 2026-06-02.
-> **PG read:** Active since 2026-06-03 (`READ_FROM_POSTGRES_OPS` includes `invoice_submissions`, `invoice_rejections`, `ai_line_items`, `gl_codes`).
-> **Rollback target:** Sheets remains writable through the wait window.
+> **Status:** LIVE on Postgres. Reads served from PG via `READ_FROM_POSTGRES_OPS` since 2026-06-03 ~15:30 UTC. Dual-write active since 2026-06-02 ~16:48 UTC; Sheets remains rollback safety net indefinitely (no decommission until Module 8 cron migrates). Wait-window observation closed 2026-06-03 evening with clean production traffic verification.
 >
 > PR 6.1 shipped the schema + dormant adapters; PR 6.2 rewired every Sheet I/O site through the dataStore orchestrators, bundled 9 cross-cutting cleanups, and switched `invoice-delete-dupe` from hard-delete to admin-gated soft-delete. PR 6.3 executed the backfill (640 historical submissions + 26 rejections + 5842 line items + 300 GL codes). PRs 6.4, 6.5, 6.6 closed three latent dual-write wiring bugs surfaced during smoke testing (tab-name constant mismatch, broken-window data recovery, schema-divergence in reject/unreject).
 
