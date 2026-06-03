@@ -1189,6 +1189,13 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   // silently dropping them. The "photo-only" ai_scan_status value is
   // dead going forward; historical rows keep it for audit.
 
+  return extractAndStoreLineItems(invoiceUuid, pages, metadata);
+}
+
+// Exported extraction body of triggerAIScan; same code path reused by
+// scripts/backfill-stl-mo-line-items.mjs. Pure move; no behavior change.
+export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   try {
     const getPageData = (p) => typeof p === "string" ? p : p.data;
     const resizeForScan = (dataUrl) => {
