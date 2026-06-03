@@ -82,7 +82,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "@supabase/supabase-js";
-import { getServiceAccountDriveClient } from "../src/lib/sheets.js";
+import { PDFDocument, PDFName } from "pdf-lib";
+import { getServiceAccountDriveClient, safeRead, SHEET_IDS } from "../src/lib/sheets.js";
 
 // ── Args ──
 const args = process.argv.slice(2);
@@ -134,15 +135,16 @@ function extractDriveFileId(url) {
   return null;
 }
 
-// Return the preferred Drive URL for a submission row: rawDriveUrl first,
-// then drive_urls[0]. Returns null if neither is usable.
-function pickDriveUrl(row) {
+// Return the RAW Drive URL ONLY. raw_drive_url is the unstamped photo
+// PDF; drive_urls[0] is the stamped file (photo + GL-coding summary
+// page) sent to bill.com. Extraction MUST use raw, never stamped, or
+// the summary page is misread as line items. If raw is missing on a
+// row, this returns null and the row is skipped at Stage 1; Stage 0
+// reconciliation buckets it separately so we know it needs a fallback
+// source (Sheet col Q lookup or local folder).
+function pickRawDriveUrl(row) {
   const raw = (row.raw_drive_url || "").trim();
   if (raw) return { source: "raw_drive_url", url: raw };
-  const arr = Array.isArray(row.drive_urls) ? row.drive_urls : [];
-  for (const u of arr) {
-    if (typeof u === "string" && u.trim()) return { source: "drive_urls[0]", url: u.trim() };
-  }
   return null;
 }
 
@@ -232,7 +234,7 @@ async function stageDryRun() {
     else if (statusKey === "photo-only") aiStatusCount["photo-only"]++;
     else aiStatusCount.other++;
 
-    const picked = pickDriveUrl(t);
+    const picked = pickRawDriveUrl(t);
     if (!picked) {
       buckets.no_url_at_all.push({ uuid: t.client_uuid, submitted_at: t.submitted_at });
       continue;
@@ -298,25 +300,324 @@ async function stageDryRun() {
   console.log(``);
   console.log(`[backfill] STAGE 0 COMPLETE. No writes performed. No model calls made.`);
   console.log(`[backfill] To proceed: review the map, then re-run with --stage=batch --limit=5 --execute.`);
-  console.log(`[backfill] Stage 1 / 2 require the triggerAIScan refactor (extractAndStoreLineItems export)`);
-  console.log(`[backfill] in src/lib/invoiceActions.js, which is not yet shipped. See the script docstring.`);
+  console.log(`[backfill] Stage 1 (batch) requires the extractAndStoreLineItems export to be on main.`);
 }
 
-// ── Stage 1 / 2 stubs ──
+// ════════════════════════════════════════════════════════════════════════════
+// PDF -> page images (no rasterizer needed for STL-MO photo wrappers)
+// ════════════════════════════════════════════════════════════════════════════
+
+// pdf-lib lookup helper: resolve a PDFRef (or pass through a direct
+// object). Some pdf-lib API surfaces hand back refs, others hand back
+// resolved objects; this normalizes.
+function pdfLookup(pdf, refOrObj) {
+  if (!refOrObj) return null;
+  try {
+    return pdf.context.lookup(refOrObj);
+  } catch {
+    return refOrObj;
+  }
+}
+
+// Walk a page's Resources.XObject dict and return every Image XObject.
+// For STL-MO raw PDFs (photo wrappers), this is one JPEG per page.
+function pageImageXObjects(pdf, page) {
+  const out = [];
+  const normalized = page.node.normalizedEntries?.();
+  const Resources = normalized?.Resources;
+  if (!Resources) return out;
+  const ResolvedResources = pdfLookup(pdf, Resources);
+  const XObject = ResolvedResources?.get?.(PDFName.of("XObject"));
+  if (!XObject) return out;
+  const ResolvedXObject = pdfLookup(pdf, XObject);
+  if (!ResolvedXObject || typeof ResolvedXObject.entries !== "function") return out;
+  for (const [name, ref] of ResolvedXObject.entries()) {
+    const obj = pdfLookup(pdf, ref);
+    if (!obj) continue;
+    const dict = obj.dict || obj;
+    if (typeof dict.get !== "function") continue;
+    const subtype = dict.get(PDFName.of("Subtype"));
+    const subtypeName = subtype?.encodedName || String(subtype || "");
+    if (!subtypeName.includes("Image")) continue;
+    const filter = dict.get(PDFName.of("Filter"));
+    const filterName = filter?.encodedName || String(filter || "");
+    const width = dict.get(PDFName.of("Width"));
+    const height = dict.get(PDFName.of("Height"));
+    out.push({
+      name: name?.encodedName || String(name),
+      bytes: obj.contents,
+      filter: filterName,
+      width: width?.value?.() ?? width,
+      height: height?.value?.() ?? height,
+    });
+  }
+  return out;
+}
+
+// Convert one extracted Image XObject into a live-path-shaped page entry.
+// DCTDecode is raw JPEG bytes; we wrap as a data URL with type="image"
+// (the REAL type for these photo-wrapped uploads). Other filters are
+// flagged but not handled today; the cohort probe showed 100% DCTDecode.
+function imageXObjectToPage(img) {
+  if (!img.bytes) return null;
+  const filter = String(img.filter || "");
+  let mediaType;
+  if (filter.includes("DCTDecode")) mediaType = "image/jpeg";
+  else if (filter.includes("CCITTFaxDecode")) mediaType = "image/tiff"; // not Anthropic-supported
+  else if (filter.includes("FlateDecode")) mediaType = null; // raw pixel data, not handled
+  else mediaType = null;
+  if (!mediaType) return { error: `unsupported filter ${filter}` };
+  const base64 = Buffer.from(img.bytes).toString("base64");
+  return {
+    page: {
+      data: `data:${mediaType};base64,${base64}`,
+      rotation: 0,
+      type: "image",
+    },
+    bytes: img.bytes.length,
+    mediaType,
+    width: img.width,
+    height: img.height,
+  };
+}
+
+async function fetchDrivePdfBytes(drive, fileId) {
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data);
+}
+
+// ── Arithmetic check: identical to the cron's gate ──
+function arithmeticCheck(li) {
+  const qty = Number(li.quantity ?? li.qty ?? 0);
+  const unit = Number(li.unit_price ?? li.unitPrice ?? 0);
+  const ext = Number(li.extended_price ?? li.extendedPrice ?? 0);
+  const calc = qty * unit;
+  const tol = 0.02 * Math.abs(ext) + 0.01;
+  return { ok: Math.abs(calc - ext) <= tol, calc, ext, qty, unit, drift: Math.abs(calc - ext) };
+}
+
+// ── Stage 1 / 2: real writes via the live extraction path ──
 async function stageBatchOrFull() {
-  console.error(`[backfill] --stage=${STAGE} is NOT YET IMPLEMENTED in this script.`);
-  console.error(`[backfill] Required to implement (next turn after Stage 0 review):`);
-  console.error(`[backfill]   1) refactor triggerAIScan in src/lib/invoiceActions.js to expose`);
-  console.error(`[backfill]      extractAndStoreLineItems(invoiceUuid, pages, metadata) as the`);
-  console.error(`[backfill]      reusable extraction body.`);
-  console.error(`[backfill]   2) server-side PDF -> JPEG render in this script (matches the live`);
-  console.error(`[backfill]      client's pdfjs flow so the extractor sees the same input shape).`);
-  console.error(`[backfill]   3) per-invoice loop: fetch Drive PDF via SA, render, call`);
-  console.error(`[backfill]      extractAndStoreLineItems with metadata.account = row.account_key.`);
-  console.error(`[backfill]   4) per-line arithmetic check report (mirrors the cron gate).`);
-  console.error(`[backfill]   5) post-write verification: count ai_line_items + AI_LINE_ITEMS`);
-  console.error(`[backfill]      Sheet rows for the processed UUIDs.`);
-  process.exit(2);
+  if (!EXECUTE) {
+    console.log(`[backfill] --stage=${STAGE} requires --execute to write.`);
+    console.log(`[backfill] Add --execute to perform real writes via extractAndStoreLineItems.`);
+    process.exit(2);
+  }
+
+  // Import the live extractor at run time so dry-run never depends on
+  // the refactor being merged.
+  let extractAndStoreLineItems;
+  try {
+    const mod = await import("../src/lib/invoiceActions.js");
+    extractAndStoreLineItems = mod.extractAndStoreLineItems;
+  } catch (e) {
+    console.error(`[backfill] failed to load invoiceActions.js: ${e.message}`);
+    process.exit(2);
+  }
+  if (typeof extractAndStoreLineItems !== "function") {
+    console.error(`[backfill] extractAndStoreLineItems is not exported on this branch.`);
+    console.error(`[backfill] Pull main after PR #110 (refactor) merges, then retry.`);
+    process.exit(2);
+  }
+
+  const cohort = await loadTargets();
+  const pending = cohort.filter((t) => !t.hasLineItems);
+  console.log(`[backfill] cohort=${cohort.length}  pending=${pending.length}`);
+
+  const maxToProcess = STAGE === "batch" ? LIMIT : pending.length;
+  const targets = [];
+  for (const t of pending) {
+    if (targets.length >= maxToProcess) break;
+    const picked = pickRawDriveUrl(t);
+    if (!picked) continue; // skip rows lacking raw_drive_url
+    targets.push({ row: t, ...picked });
+  }
+  console.log(`[backfill] selected ${targets.length} target(s) for stage=${STAGE}`);
+
+  const drive = getServiceAccountDriveClient(["https://www.googleapis.com/auth/drive.readonly"]);
+
+  let cleanCount = 0, holdCount = 0, processed = 0, skippedIdempotent = 0, errored = 0;
+  const perInvoice = [];
+
+  for (const t of targets) {
+    const uuid = t.row.client_uuid;
+    const submissionId = t.row.id;
+    const accountKey = t.row.account_key;
+    console.log(``);
+    console.log(`[backfill] ──── ${uuid}  (${t.row.vendor_name || "?"} #${t.row.invoice_number || "?"})  total=$${Number(t.row.total_amount || 0).toFixed(2)}`);
+
+    // RE-DERIVE the zero-line-items idempotency check immediately
+    // before processing. Defends against a race where another writer
+    // (live submission, retry) inserted line items between loadTargets
+    // and this loop iteration.
+    const { count: existingCount } = await supa
+      .from("ai_line_items")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_uuid", submissionId);
+    if ((existingCount || 0) > 0) {
+      console.log(`[backfill]   SKIP idempotent: ${existingCount} line item(s) already present`);
+      skippedIdempotent++;
+      perInvoice.push({ uuid, skipped: true });
+      continue;
+    }
+
+    console.log(`[backfill]   url(raw): ${t.url}`);
+    let bytes;
+    try {
+      const fileId = extractDriveFileId(t.url);
+      bytes = await fetchDrivePdfBytes(drive, fileId);
+    } catch (e) {
+      console.log(`[backfill]   ERROR drive fetch: ${e.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `drive_fetch: ${e.message}` });
+      continue;
+    }
+    console.log(`[backfill]   downloaded ${bytes.length} bytes`);
+
+    let pages;
+    try {
+      const pdf = await PDFDocument.load(bytes);
+      const pdfPageCount = pdf.getPageCount();
+      pages = [];
+      for (let i = 0; i < pdfPageCount; i++) {
+        const pg = pdf.getPage(i);
+        const imgs = pageImageXObjects(pdf, pg);
+        if (imgs.length === 0) {
+          console.log(`[backfill]   WARN page ${i + 1}: no image XObjects; skipped`);
+          continue;
+        }
+        // Photo wrappers have 1 image per page. If more, use the largest.
+        imgs.sort((a, b) => (Number(b.bytes?.length || 0) - Number(a.bytes?.length || 0)));
+        const best = imgs[0];
+        const result = imageXObjectToPage(best);
+        if (!result || result.error) {
+          console.log(`[backfill]   WARN page ${i + 1}: ${result?.error || "unsupported"}; skipped`);
+          continue;
+        }
+        pages.push(result.page);
+      }
+      console.log(`[backfill]   pdf pages: ${pdfPageCount}  extracted: ${pages.length}  type(s): ${[...new Set(pages.map((p) => p.type))].join(",")}`);
+    } catch (e) {
+      console.log(`[backfill]   ERROR pdf parse: ${e.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `pdf_parse: ${e.message}` });
+      continue;
+    }
+
+    if (pages.length === 0) {
+      console.log(`[backfill]   ERROR no extractable pages`);
+      errored++;
+      perInvoice.push({ uuid, error: "no_pages" });
+      continue;
+    }
+
+    const metadata = {
+      account: accountKey,
+      vendor: t.row.vendor_name || "",
+      invoiceNumber: t.row.invoice_number || "",
+      invoiceDate: t.row.invoice_date || "",
+      formType: t.row.type || "invoice",
+    };
+
+    try {
+      await extractAndStoreLineItems(uuid, pages, metadata);
+    } catch (e) {
+      console.log(`[backfill]   ERROR extractor: ${e.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `extractor: ${e.message}` });
+      continue;
+    }
+
+    // POST-WRITE VERIFICATION: query both stores.
+    const { data: pgLines, error: pgErr } = await supa
+      .from("ai_line_items")
+      .select("line_num, description, quantity, unit, unit_price, extended_price, category")
+      .eq("invoice_uuid", submissionId)
+      .order("line_num", { ascending: true });
+    if (pgErr) {
+      console.log(`[backfill]   ERROR pg verify: ${pgErr.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `pg_verify: ${pgErr.message}` });
+      continue;
+    }
+    const pgLineCount = pgLines?.length || 0;
+
+    let sheetLineCount = 0;
+    try {
+      const { rows: sheetRows } = await safeRead(SHEET_IDS.AI_LINE_ITEMS, accountKey);
+      sheetLineCount = (sheetRows || []).filter((r) => String(r[0] || "").trim() === uuid).length;
+    } catch (e) {
+      console.log(`[backfill]   WARN sheet verify failed (non-blocking): ${e.message}`);
+    }
+
+    console.log(`[backfill]   PG ai_line_items rows: ${pgLineCount}`);
+    console.log(`[backfill]   Sheet AI_LINE_ITEMS "${accountKey}" rows for uuid: ${sheetLineCount}`);
+
+    // Per-line arithmetic + sum reconciliation.
+    let cleanLines = 0, heldLines = 0;
+    let extendedSum = 0;
+    if (pgLineCount > 0) {
+      console.log(`[backfill]   per-line arithmetic (|qty*unit - ext| <= 2%|ext| + 0.01):`);
+      for (const li of pgLines) {
+        const a = arithmeticCheck(li);
+        extendedSum += a.ext;
+        if (a.ok) cleanLines++;
+        else heldLines++;
+        const tag = a.ok ? "PASS" : "HOLD";
+        const desc = String(li.description || "").slice(0, 50);
+        console.log(`[backfill]     L${li.line_num}  ${tag}  qty=${a.qty}  unit=${a.unit.toFixed(4)}  ext=${a.ext.toFixed(2)}  calc=${a.calc.toFixed(2)}  drift=${a.drift.toFixed(4)}  "${desc}"`);
+      }
+    }
+    cleanCount += cleanLines;
+    holdCount += heldLines;
+
+    const storedTotal = Number(t.row.total_amount || 0);
+    const sumVsTotal = extendedSum - storedTotal;
+    const totalOk = Math.abs(sumVsTotal) <= Math.max(0.5, 0.01 * Math.abs(storedTotal));
+    console.log(`[backfill]   RECONCILIATION:`);
+    console.log(`[backfill]     sum(extracted extended_price) = $${extendedSum.toFixed(2)}`);
+    console.log(`[backfill]     stored total_amount           = $${storedTotal.toFixed(2)}`);
+    console.log(`[backfill]     diff                          = $${sumVsTotal.toFixed(2)}  (${totalOk ? "MATCH within tol" : "MISMATCH"})`);
+
+    processed++;
+    perInvoice.push({
+      uuid, vendor: t.row.vendor_name, invoiceNumber: t.row.invoice_number,
+      sourceUrl: "raw_drive_url",
+      pageCountStored: t.row.page_count,
+      pdfPageCount: pages.length,
+      pgLineCount, sheetLineCount,
+      cleanLines, heldLines,
+      extendedSum: Number(extendedSum.toFixed(2)),
+      storedTotal,
+      totalDiff: Number(sumVsTotal.toFixed(2)),
+      totalReconciles: totalOk,
+    });
+
+    // Polite pacing between invoices (Anthropic + Drive rate limits).
+    if (processed < targets.length) {
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
+  console.log(``);
+  console.log(`[backfill] ════════════════════════════════════════════════`);
+  console.log(`[backfill] STAGE ${STAGE === "batch" ? "1" : "2"} SUMMARY`);
+  console.log(`[backfill]   targets attempted        : ${targets.length}`);
+  console.log(`[backfill]   processed (wrote)        : ${processed}`);
+  console.log(`[backfill]   skipped idempotent       : ${skippedIdempotent}`);
+  console.log(`[backfill]   errored                  : ${errored}`);
+  console.log(`[backfill]   total line items written : ${cleanCount + holdCount}`);
+  console.log(`[backfill]     expected-clean (PASS)  : ${cleanCount}`);
+  console.log(`[backfill]     expected-held (HOLD)   : ${holdCount}`);
+  console.log(`[backfill] ════════════════════════════════════════════════`);
+  console.log(`[backfill] STAGE COMPLETE. Per-invoice records:`);
+  for (const r of perInvoice) console.log(`[backfill]   ${JSON.stringify(r)}`);
+  console.log(`[backfill]`);
+  console.log(`[backfill] No item_catalog / price_history writes performed; the cron's`);
+  console.log(`[backfill] arithmetic gate applies on its next run (Railway nightly).`);
 }
 
 // ── Main ──
