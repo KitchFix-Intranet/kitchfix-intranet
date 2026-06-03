@@ -51,6 +51,14 @@ people: (
       <path d="M12 18h.01" />
     </svg>
   ),
+  playbook: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />
+      <path d="M4 19.5V22h16" />
+      <line x1="8" y1="7"  x2="16" y2="7"  />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </svg>
+  ),
 };
 
 const navLinks = [
@@ -59,6 +67,7 @@ const navLinks = [
   { href: '/ops',         label: 'Ops Hub',   icon: icons.ops       },
   { href: '/service-calendar', label: 'Service Calendar', icon: icons.calendar },
   { href: '/people',      label: 'People',    icon: icons.people    },
+  { href: '/playbook',    label: 'The Playbook', icon: icons.playbook },
 ];
 
 /* ── Notification SVG Icons ── */

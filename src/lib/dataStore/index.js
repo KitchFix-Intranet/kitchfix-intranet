@@ -96,3 +96,17 @@ export {
   unrejectInvoice,
   insertAILineItems,
 } from "./invoice.js";
+
+// Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no
+// cutover flags, no dispatch primitives). Module name: 'playbook'.
+export {
+  listDocuments,
+  getDocument,
+  getRelationships,
+  getSurfaces,
+  getDocumentsForSurface,
+  listIssues,
+  createDocument,
+  updateDocument,
+  createIssue,
+} from "./opd.js";
