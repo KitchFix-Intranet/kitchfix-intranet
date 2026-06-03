@@ -2,7 +2,7 @@
 
 > **Purpose:** Canonical list of every environment variable used by this system. Where it's set, what it's for, what breaks if it's missing.
 >
-> **Last verified:** 2026-05-12
+> **Last verified:** 2026-06-03
 > **Rule:** Adding an env var requires updating this doc in the same commit.
 
 ---
@@ -57,6 +57,19 @@
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `INVENTORY_SHEET_ID` | Sheet ID for inventory module (8-tab schema) | Prod, Preview | Inventory module fails |
+
+### Postgres cutover
+
+| Variable | Description | Scope | If missing |
+|---|---|---|---|
+| `DUAL_WRITE_TABLES` | Comma-separated list of PG tables that receive dual writes alongside Sheets. Per-table check via `isDualWrite(tab)` in `src/lib/cutover.js`. A tab absent here silently writes Sheets-only. | Prod, Preview, **`.env.local`** | Dual-write no-ops for the omitted tabs; PG falls out of sync with Sheets |
+| `READ_FROM_POSTGRES` | Base list of tables whose READ path serves from PG instead of Sheets. | Prod, Preview, **`.env.local`** | Reads continue from Sheets |
+| `READ_FROM_POSTGRES_OPS` | Per-surface override for the ops site. Composed with the base list at dispatch time via `isReadFromPostgres(tab, "ops")`. | Prod, Preview, **`.env.local`** | Ops reads continue from Sheets even if base list includes the tab |
+| `READ_FROM_POSTGRES_DASHBOARD` | Per-surface override for the dashboard. | Prod, Preview, **`.env.local`** | Dashboard reads continue from Sheets |
+| `READ_FROM_POSTGRES_PEOPLE` | Per-surface override for People Portal. | Prod, Preview, **`.env.local`** | People Portal reads continue from Sheets |
+| `READ_FROM_POSTGRES_DIRECTORY` | Per-surface override for the directory. | Prod, Preview, **`.env.local`** | Directory reads continue from Sheets |
+
+**Local mirroring rule:** `.env.local` must mirror Vercel's values for ALL of the above. A blank or stale local value silently makes local writes Sheets-only and diverges local reads from production. This caused Stage 1 of the STL-MO line-item backfill to write Sheets-only on 2026-06-03 (local `DUAL_WRITE_TABLES` lacked `ai_line_items` while Vercel had it; not caught until a post-stage verification query showed 0 PG rows). Pull values from Vercel rather than hand-maintaining; do not let them drift.
 
 ### Email
 
