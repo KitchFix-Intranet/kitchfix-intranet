@@ -165,12 +165,41 @@ This doc reflects the **code's view** of the schema (what handlers actually read
   - `noneOnHand` → BOOLEAN.
   - Composite index on `(session_id, location_id, saved_at DESC)` for the bootstrap dedup query.
 
-### 6. `review_queue` — pending AI-suggested merges (schema present, no current writer)
+### 6. `review_queue` — pending matches, arithmetic holds, invoice-level deferrals
 
-- **Volume:** 41 rows present in sheet — **but no current handler in `inventoryActions.js` writes to this tab.** Historical state, writer code likely removed or never built.
-- **Columns (13):** present in sheet but unverified against current code paths.
-- **Status:** Inconsistent state. The schema exists. 41 historical rows exist. handleAISimilarityCheck does NOT persist suggestions here; it returns them inline. handleReviewQueueGet is a shell that returns `{success: true, items: []}` (PR #51 sub-phase 4 left as-is).
-- **Stage 1 schema notes:** Either reconstruct the writer (persist AI suggestions for caching + pagination) or drop the table. Decision needed at Stage 1. If reconstructed, schema should support: `queue_id PK`, `account_id FK`, `suggested_item_payload JSONB`, `status ENUM('pending', 'accepted', 'rejected', 'deleted')`, `created_at`, `resolved_at`, `resolved_by`.
+- **Volume:** Growing. Inactive in `inventoryActions.js` (handleReviewQueueGet still returns `{success: true, items: []}`); the active writer is the inventory cron (`kitchfix-inventory-cron`). Backfill scripts in `kitchfix-intranet/scripts/` also append for invoice-level holds.
+- **Columns (14):**
+
+  | Col | Letter | Field | Notes |
+  |---|---|---|---|
+  | 0 | A | `queueId` | `q_<uuid>` |
+  | 1 | B | `lineItemText` | Description from `ai_line_items` |
+  | 2 | C | `vendor` | |
+  | 3 | D | `invoiceId` | Submission `client_uuid` (matches `li.invoiceUuid` the cron reads from `AI_LINE_ITEMS!A`) |
+  | 4 | E | `invoiceDate` | YYYY-MM-DD |
+  | 5 | F | `account` | Short or full account label; cron's `accountMatch` handles both |
+  | 6 | G | `suggestedMatchId` | Matched `item_catalog.itemId` if Claude proposed one |
+  | 7 | H | `suggestedMatchName` | Canonical name proposed by Claude (or fallback `lineItemText`) |
+  | 8 | I | `confidence` | 0-100 from Claude |
+  | 9 | J | `status` | `'pending'` on write; chef resolver UI flips to `'accepted'` / `'rejected'` |
+  | 10 | K | `reviewedBy` | Email of resolver (blank on insert) |
+  | 11 | L | `reviewedAt` | ISO timestamp (blank on insert) |
+  | 12 | M | `resultItemId` | Resolved `item_catalog.itemId` after the resolver acts (blank on insert) |
+  | 13 | N | `reason` | Why this row is in review (enum below) |
+
+- **`reason` (col N) values:**
+  - `arithmetic_fail` — per-line `qty * unitPrice` differs from `extendedPrice` beyond `2% * abs(extendedPrice) + 0.01`. Bad OCR; cron does NOT promote this line to `price_history` / `item_catalog`.
+  - `low_match_confidence` — Claude returned `action="match"` with confidence below `MATCH_CONFIDENCE_THRESHOLD` (default 90). Line did not promote on this pass; awaits human review.
+  - `possible_new` — Claude returned `action="new"` with confidence in [60, 94]; likely a match it didn't quite commit to. Did not promote; awaits human review.
+  - `overcount_suspect_reextract` — invoice-level hold. Sum of an invoice's extracted line `extended_price` exceeds its stored `total_amount` by more than 1% (real + fabricated mix). The cron honors these holds in `processAccount` (cron PR #2): all lines of the held invoice are filtered out of `newItems` and skipped from promotion entirely. Their `ai_line_items` rows remain for audit.
+
+- **Writers:** the inventory cron `processAccount` write path (`arithmetic_fail` / `low_match_confidence` / `possible_new`). Backfill scripts in `kitchfix-intranet/scripts/` (`overcount_suspect_reextract`).
+- **Readers:** the inventory cron itself reads col N to honor `overcount_suspect_reextract` holds before the Claude matching pass; future chef resolver UI (Module 8) consumes `status='pending'` rows for manual reconciliation.
+- **Invariants:**
+  - `invoiceId` (col D) is the submission's `client_uuid`, not the PG row id; keys identically to `li.invoiceUuid` the cron reads from `AI_LINE_ITEMS!A`.
+  - One row per line item (not per invoice). An overcount-held invoice produces N rows where N is its line count.
+  - Reason values are stable contracts the cron filter depends on; new values may be added but existing values must not change meaning.
+- **Stage 1 schema notes:** `status` and `reason` become Postgres ENUMs. `invoiceId` becomes FK to `invoice_submissions.id` (cleans up the client_uuid vs row-id distinction at the same time). Index on `(account_id, status)` and `(account_id, reason)` for the cron's hold lookup and the resolver UI's queue pagination. Reviewer fields (K/L/M) populate during chef resolver flows; suggested-match fields (G/H) are write-once at queue-insert time. Per-account isolation is row-level via the FK.
 
 ### 7. `storage_locations` — count zones + sub-zones
 
