@@ -220,6 +220,18 @@ Rationale: Measure before changing. Becomes regression test bar for Stage 2 cuto
 
 ---
 
+## Post-Sheets decommissioning architectural backlog
+
+Deferred until Module 8 complete + Sheets retired. Current dual-write orchestrator pattern is correct for the cutover phase but is transitional. Once Sheets is fully decommissioned, the PG-native patterns below provide stronger invariants and make several bug classes structurally impossible. Sequencing: ship Modules 6/7/8 LIVE first, then refactor as a dedicated post-cutover project.
+
+- **Wrap multi-table writes in Supabase transactions.** Reject, unreject, dismiss-dupe, delete-dupe, AI scan complete are all multi-statement on the PG side. Current pattern explicitly calls sequential adapters; if the second call fails after the first succeeds, partial state results. PR 5.3's `merge_vendors` PL/pgSQL is the proven pattern. Today's mitigation: the orchestrator pattern keeps Sheets as the rollback authority, so partial-PG state is recoverable. Future refactor: wrap each multi-table operation in a PG stored proc or `supabase.rpc` transaction.
+- **Add CHECK constraints for invariants currently enforced in code.** Example: `status='returned'` should require at least one non-unrejected rejection row. Cannot apply during dual-write phase because Sheets writes don't go through the PG schema, so any constraint that PG enforces but Sheets does not creates dual-write divergence. Defer until Sheets is decommissioned.
+- **Stored procs for complex multi-table operations.** Already proven with `merge_vendors` (PR 5.3). Tradeoff: business logic colocation with data vs JS-readable code. Current 1-person-dev preference is JS, so any future stored proc adoption needs a clear ROI bar (e.g., atomicity-critical workflows where partial-failure recovery costs more than the readability hit).
+- **Evaluate computed status via view vs materialized status column.** Status as a computed field (e.g., a view that derives `status` from the latest `invoice_rejections` row) eliminates entire bug classes (no parent-row mirroring needed) but requires schema rework and downstream consumer migration. Decision point at post-Module-8 architecture review.
+- **Audit Module 7 + 8 handlers for similar schema-divergence patterns before cutover.** Any handler where Sheets writes have side effects across cols that PG normalizes into separate tables is at risk for the PR 6.6 bug pattern. Recon target during the X.2 handler-rewire PR of each module.
+
+---
+
 ## Investigation TODOs (resolved)
 
 | Item | Status | Resolution |
