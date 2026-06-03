@@ -1180,16 +1180,22 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) { console.warn("[AI Scan] No API key configured, skipping"); return; }
 
-  // Skip line item extraction for photo-only submissions - phone photos produce
-  // unreliable line item data. Only run extraction when at least one page is a
-  // digital PDF upload (clean text, reliable parsing).
-  const hasDigitalPDF = pages.some((p) => (typeof p === "object" ? p.type : null) === "pdf");
-  if (!hasDigitalPDF) {
-    console.log(`[AI Scan] ${invoiceUuid}: Photo-only submission - skipping line item extraction`);
-    await markScanStatus(invoiceUuid, "photo-only");
-    return;
-  }
+  // Extract from every submission, regardless of page type. The earlier
+  // hasDigitalPDF guard pre-skipped photo uploads to dodge unreliable
+  // line-item math; that left STL-MO (and any other photo-upload
+  // workflow) with zero line items for 133+ submissions. Bad reads are
+  // now caught downstream at the cron's arithmetic gate (the price-write
+  // chokepoint), which routes suspect lines to review_queue rather than
+  // silently dropping them. The "photo-only" ai_scan_status value is
+  // dead going forward; historical rows keep it for audit.
 
+  return extractAndStoreLineItems(invoiceUuid, pages, metadata);
+}
+
+// Exported extraction body of triggerAIScan; same code path reused by
+// scripts/backfill-stl-mo-line-items.mjs. Pure move; no behavior change.
+export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   try {
     const getPageData = (p) => typeof p === "string" ? p : p.data;
     const resizeForScan = (dataUrl) => {
