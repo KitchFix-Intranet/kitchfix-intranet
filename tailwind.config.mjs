@@ -20,6 +20,8 @@ const config = {
         'kf-green': '#10b981',
         'kf-red': '#ef4444',
         'kf-orange': '#d97706',
+        // Per-hub theme tokens (first introduced in Project OPD PR 7.3)
+        'kf-playbook-teal': '#0F6E56',
         // Status Colors
         'status-pending': '#fbbf24',
         'status-success': '#10b981',

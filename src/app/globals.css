@@ -25,6 +25,10 @@
   --kf-bronze-light: #fffbeb;
   --kf-berry: #be185d;
   --kf-berry-light: #fdf2f8;
+  /* Per-hub theme tokens (Project OPD PR 7.3) */
+  --kf-playbook-teal: #0F6E56;
+  --kf-playbook-teal-dark: #0a5a45;
+  --kf-playbook-teal-light: #d4ebe2;
 }
 
 /* ═══════════════════════════════════════════════════════════

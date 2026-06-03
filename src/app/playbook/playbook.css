@@ -1,0 +1,1637 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The Playbook (Project OPD PR 7.3) · pb- prefix
+   Floor-first: laid out for 375px viewport, lifts to grid at >=640px.
+   Theme: --kf-playbook-teal (#0F6E56) for accents on navy background.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pb-wrap {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 16px 14px 80px;
+}
+
+/* ─── Loading / error / coming-soon stub ─────────────────────────────────── */
+.pb-loading,
+.pb-error {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+  gap: 12px;
+  padding: 24px;
+}
+.pb-loading-pulse {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--kf-playbook-teal);
+  animation: pb-spin 0.9s linear infinite;
+}
+@keyframes pb-spin { to { transform: rotate(360deg); } }
+.pb-loading-text { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.3px; }
+
+.pb-stub-wrap {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.pb-stub-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px 28px;
+  max-width: 440px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(15, 48, 87, 0.08);
+  border: 1px solid var(--kf-border);
+}
+.pb-stub-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal);
+  border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pb-stub-card h1 {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 12px;
+}
+.pb-stub-card p {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.pb-stub-email {
+  margin-top: 20px !important;
+  padding-top: 16px;
+  border-top: 1px solid var(--kf-border);
+  font-size: 12px;
+  color: #6B7785;
+}
+.pb-stub-email strong { color: var(--kf-navy); font-weight: 700; }
+
+/* ─── Hero band ─────────────────────────────────────────────────────────── */
+/* PR 7.3 Batch A item 3 — tightened ~25% so documents reach above the fold
+   faster. Was 28/22 mobile, 36/28 desktop; now 20/14 mobile, 24/18 desktop. */
+.pb-hero {
+  background: linear-gradient(135deg, var(--kf-navy) 0%, #1a4580 100%);
+  border-radius: 20px;
+  padding: 20px 20px 14px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 48, 87, 0.15);
+}
+.pb-hero::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: var(--kf-playbook-teal);
+}
+.pb-hero-content { position: relative; z-index: 1; }
+.pb-hero-tag {
+  font-family: 'Inter', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: white;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+.pb-hero-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 12px;
+  max-width: 560px;
+}
+.pb-ask-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.pb-ask-bar svg { color: var(--kf-playbook-teal); flex-shrink: 0; }
+.pb-ask-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: 'Mulish', sans-serif;
+  font-size: 14px;
+  color: var(--kf-navy);
+  background: transparent;
+  min-width: 0;
+}
+.pb-ask-input::placeholder { color: #6B7785; }
+.pb-ask-clear {
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 600;
+}
+.pb-ask-clear:hover { background: #e2e8f0; }
+
+@media (min-width: 640px) {
+  .pb-hero { padding: 24px 28px 18px; }
+  .pb-hero-tag { font-size: 28px; }
+  .pb-hero-sub { font-size: 14px; }
+  .pb-ask-bar { padding: 12px 16px; }
+  .pb-ask-input { font-size: 15px; }
+}
+
+/* ─── Sticky search (slides in once the hero is scrolled past) ───────────── */
+/* Two-element approach (not a CSS-sticky transform on the hero itself):
+   the hero scrolls away naturally, this slim navy bar slides in from above
+   when the sentinel placed below the hero crosses out of view. Keeps search
+   reachable for a 10x-per-day director without parking the full navy hero
+   in their face on every scroll. Stays in DOM at all times (transform off-
+   screen by default) so the slide is a pure compositor transition. */
+.pb-sticky-search {
+  position: fixed;
+  top: 56px; /* below TopNav */
+  left: 0;
+  right: 0;
+  z-index: 49;
+  background: var(--kf-navy);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(15, 48, 87, 0.18);
+  padding: 8px 14px;
+  transform: translateY(-100%);
+  /* Belt-and-braces hidden state: the TopNav above us has a translucent
+     white background + 12px backdrop-blur (TopNav.css:9-11). translateY(-100%)
+     only slides the bar up by its own ~50px height, which parks it inside the
+     TopNav's y-range, where the blur picks up its navy fill and shows it
+     through faintly. opacity:0 + visibility:hidden in the idle state means
+     there's nothing for the blur to sample, regardless of stacking. The
+     visibility transition is delayed 200ms when going TO hidden so the
+     slide-out animation plays before the bar truly disappears; coming back
+     to --show, visibility goes to visible immediately (0s 0s) so the
+     slide-in can animate. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+.pb-sticky-search--show {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out,
+    visibility 0s linear 0s;
+}
+.pb-sticky-search-inner {
+  max-width: 1024px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.pb-sticky-search-inner svg { color: var(--kf-playbook-teal); flex-shrink: 0; }
+.pb-sticky-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: 'Mulish', sans-serif;
+  font-size: 14px;
+  color: var(--kf-navy);
+  background: transparent;
+  min-width: 0;
+}
+.pb-sticky-search-input::placeholder { color: #6B7785; }
+.pb-sticky-search-clear {
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pb-sticky-search-clear:hover { background: #e2e8f0; }
+@media (prefers-reduced-motion: reduce) {
+  .pb-sticky-search { transition: none; }
+}
+
+/* ─── Owner-only "Build dashboard" link in the hero ──────────────────────── */
+/* Visible only when bootstrap.isOwner === true (gated in JSX). Sits in the
+   hero's top-right corner so it's discoverable to the owner but doesn't
+   shout — small chip-style, white-on-navy. Operators never see this. */
+.pb-admin-link {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 5px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pb-admin-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.pb-admin-link:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* ─── Controls row: chips + view toggle on one line ──────────────────────── */
+.pb-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pb-controls-row .pb-chip-row {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── View toggle (Cards / List) ─────────────────────────────────────────── */
+.pb-view-toggle {
+  display: inline-flex;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 999px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.pb-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 5px 11px;
+  border-radius: 999px;
+  transition: all 0.15s;
+}
+.pb-view-btn:hover { color: var(--kf-navy); }
+.pb-view-btn--on {
+  background: var(--kf-playbook-teal);
+  color: white;
+}
+.pb-view-btn--on:hover { color: white; }
+.pb-view-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+/* Hide the text label on narrow viewports - icon alone is enough. */
+@media (max-width: 520px) {
+  .pb-view-btn span { display: none; }
+  .pb-view-btn { padding: 5px 8px; }
+}
+
+/* ─── Filter chip row ───────────────────────────────────────────────────── */
+.pb-chip-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.pb-chip-row::-webkit-scrollbar { display: none; }
+.pb-chip {
+  background: white;
+  border: 1px solid var(--kf-border);
+  color: #475569;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.pb-chip:hover { border-color: var(--kf-playbook-teal); color: var(--kf-playbook-teal); }
+.pb-chip:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+.pb-chip--on {
+  background: var(--kf-playbook-teal);
+  border-color: var(--kf-playbook-teal);
+  color: white;
+}
+/* Status filter chips (Ready, Draft, Pending, Placeholder, ...) sit after a
+   thin vertical divider so the static "All/Pinned" filters and the dynamic
+   status filters read as two distinct groups in the same row. The status
+   chips themselves use the same .pb-chip base styles - the only difference
+   is the modifier carries a slightly tighter padding so the row doesn't get
+   too wide once 4-6 statuses are appended. */
+.pb-chip--status { padding: 6px 12px; }
+/* Press feedback - confirms a tap landed before the filter result re-renders. */
+.pb-chip:active { transform: scale(0.96); }
+
+.pb-chip-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--kf-border);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+/* ─── Layout: rail + shelves (PR 7.3 Batch A item 2) ───────────────────── */
+.pb-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 768px) {
+  .pb-layout {
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+    transition: grid-template-columns 0.2s ease, gap 0.2s ease;
+  }
+}
+
+/* ─── Sticky left rail ──────────────────────────────────────────────────── */
+/* PR 7.3 Batch A finish:
+   - top: 72px clears the sticky TopNav (56px inner height + breathing room).
+     Bug 1 fix — was 16px, which let the rail tuck behind TopNav.
+   - Card panel container (white bg + faint border + small shadow) so the rail
+     reads as a navigation panel, not floating text. Item 6.
+   - Collapsed variant (.pb-rail--collapsed) drops the panel + shrinks to a
+     thin handle so the cards reclaim the column width. Item 5. */
+.pb-rail { display: none; }
+@media (min-width: 768px) {
+  .pb-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+    padding: 8px;
+    background: white;
+    border: 1px solid var(--kf-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+    /* Floor for the rail's box height so the absolute-positioned toggle has
+       a visible anchor in the collapsed state (when the panel chrome is gone
+       and the rail-links are unmounted, intrinsic height collapses to 0). */
+    min-height: 48px;
+  }
+  .pb-rail--collapsed {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  .pb-layout[data-rail-collapsed="true"] {
+    /* Thin rail-spacer (16px) + 20px gap keeps the toggle's right edge clear
+       of the content column's left edge — 5px clearance so the toggle never
+       overlaps shelf-header text. Cards still reclaim ~168px of the previous
+       180+24 lane (down to 36px total) — visibly wider card area without the
+       header-collision tradeoff. */
+    grid-template-columns: 16px 1fr;
+    gap: 20px;
+  }
+}
+
+/* Circular floating toggle near the top of the rail panel (top:16px, not
+   vertical center) so it stays clear of shelf-header y-positions as they
+   scroll past. Position absolute against .pb-rail (which is position:sticky
+   → forms a containing block). Same right:-15px in both states so the
+   toggle is always centered on the rail's right edge; collapsed-mode
+   horizontal clearance comes from the rail-column lane (see .pb-layout). */
+.pb-rail-toggle {
+  position: absolute;
+  top: 16px;
+  right: -15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid var(--kf-border);
+  box-shadow: 0 2px 6px rgba(15, 48, 87, 0.08);
+  color: #475569;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, box-shadow 0.2s, color 0.15s;
+  z-index: 5;
+}
+.pb-rail-toggle:hover {
+  color: var(--kf-navy);
+  border-color: var(--kf-playbook-teal);
+  box-shadow: 0 4px 10px rgba(15, 48, 87, 0.12);
+}
+.pb-rail-toggle:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+/* One chevron, rotated 180° when collapsed. Smooth ~200ms swap. */
+.pb-rail-toggle svg { transition: transform 0.2s ease; }
+.pb-rail--collapsed .pb-rail-toggle svg { transform: rotate(180deg); }
+
+.pb-rail-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.pb-rail-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  /* Right-padding bumped from 10px → 24px so each count pill sits well clear
+     of the rail's right-edge toggle (the toggle is absolute-positioned on
+     the rail and slightly overlaps the panel's right edge near top:12px). */
+  padding: 7px 24px 7px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.15s;
+}
+.pb-rail-link:hover {
+  background: #f1f5f9;
+  color: var(--kf-navy);
+}
+.pb-rail-link--active {
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  font-weight: 800;
+}
+.pb-rail-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pb-rail-link--active .pb-rail-count {
+  color: var(--kf-playbook-teal-dark);
+  border-color: rgba(15, 110, 86, 0.25);
+}
+
+/* ─── Shelves ───────────────────────────────────────────────────────────── */
+.pb-shelves { display: flex; flex-direction: column; gap: 18px; }
+
+.pb-shelf {
+  background: transparent;
+  /* Account for TopNav (56px sticky) + a few px breathing room when jumped to
+     via the rail (smooth scroll respects this margin). Bug 1 fix — was 72px,
+     which still allowed the shelf top to tuck slightly under the TopNav. */
+  scroll-margin-top: 80px;
+}
+
+/* Shelf title — anchored navy header with a 3px teal vertical bar on the
+   left of the name. Heavier than v1 (was 13px slate; now 14px navy) so the
+   shelf banners read as section anchors when scrolling, not floating labels.
+   The teal bar is the page's one consistent accent — see also active rail
+   link and primary action button. */
+.pb-shelf-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-navy);
+  margin: 0 0 8px;
+  padding: 4px 0;
+  transition: color 0.12s;
+}
+.pb-shelf-title:hover { color: var(--kf-playbook-teal-dark); }
+.pb-shelf-title:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pb-shelf-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.pb-shelf-name::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--kf-playbook-teal);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Unified count pill — shared between shelf headers and rail nav. White
+   ground + 1px border so a count looks the same wherever it appears.
+   Previously: shelf count was grey-filled, rail count was bordered — two
+   designs for the same datum. */
+.pb-shelf-count,
+.pb-rail-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6B7785;
+  background: white;
+  border: 1px solid var(--kf-border);
+  padding: 1px 8px;
+  border-radius: 999px;
+  min-width: 22px;
+  height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.pb-shelf-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--kf-border);
+  margin: 0 4px;
+}
+
+.pb-shelf-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: #6B7785;
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+.pb-shelf-title[aria-expanded="false"] .pb-shelf-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Inline empty-shelf marker — small grey text next to the shelf name,
+   no card-sized white box. Applies to genuinely empty shelves (Finance)
+   AND to shelves emptied by an active filter ("no matches"). */
+.pb-shelf-empty-inline {
+  font-family: 'Mulish', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7785;
+  text-transform: none;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Shelf body wrapper - holds the grid/list and provides the smooth
+   collapse transition. max-height ceiling (4000px) is generous enough that
+   no real shelf hits it; the actual displayed height is content-sized so
+   collapse->expand reveals at the correct pace. opacity transitions in
+   parallel so the content fades as the height closes. */
+.pb-shelf-body {
+  max-height: 4000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 240ms ease-out, opacity 180ms ease-out;
+}
+.pb-shelf-body--collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.pb-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px)  { .pb-card-grid { grid-template-columns: 1fr 1fr; gap: 12px; } }
+@media (min-width: 960px)  { .pb-card-grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+/* List grid - one row per doc, single column at every breakpoint. */
+.pb-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ─── Document list row (compact alt to .pb-card) ────────────────────────── */
+/* Density tuned for scanning - row padding kept just enough to give the
+   status pill / version / nofile cluster vertical breathing room without
+   feeling card-tall. Title is NOT flex-grow:1 (the previous layout caused
+   a wide empty gap between title text and the right-anchored meta cluster);
+   instead, title is content-sized with an ellipsis cap so the meta items
+   sit tight to the title text. */
+.pb-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  padding: 5px 12px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+  position: relative;
+  overflow: hidden;
+  /* Stagger animation mirrors the card grid (see .pb-card) - filter/search
+     change replays the fade-in via the grid's keying in JSX. Shorter
+     translate distance (2px vs 4px) since rows are denser. */
+  animation: pb-row-in 180ms ease-out backwards;
+  animation-delay: calc(min(var(--idx, 0), 16) * 20ms);
+}
+@keyframes pb-row-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pb-list-row:active { transform: scale(0.995); }
+/* Alive/recessed mirrors the card pattern - same openability semantics, just
+   in the denser row form. List view doesn't get a translateY (rows are too
+   short to lift cleanly without thrashing layout); the alive signal is the
+   teal border + crisp shadow on hover, recessed gets dimmed + no border tint. */
+.pb-list-row--alive:hover {
+  border-color: var(--kf-playbook-teal);
+  box-shadow: 0 2px 8px rgba(15, 48, 87, 0.06);
+}
+.pb-list-row--recessed {
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.pb-list-row--recessed:hover {
+  border-color: var(--kf-border);
+  box-shadow: none;
+  opacity: 0.7;
+}
+.pb-list-row:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pb-list-row { transition: none; }
+}
+.pb-list-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  /* No flex-grow - title is content-sized so the meta cluster sits next to
+     the text, not at the row's right edge. Cap with max-width so very long
+     titles ellipsize before pushing meta off-screen. */
+  flex: 0 1 auto;
+  max-width: 480px;
+}
+.pb-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* Mobile - allow meta items to wrap so the row stays usable at 375px. */
+@media (max-width: 520px) {
+  .pb-list-row {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+  .pb-list-title {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.3;
+  }
+}
+
+/* ─── Document card ─────────────────────────────────────────────────────── */
+.pb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  /* Min-height plus margin-top:auto on .pb-card-foot below give all cards in
+     a row a shared baseline regardless of card_line length. Grid's default
+     stretch then matches taller cards too. */
+  min-height: 156px;
+  /* Filter/search stagger - the grid is keyed in JSX on `${filter}|${query}`
+     so a filter or query change remounts the cards, replaying this fade-in.
+     Per-card delay via --idx (set inline) so cards "materialize" in a brief
+     wave rather than popping all at once. Cap at 12 * 30ms so a wide
+     "Pending" filter (~19 cards) doesn't trail too long. backwards fill
+     keeps cards invisible before the animation starts. */
+  animation: pb-card-in 200ms ease-out backwards;
+  animation-delay: calc(min(var(--idx, 0), 12) * 30ms);
+}
+@keyframes pb-card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pb-card:active {
+  /* Press feedback - brief scale-down on tap so a click feels acknowledged
+     before the slide-over animation fires. */
+  transform: scale(0.98);
+}
+/* ALIVE state — the card has a Drive file AND is Live, so opening it lands
+   the operator on a real document. Hover-lift confirms the affordance: 2px
+   rise + grown shadow + teal border tint. House timing 150ms ease-out. */
+.pb-card--alive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(15, 48, 87, 0.1);
+  border-color: var(--kf-playbook-teal);
+}
+
+/* RECESSED state — anything that isn't ready to open right now. Dimmed +
+   desaturated so it visibly reads as "not a door yet" even from across the
+   shelf. Still clickable (the slide-over shows the metadata + the "no file
+   attached" placeholder), just doesn't pretend to be live. NO hover-lift -
+   the absence of lift reinforces the not-ready signal. */
+.pb-card--recessed {
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.pb-card--recessed:hover {
+  /* Only the border + tiny shadow nudge confirm the hover; no transform. */
+  border-color: var(--kf-border);
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  opacity: 0.7;
+}
+
+.pb-card:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* Motion that confirms, not motion that performs. When the user has
+   prefers-reduced-motion, drop the transform but keep the static visual
+   acknowledgement (border, shadow, opacity nudge). */
+@media (prefers-reduced-motion: reduce) {
+  .pb-card { transition: none; }
+  .pb-card--alive:hover { transform: none; }
+}
+
+.pb-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* Class chip — 4 family tints for scan-by-color. Each family lands in a
+   clearly different hue so they're distinguishable at a glance (vs. the
+   previous round which read as slightly-different greys). Still on-brand
+   and subtle — bg saturation kept modest, text dark enough for legibility.
+   Mapped in JS via CLASS_FAMILY:
+     gov   = STD, POL, AGR        (governance — blue/navy family)
+     proc  = PB, SOP              (procedures — teal, page house color)
+     tool  = TPL, FORM, CHK       (work tools — warm sand/amber)
+     ref   = POST, REF            (postings & references — manilla/beige) */
+.pb-class-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #eef0f4;
+  color: #475569;
+  white-space: nowrap;
+}
+.pb-class-chip--gov  { background: #c9d8ea; color: #163454; }
+.pb-class-chip--proc { background: var(--kf-playbook-teal-light); color: var(--kf-playbook-teal-dark); }
+.pb-class-chip--tool { background: #f5dab1; color: #6b4520; }
+.pb-class-chip--ref  { background: #e8dcc8; color: #5a4525; }
+.pb-class-chip--lg {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.pb-critical-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--kf-red);
+  white-space: nowrap;
+}
+.pb-nofile-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #6B7785;
+  white-space: nowrap;
+}
+
+.pb-card-icons {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6B7785;
+}
+/* Pin — muted amber SVG pushpin, smaller than the previous ★ character. Reads
+   as metadata, not as the most saturated thing on the card. */
+.pb-pin {
+  display: inline-flex;
+  align-items: center;
+  color: #cba14a;
+}
+/* Poster mark — printer icon in a warm-tinted chip. The class chip already
+   carries the "Poster" word; the orange chip background here just signals
+   "print and post on the wall" as a doc attribute (not a UI button). Toned
+   amber/sienna so it doesn't compete with the class chip as the loudest
+   thing on the card. */
+.pb-poster-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #a05a23;
+  background: rgba(160, 90, 35, 0.08);
+  padding: 3px;
+  border-radius: 5px;
+}
+
+.pb-card-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0;
+  line-height: 1.3;
+}
+.pb-card-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pb-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Pin the foot to the bottom of the card so cards with shorter card_line
+     content still align their foots — gives the grid row a clean baseline. */
+  margin-top: auto;
+  padding-top: 4px;
+  flex-wrap: wrap;
+}
+.pb-status-pill {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+/* Ghost variant for Pending — the default expected status with 22+ docs in
+   build-out. Recedes to a faint outlined chip so the eye can scan past it
+   and the non-Pending statuses (Draft, Placeholder, Blocked) catch attention. */
+.pb-status-pill--ghost {
+  border-color: #e2e8f0;
+}
+/* Large variant — used in the slide-over reader's header class-row so the
+   status pill reads at the same weight as the class chip (--lg). Status is
+   one of the most important things about a doc, so it lives up top here
+   instead of buried in the small meta line. */
+.pb-status-pill--lg {
+  font-size: 11px;
+  padding: 4px 11px;
+  letter-spacing: 0.4px;
+}
+.pb-version {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7785;
+}
+
+/* ─── Slide-over reader ─────────────────────────────────────────────────── */
+.pb-slide-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 4000;
+  animation: pb-fade-in 0.2s ease;
+}
+.pb-slide {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 520px;
+  background: white;
+  z-index: 4001;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: pb-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes pb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pb-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.pb-slide-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 0;
+  flex-shrink: 0;
+}
+/* Back button - appears when the relationship-navigation stack has more than
+   one doc on it. Small teal-tinted pill on the left of the head; close stays
+   pinned to the right via margin-left:auto so single-button layouts also
+   render with close on the right. */
+.pb-slide-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border: 1px solid var(--kf-border);
+  color: var(--kf-playbook-teal-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.pb-slide-back:hover {
+  border-color: var(--kf-playbook-teal);
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-slide-back:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+.pb-slide-close {
+  margin-left: auto;
+  background: #f1f5f9;
+  border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pb-slide-close:hover { background: #e2e8f0; }
+
+.pb-slide-loading,
+.pb-slide-error {
+  padding: 60px 24px;
+  text-align: center;
+  color: #6B7785;
+  font-size: 13px;
+}
+.pb-slide-error { color: var(--kf-red); }
+
+.pb-slide-body {
+  overflow-y: auto;
+  padding: 4px 24px 32px;
+  flex: 1;
+  /* Fade + slight upward translate on mount. SlideOverReader keys this
+     component on currentDocId so doc-swap (relationship click) remounts
+     it and replays this animation - the user FEELS they moved to a
+     different doc instead of having content hard-cut in place. House
+     timing: 180ms ease-out. Initial slide-over open also gets this; it
+     layers on top of the slide-in transform from the outer container,
+     which is fine. */
+  animation: pb-content-in 180ms ease-out;
+}
+@keyframes pb-content-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pb-slide-head-block {
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--kf-border);
+}
+.pb-slide-class-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.pb-slide-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 4px;
+  line-height: 1.3;
+}
+.pb-slide-cardline { font-size: 13px; color: #475569; line-height: 1.5; margin: 0 0 12px; }
+.pb-slide-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+/* Doc ID leads the meta line per STD-001 - bumped from faint slate (11px,
+   #6B7785) to navy + bolder + monospaced so it reads as the row's anchor.
+   IDs are codes; monospace makes them feel like the canonical reference
+   they are. */
+.pb-slide-id {
+  font-family: 'Inter', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  letter-spacing: 0.2px;
+}
+
+/* ─── EN/ES language toggle (bilingual docs only) ────────────────────────── */
+/* Rendered immediately above the reader iframe when the document has both an
+   EN and an ES Drive file. Compact segmented pill - matches the catalog's
+   .pb-view-toggle visual language so the reader doesn't introduce a new
+   control shape, just borrows the established one. Teal accent on the
+   active segment. */
+.pb-lang-toggle {
+  display: inline-flex;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 999px;
+  padding: 2px;
+  margin: 18px 0 8px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.pb-lang-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  padding: 4px 12px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+  min-width: 36px;
+}
+.pb-lang-btn:hover { color: var(--kf-navy); }
+.pb-lang-btn--on {
+  background: var(--kf-playbook-teal);
+  color: white;
+}
+.pb-lang-btn--on:hover { color: white; }
+.pb-lang-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* ─── Reader frame (Drive embed) ─────────────────────────────────────────── */
+/* Taller floor (500px) + higher max-vh ceiling pushes the document content
+   above Drive's bottom dark page/zoom chrome - the previous 320px floor
+   left page-1 text right where the controls sat. Aspect-ratio kept as a
+   secondary hint so wider viewports still scale gracefully. Frame is keyed
+   on `${doc.id}-${activeLang}` in JSX so doc-swap + lang-swap fire the
+   pb-frame-swap animation - brief opacity dip, no remount cost beyond the
+   iframe reload that was already happening on src change. */
+.pb-reader-frame {
+  position: relative;
+  margin: 18px 0 18px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid var(--kf-border);
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  min-height: 500px;
+  max-height: 78vh;
+  animation: pb-frame-swap 200ms ease-out;
+}
+.pb-reader-iframe {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  z-index: 1;  /* sits above the skeleton */
+  background: white;
+}
+
+/* Pop-out / open-external escape hatch in the top-right of the frame.
+   Visible affordance for "read this full-size in Drive" so users don't
+   have to scroll down to the actions row. Same activeViewUrl as the
+   primary action button. */
+.pb-reader-popout {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  color: var(--kf-navy);
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(15, 48, 87, 0.12);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, color 0.12s;
+}
+.pb-reader-popout:hover {
+  color: var(--kf-playbook-teal-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 48, 87, 0.18);
+}
+.pb-reader-popout:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* Skeleton shimmer that fills the frame until iframe.onLoad fires. Sits
+   below the iframe (z-index 0); the iframe paints on top once Drive has
+   the first frame rendered. Quiet diagonal shimmer - covers the bare
+   white "frame loading" moment without performing for attention. */
+.pb-iframe-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(110deg, #f1f5f9 8%, #e2e8f0 18%, #f1f5f9 33%) 0 0 / 200% 100%;
+  animation: pb-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes pb-frame-swap {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+@keyframes pb-skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.pb-no-file {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 20px;
+  gap: 8px;
+  color: #6B7785;
+}
+.pb-no-file-icon {
+  background: white;
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--kf-playbook-teal);
+}
+.pb-no-file h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+  margin: 8px 0 0;
+}
+.pb-no-file p { font-size: 12px; line-height: 1.5; margin: 0; max-width: 280px; }
+
+/* ─── Slide-over action row ──────────────────────────────────────────────── */
+.pb-slide-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.pb-action {
+  background: white;
+  border: 1px solid var(--kf-border);
+  color: var(--kf-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.pb-action:hover {
+  border-color: var(--kf-playbook-teal);
+  color: var(--kf-playbook-teal);
+}
+.pb-action:active { transform: scale(0.97); }
+.pb-action--primary {
+  background: var(--kf-playbook-teal);
+  border-color: var(--kf-playbook-teal);
+  color: white;
+}
+.pb-action--primary:hover {
+  background: var(--kf-playbook-teal-dark);
+  border-color: var(--kf-playbook-teal-dark);
+  color: white;
+}
+.pb-action--ghost {
+  background: transparent;
+  border-color: var(--kf-border);
+  color: #64748b;
+}
+.pb-action--ghost:hover { color: var(--kf-navy); }
+.pb-action--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ─── Report-issue form ──────────────────────────────────────────────────── */
+.pb-report-form {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--kf-border);
+}
+.pb-report-textarea {
+  width: 100%;
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'Mulish', sans-serif;
+  font-size: 13px;
+  color: var(--kf-navy);
+  resize: vertical;
+  outline: none;
+  background: white;
+  min-height: 70px;
+}
+.pb-report-textarea:focus { border-color: var(--kf-playbook-teal); }
+.pb-report-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--kf-red);
+}
+.pb-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pb-report-success {
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+/* ─── SousAI doc-scoped affordance (UI-only placeholder) ─────────────────── */
+/* This is intentionally NOT a functioning control - the wire-up lands in a
+   future change. Designed as aspirational so it reads as "coming, by design"
+   rather than "broken button":
+     - Dashed teal border + faint teal-tinted ground = clearly different from
+       any of the working .pb-action buttons (which have solid borders)
+     - Italic muted placeholder text inside (mirrors how disabled inputs read)
+     - "Coming soon" tag on the right pinpoints the state explicitly
+     - cursor: not-allowed + aria-disabled=true for accessibility honesty */
+.pb-sousai {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(15, 110, 86, 0.04);
+  border: 1px dashed var(--kf-playbook-teal);
+  border-radius: 10px;
+  color: var(--kf-playbook-teal-dark);
+  cursor: not-allowed;
+  margin-bottom: 18px;
+  user-select: none;
+}
+.pb-sousai-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--kf-playbook-teal);
+  flex-shrink: 0;
+}
+.pb-sousai-text {
+  flex: 1;
+  font-family: 'Mulish', sans-serif;
+  font-size: 13px;
+  color: #6B7785;
+  font-style: italic;
+}
+.pb-sousai-tag {
+  flex-shrink: 0;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* ─── Slide-over sections ────────────────────────────────────────────────── */
+.pb-slide-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--kf-border);
+}
+.pb-slide-section:last-child { border-bottom: 0; }
+.pb-slide-section-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6B7785;
+  margin: 0 0 10px;
+}
+.pb-slide-text {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.pb-tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Keyword tag - filled, rounded pill. Pure search-term semantic. */
+.pb-tag {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+/* Surface tag - outlined, squared-off chip with a leading layout-grid icon.
+   Surfaces describe PLACEMENT (where the doc appears in the intranet); the
+   shape + icon makes them visibly different from keywords without relying
+   on a "#" prefix that read as "just another tag". */
+.pb-tag--surface {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: white;
+  color: var(--kf-playbook-teal-dark);
+  border: 1px solid var(--kf-playbook-teal);
+  border-radius: 4px;
+  padding: 3px 9px 3px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pb-tag--surface svg {
+  color: var(--kf-playbook-teal);
+  flex-shrink: 0;
+}
+
+.pb-rel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pb-rel-item {
+  list-style: none;
+  font-size: 12px;
+}
+/* Relationship row is now a clickable button — clicking navigates the reader
+   in place to the related doc (no slide-over close/reopen). The border + hover
+   background make it visibly interactive; the trailing chevron signals "this
+   leads somewhere." */
+.pb-rel-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+.pb-rel-link:hover {
+  background: #f8fafc;
+  border-color: var(--kf-border);
+}
+.pb-rel-link:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+/* Humanized rel-type label - sentence case + colon (e.g. "See also:",
+   "Part of:", "Source for:") instead of the previous "REFERENCED BY ←"
+   graph-edge jargon. The label text now does the directional work; the
+   trailing colon reads as a natural lead-in to the doc title. Uppercase
+   + letter-spacing dropped - they were performing "this is a label!"
+   instead of just being one. */
+.pb-rel-type {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: var(--kf-navy);
+  font-size: 12.5px;
+  flex-shrink: 0;
+  min-width: 95px;
+}
+.pb-rel-other {
+  color: #475569;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+}
+.pb-rel-id {
+  font-family: 'Inter', monospace;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+.pb-rel-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  color: #cbd5e1;
+  flex-shrink: 0;
+  transition: color 0.12s, transform 0.12s;
+}
+.pb-rel-link:hover .pb-rel-chevron {
+  color: var(--kf-playbook-teal);
+  transform: translateX(2px);
+}
+
+.pb-footer-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.pb-footer-meta-row span { color: #6B7785; }
+.pb-footer-meta-row strong { color: #475569; font-weight: 600; }
+
+/* ─── Mobile slide-over polish ───────────────────────────────────────────── */
+@media (max-width: 520px) {
+  .pb-slide { max-width: 100vw; }
+  /* Mobile: shorter floor than desktop's 500px since the viewport itself
+     is shorter. Aspect-ratio 3/4 still scales gracefully. */
+  .pb-reader-frame { aspect-ratio: 3 / 4; min-height: 360px; max-height: 75vh; }
+}
+
+/* ─── Empty-state (zero docs in catalog) ─────────────────────────────────── */
+.pb-empty-state {
+  text-align: center;
+  padding: 64px 24px 80px;
+  color: #6B7785;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pb-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.pb-empty-state h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: #475569;
+  margin: 0;
+}
+.pb-empty-state p {
+  font-size: 13px;
+  margin: 0;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Global prefers-reduced-motion guard
+   ════════════════════════════════════════════════════════════════════════════
+
+   Required by the motion ethos: "all motion respects prefers-reduced-motion;
+   when set, transitions collapse to instant or near-instant." This is the
+   floor that catches anything individual rules above might miss - the heavy
+   hammer that nukes all animations + transitions to ~instant when the user
+   has the OS-level reduce-motion preference on. Applies to:
+     - shelf body height/opacity transitions
+     - card + list-row stagger and hover-lift
+     - rail-toggle chevron rotation
+     - slide-over backdrop fade + slide-in
+     - reader frame swap + skeleton shimmer
+     - sticky search bar slide
+     - filter chip hover/active scales
+     - reader actions / pop-out lift
+   Everything else explicit in this file already has individual guards above
+   where it mattered for clarity; this is the safety net. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
