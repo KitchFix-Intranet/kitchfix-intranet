@@ -1168,6 +1168,18 @@ export async function insertInvoiceRejection(input) {
   const sheetsResult = await insertInvoiceRejectionSheets(input);
   if (isDualWrite(INVOICE_REJECTIONS_TAB)) {
     await insertInvoiceRejectionPostgres({ ...input, rejectedAt: sheetsResult.rejectedAt });
+    // PR 6.6 hotfix: schema divergence. The Sheets adapter writes
+    // rejection metadata (cols R-U) AND flips cols N-O on the same
+    // submission row atomically. The PG schema normalizes rejections
+    // into a separate table, so the parent's status field has to be
+    // updated explicitly. Uses the private PG-only adapter to avoid
+    // double-writing to Sheets (cols N-O were already set above).
+    // statusUpdatedAt mirrors the rejection's rejected_at to keep
+    // the two stores aligned.
+    await updateInvoiceFieldsPostgres(input.submissionUuid, {
+      status: "returned",
+      statusUpdatedAt: sheetsResult.rejectedAt,
+    });
   }
   return sheetsResult;
 }
@@ -1184,6 +1196,15 @@ export async function unrejectInvoice(submissionUuid, by, _opts = {}) {
   await unrejectInvoiceSheets(submissionUuid, by);
   if (isDualWrite(INVOICE_REJECTIONS_TAB)) {
     await unrejectInvoicePostgres(submissionUuid, by);
+    // PR 6.6 hotfix: symmetric with insertInvoiceRejection. The Sheets
+    // adapter clears cols R-U AND reverts cols N-O to ('sent', '') on
+    // the same submission row. The PG schema normalizes rejections,
+    // so the parent's status revert must be explicit. PG-only adapter
+    // avoids re-writing the Sheets cols already cleared above.
+    await updateInvoiceFieldsPostgres(submissionUuid, {
+      status: "sent",
+      statusUpdatedAt: null,
+    });
   }
 }
 
