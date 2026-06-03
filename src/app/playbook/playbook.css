@@ -77,7 +77,7 @@
   padding-top: 16px;
   border-top: 1px solid var(--kf-border);
   font-size: 12px;
-  color: #94a3b8;
+  color: #6B7785;
 }
 .pb-stub-email strong { color: var(--kf-navy); font-weight: 700; }
 
@@ -136,7 +136,7 @@
   background: transparent;
   min-width: 0;
 }
-.pb-ask-input::placeholder { color: #94a3b8; }
+.pb-ask-input::placeholder { color: #6B7785; }
 .pb-ask-clear {
   background: #f1f5f9;
   color: #475569;
@@ -156,6 +156,92 @@
   .pb-hero-sub { font-size: 14px; }
   .pb-ask-bar { padding: 12px 16px; }
   .pb-ask-input { font-size: 15px; }
+}
+
+/* ─── Sticky search (slides in once the hero is scrolled past) ───────────── */
+/* Two-element approach (not a CSS-sticky transform on the hero itself):
+   the hero scrolls away naturally, this slim navy bar slides in from above
+   when the sentinel placed below the hero crosses out of view. Keeps search
+   reachable for a 10x-per-day director without parking the full navy hero
+   in their face on every scroll. Stays in DOM at all times (transform off-
+   screen by default) so the slide is a pure compositor transition. */
+.pb-sticky-search {
+  position: fixed;
+  top: 56px; /* below TopNav */
+  left: 0;
+  right: 0;
+  z-index: 49;
+  background: var(--kf-navy);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(15, 48, 87, 0.18);
+  padding: 8px 14px;
+  transform: translateY(-100%);
+  /* Belt-and-braces hidden state: the TopNav above us has a translucent
+     white background + 12px backdrop-blur (TopNav.css:9-11). translateY(-100%)
+     only slides the bar up by its own ~50px height, which parks it inside the
+     TopNav's y-range, where the blur picks up its navy fill and shows it
+     through faintly. opacity:0 + visibility:hidden in the idle state means
+     there's nothing for the blur to sample, regardless of stacking. The
+     visibility transition is delayed 200ms when going TO hidden so the
+     slide-out animation plays before the bar truly disappears; coming back
+     to --show, visibility goes to visible immediately (0s 0s) so the
+     slide-in can animate. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+.pb-sticky-search--show {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out,
+    visibility 0s linear 0s;
+}
+.pb-sticky-search-inner {
+  max-width: 1024px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.pb-sticky-search-inner svg { color: var(--kf-playbook-teal); flex-shrink: 0; }
+.pb-sticky-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: 'Mulish', sans-serif;
+  font-size: 14px;
+  color: var(--kf-navy);
+  background: transparent;
+  min-width: 0;
+}
+.pb-sticky-search-input::placeholder { color: #6B7785; }
+.pb-sticky-search-clear {
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pb-sticky-search-clear:hover { background: #e2e8f0; }
+@media (prefers-reduced-motion: reduce) {
+  .pb-sticky-search { transition: none; }
 }
 
 /* ─── Owner-only "Build dashboard" link in the hero ──────────────────────── */
@@ -278,6 +364,24 @@
   border-color: var(--kf-playbook-teal);
   color: white;
 }
+/* Status filter chips (Ready, Draft, Pending, Placeholder, ...) sit after a
+   thin vertical divider so the static "All/Pinned" filters and the dynamic
+   status filters read as two distinct groups in the same row. The status
+   chips themselves use the same .pb-chip base styles - the only difference
+   is the modifier carries a slightly tighter padding so the row doesn't get
+   too wide once 4-6 statuses are appended. */
+.pb-chip--status { padding: 6px 12px; }
+/* Press feedback - confirms a tap landed before the filter result re-renders. */
+.pb-chip:active { transform: scale(0.96); }
+
+.pb-chip-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--kf-border);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
 /* ─── Layout: rail + shelves (PR 7.3 Batch A item 2) ───────────────────── */
 .pb-layout {
   display: grid;
@@ -492,7 +596,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
+  color: #6B7785;
   background: white;
   border: 1px solid var(--kf-border);
   padding: 1px 8px;
@@ -515,7 +619,7 @@
 .pb-shelf-chevron {
   display: inline-flex;
   align-items: center;
-  color: #94a3b8;
+  color: #6B7785;
   transition: transform 0.18s ease;
   flex-shrink: 0;
 }
@@ -530,11 +634,27 @@
   font-family: 'Mulish', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: #6B7785;
   text-transform: none;
   letter-spacing: 0.2px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Shelf body wrapper - holds the grid/list and provides the smooth
+   collapse transition. max-height ceiling (4000px) is generous enough that
+   no real shelf hits it; the actual displayed height is content-sized so
+   collapse->expand reveals at the correct pace. opacity transitions in
+   parallel so the content fades as the height closes. */
+.pb-shelf-body {
+  max-height: 4000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 240ms ease-out, opacity 180ms ease-out;
+}
+.pb-shelf-body--collapsed {
+  max-height: 0;
+  opacity: 0;
 }
 
 .pb-card-grid {
@@ -574,21 +694,40 @@
   transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
   position: relative;
   overflow: hidden;
+  /* Stagger animation mirrors the card grid (see .pb-card) - filter/search
+     change replays the fade-in via the grid's keying in JSX. Shorter
+     translate distance (2px vs 4px) since rows are denser. */
+  animation: pb-row-in 180ms ease-out backwards;
+  animation-delay: calc(min(var(--idx, 0), 16) * 20ms);
 }
-.pb-list-row:hover {
+@keyframes pb-row-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pb-list-row:active { transform: scale(0.995); }
+/* Alive/recessed mirrors the card pattern - same openability semantics, just
+   in the denser row form. List view doesn't get a translateY (rows are too
+   short to lift cleanly without thrashing layout); the alive signal is the
+   teal border + crisp shadow on hover, recessed gets dimmed + no border tint. */
+.pb-list-row--alive:hover {
   border-color: var(--kf-playbook-teal);
   box-shadow: 0 2px 8px rgba(15, 48, 87, 0.06);
+}
+.pb-list-row--recessed {
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.pb-list-row--recessed:hover {
+  border-color: var(--kf-border);
+  box-shadow: none;
+  opacity: 0.7;
 }
 .pb-list-row:focus-visible {
   outline: 2px solid var(--kf-playbook-teal);
   outline-offset: 2px;
 }
-.pb-list-row--critical::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--kf-red);
+@media (prefers-reduced-motion: reduce) {
+  .pb-list-row { transition: none; }
 }
 .pb-list-title {
   font-family: 'Inter', sans-serif;
@@ -646,22 +785,60 @@
      a row a shared baseline regardless of card_line length. Grid's default
      stretch then matches taller cards too. */
   min-height: 156px;
+  /* Filter/search stagger - the grid is keyed in JSX on `${filter}|${query}`
+     so a filter or query change remounts the cards, replaying this fade-in.
+     Per-card delay via --idx (set inline) so cards "materialize" in a brief
+     wave rather than popping all at once. Cap at 12 * 30ms so a wide
+     "Pending" filter (~19 cards) doesn't trail too long. backwards fill
+     keeps cards invisible before the animation starts. */
+  animation: pb-card-in 200ms ease-out backwards;
+  animation-delay: calc(min(var(--idx, 0), 12) * 30ms);
 }
-.pb-card:hover {
+@keyframes pb-card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pb-card:active {
+  /* Press feedback - brief scale-down on tap so a click feels acknowledged
+     before the slide-over animation fires. */
+  transform: scale(0.98);
+}
+/* ALIVE state — the card has a Drive file AND is Live, so opening it lands
+   the operator on a real document. Hover-lift confirms the affordance: 2px
+   rise + grown shadow + teal border tint. House timing 150ms ease-out. */
+.pb-card--alive:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 14px rgba(15, 48, 87, 0.1);
   border-color: var(--kf-playbook-teal);
 }
+
+/* RECESSED state — anything that isn't ready to open right now. Dimmed +
+   desaturated so it visibly reads as "not a door yet" even from across the
+   shelf. Still clickable (the slide-over shows the metadata + the "no file
+   attached" placeholder), just doesn't pretend to be live. NO hover-lift -
+   the absence of lift reinforces the not-ready signal. */
+.pb-card--recessed {
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.pb-card--recessed:hover {
+  /* Only the border + tiny shadow nudge confirm the hover; no transform. */
+  border-color: var(--kf-border);
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  opacity: 0.7;
+}
+
 .pb-card:focus-visible {
   outline: 2px solid var(--kf-playbook-teal);
   outline-offset: 2px;
 }
-.pb-card--critical::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--kf-red);
+
+/* Motion that confirms, not motion that performs. When the user has
+   prefers-reduced-motion, drop the transform but keep the static visual
+   acknowledgement (border, shadow, opacity nudge). */
+@media (prefers-reduced-motion: reduce) {
+  .pb-card { transition: none; }
+  .pb-card--alive:hover { transform: none; }
 }
 
 .pb-card-head {
@@ -716,7 +893,7 @@
   padding: 3px 8px;
   border-radius: 6px;
   background: #f1f5f9;
-  color: #94a3b8;
+  color: #6B7785;
   white-space: nowrap;
 }
 
@@ -725,7 +902,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #94a3b8;
+  color: #6B7785;
 }
 /* Pin — muted amber SVG pushpin, smaller than the previous ★ character. Reads
    as metadata, not as the most saturated thing on the card. */
@@ -806,30 +983,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
-}
-
-/* Quiet "no file yet" marker — sits in the card-foot cluster (left-aligned
-   with status + version) so the foot reads as one coherent zone, not two
-   disconnected items. Italic + light slate so it recedes against the status
-   pill but stays scannable for owner-only "missing Drive link" sweeps. */
-.pb-nofile-marker {
-  font-family: 'Mulish', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  font-style: italic;
-  color: #94a3b8;
-  letter-spacing: 0.2px;
-}
-/* Mid-dot separator between version and "no file yet" — renders only when
-   both are present (JSX conditional). Quiet slate dot, no extra width
-   beyond the standard flex gap, just punctuation so the two facts read
-   distinct instead of running on. */
-.pb-foot-sep {
-  color: #cbd5e1;
-  font-size: 14px;
-  line-height: 1;
-  user-select: none;
+  color: #6B7785;
 }
 
 /* ─── Slide-over reader ─────────────────────────────────────────────────── */
@@ -912,7 +1066,7 @@
 .pb-slide-error {
   padding: 60px 24px;
   text-align: center;
-  color: #94a3b8;
+  color: #6B7785;
   font-size: 13px;
 }
 .pb-slide-error { color: var(--kf-red); }
@@ -921,6 +1075,18 @@
   overflow-y: auto;
   padding: 4px 24px 32px;
   flex: 1;
+  /* Fade + slight upward translate on mount. SlideOverReader keys this
+     component on currentDocId so doc-swap (relationship click) remounts
+     it and replays this animation - the user FEELS they moved to a
+     different doc instead of having content hard-cut in place. House
+     timing: 180ms ease-out. Initial slide-over open also gets this; it
+     layers on top of the slide-in transform from the outer container,
+     which is fine. */
+  animation: pb-content-in 180ms ease-out;
+}
+@keyframes pb-content-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .pb-slide-head-block {
@@ -951,10 +1117,16 @@
   font-size: 12px;
   color: #64748b;
 }
+/* Doc ID leads the meta line per STD-001 - bumped from faint slate (11px,
+   #6B7785) to navy + bolder + monospaced so it reads as the row's anchor.
+   IDs are codes; monospace makes them feel like the canonical reference
+   they are. */
 .pb-slide-id {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: #94a3b8;
+  font-family: 'Inter', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  letter-spacing: 0.2px;
 }
 
 /* ─── EN/ES language toggle (bilingual docs only) ────────────────────────── */
@@ -999,21 +1171,86 @@
 }
 
 /* ─── Reader frame (Drive embed) ─────────────────────────────────────────── */
+/* Taller floor (500px) + higher max-vh ceiling pushes the document content
+   above Drive's bottom dark page/zoom chrome - the previous 320px floor
+   left page-1 text right where the controls sat. Aspect-ratio kept as a
+   secondary hint so wider viewports still scale gracefully. Frame is keyed
+   on `${doc.id}-${activeLang}` in JSX so doc-swap + lang-swap fire the
+   pb-frame-swap animation - brief opacity dip, no remount cost beyond the
+   iframe reload that was already happening on src change. */
 .pb-reader-frame {
+  position: relative;
   margin: 18px 0 18px;
   background: #f8fafc;
   border-radius: 12px;
   border: 1px solid var(--kf-border);
   overflow: hidden;
   aspect-ratio: 4 / 5;
-  min-height: 320px;
-  max-height: 70vh;
+  min-height: 500px;
+  max-height: 78vh;
+  animation: pb-frame-swap 200ms ease-out;
 }
 .pb-reader-iframe {
+  position: relative;
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
+  z-index: 1;  /* sits above the skeleton */
+  background: white;
+}
+
+/* Pop-out / open-external escape hatch in the top-right of the frame.
+   Visible affordance for "read this full-size in Drive" so users don't
+   have to scroll down to the actions row. Same activeViewUrl as the
+   primary action button. */
+.pb-reader-popout {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  color: var(--kf-navy);
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(15, 48, 87, 0.12);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, color 0.12s;
+}
+.pb-reader-popout:hover {
+  color: var(--kf-playbook-teal-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 48, 87, 0.18);
+}
+.pb-reader-popout:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* Skeleton shimmer that fills the frame until iframe.onLoad fires. Sits
+   below the iframe (z-index 0); the iframe paints on top once Drive has
+   the first frame rendered. Quiet diagonal shimmer - covers the bare
+   white "frame loading" moment without performing for attention. */
+.pb-iframe-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(110deg, #f1f5f9 8%, #e2e8f0 18%, #f1f5f9 33%) 0 0 / 200% 100%;
+  animation: pb-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes pb-frame-swap {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+@keyframes pb-skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 .pb-no-file {
   height: 100%;
@@ -1024,7 +1261,7 @@
   text-align: center;
   padding: 32px 20px;
   gap: 8px;
-  color: #94a3b8;
+  color: #6B7785;
 }
 .pb-no-file-icon {
   background: white;
@@ -1068,6 +1305,7 @@
   border-color: var(--kf-playbook-teal);
   color: var(--kf-playbook-teal);
 }
+.pb-action:active { transform: scale(0.97); }
 .pb-action--primary {
   background: var(--kf-playbook-teal);
   border-color: var(--kf-playbook-teal);
@@ -1166,7 +1404,7 @@
   flex: 1;
   font-family: 'Mulish', sans-serif;
   font-size: 13px;
-  color: #94a3b8;
+  color: #6B7785;
   font-style: italic;
 }
 .pb-sousai-tag {
@@ -1194,7 +1432,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #94a3b8;
+  color: #6B7785;
   margin: 0 0 10px;
 }
 .pb-slide-text {
@@ -1274,15 +1512,19 @@
   outline: 2px solid var(--kf-playbook-teal);
   outline-offset: 2px;
 }
+/* Humanized rel-type label - sentence case + colon (e.g. "See also:",
+   "Part of:", "Source for:") instead of the previous "REFERENCED BY ←"
+   graph-edge jargon. The label text now does the directional work; the
+   trailing colon reads as a natural lead-in to the doc title. Uppercase
+   + letter-spacing dropped - they were performing "this is a label!"
+   instead of just being one. */
 .pb-rel-type {
   font-family: 'Inter', sans-serif;
   font-weight: 700;
-  color: var(--kf-playbook-teal-dark);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  color: var(--kf-navy);
+  font-size: 12.5px;
   flex-shrink: 0;
-  min-width: 110px;
+  min-width: 95px;
 }
 .pb-rel-other {
   color: #475569;
@@ -1318,20 +1560,22 @@
   font-size: 12px;
   padding: 4px 0;
 }
-.pb-footer-meta-row span { color: #94a3b8; }
+.pb-footer-meta-row span { color: #6B7785; }
 .pb-footer-meta-row strong { color: #475569; font-weight: 600; }
 
 /* ─── Mobile slide-over polish ───────────────────────────────────────────── */
 @media (max-width: 520px) {
   .pb-slide { max-width: 100vw; }
-  .pb-reader-frame { aspect-ratio: 3 / 4; min-height: 240px; }
+  /* Mobile: shorter floor than desktop's 500px since the viewport itself
+     is shorter. Aspect-ratio 3/4 still scales gracefully. */
+  .pb-reader-frame { aspect-ratio: 3 / 4; min-height: 360px; max-height: 75vh; }
 }
 
 /* ─── Empty-state (zero docs in catalog) ─────────────────────────────────── */
 .pb-empty-state {
   text-align: center;
   padding: 64px 24px 80px;
-  color: #94a3b8;
+  color: #6B7785;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1360,4 +1604,34 @@
   margin: 0;
   max-width: 360px;
   line-height: 1.5;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Global prefers-reduced-motion guard
+   ════════════════════════════════════════════════════════════════════════════
+
+   Required by the motion ethos: "all motion respects prefers-reduced-motion;
+   when set, transitions collapse to instant or near-instant." This is the
+   floor that catches anything individual rules above might miss - the heavy
+   hammer that nukes all animations + transitions to ~instant when the user
+   has the OS-level reduce-motion preference on. Applies to:
+     - shelf body height/opacity transitions
+     - card + list-row stagger and hover-lift
+     - rail-toggle chevron rotation
+     - slide-over backdrop fade + slide-in
+     - reader frame swap + skeleton shimmer
+     - sticky search bar slide
+     - filter chip hover/active scales
+     - reader actions / pop-out lift
+   Everything else explicit in this file already has individual guards above
+   where it mattered for clarity; this is the safety net. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

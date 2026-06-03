@@ -376,7 +376,7 @@ function AdminDashboard({
 
       {/* Slide-over reader (same one the catalog uses) ───────────────────── */}
       {openDocId && (
-        <SlideOverReader docId={openDocId} onClose={() => setOpenDocId(null)} />
+        <SlideOverReader docId={openDocId} onClose={() => setOpenDocId(null)} isOwner={true} />
       )}
     </div>
   );

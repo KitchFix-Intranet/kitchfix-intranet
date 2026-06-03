@@ -72,7 +72,7 @@
 .pb-metric-of {
   font-size: 14px;
   font-weight: 600;
-  color: #94a3b8;
+  color: #6B7785;
 }
 .pb-metric-label {
   font-family: 'Inter', sans-serif;
@@ -223,7 +223,7 @@ button.pb-admin-gap-link:focus-visible {
 }
 .pb-admin-gap-note {
   font-size: 12px;
-  color: #94a3b8;
+  color: #6B7785;
 }
 .pb-admin-gap--ok {
   color: var(--kf-playbook-teal-dark);
@@ -258,11 +258,11 @@ button.pb-admin-gap-link:focus-visible {
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
-  color: #94a3b8;
+  color: #6B7785;
 }
 .pb-admin-worklist-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: #6B7785;
 }
 
 .pb-admin-table-wrap {

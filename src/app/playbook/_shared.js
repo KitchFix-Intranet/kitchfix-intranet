@@ -67,20 +67,30 @@ export const ALL_STATUSES = [
   "Blocked",
 ];
 
+// Humanized relationship labels - graph-edge jargon replaced with plain
+// phrases. Per-rel_type:
+//   references OUT     : "See also:"          (this doc points at another)
+//   references IN      : "Part of:"           (another doc points at this)
+//   derived_from OUT   : "Based on:"          (this doc is derived from another)
+//   derived_from IN    : "Source for:"        (this doc is the source for another)
+//   related OUT/IN     : "Related:"           (sibling)
+// implements/supersedes/superseded_by kept at near-original wording pending
+// explicit copy from k.fietek - they don't appear in the current 36-edge
+// seed often (if at all), so polishing them is a follow-up.
 export const RELATIONSHIP_LABELS_OUT = {
-  references:    "References",
+  references:    "See also",
   implements:    "Implements",
   supersedes:    "Supersedes",
   superseded_by: "Superseded by",
-  derived_from:  "Derived from",
-  related:       "Related to",
+  derived_from:  "Based on",
+  related:       "Related",
 };
 
 export const RELATIONSHIP_LABELS_IN = {
-  references:    "Referenced by",
+  references:    "Part of",
   implements:    "Implemented by",
   supersedes:    "Replaces (older)",
   superseded_by: "Replacement for",
   derived_from:  "Source for",
-  related:       "Related to",
+  related:       "Related",
 };

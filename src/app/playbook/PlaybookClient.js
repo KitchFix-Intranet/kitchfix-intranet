@@ -9,19 +9,49 @@
 // Shared data maps live in ./_shared. CSS prefix pb-.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import "./playbook.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
 
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
-// chip was removed once /playbook/admin shipped — the dashboard's worklist
-// (sortable by Linked) is now the place to find unlinked docs.
+// chip was removed once /playbook/admin shipped (the dashboard's worklist
+// covers it). The "Critical" chip was also dropped here once the critical
+// visual treatment came off cards — the chip filtered to docs that look
+// identical to non-critical ones, so it had no signal-to-action ratio in
+// the operator view. The `critical` column stays in the data model intact.
+// Status chips (Ready, Draft, Pending, Placeholder, etc.) are appended
+// dynamically at render time from whatever distinct statuses exist in the
+// visible documents — they aren't hardcoded here.
 const FILTER_CHIPS = [
-  { id: "all",      label: "All" },
-  { id: "critical", label: "Critical" },
-  { id: "pinned",   label: "Pinned" },
+  { id: "all",    label: "All" },
+  { id: "pinned", label: "Pinned" },
+];
+
+// Operator-readable status labels. Only "Live" → "Ready" right now — the
+// floor reads "ready to use" more naturally than the workflow term "Live".
+// All other status values stay canonical (Draft, Pending, Placeholder,
+// In Build, Blocked) so the chip row + cards still reflect the granular
+// build state. The data + admin dashboard always carry the raw status.
+const OPERATOR_STATUS_LABEL = {
+  Live: "Ready",
+};
+function operatorStatusLabel(s) {
+  return OPERATOR_STATUS_LABEL[s] || s;
+}
+
+// Canonical workflow order — used to render status filter chips in a stable
+// order regardless of which subset actually appears in the data. Mirrors
+// _shared.ALL_STATUSES but defined locally to keep the chip-row import
+// surface tight.
+const STATUS_CHIP_ORDER = [
+  "Live",
+  "In Build",
+  "Draft",
+  "Pending",
+  "Placeholder",
+  "Blocked",
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -243,6 +273,29 @@ function useRailCollapsed() {
   return [collapsed, toggle];
 }
 
+// Sticky search visibility - true once the hero has scrolled out of view.
+// Used by the StickySearch slim bar that slides in from above when the user
+// scrolls past the hero, so search stays reachable for a director hitting
+// /playbook 10x/day. Uses IntersectionObserver on a sentinel placed right
+// after the hero (with a -56px rootMargin to account for the TopNav) - it
+// flips state precisely when the hero's bottom crosses below the TopNav,
+// without per-frame scroll math.
+function useStickyHero() {
+  const sentinelRef = useRef(null);
+  const [showSticky, setShowSticky] = useState(false);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => setShowSticky(!entry.isIntersecting),
+      { rootMargin: "-56px 0px 0px 0px" }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, []);
+  return [showSticky, sentinelRef];
+}
+
 // Persist card vs list view choice. Same casual-browser-state pattern as
 // rail/shelf collapse — display preference, not server-persisted.
 const VIEW_STORAGE_KEY = "kf_playbook_view";
@@ -311,11 +364,16 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
   const { documents, shelves, isOwner } = bootstrap;
   const isSearching = !!query.trim() || filter !== "all";
 
-  // Search + filter
+  // Search + filter. Status filters use the prefix "status:Live", "status:Draft",
+  // etc. (added dynamically based on availableStatuses) so they don't collide
+  // with the static "all" / "pinned" filter ids.
   const filteredDocs = useMemo(() => {
     let out = documents;
-    if (filter === "critical") out = out.filter((d) => d.critical);
-    if (filter === "pinned")   out = out.filter((d) => d.pinned);
+    if (filter === "pinned") out = out.filter((d) => d.pinned);
+    else if (filter.startsWith("status:")) {
+      const target = filter.slice(7);
+      out = out.filter((d) => d.status === target);
+    }
 
     const q = query.trim().toLowerCase();
     if (q) {
@@ -330,26 +388,81 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
     return out;
   }, [documents, filter, query]);
 
-  // Group by shelf (preserves API order: pinned DESC, sort_order ASC, title ASC)
+  // Distinct statuses present in the visible document set, in canonical
+  // workflow order. The status filter chip row is built from this; statuses
+  // with zero docs aren't rendered as chips (no use clicking a filter that
+  // returns nothing).
+  const availableStatuses = useMemo(() => {
+    const present = new Set(documents.map((d) => d.status));
+    return STATUS_CHIP_ORDER.filter((s) => present.has(s));
+  }, [documents]);
+
+  // Permanently-empty shelves (zero docs in the UNFILTERED set) are hidden
+  // from the operator view — Finance is currently a dead room in the rail.
+  // Shelves emptied by an active filter still render with the "no matches"
+  // inline marker so the user can see the filter actually applied. Admin
+  // dashboard keeps all shelves so its Gaps callout can flag the empties.
+  const visibleShelves = useMemo(() => {
+    const hasAny = new Set();
+    for (const d of documents) {
+      if (d.shelf) hasAny.add(d.shelf);
+    }
+    return shelves.filter((s) => hasAny.has(s));
+  }, [shelves, documents]);
+
+  // Group by shelf, then re-sort WITHIN each shelf by readiness so openable
+  // docs lead. Group order (lower index = earlier on the shelf):
+  //
+  //   0. pinned + ready  (Live AND has a Drive file AND pinned)
+  //   1. ready           (Live AND has a Drive file)
+  //   2. pinned          (pinned, not yet ready)
+  //   3. not-ready       (everything else)
+  //
+  // Within each group: tie-break by sort_order ASC, then title ASC, which
+  // mirrors the API's authored ordering (opd.listDocuments orders by
+  // pinned DESC, sort_order ASC, title ASC). Result: each shelf leads with
+  // its openable docs in their authored order, then the not-yet-ready docs
+  // follow in their authored order. Shelves themselves are NOT reordered -
+  // Safety still contains exactly its Safety docs, etc.
+  //
+  // Only visibleShelves get an entry; permanently-empty shelves (Finance)
+  // aren't in the rendered set at all.
   const docsByShelf = useMemo(() => {
-    const map = Object.fromEntries(shelves.map((s) => [s, []]));
+    const map = Object.fromEntries(visibleShelves.map((s) => [s, []]));
     for (const d of filteredDocs) {
       if (d.shelf && map[d.shelf]) map[d.shelf].push(d);
     }
+    const groupKey = (d) => {
+      const ready = !!d.source_drive_id && d.status === "Live";
+      if (ready && d.pinned) return 0;
+      if (ready)             return 1;
+      if (d.pinned)          return 2;
+      return 3;
+    };
+    for (const s of visibleShelves) {
+      map[s].sort((a, b) => {
+        const ga = groupKey(a), gb = groupKey(b);
+        if (ga !== gb) return ga - gb;
+        const so = (a.sort_order ?? 100) - (b.sort_order ?? 100);
+        if (so !== 0)  return so;
+        return (a.title || "").localeCompare(b.title || "");
+      });
+    }
     return map;
-  }, [filteredDocs, shelves]);
+  }, [filteredDocs, visibleShelves]);
 
   // Per-shelf visible counts (post-filter, post-search) — rail + header chip read this.
   const counts = useMemo(() => {
     const c = {};
-    for (const s of shelves) c[s] = (docsByShelf[s] || []).length;
+    for (const s of visibleShelves) c[s] = (docsByShelf[s] || []).length;
     return c;
-  }, [docsByShelf, shelves]);
+  }, [docsByShelf, visibleShelves]);
 
   const [collapsed, toggleCollapsed] = useCollapsedShelves();
-  const [activeShelf, setActiveShelf] = useActiveShelf(shelves);
+  const [activeShelf, setActiveShelf] = useActiveShelf(visibleShelves);
   const [railCollapsed, toggleRailCollapsed] = useRailCollapsed();
   const [viewMode, setViewMode] = useViewMode();
+  const [stickyShown, sentinelRef] = useStickyHero();
 
   // jumpToShelf needs to: (a) immediately mark the target active so the rail
   // highlight responds at click-time (bug 3a), (b) force-expand the target if
@@ -380,8 +493,14 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
   return (
     <div className="pb-wrap">
       <Hero query={query} setQuery={setQuery} isOwner={isOwner} />
+      {/* Sentinel just below the hero - IntersectionObserver in useStickyHero
+          flips state when its bounds cross above the TopNav line, triggering
+          the slim sticky search bar's slide-in. Zero size, negative margin
+          so it sits inside the hero's bottom boundary in flow. */}
+      <div ref={sentinelRef} aria-hidden="true" style={{ height: 0, marginTop: -1 }} />
+      <StickySearch query={query} setQuery={setQuery} visible={stickyShown} />
       <div className="pb-controls-row">
-        <FilterChipsBar filter={filter} setFilter={setFilter} />
+        <FilterChipsBar filter={filter} setFilter={setFilter} availableStatuses={availableStatuses} />
         <ViewToggle view={viewMode} setView={setViewMode} />
       </div>
       {documents.length === 0 ? (
@@ -392,7 +511,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
           data-rail-collapsed={railCollapsed ? "true" : "false"}
         >
           <ShelfRail
-            shelves={shelves}
+            shelves={visibleShelves}
             counts={counts}
             active={activeShelf}
             onJump={jumpToShelf}
@@ -400,12 +519,13 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
             onToggleCollapse={toggleRailCollapsed}
           />
           <div className="pb-shelves">
-            {shelves.map((shelfName) => (
+            {visibleShelves.map((shelfName) => (
               <Shelf
                 key={shelfName}
                 name={shelfName}
                 docs={docsByShelf[shelfName]}
                 view={viewMode}
+                staggerKey={`${filter}|${query}`}
                 onOpen={(id) => setOpenDocId(id)}
                 isSearching={isSearching}
                 isCollapsed={collapsed.has(shelfName)}
@@ -420,6 +540,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
         <SlideOverReader
           docId={openDocId}
           onClose={() => setOpenDocId(null)}
+          isOwner={isOwner}
         />
       )}
     </div>
@@ -480,9 +601,56 @@ function Hero({ query, setQuery, isOwner }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Filter chips
+// Sticky search — slim navy bar that slides in from above when the hero has
+// scrolled out of view. Keeps search reachable for a director hitting the
+// playbook 10x/day without leaving the navy hero parked on every scroll.
+// Always rendered; transform: translateY(-100%) hides it until the sentinel
+// flips. House timing 200ms ease-out; collapses to instant under
+// prefers-reduced-motion.
 // ════════════════════════════════════════════════════════════════════════════
-function FilterChipsBar({ filter, setFilter }) {
+function StickySearch({ query, setQuery, visible }) {
+  return (
+    <div
+      className={`pb-sticky-search${visible ? " pb-sticky-search--show" : ""}`}
+      aria-hidden={!visible}
+    >
+      <div className="pb-sticky-search-inner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Ask SousAI, or search…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pb-sticky-search-input"
+          aria-label="Search the playbook"
+          tabIndex={visible ? 0 : -1}
+        />
+        {query && (
+          <button
+            className="pb-sticky-search-clear"
+            aria-label="Clear search"
+            onClick={() => setQuery("")}
+            tabIndex={visible ? 0 : -1}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Filter chips — static (All / Pinned) + dynamic status chips (Ready, Draft,
+// Pending, ...). Status chips are appended from availableStatuses (computed
+// upstream from the visible document set) so the row only ever shows filters
+// that would return results. The Live status renders as "Ready" via
+// operatorStatusLabel; all other statuses keep their canonical workflow names.
+// ════════════════════════════════════════════════════════════════════════════
+function FilterChipsBar({ filter, setFilter, availableStatuses }) {
   return (
     <div className="pb-chip-row" role="tablist" aria-label="Document filters">
       {FILTER_CHIPS.map((c) => (
@@ -496,6 +664,25 @@ function FilterChipsBar({ filter, setFilter }) {
           {c.label}
         </button>
       ))}
+      {availableStatuses && availableStatuses.length > 0 && (
+        <span className="pb-chip-sep" aria-hidden="true" />
+      )}
+      {(availableStatuses || []).map((s) => {
+        const id = `status:${s}`;
+        const active = filter === id;
+        return (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => setFilter(id)}
+            className={`pb-chip pb-chip--status${active ? " pb-chip--on" : ""}`}
+            title={`Show only ${s} documents`}
+          >
+            {operatorStatusLabel(s)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -545,7 +732,7 @@ function ViewToggle({ view, setView }) {
 // ════════════════════════════════════════════════════════════════════════════
 // Shelves + cards
 // ════════════════════════════════════════════════════════════════════════════
-function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view }) {
+function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view, staggerKey }) {
   const empty = docs.length === 0;
   const count = docs.length;
   return (
@@ -574,42 +761,52 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view })
           </svg>
         </span>
       </button>
-      {!isCollapsed && !empty && (
-        view === "list" ? (
-          <div className="pb-list-grid">
-            {docs.map((d) => (
-              <DocumentListRow key={d.id} doc={d} onOpen={onOpen} />
-            ))}
-          </div>
-        ) : (
-          <div className="pb-card-grid">
-            {docs.map((d) => (
-              <DocumentCard key={d.id} doc={d} onOpen={onOpen} />
-            ))}
-          </div>
-        )
-      )}
+      {/* Body wrapper always renders so the collapse can transition smoothly
+          via max-height + opacity (display:none can't transition). The inner
+          grid is keyed on `${staggerKey}|${view}` so changing filter/search
+          (or toggling view mode) remounts the grid and replays the
+          per-card fade-in stagger (.pb-card animation in CSS). */}
+      <div className={`pb-shelf-body${isCollapsed ? " pb-shelf-body--collapsed" : ""}`}>
+        {!empty && (
+          view === "list" ? (
+            <div className="pb-list-grid" key={`${staggerKey}|list`}>
+              {docs.map((d, i) => (
+                <DocumentListRow key={d.id} doc={d} idx={i} onOpen={onOpen} />
+              ))}
+            </div>
+          ) : (
+            <div className="pb-card-grid" key={`${staggerKey}|cards`}>
+              {docs.map((d, i) => (
+                <DocumentCard key={d.id} doc={d} idx={i} onOpen={onOpen} />
+              ))}
+            </div>
+          )
+        )}
+      </div>
     </section>
   );
 }
 
-function DocumentCard({ doc, onOpen }) {
+function DocumentCard({ doc, onOpen, idx = 0 }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  const noFile = !doc.source_drive_id;
+  // ALIVE = has a Drive file AND is Live. That's the operator's "this card is
+  // a door" test. Anything else gets the recessed treatment so the eye can
+  // skip past it - the recessed state replaces the previous combination of
+  // "no file yet" text marker + status pill colors as the openability signal.
+  const isAlive = !!doc.source_drive_id && doc.status === "Live";
   return (
     <button
-      className={`pb-card${doc.critical ? " pb-card--critical" : ""}`}
+      className={`pb-card pb-card--${isAlive ? "alive" : "recessed"}`}
       onClick={() => onOpen(doc.id)}
       aria-label={`Open ${doc.title}`}
+      style={{ "--idx": idx }}
     >
       <div className="pb-card-head">
         <span className={`pb-class-chip pb-class-chip--${classFamily}`}>
           {classLabel}
         </span>
-        {/* Critical: red left-edge stripe (pb-card--critical) is sufficient on card.
-            The "⚠ Critical" text chip is surfaced in the slide-over reader instead. */}
         <span className="pb-card-icons">
           {doc.pinned && (
             <span className="pb-pin" aria-label="Pinned" title="Pinned">
@@ -636,17 +833,9 @@ function DocumentCard({ doc, onOpen }) {
           className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
           style={{ background: status.bg, color: status.color }}
         >
-          {doc.status}
+          {operatorStatusLabel(doc.status)}
         </span>
         {doc.version && <span className="pb-version">{doc.version}</span>}
-        {doc.version && noFile && (
-          <span className="pb-foot-sep" aria-hidden="true">·</span>
-        )}
-        {noFile && (
-          <span className="pb-nofile-marker" title="No Drive file attached yet">
-            no file yet
-          </span>
-        )}
       </div>
     </button>
   );
@@ -657,16 +846,17 @@ function DocumentCard({ doc, onOpen }) {
 // DocumentCard. Toggled via ViewToggle; clicking a row opens the same
 // slide-over reader. Same data wiring, different presentation.
 // ════════════════════════════════════════════════════════════════════════════
-function DocumentListRow({ doc, onOpen }) {
+function DocumentListRow({ doc, onOpen, idx = 0 }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  const noFile = !doc.source_drive_id;
+  const isAlive = !!doc.source_drive_id && doc.status === "Live";
   return (
     <button
-      className={`pb-list-row${doc.critical ? " pb-list-row--critical" : ""}`}
+      className={`pb-list-row pb-list-row--${isAlive ? "alive" : "recessed"}`}
       onClick={() => onOpen(doc.id)}
       aria-label={`Open ${doc.title}`}
+      style={{ "--idx": idx }}
     >
       <span className={`pb-class-chip pb-class-chip--${classFamily}`}>
         {classLabel}
@@ -693,14 +883,9 @@ function DocumentListRow({ doc, onOpen }) {
           className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
           style={{ background: status.bg, color: status.color }}
         >
-          {doc.status}
+          {operatorStatusLabel(doc.status)}
         </span>
         {doc.version && <span className="pb-version">{doc.version}</span>}
-        {noFile && (
-          <span className="pb-nofile-marker" title="No Drive file attached yet">
-            no file yet
-          </span>
-        )}
       </span>
     </button>
   );
