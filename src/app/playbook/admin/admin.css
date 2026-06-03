@@ -307,38 +307,35 @@ button.pb-admin-gap-link:focus-visible {
   min-width: 8px;
 }
 
+/* Row no longer has a click handler (the ID button opens the reader, every
+   other cell handles its own click via the inline editor). Hover stays as
+   a subtle scan affordance so the user can track which row their eye is on. */
 .pb-admin-row {
-  cursor: pointer;
   transition: background 0.1s;
 }
-.pb-admin-row:hover { background: #f8fafc; }
-.pb-admin-row:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
-  outline-offset: -2px;
-}
+.pb-admin-row:hover { background: #fafbfc; }
+
 .pb-admin-cell {
-  padding: 8px 12px;
+  padding: 6px 12px;
   font-family: 'Inter', sans-serif;
   font-size: 12.5px;
   color: #475569;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+  position: relative; /* anchor for the error dismiss button */
 }
 .pb-admin-row:last-child .pb-admin-cell { border-bottom: 0; }
 .pb-admin-cell-id {
   font-family: 'Inter', monospace;
   font-weight: 600;
-  color: #64748b;
   font-size: 11.5px;
   white-space: nowrap;
+  padding: 4px 8px;
 }
 .pb-admin-cell-title {
   font-weight: 700;
   color: var(--kf-navy);
   max-width: 360px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .pb-admin-cell-version {
   font-family: 'Inter', monospace;
@@ -353,6 +350,10 @@ button.pb-admin-gap-link:focus-visible {
 .pb-admin-cell-linked--yes {
   color: var(--kf-playbook-teal);
 }
+.pb-admin-cell-pin {
+  text-align: center;
+  width: 44px;
+}
 
 /* Screen-reader-only text for the linked column's icon-only cell. */
 .pb-admin-sr-only {
@@ -361,6 +362,459 @@ button.pb-admin-gap-link:focus-visible {
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Inline editing UX - shared bits
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Wrap around DisplayCell so the cell + an error dismiss button can sit
+   side by side without disturbing table column widths. */
+.pb-admin-cell-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* The clickable display surface inside an editable cell. Looks like a span
+   but is a button so it's keyboard-focusable. Subtle hover indicates "this
+   is editable" without screaming for attention - directors notice the
+   editability when they hover, operators (who don't reach this surface
+   anyway) wouldn't be confused. */
+.pb-admin-cell-display {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin: -3px -6px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+.pb-admin-cell-display:hover {
+  background: rgba(15, 110, 86, 0.04);
+  border-color: rgba(15, 110, 86, 0.18);
+}
+.pb-admin-cell-display:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 1px;
+}
+/* Status pill + class chip inside the display cell shouldn't shrink awkwardly. */
+.pb-admin-cell-display .pb-status-pill,
+.pb-admin-cell-display .pb-class-chip {
+  white-space: nowrap;
+}
+
+/* Em-dash placeholder for empty values (null version, null shelf). Lower
+   contrast than the floor-critical text since it's a "nothing here yet"
+   signal, not actual content. */
+.pb-admin-cell-empty {
+  color: #cbd5e1;
+}
+
+/* Text input that replaces the display in edit mode. Matches the table's
+   font/size so the row height doesn't jump. */
+.pb-admin-edit-input {
+  width: 100%;
+  font: inherit;
+  color: var(--kf-navy);
+  background: white;
+  border: 1px solid var(--kf-playbook-teal);
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin: -3px -6px;
+  outline: none;
+}
+
+/* Select that replaces the display in edit mode. Native select - styling
+   is intentionally minimal so the browser's picker UI shows up correctly. */
+.pb-admin-edit-select {
+  font: inherit;
+  color: var(--kf-navy);
+  background: white;
+  border: 1px solid var(--kf-playbook-teal);
+  border-radius: 4px;
+  padding: 2px 4px;
+  outline: none;
+  max-width: 100%;
+}
+
+/* Saved-flash: brief soft-teal background pulse that fades to transparent
+   over 1.4s. Communicates "the write committed" without celebration. The
+   animation is keyed on a class toggle in JS that auto-clears at 1500ms. */
+.pb-admin-cell--saved {
+  animation: pb-admin-saved-flash 1.4s ease-out;
+}
+@keyframes pb-admin-saved-flash {
+  0%   { background-color: rgba(15, 110, 86, 0.18); }
+  100% { background-color: transparent; }
+}
+
+/* Error state: red border + small inline ! that opens the message on hover.
+   Click the ! to dismiss and clear the error (the user has acknowledged and
+   wants to retry). */
+.pb-admin-cell--error {
+  border-color: var(--kf-red) !important;
+  background-color: rgba(239, 68, 68, 0.06);
+}
+.pb-admin-error-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--kf-red);
+  background: white;
+  color: var(--kf-red);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.pb-admin-error-dismiss:hover {
+  background: var(--kf-red);
+  color: white;
+}
+
+/* ID cell button - looks like a code chip, opens the reader. Distinct from
+   the editable cells so the operator-reader-open affordance reads clearly. */
+.pb-admin-id-btn {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  color: var(--kf-navy);
+  border: 1px solid var(--kf-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: 'Inter', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.pb-admin-id-btn:hover {
+  background: white;
+  border-color: var(--kf-playbook-teal);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-admin-id-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* Pin toggle - filled when pinned (muted gold to match the catalog card
+   pin's icon language), outline when not. Optimistic-write target like
+   the other low-risk fields, including the saved-flash and error states. */
+.pb-admin-pin-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pb-admin-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
+}
+.pb-admin-pin-btn:hover {
+  background: rgba(203, 161, 74, 0.08);
+  color: #cba14a;
+  border-color: rgba(203, 161, 74, 0.3);
+}
+.pb-admin-pin-btn--on {
+  color: #cba14a;
+}
+.pb-admin-pin-btn--on:hover {
+  color: #b08c3e;
+}
+.pb-admin-pin-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+.pb-admin-pin-btn:active { transform: scale(0.9); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Linked cell - clickable, toggles the Drive-link expansion (Part B)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pb-admin-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.pb-admin-link-btn:hover {
+  background: rgba(15, 110, 86, 0.05);
+  border-color: rgba(15, 110, 86, 0.2);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-admin-link-btn--yes {
+  color: var(--kf-playbook-teal);
+}
+.pb-admin-link-btn--open {
+  background: rgba(15, 110, 86, 0.08);
+  border-color: var(--kf-playbook-teal);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-admin-link-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+.pb-admin-link-btn-dash {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+}
+.pb-admin-link-btn-chevron {
+  transition: transform 0.15s ease-out;
+  flex-shrink: 0;
+}
+.pb-admin-link-btn--open .pb-admin-link-btn-chevron {
+  transform: rotate(180deg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Drive-ID expand panel (Part B)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Panel TR sits below the main row, full-width via colSpan=8. Light slate
+   background so it visually reads as a tray attached to the row above.
+   No border-bottom radius on the row above (handled by the panel's top
+   border) so they merge into one continuous unit. */
+.pb-admin-drive-row td {
+  padding: 0;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pb-admin-drive-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px 16px;
+}
+.pb-admin-drive-panel-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.pb-admin-drive-panel-title code {
+  font-family: 'Inter', monospace;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  margin-left: 2px;
+}
+
+/* EN/ES row - label, input, save, test, error message in a single flex
+   line that wraps on narrow viewports. */
+.pb-admin-drive-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pb-admin-drive-label {
+  font-family: 'Inter', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--kf-playbook-teal-dark);
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 26px;
+  text-align: center;
+}
+.pb-admin-drive-input {
+  flex: 1 1 280px;
+  min-width: 200px;
+  font-family: 'Inter', monospace;
+  font-size: 12px;
+  color: var(--kf-navy);
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.pb-admin-drive-input:focus {
+  border-color: var(--kf-playbook-teal);
+}
+
+/* Save button - three deliberately distinct states:
+     1. ACTIVE     : there's a pending change. Teal background, pointer
+                     cursor, full saturation. Click to save.
+     2. JUST SAVED : write succeeded, .pb-admin-drive-save--saved class on for
+                     ~2s. Teal-light background, dark-teal text, checkmark
+                     SVG, "Saved" label. Default (not not-allowed) cursor -
+                     the button is intentionally disabled at this moment but
+                     it's NOT a block, it's a confirmation.
+     3. IDLE       : disabled because there's nothing to save. Muted slate-
+                     grey background, faint text, default cursor. Reads as
+                     "no change pending" - clearly distinct from an error or
+                     a frozen control. The not-allowed cursor was removed
+                     here specifically because it had been miscueing the
+                     owner as "this button is broken." */
+.pb-admin-drive-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: background 0.18s ease-out, border-color 0.18s ease-out, color 0.18s ease-out, transform 0.08s;
+  /* Active state (no :disabled) */
+  background: var(--kf-playbook-teal);
+  color: white;
+  border-color: var(--kf-playbook-teal);
+  cursor: pointer;
+}
+.pb-admin-drive-save:hover:not(:disabled) {
+  background: var(--kf-playbook-teal-dark);
+  border-color: var(--kf-playbook-teal-dark);
+}
+.pb-admin-drive-save:active:not(:disabled) { transform: scale(0.97); }
+.pb-admin-drive-save:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
+/* Idle state - disabled because the input matches the saved value. Muted
+   neutral, NOT a not-allowed cursor (the previous styling read as
+   "broken/frozen" to the owner). Default cursor + low-contrast styling
+   communicates "nothing to do here" rather than "blocked." */
+.pb-admin-drive-save:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: var(--kf-border);
+  cursor: default;
+}
+
+/* Saved state - overrides the idle disabled styling for ~2s after a
+   successful save. Specificity (compound class + :disabled) beats the
+   plain :disabled rule above without needing !important. Teal-light
+   background + dark-teal "Saved" label + checkmark SVG = unmistakable
+   success signal, sitting right where the click landed. Default cursor
+   stays (the button isn't an action target during this window, but it's
+   also not a block - it's a confirmation). */
+.pb-admin-drive-save:disabled.pb-admin-drive-save--saved {
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  border-color: var(--kf-playbook-teal);
+}
+
+/* test ↗ - quiet link, opens preview URL in new tab. Visible only when the
+   input has a value to test. */
+.pb-admin-drive-test {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kf-playbook-teal-dark);
+  text-decoration: none;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+.pb-admin-drive-test:hover {
+  text-decoration: underline;
+  color: var(--kf-navy);
+}
+.pb-admin-drive-test:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Field error state - red border + tinted input bg. The success signal
+   used to also live here as a background flash (.pb-admin-drive-field--saved
+   with the same keyframes as Part A), but it was too subtle to read - the
+   Save button's "Saved ✓" morph carries the signal now, where the click
+   landed, in text-and-icon form. The field row stays neutral on success. */
+.pb-admin-drive-field--error .pb-admin-drive-input {
+  border-color: var(--kf-red);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+/* Error message button - clickable to dismiss. */
+.pb-admin-drive-error-msg {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--kf-red);
+  color: var(--kf-red);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pb-admin-drive-error-msg:hover { background: rgba(239, 68, 68, 0.16); }
+
+/* Sharing prerequisite hint - low-saturation but explicit. The #1 reason a
+   saved Drive ID renders blank for operators is the sharing isn't set up
+   right; calling it out here keeps the silent-failure mode visible. */
+.pb-admin-drive-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+  padding-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+  margin-top: 2px;
+}
+.pb-admin-drive-hint svg {
+  color: var(--kf-playbook-teal);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.pb-admin-drive-hint strong {
+  color: var(--kf-navy);
+  font-weight: 700;
 }
 
 /* Mobile - table scrolls horizontally rather than reflowing, keeps the

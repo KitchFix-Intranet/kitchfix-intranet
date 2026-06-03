@@ -25,6 +25,7 @@ import {
   getRelationships,
   getSurfaces,
   createIssue,
+  updateDocument,
 } from "@/lib/dataStore";
 import {
   canViewPlaybook,
@@ -45,6 +46,126 @@ const SHELVES = [
 ];
 
 const MODULE = "playbook";
+
+// ─── Editing allowlist + validation sets (action=update-document) ───────────
+//
+// The owner edits catalog fields directly from /playbook/admin's worklist:
+//   Part A (auto-commit, optimistic):  title, shelf, doc_class, status, version, pinned
+//   Part B (explicit Save, confirmed): source_drive_id, source_drive_id_es
+//
+// The set is HARD - `id` is still explicitly NOT in here so an attempt to
+// write it returns 400 even if the client forges it. ID renames stay a
+// deliberate scripted operation (see pr-7-5 atomic POST-003 -> POSTER-001).
+//
+// Per-field value validators mirror the schema CHECK constraints + the
+// implicit "Drive ID is a string or null" shape. The schema
+// (pr-7-1-opd-schema.sql + pr-7-4 bilingual columns) is still the source of
+// truth; these sets just cache the same allowed values for fast 400s instead
+// of round-tripping a Postgres constraint violation. Drive IDs have no
+// schema-side format check - any string is a valid catalog value (a wrong
+// or unshared ID is a SEMANTIC failure that the test-render link in the
+// dashboard surfaces, not a DB error).
+const WRITABLE_FIELDS_A = new Set([
+  "title", "shelf", "doc_class", "status", "version", "pinned",
+  "source_drive_id", "source_drive_id_es",
+]);
+const VALID_SHELVES_SET = new Set(SHELVES);
+const VALID_CLASSES = new Set([
+  "PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK",
+]);
+const VALID_STATUSES = new Set([
+  "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",
+]);
+
+function validatePatch(patch) {
+  // Returns { ok: true, clean } on success or { ok: false, error } on failure.
+  // `clean` is the canonicalized patch (whitespace-trimmed strings, etc.) so
+  // the caller can pass it straight to updateDocument without re-massaging.
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    return { ok: false, error: "patch must be a non-null object" };
+  }
+  const keys = Object.keys(patch);
+  if (keys.length === 0) {
+    return { ok: false, error: "patch is empty - no fields to update" };
+  }
+  for (const k of keys) {
+    if (!WRITABLE_FIELDS_A.has(k)) {
+      // Hard reject - covers id, source_drive_id*, storage_path*, anything else
+      // not in the Part A allowlist. The reason `id` lands here is structural,
+      // not stylistic: renaming the PK is a multi-table transaction (pr-7-5),
+      // not a single .update().
+      return { ok: false, error: `field '${k}' is not writable via this action` };
+    }
+  }
+  const clean = {};
+  if ("title" in patch) {
+    if (typeof patch.title !== "string" || !patch.title.trim()) {
+      return { ok: false, error: "title must be a non-empty string" };
+    }
+    clean.title = patch.title.trim();
+  }
+  if ("shelf" in patch) {
+    if (patch.shelf !== null && !VALID_SHELVES_SET.has(patch.shelf)) {
+      return { ok: false, error: `invalid shelf '${patch.shelf}'` };
+    }
+    clean.shelf = patch.shelf;
+  }
+  if ("doc_class" in patch) {
+    if (!VALID_CLASSES.has(patch.doc_class)) {
+      return { ok: false, error: `invalid doc_class '${patch.doc_class}'` };
+    }
+    clean.doc_class = patch.doc_class;
+  }
+  if ("status" in patch) {
+    if (!VALID_STATUSES.has(patch.status)) {
+      return { ok: false, error: `invalid status '${patch.status}'` };
+    }
+    clean.status = patch.status;
+  }
+  if ("version" in patch) {
+    if (patch.version === null) {
+      clean.version = null;
+    } else if (typeof patch.version === "string") {
+      const trimmed = patch.version.trim();
+      clean.version = trimmed.length === 0 ? null : trimmed;
+    } else {
+      return { ok: false, error: "version must be a string or null" };
+    }
+  }
+  if ("pinned" in patch) {
+    if (typeof patch.pinned !== "boolean") {
+      return { ok: false, error: "pinned must be a boolean" };
+    }
+    clean.pinned = patch.pinned;
+  }
+  // Drive ID fields (Part B): nullable strings. Empty / whitespace-only
+  // values get canonicalized to NULL so an "unlink" is the natural result
+  // of clearing the input. No format validation - Drive IDs vary in length
+  // and shape across Drive's URL generations, and the test-render link in
+  // the dashboard catches semantically wrong values much better than any
+  // regex would.
+  if ("source_drive_id" in patch) {
+    if (patch.source_drive_id === null) {
+      clean.source_drive_id = null;
+    } else if (typeof patch.source_drive_id === "string") {
+      const trimmed = patch.source_drive_id.trim();
+      clean.source_drive_id = trimmed.length === 0 ? null : trimmed;
+    } else {
+      return { ok: false, error: "source_drive_id must be a string or null" };
+    }
+  }
+  if ("source_drive_id_es" in patch) {
+    if (patch.source_drive_id_es === null) {
+      clean.source_drive_id_es = null;
+    } else if (typeof patch.source_drive_id_es === "string") {
+      const trimmed = patch.source_drive_id_es.trim();
+      clean.source_drive_id_es = trimmed.length === 0 ? null : trimmed;
+    } else {
+      return { ok: false, error: "source_drive_id_es must be a string or null" };
+    }
+  }
+  return { ok: true, clean };
+}
 
 export async function GET(request) {
   const session = await auth();
@@ -236,6 +357,39 @@ export async function POST(request) {
       }
 
       return NextResponse.json({ ok: true, issue_id: issue.id });
+    }
+
+    // ── update-document ─────────────────────────────────────────────────
+    // Owner-gated catalog editing path used by /playbook/admin's worklist.
+    // The owner gate (canViewPlaybook) is enforced at the TOP of the POST
+    // handler, server-side, against session.user.email - it is re-checked
+    // on every request. A client cannot bypass it by lying about isOwner.
+    if (action === "update-document") {
+      const { id, patch } = body;
+      if (!id || typeof id !== "string") {
+        return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+      }
+      const v = validatePatch(patch);
+      if (!v.ok) {
+        return NextResponse.json({ error: v.error }, { status: 400 });
+      }
+      // updateDocument throws on PG errors (FK / CHECK / row-not-found surfaces
+      // an error.message that bubbles up). It also stamps updated_at and runs
+      // .select().single() so the returned row reflects the actual post-write
+      // state - that's our read-validate.
+      let updated;
+      try {
+        updated = await updateDocument(id, v.clean, { module: MODULE });
+      } catch (e) {
+        // Distinguish "row missing" from generic write errors so the client
+        // can react sensibly (e.g. dropdown still showed a stale id).
+        const msg = e?.message || "update failed";
+        if (/no rows|0 rows|PGRST116/i.test(msg)) {
+          return NextResponse.json({ error: `Document ${id} not found` }, { status: 404 });
+        }
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, document: updated });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
