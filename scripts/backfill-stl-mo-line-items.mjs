@@ -83,7 +83,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument, PDFName } from "pdf-lib";
-import { getServiceAccountDriveClient, safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { getServiceAccountDriveClient, safeRead, appendRowsSA, SHEET_IDS } from "../src/lib/sheets.js";
 
 // ── Args ──
 const args = process.argv.slice(2);
@@ -98,8 +98,8 @@ const STAGE = getArg("stage", "dry-run");
 const LIMIT = parseInt(getArg("limit", "5"), 10);
 const EXECUTE = args.includes("--execute");
 
-if (!["dry-run", "batch", "full"].includes(STAGE)) {
-  console.error(`[backfill] Unknown --stage="${STAGE}". Valid: dry-run, batch, full.`);
+if (!["dry-run", "batch", "full", "replay-pg", "hold-overcount-kuna"].includes(STAGE)) {
+  console.error(`[backfill] Unknown --stage="${STAGE}". Valid: dry-run, batch, full, replay-pg, hold-overcount-kuna.`);
   process.exit(2);
 }
 
@@ -153,7 +153,7 @@ async function loadTargets() {
   // Fetch all candidate submissions (filters that index in PG).
   const { data: subs, error: subErr } = await supa
     .from("invoice_submissions")
-    .select("id, client_uuid, submitted_at, submitter_email, account_key, vendor_name, vendor_id, invoice_number, invoice_date, page_count, raw_drive_url, drive_urls, ai_scan_status, status, type")
+    .select("id, client_uuid, submitted_at, submitter_email, account_key, vendor_name, vendor_id, invoice_number, invoice_date, total_amount, page_count, raw_drive_url, drive_urls, ai_scan_status, status, type")
     .eq("account_key", ACCOUNT_KEY)
     .gte("submitted_at", SUBMITTED_AT_MIN)
     .or("ai_scan_status.is.null,ai_scan_status.eq.photo-only")
@@ -620,11 +620,346 @@ async function stageBatchOrFull() {
   console.log(`[backfill] arithmetic gate applies on its next run (Railway nightly).`);
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// REPLAY-PG: write the PG side for the Stage 1 cohort whose Sheet rows
+// landed but whose PG rows did not (local .env.local was missing
+// ai_line_items in DUAL_WRITE_TABLES while Vercel had it; first 5
+// invoices were Sheet-only). Reads existing Sheet rows for each UUID
+// and inserts them into PG ai_line_items directly. NO second model
+// call, NO Sheet duplicates, NO live-code change.
+//
+// Source of truth for the values: the Sheet rows that Stage 1 wrote.
+// Reading them back and inserting to PG is idempotent: re-running
+// after a partial completion is safe because the per-UUID guard
+// checks PG count first.
+//
+// Default UUIDs are the 5 from Stage 1. Override via
+//   --uuids=uuid1,uuid2,...
+// ════════════════════════════════════════════════════════════════════════════
+
+const STAGE_1_UUIDS = [
+  "9f009084-98c1-4d10-99b8-92111941366a", // City Seafood INV23661
+  "1e43b586-0cbe-45e5-8216-09b88c2a4ab1", // Grey Eagle 604008
+  "dc10f95e-c86a-4919-b06a-0ee4300703e8", // Grey Eagle 609400
+  "512cda63-2de5-4b15-9f75-1bb7688c38bc", // What Chefs Want 12538734
+  "7ea1ef30-a409-4726-ab7c-743e71cf5e7a", // What Chefs Want 12534477
+];
+
+function safeJsonParse(s) {
+  try { return typeof s === "string" ? JSON.parse(s) : s; } catch { return null; }
+}
+
+function sheetRowToPgLine(row, sub) {
+  // Schema (per LINE_IDX in dataStore/invoice.js):
+  //   0 invoiceUuid, 1 timestamp, 2 account, 3 vendor, 4 invoice#,
+  //   5 invoiceDate, 6 lineNum, 7 description, 8 quantity, 9 unit,
+  //   10 unitPrice, 11 extendedPrice, 12 category, 13 confidence,
+  //   14 rawJson
+  const num = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    invoice_uuid:   sub.id,
+    account_key:    sub.account_key,
+    vendor_name:    String(row[3] || sub.vendor_name || "").trim(),
+    invoice_number: String(row[4] || sub.invoice_number || "").trim() || null,
+    invoice_date:   String(row[5] || "").trim() || sub.invoice_date || null,
+    line_num:       num(row[6]) || 0,
+    description:    String(row[7] || "").trim(),
+    quantity:       num(row[8]),
+    unit:           String(row[9] || "").trim() || null,
+    unit_price:     num(row[10]),
+    extended_price: num(row[11]),
+    category:       String(row[12] || "").trim() || null,
+    confidence:     String(row[13] || "").trim() || null,
+    raw_json:       row[14] ? safeJsonParse(row[14]) : null,
+  };
+}
+
+async function stageReplayPg() {
+  const override = getArg("uuids");
+  const targets = (override ? override.split(",") : STAGE_1_UUIDS).map((s) => s.trim()).filter(Boolean);
+  console.log(`[backfill] replay-pg targets: ${targets.length}`);
+
+  if (!EXECUTE) {
+    console.log(`[backfill] --stage=replay-pg requires --execute to write.`);
+    process.exit(2);
+  }
+
+  let written = 0, skippedIdempotent = 0, errored = 0, noSheetRows = 0;
+  const perInvoice = [];
+
+  for (const uuid of targets) {
+    console.log(``);
+    console.log(`[backfill] ──── ${uuid}`);
+
+    // Resolve PG submission row.
+    const { data: sub, error: subErr } = await supa
+      .from("invoice_submissions")
+      .select("id, account_key, vendor_name, invoice_number, invoice_date, total_amount")
+      .eq("client_uuid", uuid)
+      .maybeSingle();
+    if (subErr) {
+      console.log(`[backfill]   ERROR submission lookup: ${subErr.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `sub_lookup: ${subErr.message}` });
+      continue;
+    }
+    if (!sub) {
+      console.log(`[backfill]   ERROR submission not in PG`);
+      errored++;
+      perInvoice.push({ uuid, error: "no_submission" });
+      continue;
+    }
+    console.log(`[backfill]   ${sub.vendor_name} #${sub.invoice_number}  total=$${Number(sub.total_amount || 0).toFixed(2)}`);
+
+    // Idempotency: skip if PG already has line items.
+    const { count: existing } = await supa
+      .from("ai_line_items")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_uuid", sub.id);
+    if ((existing || 0) > 0) {
+      console.log(`[backfill]   SKIP idempotent: ${existing} PG row(s) already present`);
+      skippedIdempotent++;
+      perInvoice.push({ uuid, skipped: true, pgLineCount: existing });
+      continue;
+    }
+
+    // Read the Sheet rows for this UUID from the account tab.
+    let sheetRows;
+    try {
+      const result = await safeRead(SHEET_IDS.AI_LINE_ITEMS, sub.account_key);
+      sheetRows = result.rows || [];
+    } catch (e) {
+      console.log(`[backfill]   ERROR sheet read: ${e.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `sheet_read: ${e.message}` });
+      continue;
+    }
+    const matching = sheetRows.filter((r) => String(r[0] || "").trim() === uuid);
+    console.log(`[backfill]   sheet rows for uuid: ${matching.length}`);
+
+    if (matching.length === 0) {
+      console.log(`[backfill]   WARN no sheet rows; nothing to replay`);
+      noSheetRows++;
+      perInvoice.push({ uuid, error: "no_sheet_rows" });
+      continue;
+    }
+
+    const pgRows = matching.map((r) => sheetRowToPgLine(r, sub));
+    const { error: insErr } = await supa.from("ai_line_items").insert(pgRows);
+    if (insErr) {
+      console.log(`[backfill]   ERROR pg insert: ${insErr.message}`);
+      errored++;
+      perInvoice.push({ uuid, error: `pg_insert: ${insErr.message}` });
+      continue;
+    }
+    written += pgRows.length;
+    console.log(`[backfill]   wrote ${pgRows.length} PG row(s)`);
+
+    // Verify post-write.
+    const { count: postCount } = await supa
+      .from("ai_line_items")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_uuid", sub.id);
+    console.log(`[backfill]   PG ai_line_items rows: ${postCount}`);
+
+    // Backfill ai_scan_status='complete' to match what markScanStatus
+    // would have written in a successful live path.
+    const { error: statusErr } = await supa
+      .from("invoice_submissions")
+      .update({ ai_scan_status: "complete" })
+      .eq("id", sub.id);
+    if (statusErr) {
+      console.log(`[backfill]   WARN status update failed: ${statusErr.message}`);
+    } else {
+      console.log(`[backfill]   ai_scan_status -> 'complete'`);
+    }
+
+    perInvoice.push({ uuid, vendor: sub.vendor_name, invoiceNumber: sub.invoice_number, pgLineCount: postCount, written: pgRows.length });
+  }
+
+  console.log(``);
+  console.log(`[backfill] ════════════════════════════════════════════════`);
+  console.log(`[backfill] REPLAY-PG SUMMARY`);
+  console.log(`[backfill]   targets attempted    : ${targets.length}`);
+  console.log(`[backfill]   PG rows written      : ${written}`);
+  console.log(`[backfill]   skipped idempotent   : ${skippedIdempotent}`);
+  console.log(`[backfill]   no sheet rows        : ${noSheetRows}`);
+  console.log(`[backfill]   errored              : ${errored}`);
+  console.log(`[backfill] ════════════════════════════════════════════════`);
+  for (const r of perInvoice) console.log(`[backfill]   ${JSON.stringify(r)}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HOLD-OVERCOUNT-KUNA: route ai_line_items of overcount Kuna invoices
+// to review_queue with reason='overcount_suspect_reextract' so the
+// cron's matching companion check skips promotion. Sheet + PG line
+// items themselves are NOT touched; the holds are an additive
+// review_queue write only. Goal: preserve every recoverable line
+// (the real ones inside these invoices remain auditable).
+//
+// Criterion: sum(extended_price) > total_amount * 1.01 across the
+// invoice's PG ai_line_items.
+//
+// Companion cron change (kitchfix-inventory-cron, branch
+// feat/honor-overcount-suspect-holds): reads review_queue for
+// invoice-level holds with this reason and filters those invoices
+// out of newItems before promotion.
+// ════════════════════════════════════════════════════════════════════════════
+
+function uidShort() {
+  const h = () => Math.random().toString(16).slice(2, 10);
+  return `${h()}-${h().slice(0, 4)}-${h().slice(0, 4)}-${h()}`;
+}
+
+async function stageHoldOvercountKuna() {
+  console.log(`[backfill] identifying overcount Kuna invoices (sum_ext > total_amount * 1.01)`);
+
+  const { data: subs, error: subErr } = await supa
+    .from("invoice_submissions")
+    .select("id, client_uuid, invoice_number, invoice_date, total_amount, submitted_at")
+    .eq("account_key", ACCOUNT_KEY)
+    .eq("vendor_name", "Kuna Foodservice")
+    .gte("submitted_at", SUBMITTED_AT_MIN)
+    .order("submitted_at", { ascending: true });
+  if (subErr) throw new Error(`Kuna submissions query: ${subErr.message}`);
+
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) {
+    console.log(`[backfill] no Kuna submissions in cohort; nothing to hold.`);
+    return;
+  }
+  const { data: lines, error: lineErr } = await supa
+    .from("ai_line_items")
+    .select("invoice_uuid, line_num, description, quantity, unit, unit_price, extended_price, category, invoice_date")
+    .in("invoice_uuid", subIds);
+  if (lineErr) throw new Error(`Kuna ai_line_items query: ${lineErr.message}`);
+
+  const byInvoice = {};
+  for (const l of lines) {
+    if (!byInvoice[l.invoice_uuid]) byInvoice[l.invoice_uuid] = [];
+    byInvoice[l.invoice_uuid].push(l);
+  }
+
+  const held = [];
+  const promotable = [];
+  const noLines = [];
+  for (const sub of subs) {
+    const subLines = byInvoice[sub.id] || [];
+    if (subLines.length === 0) {
+      noLines.push(sub);
+      continue;
+    }
+    const sumExt = subLines.reduce((s, l) => s + Number(l.extended_price || 0), 0);
+    const total = Number(sub.total_amount || 0);
+    const overBy = sumExt - total;
+    const isHeld = sumExt > total * 1.01;
+    const rec = {
+      client_uuid: sub.client_uuid,
+      invoice_number: sub.invoice_number,
+      invoice_date: sub.invoice_date,
+      total, sumExt, overBy,
+      lineCount: subLines.length,
+      lines: subLines,
+    };
+    if (isHeld) held.push(rec);
+    else promotable.push(rec);
+  }
+
+  console.log(``);
+  console.log(`[backfill] HELD Kuna invoices (sum_ext > total * 1.01):`);
+  console.log(`[backfill]   invoice_num    | total      | sum_ext     | over_by    | lines`);
+  for (const h of held) {
+    console.log(`[backfill]   ${String(h.invoice_number || "?").padEnd(14)} | $${h.total.toFixed(2).padStart(9)} | $${h.sumExt.toFixed(2).padStart(10)} | $${h.overBy.toFixed(2).padStart(9)} | ${h.lineCount}`);
+  }
+  const heldLineTotal = held.reduce((s, h) => s + h.lineCount, 0);
+  console.log(`[backfill]   total held invoices : ${held.length}`);
+  console.log(`[backfill]   total held lines    : ${heldLineTotal}`);
+
+  console.log(``);
+  console.log(`[backfill] PROMOTABLE Kuna invoices (within 1% over or under-count):`);
+  console.log(`[backfill]   invoice_num    | total      | sum_ext     | diff       | lines`);
+  for (const p of promotable) {
+    console.log(`[backfill]   ${String(p.invoice_number || "?").padEnd(14)} | $${p.total.toFixed(2).padStart(9)} | $${p.sumExt.toFixed(2).padStart(10)} | $${p.overBy.toFixed(2).padStart(9)} | ${p.lineCount}`);
+  }
+  console.log(`[backfill]   total promotable invoices : ${promotable.length}`);
+  if (noLines.length > 0) {
+    console.log(``);
+    console.log(`[backfill]   Kuna submissions with zero PG lines (skipped from both lists):`);
+    for (const n of noLines) console.log(`[backfill]     ${n.client_uuid}  INV${n.invoice_number}`);
+  }
+
+  if (!EXECUTE) {
+    console.log(``);
+    console.log(`[backfill] DRY RUN. Re-run with --execute to append the ${heldLineTotal} review_queue row(s).`);
+    return;
+  }
+
+  // ── IDEMPOTENCY: skip held invoices that already have a
+  // review_queue row with reason='overcount_suspect_reextract'.
+  // Avoid double-appending on re-runs.
+  const { rows: existingQueueRows } = await safeRead(SHEET_IDS.INVENTORY, "review_queue");
+  const alreadyHeld = new Set();
+  for (const r of existingQueueRows) {
+    if (String(r[13] || "").trim() === "overcount_suspect_reextract" && String(r[5] || "").trim() === ACCOUNT_KEY) {
+      const inv = String(r[3] || "").trim();
+      if (inv) alreadyHeld.add(inv);
+    }
+  }
+  const toWrite = held.filter((h) => !alreadyHeld.has(h.client_uuid));
+  const skippedAlreadyHeld = held.length - toWrite.length;
+  if (skippedAlreadyHeld > 0) {
+    console.log(``);
+    console.log(`[backfill] ${skippedAlreadyHeld} invoice(s) already have hold rows; skipping (idempotent).`);
+  }
+  if (toWrite.length === 0) {
+    console.log(`[backfill] nothing new to append.`);
+    return;
+  }
+
+  const queueRows = [];
+  for (const h of toWrite) {
+    for (const l of h.lines) {
+      queueRows.push([
+        `q_${uidShort()}`,                              // A queueId
+        String(l.description || ""),                   // B lineItemText
+        "Kuna Foodservice",                            // C vendor
+        h.client_uuid,                                 // D invoiceId (client_uuid)
+        String(l.invoice_date || h.invoice_date || ""),// E invoiceDate
+        ACCOUNT_KEY,                                   // F account
+        "",                                            // G suggestedMatchId
+        "",                                            // H suggestedMatchName
+        0,                                             // I confidence
+        "pending",                                     // J status
+        "",                                            // K reviewedBy
+        "",                                            // L reviewedAt
+        "",                                            // M resultItemId
+        "overcount_suspect_reextract",                 // N reason
+      ]);
+    }
+  }
+  console.log(``);
+  console.log(`[backfill] appending ${queueRows.length} review_queue row(s) for ${toWrite.length} invoice(s)...`);
+  await appendRowsSA(SHEET_IDS.INVENTORY, "review_queue!A1", queueRows);
+  console.log(`[backfill] DONE.`);
+}
+
 // ── Main ──
 async function main() {
   console.log(`[backfill] invoked: stage=${STAGE} limit=${LIMIT} execute=${EXECUTE}`);
   if (STAGE === "dry-run") {
     await stageDryRun();
+    return;
+  }
+  if (STAGE === "replay-pg") {
+    await stageReplayPg();
+    return;
+  }
+  if (STAGE === "hold-overcount-kuna") {
+    await stageHoldOvercountKuna();
     return;
   }
   await stageBatchOrFull();
