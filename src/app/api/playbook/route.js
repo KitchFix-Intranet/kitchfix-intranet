@@ -136,6 +136,15 @@ export async function GET(request) {
       const drivePreviewUrl = doc.source_drive_id
         ? `https://drive.google.com/file/d/${doc.source_drive_id}/preview`
         : null;
+      // ES URLs mirror the EN ones for bilingual docs (POSTER-001 is the
+      // first). Both are null on the vast majority of rows; the reader
+      // only renders an EN/ES toggle when both EN + ES previews exist.
+      const driveViewUrlEs = doc.source_drive_id_es
+        ? `https://drive.google.com/file/d/${doc.source_drive_id_es}/view`
+        : null;
+      const drivePreviewUrlEs = doc.source_drive_id_es
+        ? `https://drive.google.com/file/d/${doc.source_drive_id_es}/preview`
+        : null;
 
       return NextResponse.json({
         document: doc,
@@ -143,6 +152,8 @@ export async function GET(request) {
         surfaces: surfs,
         drive_view_url: driveViewUrl,
         drive_preview_url: drivePreviewUrl,
+        drive_view_url_es: driveViewUrlEs,
+        drive_preview_url_es: drivePreviewUrlEs,
       });
     }
 

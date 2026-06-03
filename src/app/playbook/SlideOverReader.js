@@ -125,11 +125,31 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo }) {
     surfaces,
     drive_view_url,
     drive_preview_url,
+    drive_view_url_es,
+    drive_preview_url_es,
   } = data;
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  const hasFile = !!drive_preview_url;
+
+  // EN/ES language selection - only meaningful when BOTH URLs are present.
+  // Default is "en"; reset back to "en" whenever the reader navigates to a
+  // different doc (the back/forward via relationship clicks rebinds doc.id,
+  // and we don't want a previous doc's language preference to leak forward).
+  const [lang, setLang] = useState("en");
+  useEffect(() => { setLang("en"); }, [doc.id]);
+
+  const hasEn = !!drive_preview_url;
+  const hasEs = !!drive_preview_url_es;
+  const showLangToggle = hasEn && hasEs;
+  // Active language. If only one of the two is present, the toggle is hidden
+  // and we just render whichever exists; we never show an empty iframe.
+  const activeLang = showLangToggle
+    ? lang
+    : (hasEn ? "en" : (hasEs ? "es" : "en"));
+  const activeViewUrl    = activeLang === "es" ? drive_view_url_es    : drive_view_url;
+  const activePreviewUrl = activeLang === "es" ? drive_preview_url_es : drive_preview_url;
+  const hasFile = !!activePreviewUrl;
 
   return (
     <div className="pb-slide-body">
@@ -159,13 +179,40 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo }) {
         </div>
       </div>
 
+      {/* Language toggle — only when the doc has both EN and ES Drive files
+          (currently just POSTER-001). The iframe + Open in Drive + Print all
+          act on the active language; navigating to a different doc resets
+          this back to EN via the useEffect above. */}
+      {showLangToggle && (
+        <div className="pb-lang-toggle" role="group" aria-label="Document language">
+          <button
+            type="button"
+            className={`pb-lang-btn${activeLang === "en" ? " pb-lang-btn--on" : ""}`}
+            onClick={() => setLang("en")}
+            aria-pressed={activeLang === "en"}
+            title="English"
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            className={`pb-lang-btn${activeLang === "es" ? " pb-lang-btn--on" : ""}`}
+            onClick={() => setLang("es")}
+            aria-pressed={activeLang === "es"}
+            title="Español"
+          >
+            ES
+          </button>
+        </div>
+      )}
+
       {/* Reader frame */}
       <div className="pb-reader-frame">
         {hasFile ? (
           <iframe
-            src={drive_preview_url}
+            src={activePreviewUrl}
             className="pb-reader-iframe"
-            title={`PDF preview: ${doc.title}`}
+            title={`PDF preview: ${doc.title}${showLangToggle ? ` (${activeLang.toUpperCase()})` : ""}`}
             allow="autoplay"
           />
         ) : (
@@ -182,11 +229,13 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo }) {
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — Open in Drive / Print act on whichever language is
+          currently selected (activeViewUrl). For monolingual docs this is
+          just the EN URL; for bilingual docs it swaps with the toggle. */}
       <div className="pb-slide-actions">
         <a
           className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
-          href={drive_view_url || "#"}
+          href={activeViewUrl || "#"}
           target="_blank"
           rel="noopener noreferrer"
           aria-disabled={!hasFile}
@@ -196,7 +245,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo }) {
         </a>
         <a
           className={`pb-action${hasFile ? "" : " pb-action--disabled"}`}
-          href={drive_view_url || "#"}
+          href={activeViewUrl || "#"}
           target="_blank"
           rel="noopener noreferrer"
           aria-disabled={!hasFile}

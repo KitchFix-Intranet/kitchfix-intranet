@@ -957,6 +957,47 @@
   color: #94a3b8;
 }
 
+/* ─── EN/ES language toggle (bilingual docs only) ────────────────────────── */
+/* Rendered immediately above the reader iframe when the document has both an
+   EN and an ES Drive file. Compact segmented pill - matches the catalog's
+   .pb-view-toggle visual language so the reader doesn't introduce a new
+   control shape, just borrows the established one. Teal accent on the
+   active segment. */
+.pb-lang-toggle {
+  display: inline-flex;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 999px;
+  padding: 2px;
+  margin: 18px 0 8px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.pb-lang-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  padding: 4px 12px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+  min-width: 36px;
+}
+.pb-lang-btn:hover { color: var(--kf-navy); }
+.pb-lang-btn--on {
+  background: var(--kf-playbook-teal);
+  color: white;
+}
+.pb-lang-btn--on:hover { color: white; }
+.pb-lang-btn:focus-visible {
+  outline: 2px solid var(--kf-playbook-teal);
+  outline-offset: 2px;
+}
+
 /* ─── Reader frame (Drive embed) ─────────────────────────────────────────── */
 .pb-reader-frame {
   margin: 18px 0 18px;
