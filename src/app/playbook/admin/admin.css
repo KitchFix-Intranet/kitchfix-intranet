@@ -981,6 +981,51 @@ button.pb-admin-gap-link:focus-visible {
   outline-offset: 2px;
 }
 
+/* Ask Sous (Preview) - demo entry from the admin tab nav. Amber accent
+   signals showcase surface, not a production action. Lives to the left of
+   New Document so the primary navy CTA stays at the right edge. */
+.pb-admin-sous-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 7px 14px;
+  margin-right: 8px;
+  border: 1px solid var(--kf-ops-amber);
+  background: var(--kf-surface-1);
+  color: var(--kf-ops-amber-dim);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 700;
+  border-radius: var(--kf-r-input);
+  text-decoration: none;
+  transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
+}
+.pb-admin-sous-btn:hover {
+  background: var(--kf-ops-amber);
+  color: white;
+  border-color: var(--kf-ops-amber);
+}
+.pb-admin-sous-btn:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+}
+.pb-admin-sous-tag {
+  margin-left: 4px;
+  padding: 2px 6px;
+  background: var(--kf-ops-amber);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-radius: 3px;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.pb-admin-sous-btn:hover .pb-admin-sous-tag {
+  background: white;
+  color: var(--kf-ops-amber-dim);
+}
+
 /* ─── Worklist archive cell ──────────────────────────────────────────────── */
 .pb-admin-th--action {
   font-family: 'Inter', sans-serif;
