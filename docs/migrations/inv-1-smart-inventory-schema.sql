@@ -387,8 +387,8 @@ CREATE TABLE IF NOT EXISTS price_history (
 
   -- Cron-side dedup key (the legacy "sourceOrInvoiceId" string).
   -- Stays as TEXT because manual sources used to write things like
-  -- "manual-add" too. UNIQUE (item_id, source_or_invoice_id) below
-  -- moves the cron's JS Set dedup into the DB (D7).
+  -- "manual-add" too. UNIQUE (item_id, source_or_invoice_id, price)
+  -- below moves the cron's JS Set dedup into the DB (D7).
   source_or_invoice_id  TEXT NOT NULL,
 
   source              price_history_source NOT NULL,
@@ -396,10 +396,17 @@ CREATE TABLE IF NOT EXISTS price_history (
   recorded_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   recorded_by         TEXT,
 
-  -- D7: cron idempotency moves to the DB. INSERT ... ON CONFLICT
-  -- (item_id, source_or_invoice_id) DO NOTHING is the new write
-  -- pattern (replaces cron's processedInvoices JS Set).
-  UNIQUE (item_id, source_or_invoice_id)
+  -- D7: cron idempotency moves to the DB. The cron writes
+  -- INSERT ... ON CONFLICT (item_id, source_or_invoice_id, price)
+  -- DO NOTHING (replaces the legacy processedInvoices JS Set).
+  --
+  -- Key includes price because the cron writes line-item-level rows:
+  -- one invoice can legitimately produce multiple entries for the
+  -- same item at distinct prices (B1 in the INV-3 backfill audit).
+  -- Within-run exact-duplicate writes (A1) are a cron loop bug
+  -- tracked under Module 8 and deduped in the INV-3 backfill.
+  CONSTRAINT price_history_item_id_source_or_invoice_id_price_key
+    UNIQUE (item_id, source_or_invoice_id, price)
 );
 
 -- D-Delta-2 supporting index. Keys on (item_id, recorded_at DESC) so
@@ -562,8 +569,9 @@ CREATE INDEX IF NOT EXISTS merge_history_items_role_idx
 --        (ON CONFLICT (item_id, alias_normalized) DO NOTHING so a
 --        keeper-already-has-this-alias case is harmless).
 --     3. Reassign price_history.item_id from each dupe to keeper.
---        (ON CONFLICT (item_id, source_or_invoice_id) DO NOTHING in
---        case the keeper already saw the same invoice.)
+--        (ON CONFLICT (item_id, source_or_invoice_id, price) DO NOTHING
+--        in case the keeper already has a row matching that exact
+--        invoice + price tuple.)
 --     4. Soft-delete the dupes: status='archived', updated_at=now().
 --     5. Insert merge_history row.
 --     6. Insert merge_history_items rows (keeper + every dupe).
@@ -669,14 +677,18 @@ BEGIN
   DELETE FROM item_aliases WHERE item_id = ANY(p_dupe_ids);
 
   -- 3. Reassign price_history.
+  --    NOT EXISTS guards against the widened UNIQUE key
+  --    (item_id, source_or_invoice_id, price). Two B1 line items on
+  --    the dupe at different prices both survive the merge.
   WITH reassigned AS (
     UPDATE price_history
        SET item_id = p_keeper_id
      WHERE item_id = ANY(p_dupe_ids)
        AND NOT EXISTS (
          SELECT 1 FROM price_history existing
-          WHERE existing.item_id = p_keeper_id
+          WHERE existing.item_id              = p_keeper_id
             AND existing.source_or_invoice_id = price_history.source_or_invoice_id
+            AND existing.price                = price_history.price
        )
     RETURNING 1
   )
