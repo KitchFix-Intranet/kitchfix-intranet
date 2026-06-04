@@ -1,21 +1,72 @@
 /**
  * inventoryActions.js — Inventory Manager Backend Handlers
+ *
+ * Post-INV-2: every live handler routes through src/lib/dataStore/inventory.js
+ * orchestrators. With cutover flags off (default on merge), the orchestrators
+ * dispatch to their Sheets adapters and behavior is byte-equivalent to the
+ * pre-INV-2 file. Once DUAL_WRITE_TABLES is flipped for inventory tabs, the
+ * same handlers will write to PG via the orchestrators with no further code
+ * changes here.
+ *
+ * Module-arg discipline (per Module 5 lesson #1 / PR #92): every orchestrator
+ * call from this file passes { module: "ops" } so READ_FROM_POSTGRES_OPS
+ * takes effect at read-cutover time. Forget this once and the per-surface
+ * flag silently no-ops.
+ *
+ * Three INV-2 design calls applied here:
+ *   - handleReviewAccept: zone_corrections write DROPPED on both sides (INV-1
+ *     dropped the table as vestigial).
+ *   - handleMergeItems: mirrors mergeVendors. The orchestrator runs the
+ *     existing 4-7 step Sheets sequence unconditionally + the
+ *     merge_inventory_items() RPC for atomic PG state. Keeper-field side
+ *     effects (location_id copy, notes append) happen in JS inside the PG
+ *     adapter BEFORE the RPC, mirroring the Sheets path inline behavior.
+ *   - accountMatch retired from this file. The Sheets-side tolerance for
+ *     the 1 stray STL-MO full-form row stays inside the Sheets adapters in
+ *     dataStore/inventory.js. PG adapters use direct equality; the canonical
+ *     account_key CHECK constraint guarantees no drift.
+ *
+ * 7 stubs (handleUpdateItem, handleResolveQueue, handleAdminCorrect,
+ * handleScan, handleHistoryGet, handleReviewQueueGet, handlePrint) STAY as
+ * stubs per BR3.
+ *
+ * handleDedupCatalog RETIRED per audit BR4. The PG UNIQUE constraint on
+ * inventory_items + merge_inventory_items() RPC replace it.
  */
 
-import { SHEET_IDS, readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, batchUpdateRangesSA } from "@/lib/sheets";
 import {
-  cachedRead, batchRead, invalidateCache,
   getAccountConfigs, getPeriods, getCurrentPeriod,
-  parseNum, generateId,
 } from "@/lib/opsUtils";
+import {
+  getInventoryBootstrap,
+  getCatalogForAccount,
+  getCatalogForMatching,
+  getRecentMergeHistory,
+  createCountSession,
+  appendCountItems,
+  submitCountSession,
+  createInventoryItem,
+  verifyItemPrice,
+  moveItemsBulk,
+  mergeInventoryItems,
+  logKeepSeparate,
+  acceptReviewItem,
+  deleteReviewItem,
+  excludeItem,
+  saveStorageLocations,
+  saveLocationSortOrder,
+  addStorageSubZone,
+  updateStorageLocation,
+  deactivateStorageLocation,
+  updateCatalogItem,
+  archiveItem,
+  reactivateItem,
+} from "@/lib/dataStore";
 
-// Account labels in item_catalog may be short ("STL - MO") while bootstrap
-// uses full labels ("STL - MO - St Louis Cardinals"). Match flexibly.
-function accountMatch(rowAccount, activeAccount) {
-  if (!rowAccount || !activeAccount) return false;
-  if (rowAccount === activeAccount) return true;
-  return activeAccount.startsWith(rowAccount + " -");
-}
+const MH_ACTION_IDX = 8;
+const MH_MERGED_IDS_IDX = 6;
+const MH_MERGED_NAMES_IDX = 7;
+const MH_KEEPER_NAME_IDX = 5;
 
 // ═══════════════════════════════════════
 // BOOTSTRAP
@@ -28,162 +79,14 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
     ]);
 
     const activeAccount = account || accounts[0]?.label || "";
-
-    // Read inventory tabs in parallel (fresh=true bypasses cache after save)
-    const inv = await batchRead(SHEET_IDS.INVENTORY, [
-      "item_catalog", "storage_locations", "count_sessions", "count_items",
-      "review_queue", "price_history", "item_aliases",
-    ], { fresh });
-
-    // Full catalog for this account
-    const catalogItems = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && r[11] !== "FALSE" && r[11] !== false)
-      .map((r) => ({
-        itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized",
-        unit: r[4] || "EA", locationId: r[5] || "",
-        primaryVendor: r[6] || "", lastPrice: parseNum(r[7]),
-        lastPriceDate: r[8] || "", lastPriceVendor: r[9] || "",
-        priceAtLastCount: parseNum(r[10]),
-        linkedToInvoice: r[12] === "TRUE",
-        isVarietyGroup: r[13] === "TRUE",
-        createdBy: r[14] || "",
-        notes: r[17] || "",
-        lastVerified: r[18] || "",
-      }));
-
-    const catalogStats = { totalItems: catalogItems.length, byCategory: {} };
-    catalogItems.forEach((i) => {
-      catalogStats.byCategory[i.category] = (catalogStats.byCategory[i.category] || 0) + 1;
-    });
-
-    const excludedItems = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && (r[11] === "FALSE" || r[11] === false) && r[16] === "excluded")
-      .map((r) => ({ itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized", unit: r[4] || "EA", primaryVendor: r[6] || "", lastPrice: parseNum(r[7]) }));
-
-    const archivedItems = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && (r[11] === "FALSE" || r[11] === false) && r[16] === "archived")
-      .map((r) => ({
-        itemId: r[0], name: r[2] || "", category: r[3] || "Uncategorized",
-        unit: r[4] || "EA", locationId: r[5] || "",
-        primaryVendor: r[6] || "", lastPrice: parseNum(r[7]),
-        lastPriceDate: r[8] || "", lastPriceVendor: r[9] || "",
-        createdBy: r[14] || "",
-        notes: r[17] || "",
-        lastVerified: r[18] || "",
-      }));
-
-    const catalogItemIds = new Set(catalogItems.map(i => i.itemId));
-    const aliases = (inv.item_aliases?.rows || []).filter((r) => catalogItemIds.has(r[2])).map((r) => ({ aliasText: r[1], itemId: r[2], vendor: r[3] }));
-
-    // Storage locations
-    const locations = (inv.storage_locations?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount) && r[5] !== "FALSE" && r[5] !== false)
-      .sort((a, b) => (parseInt(a[4]) || 0) - (parseInt(b[4]) || 0))
-      .map((r) => ({
-        locationId: r[0], name: r[2] || "", icon: r[3] || "box",
-        sortOrder: parseInt(r[4]) || 0,
-        parentLocationId: r[8] || null,
-        color: r[9] || "",
-      }));
-
-    // Count sessions for this account
-    const sessions = (inv.count_sessions?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount))
-      .sort((a, b) => new Date(b[7] || b[4] || 0) - new Date(a[7] || a[4] || 0));
-
-    const lastSubmitted = sessions.find((r) => r[5] === "submitted" || r[5] === "corrected");
-    const activeDraft = sessions.find(
-      (r) => r[5] === "draft" && r[2] === currentPeriod?.name
-    );
-
-    // Last count for summary
-    let lastCount = null;
-    if (lastSubmitted) {
-      lastCount = {
-        sessionId: lastSubmitted[0], period: lastSubmitted[2],
-        submittedBy: lastSubmitted[6] || lastSubmitted[3],
-        submittedAt: lastSubmitted[7] || "",
-        status: lastSubmitted[5],
-        totalFood: parseNum(lastSubmitted[8]),
-        totalPackaging: parseNum(lastSubmitted[9]),
-        totalSupplies: parseNum(lastSubmitted[10]),
-        totalSnacks: parseNum(lastSubmitted[11]),
-        totalBeverages: parseNum(lastSubmitted[12]),
-        grandTotal: parseNum(lastSubmitted[13]),
-      };
-    }
-
-    // "Last: X" chips — get per-item quantities from last submitted count
-    const lastCountItems = {};
-    if (lastSubmitted) {
-      const allCountItems = (inv.count_items?.rows || [])
-        .filter((r) => r[0] === lastSubmitted[0]);
-      // Group by locationId, take latest locationSaveId per location
-      const locGroups = {};
-      allCountItems.forEach((r) => {
-        const locId = r[8];
-        const saveId = r[1];
-        const savedAt = r[11] || "";
-        if (!locGroups[locId] || savedAt > locGroups[locId].savedAt) {
-          locGroups[locId] = { saveId, savedAt, items: [] };
-        }
-      });
-      // Second pass: collect items from latest save per location
-      allCountItems.forEach((r) => {
-        const locId = r[8];
-        if (locGroups[locId] && r[1] === locGroups[locId].saveId) {
-          lastCountItems[r[2]] = {
-            quantity: parseNum(r[3]),
-            noneOnHand: r[12] === "TRUE",
-          };
-        }
-      });
-    }
-
-    // Review queue count
-    const reviewCount = (inv.review_queue?.rows || [])
-      .filter((r) => accountMatch(r[5], activeAccount) && r[9] === "pending").length;
-
-    // Price movers
-    const priceRows = (inv.price_history?.rows || [])
-      .filter((r) => accountMatch(r[1], activeAccount))
-      .sort((a, b) => new Date(b[6] || b[4] || 0) - new Date(a[6] || a[4] || 0));
-    const priceByItem = {};
-    priceRows.forEach((r) => {
-      if (!priceByItem[r[0]]) priceByItem[r[0]] = [];
-      if (priceByItem[r[0]].length < 8) priceByItem[r[0]].push({ price: parseNum(r[3]), vendor: r[2], date: r[4] || "" });
-    });
-    const movers = [];
-    for (const [itemId, prices] of Object.entries(priceByItem)) {
-      if (prices.length < 2) continue;
-      const diff = prices[0].price - prices[1].price;
-      if (Math.abs(diff) < 0.01) continue;
-      const cat = catalogItems.find((i) => i.itemId === itemId);
-      movers.push({
-        itemId, name: cat?.name || itemId,
-        currentPrice: prices[0].price, previousPrice: prices[1].price,
-        change: diff, pctChange: ((diff / prices[1].price) * 100).toFixed(1),
-        vendor: prices[0].vendor, direction: diff > 0 ? "up" : "down",
-      });
-    }
-    movers.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-
-    const currentPeriodSubmitted = sessions.some(
-      (r) => r[2] === currentPeriod?.name && (r[5] === "submitted" || r[5] === "corrected")
-    );
+    const inv = await getInventoryBootstrap({ account: activeAccount, currentPeriod, fresh, module: "ops" });
 
     return {
       success: true,
       account: activeAccount,
       accounts: accounts.map((a) => ({ key: a.key, label: a.label, level: a.level })),
       currentPeriod, allPeriods,
-      catalogItems, catalogStats, locations, excludedItems, archivedItems, aliases,
-      lastCount, lastCountItems,
-      activeDraft: activeDraft ? { sessionId: activeDraft[0], period: activeDraft[2], startedAt: activeDraft[4] } : null,
-      reviewQueueCount: reviewCount,
-      priceMovers: movers.filter(m => Math.abs(parseFloat(m.pctChange)) >= 5).slice(0, 10),
-      itemPrices: Object.fromEntries(Object.entries(priceByItem).map(([id, prices]) => [id, prices.slice(0, 6)])),
-      currentPeriodSubmitted,
+      ...inv,
     };
   } catch (error) {
     console.error("[inventoryActions] bootstrap error:", error);
@@ -197,13 +100,7 @@ export async function handleInventoryBootstrap({ account, fresh = false }) {
 
 export async function handleStartSession({ account, period, email }) {
   try {
-    const sessionId = generateId("inv");
-    const row = [
-      sessionId, account, period, email, new Date().toISOString(),
-      "draft", "", "", "", "", "", "", "", "", "", "", "", "",
-    ];
-    await appendRowSA(SHEET_IDS.INVENTORY, "count_sessions", row);
-    invalidateCache(SHEET_IDS.INVENTORY, "count_sessions");
+    const { sessionId } = await createCountSession({ account, period, email, module: "ops" });
     return { success: true, sessionId };
   } catch (error) {
     return { success: false, error: error.message };
@@ -216,19 +113,10 @@ export async function handleStartSession({ account, period, email }) {
 
 export async function handleCountSave({ sessionId, locationId, items, email }) {
   try {
-    const locationSaveId = generateId("loc");
-    const savedAt = new Date().toISOString();
-    const rows = items.map((item) => [
-      sessionId, locationSaveId, item.itemId,
-      item.quantity ?? 0, item.unit || "EA",
-      item.priceAtCount ?? 0, item.priceVendor || "",
-      ((item.quantity || 0) * (item.priceAtCount || 0)).toFixed(2),
-      locationId, email, savedAt, savedAt,
-      item.noneOnHand ? "TRUE" : "FALSE",
-    ]);
-    await appendRowsSA(SHEET_IDS.INVENTORY, "count_items", rows);
-    invalidateCache(SHEET_IDS.INVENTORY, "count_items");
-    return { success: true, locationSaveId, itemCount: rows.length };
+    const { locationSaveId, itemCount } = await appendCountItems({
+      sessionId, locationId, items, email, module: "ops",
+    });
+    return { success: true, locationSaveId, itemCount };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -240,77 +128,18 @@ export async function handleCountSave({ sessionId, locationId, items, email }) {
 
 export async function handleCountSubmit({ sessionId, account, period, summary, email }) {
   try {
-    const inv = await batchRead(SHEET_IDS.INVENTORY, ["count_sessions", "count_items", "item_catalog"], { fresh: true });
-    const sessions = inv.count_sessions?.rows || [];
-    const now = new Date().toISOString();
-
-    // Find session row
-    let sessionRowNum = null;
-    for (let i = 0; i < sessions.length; i++) {
-      if (sessions[i][0] === sessionId) { sessionRowNum = i + 2; break; }
-    }
-    if (!sessionRowNum) return { success: false, error: "Session not found" };
-
-    // Calculate category totals from count_items
-    const countItems = (inv.count_items?.rows || []).filter(r => r[0] === sessionId);
-    const catTotals = { Food: 0, Packaging: 0, Supplies: 0, Snacks: 0, Beverages: 0 };
-    const catalogRows = inv.item_catalog?.rows || [];
-    const catMap = {};
-    catalogRows.forEach(r => { catMap[r[0]] = r[3] || "Food"; });
-
-    let grandTotal = 0;
-    countItems.forEach(r => {
-      const ext = parseNum(r[7]);
-      const cat = catMap[r[2]] || "Food";
-      if (catTotals[cat] !== undefined) catTotals[cat] += ext;
-      else catTotals.Food += ext;
-      grandTotal += ext;
+    const { grandTotal, catTotals, itemsCounted } = await submitCountSession({
+      sessionId, account, period, email, module: "ops",
     });
 
-    // Update session row: status, submittedBy, submittedAt, category totals, grandTotal
-    await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-      { range: `count_sessions!F${sessionRowNum}`, values: [["submitted"]] },
-      { range: `count_sessions!G${sessionRowNum}`, values: [[email || ""]] },
-      { range: `count_sessions!H${sessionRowNum}`, values: [[now]] },
-      { range: `count_sessions!I${sessionRowNum}`, values: [[catTotals.Food.toFixed(2)]] },
-      { range: `count_sessions!J${sessionRowNum}`, values: [[catTotals.Packaging.toFixed(2)]] },
-      { range: `count_sessions!K${sessionRowNum}`, values: [[catTotals.Supplies.toFixed(2)]] },
-      { range: `count_sessions!L${sessionRowNum}`, values: [[catTotals.Snacks.toFixed(2)]] },
-      { range: `count_sessions!M${sessionRowNum}`, values: [[catTotals.Beverages.toFixed(2)]] },
-      { range: `count_sessions!N${sessionRowNum}`, values: [[grandTotal.toFixed(2)]] },
-    ]);
-
-    // Update priceAtLastCount on catalog items (col K)
-    const priceUpdates = [];
-    countItems.forEach(r => {
-      const itemId = r[2];
-      const priceAtCount = parseNum(r[5]);
-      if (priceAtCount > 0) {
-        for (let i = 0; i < catalogRows.length; i++) {
-          if (catalogRows[i][0] === itemId && accountMatch(catalogRows[i][1], account)) {
-            priceUpdates.push({ range: `item_catalog!K${i + 2}`, values: [[priceAtCount]] });
-            break;
-          }
-        }
-      }
-    });
-    if (priceUpdates.length > 0) {
-      const CHUNK = 500;
-      for (let i = 0; i < priceUpdates.length; i += CHUNK) {
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, priceUpdates.slice(i, i + CHUNK));
-      }
-    }
-
-    // Slack notification
+    // Slack notification (preserved verbatim from pre-INV-2)
     const slackUrl = process.env.SLACK_INVENTORY_WEBHOOK;
     if (slackUrl) {
-      const text = `*Inventory Count Submitted*\n• Account: ${account}\n• Period: ${period}\n• By: ${email}\n• Grand Total: $${grandTotal.toFixed(2)}\n• Food: $${catTotals.Food.toFixed(2)} | Snacks: $${catTotals.Snacks.toFixed(2)} | Beverages: $${catTotals.Beverages.toFixed(2)}\n• Supplies: $${catTotals.Supplies.toFixed(2)} | Packaging: $${catTotals.Packaging.toFixed(2)}\n• Items counted: ${countItems.length}`;
+      const text = `*Inventory Count Submitted*\n• Account: ${account}\n• Period: ${period}\n• By: ${email}\n• Grand Total: $${grandTotal.toFixed(2)}\n• Food: $${catTotals.Food.toFixed(2)} | Snacks: $${catTotals.Snacks.toFixed(2)} | Beverages: $${catTotals.Beverages.toFixed(2)}\n• Supplies: $${catTotals.Supplies.toFixed(2)} | Packaging: $${catTotals.Packaging.toFixed(2)}\n• Items counted: ${itemsCounted}`;
       try { await fetch(slackUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); } catch {}
     }
 
-    invalidateCache(SHEET_IDS.INVENTORY, "count_sessions");
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    return { success: true, grandTotal, catTotals, itemsCounted: countItems.length };
+    return { success: true, grandTotal, catTotals, itemsCounted };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -322,44 +151,19 @@ export async function handleCountSubmit({ sessionId, account, period, summary, e
 
 export async function handleCatalogGet({ account }) {
   try {
-    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases"]);
-    const items = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false)
-      .map((r) => ({
-        itemId: r[0], name: r[2], category: r[3], unit: r[4],
-        locationId: r[5], primaryVendor: r[6], lastPrice: parseNum(r[7]),
-        lastPriceDate: r[8], lastPriceVendor: r[9],
-        linkedToInvoice: r[12] === "TRUE", isVarietyGroup: r[13] === "TRUE",
-      }));
-    return { success: true, items };
+    const { items, aliases } = await getCatalogForAccount({ account, module: "ops" });
+    return { success: true, items, aliases };
   } catch (error) {
     return { success: false, error: error.message };
   }
 }
 
-// ═══════════════════════════════════════
-// STUBS — built in later sessions
-// ═══════════════════════════════════════
-
 export async function handleAddItem({ account, name, vendor, category, unit, price, locationId, email }) {
   try {
     if (!name || !vendor) return { success: false, error: "Name and vendor are required" };
-    const itemId = generateId("inv");
-    const now = new Date().toISOString();
-    const priceNum = parseNum(price);
-    await appendRowSA(SHEET_IDS.INVENTORY, "item_catalog", [
-      itemId, account, name, category || "Uncategorized", unit || "each",
-      locationId || "", vendor, priceNum || "", priceNum ? now.slice(0, 10) : "",
-      priceNum ? vendor : "", 0, "TRUE", "FALSE", "FALSE",
-      email || "manual", now, "", "", priceNum ? now.slice(0, 10) : "",
-    ]);
-    if (priceNum > 0) {
-      await appendRowSA(SHEET_IDS.INVENTORY, "price_history", [
-        itemId, account, vendor, priceNum, now.slice(0, 10), "manual-add", now,
-      ]);
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
+    const { itemId } = await createInventoryItem({
+      account, name, vendor, category, unit, price, locationId, email, module: "ops",
+    });
     return { success: true, itemId };
   } catch (error) {
     return { success: false, error: error.message };
@@ -368,27 +172,7 @@ export async function handleAddItem({ account, name, vendor, category, unit, pri
 
 export async function handleVerifyPrice({ account, itemId, price, email }) {
   try {
-    const priceNum = parseNum(price);
-    if (!priceNum || priceNum <= 0) return { success: false, error: "Valid price required" };
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        const now = new Date().toISOString();
-        const vendor = rows[i][6] || "";
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-          { range: `item_catalog!H${i + 2}`, values: [[priceNum]] },
-          { range: `item_catalog!I${i + 2}`, values: [[now.slice(0, 10)]] },
-          { range: `item_catalog!J${i + 2}`, values: [[vendor]] },
-          { range: `item_catalog!S${i + 2}`, values: [[now.slice(0, 10)]] },
-        ]);
-        await appendRowSA(SHEET_IDS.INVENTORY, "price_history", [
-          itemId, account, vendor, priceNum, now.slice(0, 10), "manual-verify", now,
-        ]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
+    await verifyItemPrice({ account, itemId, price, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -398,45 +182,16 @@ export async function handleVerifyPrice({ account, itemId, price, email }) {
 export async function handleUpdateItem(body) { return { success: false, error: "Week 3" }; }
 
 export async function handleBatchMoveItems({ account, items }) {
-  // items: [{itemId, newLocationId}]
   try {
     if (!items || items.length === 0) return { success: true, moved: 0 };
-    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    const rows = catalogData.rows || [];
-
-    // Build batch of range updates
-    const data = [];
-    for (const move of items) {
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i][0] === move.itemId && accountMatch(rows[i][1], account)) {
-          data.push({ range: `item_catalog!F${i + 2}`, values: [[move.newLocationId]] });
-          break;
-        }
-      }
-    }
-
-    if (data.length === 0) return { success: true, moved: 0 };
-
-    // Sheets batchUpdate handles up to 100k cells — chunk at 500 to be safe
-    const CHUNK = 500;
-    let moved = 0;
-    for (let c = 0; c < data.length; c += CHUNK) {
-      const chunk = data.slice(c, c + CHUNK);
-      const result = await batchUpdateRangesSA(SHEET_IDS.INVENTORY, chunk);
-      if (!result.success) {
-        console.error(`[batch-move] Chunk failed at offset ${c}:`, result.error);
-        return { success: false, moved, error: result.error };
-      }
-      moved += chunk.length;
-    }
-
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    const { moved } = await moveItemsBulk({ account, items, module: "ops" });
     return { success: true, moved };
   } catch (error) {
     console.error("[inventoryActions] batch-move error:", error.message);
     return { success: false, error: error.message };
   }
 }
+
 // ═══════════════════════════════════════
 // ITEM REVIEW — AI Similarity + Merge
 // ═══════════════════════════════════════
@@ -473,47 +228,49 @@ async function callClaude(prompt, maxTokens = 8192, retries = 3) {
 
 export async function handleAISimilarityCheck({ account }) {
   try {
-    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases", "merge_history"], { fresh: true });
-    const items = (inv.item_catalog?.rows || [])
-      .filter((r) => accountMatch(r[1], account) && r[11] !== "FALSE" && r[11] !== false && r[0] && r[2])
-      .map((r) => ({ itemId: r[0], name: r[2], category: r[3] || "Food", unit: r[4] || "EA", vendor: r[6] || "", price: r[7] || "" }));
+    const [{ items, aliases }, mergeRows] = await Promise.all([
+      getCatalogForMatching({ account, module: "ops" }),
+      getRecentMergeHistory({ account, limit: 50, module: "ops" }),
+    ]);
 
-    if (items.length === 0) return { success: true, groups: [] };
+    // Adapt canonical records back to the shape the prompt-builder uses.
+    const promptItems = items.map((i) => ({
+      itemId: i.itemId, name: i.name, category: i.category || "Food",
+      unit: i.unit || "EA", vendor: i.primaryVendor || "", price: i.lastPrice || "",
+    }));
 
-    const aliases = (inv.item_aliases?.rows || [])
-      .filter((r) => items.some((i) => i.itemId === r[2]))
-      .map((r) => ({ alias: r[1], itemId: r[2], vendor: r[3] }));
+    if (promptItems.length === 0) return { success: true, groups: [] };
 
-    // Recent merge decisions for learning
-    const mergeRows = (inv.merge_history?.rows || [])
-      .filter((r) => accountMatch(r[1], account))
-      .slice(-50);
+    const promptAliases = aliases.map((a) => ({
+      alias: a.aliasText, itemId: a.itemId, vendor: a.vendor,
+    }));
 
-    // Build separate lists for merged vs keep-separate
+    // Recent merge decisions for learning (walks the row by positional
+    // index; both Sheets adapter and PG adapter return the same shape).
     const mergedContext = [];
     const keepSeparateContext = [];
     mergeRows.forEach((r) => {
-      if (r[8] === "keep_separate") {
+      if (r[MH_ACTION_IDX] === "keep_separate") {
         try {
-          const names = JSON.parse(r[7] || "[]");
+          const names = JSON.parse(r[MH_MERGED_NAMES_IDX] || "[]");
           if (names.length > 0) keepSeparateContext.push(`  - "${names.join('" AND "')}"`);
         } catch { /* skip malformed */ }
       } else {
-        mergedContext.push(`  - MERGED: "${r[5]}" ← ${r[7] || ""}`);
+        mergedContext.push(`  - MERGED: "${r[MH_KEEPER_NAME_IDX]}" ← ${r[MH_MERGED_NAMES_IDX] || ""}`);
       }
     });
 
     const mergeContext = mergedContext.length > 0 ? mergedContext.join("\n") : "  (none)";
     const keepSepContext = keepSeparateContext.length > 0 ? keepSeparateContext.join("\n") : "  (none)";
 
-    const catalogList = items.map((i) => `  ID:${i.itemId} | "${i.name}" | ${i.category} | ${i.unit} | vendor:${i.vendor} | price:${i.price}`).join("\n");
-    const aliasList = aliases.length > 0
-      ? aliases.map((a) => `  "${a.alias}" → ${a.itemId} (${a.vendor})`).join("\n")
+    const catalogList = promptItems.map((i) => `  ID:${i.itemId} | "${i.name}" | ${i.category} | ${i.unit} | vendor:${i.vendor} | price:${i.price}`).join("\n");
+    const aliasList = promptAliases.length > 0
+      ? promptAliases.map((a) => `  "${a.alias}" → ${a.itemId} (${a.vendor})`).join("\n")
       : "  (none)";
 
     const prompt = `You are a food service inventory dedup engine. Scan this catalog for items that are likely the same product listed multiple times.
 
-CATALOG (${items.length} items):
+CATALOG (${promptItems.length} items):
 ${catalogList}
 
 EXISTING ALIASES:
@@ -567,12 +324,11 @@ TYPE MUST BE one of:
 - "merge" — same product, same unit, should be merged into one catalog entry
 - "keep_separate" — same product but different pack size/unit, must stay as separate items
 
-IMPORTANT: Be EXHAUSTIVE — scan EVERY item against EVERY other item. Do NOT stop after finding a few groups. Check all ${items.length} items systematically. Missing a duplicate is worse than flagging a false positive. Each group MUST contain at least 2 items. Only return groups where you found 2 or more items that appear to be the same product.
+IMPORTANT: Be EXHAUSTIVE — scan EVERY item against EVERY other item. Do NOT stop after finding a few groups. Check all ${promptItems.length} items systematically. Missing a duplicate is worse than flagging a false positive. Each group MUST contain at least 2 items. Only return groups where you found 2 or more items that appear to be the same product.
 
 If no duplicates found, return: { "groups": [] }`;
 
-const raw = await callClaude(prompt, 16384);
-    // Robust JSON extraction — find first { and last }
+    const raw = await callClaude(prompt, 16384);
     const cleaned = raw.replace(/```json\s*|```/g, "").trim();
     const jsonStart = cleaned.indexOf("{");
     const jsonEnd = cleaned.lastIndexOf("}");
@@ -580,25 +336,22 @@ const raw = await callClaude(prompt, 16384);
     const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
     const parsed = JSON.parse(jsonStr);
 
-    // Code-level safety: filter out groups that contain keep-separate pairs
+    // Code-level safety: filter out groups that contain keep-separate pairs.
     const keepSepSets = mergeRows
-      .filter((r) => r[8] === "keep_separate")
-      .map((r) => { try { return new Set(JSON.parse(r[6] || "[]")); } catch { return new Set(); } })
+      .filter((r) => r[MH_ACTION_IDX] === "keep_separate")
+      .map((r) => { try { return new Set(JSON.parse(r[MH_MERGED_IDS_IDX] || "[]")); } catch { return new Set(); } })
       .filter((s) => s.size > 0);
 
     const filtered = (parsed.groups || [])
-      // Must have 2+ items to be a similarity group
       .filter((group) => group.items && group.items.length >= 2)
-      // Filter out keep-separate pairs
       .filter((group) => {
-      const groupIds = new Set(group.items.map((i) => i.itemId));
-      // Reject group if ALL its items appear in a single keep-separate entry
-      return !keepSepSets.some((sepSet) => {
-        let overlap = 0;
-        groupIds.forEach((id) => { if (sepSet.has(id)) overlap++; });
-        return overlap >= 2; // at least 2 items from this group were kept separate before
+        const groupIds = new Set(group.items.map((i) => i.itemId));
+        return !keepSepSets.some((sepSet) => {
+          let overlap = 0;
+          groupIds.forEach((id) => { if (sepSet.has(id)) overlap++; });
+          return overlap >= 2;
+        });
       });
-    });
 
     return { success: true, groups: filtered };
   } catch (error) {
@@ -609,104 +362,10 @@ const raw = await callClaude(prompt, 16384);
 
 export async function handleMergeItems({ account, keeperItemId, mergedItemIds, canonicalName, category, unit, email }) {
   try {
-    const inv = await batchRead(SHEET_IDS.INVENTORY, ["item_catalog", "item_aliases", "price_history"], { fresh: true });
-    const catalogRows = inv.item_catalog?.rows || [];
-    const aliasRows = inv.item_aliases?.rows || [];
-    const priceRows = inv.price_history?.rows || [];
-    const now = new Date().toISOString();
-
-    // Find keeper row
-    let keeperRowNum = null;
-    let keeperRow = null;
-    for (let i = 0; i < catalogRows.length; i++) {
-      if (catalogRows[i][0] === keeperItemId) { keeperRowNum = i + 2; keeperRow = catalogRows[i]; break; }
-    }
-    if (!keeperRowNum) return { success: false, error: "Keeper item not found" };
-
-    // Update keeper name/category/unit
-    await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!C${keeperRowNum}:E${keeperRowNum}`, [[canonicalName || keeperRow[2], category || keeperRow[3], unit || keeperRow[4]]]);
-
-    const mergedNames = [];
-    // F33 (PR #51 Audit #6): collect alias + price_history remap ops into batches.
-    // Prior code used `forEach(async ...)` which fired Promises without awaiting them - the merge
-    // returned success before the remaps completed, cache invalidated before writes landed, and
-    // the next read could see stale rows still pointing at the merged (now inactive) itemId.
-    const aliasRemapOps = [];
-    const priceRemapOps = [];
-
-    for (const mergedId of mergedItemIds) {
-      // Find merged row
-      for (let i = 0; i < catalogRows.length; i++) {
-        if (catalogRows[i][0] === mergedId) {
-          const rowNum = i + 2;
-          mergedNames.push(catalogRows[i][2] || mergedId);
-
-          // Deactivate merged item
-          await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!L${rowNum}`, [["FALSE"]]);
-
-          // Create alias from merged name → keeper
-          await appendRowSA(SHEET_IDS.INVENTORY, "item_aliases", [
-            generateId("alias"), catalogRows[i][2] || "", keeperItemId,
-            catalogRows[i][6] || "", 100, email || "item_review", now, "item_review",
-          ]);
-
-          // Collect alias remap ops (existing aliases pointing to merged → keeper). Fired in batch after the outer loop.
-          aliasRows.forEach((a, ai) => {
-            if (a[2] === mergedId) {
-              aliasRemapOps.push({ range: `item_aliases!C${ai + 2}`, values: [[keeperItemId]] });
-            }
-          });
-
-          // Collect price_history remap ops. Same batching pattern.
-          priceRows.forEach((p, pi) => {
-            if (p[0] === mergedId) {
-              priceRemapOps.push({ range: `price_history!A${pi + 2}`, values: [[keeperItemId]] });
-            }
-          });
-
-          // Copy locationId if keeper has none
-          if (catalogRows[i][5] && !keeperRow[5]) {
-            await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${keeperRowNum}`, [[catalogRows[i][5]]]);
-            keeperRow[5] = catalogRows[i][5];
-          }
-
-          // Append merged item's notes to keeper (locked decision: preserve notes)
-          const mergedNotes = catalogRows[i][17] || "";
-          if (mergedNotes.trim()) {
-            const keeperNotes = keeperRow[17] || "";
-            const combined = keeperNotes
-              ? `${keeperNotes}\n[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`
-              : `[Merged from ${catalogRows[i][2]}]: ${mergedNotes}`;
-            await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!R${keeperRowNum}`, [[combined.slice(0, 500)]]);
-            keeperRow[17] = combined.slice(0, 500);
-          }
-          break;
-        }
-      }
-    }
-
-    // F33 fix: fire collected remap ops as batched writes before logging merge_history or returning.
-    // N+M individual updateRangeSA calls collapse to 2 batched API calls.
-    if (aliasRemapOps.length > 0) {
-      await batchUpdateRangesSA(SHEET_IDS.INVENTORY, aliasRemapOps);
-    }
-    if (priceRemapOps.length > 0) {
-      await batchUpdateRangesSA(SHEET_IDS.INVENTORY, priceRemapOps);
-    }
-
-    // Log merge decision
-    await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
-      generateId("mrg"), account, now, email || "",
-      keeperItemId, canonicalName || keeperRow[2],
-      JSON.stringify(mergedItemIds), JSON.stringify(mergedNames),
-      "merge", "",
-    ]);
-
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    invalidateCache(SHEET_IDS.INVENTORY, "item_aliases");
-    invalidateCache(SHEET_IDS.INVENTORY, "price_history");
-
-    return { success: true, merged: mergedItemIds.length };
+    const { merged } = await mergeInventoryItems({
+      account, keeperItemId, mergedItemIds, canonicalName, category, unit, email, module: "ops",
+    });
+    return { success: true, merged };
   } catch (error) {
     console.error("[inventoryActions] merge error:", error.message);
     return { success: false, error: error.message };
@@ -715,14 +374,7 @@ export async function handleMergeItems({ account, keeperItemId, mergedItemIds, c
 
 export async function handleKeepSeparate({ account, itemIds, itemNames, email }) {
   try {
-    const now = new Date().toISOString();
-    await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
-      generateId("mrg"), account, now, email || "",
-      "", "",
-      JSON.stringify(itemIds),
-      JSON.stringify(itemNames || itemIds),
-      "keep_separate", "",
-    ]);
+    await logKeepSeparate({ account, itemIds, itemNames, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -731,30 +383,7 @@ export async function handleKeepSeparate({ account, itemIds, itemNames, email })
 
 export async function handleReviewAccept({ account, itemId, name, category, unit, locationId, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        const rowNum = i + 2;
-        // Update name, category, unit, locationId
-        const updates = [name || rows[i][2], category || rows[i][3], unit || rows[i][4]];
-        await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!C${rowNum}:E${rowNum}`, [updates]);
-        if (locationId) {
-          await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${rowNum}`, [[locationId]]);
-          // Log zone correction if different from AI suggestion
-          const aiSuggested = rows[i][5] || "";
-          if (aiSuggested && aiSuggested !== locationId) {
-            await appendRowSA(SHEET_IDS.INVENTORY, "zone_corrections", [
-              generateId("zc"), account, new Date().toISOString(), email || "",
-              itemId, name || rows[i][2], aiSuggested, locationId, category || rows[i][3],
-            ]);
-          }
-        }
-        // Set reviewStatus (column Q, index 16)
-        await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!Q${rowNum}`, [["reviewed"]]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await acceptReviewItem({ account, itemId, name, category, unit, locationId, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -763,26 +392,7 @@ export async function handleReviewAccept({ account, itemId, name, category, unit
 
 export async function handleReviewDelete({ account, itemId, reason, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        const itemName = rows[i][2] || "";
-        // F36 (PR #51 Audit #6): handler was accepting `reason` and `email` from UI but
-        // writing neither. Now matches the dual-column + merge_history audit pattern used
-        // by handleArchiveItem and handleExcludeItem. reason lives in merge_history col 9
-        // (the previously-empty trailing column reserved across all current writes).
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
-          { range: `item_catalog!Q${i + 2}`, values: [["review_deleted"]] },
-        ]);
-        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
-          generateId("mrg"), account, new Date().toISOString(), email || "",
-          itemId, itemName, "", "", "review_delete", reason || "",
-        ]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await deleteReviewItem({ account, itemId, reason, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -791,23 +401,7 @@ export async function handleReviewDelete({ account, itemId, reason, email }) {
 
 export async function handleExcludeItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        // Set active=FALSE (col L) and reviewStatus=excluded (col Q)
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
-          { range: `item_catalog!Q${i + 2}`, values: [["excluded"]] },
-        ]);
-        // Log to merge_history for cron exclusion reference
-        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history!A:A", [
-          generateId("mrg"), account, new Date().toISOString(), email,
-          itemId, rows[i][2] || "", "", "", "exclude", "",
-        ]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await excludeItem({ account, itemId, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -815,180 +409,23 @@ export async function handleExcludeItem({ account, itemId, email }) {
 }
 
 export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
+
 export async function handleSaveLocations({ account, locations, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
-
-    // Ensure columns I & J headers exist (parentLocationId, color)
-    await updateRangeSA(SHEET_IDS.INVENTORY, "storage_locations!I1:J1", [["parentLocationId", "color"]]);
-
-    const existingRows = {};
-    rows.forEach((r, i) => {
-      if (accountMatch(r[1], account)) existingRows[r[0]] = i + 2;
-    });
-
-    const now = new Date().toISOString();
-    const savedIds = new Set();
-    const savedLocations = [];
-    const newIdMap = {}; // map temp IDs to real IDs for sub-zone parent resolution
-
-    // First pass: save top-level zones (parentLocationId === null)
-    const topLevel = locations.filter((l) => !l.parentLocationId);
-    for (const loc of topLevel) {
-      if (loc.locationId && existingRows[loc.locationId]) {
-        const rowNum = existingRows[loc.locationId];
-        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!A${rowNum}:J${rowNum}`, [[
-          loc.locationId, account, loc.name, loc.icon || "box",
-          loc.sortOrder, "TRUE", email, now, "", loc.color || "",
-        ]]);
-        savedIds.add(loc.locationId);
-        savedLocations.push({ locationId: loc.locationId, name: loc.name });
-      } else {
-        const locationId = generateId("loc");
-        newIdMap[loc.name] = locationId; // for sub-zone parent resolution
-        await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
-          locationId, account, loc.name, loc.icon || "box",
-          loc.sortOrder, "TRUE", email, now, "", loc.color || "",
-        ]);
-        savedLocations.push({ locationId, name: loc.name });
-      }
-    }
-
-    // Second pass: save sub-zones (parentLocationId !== null)
-    const subZones = locations.filter((l) => l.parentLocationId);
-    console.log(`[save-locations] ${account}: ${topLevel.length} zones, ${subZones.length} sub-zones to save`);
-    for (const loc of subZones) {
-      // Resolve parent ID (might be a new zone that just got a real ID)
-      let parentId = loc.parentLocationId;
-      if (!parentId && loc.parentName) parentId = newIdMap[loc.parentName] || "";
-      console.log(`[save-locations] Sub-zone "${loc.name}" → parent: ${parentId}`);
-
-      if (loc.locationId && existingRows[loc.locationId]) {
-        const rowNum = existingRows[loc.locationId];
-        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!A${rowNum}:J${rowNum}`, [[
-          loc.locationId, account, loc.name, loc.icon || "box",
-          loc.sortOrder, "TRUE", email, now, parentId, loc.color || "",
-        ]]);
-        savedIds.add(loc.locationId);
-      } else {
-        const locationId = generateId("loc");
-        await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
-          locationId, account, loc.name, loc.icon || "box",
-          loc.sortOrder, "TRUE", email, now, parentId, loc.color || "",
-        ]);
-        savedIds.add(locationId); // Track new sub-zones too
-        console.log(`[save-locations] Appended sub-zone ${locationId} "${loc.name}" parent=${parentId}`);
-      }
-    }
-
-    // Mark removed locations as inactive + clear sortOrder
-    // Only deactivate rows that exist in sheet but weren't in our save payload
-    for (const [locId, rowNum] of Object.entries(existingRows)) {
-      if (!savedIds.has(locId)) {
-        console.log(`[save-locations] Deactivating removed location: ${locId} at row ${rowNum}`);
-        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!E${rowNum}:F${rowNum}`, [[999, "FALSE"]]);
-      }
-    }
-
-    // ── Auto-assign items with keyword locationIds ──
-    const KEYWORD_PATTERNS = {
-      cooler:   ["cool", "refrig", "reach-in", "walk-in c", "fridge"],
-      freezer:  ["freez", "frost"],
-      dry:      ["dry", "pantry", "shelf", "storage room"],
-      beverage: ["bev", "bar", "drink"],
-      supplies: ["supply", "suppli", "clean", "chem", "janitor", "paper"],
-    };
-
-    function matchKeywordToLocation(keyword) {
-      const patterns = KEYWORD_PATTERNS[keyword];
-      if (!patterns) return savedLocations[0]?.locationId || "";
-      const nameLower = savedLocations.map((l) => ({ ...l, lower: l.name.toLowerCase() }));
-      for (const pattern of patterns) {
-        const match = nameLower.find((l) => l.lower.includes(pattern));
-        if (match) return match.locationId;
-      }
-      return savedLocations[0]?.locationId || "";
-    }
-
-    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    const catalogRows = catalogData.rows || [];
-    let assigned = 0;
-
-    // Build set of all active location IDs for this account
-    const activeLocIds = new Set();
-    rows.forEach((r) => {
-      if (accountMatch(r[1], account) && r[5] !== "FALSE" && r[5] !== false && r[0]) activeLocIds.add(r[0]);
-    });
-    // Also include newly saved locations
-    savedLocations.forEach((l) => activeLocIds.add(l.locationId));
-
-    // Check if any items need assignment (keyword, empty, or orphaned loc_ ID)
-    let needsAssignment = false;
-    for (let i = 0; i < catalogRows.length; i++) {
-      const r = catalogRows[i];
-      if (!accountMatch(r[1], account)) continue;
-      const currentLocId = r[5] || "";
-      if (!currentLocId || (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) || (currentLocId.startsWith("loc_") && !activeLocIds.has(currentLocId))) {
-        needsAssignment = true; break;
-      }
-    }
-
-    if (needsAssignment) {
-      console.log(`[save-locations] Running auto-assign for ${account}...`);
-      for (let i = 0; i < catalogRows.length; i++) {
-        const r = catalogRows[i];
-        if (!accountMatch(r[1], account)) continue;
-        const currentLocId = r[5] || "";
-        const isOrphaned = currentLocId.startsWith("loc_") && !activeLocIds.has(currentLocId);
-
-        // Keyword locationId → map to real location
-        if (currentLocId && !currentLocId.startsWith("loc_") && KEYWORD_PATTERNS[currentLocId]) {
-          const realLocId = matchKeywordToLocation(currentLocId);
-          if (realLocId) { await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
-        }
-        // Empty or orphaned → assign by category
-        if (!currentLocId || isOrphaned) {
-          const cat = (r[3] || "").toLowerCase();
-          let keyword = "dry";
-          if (["food"].includes(cat)) keyword = "cooler";
-          if (["beverages"].includes(cat)) keyword = "beverage";
-          if (["packaging", "supplies"].includes(cat)) keyword = "supplies";
-          if (["snacks"].includes(cat)) keyword = "dry";
-          const realLocId = matchKeywordToLocation(keyword);
-          if (realLocId) { await updateRangeSA(SHEET_IDS.INVENTORY, `item_catalog!F${i + 2}`, [[realLocId]]); assigned++; }
-        }
-      }
-      invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    } else {
-      console.log(`[save-locations] No items need auto-assignment, skipping`);
-    }
-
-    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-    console.log(`[save-locations] ${account}: ${savedLocations.length} zones saved, ${subZones.length} sub-zones, ${assigned} items auto-assigned`);
-    return { success: true, count: locations.length, assigned };
+    const { count, assigned } = await saveStorageLocations({ account, locations, email, module: "ops" });
+    console.log(`[save-locations] ${account}: ${count} zones saved, ${assigned} items auto-assigned`);
+    return { success: true, count, assigned };
   } catch (error) {
     console.error("[inventoryActions] save-locations error:", error.message);
     return { success: false, error: error.message };
   }
 }
+
 export async function handleSaveSortOrder({ account, updates }) {
-  // updates: [{ locationId, sortOrder }]
   try {
     if (!updates || updates.length === 0) return { success: true };
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
-    const data = [];
-    for (const u of updates) {
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i][0] === u.locationId && accountMatch(rows[i][1], account)) {
-          data.push({ range: `storage_locations!E${i + 2}`, values: [[u.sortOrder]] });
-          break;
-        }
-      }
-    }
-    if (data.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, data);
-    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
-    return { success: true, updated: data.length };
+    const { updated } = await saveLocationSortOrder({ account, updates, module: "ops" });
+    return { success: true, updated };
   } catch (error) {
     console.error("[inventoryActions] save-sort-order error:", error.message);
     return { success: false, error: error.message };
@@ -996,24 +433,11 @@ export async function handleSaveSortOrder({ account, updates }) {
 }
 
 export async function handleAddSubZone({ account, parentLocationId, name, icon, color, email }) {
-      try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
-    // Count existing sub-zones for sortOrder
-    let maxSort = -1;
-    rows.forEach(r => {
-      if (accountMatch(r[1], account) && (r[8] || "") === (parentLocationId || "") && r[5] !== "FALSE" && r[5] !== false) {
-        const s = Number(r[4] || 0);
-        if (s > maxSort) maxSort = s;
-      }
+  try {
+    const { locationId, name: savedName } = await addStorageSubZone({
+      account, parentLocationId, name, icon, color, email, module: "ops",
     });
-    const locationId = generateId("loc");
-    const now = new Date().toISOString();
-    await appendRowSA(SHEET_IDS.INVENTORY, "storage_locations!A:A", [
-locationId, account, name, icon || "box",
-      maxSort + 1, "TRUE", email, now, parentLocationId, color || "",
-        ]);
-    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
-    return { success: true, locationId, name };
+    return { success: true, locationId, name: savedName };
   } catch (error) {
     console.error("[inventoryActions] add-subzone error:", error.message);
     return { success: false, error: error.message };
@@ -1022,18 +446,7 @@ locationId, account, name, icon || "box",
 
 export async function handleUpdateLocation({ account, locationId, fields }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === locationId && accountMatch(rows[i][1], account) && rows[i][5] !== "FALSE" && rows[i][5] !== false) {
-        const updates = [];
-        if (fields.name !== undefined) updates.push({ range: `storage_locations!C${i + 2}`, values: [[fields.name]] });
-        if (fields.icon !== undefined) updates.push({ range: `storage_locations!D${i + 2}`, values: [[fields.icon]] });
-        if (fields.color !== undefined) updates.push({ range: `storage_locations!J${i + 2}`, values: [[fields.color]] });
-        if (updates.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, updates);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
+    await updateStorageLocation({ account, locationId, fields, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1042,151 +455,37 @@ export async function handleUpdateLocation({ account, locationId, fields }) {
 
 export async function handleDeactivateLocation({ account, locationId }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "storage_locations");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === locationId && accountMatch(rows[i][1], account)) {
-        await updateRangeSA(SHEET_IDS.INVENTORY, `storage_locations!E${i + 2}:F${i + 2}`, [[999, "FALSE"]]);
-        invalidateCache(SHEET_IDS.INVENTORY, "storage_locations");
-        return { success: true };
-      }
-    }
-    return { success: false, error: "Location not found" };
+    const result = await deactivateStorageLocation({ account, locationId, module: "ops" });
+    if (result?.ok === false) return { success: false, error: "Location not found" };
+    return { success: true };
   } catch (error) {
     console.error("[inventoryActions] deactivate-location error:", error.message);
     return { success: false, error: error.message };
   }
 }
+
 export async function handleAdminCorrect(body) { return { success: false, error: "Week 4" }; }
 export async function handleScan(body) { return { success: false, error: "Week 3" }; }
 export async function handleHistoryGet({ account }) { return { success: true, sessions: [] }; }
 export async function handleReviewQueueGet({ account }) { return { success: true, items: [] }; }
 
-// ── One-time catalog dedup ──
-function normalizeCatalogName(name) {
-  return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-}
+// handleDedupCatalog RETIRED per audit BR4. PG UNIQUE constraints on
+// inventory_items + merge_inventory_items() RPC replace it.
 
-export async function handleDedupCatalog({ dryRun = true }) {
-  try {
-    const catalogData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    const aliasData = await readSheetSA(SHEET_IDS.INVENTORY, "item_aliases");
-    const priceData = await readSheetSA(SHEET_IDS.INVENTORY, "price_history");
-    const catalogRows = catalogData.rows || [];
-    const aliasRows = aliasData.rows || [];
-    const priceRows = priceData.rows || [];
-
-    // Group active items by normalized name + account
-    const groups = {};
-    catalogRows.forEach((r, i) => {
-      if (r[11] === "FALSE") return;
-      if (!r[0] || !r[2]) return; // skip header/empty rows
-      const account = r[1] || "";
-      const name = normalizeCatalogName(r[2]);
-      if (!name) return; // skip if name normalizes to empty
-      const key = `${account}::${name}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push({ rowNum: i + 2, itemId: r[0], name: r[2], lastPriceDate: r[8] || "", locationId: r[5] || "" });
-    });
-
-    let deactivated = 0;
-    const ops = [];
-    const log = [];
-
-    for (const [key, items] of Object.entries(groups)) {
-      if (items.length <= 1) continue;
-
-      // Keep item with locationId, then most recent price date
-      items.sort((a, b) => {
-        if (a.locationId && !b.locationId) return -1;
-        if (!a.locationId && b.locationId) return 1;
-        return (b.lastPriceDate || "").localeCompare(a.lastPriceDate || "");
-      });
-      const keeper = items[0];
-      const dupes = items.slice(1);
-
-      log.push(`"${keeper.name}" — keep ${keeper.itemId}, deactivate ${dupes.map(d => d.itemId).join(", ")}`);
-
-      for (const dupe of dupes) {
-        ops.push({ range: `item_catalog!L${dupe.rowNum}`, values: [["FALSE"]] });
-
-        aliasRows.forEach((a, ai) => {
-          if (a[2] === dupe.itemId) {
-            ops.push({ range: `item_aliases!C${ai + 2}`, values: [[keeper.itemId]] });
-          }
-        });
-
-        priceRows.forEach((p, pi) => {
-          if (p[0] === dupe.itemId) {
-            ops.push({ range: `price_history!A${pi + 2}`, values: [[keeper.itemId]] });
-          }
-        });
-
-        if (dupe.locationId && !keeper.locationId) {
-          ops.push({ range: `item_catalog!F${keeper.rowNum}`, values: [[dupe.locationId]] });
-          keeper.locationId = dupe.locationId;
-        }
-
-        deactivated++;
-      }
-    }
-
-    if (!dryRun && ops.length > 0) {
-      for (const op of ops) {
-        await updateRangeSA(SHEET_IDS.INVENTORY, op.range, op.values);
-      }
-      invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
-      invalidateCache(SHEET_IDS.INVENTORY, "item_aliases");
-      invalidateCache(SHEET_IDS.INVENTORY, "price_history");
-    }
-
-    return {
-      success: true,
-      dryRun,
-      deactivated,
-      operations: ops.length,
-      log,
-    };
-  } catch (error) {
-    console.error("[inventoryActions] dedup error:", error.message);
-    return { success: false, error: error.message };
-  }
-}
 export async function handlePrint({ account }) { return { success: false, error: "Week 3" }; }
+
 export async function handleUpdateCatalogItem({ account, itemId, fields, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        const updates = [];
-        if (fields.category !== undefined) updates.push({ range: `item_catalog!D${i + 2}`, values: [[fields.category]] });
-        if (fields.notes !== undefined) updates.push({ range: `item_catalog!R${i + 2}`, values: [[fields.notes]] });
-        if (updates.length > 0) await batchUpdateRangesSA(SHEET_IDS.INVENTORY, updates);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await updateCatalogItem({ account, itemId, fields, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
 }
+
 export async function handleArchiveItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-          { range: `item_catalog!L${i + 2}`, values: [["FALSE"]] },
-          { range: `item_catalog!Q${i + 2}`, values: [["archived"]] },
-        ]);
-        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
-          generateId("mrg"), account, new Date().toISOString(), email || "",
-          itemId, rows[i][2] || "", "", "", "archive", "",
-        ]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await archiveItem({ account, itemId, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1195,21 +494,7 @@ export async function handleArchiveItem({ account, itemId, email }) {
 
 export async function handleReactivateItem({ account, itemId, email }) {
   try {
-    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === itemId && accountMatch(rows[i][1], account)) {
-        await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
-          { range: `item_catalog!L${i + 2}`, values: [["TRUE"]] },
-          { range: `item_catalog!Q${i + 2}`, values: [[""]] },
-        ]);
-        await appendRowSA(SHEET_IDS.INVENTORY, "merge_history", [
-          generateId("mrg"), account, new Date().toISOString(), email || "",
-          itemId, rows[i][2] || "", "", "", "reactivate", "",
-        ]);
-        break;
-      }
-    }
-    invalidateCache(SHEET_IDS.INVENTORY, "item_catalog");
+    await reactivateItem({ account, itemId, email, module: "ops" });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
