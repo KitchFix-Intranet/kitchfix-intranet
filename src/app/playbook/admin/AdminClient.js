@@ -178,6 +178,23 @@ function AdminDashboard({
   // the current and opens the new one.
   const [expandedRowId, setExpandedRowId] = useState(null);
 
+  // ── Tab state + archive/create state (CP3) ───────────────────────────────
+  // activeTab: 'worklist' (default) | 'archive'. Tab switching is purely
+  // client-side; the worklist data is from bootstrap, archive is lazy-loaded
+  // on first tab click and cached in archivedDocs.
+  const [activeTab, setActiveTab] = useState("worklist");
+  // null = not yet loaded; array (even empty) = loaded. Stays null until the
+  // user clicks Archive for the first time so the bootstrap stays lean.
+  const [archivedDocs, setArchivedDocs] = useState(null);
+  // Doc currently being archived (shows the confirmation dialog). null when
+  // no dialog is open.
+  const [archiveDialogDoc, setArchiveDialogDoc] = useState(null);
+  // Doc currently being restored (shows the restore confirmation dialog).
+  const [restoreDialogDoc, setRestoreDialogDoc] = useState(null);
+  // Create modal visibility. Decoupled from the doc state because no doc
+  // exists yet at the moment the modal opens.
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   const total = docs.length;
 
   // ── updateField: optimistic + API + reconcile/revert ──────────────────────
@@ -335,6 +352,17 @@ function AdminDashboard({
         </p>
       </header>
 
+      {/* Tab nav (CP3) ─ Worklist / Archive + Create entry ─────────────── */}
+      <TabNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        activeCount={total}
+        archivedCount={archivedDocs?.length ?? null}
+        onCreateClick={() => setShowCreateModal(true)}
+      />
+
+      {activeTab === "worklist" && (
+        <>
       {/* Metrics row ─────────────────────────────────────────────────────── */}
       <section className="pb-admin-metrics" aria-label="Catalog metrics">
         <div className="pb-metric">
@@ -439,6 +467,7 @@ function AdminDashboard({
                 <SortHeader col="version" label="Version" {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="linked"  label="Linked"  {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="pinned"  label="Pin"     {...{ sortBy, sortDir, onSort: handleSort }} />
+                <th className="pb-admin-th pb-admin-th--action" scope="col">Archive</th>
               </tr>
             </thead>
             <tbody>
@@ -458,12 +487,70 @@ function AdminDashboard({
                   onToggleExpand={() =>
                     setExpandedRowId((prev) => (prev === doc.id ? null : doc.id))
                   }
+                  onArchiveClick={() => setArchiveDialogDoc(doc)}
                 />
               ))}
             </tbody>
           </table>
         </div>
       </section>
+        </>
+      )}
+
+      {activeTab === "archive" && (
+        <ArchiveTab
+          docs={archivedDocs}
+          onLoaded={setArchivedDocs}
+          onRestoreClick={(doc) => setRestoreDialogDoc(doc)}
+        />
+      )}
+
+      {showCreateModal && (
+        <CreateModal
+          shelves={shelves}
+          classes={CLASS_EDIT_OPTIONS}
+          // Retired is a terminal status, not a starting state. A brand-new
+          // doc shouldn't offer it. The server validator still ACCEPTS it
+          // if forged - this is purely a UX filter.
+          statuses={STATUS_EDIT_OPTIONS.filter((s) => s !== "Retired")}
+          onCancel={() => setShowCreateModal(false)}
+          onCreated={(newDoc) => {
+            setDocs((prev) => [newDoc, ...prev]);
+            setShowCreateModal(false);
+          }}
+        />
+      )}
+
+      {archiveDialogDoc && (
+        <ArchiveDialog
+          doc={archiveDialogDoc}
+          onCancel={() => setArchiveDialogDoc(null)}
+          onConfirmed={(updatedDoc) => {
+            // Move from active worklist to archived list. archivedDocs stays
+            // null if the user hasn't opened the Archive tab yet (so the
+            // first tab open will lazy-fetch from scratch); if non-null,
+            // we prepend so the just-archived doc shows at the top.
+            setDocs((prev) => prev.filter((d) => d.id !== updatedDoc.id));
+            setArchivedDocs((prev) => (prev === null ? null : [updatedDoc, ...prev]));
+            setArchiveDialogDoc(null);
+          }}
+        />
+      )}
+
+      {restoreDialogDoc && (
+        <RestoreDialog
+          doc={restoreDialogDoc}
+          onCancel={() => setRestoreDialogDoc(null)}
+          onConfirmed={(updatedDoc) => {
+            // Move from archived back to active worklist.
+            setArchivedDocs((prev) =>
+              prev === null ? null : prev.filter((d) => d.id !== updatedDoc.id)
+            );
+            setDocs((prev) => [updatedDoc, ...prev]);
+            setRestoreDialogDoc(null);
+          }}
+        />
+      )}
 
       {openDocId && (
         <SlideOverReader docId={openDocId} onClose={() => setOpenDocId(null)} isOwner={true} />
@@ -497,6 +584,7 @@ function WorklistRow({
   onOpenReader,
   isExpanded,
   onToggleExpand,
+  onArchiveClick,
 }) {
   const sc = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const cl = CLASS_LABELS[doc.doc_class] || doc.doc_class;
@@ -663,10 +751,27 @@ function WorklistRow({
           onDismissError={() => onDismissError(`${doc.id}:pinned`)}
         />
       </td>
+
+      {/* Archive - opens confirmation dialog */}
+      <td className="pb-admin-cell pb-admin-cell-archive">
+        <button
+          type="button"
+          className="pb-admin-archive-btn"
+          onClick={onArchiveClick}
+          title="Archive this document"
+          aria-label={`Archive ${doc.id}`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 8v13h18V8" />
+            <path d="M1 3h22v5H1z" />
+            <path d="M10 12h4" />
+          </svg>
+        </button>
+      </td>
     </tr>
     {isExpanded && (
       <tr className="pb-admin-drive-row">
-        <td colSpan={8}>
+        <td colSpan={9}>
           <DriveLinkPanel
             doc={doc}
             onUpdate={onUpdate}
@@ -1021,6 +1126,532 @@ function DisplayCell({ children, isSaved, error, onClick, onDismissError }) {
         </button>
       )}
     </span>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CP3 - Tab nav, Archive view, Archive/Restore dialogs, Create modal
+// ════════════════════════════════════════════════════════════════════════════
+
+// TabNav: switches between Worklist / Archive views, plus the inline
+// + New Document trigger. Archive count is null until the user opens the
+// Archive tab for the first time (we lazy-fetch); the count badge is
+// hidden during that gap so it doesn't show "0" misleadingly.
+function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateClick }) {
+  return (
+    <div className="pb-admin-tabnav" role="tablist" aria-label="Admin views">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "worklist"}
+        className={`pb-admin-tab${activeTab === "worklist" ? " pb-admin-tab--active" : ""}`}
+        onClick={() => onTabChange("worklist")}
+      >
+        Worklist
+        <span className="pb-admin-tab-count">{activeCount}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "archive"}
+        className={`pb-admin-tab${activeTab === "archive" ? " pb-admin-tab--active" : ""}`}
+        onClick={() => onTabChange("archive")}
+      >
+        Archive
+        {archivedCount !== null && (
+          <span className="pb-admin-tab-count">{archivedCount}</span>
+        )}
+      </button>
+      <div className="pb-admin-tabnav-spacer" />
+      <button
+        type="button"
+        className="pb-admin-new-btn"
+        onClick={onCreateClick}
+        title="Create a new document"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        New Document
+      </button>
+    </div>
+  );
+}
+
+// ArchiveTab: lazy-fetches the archived docs list on first mount when
+// `docs` is null. Renders a read-only listing with a Restore button per row.
+function ArchiveTab({ docs, onLoaded, onRestoreClick }) {
+  useEffect(() => {
+    if (docs !== null) return;
+    let cancelled = false;
+    fetch("/api/playbook?action=list-archived")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.error) {
+          console.error("list-archived failed:", data.error);
+          onLoaded([]);
+        } else {
+          onLoaded(data.documents || []);
+        }
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error("list-archived fetch failed:", e.message);
+        onLoaded([]);
+      });
+    return () => { cancelled = true; };
+  }, [docs, onLoaded]);
+
+  if (docs === null) {
+    return <div className="pb-admin-archive-loading">Loading archived documents…</div>;
+  }
+  if (docs.length === 0) {
+    return (
+      <div className="pb-admin-archive-empty">
+        <h2>Archive</h2>
+        <p>No archived documents.</p>
+        <p className="pb-admin-archive-empty-hint">
+          When you archive a document it disappears from the operator catalog and Sous and lands here. You can restore it from this view.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="pb-admin-archive" aria-label="Archived documents">
+      <div className="pb-admin-archive-head">
+        <h2>
+          Archive <span className="pb-admin-worklist-count">{docs.length} archived</span>
+        </h2>
+        <span className="pb-admin-archive-hint">
+          Archived docs are hidden from /playbook and removed from Sous. Restore re-embeds the doc.
+        </span>
+      </div>
+      <div className="pb-admin-table-wrap">
+        <table className="pb-admin-table">
+          <thead>
+            <tr>
+              <th className="pb-admin-th pb-admin-th--static">ID</th>
+              <th className="pb-admin-th pb-admin-th--static">Title</th>
+              <th className="pb-admin-th pb-admin-th--static">Shelf</th>
+              <th className="pb-admin-th pb-admin-th--static">Class</th>
+              <th className="pb-admin-th pb-admin-th--static">Status</th>
+              <th className="pb-admin-th pb-admin-th--static">Archived</th>
+              <th className="pb-admin-th pb-admin-th--action">Restore</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((doc) => {
+              const sc = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
+              const cf = CLASS_FAMILY[doc.doc_class] || "ref";
+              return (
+                <tr key={doc.id} className="pb-admin-row pb-admin-row--archived">
+                  <td className="pb-admin-cell pb-admin-cell-id"><code>{doc.id}</code></td>
+                  <td className="pb-admin-cell pb-admin-cell-title">{doc.title}</td>
+                  <td className="pb-admin-cell">{doc.shelf || "—"}</td>
+                  <td className="pb-admin-cell">
+                    <span className={`pb-class-chip pb-class-chip--${cf}`}>
+                      {CLASS_LABELS[doc.doc_class] || doc.doc_class}
+                    </span>
+                  </td>
+                  <td className="pb-admin-cell">
+                    <span
+                      className={`pb-status-pill${sc.ghost ? " pb-status-pill--ghost" : ""}`}
+                      style={{ background: sc.bg, color: sc.color }}
+                    >
+                      {doc.status}
+                    </span>
+                  </td>
+                  <td className="pb-admin-cell pb-admin-archived-at">
+                    {doc.archived_at ? new Date(doc.archived_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="pb-admin-cell pb-admin-cell-restore">
+                    <button
+                      type="button"
+                      className="pb-admin-restore-btn"
+                      onClick={() => onRestoreClick(doc)}
+                      title={`Restore ${doc.id}`}
+                    >
+                      Restore
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// ArchiveDialog: pre-fetches the impact (incoming relationships + chunk
+// count), shows it in a confirmation overlay, fires the archive POST on
+// confirm. Stays open and shows the error if the action fails; the parent
+// only removes the doc from the worklist on success.
+function ArchiveDialog({ doc, onCancel, onConfirmed }) {
+  const [impact, setImpact] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/playbook?action=archive-impact&id=${encodeURIComponent(doc.id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.error) setError(data.error);
+        else setImpact(data);
+      })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [doc.id]);
+
+  const handleArchive = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/playbook?action=archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: doc.id }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      onConfirmed(data.document, data.chunks_deleted);
+    } catch (e) {
+      setError(e.message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={submitting ? () => {} : onCancel}>
+      <div className="pb-admin-modal-header">
+        <h2>Archive <code>{doc.id}</code>?</h2>
+        <p className="pb-admin-modal-subtitle">{doc.title}</p>
+      </div>
+
+      <div className="pb-admin-modal-body">
+        {loading ? (
+          <p>Loading archive impact…</p>
+        ) : impact ? (
+          <>
+            <p className="pb-admin-modal-lead">This will:</p>
+            <ul className="pb-admin-modal-list">
+              <li>Hide <code>{doc.id}</code> from <code>/playbook</code> (operators won&apos;t see it)</li>
+              <li>
+                Remove <strong>{impact.chunks_count} chunk{impact.chunks_count !== 1 ? "s" : ""}</strong> from Sous (the doc stops being searchable)
+              </li>
+            </ul>
+
+            {impact.incoming_relationships.length > 0 ? (
+              <>
+                <p className="pb-admin-modal-lead">
+                  <strong>{impact.incoming_relationships.length} doc{impact.incoming_relationships.length !== 1 ? "s" : ""}</strong> reference{impact.incoming_relationships.length === 1 ? "s" : ""} this one. The references stay intact - the doc row remains in the catalog, just hidden:
+                </p>
+                <ul className="pb-admin-modal-list pb-admin-modal-rels">
+                  {impact.incoming_relationships.map((r, i) => (
+                    <li key={`${r.from_doc}-${r.rel_type}-${i}`}>
+                      <code>{r.from_doc}</code> · {r.from_title}{" "}
+                      <span className="pb-admin-modal-rel-type">({r.rel_type})</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="pb-admin-modal-lead">No other docs reference this one.</p>
+            )}
+          </>
+        ) : null}
+
+        {error && <div className="pb-admin-modal-error">{error}</div>}
+      </div>
+
+      <div className="pb-admin-modal-actions">
+        <button
+          type="button"
+          className="pb-admin-modal-btn"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="pb-admin-modal-btn pb-admin-modal-btn--danger"
+          onClick={handleArchive}
+          disabled={loading || submitting}
+        >
+          {submitting ? "Archiving…" : "Archive"}
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+// RestoreDialog: simpler than ArchiveDialog - no pre-fetch needed. The
+// restore-time note hints at what the re-embed will do (stub, full extract,
+// or no rebuild) so the owner knows roughly how long it will take.
+function RestoreDialog({ doc, onCancel, onConfirmed }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const restoreNote =
+    doc.doc_class === "POST"
+      ? "Sous will rebuild the poster stub chunk (~1s)."
+      : doc.source_drive_id
+      ? "Sous will re-extract from Drive and re-embed (~3-5s for a typical doc)."
+      : "No Drive link - the doc returns to the catalog with no chunks (no content yet).";
+
+  const handleRestore = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/playbook?action=restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: doc.id }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      onConfirmed(data.document, data.restore_path, data.chunks_inserted);
+    } catch (e) {
+      setError(e.message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={submitting ? () => {} : onCancel}>
+      <div className="pb-admin-modal-header">
+        <h2>Restore <code>{doc.id}</code>?</h2>
+        <p className="pb-admin-modal-subtitle">{doc.title}</p>
+      </div>
+
+      <div className="pb-admin-modal-body">
+        <p className="pb-admin-modal-lead">
+          The doc will return to <code>/playbook</code> at its current status
+          (<strong>{doc.status}</strong>).
+        </p>
+        <p>{restoreNote}</p>
+
+        {error && <div className="pb-admin-modal-error">{error}</div>}
+      </div>
+
+      <div className="pb-admin-modal-actions">
+        <button
+          type="button"
+          className="pb-admin-modal-btn"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="pb-admin-modal-btn pb-admin-modal-btn--primary"
+          onClick={handleRestore}
+          disabled={submitting}
+        >
+          {submitting ? "Restoring…" : "Restore"}
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+// CreateModal: form for adding a new doc to the catalog. All real validation
+// lives server-side (validateCreatePayload + uniqueness check); the client
+// regex pattern on the ID input is just an early UX hint - the server is
+// the source of truth.
+function CreateModal({ shelves, classes, statuses, onCancel, onCreated }) {
+  const [id, setId] = useState("");
+  const [title, setTitle] = useState("");
+  const [shelf, setShelf] = useState("");
+  const [docClass, setDocClass] = useState("");
+  const [status, setStatus] = useState("Pending");
+  const [version, setVersion] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    const payload = {
+      id: id.trim().toUpperCase(),
+      title: title.trim(),
+      doc_class: docClass,
+      status: status || "Pending",
+    };
+    if (shelf) payload.shelf = shelf;
+    if (version.trim()) payload.version = version.trim();
+
+    try {
+      const r = await fetch("/api/playbook?action=create-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      onCreated(data.document);
+    } catch (e) {
+      setError(e.message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={submitting ? () => {} : onCancel}>
+      <form onSubmit={handleSubmit}>
+        <div className="pb-admin-modal-header">
+          <h2>New Document</h2>
+          <p className="pb-admin-modal-subtitle">Add a row to the catalog. The ID is permanent (it&apos;s the FK target for relationships).</p>
+        </div>
+
+        <div className="pb-admin-modal-body">
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-id">ID</label>
+            <input
+              id="new-id"
+              type="text"
+              value={id}
+              onChange={(e) => setId(e.target.value.toUpperCase())}
+              placeholder="e.g. PB-007, POSTER-002"
+              required
+              autoFocus
+              pattern="^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\d{3}$"
+              title="PREFIX-NNN where PREFIX is one of PB, STD, POL, SOP, TPL, CHK, REF, AGR, FORM, POST, POSTER and NNN is a 3-digit number"
+            />
+            <small className="pb-admin-form-hint">
+              PREFIX-NNN (e.g. PB-007). Prefix must match doc_class (POSTER → POST is the only special case).
+            </small>
+          </div>
+
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-title">Title</label>
+            <input
+              id="new-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Operator-facing title"
+              required
+            />
+          </div>
+
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-class">Class</label>
+            <select
+              id="new-class"
+              value={docClass}
+              onChange={(e) => setDocClass(e.target.value)}
+              required
+            >
+              <option value="" disabled>Select a class…</option>
+              {classes.map((c) => (
+                <option key={c} value={c}>{c} — {CLASS_LABELS[c] || c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-shelf">Shelf (optional)</label>
+            <select
+              id="new-shelf"
+              value={shelf}
+              onChange={(e) => setShelf(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {shelves.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-status">Status</label>
+            <select
+              id="new-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div className="pb-admin-form-row">
+            <label htmlFor="new-version">Version (optional)</label>
+            <input
+              id="new-version"
+              type="text"
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              placeholder="leave blank for an unstarted doc"
+            />
+            <small className="pb-admin-form-hint">
+              A brand-new doc with no content shouldn&apos;t claim a version. Set this once there&apos;s content to version.
+            </small>
+          </div>
+
+          {error && <div className="pb-admin-modal-error">{error}</div>}
+        </div>
+
+        <div className="pb-admin-modal-actions">
+          <button
+            type="button"
+            className="pb-admin-modal-btn"
+            onClick={onCancel}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="pb-admin-modal-btn pb-admin-modal-btn--primary"
+            disabled={submitting}
+          >
+            {submitting ? "Creating…" : "Create Document"}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  );
+}
+
+// ModalOverlay: shared backdrop + dialog frame. Closes on Escape and on
+// backdrop click. Submitting dialogs pass a no-op onClose to prevent
+// accidental dismissal mid-action.
+function ModalOverlay({ children, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="pb-admin-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="pb-admin-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 

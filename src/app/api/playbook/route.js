@@ -25,6 +25,7 @@ import {
   getRelationships,
   getSurfaces,
   createIssue,
+  createDocument,
   updateDocument,
 } from "@/lib/dataStore";
 import {
@@ -33,6 +34,14 @@ import {
   visibleStatuses,
   filterDocuments,
 } from "@/lib/opdAcl";
+import { getServiceClient } from "@/lib/supabase";
+import {
+  embedDocument,
+  embedPosterStub,
+  restoreDocument,
+  SKIP_TEXT_EXTRACTION_CLASSES,
+} from "@/lib/sousai";
+import { validateCreatePayload } from "@/lib/playbookValidation";
 
 // Locked shelf order — Safety first, Site & Client last (Finance renders
 // empty/short between Culinary and Site & Client).
@@ -278,6 +287,70 @@ export async function GET(request) {
       });
     }
 
+    // ── list-archived ────────────────────────────────────────────────────
+    // Admin archive view: owner-only. Returns just archived docs, ordered
+    // archived_at DESC (most-recently-archived first). Lazy-loaded by the
+    // admin client when the user clicks the Archive tab.
+    if (action === "list-archived") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const archived = await listDocuments(
+        { archivedOnly: true },
+        { module: MODULE }
+      );
+      return NextResponse.json({ documents: archived });
+    }
+
+    // ── archive-impact ───────────────────────────────────────────────────
+    // Read-only inspection: returns incoming relationships (other docs that
+    // point AT this one) + chunk count for the confirmation dialog. No
+    // state change. The relationships are FYI - archive preserves them
+    // because the doc row stays in the table; the references aren't broken,
+    // they just point to a hidden doc.
+    if (action === "archive-impact") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const id = searchParams.get("id");
+      if (!id) {
+        return NextResponse.json({ error: "Missing id" }, { status: 400 });
+      }
+      const doc = await getDocument(id, { module: MODULE });
+      if (!doc) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+
+      const allRels = await getRelationships(id, { module: MODULE });
+      const incoming = allRels.filter((r) => r.to_doc === id);
+      const fromIds = [...new Set(incoming.map((r) => r.from_doc))];
+      const fromDocs = await Promise.all(
+        fromIds.map((fid) => getDocument(fid, { module: MODULE }))
+      );
+      const fromMap = Object.fromEntries(
+        fromDocs.filter(Boolean).map((d) => [d.id, d])
+      );
+      const incoming_relationships = incoming.map((r) => ({
+        rel_type: r.rel_type,
+        from_doc: r.from_doc,
+        from_title: fromMap[r.from_doc]?.title || r.from_doc,
+        from_class: fromMap[r.from_doc]?.doc_class || null,
+      }));
+
+      const sb = getServiceClient();
+      const { count: chunks_count } = await sb
+        .from("document_chunks")
+        .select("*", { count: "exact", head: true })
+        .eq("doc_id", id);
+
+      return NextResponse.json({
+        document_id: id,
+        title: doc.title,
+        incoming_relationships,
+        chunks_count: chunks_count || 0,
+      });
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     console.error("[playbook GET]", e.message);
@@ -390,6 +463,113 @@ export async function POST(request) {
         return NextResponse.json({ error: msg }, { status: 400 });
       }
       return NextResponse.json({ ok: true, document: updated });
+    }
+
+    // ── archive ──────────────────────────────────────────────────────────
+    // Calls the archive_document(p_doc_id) RPC. The RPC atomically flips
+    // archived=true AND deletes all document_chunks for the doc in ONE
+    // transaction (pr-7-7). Either both happen or both fail - there is no
+    // possible state where Sous can still cite a doc that's hidden from
+    // the catalog, or vice versa.
+    if (action === "archive") {
+      const { id } = body;
+      if (!id || typeof id !== "string") {
+        return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+      }
+      // Existence pre-check so we return a clear 404 instead of the RPC's
+      // generic "0 rows returned".
+      const existing = await getDocument(id, { module: MODULE });
+      if (!existing) {
+        return NextResponse.json({ error: `Document ${id} not found` }, { status: 404 });
+      }
+
+      const sb = getServiceClient();
+      const { data, error } = await sb.rpc("archive_document", { p_doc_id: id });
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      const rpcRow = data?.[0] || {};
+
+      // Re-fetch to return the full post-archive document row (archived
+      // flag, archived_at timestamp).
+      const updatedDoc = await getDocument(id, { module: MODULE });
+      return NextResponse.json({
+        ok: true,
+        document: updatedDoc,
+        chunks_deleted: rpcRow.chunks_deleted ?? 0,
+      });
+    }
+
+    // ── restore ──────────────────────────────────────────────────────────
+    // Delegates to sousai.restoreDocument which dispatches re-embed by
+    // doc_class (POST -> stub, else+Drive -> full extract, else -> no
+    // content), then flips archived=false LAST so we never have a
+    // visible-but-not-embedded half-state.
+    if (action === "restore") {
+      const { id } = body;
+      if (!id || typeof id !== "string") {
+        return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+      }
+      const existing = await getDocument(id, { module: MODULE });
+      if (!existing) {
+        return NextResponse.json({ error: `Document ${id} not found` }, { status: 404 });
+      }
+      if (!existing.archived) {
+        return NextResponse.json(
+          { error: `Document ${id} is not archived` },
+          { status: 400 }
+        );
+      }
+
+      let result;
+      try {
+        result = await restoreDocument({ docId: id });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Restore failed: ${e.message}. Doc remains archived.` },
+          { status: 500 }
+        );
+      }
+
+      const updatedDoc = await getDocument(id, { module: MODULE });
+      return NextResponse.json({
+        ok: true,
+        document: updatedDoc,
+        restore_path: result.restorePath,
+        chunks_inserted: result.chunksInserted,
+      });
+    }
+
+    // ── create-document ──────────────────────────────────────────────────
+    // Strict validation: ID format regex, prefix↔doc_class consistency,
+    // uniqueness, plus the existing shelf/class/status sets. Defaults:
+    // status=Pending if omitted, version=null (per spec - a brand-new doc
+    // with no content shouldn't claim a version it doesn't have).
+    if (action === "create-document") {
+      const v = validateCreatePayload(body, {
+        validShelves: VALID_SHELVES_SET,
+        validClasses: VALID_CLASSES,
+        validStatuses: VALID_STATUSES,
+      });
+      if (!v.ok) {
+        return NextResponse.json({ error: v.error }, { status: 400 });
+      }
+      // Uniqueness: surface a clear "id already exists: <title>" instead
+      // of the raw PG unique-violation message.
+      const existing = await getDocument(v.clean.id, { module: MODULE });
+      if (existing) {
+        return NextResponse.json(
+          { error: `id '${v.clean.id}' already exists: ${existing.title}` },
+          { status: 400 }
+        );
+      }
+      let created;
+      try {
+        created = await createDocument(v.clean, { module: MODULE });
+      } catch (e) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, document: created });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

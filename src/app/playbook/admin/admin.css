@@ -2,10 +2,58 @@
    /playbook/admin · Build Dashboard
    Reuses .pb-wrap, .pb-class-chip, .pb-status-pill, etc. from playbook.css.
    This file adds .pb-admin-* classes for the dashboard's denser layout.
+
+   Grounded in docs/DESIGN_SYSTEM_REFERENCE.md (verified 2026-05-05):
+   - Inter only for screen UI (Mulish demoted; Oswald not in system)
+   - Density mode tokens (admin/director surface): 11/13/14/16/20/24
+   - Ops Hub palette: brand navy #153968 + amber #d97706 + neutral grays
+   - Modal radius 12 (mode-independent); card 8, input/button 4
+   - Motion: 150ms ease-out default; never exceed 400ms
+   - Reference anchors: Linear (density + restraint), Ramp (table clarity)
+   - Mobile <1024px overrides to Comfortable per the floor-first rule
+
+   NOTE: globals.css `--kf-navy: #0f3057` is documented drift from canonical
+   `#153968`. Not fixed here (sweeping refactor scope). This file uses a
+   local --kf-brand-navy for new code; existing var(--kf-navy) usages stay.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .pb-admin {
-  /* Tighter top spacing than the catalog - no big hero band. */
+  /* Brand - the only two color tokens this surface needs. Everything else
+     is functional (state colors, neutrals, surfaces). */
+  --kf-brand-navy:    #153968;
+  --kf-ops-amber:     #d97706;
+  --kf-ops-amber-dim: #b56506;
+
+  /* Functional state colors. */
+  --kf-danger:        #b91c1c;
+  --kf-danger-soft:   #fef2f2;
+  --kf-danger-soft-bd:#fecaca;
+
+  /* Surfaces + neutrals. */
+  --kf-surface-1:     #ffffff;
+  --kf-surface-2:     #f6f8fb;
+  --kf-surface-3:     #eef2f7;
+  --kf-line:          #e2e8f0;
+  --kf-line-strong:   #cbd5e1;
+  --kf-muted:         #64748b;
+  --kf-muted-soft:    #94a3b8;
+
+  /* Density-mode type scale (per design system, density admin surface).
+     11 = caption/labels only, never body. */
+  --kf-t-caption: 11px;
+  --kf-t-body-sm: 13px;
+  --kf-t-body:    14px;
+  --kf-t-emp:     16px;
+  --kf-t-h2:      20px;
+  --kf-t-h1:      24px;
+  --kf-lh-body:   1.3;
+  --kf-lh-head:   1.15;
+
+  /* Density radii. Modal radius is mode-independent (12). */
+  --kf-r-card:    8px;
+  --kf-r-input:   4px;
+  --kf-r-modal:   12px;
+
   padding-top: 14px;
 }
 
@@ -18,32 +66,35 @@
   align-items: center;
   gap: 4px;
   font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--kf-playbook-teal-dark);
+  font-size: var(--kf-t-caption);
+  font-weight: 600;
+  color: var(--kf-muted);
   text-decoration: none;
   margin-bottom: 10px;
-  transition: color 0.15s;
+  transition: color 150ms ease-out;
 }
-.pb-admin-back:hover { color: var(--kf-navy); }
+.pb-admin-back:hover { color: var(--kf-brand-navy); }
 .pb-admin-back:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--kf-ops-amber);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 .pb-admin-title {
   font-family: 'Inter', sans-serif;
-  font-size: 22px;
+  font-size: var(--kf-t-h1);
   font-weight: 800;
-  color: var(--kf-navy);
+  color: var(--kf-brand-navy);
   margin: 0 0 4px;
   letter-spacing: -0.3px;
+  line-height: var(--kf-lh-head);
 }
 .pb-admin-sub {
-  font-size: 13px;
-  color: #64748b;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  color: var(--kf-muted);
   margin: 0;
 }
+.pb-admin-sub strong { color: var(--kf-brand-navy); font-weight: 700; }
 
 /* ─── Metrics row ────────────────────────────────────────────────────────── */
 .pb-admin-metrics {
@@ -53,34 +104,34 @@
   margin-bottom: 14px;
 }
 .pb-metric {
-  background: white;
-  border: 1px solid var(--kf-border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  /* Match .pb-card's resting shadow so the dashboard cards read as the
-     same kit as the catalog cards. */
-  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  background: var(--kf-surface-1);
+  border: 1px solid var(--kf-line);
+  border-radius: var(--kf-r-card);
+  padding: 12px 16px;
+  transition: border-color 150ms ease-out;
 }
+.pb-metric:hover { border-color: var(--kf-line-strong); }
 .pb-metric-value {
   font-family: 'Inter', sans-serif;
-  font-size: 22px;
+  font-size: var(--kf-t-h2);
   font-weight: 800;
-  color: var(--kf-navy);
-  line-height: 1.1;
+  color: var(--kf-brand-navy);
+  line-height: var(--kf-lh-head);
   margin-bottom: 4px;
+  letter-spacing: -0.2px;
 }
 .pb-metric-of {
-  font-size: 14px;
+  font-size: var(--kf-t-body);
   font-weight: 600;
-  color: #6B7785;
+  color: var(--kf-muted);
 }
 .pb-metric-label {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--kf-t-caption);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #64748b;
+  color: var(--kf-muted);
 }
 /* Progress card spans two grid cells on wide layouts so the bar reads
    honestly without being squeezed. */
@@ -91,17 +142,17 @@
   justify-content: center;
 }
 .pb-metric-progress {
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: var(--kf-surface-3);
   overflow: hidden;
   margin-bottom: 6px;
 }
 .pb-metric-progress-bar {
   height: 100%;
-  background: var(--kf-playbook-teal);
+  background: var(--kf-ops-amber);
   border-radius: 999px;
-  transition: width 0.3s ease;
+  transition: width 250ms ease-out;
 }
 .pb-metric-progress-label {
   display: flex;
@@ -110,22 +161,20 @@
 }
 .pb-metric-value-inline {
   font-family: 'Inter', sans-serif;
-  font-size: 16px;
+  font-size: var(--kf-t-emp);
   font-weight: 800;
-  color: var(--kf-navy);
+  color: var(--kf-brand-navy);
 }
 .pb-metric-progress-text {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--kf-t-caption);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #64748b;
+  color: var(--kf-muted);
 }
 
 @media (max-width: 600px) {
-  /* Drop the span-2 on the progress card on phones so all four metrics
-     stack cleanly. */
   .pb-metric--wide { grid-column: span 1; }
 }
 
@@ -137,7 +186,7 @@
   margin-bottom: 22px;
 }
 .pb-admin-status-chip {
-  font-size: 11px;
+  font-size: var(--kf-t-caption);
   padding: 4px 10px;
 }
 .pb-admin-status-chip strong {
@@ -147,21 +196,19 @@
 
 /* ─── Gaps & blockers ───────────────────────────────────────────────────── */
 .pb-admin-gaps {
-  background: white;
-  border: 1px solid var(--kf-border);
-  border-radius: 12px;
+  background: var(--kf-surface-1);
+  border: 1px solid var(--kf-line);
+  border-radius: var(--kf-r-card);
   padding: 14px 18px 16px;
   margin-bottom: 24px;
-  /* Same resting shadow as the catalog cards + metric cards. */
-  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
 }
 .pb-admin-gaps h2 {
   font-family: 'Inter', sans-serif;
-  font-size: 12px;
+  font-size: var(--kf-t-caption);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--kf-navy);
+  color: var(--kf-brand-navy);
   margin: 0 0 10px;
 }
 .pb-admin-gap-list {
@@ -186,47 +233,46 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--kf-surface-3);
+  color: var(--kf-muted);
   padding: 2px 8px;
   border-radius: 999px;
   flex-shrink: 0;
 }
 .pb-admin-gap--priority .pb-admin-gap-label {
-  background: rgba(239, 68, 68, 0.12);
-  color: var(--kf-red);
+  background: var(--kf-danger-soft);
+  color: var(--kf-danger);
 }
 .pb-admin-gap-link {
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-size: var(--kf-t-body-sm);
   font-weight: 700;
-  color: var(--kf-navy);
+  color: var(--kf-brand-navy);
   background: transparent;
   border: none;
   padding: 0;
   cursor: pointer;
   text-align: left;
   text-decoration: none;
-  font-family: inherit;
+  transition: color 150ms ease-out;
 }
 button.pb-admin-gap-link:hover {
-  color: var(--kf-playbook-teal-dark);
+  color: var(--kf-ops-amber-dim);
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 button.pb-admin-gap-link:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--kf-ops-amber);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
-.pb-admin-gap-link--plain {
-  cursor: default;
-}
+.pb-admin-gap-link--plain { cursor: default; }
 .pb-admin-gap-note {
   font-size: 12px;
-  color: #6B7785;
+  color: var(--kf-muted);
 }
 .pb-admin-gap--ok {
-  color: var(--kf-playbook-teal-dark);
+  color: var(--kf-muted);
   font-style: italic;
 }
 
@@ -243,35 +289,35 @@ button.pb-admin-gap-link:focus-visible {
 }
 .pb-admin-worklist h2 {
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
+  font-size: var(--kf-t-body);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--kf-navy);
+  color: var(--kf-brand-navy);
   margin: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
 }
 .pb-admin-worklist-count {
   font-size: 12px;
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
-  color: #6B7785;
+  color: var(--kf-muted);
+  margin-left: 8px;
 }
 .pb-admin-worklist-hint {
   font-size: 12px;
-  color: #6B7785;
+  color: var(--kf-muted);
+  margin-left: auto;
 }
 
 .pb-admin-table-wrap {
-  background: white;
-  border: 1px solid var(--kf-border);
-  border-radius: 12px;
-  overflow: hidden;
-  /* Same resting shadow as the catalog cards + metric cards + gaps panel. */
-  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.04);
+  background: var(--kf-surface-1);
+  border: 1px solid var(--kf-line);
+  border-radius: var(--kf-r-card);
+  /* Horizontal scroll instead of clip - the 9-column worklist needs more
+     room than a typical viewport gives. Border-radius still clips the
+     corners; overflow-x:auto only handles the rare narrow-width case. */
+  overflow-x: auto;
 }
 .pb-admin-table {
   width: 100%;
@@ -280,49 +326,60 @@ button.pb-admin-gap-link:focus-visible {
 }
 .pb-admin-th {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: var(--kf-t-caption);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #64748b;
-  background: #f8fafc;
-  padding: 10px 12px;
+  color: var(--kf-muted);
+  background: var(--kf-surface-2);
+  padding: 10px 10px;
   text-align: left;
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid var(--kf-border);
+  border-bottom: 1px solid var(--kf-line);
   white-space: nowrap;
-  transition: color 0.12s, background 0.12s;
+  transition: color 150ms ease-out, background 150ms ease-out;
 }
-.pb-admin-th:hover { color: var(--kf-navy); background: #eef2f7; }
-.pb-admin-th--active { color: var(--kf-playbook-teal-dark); }
+.pb-admin-th:hover { color: var(--kf-brand-navy); background: var(--kf-surface-3); }
+.pb-admin-th--active {
+  color: var(--kf-brand-navy);
+  box-shadow: inset 0 -2px 0 var(--kf-ops-amber);
+}
 .pb-admin-th:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--kf-ops-amber);
   outline-offset: -2px;
+}
+
+/* Static header modifier - same visual treatment as pb-admin-th but no
+   sort/hover behavior. Used on read-only columns in the Archive tab. */
+.pb-admin-th--static { cursor: default; }
+.pb-admin-th--static:hover {
+  color: var(--kf-muted);
+  background: var(--kf-surface-2);
 }
 .pb-admin-th-arrow {
   margin-left: 6px;
   font-size: 10px;
   display: inline-block;
   min-width: 8px;
+  color: var(--kf-ops-amber-dim);
 }
 
-/* Row no longer has a click handler (the ID button opens the reader, every
-   other cell handles its own click via the inline editor). Hover stays as
-   a subtle scan affordance so the user can track which row their eye is on. */
+/* Row hover: subtle neutral scan band - quiet enough not to compete with
+   the cell-level edit affordances. */
 .pb-admin-row {
-  transition: background 0.1s;
+  transition: background 150ms ease-out;
 }
-.pb-admin-row:hover { background: #fafbfc; }
+.pb-admin-row:hover { background: var(--kf-surface-2); }
 
 .pb-admin-cell {
-  padding: 6px 12px;
+  padding: 6px 10px;
   font-family: 'Inter', sans-serif;
-  font-size: 12.5px;
+  font-size: var(--kf-t-body-sm);
   color: #475569;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--kf-line);
   vertical-align: middle;
-  position: relative; /* anchor for the error dismiss button */
+  position: relative;
 }
 .pb-admin-row:last-child .pb-admin-cell { border-bottom: 0; }
 .pb-admin-cell-id {
@@ -334,18 +391,18 @@ button.pb-admin-gap-link:focus-visible {
 }
 .pb-admin-cell-title {
   font-weight: 700;
-  color: var(--kf-navy);
-  max-width: 360px;
+  color: var(--kf-brand-navy);
+  max-width: 320px;
 }
 .pb-admin-cell-version {
   font-family: 'Inter', monospace;
   font-size: 11.5px;
-  color: #64748b;
+  color: var(--kf-muted);
   white-space: nowrap;
 }
 .pb-admin-cell-linked {
   text-align: center;
-  color: #cbd5e1;
+  color: var(--kf-muted-soft);
 }
 .pb-admin-cell-linked--yes {
   color: var(--kf-playbook-teal);
@@ -829,4 +886,463 @@ button.pb-admin-gap-link:focus-visible {
   .pb-admin-cell-title {
     max-width: 240px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CP3 - Tab nav, Archive view, Archive/Restore dialogs, Create modal
+   Grounded in DESIGN_SYSTEM_REFERENCE.md:
+   - Inter only (no Oswald, Mulish demoted from screen)
+   - Density tokens (11/13/14/16/20/24)
+   - Ops Hub palette: brand navy + amber accent + neutral grays
+   - Modal radius 12 (locked), card 8, input/button 4
+   - 150ms ease-out default, no custom easing
+   - Reference anchor: Linear's admin restraint
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Tab nav ────────────────────────────────────────────────────────────── */
+.pb-admin-tabnav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 22px;
+  border-bottom: 1px solid var(--kf-line);
+}
+.pb-admin-tabnav-spacer { flex: 1; }
+
+.pb-admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 600;
+  color: var(--kf-muted);
+  cursor: pointer;
+  position: relative;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  transition: color 150ms ease-out, border-color 150ms ease-out;
+}
+.pb-admin-tab:hover { color: var(--kf-brand-navy); }
+.pb-admin-tab:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.pb-admin-tab--active {
+  color: var(--kf-brand-navy);
+  font-weight: 700;
+  border-bottom-color: var(--kf-ops-amber);
+}
+
+.pb-admin-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--kf-surface-3);
+  color: var(--kf-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 700;
+}
+.pb-admin-tab--active .pb-admin-tab-count {
+  background: var(--kf-brand-navy);
+  color: white;
+}
+
+.pb-admin-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--kf-brand-navy);
+  background: var(--kf-brand-navy);
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 700;
+  border-radius: var(--kf-r-input);
+  cursor: pointer;
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+.pb-admin-new-btn:hover {
+  background: #0f2a4e;
+  border-color: #0f2a4e;
+}
+.pb-admin-new-btn:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+}
+
+/* ─── Worklist archive cell ──────────────────────────────────────────────── */
+.pb-admin-th--action {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-muted);
+  text-align: center;
+  cursor: default;
+}
+.pb-admin-th--action:hover { color: var(--kf-muted); background: var(--kf-surface-2); }
+.pb-admin-cell-archive {
+  width: 72px;
+  text-align: center;
+}
+.pb-admin-cell-restore {
+  width: 96px;
+  text-align: center;
+}
+.pb-admin-archive-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--kf-muted-soft);
+  border-radius: var(--kf-r-input);
+  cursor: pointer;
+  transition: color 150ms ease-out, background 150ms ease-out, border-color 150ms ease-out;
+}
+.pb-admin-archive-btn:hover {
+  color: var(--kf-danger);
+  background: var(--kf-danger-soft);
+  border-color: var(--kf-danger-soft-bd);
+}
+.pb-admin-archive-btn:focus-visible {
+  outline: 2px solid var(--kf-danger);
+  outline-offset: 1px;
+}
+
+/* ─── Archive tab content ──────────────────────────────────────────────────
+   Header treatment mirrors .pb-admin-worklist-head exactly so the two tabs
+   read as the same surface kit. The Archive table inside this section uses
+   the worklist's pb-admin-th + pb-admin-cell classes directly - no parallel
+   style system. */
+.pb-admin-archive { margin-top: 2px; }
+.pb-admin-archive-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.pb-admin-archive-head h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-brand-navy);
+  margin: 0;
+}
+.pb-admin-archive-hint {
+  font-size: 12px;
+  color: var(--kf-muted);
+  margin-left: auto;
+}
+.pb-admin-archive-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--kf-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+}
+.pb-admin-archive-empty {
+  padding: 40px 24px;
+  background: var(--kf-surface-1);
+  border: 1px dashed var(--kf-line-strong);
+  border-radius: var(--kf-r-card);
+  text-align: center;
+  color: var(--kf-muted);
+}
+.pb-admin-archive-empty h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-emp);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+  margin: 0 0 8px;
+}
+.pb-admin-archive-empty p {
+  margin: 6px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  color: var(--kf-muted);
+}
+.pb-admin-archive-empty-hint {
+  max-width: 480px;
+  margin: 12px auto 0;
+  font-size: 12px;
+  color: var(--kf-muted);
+  line-height: 1.5;
+}
+.pb-admin-row--archived td { color: var(--kf-muted); }
+.pb-admin-archived-at {
+  font-family: 'Inter', monospace;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+  white-space: nowrap;
+}
+.pb-admin-restore-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--kf-brand-navy);
+  background: var(--kf-surface-1);
+  color: var(--kf-brand-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--kf-r-input);
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.pb-admin-restore-btn:hover {
+  background: var(--kf-brand-navy);
+  color: white;
+}
+.pb-admin-restore-btn:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+}
+
+/* ─── Modal overlay + frame ──────────────────────────────────────────────── */
+/* Clean screen-native modal: white box, navy text title, modest divider.
+   No navy band, no print-cover metaphor. Linear/Ramp restraint. */
+.pb-admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: pb-admin-overlay-in 150ms ease-out;
+}
+@keyframes pb-admin-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.pb-admin-modal {
+  background: var(--kf-surface-1);
+  border-radius: var(--kf-r-modal);
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
+  max-width: 540px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: pb-admin-modal-in 200ms ease-out;
+}
+@keyframes pb-admin-modal-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pb-admin-overlay-in,
+  .pb-admin-modal-in { animation: none; }
+}
+.pb-admin-modal form {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.pb-admin-modal-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--kf-line);
+}
+.pb-admin-modal-header h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-h2);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+  margin: 0 0 4px;
+  line-height: var(--kf-lh-head);
+  letter-spacing: -0.2px;
+}
+.pb-admin-modal-header h2 code {
+  background: var(--kf-surface-3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: 'Inter', monospace;
+  font-size: var(--kf-t-emp);
+  font-weight: 600;
+  color: var(--kf-brand-navy);
+}
+.pb-admin-modal-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  color: var(--kf-muted);
+  margin: 0;
+}
+
+.pb-admin-modal-body {
+  padding: 16px 22px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body);
+  color: #1e293b;
+  line-height: var(--kf-lh-body);
+}
+.pb-admin-modal-lead {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  color: var(--kf-brand-navy);
+}
+.pb-admin-modal-lead:first-child { margin-top: 0; }
+.pb-admin-modal-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+.pb-admin-modal-list li { margin-bottom: 4px; }
+.pb-admin-modal-list code {
+  background: var(--kf-surface-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Inter', monospace;
+  font-size: 12px;
+  color: var(--kf-brand-navy);
+  font-weight: 600;
+}
+.pb-admin-modal-list strong { color: var(--kf-brand-navy); }
+.pb-admin-modal-rels {
+  background: var(--kf-surface-2);
+  padding: 10px 16px 10px 32px;
+  border-radius: var(--kf-r-input);
+  border-left: 2px solid var(--kf-ops-amber);
+}
+.pb-admin-modal-rels li { margin-bottom: 4px; }
+.pb-admin-modal-rels code { background: var(--kf-surface-1); }
+.pb-admin-modal-rel-type {
+  color: var(--kf-muted);
+  font-size: var(--kf-t-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-left: 4px;
+}
+.pb-admin-modal-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--kf-danger-soft);
+  border: 1px solid var(--kf-danger-soft-bd);
+  border-radius: var(--kf-r-input);
+  color: var(--kf-danger);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.pb-admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  background: var(--kf-surface-2);
+  border-top: 1px solid var(--kf-line);
+}
+.pb-admin-modal-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--kf-line-strong);
+  background: var(--kf-surface-1);
+  color: var(--kf-brand-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 600;
+  border-radius: var(--kf-r-input);
+  cursor: pointer;
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+.pb-admin-modal-btn:hover {
+  background: var(--kf-surface-3);
+  border-color: var(--kf-muted-soft);
+}
+.pb-admin-modal-btn:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+}
+.pb-admin-modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pb-admin-modal-btn--primary {
+  background: var(--kf-brand-navy);
+  border-color: var(--kf-brand-navy);
+  color: white;
+}
+.pb-admin-modal-btn--primary:hover {
+  background: #0f2a4e;
+  border-color: #0f2a4e;
+}
+.pb-admin-modal-btn--danger {
+  background: var(--kf-danger);
+  border-color: var(--kf-danger);
+  color: white;
+}
+.pb-admin-modal-btn--danger:hover {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
+/* ─── Create modal form rows ─────────────────────────────────────────────── */
+.pb-admin-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.pb-admin-form-row label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.pb-admin-form-row input,
+.pb-admin-form-row select {
+  padding: 8px 10px;
+  border: 1px solid var(--kf-line-strong);
+  border-radius: var(--kf-r-input);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body);
+  background: var(--kf-surface-1);
+  color: #1e293b;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.pb-admin-form-row input:focus,
+.pb-admin-form-row select:focus {
+  outline: none;
+  border-color: var(--kf-ops-amber);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+.pb-admin-form-row input::placeholder {
+  color: var(--kf-muted-soft);
+}
+.pb-admin-form-row input:user-invalid {
+  border-color: #fca5a5;
+}
+.pb-admin-form-row input:user-invalid:focus {
+  border-color: var(--kf-danger);
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.18);
+}
+.pb-admin-form-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+  line-height: 1.4;
+  margin-top: 2px;
 }
