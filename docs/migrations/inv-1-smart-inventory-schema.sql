@@ -132,8 +132,11 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   category            inventory_category,
   unit                TEXT,
 
-  -- Soft FK; ON DELETE SET NULL so deactivating a zone does not delete the item.
-  location_id         TEXT REFERENCES storage_locations(id) ON DELETE SET NULL,
+  -- Soft FK to storage_locations(id). The actual FK is added via
+  -- ALTER TABLE after both this and storage_locations exist (see below
+  -- the storage_locations section); CREATE TABLE cannot reference a
+  -- table that has not been defined yet within the same script.
+  location_id         TEXT,
 
   -- D2: canonical vendor identity. Matches invoice_submissions.vendor_id.
   -- Backfill (INV-3) resolves all 34 freeform strings: 29 exact,
@@ -259,6 +262,16 @@ CREATE INDEX IF NOT EXISTS storage_locations_account_idx
 
 CREATE INDEX IF NOT EXISTS storage_locations_parent_idx
   ON storage_locations (parent_location_id);
+
+-- Deferred FK: inventory_items.location_id was declared without a
+-- REFERENCES clause above because storage_locations had not been
+-- created yet when CREATE TABLE inventory_items ran. Add the FK now.
+-- Idempotent: skip if the constraint already exists from a prior apply.
+DO $$ BEGIN
+  ALTER TABLE inventory_items
+    ADD CONSTRAINT inventory_items_location_id_fkey
+    FOREIGN KEY (location_id) REFERENCES storage_locations(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ═══════════════════════════════════════════════════════════════
 -- 4. count_sessions  (T4, D7 Option B)
