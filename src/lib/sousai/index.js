@@ -259,3 +259,92 @@ export async function embedPosterStub({ docId, language = "en" }) {
     chunksReplaced,
   };
 }
+
+/**
+ * Restore an archived doc: re-embed (if applicable) + flip archived=false.
+ *
+ * Dispatch by doc_class:
+ *   - POST class       -> embedPosterStub  (rebuilds the stub chunk)
+ *   - else + Drive ID  -> embedDocument    (full extract+chunk+embed)
+ *   - else (no Drive)  -> no re-embed      (doc returns to catalog unembedded)
+ *
+ * Re-embed runs BEFORE the archived=false flip. On embed failure the doc
+ * stays archived (the flip never runs), so operators / Sous see a consistent
+ * state - no "visible-but-not-embedded" half-state on the way back.
+ *
+ * @param {object} opts
+ * @param {string} opts.docId - documents.id (must be currently archived)
+ * @returns {Promise<{
+ *   docId: string,
+ *   docTitle: string,
+ *   docClass: string,
+ *   restorePath: 'poster-stub' | 'full-extract' | 'no-content',
+ *   chunksInserted: number,
+ * }>}
+ *
+ * Throws if:
+ *   - doc not found in catalog
+ *   - doc is not currently archived
+ *   - re-embed fails (doc stays archived; safe to retry)
+ *   - the final archived=false UPDATE fails
+ */
+export async function restoreDocument({ docId }) {
+  if (!docId) throw new Error("restoreDocument: docId is required");
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+
+  const { data: docRow, error: docErr } = await supabase
+    .from("documents")
+    .select("id, title, doc_class, source_drive_id, archived")
+    .eq("id", docId)
+    .single();
+  if (docErr || !docRow) {
+    throw new Error(
+      `restoreDocument: doc ${docId} not found: ${docErr?.message || "not in catalog"}`
+    );
+  }
+  if (!docRow.archived) {
+    throw new Error(`restoreDocument: ${docId} is not archived (nothing to restore)`);
+  }
+
+  let restorePath;
+  let chunksInserted = 0;
+  if (SKIP_TEXT_EXTRACTION_CLASSES.includes(docRow.doc_class)) {
+    const r = await embedPosterStub({ docId });
+    chunksInserted = r.chunksReplaced.inserted;
+    restorePath = "poster-stub";
+  } else if (docRow.source_drive_id) {
+    const r = await embedDocument({ docId, driveFileId: docRow.source_drive_id });
+    chunksInserted = r.chunksReplaced.inserted;
+    restorePath = "full-extract";
+  } else {
+    chunksInserted = 0;
+    restorePath = "no-content";
+  }
+
+  const { error: updateErr } = await supabase
+    .from("documents")
+    .update({
+      archived: false,
+      archived_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", docId);
+  if (updateErr) {
+    throw new Error(
+      `restoreDocument: archived=false flip failed for ${docId}: ${updateErr.message}`
+    );
+  }
+
+  return {
+    docId,
+    docTitle: docRow.title,
+    docClass: docRow.doc_class,
+    restorePath,
+    chunksInserted,
+  };
+}

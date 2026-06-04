@@ -40,25 +40,47 @@ const DOC_ID_RE = /^[A-Z0-9-]+$/;
 /**
  * List documents on a shelf (or across all shelves), filtered to a status set.
  *
- * Retired is never returned — STD-005 §3.5. The caller passes the visible
- * statuses from opdAcl.visibleStatuses(isCorporate); we default to ['Live']
- * if absent so the failure mode is the most restrictive view.
+ * Two mutually-exclusive modes via `archivedOnly`:
+ *   - archivedOnly: false (default) - operator/admin worklist view. Excludes
+ *     archived docs and Retired status. Filters by `statuses` (defaults to
+ *     ['Live'] if absent so the failure mode is the most restrictive view).
+ *     Ordering: pinned DESC, sort_order ASC, title ASC.
+ *   - archivedOnly: true - admin archive view. Returns ONLY archived docs.
+ *     Ordering: archived_at DESC (most-recently-archived first), id ASC.
  *
- * Ordering: pinned DESC, sort_order ASC, title ASC.
+ * No "both" mode - the operator view always wants active docs, the archive
+ * view always wants archived docs. Mixing them would muddle the UX.
+ *
+ * Retired is never returned in the active mode — STD-005 §3.5. The caller
+ * passes the visible statuses from opdAcl.visibleStatuses(isCorporate);
+ * archived docs are excluded in active mode regardless of status (the
+ * `archived` flag is orthogonal to status by design).
  */
-export async function listDocuments({ shelf, statuses } = {}, opts = {}) {
+export async function listDocuments(
+  { shelf, statuses, archivedOnly = false } = {},
+  opts = {}
+) {
   const sb = getServiceClient();
-  const stats = statuses && statuses.length ? statuses : ["Live"];
-  let q = sb
-    .from(DOCUMENTS_TABLE)
-    .select("*")
-    .neq("status", "Retired")
-    .in("status", stats);
-  if (shelf) q = q.eq("shelf", shelf);
-  q = q
-    .order("pinned",     { ascending: false })
-    .order("sort_order", { ascending: true })
-    .order("title",      { ascending: true });
+  let q = sb.from(DOCUMENTS_TABLE).select("*");
+
+  if (archivedOnly) {
+    q = q
+      .eq("archived", true)
+      .order("archived_at", { ascending: false })
+      .order("id",          { ascending: true });
+  } else {
+    const stats = statuses && statuses.length ? statuses : ["Live"];
+    q = q
+      .eq("archived", false)
+      .neq("status", "Retired")
+      .in("status", stats);
+    if (shelf) q = q.eq("shelf", shelf);
+    q = q
+      .order("pinned",     { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("title",      { ascending: true });
+  }
+
   const { data, error } = await q;
   if (error) throw new Error(`opd.listDocuments: ${error.message}`);
   return data || [];
