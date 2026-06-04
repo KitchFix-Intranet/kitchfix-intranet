@@ -47,6 +47,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // ── Args ──
 const args = process.argv.slice(2);
@@ -83,15 +85,11 @@ const SHEET_IDS = {
   INVENTORY:     process.env.SHEET_INVENTORY     || "14oROcj9hyQJfKOm-ZXUDn6qvOviZYX1aLMs27V8zZnk",
 };
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("[recon] FATAL: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  process.exit(2);
-}
-if (!GOOGLE_SA_EMAIL || !GOOGLE_PRIVATE_KEY) {
-  console.error("[recon] FATAL: missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY");
-  process.exit(2);
-}
-
+// Env validation deferred to runReconciliationAlarm() so library callers
+// (e.g. the kitchfix-inventory-cron Railway service) can wrap the call in
+// try/catch instead of having the import crash the process. createClient
+// itself does not validate URL/key on construction; the failure surfaces
+// on the first PostgREST call inside the function.
 const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
@@ -789,7 +787,18 @@ function buildDigest(c1Results, c2Result) {
 }
 
 // ── Main ──
-async function main() {
+// Exported so the kitchfix-inventory-cron Railway service can append it
+// to the tail of its own main() after the 06:00 cron writes flush. The
+// CLI entry point (see bottom of file) calls this same function when the
+// script is invoked directly via node.
+export async function runReconciliationAlarm() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("[recon] missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
+  if (!GOOGLE_SA_EMAIL || !GOOGLE_PRIVATE_KEY) {
+    throw new Error("[recon] missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY");
+  }
+
   console.log("════════════════════════════════════════════════════════════════════════");
   console.log(`  INVENTORY DUAL-WRITE RECON  ${DRY_RUN ? "(DRY-RUN - CONSOLE ONLY)" : "(POSTS TO SLACK)"}`);
   console.log("════════════════════════════════════════════════════════════════════════");
@@ -855,10 +864,25 @@ async function main() {
       : "SLACK_RECAP_WEBHOOK not set; skipped.");
   }
 
-  process.exit(digest.alarm ? 1 : 0);
+  return { alarm: digest.alarm };
 }
 
-main().catch((err) => {
-  console.error("[recon] FATAL:", err.stack || err.message);
-  process.exit(2);
-});
+// CLI direct-run guard. When invoked as `node scripts/reconciliation-alarm.mjs ...`,
+// run the alarm and exit with 0 (clean), 1 (real alarm), or 2 (fatal). When
+// imported as a module (Railway cron tail), this block is skipped and the
+// caller invokes runReconciliationAlarm() directly inside its own try/catch.
+const isDirectRun = (() => {
+  try {
+    return process.argv[1]
+      && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch { return false; }
+})();
+
+if (isDirectRun) {
+  runReconciliationAlarm()
+    .then((result) => process.exit(result.alarm ? 1 : 0))
+    .catch((err) => {
+      console.error("[recon] FATAL:", err.stack || err.message);
+      process.exit(2);
+    });
+}
