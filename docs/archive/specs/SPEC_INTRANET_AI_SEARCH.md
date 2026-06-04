@@ -64,7 +64,8 @@ What Sous AI is NOT.
 
 Decisions to make before the build starts.
 
-*(empty - to be populated)*
+- **"I don't know" threshold can't be raw similarity alone.** From the 2026-06-04 preliminary retrieval test (4 docs, 130 chunks): the gap between weak-but-real hits (typo-laden question, sim ~0.30) and no-answer queries (out-of-corpus question, sim ~0.20) is only ~10 points. That gap will compress as the corpus grows and there's more semi-relevant content to fish through, eroding any static similarity threshold. The likely fix is a verifier step on top of retrieval: pull top K chunks, then ask Claude "is the retrieved content actually relevant to the question?" before answering. Decide before retrieval ships to production.
+- **Spanish queries embed at ~half the confidence of English.** Same 2026-06-04 test: an ES question about allergens retrieved the right English chunks but at sim ~0.33 vs ~0.66 for the English equivalent. One-index multilingual works but degrades signal. Two options when ES queries get real: (a) translate-then-embed (ES query, EN translation, embed, search the EN index), or (b) re-embed the corpus with a multilingual model. (a) is cheaper and minimally invasive; (b) is more accurate for users who write Spanglish or technical ES that doesn't translate cleanly. Probably (a) first, (b) only if needed.
 
 ---
 
