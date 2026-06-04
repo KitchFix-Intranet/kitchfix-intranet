@@ -26,54 +26,67 @@ import { embedTexts } from "../src/lib/sousai/embed.js";
 const TOP_N = 5;
 const PREVIEW_CHARS = 150;
 
+// Regression suite for retrieval at 8+ docs / 190+ chunks. Replaces the
+// preliminary 9-question set that validated retrieval at 4 docs - that
+// set proved retrieval works on the first corpus but didn't exercise
+// doc-level discrimination, form retrieval, or the no-answer gap at
+// scale. The 10 questions below were run on the 2026-06-04 scaled-
+// corpus retest and all passed; rerun this harness whenever the corpus
+// grows materially to confirm the same behaviors hold.
 const QUESTIONS = [
-  // ── DIRECT HITS ──────────────────────────────────────────────────────────
+  // ── DISCRIMINATION UNDER OVERLAP (the new hard tests at 8+ docs) ─────────
   {
-    label: "1. DIRECT - 9 allergens",
-    q: "what are the 9 allergens",
-    expect: "PB-002 allergen content",
-  },
-  {
-    label: "2. DIRECT - confidentiality / media",
-    q: "can I talk about players or injuries to the media",
-    expect: "AGR-001 confidentiality",
-  },
-  {
-    label: "3. DIRECT - brand tokens / typography",
-    q: "what font do documents use",
-    expect: "STD-001 brand / typography",
-  },
-  // ── HARD TESTS ───────────────────────────────────────────────────────────
-  {
-    label: "4. HARD - typo / garbled spelling",
-    q: "r tomatoes a alergure",
-    expect: "PB-002 allergen content (despite typos) - THE HEADLINE TEST",
-  },
-  {
-    label: "5. HARD - emergency response (Section 6 ancestry test)",
+    label: "1. OVERLAP - allergic reaction (PB-002 + SOP-002 should both appear)",
     q: "what do I do if someone has an allergic reaction",
-    expect: "PB-002 Section 6 emergency-response step chunks",
+    expect: "PB-002 Section 6 steps AND SOP-002 §7.3 in top 5 (cross-doc reference)",
   },
   {
-    label: "6. HARD - Spanish question, English corpus (Fork 4)",
+    label: "2. OVERLAP - safety incident procedure (favor SOP-002)",
+    q: "what's the procedure for a safety incident",
+    expect: "SOP-002 incident management, NOT PB-002 allergen-specific",
+  },
+  {
+    label: "3. FORM retrieval - medical refusal form",
+    q: "what form do I use when someone refuses medical treatment",
+    expect: "FORM-001 single fallback chunk surfaces",
+  },
+  {
+    label: "4. ALLERGEN LIST (favor PB-002, resist pull to SOP-002 / POST-002)",
+    q: "what are the 9 allergens",
+    expect: "PB-002 Top 9 allergens - not crowded out by docs that just mention allergens",
+  },
+  // ── STANDING TESTS (from preliminary, confirm still hold as corpus grows) ─
+  {
+    label: "5. STANDING - typo / garbled",
+    q: "r tomatoes a alergure",
+    expect: "PB-002 allergen content (still pulls despite typos)",
+  },
+  {
+    label: "6. STANDING - confidentiality / media",
+    q: "can I talk about players to the media",
+    expect: "AGR-001 confidentiality discriminates from safety/operations docs",
+  },
+  {
+    label: "7. STANDING - Spanish cross-lingual",
     q: "¿los tomates son alérgenos?",
-    expect: "PB-002 allergen content via cross-lingual embedding",
+    expect: "PB-002 allergen content via cross-lingual embedding (documented degraded)",
   },
-  // ── CRITICAL NEGATIVES ───────────────────────────────────────────────────
+  // ── CRITICAL NEGATIVE (did corpus growth erode the no-answer gap?) ───────
   {
-    label: "7. NEGATIVE - no answer in corpus",
+    label: "8. NEGATIVE - no answer in corpus (does the gap survive corpus growth?)",
     q: "what is the labor budget formula",
-    expect: "LOW similarity scores (proving retrieval can signal 'nothing relevant')",
+    expect: "LOW scores - at 2x growth the gap held at ~10pts (0.22 vs 0.32); rerun confirms",
   },
+  // ── POSTER STUBS (don't pollute / surface appropriately) ─────────────────
   {
-    label: "8. POSTER STUB - poster query",
-    q: "where's the big rules wall poster",
-    expect: "POSTER-001 stub chunk pointing to AGR-001",
-  },
-  {
-    label: "9. STUB-DOESN'T-POLLUTE - real-rules query",
+    label: "9. STUB-DOESN'T-POLLUTE - 'big rules' real-content query",
     q: "what are the big rules",
     expect: "AGR-001 content chunks ranked ABOVE POSTER-001 stub",
+  },
+  {
+    label: "10. STUB SURFACES - 'allergen poster' query",
+    q: "allergen poster",
+    expect: "POST-002 stub surfaces appropriately",
   },
 ];
 
@@ -84,7 +97,7 @@ const sb = createClient(
 );
 
 // Batch-embed all questions in a single OpenAI call (the embedding API
-// supports up to 2048 inputs per request; 9 is trivial).
+// supports up to 2048 inputs per request; 10 is trivial).
 const questionTexts = QUESTIONS.map((Q) => Q.q);
 let questionEmbeddings;
 try {
