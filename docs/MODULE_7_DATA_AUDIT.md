@@ -45,13 +45,25 @@ All figures below were pulled from the live system (Sheets + PG via service acco
 
 ```
 CIN - AZ                        321      STL - MO                        758
-CIN - OH                        412      STL - MO - St Louis Cardinals     1   <-- lone full-form stray
+CIN - OH                        412      STL - MO - St Louis Cardinals     1   <-- 1 stray here; full scope 97 rows / 5 tabs (see Correction below)
 STL - FL                        299      TBJ - FL                        285
 TBR - FL                        378      TXR - AZ                        334
 TXR - TX - H                    527      TXR - TX - V                    351
 ```
 
-**Short-vs-full drift is ONE stray row** (`STL - MO - St Louis Cardinals`, 1 of 759), not the widespread drift the doc implied. `accountMatch` is called in 20+ handlers to tolerate this. Catalog covers 10 of ~15 documented accounts.
+**Short-vs-full drift in `item_catalog` is ONE stray row** (`STL - MO - St Louis Cardinals`, 1 of 759), not the widespread drift the doc implied. `accountMatch` is called in 20+ handlers to tolerate this. Catalog covers 10 of ~15 documented accounts.
+
+> **CORRECTION (2026-06-04):** the audit above under-counted by sampling only `item_catalog`. The full long-form-account scope across Module 7 inventory tabs is **97 rows across 5 tabs**:
+>
+> | Tab | Long-form rows |
+> |---|---|
+> | `storage_locations` | 32 |
+> | `merge_history` | 58 |
+> | `count_sessions` | 5 |
+> | `item_catalog` | 1 |
+> | `price_history` | 1 |
+>
+> Mappings: `STL - MO - St Louis Cardinals` → `STL - MO` (80 rows) and `CIN - OH - Cincinnati Reds` → `CIN - OH` (17 rows). The full scope surfaced during the INV-3 dual-write end-to-end test on 2026-06-04, which caught a Sheets-vs-PG `sort_order` divergence on a new sub-zone insert under `STL - MO` Walk-in Cooler (Sheets returned 0, PG returned 5) — root-caused to the intranet's asymmetric `accountMatch` failing on a short-query against a long-row. Fixed in two phases: the INV-3 backfill canonicalized the PG side per the inv-1 CHECK constraint, then `scripts/canonicalize-inventory-accounts.mjs` canonicalized the Sheets side via RAW `batchUpdate` (97 cells across the 5 tabs above). **Status: COMPLETE** — 97/97 rows fixed in prod, 0 long-form remaining per the script's built-in re-scan.
 
 ### Vendor resolution (for the primaryVendor FK question)
 34 distinct `primaryVendor` strings in active catalog vs 33 vendor names in PG `vendors` (Module 5 live). **5 do not exact-match** and need fuzzy resolution: `Test Vendor`, `Freshpoint` (PG: "Fresh Point"), `Cozzini Bros` + `Cozzini Brothers` (spelling split), `Samuels Seafoos` (typo of "Samuels Seafood").
@@ -122,7 +134,7 @@ For each pattern/table: how it works today (Sheets-era), what PG/Supabase best p
 
 **T1 — inventory_items (renamed from item_catalog)**
 - Drop dead/reserved/padding columns (padding already gone; confirm no dead cols remain). **DO NOW.**
-- `account` → FK + canonical label; retire `accountMatch`. **`[DECISION 6]`** (lean: yes, fix the 1 stray row, add CHECK/FK).
+- `account` → FK + canonical label; retire `accountMatch`. **`[DECISION 6]`** (lean: yes, fix the long-form rows, add CHECK/FK — scope corrected to 97 rows across 5 tabs, see Correction under §Account labels).
 - `primaryVendor` → FK vs freeform. **`[DECISION 2]`**.
 - `priceAtLastCount` (0/3666 filled) → keep the column, or drop and derive from a join to count_items at read time. **`[DECISION 5]`**.
 - `status` enum (per P7). **DO NOW**, pending the 30-row investigation.
@@ -193,7 +205,7 @@ Migrate clean, not messy-then-clean. The 2,270 redundant rows are deduped as par
 Column removed; "price at last count" is derived via join to `count_items` at read time. Eliminates a denormalized, drift-prone column that only a never-fired write path populated (0/3,666 today).
 
 **[DECISION 6] — account identity → canonical + enforced.**
-CHECK/FK enforces canonical short-form account labels; the 1 stray full-form row (`STL - MO - St Louis Cardinals`) is fixed in backfill; **`accountMatch` is retired** (the DB constraint makes fuzzy matching unnecessary).
+CHECK/FK enforces canonical short-form account labels on the PG side; the long-form rows (97 across 5 inventory tabs — see Correction under §Account labels) were canonicalized in two phases: the INV-3 backfill canonicalized the PG side per the CHECK constraint, then `scripts/canonicalize-inventory-accounts.mjs` (run 2026-06-04) closed the Sheets-side gap after the dual-write E2E test surfaced the full scope; **`accountMatch` is retired** (the DB constraint makes fuzzy matching unnecessary).
 
 **[DECISION 7] — free-wins batch → YES, with two refinements from the investigations.**
 - **`count_items.extended_price`** = `GENERATED ALWAYS AS (quantity * price_at_count) STORED`.
@@ -234,7 +246,7 @@ The pre-launch safety net (lesson of the 2026-06-03 silent gap). Doesn't block s
 30 handlers route through `dataStore/inventory.js`. `accountMatch` removed (D6). `handleDedupCatalog` retired. `opsUtils` cache becomes a no-op (D8). The 7 stub handlers stay stubs (resolver deferred per D9). `priceAtLastCount` reads become a join (D5).
 
 **INV-3 — Backfill (~6–8h).**
-8 tables in dependency order. Includes: vendor_id resolution for all 34 strings (D2), alias dedup + learnedBy/source collapse preserving the 408 (D4), the 1 stray account-label fix (D6), and the 30 "other" inactive rows mapped to **`status='archived'`** with their col-Q timestamp moved to `updated_at` (per Investigation 1). `count_sessions`/`count_items` carry trivial volume (5 drafts, 147 items) so preservation risk is near-zero.
+8 tables in dependency order. Includes: vendor_id resolution for all 34 strings (D2), alias dedup + learnedBy/source collapse preserving the 408 (D4), the account-label canonicalization (D6 — scope corrected post-INV-3 to 97 rows across 5 tabs, see §Account labels Correction), and the 30 "other" inactive rows mapped to **`status='archived'`** with their col-Q timestamp moved to `updated_at` (per Investigation 1). `count_sessions`/`count_items` carry trivial volume (5 drafts, 147 items) so preservation risk is near-zero.
 
 ### Parallel track
 - **Reconciliation alarm (D10)** — buildable now against PG, in parallel with INV-1/2. Pre-go-live requirement.
