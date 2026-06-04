@@ -97,6 +97,35 @@ export {
   insertAILineItems,
 } from "./invoice.js";
 
+// Inventory module (Stage 1 module 7 / INV-2 - DORMANT until INV-3 backfill).
+// Reads stay on Sheets until Module 8 (cron migration); writes dual to PG once
+// inventory tabs are added to DUAL_WRITE_TABLES.
+export {
+  getInventoryBootstrap,
+  getCatalogForAccount,
+  getCatalogForMatching,
+  getRecentMergeHistory,
+  createCountSession,
+  appendCountItems,
+  submitCountSession,
+  createInventoryItem,
+  verifyItemPrice,
+  moveItemsBulk,
+  mergeInventoryItems,
+  logKeepSeparate,
+  acceptReviewItem,
+  deleteReviewItem,
+  excludeItem,
+  saveStorageLocations,
+  saveLocationSortOrder,
+  addStorageSubZone,
+  updateStorageLocation,
+  deactivateStorageLocation,
+  updateCatalogItem,
+  archiveItem,
+  reactivateItem,
+} from "./inventory.js";
+
 // Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no
 // cutover flags, no dispatch primitives). Module name: 'playbook'.
 export {

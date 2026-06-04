@@ -23,7 +23,6 @@ import {
   handleSaveSortOrder,
   handleAdminCorrect,
   handleScan,
-  handleDedupCatalog,
   handleAISimilarityCheck,
   handleKeepSeparate,
   handleReviewAccept,
@@ -104,7 +103,10 @@ export async function POST(request) {
         }
         return NextResponse.json(await handleAdminCorrect(body));
       case "scan": return NextResponse.json(await handleScan(body));
-      case "dedup-catalog": return NextResponse.json(await handleDedupCatalog(body));
+      // 'dedup-catalog' action retired with INV-2 / audit BR4 (PG UNIQUE +
+      // merge_inventory_items() RPC replace it). Frontend stopped calling
+      // this; if any caller remains, the default branch returns the
+      // standard unknown-action error.
       case "ai-similarity-check": return NextResponse.json(await handleAISimilarityCheck(body));
       case "keep-separate": return NextResponse.json(await handleKeepSeparate(body));
       case "review-accept": return NextResponse.json(await handleReviewAccept(body));
