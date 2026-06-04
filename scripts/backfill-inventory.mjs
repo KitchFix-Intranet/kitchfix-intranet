@@ -42,6 +42,20 @@ function getArg(name, fallback) {
 // Dry-run defaults TRUE. Only "--dry-run=false" turns writes on.
 const DRY_RUN = getArg("dry-run", "true").toLowerCase() !== "false";
 
+// Resume mode. --start-phase=N skips inserts for phases 1..N-1 but still
+// runs their Sheets read + map-build so downstream phases get the same
+// derived state (vendorResolutionByString, insertedItemIds, ...). The
+// precheck likewise only enforces "table empty" for phases >= N.
+// Use case: a prior run committed phases 1..N-1 and aborted in N.
+const START_PHASE = parseInt(getArg("start-phase", "1"), 10);
+if (!(START_PHASE >= 1 && START_PHASE <= 7)) {
+  console.error(`[backfill] --start-phase must be 1..7 (got ${START_PHASE})`);
+  process.exit(2);
+}
+function writeOk(phaseNum) {
+  return !DRY_RUN && phaseNum >= START_PHASE;
+}
+
 // ── Env / clients ──
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -214,7 +228,7 @@ async function phaseStorageLocations() {
   console.log(`Sub-zone sample:`);
   for (const r of sample(subRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(1)) {
     // Insert parents first.
     if (parentRows.length) {
       const { error } = await supa.from("storage_locations").insert(parentRows);
@@ -224,6 +238,8 @@ async function phaseStorageLocations() {
       const { error } = await supa.from("storage_locations").insert(subRows);
       if (error) throw new Error(`storage_locations subs: ${error.message}`);
     }
+  } else if (!DRY_RUN) {
+    console.log(`  (skip write: START_PHASE=${START_PHASE}, phase 1 already populated)`);
   }
   summary.push({ table: "storage_locations", wouldInsert: parentRows.length + subRows.length });
   return new Set([...parentRows, ...subRows].map((r) => r.id));
@@ -421,7 +437,7 @@ async function phaseInventoryItems({ insertedLocationIds }) {
   console.log(`Sample:`);
   for (const r of sample(pgItemRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(2)) {
     if (samuelsAliasNeeded && samuelsSeafoodId) {
       const { error } = await supa.from("vendor_aliases").insert({
         vendor_id: samuelsSeafoodId,
@@ -437,6 +453,8 @@ async function phaseInventoryItems({ insertedLocationIds }) {
       const { error } = await supa.from("inventory_items").insert(pgItemRows.slice(i, i + CHUNK));
       if (error) throw new Error(`inventory_items insert chunk: ${error.message}`);
     }
+  } else if (!DRY_RUN) {
+    console.log(`  (skip write: START_PHASE=${START_PHASE}, phase 2 already populated)`);
   }
   summary.push({ table: "inventory_items", wouldInsert: pgItemRows.length });
 
@@ -534,12 +552,14 @@ async function phaseItemAliases({ insertedItemIds }) {
   console.log(`Sample:`);
   for (const r of sample(pgAliasRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(3)) {
     const CHUNK = 500;
     for (let i = 0; i < pgAliasRows.length; i += CHUNK) {
       const { error } = await supa.from("item_aliases").insert(pgAliasRows.slice(i, i + CHUNK));
       if (error) throw new Error(`item_aliases insert chunk: ${error.message}`);
     }
+  } else if (!DRY_RUN) {
+    console.log(`  (skip write: START_PHASE=${START_PHASE}, phase 3 already populated)`);
   }
   summary.push({ table: "item_aliases", wouldInsert: pgAliasRows.length });
 }
@@ -635,7 +655,7 @@ async function phaseCountSessions({ insertedItemIds, insertedLocationIds }) {
   console.log(`  Sample:`);
   for (const r of sample(pgCiRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(4)) {
     if (pgSessionRows.length) {
       const { error } = await supa.from("count_sessions").insert(pgSessionRows);
       if (error) throw new Error(`count_sessions: ${error.message}`);
@@ -644,6 +664,8 @@ async function phaseCountSessions({ insertedItemIds, insertedLocationIds }) {
       const { error } = await supa.from("count_items").insert(pgCiRows);
       if (error) throw new Error(`count_items: ${error.message}`);
     }
+  } else if (!DRY_RUN) {
+    console.log(`  (skip write: START_PHASE=${START_PHASE}, phase 4 already populated)`);
   }
   summary.push({ table: "count_sessions", wouldInsert: pgSessionRows.length });
   summary.push({ table: "count_items",    wouldInsert: pgCiRows.length });
@@ -680,6 +702,12 @@ async function phasePriceHistory({ vendorResolutionByString, insertedItemIds }) 
 
   let droppedByItem = 0, droppedByVendor = 0, droppedByAccount = 0, sourceStrays = 0;
   let invoiceResolved = 0, invoiceNull = 0;
+  let droppedByA1Dupe = 0;
+  // PG UNIQUE key is (item_id, source_or_invoice_id, price). Pre-dedup
+  // here so A1 within-run cron duplicates (same key, same price) are
+  // dropped client-side rather than failing the chunk. B1 multi-line
+  // entries (same item + same invoice, different price) survive.
+  const seenPgKeys = new Set();
   const pgPriceRows = [];
   for (const r of rows) {
     const itemId = asStr(r[PRICE_IDX.itemId]);
@@ -723,14 +751,27 @@ async function phasePriceHistory({ vendorResolutionByString, insertedItemIds }) 
       invoiceNull++;
     }
 
+    const price                = parseNum(r[PRICE_IDX.price]) || 0;
+    const resolvedSourceOrInv  = sourceOrInvoiceId || `${source}:${itemId}:${rows.indexOf(r)}`;
+    const dedupKey             = `${itemId}::${resolvedSourceOrInv}::${price}`;
+    if (seenPgKeys.has(dedupKey)) {
+      // Adjust the invoice-resolution tally so it tracks ACCEPTED rows
+      // (we already counted this row before catching the dupe).
+      if (source === "invoice_ocr" && clientUuidToInvoiceId.has(sourceOrInvoiceId)) invoiceResolved--;
+      else                                                                         invoiceNull--;
+      droppedByA1Dupe++;
+      continue;
+    }
+    seenPgKeys.add(dedupKey);
+
     pgPriceRows.push({
       item_id:               itemId,
       account,
       vendor_id:             vendorRes.vendorId,
-      price:                 parseNum(r[PRICE_IDX.price]) || 0,
+      price,
       effective_date:        asStr(r[PRICE_IDX.effectiveDate]) || asStr(r[PRICE_IDX.recordedAt])?.slice(0, 10) || null,
       invoice_id:            invoiceId,
-      source_or_invoice_id:  sourceOrInvoiceId || `${source}:${itemId}:${rows.indexOf(r)}`,
+      source_or_invoice_id:  resolvedSourceOrInv,
       source,
       recorded_at:           asStr(r[PRICE_IDX.recordedAt]) || undefined,
     });
@@ -738,13 +779,13 @@ async function phasePriceHistory({ vendorResolutionByString, insertedItemIds }) 
 
   console.log(`Sheets rows:          ${rows.length}`);
   console.log(`Would insert:         ${pgPriceRows.length}`);
-  console.log(`Dropped:              item_missing=${droppedByItem}, vendor_unresolved=${droppedByVendor}, account_fail=${droppedByAccount}, source_stray=${sourceStrays}`);
+  console.log(`Dropped:              item_missing=${droppedByItem}, vendor_unresolved=${droppedByVendor}, account_fail=${droppedByAccount}, source_stray=${sourceStrays}, a1_dupe=${droppedByA1Dupe}`);
   console.log(`invoice_id resolved:  ${invoiceResolved} (via invoice_submissions.client_uuid match)`);
   console.log(`invoice_id NULL:      ${invoiceNull} (manual sources + unresolvable invoice refs)`);
   console.log(`Sample:`);
   for (const r of sample(pgPriceRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(5)) {
     const CHUNK = 500;
     for (let i = 0; i < pgPriceRows.length; i += CHUNK) {
       const { error } = await supa.from("price_history").insert(pgPriceRows.slice(i, i + CHUNK));
@@ -855,7 +896,7 @@ async function phaseReviewQueue({ insertedItemIds }) {
   console.log(`Sample:`);
   for (const r of sample(pgRqRows)) console.log(`  ${JSON.stringify(r)}`);
 
-  if (!DRY_RUN) {
+  if (writeOk(6)) {
     const CHUNK = 500;
     for (let i = 0; i < pgRqRows.length; i += CHUNK) {
       const { error } = await supa.from("review_queue").insert(pgRqRows.slice(i, i + CHUNK));
@@ -958,7 +999,7 @@ async function phaseMergeHistory({ insertedItemIds }) {
     for (const j of junction) console.log(`  junction: ${JSON.stringify(j)}`);
   }
 
-  if (!DRY_RUN) {
+  if (writeOk(7)) {
     for (const { header, junction } of pgHeaders) {
       const { data: mh, error } = await supa
         .from("merge_history")
@@ -978,30 +1019,130 @@ async function phaseMergeHistory({ insertedItemIds }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Resume integrity gate: verify committed PG state matches recomputed maps.
+// ════════════════════════════════════════════════════════════════════════════
+
+async function fetchAllIds(table) {
+  const out = new Set();
+  let from = 0; const PAGE = 1000;
+  while (true) {
+    const { data, error } = await supa.from(table).select("id").range(from, from + PAGE - 1);
+    if (error) throw new Error(`${table} id fetch: ${error.message}`);
+    if (!data?.length) break;
+    for (const r of data) out.add(r.id);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return out;
+}
+
+function setDiff(a, b) {
+  const out = [];
+  for (const x of a) if (!b.has(x)) out.push(x);
+  return out;
+}
+
+async function assertResumeMapsMatchPG({ insertedLocationIds, insertedItemIds }) {
+  header("RESUME INTEGRITY GATE");
+
+  const pgLocs  = await fetchAllIds("storage_locations");
+  const pgItems = await fetchAllIds("inventory_items");
+
+  const locsInPgNotInMap = setDiff(pgLocs, insertedLocationIds);
+  const locsInMapNotInPg = setDiff(insertedLocationIds, pgLocs);
+  const itemsInPgNotInMap = setDiff(pgItems, insertedItemIds);
+  const itemsInMapNotInPg = setDiff(insertedItemIds, pgItems);
+
+  function row(label, pgSet, mapSet, missingFromMap, missingFromPg) {
+    const match = pgSet.size === mapSet.size && missingFromMap.length === 0 && missingFromPg.length === 0;
+    console.log(`  ${label.padEnd(20)} PG=${String(pgSet.size).padStart(5)}  recomputed map=${String(mapSet.size).padStart(5)}  in_pg_not_in_map=${missingFromMap.length}  in_map_not_in_pg=${missingFromPg.length}  ${match ? "MATCH" : "MISMATCH"}`);
+    return match;
+  }
+
+  const locOk  = row("storage_locations",  pgLocs,  insertedLocationIds, locsInPgNotInMap,  locsInMapNotInPg);
+  const itemOk = row("inventory_items",    pgItems, insertedItemIds,     itemsInPgNotInMap, itemsInMapNotInPg);
+
+  if (!locOk || !itemOk) {
+    console.error("");
+    console.error("RESUME INTEGRITY GATE: MISMATCH - aborting before Phase 5.");
+    console.error("");
+    if (locsInPgNotInMap.length)  console.error(`  storage_locations rows in PG but NOT in recomputed map (first 10):  ${locsInPgNotInMap.slice(0,10).join(", ")}`);
+    if (locsInMapNotInPg.length)  console.error(`  storage_locations rows in recomputed map but NOT in PG (first 10):  ${locsInMapNotInPg.slice(0,10).join(", ")}`);
+    if (itemsInPgNotInMap.length) console.error(`  inventory_items   rows in PG but NOT in recomputed map (first 10):  ${itemsInPgNotInMap.slice(0,10).join(", ")}`);
+    if (itemsInMapNotInPg.length) console.error(`  inventory_items   rows in recomputed map but NOT in PG (first 10):  ${itemsInMapNotInPg.slice(0,10).join(", ")}`);
+    console.error("");
+    console.error("Investigate before proceeding - someone (manual cleanup, cron writes, etc) drifted the");
+    console.error("committed state away from what Sheets currently produces. Phase 5's FKs can't be trusted");
+    console.error("until the maps and PG agree.");
+    process.exit(2);
+  }
+  console.log("");
+  console.log("Integrity gate PASS: committed PG state matches recomputed maps exactly.");
+  console.log("Phase 5+ FKs are safe.");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Main
 // ════════════════════════════════════════════════════════════════════════════
 
 async function main() {
   console.log(``);
   console.log(`========================================================================`);
-  console.log(`  INV-3 BACKFILL  ${DRY_RUN ? "(DRY-RUN — NO WRITES)" : "(REAL RUN — WRITES ENABLED)"}`);
+  console.log(`  INV-3 BACKFILL  ${DRY_RUN ? "(DRY-RUN - NO WRITES)" : "(REAL RUN - WRITES ENABLED)"}${START_PHASE > 1 ? `  [RESUME from phase ${START_PHASE}]` : ""}`);
   console.log(`========================================================================`);
 
-  // Pre-check: assert PG inventory tables are empty (else the apply was already partial).
-  const inv1Tables = ["storage_locations", "inventory_items", "item_aliases", "count_sessions", "count_items", "price_history", "review_queue", "merge_history", "merge_history_items"];
-  for (const t of inv1Tables) {
+  // Pre-check: assert PG inventory tables are empty for phases the run
+  // will actually write to. With --start-phase=N, phases 1..N-1 are
+  // expected to already be populated; only N..7's tables must be empty.
+  const phaseTables = [
+    [1, "storage_locations"],
+    [2, "inventory_items"],
+    [3, "item_aliases"],
+    [4, "count_sessions"],
+    [4, "count_items"],
+    [5, "price_history"],
+    [6, "review_queue"],
+    [7, "merge_history"],
+    [7, "merge_history_items"],
+  ];
+  console.log(`Pre-check (START_PHASE=${START_PHASE}):`);
+  for (const [phase, t] of phaseTables) {
     const { count } = await supa.from(t).select("*", { count: "exact", head: true });
-    if ((count || 0) > 0) {
-      console.error(`PG inventory table ${t} has ${count} rows. Backfill expects empty. Aborting.`);
-      process.exit(2);
+    const c = count || 0;
+    if (phase < START_PHASE) {
+      console.log(`  phase ${phase}  ${t.padEnd(22)} ${c} rows (resume mode, expected populated)`);
+    } else {
+      if (c > 0) {
+        console.error(`  phase ${phase}  ${t} has ${c} rows. Backfill expects empty for phase >= START_PHASE. Aborting.`);
+        process.exit(2);
+      }
+      console.log(`  phase ${phase}  ${t.padEnd(22)} EMPTY OK`);
     }
   }
-  console.log(`Pre-check: all 9 PG inventory tables EMPTY.`);
 
   const insertedLocationIds = await phaseStorageLocations();
   const { vendorResolutionByString, insertedItemIds } = await phaseInventoryItems({ insertedLocationIds });
   await phaseItemAliases({ insertedItemIds });
   await phaseCountSessions({ insertedItemIds, insertedLocationIds });
+
+  // ── Resume integrity gate ──
+  // When --start-phase > 1, Phase 5+ FKs (price_history.item_id,
+  // count_items.item_id, etc) depend on the committed inventory_items
+  // and storage_locations EXACTLY matching the maps this run just
+  // recomputed from Sheets. If anyone edited those tables since the
+  // first run (manual cleanup, additional cron writes, dropped rows),
+  // the recomputed maps and PG would disagree and Phase 5's FKs would
+  // be silently wrong (some inserts would FK-fail; worse, some would
+  // succeed against rows that have since drifted in PG).
+  //
+  // Read-only set comparison. Aborts on any mismatch.
+  if (START_PHASE > 1) {
+    await assertResumeMapsMatchPG({
+      insertedLocationIds,
+      insertedItemIds,
+    });
+  }
+
   await phasePriceHistory({ vendorResolutionByString, insertedItemIds });
   await phaseReviewQueue({ insertedItemIds });
   await phaseMergeHistory({ insertedItemIds });
