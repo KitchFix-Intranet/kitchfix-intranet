@@ -123,6 +123,30 @@ async function safeRead(spreadsheetId, tabName) {
   }
 }
 
+// Read a tab with up to maxRetries on errors. The retry-with-backoff
+// closes the silent-failure mode the original per_account loop had: a
+// transient Google Sheets API blip (429 rate limit, momentary 5xx,
+// network hiccup) was previously swallowed as zero rows, undercounting
+// the table and tripping a false drift alarm on 2026-06-05 (ai_line_items
+// reported 2965 Sheets vs 7575 PG when the real Sheets count was ~7680
+// across all 9 tabs). Retries cover most transient blips at low cost
+// (500ms then 1500ms = up to 2s extra per persistently-failing tab).
+async function readTabWithRetry(spreadsheetId, tabName, maxRetries = 2) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await safeRead(spreadsheetId, tabName);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxRetries) {
+        const delayMs = attempt === 0 ? 500 : 1500;
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 // List all tab (sheet) names in a spreadsheet. Used for ai_line_items and
 // gl_codes which fan into one tab per kitchen account.
 async function listTabs(spreadsheetId) {
@@ -524,23 +548,40 @@ async function countSheetsByMode(config) {
 
   if (config.sheetsMode === "per_account") {
     const tabs = await listTabs(spreadsheetId);
-    // Skip non-data tabs (headers, template) by convention. The cron and
-    // intranet readers treat every tab as a per-account data tab.
-    let total = 0; let nonEmpty = 0;
+    // Per-tab read with retry. Tabs that still fail after retries are
+    // tracked (NOT silently counted as zero) and surfaced as an error
+    // for the whole table - a partial per-account read can never be
+    // safely compared against a complete PG count, because the drift
+    // direction would be ambiguous (could be a real PG-side surplus,
+    // could be a Sheets-side under-read). check1's outer try/catch
+    // records the throw below as { status: "error" } and the digest
+    // renders the table in the *⚠️ CHECK ERRORS* section, not as drift.
+    let total = 0; let read = 0;
+    const failed = [];
     for (const t of tabs) {
       try {
-        const { rows } = await safeRead(spreadsheetId, t);
+        const { rows } = await readTabWithRetry(spreadsheetId, t);
         total += rows.length;
-        if (rows.length) nonEmpty++;
-      } catch {
-        // Skip unreadable tab (some spreadsheets have a hidden template tab)
+        read++;
+      } catch (e) {
+        failed.push({ tab: t, error: String(e?.message || e).slice(0, 160) });
       }
+    }
+    if (failed.length > 0) {
+      const failedList = failed.map((f) => `"${f.tab}"`).join(", ");
+      throw new Error(
+        `per_account read partial: ${tabs.length} tabs, ${read} read OK ` +
+        `(${total} rows seen, LOWER BOUND - not compared), ${failed.length} ` +
+        `FAILED after retries: ${failedList}. ` +
+        `Sample error: ${failed[0].error}. ` +
+        `Re-run the alarm; if the same tabs persistently fail, investigate Sheets API.`
+      );
     }
     return {
       sheetsAll:  total,
       sheetsLive: total,
       newestTs:   null,
-      modeNote:   `${tabs.length} tabs (${nonEmpty} non-empty)`,
+      modeNote:   `${tabs.length} tabs (all read)`,
     };
   }
 
