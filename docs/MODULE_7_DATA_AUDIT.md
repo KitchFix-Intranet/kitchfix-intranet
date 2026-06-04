@@ -195,11 +195,12 @@ Column removed; "price at last count" is derived via join to `count_items` at re
 **[DECISION 6] — account identity → canonical + enforced.**
 CHECK/FK enforces canonical short-form account labels; the 1 stray full-form row (`STL - MO - St Louis Cardinals`) is fixed in backfill; **`accountMatch` is retired** (the DB constraint makes fuzzy matching unnecessary).
 
-**[DECISION 7] — free-wins batch → YES to all.**
-- Generated columns: `count_sessions.grand_total`, `count_items.extended_price`.
-- `UNIQUE (item_id, source_or_invoice_id)` + `INSERT ... ON CONFLICT DO NOTHING` on `price_history` (cron idempotency moves to the DB).
-- `merge_inventory_items()` **stored proc** (atomic transaction), mirroring the live `merge_vendors()` precedent.
-- `status` enum (`active`/`archived`/`excluded`) replacing the `active` boolean + `status` string pair.
+**[DECISION 7] — free-wins batch → YES, with two refinements from the investigations.**
+- **`count_items.extended_price`** = `GENERATED ALWAYS AS (quantity * price_at_count) STORED`.
+- **count_sessions totals → DERIVED, NOT STORED (Option B).** Investigation 3 confirmed the source of truth is `count_items.extended_price` joined to `inventory_items.category`; the 5 stored category totals were a Sheets-era workaround (Sheets can't aggregate cross-tab). In PG, all 6 totals (5 categories + grand_total) live in the **bootstrap view**, derived from count_items. Nothing is stored, so nothing can drift. `handleCountSubmit` collapses to a pure status flip (draft → submitted + submitted_by + submitted_at). Needs an index on `count_items(session_id)`; trivial at current/expected scale. (The "as-submitted" snapshot is preserved implicitly by the append-only count_items ledger — latest locationSaveId wins.) *This overrides the original "grand_total generated column" wording in favor of full derivation.*
+- `UNIQUE (item_id, source_or_invoice_id)` + `INSERT ... ON CONFLICT DO NOTHING` on `price_history`.
+- `merge_inventory_items()` **stored proc** (atomic transaction), mirroring live `merge_vendors()`.
+- **`status` enum (`active`/`archived`/`excluded`) AND a separate `updated_at TIMESTAMPTZ`.** Investigation 1 found col Q is a **dual-meaning column**: the cron writes a timestamp (treats it as updatedAt), the intranet writes a status string. INV-1 splits these into two properly-typed columns. The 30 "other" inactive rows (all cron-created, dedup-deactivated) map to **`status='archived'`** in backfill, their col-Q timestamp moving to `updated_at`. *(Module 8 cron change required: stop writing a timestamp into the status column post-migration — logged in the M8 track below.)*
 
 **[DECISION 8] — bootstrap → PG views, MECHANICAL ONLY.**
 Build views for the mechanical derivations (price movers, current-count window, category rollups). The JS cache layer disappears. **No materialized views / heavier denormalization** unless a real read-latency problem appears (no premature optimization).
@@ -210,10 +211,10 @@ The resolver (currently stubbed) is a post-cutover **feature**, not a migration 
 **[DECISION 10] — reconciliation alarm → BEFORE go-live, PARALLEL-ABLE.**
 The pre-launch safety net (lesson of the 2026-06-03 silent gap). Doesn't block schema work; can be built alongside the migration. Must be in place before chefs count against this catalog.
 
-### Investigations (CC tasks, run before/during INV-1)
-- What are the 30 "other" inactive `item_catalog` rows? (Determines status-enum mapping.)
-- What is `zone_corrections` — read by anything? Safe to drop, or must it migrate?
-- Confirm the exact `grand_total` derivation (generated over the 5 stored category totals vs aggregate over `count_items`).
+### Investigations (RESOLVED 2026-06-04)
+- **The 30 "other" inactive item_catalog rows → RESOLVED.** All cron-created (`ai_cron`, `linkedToInvoice=TRUE`), deactivated by the cron's dedup mode. The "other" status is actually a **timestamp the cron wrote into col Q** (which the cron treats as `updatedAt` while the intranet treats it as a status enum — a dual-meaning column). Fix: split col Q into `status` + `updated_at` (see D7). Backfill maps these 30 to `status='archived'`.
+- **`zone_corrections` → DROP from INV-1.** Vestigial: 0 rows, one write site (`handleReviewAccept`), no reader in either repo. Resurrect with a real schema if/when the AI-training corpus becomes a feature (alongside the deferred resolver, D9). INV-1 = 8 core tables + the `merge_history_items` junction.
+- **`grand_total` derivation → RESOLVED to Option B (derive everything).** See D7.
 
 ---
 
@@ -224,13 +225,13 @@ The pre-launch safety net (lesson of the 2026-06-03 silent gap). Doesn't block s
 ### Core migration (the 3 PRs, ~30–40h)
 
 **INV-1 — Schema + dormant adapters (~10–14h).**
-9 PG tables + 1 junction (`merge_history_items`). Embeds the resolved decisions: vendor_id FK (D2), account CHECK (D6), generated columns + UNIQUE/ON CONFLICT + status enums (D7), self-FK on locations, FK `price_history.invoice_id → invoice_submissions`, RLS-ready account identity (D1). `merge_inventory_items()` stored proc (D7/P4). PG views for bootstrap derivations (D8). `dataStore/inventory.js` adapters dormant behind cutover flags. **No behavior change yet.**
+**8 core tables + 1 junction (`merge_history_items`)** — `zone_corrections` dropped per investigation (vestigial). The 8: `inventory_items` (renamed from item_catalog), `item_aliases`, `storage_locations`, `count_sessions`, `count_items`, `price_history`, `review_queue`, `merge_history`. Embeds the resolved decisions: vendor_id FK (D2), account CHECK (D6), `count_items.extended_price` generated + status enum **and separate `updated_at`** (D7), totals **derived via view, not stored** (D7 Option B), self-FK on locations, FK `price_history.invoice_id → invoice_submissions`, UNIQUE/ON CONFLICT on price_history, RLS-ready account identity (D1). `merge_inventory_items()` stored proc (D7/P4). PG views for bootstrap derivations incl. the 6 count totals and current-count window (D8). `dataStore/inventory.js` adapters dormant behind cutover flags. **No behavior change yet.**
 
 **INV-2 — Handler rewire (~14–18h).**
 30 handlers route through `dataStore/inventory.js`. `accountMatch` removed (D6). `handleDedupCatalog` retired. `opsUtils` cache becomes a no-op (D8). The 7 stub handlers stay stubs (resolver deferred per D9). `priceAtLastCount` reads become a join (D5).
 
 **INV-3 — Backfill (~6–8h).**
-9 tables in dependency order. Includes: vendor_id resolution for all 34 strings (D2), alias dedup + learnedBy/source collapse preserving the 408 (D4), the 1 stray account-label fix (D6), the 30 "other" inactive rows mapped to the status enum (pending investigation).
+8 tables in dependency order. Includes: vendor_id resolution for all 34 strings (D2), alias dedup + learnedBy/source collapse preserving the 408 (D4), the 1 stray account-label fix (D6), and the 30 "other" inactive rows mapped to **`status='archived'`** with their col-Q timestamp moved to `updated_at` (per Investigation 1). `count_sessions`/`count_items` carry trivial volume (5 drafts, 147 items) so preservation risk is near-zero.
 
 ### Parallel track
 - **Reconciliation alarm (D10)** — buildable now against PG, in parallel with INV-1/2. Pre-go-live requirement.
@@ -260,4 +261,6 @@ The pre-launch safety net (lesson of the 2026-06-03 silent gap). Doesn't block s
 8. Module 7 plan is 3 PRs (not 5).
 9. No MODULE_7_DATA_AUDIT.md existed (this fills it).
 10. No inventory DDL exists (the pr-7-*.sql files are OPD).
-11. 30 "other" inactive catalog rows — undocumented status class.
+11. **col Q is a dual-meaning column** — cron writes a timestamp (updatedAt), intranet writes a status string; INV-1 splits into `status` + `updated_at`. The 30 "other" inactive rows are the visible symptom.
+12. **`zone_corrections` is vestigial** — 0 rows, one write site, no reader; dropped from INV-1.
+13. **count totals are derived, not stored, in PG** (Option B) — the 5 stored category totals were a Sheets cross-tab-aggregation workaround that PG retires.
