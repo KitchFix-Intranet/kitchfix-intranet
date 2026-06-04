@@ -72,7 +72,26 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE merge_history_action AS ENUM ('merge', 'keep_separate', 'link', 'exclude');
+  CREATE TYPE merge_history_action AS ENUM (
+    'merge',          -- two items combined; keeper kept, dupes archived
+    'keep_separate',  -- explicit "do not merge these" decision (kept apart on purpose)
+    'link',           -- relate without merging (e.g. variety grouping)
+    'exclude',        -- never re-import (cron honors as a permanent skip)
+    'archive',        -- soft-delete; semantically distinct from exclude because archive is reversible
+    'reactivate',     -- undo of archive
+    'review_delete'   -- removed from review_queue with a reason; preserves the audit
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- D-Delta-3: category is enforced to the 5-bucket scheme money rollups
+-- key on. Verified against the 3,666 live item_catalog rows on 2026-06-04:
+-- ZERO strays - every existing value fits one of the five. Money-driving
+-- views (v_count_session_totals) match category by exact string today;
+-- the enum makes a silent misbucket impossible.
+DO $$ BEGIN
+  CREATE TYPE inventory_category AS ENUM (
+    'Food', 'Packaging', 'Supplies', 'Snacks', 'Beverages'
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -106,7 +125,11 @@ CREATE TABLE IF NOT EXISTS inventory_items (
                       ),
 
   name                TEXT NOT NULL,
-  category            TEXT,                 -- normalized to bootstrap's 5-bucket scheme by the app for now; promote to enum later if useful
+
+  -- D-Delta-3: enum, not text. Money-driving rollups can no longer
+  -- silently misbucket. The 5 buckets matched 100% of 3,666 live rows
+  -- in the 2026-06-04 verification.
+  category            inventory_category,
   unit                TEXT,
 
   -- Soft FK; ON DELETE SET NULL so deactivating a zone does not delete the item.
@@ -118,16 +141,16 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   -- 'Test Vendor' rows are skipped (dev artifact).
   vendor_id           TEXT NOT NULL REFERENCES vendors(id),
 
-  -- "Most recent price snapshot" cache for bootstrap; populated on write
-  -- by handleVerifyPrice / handleAddItem / cron promotion. Authoritative
-  -- ledger is price_history. (Keep as stored for read-path simplicity;
-  -- the audit did not push these to view-derived.)
-  last_price          NUMERIC,
-  last_price_date     DATE,
-  last_price_vendor   TEXT,                 -- display name; FK NOT applied because last vendor may differ from primary
+  -- D-Delta-2: last_price / last_price_date / last_price_vendor REMOVED
+  -- as stored columns. They were "two values that must agree" cache
+  -- columns on top of price_history (the authoritative ledger), the
+  -- same drift class we eliminated for count_sessions totals (D7
+  -- Option B). Same philosophy applied: derive at read time from
+  -- price_history in v_inventory_items_full. Index supporting the
+  -- derivation is added on price_history below.
 
   -- D5: priceAtLastCount column DROPPED. Read-time derive from
-  -- count_items via the v_inventory_items_with_price_at_last_count view.
+  -- count_items via the v_inventory_items_full view.
 
   -- D7: status enum replaces the legacy active boolean + status string pair.
   status              inventory_item_status NOT NULL DEFAULT 'active',
@@ -366,6 +389,18 @@ CREATE TABLE IF NOT EXISTS price_history (
   UNIQUE (item_id, source_or_invoice_id)
 );
 
+-- D-Delta-2 supporting index. Keys on (item_id, recorded_at DESC) so
+-- the derived "last_price" lookup in v_inventory_items_full is an
+-- index scan. Chose recorded_at over effective_date because:
+--   (1) the legacy bootstrap sorts price_history by recorded_at first,
+--       falling back to effective_date - so "latest price" today already
+--       means "most recently recorded";
+--   (2) defensive against backfill: importing historical data with an
+--       old effective_date should NOT supersede a live cron write from
+--       today, but it WOULD if we sorted by effective_date;
+--   (3) chef-friendly: handleVerifyPrice (manual) is the most-recent
+--       insight even if the vendor's effective_date predates the cron's
+--       last invoice. recorded_at honors that.
 CREATE INDEX IF NOT EXISTS price_history_item_recorded_idx
   ON price_history (item_id, recorded_at DESC);
 
@@ -534,6 +569,7 @@ SECURITY INVOKER
 AS $$
 DECLARE
   v_merge_id              uuid;
+  v_existing_merge_id     uuid;
   v_keeper                inventory_items%ROWTYPE;
   v_account               text;
   v_aliases_reassigned    int := 0;
@@ -541,6 +577,7 @@ DECLARE
   v_dupes_archived        int := 0;
   v_dupe_id               text;
   v_dupe_row              inventory_items%ROWTYPE;
+  v_dupe_count            int := COALESCE(array_length(p_dupe_ids, 1), 0);
 BEGIN
   -- Validate keeper.
   SELECT * INTO v_keeper FROM inventory_items WHERE id = p_keeper_id;
@@ -551,6 +588,46 @@ BEGIN
     RAISE EXCEPTION 'merge_inventory_items: keeper % is not active (status=%)', p_keeper_id, v_keeper.status;
   END IF;
   v_account := v_keeper.account;
+
+  -- 0. IDEMPOTENCY GUARD (review feedback verification (e)).
+  -- Without this, re-running the same merge writes a second
+  -- merge_history audit row (the data-side ops are all no-ops because
+  -- the dupes are already archived and their aliases/prices already
+  -- reassigned). Detect "this exact merge already recorded" before
+  -- touching anything and return the prior merge_id with zero counters.
+  --
+  -- "Exact" = an existing action='merge' merge_history row whose
+  -- keeper_item_id matches AND whose role='merged' junction items
+  -- are exactly the set p_dupe_ids (same count, all present).
+  SELECT mh.id INTO v_existing_merge_id
+    FROM merge_history mh
+   WHERE mh.action = 'merge'
+     AND mh.keeper_item_id = p_keeper_id
+     AND (
+       SELECT COUNT(*) FROM merge_history_items
+        WHERE merge_id = mh.id AND role = 'merged'
+     ) = v_dupe_count
+     AND NOT EXISTS (
+       SELECT 1 FROM unnest(p_dupe_ids) AS dupe_id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM merge_history_items
+           WHERE merge_id = mh.id
+             AND role     = 'merged'
+             AND item_id  = dupe_id
+        )
+     )
+   ORDER BY mh.created_at DESC
+   LIMIT 1;
+
+  IF v_existing_merge_id IS NOT NULL THEN
+    RETURN json_build_object(
+      'merge_id',             v_existing_merge_id,
+      'aliases_reassigned',   0,
+      'prices_reassigned',    0,
+      'dupes_archived',       0,
+      'idempotent',           true
+    );
+  END IF;
 
   -- 1. Optional rename.
   IF p_canonical_name IS NOT NULL AND p_canonical_name <> v_keeper.name THEN
@@ -709,12 +786,27 @@ WHERE rh.rn = 1
   AND rh.prior_price <> 0
   AND ABS(((rh.price - rh.prior_price) / rh.prior_price) * 100) >= 5;
 
--- v_inventory_items_with_price_at_last_count: D5. priceAtLastCount
--- is gone from inventory_items; this view derives it from the most
--- recent submitted/corrected session's count_items row for each item.
-CREATE OR REPLACE VIEW v_inventory_items_with_price_at_last_count AS
+-- v_inventory_items_full: the catalog row joined with everything the
+-- bootstrap currently reads as denormalized columns, all derived from
+-- the authoritative ledgers.
+--
+-- last_price / last_price_date / last_price_vendor_id (D-Delta-2):
+--   derived from the most recent price_history row for the item.
+--   "Most recent" = max recorded_at (see the index rationale above).
+--   The lateral correlated subquery uses the
+--   price_history_item_recorded_idx index for an O(log n) lookup.
+--
+-- price_at_last_count (D5): derived from the most recent submitted or
+--   corrected count_session's count_items row for the item.
+--
+-- last_price_vendor_id is the canonical vendor reference; the bootstrap
+-- can join to vendors.name for display.
+CREATE OR REPLACE VIEW v_inventory_items_full AS
 SELECT
   ii.*,
+  ph_latest.price          AS last_price,
+  ph_latest.effective_date AS last_price_date,
+  ph_latest.vendor_id      AS last_price_vendor_id,
   (
     SELECT ci.price_at_count
       FROM count_items ci
@@ -724,7 +816,14 @@ SELECT
      ORDER BY cs.submitted_at DESC NULLS LAST, ci.saved_at DESC
      LIMIT 1
   ) AS price_at_last_count
-FROM inventory_items ii;
+FROM inventory_items ii
+LEFT JOIN LATERAL (
+  SELECT ph.price, ph.effective_date, ph.vendor_id
+    FROM price_history ph
+   WHERE ph.item_id = ii.id
+   ORDER BY ph.recorded_at DESC
+   LIMIT 1
+) ph_latest ON true;
 
 -- ═══════════════════════════════════════════════════════════════
 -- RLS posture: PARKED per D1
@@ -782,6 +881,6 @@ GRANT SELECT ON v_current_count_items                          TO service_role, 
 GRANT SELECT ON v_count_session_totals                         TO service_role, anon, authenticated;
 GRANT SELECT ON v_price_history_ranked                         TO service_role, anon, authenticated;
 GRANT SELECT ON v_price_movers                                 TO service_role, anon, authenticated;
-GRANT SELECT ON v_inventory_items_with_price_at_last_count     TO service_role, anon, authenticated;
+GRANT SELECT ON v_inventory_items_full                         TO service_role, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION merge_inventory_items(text, text[], text, text) TO service_role;
