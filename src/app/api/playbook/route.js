@@ -34,13 +34,15 @@ import {
   filterDocuments,
 } from "@/lib/opdAcl";
 
-// Locked shelf order — Safety first, Site & Client last (Finance renders
-// empty/short between Culinary and Site & Client).
+// Locked shelf order - Safety first, Site & Client last. Brand & Standards
+// + Finance sit together as the internal/meta pair before Site & Client;
+// Finance still renders empty/short.
 const SHELVES = [
   "Safety",
   "Operations",
   "HR & People",
   "Culinary",
+  "Brand & Standards",
   "Finance",
   "Site & Client",
 ];
