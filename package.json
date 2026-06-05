@@ -17,7 +17,7 @@
     "backfill:invoice": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-invoice.mjs"
   },
   "dependencies": {
-    "@kitchfix-intranet/shared": "^1.0.0",
+    "@kitchfix-intranet/shared": "^1.0.1",
     "@sentry/nextjs": "10.53.1",
     "@supabase/supabase-js": "^2.106.2",
     "google-auth-library": "10.5.0",
