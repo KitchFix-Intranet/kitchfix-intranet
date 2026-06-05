@@ -961,23 +961,88 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
   if (!sub) {
     throw new Error(`[dataStore.invoice.pg] insertAILineItems: submission ${invoiceUuid} not in PG`);
   }
-  const rows = lineItems.map((item) => ({
-    invoice_uuid:   sub.id,
-    account_key:    sub.account_key,
-    vendor_name:    item.vendorName || sub.vendor_name,
-    invoice_number: item.invoiceNumber || sub.invoice_number,
-    invoice_date:   parseDateOrNull(item.invoiceDate) || sub.invoice_date,
-    line_num:       item.lineNum || 0,
-    description:    item.description || "",
-    quantity:       item.quantity != null ? item.quantity : null,
-    unit:           item.unit || null,
-    unit_price:     item.unitPrice != null ? item.unitPrice : null,
-    extended_price: item.extendedPrice != null ? item.extendedPrice : null,
-    category:       item.category || null,
-    confidence:     item.confidence || null,
-    raw_json:       item.rawJson ? safeParseJson(item.rawJson) : null,
-    // is_historical + data_provenance default FALSE + 'app_scan'
-  }));
+
+  // PR 8.1: resolve each line's vendor_name to a vendors(id) via the same
+  // 2-step algorithm as scripts/backfill-inventory.mjs Phase 2 + the SQL
+  // backfill in docs/migrations/pr-8-1-ai-line-items-vendor-id.sql:
+  //   1. exact match on lower(vendors.name)
+  //   2. vendor_aliases.alias_normalized fallback
+  //      (alias_normalized is GENERATED = lower + strip non-[a-z0-9 space])
+  //
+  // ai_line_items.vendor_id is NOT NULL post-migration, so EVERY line MUST
+  // resolve. An unresolvable vendor THROWS with a clear message that names
+  // the offending vendor and prescribes the fix (add a vendors row or a
+  // vendor_aliases entry, then re-submit the invoice). The throw bubbles
+  // to the OCR pipeline's caller, which is what we want: the invoice fails
+  // visibly rather than silently writing a bad/NULL value. Same fail-loud
+  // principle as the per_account read-loop fix in the reconciliation alarm.
+  //
+  // No module-scope cache for the vendor/alias maps. Per-call lookups cost
+  // 2 small queries (~33 vendor rows, ~50 alias rows in current prod,
+  // negligible payload). Invoice OCR processing itself takes 5-15s for the
+  // Claude scan, so adding ~100ms of vendor lookup is <1% overhead and not
+  // worth caching. The benefit of no cache: a newly-added vendor is visible
+  // on the very next write, with no TTL window where invoices fail
+  // unnecessarily.
+  const [vendorsRes, aliasesRes] = await Promise.all([
+    supabase.from("vendors").select("id, name").is("deleted_at", null),
+    supabase.from("vendor_aliases").select("vendor_id, alias_normalized"),
+  ]);
+  if (vendorsRes.error) {
+    throw new Error(`[dataStore.invoice.pg] insertAILineItems vendor lookup: ${vendorsRes.error.message}`);
+  }
+  if (aliasesRes.error) {
+    throw new Error(`[dataStore.invoice.pg] insertAILineItems alias lookup: ${aliasesRes.error.message}`);
+  }
+  const nameToVendorId = new Map();
+  for (const v of vendorsRes.data || []) {
+    nameToVendorId.set((v.name || "").toLowerCase(), v.id);
+  }
+  const aliasNormToVendorId = new Map();
+  for (const a of aliasesRes.data || []) {
+    aliasNormToVendorId.set((a.alias_normalized || "").toLowerCase(), a.vendor_id);
+  }
+  function normalizeAlias(s) {
+    return String(s || "").toLowerCase().replace(/[^a-zA-Z0-9 ]/g, "");
+  }
+  function resolveVendorId(vendorName) {
+    const lower = String(vendorName || "").trim().toLowerCase();
+    if (!lower) return null;
+    const exact = nameToVendorId.get(lower);
+    if (exact) return exact;
+    const norm = normalizeAlias(vendorName);
+    return aliasNormToVendorId.get(norm) || null;
+  }
+
+  const rows = lineItems.map((item) => {
+    const vendorName = item.vendorName || sub.vendor_name;
+    const vendorId = resolveVendorId(vendorName);
+    if (!vendorId) {
+      throw new Error(
+        `[dataStore.invoice.pg] insertAILineItems: vendor "${vendorName}" did not resolve ` +
+        `to a vendor_id (exact + alias lookup both failed). Add a vendors row for "${vendorName}" ` +
+        `or a vendor_aliases entry mapping it to the canonical vendor, then re-submit invoice ${invoiceUuid}.`
+      );
+    }
+    return {
+      invoice_uuid:   sub.id,
+      account_key:    sub.account_key,
+      vendor_name:    vendorName,
+      vendor_id:      vendorId,
+      invoice_number: item.invoiceNumber || sub.invoice_number,
+      invoice_date:   parseDateOrNull(item.invoiceDate) || sub.invoice_date,
+      line_num:       item.lineNum || 0,
+      description:    item.description || "",
+      quantity:       item.quantity != null ? item.quantity : null,
+      unit:           item.unit || null,
+      unit_price:     item.unitPrice != null ? item.unitPrice : null,
+      extended_price: item.extendedPrice != null ? item.extendedPrice : null,
+      category:       item.category || null,
+      confidence:     item.confidence || null,
+      raw_json:       item.rawJson ? safeParseJson(item.rawJson) : null,
+      // is_historical + data_provenance default FALSE + 'app_scan'
+    };
+  });
   const { error } = await supabase.from("ai_line_items").insert(rows);
   if (error) throw new Error(`[dataStore.invoice.pg] insertAILineItems: ${error.message}`);
 }
