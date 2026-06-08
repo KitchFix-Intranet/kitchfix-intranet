@@ -1302,42 +1302,57 @@ DUPLICATE DETECTION:
       return;
     }
 
-    if (parsed.lineItems && parsed.lineItems.length > 0) {
-      const accountKey = metadata.account;
-      const baseVendor = metadata.vendor || parsed.vendor || "";
-      const baseInvNum = metadata.invoiceNumber || parsed.invoiceNumber || "";
-      const baseInvDate = metadata.invoiceDate || parsed.invoiceDate || "";
-      const lineItems = parsed.lineItems.map((item) => ({
-        lineNum:       item.lineNum || 0,
-        description:   item.description || "",
-        quantity:      item.quantity || 0,
-        unit:          item.unit || "",
-        unitPrice:     item.unitPrice || 0,
-        extendedPrice: item.extendedPrice || 0,
-        category:      item.category || "other",
-        confidence:    "high",
-        rawJson:       JSON.stringify(item),
-        vendorName:    baseVendor,
-        invoiceNumber: baseInvNum,
-        invoiceDate:   baseInvDate,
-      }));
+    // Invariant: ai_scan_status = 'complete' iff insertAILineItems was
+    // called and succeeded. Every earlier failure mode (empty extraction,
+    // missing account on metadata, swallowed insert error) used to fall
+    // through to markScanStatus('complete') below, producing "silent
+    // gaps": invoices marked complete with zero ai_line_items. See the
+    // 2026-06-08 investigation of the 12 stranded invoices.
+    const items = parsed.lineItems || [];
+    if (items.length === 0) {
+      console.warn(`[AI Scan] ${invoiceUuid}: Claude returned 0 line items; marking failed`);
+      await markScanStatus(invoiceUuid, "failed");
+      return;
+    }
 
-      // PR 6.2 (L1): drop the legacy "Invoice Uploads" fallback. The
-      // orchestrator throws if accountKey is missing on the Sheets
-      // path, so log + skip rather than write to a junk drawer tab.
-      if (!accountKey) {
-        console.warn(`[AI Scan] ${invoiceUuid}: skipping line item write (no account on metadata)`);
-      } else {
-        try {
-          await insertAILineItems(invoiceUuid, lineItems, { accountKey, module: "ops" });
-        } catch (insErr) {
-          console.error(`[AI Scan] ${invoiceUuid}: line item insert failed:`, insErr.message);
-        }
-      }
+    const accountKey = metadata.account;
+    if (!accountKey) {
+      // PR 6.2 (L1) dropped the "Invoice Uploads" junk-drawer fallback;
+      // the Sheets orchestrator throws when accountKey is missing. Mark
+      // failed (was silently complete-with-zero-rows pre-fix).
+      console.warn(`[AI Scan] ${invoiceUuid}: missing account on metadata; cannot write line items; marking failed`);
+      await markScanStatus(invoiceUuid, "failed");
+      return;
+    }
+
+    const baseVendor = metadata.vendor || parsed.vendor || "";
+    const baseInvNum = metadata.invoiceNumber || parsed.invoiceNumber || "";
+    const baseInvDate = metadata.invoiceDate || parsed.invoiceDate || "";
+    const lineItems = items.map((item) => ({
+      lineNum:       item.lineNum || 0,
+      description:   item.description || "",
+      quantity:      item.quantity || 0,
+      unit:          item.unit || "",
+      unitPrice:     item.unitPrice || 0,
+      extendedPrice: item.extendedPrice || 0,
+      category:      item.category || "other",
+      confidence:    "high",
+      rawJson:       JSON.stringify(item),
+      vendorName:    baseVendor,
+      invoiceNumber: baseInvNum,
+      invoiceDate:   baseInvDate,
+    }));
+
+    try {
+      await insertAILineItems(invoiceUuid, lineItems, { accountKey, module: "ops" });
+    } catch (insErr) {
+      console.error(`[AI Scan] ${invoiceUuid}: line item insert failed:`, insErr.message);
+      await markScanStatus(invoiceUuid, "failed");
+      return;
     }
 
     await markScanStatus(invoiceUuid, "complete");
-    console.log(`[AI Scan] ${invoiceUuid}: Extracted ${parsed.lineItems?.length || 0} line items`);
+    console.log(`[AI Scan] ${invoiceUuid}: Extracted ${lineItems.length} line items`);
 
   } catch (error) {
     console.error("[AI Scan] Error:", error.message);
