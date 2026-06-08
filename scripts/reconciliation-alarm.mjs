@@ -708,6 +708,39 @@ async function check2() {
   return { lookback: LOOKBACK_DAYS, candidates: candidates.length, gaps };
 }
 
+// ── CHECK 3: failed-extraction detector ──
+//
+// invoice_submissions where:
+//   ai_scan_status   = 'failed'   AI scan reached the failed path
+//   is_historical    = FALSE      skip backfilled rows
+//   submitted_at >= now() - 7d    lookback window (same as check2)
+//   submitted_at <= now() - 24h   grace period for transient retries
+//
+// Counterpart to check2 for the PR #129 failure class: extractions that
+// honestly reported failure (status='failed') instead of silently
+// claiming success (status='complete' + 0 line items). These rows are
+// invisible to check2 because ai_scan_complete=FALSE. Without check3
+// they're invisible to ALL monitoring - which means PR #129 only moved
+// the silence rather than eliminating it. PR #129's fix made 'failed' a
+// terminal state with no auto-retry, so a failed row in the lookback
+// window genuinely needs a human.
+async function check3() {
+  const since  = new Date(Date.now() - LOOKBACK_DAYS    * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(Date.now() - GAP_MIN_AGE_HOURS *      60 * 60 * 1000).toISOString();
+
+  const { data: failed, error } = await supa
+    .from("invoice_submissions")
+    .select("id, vendor_id, account_key, invoice_number, submitted_at, status, ai_scan_status")
+    .eq("ai_scan_status", "failed")
+    .eq("is_historical", false)
+    .gte("submitted_at", since)
+    .lte("submitted_at", cutoff)
+    .order("submitted_at", { ascending: false });
+  if (error) throw new Error(`failed-status query: ${error.message}`);
+
+  return { lookback: LOOKBACK_DAYS, failed: failed || [] };
+}
+
 // ── Slack poster (reuses the cron/daily/route.js pattern) ──
 async function postSlack(webhookUrl, text, mrkdwn) {
   if (!webhookUrl) return;
@@ -726,7 +759,7 @@ async function postSlack(webhookUrl, text, mrkdwn) {
 }
 
 // ── Digest builder ──
-function buildDigest(c1Results, c2Result) {
+function buildDigest(c1Results, c2Result, c3Result) {
   const realDrift  = c1Results.filter((r) => r.classification === "real_drift");
   const expected   = c1Results.filter((r) => r.classification === "expected_cron_drift");
   const structural = c1Results.filter((r) => r.classification === "structural_difference");
@@ -737,15 +770,16 @@ function buildDigest(c1Results, c2Result) {
   const errors     = c1Results.filter((r) => r.status === "error");
   const noConfig   = c1Results.filter((r) => r.status === "no_config");
   const gaps       = c2Result.gaps;
+  const failed     = c3Result.failed;
 
-  const alarm = realDrift.length > 0 || gaps.length > 0 || errors.length > 0;
+  const alarm = realDrift.length > 0 || gaps.length > 0 || failed.length > 0 || errors.length > 0;
   const tailBits = [];
   if (expected.length)   tailBits.push(`${expected.length} expected-drift`);
   if (knownRes.length)   tailBits.push(`${knownRes.length} known-residue`);
   if (structural.length) tailBits.push(`${structural.length} structural`);
   const headline = alarm
-    ? `🚨 *Dual-write recon ALARM* - ${realDrift.length} drift, ${gaps.length} silent gap, ${errors.length} error`
-    : `✅ *Dual-write recon clean* - ${reconciled.length} reconciled${tailBits.length ? ", " + tailBits.join(", ") : ""}, 0 gaps`;
+    ? `🚨 *Dual-write recon ALARM* - ${realDrift.length} drift, ${gaps.length} silent gap, ${failed.length} failed, ${errors.length} error`
+    : `✅ *Dual-write recon clean* - ${reconciled.length} reconciled${tailBits.length ? ", " + tailBits.join(", ") : ""}, 0 gaps, 0 failed`;
 
   const lines = [headline, ""];
 
@@ -767,6 +801,15 @@ function buildDigest(c1Results, c2Result) {
       lines.push(`  • \`${g.id}\` vendor=${g.vendor_id || "(null)"} acct=${g.account_key} inv#=${g.invoice_number || "(n/a)"} submitted=${(g.submitted_at||"").slice(0,16)}`);
     }
     if (gaps.length > shown.length) lines.push(`  • _… ${gaps.length - shown.length} more_`);
+    lines.push("");
+  }
+  if (failed.length) {
+    lines.push("*⚠️ FAILED EXTRACTIONS (ai_scan_status=failed in lookback)*");
+    const shown = failed.slice(0, 10);
+    for (const f of shown) {
+      lines.push(`  • \`${f.id}\` vendor=${f.vendor_id || "(null)"} acct=${f.account_key} inv#=${f.invoice_number || "(n/a)"} submitted=${(f.submitted_at||"").slice(0,16)}`);
+    }
+    if (failed.length > shown.length) lines.push(`  • _… ${failed.length - shown.length} more_`);
     lines.push("");
   }
   if (errors.length) {
@@ -891,7 +934,25 @@ export async function runReconciliationAlarm() {
   }
   console.log("");
 
-  const digest = buildDigest(c1, c2);
+  console.log("CHECK 3 - failed-extraction detector (invoice_submissions with ai_scan_status='failed')");
+  console.log("────────────────────────────────────────────────────────────────────────");
+  let c3;
+  try {
+    c3 = await check3();
+    console.log(`  Failed (ai_scan_status=failed, is_historical=FALSE, submitted_at ${LOOKBACK_DAYS}d..${GAP_MIN_AGE_HOURS}h ago): ${c3.failed.length}`);
+    for (const f of c3.failed.slice(0, 20)) {
+      console.log(`    ${f.id}  vendor=${f.vendor_id || "(null)"}  acct=${f.account_key}  inv#=${f.invoice_number || "(n/a)"}  submitted=${f.submitted_at}`);
+    }
+    if (c3.failed.length > 20) console.log(`    ... and ${c3.failed.length - 20} more`);
+  } catch (err) {
+    console.log(`  ✗ CHECK 3 failed: ${err.message}`);
+    c3 = { lookback: LOOKBACK_DAYS, failed: [] };
+    // Tag this as an error in the digest by inserting an error row in c1.
+    c1.push({ tab: "check3", status: "error", message: err.message });
+  }
+  console.log("");
+
+  const digest = buildDigest(c1, c2, c3);
   console.log("DIGEST");
   console.log("────────────────────────────────────────────────────────────────────────");
   console.log(digest.mrkdwn);
