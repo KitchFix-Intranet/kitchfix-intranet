@@ -1349,6 +1349,7 @@ DUPLICATE DETECTION:
     const baseInvNum = metadata.invoiceNumber || parsed.invoiceNumber || "";
     const baseInvDate = metadata.invoiceDate || parsed.invoiceDate || "";
     const lineItems = items.map((item) => ({
+      // Existing fields — backwards compat for cron read at Sheets cols A-M.
       lineNum:       item.lineNum || 0,
       description:   item.description || "",
       quantity:      item.quantity || 0,
@@ -1361,6 +1362,19 @@ DUPLICATE DETECTION:
       vendorName:    baseVendor,
       invoiceNumber: baseInvNum,
       invoiceDate:   baseInvDate,
+
+      // Stage A raw labeled fields — flat pass-through, no derivation here.
+      // Number fields preserve NULL (don't coerce to 0); strings preserve null/empty.
+      // The Stage B derivation layer reads these to recompute quantity-for-pricing.
+      itemNumber:        item.itemNumber || null,
+      packSize:          item.packSize || null,
+      orderedCount:      item.orderedCount != null ? item.orderedCount : null,
+      shippedCount:      item.shippedCount != null ? item.shippedCount : null,
+      uomRaw:            item.uomRaw || null,
+      amount:            item.amount != null ? item.amount : null,
+      weightLineValue:   item.weightLineValue != null ? item.weightLineValue : null,
+      catchWeightMarker: item.catchWeightMarker || null,
+      rawColumns:        item.rawColumns || null,
     }));
 
     try {
