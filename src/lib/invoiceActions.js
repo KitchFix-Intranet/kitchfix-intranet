@@ -1219,7 +1219,6 @@ Return ONLY valid JSON:
       "amount": number,
       "weightLineValue": number|null,
       "catchWeightMarker": "*CS|*EA|null",
-      "rawColumns": { "HEADER_LABEL": "raw_value" },
       "quantity": number,
       "unit": "case|lb|ea|gal|oz|bag|box|each|pack|other",
       "extendedPrice": number,
@@ -1236,17 +1235,25 @@ RAW LABELED FIELDS — the load-bearing part. Extract faithfully. NEVER infer, N
 - uomRaw: UOM column raw text BEFORE normalization (e.g., "CS", "EA", "2/LB").
 - unitPrice: PRICE column value (per-unit, or per-pound for catch-weight).
 - amount: AMOUNT/EXTENDED column value (line total as printed).
-- weightLineValue: value from "Total Weight ##.##" or "Weight: ##.##" sub-line beneath a catch-weight item, else null.
-- catchWeightMarker: "*CS" or "*EA" if the line is explicitly marked catch-weight, else null.
-- rawColumns: JSON object dumping all raw column values for this row keyed by header label (e.g., {"ORDERED":"2","SHIPPED":"2","PACK":"12","UNIT":"CS","PRICE":"69.07","AMOUNT":"138.14"}). Backstop in case a field is needed later.
+- weightLineValue: TOTAL weight from any catch-weight sub-line beneath the item, expressed as a single number in pounds. Capture from ALL of these variants:
+    • "Case weights: X.XX, X.XX, ..., TOTAL: Y.YY"   → use the TOTAL value (What Chefs Want)
+    • "TOTAL WEIGHT: ##.###"                          → use that value (Gordon Food Service, Ben E Keith)
+    • "CASE: <id> WEIGHT: ##.###" repeated per case   → SUM the WEIGHT values across cases (Gordon per-case)
+    • "Total Weight ##.##" or "Weight: ##.##"        → use that value (Ben E Keith short form)
+    • "T/WT= ##.###"                                  → use that value (Sysco)
+    • "Weights: TOTAL= ##.##"                         → use that value (Kuna)
+    • For invoices with a printed WEIGHT column (Cheney F4 catch-weight lines): the WEIGHT column value for that line, when weight × unitPrice ≈ amount makes structural sense.
+  Else null. NEVER infer the weight from amount ÷ unitPrice.
+- catchWeightMarker: "*CS" or "*EA" if the line is explicitly marked with that asterisk-prefixed text (Sysco-style inline marker), else null.
 
-CRITICAL — DO NOT CONFLATE THESE:
-- packSize is a DESCRIPTOR (e.g., "2/2 LB" means "2 inner units of 2 LB each"). It is NEVER the shipped quantity.
-- shippedCount = the SHIPPED/CASES column value. NOT the PACK number. NOT the pack count.
+CRITICAL - DO NOT CONFLATE THESE:
+- packSize is a DESCRIPTOR (e.g., "2/2 LB" means "2 inner units of 2 LB each"). It is NEVER the shipped quantity. NEVER the weight.
+- shippedCount = the SHIPPED/CASES column value. NOT the PACK number. NOT the pack count. NOT the weight.
 - For catch-weight items, populate BOTH shippedCount (case count) AND weightLineValue (total weight). Code decides which to use.
+- If the SHIPPED/CASES column is unreadable (e.g., handwritten and illegible), return shippedCount: null. NEVER substitute a default. NEVER back-compute from amount ÷ unitPrice. A null is honest.
 
-BACKWARDS-COMPAT FIELDS (downstream cron reads these — keep them populated):
-- quantity: your best-guess quantity-for-pricing. Standard items = shippedCount. Catch-weight items with weightLineValue = weightLineValue.
+BACKWARDS-COMPAT FIELDS (downstream cron reads these - keep them populated as literal passthroughs, NOT derived values):
+- quantity: SAME VALUE AS shippedCount (literal passthrough). If shippedCount is null, quantity is null. DO NOT derive, DO NOT substitute weightLineValue, DO NOT back-compute. Code does the catch-weight branching downstream.
 - unit: normalized from uomRaw (cs→case, ea→each, gal→gallon, lb→pound, oz→ounce, pk→pack, bg→bag, ct→count, dz→dozen). Default "case" if unclear.
 - extendedPrice: same numeric value as amount.
 - category: your best guess from description.
@@ -1380,7 +1387,7 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
       amount:            item.amount != null ? item.amount : null,
       weightLineValue:   item.weightLineValue != null ? item.weightLineValue : null,
       catchWeightMarker: item.catchWeightMarker || null,
-      rawColumns:        item.rawColumns || null,
+      rawColumns:        null,  // rawColumns dropped from prompt - was causing JSON truncation on dense F5 invoices; column kept in DB as backstop, always null going forward.
     }));
 
     try {
