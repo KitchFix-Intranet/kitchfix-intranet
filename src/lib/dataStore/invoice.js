@@ -1055,6 +1055,18 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
       category:       item.category || null,
       confidence:     item.confidence || null,
       raw_json:       item.rawJson ? safeParseJson(item.rawJson) : null,
+
+      // Stage A raw labeled fields (pr-9-1 migration). All nullable on PG.
+      item_number:          item.itemNumber || null,
+      pack_size:            item.packSize || null,
+      ordered_count:        item.orderedCount != null ? item.orderedCount : null,
+      shipped_count:        item.shippedCount != null ? item.shippedCount : null,
+      uom_raw:              item.uomRaw || null,
+      amount:               item.amount != null ? item.amount : null,
+      weight_line_value:    item.weightLineValue != null ? item.weightLineValue : null,
+      catch_weight_marker:  item.catchWeightMarker || null,
+      raw_columns:          item.rawColumns || null,
+
       // is_historical + data_provenance default FALSE + 'app_scan'
     };
   });
