@@ -1192,24 +1192,11 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   return extractAndStoreLineItems(invoiceUuid, pages, metadata);
 }
 
-// Exported extraction body of triggerAIScan; same code path reused by
-// scripts/backfill-stl-mo-line-items.mjs. Pure move; no behavior change.
-export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  try {
-    const getPageData = (p) => typeof p === "string" ? p : p.data;
-    const resizeForScan = (dataUrl) => {
-      return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-    };
-
-const imageBlocks = pages.slice(0, 6).map((page) => {
-        const data = getPageData(page);
-      const base64 = resizeForScan(data);
-      const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
-      return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
-    });
-
-    const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice into RAW LABELED columns. Downstream code derives the inventory/pricing values from the raw fields. Your job is fidelity to the invoice as printed, NOT derivation.
+// Exported so scripts/_probe_stage_a_extraction.mjs (and any future
+// validation harness) can test the EXACT live prompt without
+// duplication drift. The string is module-level so the function body
+// keeps a single reference to it.
+export const EXTRACTION_PROMPT = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice into RAW LABELED columns. Downstream code derives the inventory/pricing values from the raw fields. Your job is fidelity to the invoice as printed, NOT derivation.
 
 Return ONLY valid JSON:
 {
@@ -1291,6 +1278,25 @@ Unit disambiguation — price reasonableness check:
 DUPLICATE DETECTION:
 - Multi-page invoices may show the same header/boilerplate on each page. Do NOT extract the same item twice.
 - If you see identical item numbers or descriptions across pages, include only one entry with the correct quantity.`;
+
+// Exported extraction body of triggerAIScan; same code path reused by
+// scripts/backfill-stl-mo-line-items.mjs. Pure move; no behavior change.
+export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  try {
+    const getPageData = (p) => typeof p === "string" ? p : p.data;
+    const resizeForScan = (dataUrl) => {
+      return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+    };
+
+const imageBlocks = pages.slice(0, 6).map((page) => {
+        const data = getPageData(page);
+      const base64 = resizeForScan(data);
+      const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
+      return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
+    });
+
+    const prompt = EXTRACTION_PROMPT;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
