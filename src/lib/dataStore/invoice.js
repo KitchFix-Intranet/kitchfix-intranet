@@ -638,6 +638,7 @@ async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
   await ensureLineItemTab(accountKey);
   const now = new Date().toISOString();
   const rows = lineItems.map((item) => [
+    // Cols A-O (indices 0-14) — existing shape, MUST stay byte-identical (cron reads cols A-M).
     invoiceUuid,
     now,
     accountKey,
@@ -653,6 +654,20 @@ async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
     item.category || "other",
     item.confidence || "high",
     item.rawJson || JSON.stringify(item),
+
+    // Cols P-X (indices 15-23) — Stage A raw labeled fields.
+    // Sheets stores everything as strings; numbers stringified when non-null,
+    // null/missing fields land as empty strings. rawColumns is JSON-stringified.
+    // The cron reads cols 0-12 only, so these are invisible to it.
+    item.itemNumber || "",                                                              // P (15)
+    item.packSize || "",                                                                // Q (16)
+    item.orderedCount != null ? String(item.orderedCount) : "",                         // R (17)
+    item.shippedCount != null ? String(item.shippedCount) : "",                         // S (18)
+    item.uomRaw || "",                                                                  // T (19)
+    item.amount != null ? String(item.amount) : "",                                     // U (20)
+    item.weightLineValue != null ? String(item.weightLineValue) : "",                   // V (21)
+    item.catchWeightMarker || "",                                                       // W (22)
+    item.rawColumns != null ? JSON.stringify(item.rawColumns) : "",                     // X (23)
   ]);
   await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
 }
