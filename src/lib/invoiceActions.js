@@ -1209,9 +1209,9 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
 
-    const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice.
+    const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice into RAW LABELED columns. Downstream code derives the inventory/pricing values from the raw fields. Your job is fidelity to the invoice as printed, NOT derivation.
 
-Return ONLY valid JSON with this structure:
+Return ONLY valid JSON:
 {
   "vendor": "string",
   "invoiceNumber": "string",
@@ -1223,50 +1223,70 @@ Return ONLY valid JSON with this structure:
     {
       "lineNum": 1,
       "description": "string",
+      "itemNumber": "string|null",
+      "packSize": "string|null",
+      "orderedCount": number|null,
+      "shippedCount": number|null,
+      "uomRaw": "string|null",
+      "unitPrice": number,
+      "amount": number,
+      "weightLineValue": number|null,
+      "catchWeightMarker": "*CS|*EA|null",
+      "rawColumns": { "HEADER_LABEL": "raw_value" },
       "quantity": number,
       "unit": "case|lb|ea|gal|oz|bag|box|each|pack|other",
-      "unitPrice": number,
       "extendedPrice": number,
       "category": "produce|protein|dairy|dry_goods|beverage|packaging|cleaning|supplies|smallwares|other"
     }
   ]
 }
 
+RAW LABELED FIELDS — the load-bearing part. Extract faithfully. NEVER infer, NEVER compute, NEVER substitute a default:
+- itemNumber: ITEM #/SKU/PRODUCT CODE column value if present, else null.
+- packSize: PACK/SIZE column or embedded pack notation as a STRING (e.g., "2/2 LB", "24/16OZ", "6-count"). NEVER a number. NEVER the quantity.
+- orderedCount: ORDERED column raw value.
+- shippedCount: SHIPPED/CASES column raw value — what was actually delivered. For distributor invoices (Ben E Keith, Cheney, Kuna) this is the Cases column, NOT pack count.
+- uomRaw: UOM column raw text BEFORE normalization (e.g., "CS", "EA", "2/LB").
+- unitPrice: PRICE column value (per-unit, or per-pound for catch-weight).
+- amount: AMOUNT/EXTENDED column value (line total as printed).
+- weightLineValue: value from "Total Weight ##.##" or "Weight: ##.##" sub-line beneath a catch-weight item, else null.
+- catchWeightMarker: "*CS" or "*EA" if the line is explicitly marked catch-weight, else null.
+- rawColumns: JSON object dumping all raw column values for this row keyed by header label (e.g., {"ORDERED":"2","SHIPPED":"2","PACK":"12","UNIT":"CS","PRICE":"69.07","AMOUNT":"138.14"}). Backstop in case a field is needed later.
+
+CRITICAL — DO NOT CONFLATE THESE:
+- packSize is a DESCRIPTOR (e.g., "2/2 LB" means "2 inner units of 2 LB each"). It is NEVER the shipped quantity.
+- shippedCount = the SHIPPED/CASES column value. NOT the PACK number. NOT the pack count.
+- For catch-weight items, populate BOTH shippedCount (case count) AND weightLineValue (total weight). Code decides which to use.
+
+BACKWARDS-COMPAT FIELDS (downstream cron reads these — keep them populated):
+- quantity: your best-guess quantity-for-pricing. Standard items = shippedCount. Catch-weight items with weightLineValue = weightLineValue.
+- unit: normalized from uomRaw (cs→case, ea→each, gal→gallon, lb→pound, oz→ounce, pk→pack, bg→bag, ct→count, dz→dozen). Default "case" if unclear.
+- extendedPrice: same numeric value as amount.
+- category: your best guess from description.
+
 Rules:
-- Extract every line item visible on the invoice
-- For quantity and prices, use numbers only (no $ signs)
-- Category should be your best guess based on the item description
-- If a field is unclear, use null
-- Return ONLY the JSON object, no markdown or explanation
+- Extract every line item visible on the invoice.
+- For numeric fields, use numbers only (no $ signs).
+- If a field is unclear, use null. Do not guess.
+- Return ONLY the JSON object, no markdown or explanation.
 
 CRITICAL — SKIP THESE ROWS (they are NOT line items):
-- Summary rows: "GRAND TOTAL", "MAJOR CATEGORY SUMMARY", "CONTINUED", "SPLITS", any row that is a subtotal or category rollup
-- Boilerplate/disclaimer text about perishable commodities, restock fees, return policies, credit terms, collection fees
-- Weight notation lines like "Weight: 80.7" or "TOTAL = 37.7 ==>>>> 18.90 18.80" — these are supplementary detail for the line item above them, not separate items
-- Distribution/freight fee lines (e.g., "DISTRIBUTION FEE", "FREIGHT") — extract these as a single line item with category "other", not as multiple items
-- Column headers (ITEM NO, ORDERED, SHIPPED, DESCRIPTION, CASE PACK, UNIT, PRICE, AMOUNT)
+- Summary rows: "GRAND TOTAL", "MAJOR CATEGORY SUMMARY", "CONTINUED", "SPLITS", any row that is a subtotal or category rollup.
+- Boilerplate/disclaimer text about perishable commodities, restock fees, return policies, credit terms, collection fees.
+- Weight notation lines like "Weight: 80.7" — these belong to the line item ABOVE them as weightLineValue; do NOT extract as separate items.
+- Distribution/freight fee lines (e.g., "DISTRIBUTION FEE", "FREIGHT") — extract as a single line item with category "other", not as multiple items.
+- Column headers (ITEM NO, ORDERED, SHIPPED, DESCRIPTION, CASE PACK, UNIT, PRICE, AMOUNT).
 
-CATCH-WEIGHT ITEMS (marked with *CS or *EA on Kuna/distributor invoices):
-- These items are priced PER POUND, not per case. The PRICE column shows $/lb and the AMOUNT column shows the extended price based on actual delivered weight.
-- For catch-weight items: use the AMOUNT column as extendedPrice, use the PRICE column as unitPrice (per lb), and set unit to "lb".
-- quantity for catch-weight items = the weight shown (e.g., "Weight: 80.7" means qty 80.7 lb)
-- If the weight line is not clearly readable, calculate: quantity = extendedPrice / unitPrice
-
-QUANTITY RULES:
-- Use the SHIPPED column, not the ORDERED column (shipped = what was actually delivered)
-- If ordered and shipped differ, always use shipped quantity
-
-UNIT RULES — always use "case" as the default unit for food service invoices unless:
+UNIT RULES — default "case" unless:
 - Item is marked *EA → use "each"
-- Item is catch-weight *CS → use "lb" (see above)
-- Item is clearly sold per pound with no case pack
+- Item is marked *CS catch-weight → use "lb"
+- Item is clearly sold per pound with no case pack.
 
 Unit disambiguation — price reasonableness check:
-- $15+ per "oz" is likely per "each" or per "jar" or per "bottle"
-- $100+ per "lb" is likely per "case"
-- $50+ per "gal" for a non-bulk item is likely per "case"
+- $15+ per "oz" is likely per "each" or per "jar" or per "bottle".
+- $100+ per "lb" is likely per "case".
+- $50+ per "gal" for a non-bulk item is likely per "case".
 - Use context from other line items to calibrate. If most items are priced per case, a single item at a case-like price is probably per case.
-- Normalize abbreviations: cs = case, ea = each, gal = gallon, bx = box, bg = bag, pk = pack
 
 DUPLICATE DETECTION:
 - Multi-page invoices may show the same header/boilerplate on each page. Do NOT extract the same item twice.
