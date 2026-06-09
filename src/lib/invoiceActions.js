@@ -1192,6 +1192,100 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   return extractAndStoreLineItems(invoiceUuid, pages, metadata);
 }
 
+// Exported so scripts/_probe_stage_a_extraction.mjs (and any future
+// validation harness) can test the EXACT live prompt without
+// duplication drift. The string is module-level so the function body
+// keeps a single reference to it.
+export const EXTRACTION_PROMPT = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice into RAW LABELED columns. Downstream code derives the inventory/pricing values from the raw fields. Your job is fidelity to the invoice as printed, NOT derivation.
+
+Return ONLY valid JSON:
+{
+  "vendor": "string",
+  "invoiceNumber": "string",
+  "invoiceDate": "YYYY-MM-DD",
+  "subtotal": number,
+  "tax": number,
+  "total": number,
+  "lineItems": [
+    {
+      "lineNum": 1,
+      "description": "string",
+      "itemNumber": "string|null",
+      "packSize": "string|null",
+      "orderedCount": number|null,
+      "shippedCount": number|null,
+      "uomRaw": "string|null",
+      "unitPrice": number,
+      "amount": number,
+      "weightLineValue": number|null,
+      "catchWeightMarker": "*CS|*EA|null",
+      "quantity": number,
+      "unit": "case|lb|ea|gal|oz|bag|box|each|pack|other",
+      "extendedPrice": number,
+      "category": "produce|protein|dairy|dry_goods|beverage|packaging|cleaning|supplies|smallwares|other"
+    }
+  ]
+}
+
+RAW LABELED FIELDS — the load-bearing part. Extract faithfully. NEVER infer, NEVER compute, NEVER substitute a default:
+- itemNumber: ITEM #/SKU/PRODUCT CODE column value if present, else null.
+- packSize: PACK/SIZE column or embedded pack notation as a STRING (e.g., "2/2 LB", "24/16OZ", "6-count"). NEVER a number. NEVER the quantity.
+- orderedCount: ORDERED column raw value.
+- shippedCount: SHIPPED/CASES column raw value — what was actually delivered. For distributor invoices (Ben E Keith, Cheney, Kuna) this is the Cases column, NOT pack count.
+- uomRaw: UOM column raw text BEFORE normalization (e.g., "CS", "EA", "2/LB").
+- unitPrice: PRICE column value (per-unit, or per-pound for catch-weight).
+- amount: AMOUNT/EXTENDED column value (line total as printed).
+- weightLineValue: TOTAL weight from any catch-weight sub-line beneath the item, expressed as a single number in pounds. Capture from ALL of these variants:
+    • "Case weights: X.XX, X.XX, ..., TOTAL: Y.YY"   → use the TOTAL value (What Chefs Want)
+    • "TOTAL WEIGHT: ##.###"                          → use that value (Gordon Food Service, Ben E Keith)
+    • "CASE: <id> WEIGHT: ##.###" repeated per case   → SUM the WEIGHT values across cases (Gordon per-case)
+    • "Total Weight ##.##" or "Weight: ##.##"        → use that value (Ben E Keith short form)
+    • "T/WT= ##.###"                                  → use that value (Sysco)
+    • "Weights: TOTAL= ##.##"                         → use that value (Kuna)
+    • For invoices with a printed WEIGHT column (Cheney F4 catch-weight lines): the WEIGHT column value for that line, when weight × unitPrice ≈ amount makes structural sense.
+  Else null. NEVER infer the weight from amount ÷ unitPrice.
+- catchWeightMarker: "*CS" or "*EA" if the line is explicitly marked with that asterisk-prefixed text (Sysco-style inline marker), else null.
+
+CRITICAL - DO NOT CONFLATE THESE:
+- packSize is a DESCRIPTOR (e.g., "2/2 LB" means "2 inner units of 2 LB each"). It is NEVER the shipped quantity. NEVER the weight.
+- shippedCount = the SHIPPED/CASES column value. NOT the PACK number. NOT the pack count. NOT the weight.
+- For catch-weight items, populate BOTH shippedCount (case count) AND weightLineValue (total weight). Code decides which to use.
+- If the SHIPPED/CASES column is unreadable (e.g., handwritten and illegible), return shippedCount: null. NEVER substitute a default. NEVER back-compute from amount ÷ unitPrice. A null is honest.
+
+BACKWARDS-COMPAT FIELDS (downstream cron reads these - keep them populated as literal passthroughs, NOT derived values):
+- quantity: SAME VALUE AS shippedCount (literal passthrough). If shippedCount is null, quantity is null. DO NOT derive, DO NOT substitute weightLineValue, DO NOT back-compute. Code does the catch-weight branching downstream.
+- unit: normalized from uomRaw (cs→case, ea→each, gal→gallon, lb→pound, oz→ounce, pk→pack, bg→bag, ct→count, dz→dozen). Default "case" if unclear.
+- extendedPrice: same numeric value as amount.
+- category: your best guess from description.
+
+Rules:
+- Extract every line item visible on the invoice.
+- For numeric fields, use numbers only (no $ signs).
+- If a field is unclear, use null. Do not guess.
+- Return ONLY the JSON object, no markdown or explanation.
+
+CRITICAL — SKIP THESE ROWS (they are NOT line items):
+- Summary rows: "GRAND TOTAL", "MAJOR CATEGORY SUMMARY", "CONTINUED", "SPLITS", any row that is a subtotal or category rollup.
+- Boilerplate/disclaimer text about perishable commodities, restock fees, return policies, credit terms, collection fees.
+- Weight notation lines like "Weight: 80.7" — these belong to the line item ABOVE them as weightLineValue; do NOT extract as separate items.
+- Distribution/freight fee lines (e.g., "DISTRIBUTION FEE", "FREIGHT") — extract as a single line item with category "other", not as multiple items.
+- Column headers (ITEM NO, ORDERED, SHIPPED, DESCRIPTION, CASE PACK, UNIT, PRICE, AMOUNT).
+
+UNIT RULES — default "case" unless:
+- Item is marked *EA → use "each"
+- Item is marked *CS catch-weight → use "lb"
+- Item is clearly sold per pound with no case pack.
+
+Unit disambiguation — price reasonableness check:
+- $15+ per "oz" is likely per "each" or per "jar" or per "bottle".
+- $100+ per "lb" is likely per "case".
+- $50+ per "gal" for a non-bulk item is likely per "case".
+- Use context from other line items to calibrate. If most items are priced per case, a single item at a case-like price is probably per case.
+
+DUPLICATE DETECTION:
+- Multi-page invoices may show the same header/boilerplate on each page. Do NOT extract the same item twice.
+- If you see identical item numbers or descriptions across pages, include only one entry with the correct quantity.`;
+
 // Exported extraction body of triggerAIScan; same code path reused by
 // scripts/backfill-stl-mo-line-items.mjs. Pure move; no behavior change.
 export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
@@ -1209,68 +1303,7 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
 
-    const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice.
-
-Return ONLY valid JSON with this structure:
-{
-  "vendor": "string",
-  "invoiceNumber": "string",
-  "invoiceDate": "YYYY-MM-DD",
-  "subtotal": number,
-  "tax": number,
-  "total": number,
-  "lineItems": [
-    {
-      "lineNum": 1,
-      "description": "string",
-      "quantity": number,
-      "unit": "case|lb|ea|gal|oz|bag|box|each|pack|other",
-      "unitPrice": number,
-      "extendedPrice": number,
-      "category": "produce|protein|dairy|dry_goods|beverage|packaging|cleaning|supplies|smallwares|other"
-    }
-  ]
-}
-
-Rules:
-- Extract every line item visible on the invoice
-- For quantity and prices, use numbers only (no $ signs)
-- Category should be your best guess based on the item description
-- If a field is unclear, use null
-- Return ONLY the JSON object, no markdown or explanation
-
-CRITICAL — SKIP THESE ROWS (they are NOT line items):
-- Summary rows: "GRAND TOTAL", "MAJOR CATEGORY SUMMARY", "CONTINUED", "SPLITS", any row that is a subtotal or category rollup
-- Boilerplate/disclaimer text about perishable commodities, restock fees, return policies, credit terms, collection fees
-- Weight notation lines like "Weight: 80.7" or "TOTAL = 37.7 ==>>>> 18.90 18.80" — these are supplementary detail for the line item above them, not separate items
-- Distribution/freight fee lines (e.g., "DISTRIBUTION FEE", "FREIGHT") — extract these as a single line item with category "other", not as multiple items
-- Column headers (ITEM NO, ORDERED, SHIPPED, DESCRIPTION, CASE PACK, UNIT, PRICE, AMOUNT)
-
-CATCH-WEIGHT ITEMS (marked with *CS or *EA on Kuna/distributor invoices):
-- These items are priced PER POUND, not per case. The PRICE column shows $/lb and the AMOUNT column shows the extended price based on actual delivered weight.
-- For catch-weight items: use the AMOUNT column as extendedPrice, use the PRICE column as unitPrice (per lb), and set unit to "lb".
-- quantity for catch-weight items = the weight shown (e.g., "Weight: 80.7" means qty 80.7 lb)
-- If the weight line is not clearly readable, calculate: quantity = extendedPrice / unitPrice
-
-QUANTITY RULES:
-- Use the SHIPPED column, not the ORDERED column (shipped = what was actually delivered)
-- If ordered and shipped differ, always use shipped quantity
-
-UNIT RULES — always use "case" as the default unit for food service invoices unless:
-- Item is marked *EA → use "each"
-- Item is catch-weight *CS → use "lb" (see above)
-- Item is clearly sold per pound with no case pack
-
-Unit disambiguation — price reasonableness check:
-- $15+ per "oz" is likely per "each" or per "jar" or per "bottle"
-- $100+ per "lb" is likely per "case"
-- $50+ per "gal" for a non-bulk item is likely per "case"
-- Use context from other line items to calibrate. If most items are priced per case, a single item at a case-like price is probably per case.
-- Normalize abbreviations: cs = case, ea = each, gal = gallon, bx = box, bg = bag, pk = pack
-
-DUPLICATE DETECTION:
-- Multi-page invoices may show the same header/boilerplate on each page. Do NOT extract the same item twice.
-- If you see identical item numbers or descriptions across pages, include only one entry with the correct quantity.`;
+    const prompt = EXTRACTION_PROMPT;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1329,6 +1362,7 @@ DUPLICATE DETECTION:
     const baseInvNum = metadata.invoiceNumber || parsed.invoiceNumber || "";
     const baseInvDate = metadata.invoiceDate || parsed.invoiceDate || "";
     const lineItems = items.map((item) => ({
+      // Existing fields — backwards compat for cron read at Sheets cols A-M.
       lineNum:       item.lineNum || 0,
       description:   item.description || "",
       quantity:      item.quantity || 0,
@@ -1341,6 +1375,19 @@ DUPLICATE DETECTION:
       vendorName:    baseVendor,
       invoiceNumber: baseInvNum,
       invoiceDate:   baseInvDate,
+
+      // Stage A raw labeled fields — flat pass-through, no derivation here.
+      // Number fields preserve NULL (don't coerce to 0); strings preserve null/empty.
+      // The Stage B derivation layer reads these to recompute quantity-for-pricing.
+      itemNumber:        item.itemNumber || null,
+      packSize:          item.packSize || null,
+      orderedCount:      item.orderedCount != null ? item.orderedCount : null,
+      shippedCount:      item.shippedCount != null ? item.shippedCount : null,
+      uomRaw:            item.uomRaw || null,
+      amount:            item.amount != null ? item.amount : null,
+      weightLineValue:   item.weightLineValue != null ? item.weightLineValue : null,
+      catchWeightMarker: item.catchWeightMarker || null,
+      rawColumns:        null,  // rawColumns dropped from prompt - was causing JSON truncation on dense F5 invoices; column kept in DB as backstop, always null going forward.
     }));
 
     try {
