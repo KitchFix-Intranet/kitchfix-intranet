@@ -19,6 +19,9 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
   const [filterVendor, setFilterVendor]   = useState("");
   const [busyQueueId, setBusyQueueId]     = useState(null);
   const [matchModalItem, setMatchModalItem] = useState(null);
+  // PR B commit 4: multi-select for bulk-skip. Set of queueId strings.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -147,6 +150,65 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
     }
   }
 
+  // PR B commit 4: bulk-skip-by-filter. Operator selects rows (checkboxes
+  // in each row + master "select all visible") then clicks "Skip N selected".
+  // POSTs the queueId array; server loops the REAL skipReviewQueueLine per
+  // row (so every guard fires) and returns per-row results. Partial success:
+  // successful rows are removed from the list; failed rows stay visible and
+  // the toast surfaces the count + first failure reason.
+  function toggleSelect(queueId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(queueId)) next.delete(queueId); else next.add(queueId);
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    setSelectedIds(new Set(visibleItems.map((i) => i.queueId)));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function handleBulkSkip() {
+    if (selectedIds.size === 0 || bulkBusy) return;
+    const queueIds = [...selectedIds];
+    setBulkBusy(true);
+    try {
+      const res = await fetch("/api/ops/inventory", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulk-skip-queue", queueIds }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        showToast?.(json.error || "Bulk skip failed", "error");
+        return;
+      }
+      const succeededIds = new Set((json.results || []).filter((r) => r.success).map((r) => r.queueId));
+      const failedRows   = (json.results || []).filter((r) => !r.success);
+      setItems((prev) => prev.filter((i) => !succeededIds.has(i.queueId)));
+      // Clear selection of succeeded rows; keep failed rows selected so the
+      // operator sees what's still here.
+      setSelectedIds((prev) => {
+        const next = new Set();
+        for (const id of prev) if (!succeededIds.has(id)) next.add(id);
+        return next;
+      });
+      if (failedRows.length === 0) {
+        showToast?.(`Skipped ${json.successCount} line(s)`, "success");
+      } else {
+        const firstReason = failedRows[0]?.error || "unknown";
+        showToast?.(`Skipped ${json.successCount} of ${queueIds.length}. ${json.failCount} failed - first reason: ${firstReason}`, "warning");
+      }
+    } catch (e) {
+      showToast?.(`Network error: ${e.message}`, "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   // PR B commit 3: Create-new-from-queue POST. Body shape:
   //   { queueId, name, category, unit }
   // Creates the catalog item (reusing the existing createInventoryItem with
@@ -195,7 +257,26 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
           ? <><span className="oh-rq-stats-sep">·</span><span>{totals.filtered} visible</span></>
           : null
         }
+        {selectedIds.size === 0 && visibleItems.length > 0
+          ? <><span className="oh-rq-stats-sep">·</span><button onClick={selectAllVisible} style={bulkLinkInlineStyle}>Select all visible</button></>
+          : null
+        }
       </div>
+
+      {selectedIds.size > 0 ? (
+        <div style={bulkBarStyle}>
+          <span style={{ fontWeight: 600 }}>{selectedIds.size} selected</span>
+          <button onClick={handleBulkSkip} disabled={bulkBusy} style={bulkSkipBtnStyle}>
+            {bulkBusy ? "Skipping..." : `Skip ${selectedIds.size} selected`}
+          </button>
+          <button onClick={selectAllVisible} disabled={bulkBusy} style={bulkLinkStyle}>
+            Select all visible ({visibleItems.length})
+          </button>
+          <button onClick={clearSelection} disabled={bulkBusy} style={bulkLinkStyle}>
+            Clear selection
+          </button>
+        </div>
+      ) : null}
 
       <div className="oh-rq-filters">
         <label>
@@ -249,7 +330,9 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
                 onResolve={handleResolve}
                 onSkip={handleSkip}
                 onOpenMatchModal={setMatchModalItem}
-                busy={busyQueueId === it.queueId}
+                onToggleSelect={toggleSelect}
+                selected={selectedIds.has(it.queueId)}
+                busy={busyQueueId === it.queueId || bulkBusy}
               />
             ))}
           </div>
@@ -258,3 +341,21 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
     </div>
   );
 }
+
+const bulkBarStyle = {
+  display: "flex", alignItems: "center", gap: 12,
+  background: "#fef3c7", border: "1px solid #fde68a",
+  borderRadius: 6, padding: "10px 14px", margin: "10px 0", fontSize: 14, color: "#92400e",
+};
+const bulkSkipBtnStyle = {
+  background: "#dc2626", color: "#fff", border: "none", borderRadius: 6,
+  padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+};
+const bulkLinkStyle = {
+  background: "transparent", border: "none", color: "#92400e",
+  textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: 13,
+};
+const bulkLinkInlineStyle = {
+  background: "transparent", border: "none", color: "#2563eb",
+  textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: 13,
+};

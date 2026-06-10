@@ -14,7 +14,7 @@ import { canonicalActionFor, reasonLabelFor } from "./reviewQueueLogic";
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
 
-export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, busy }) {
+export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, onToggleSelect, selected, busy }) {
   const [draftQty, setDraftQty] = useState(item.quantity ?? "");
   const [draftUnit, setDraftUnit] = useState(item.unit || "");
   const [softAlert, setSoftAlert] = useState(null); // { message, accept: () => fn }
@@ -78,6 +78,15 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
     <div className="oh-rq-row" data-busy={busy ? "1" : "0"}>
       <div className="oh-rq-row-head">
         <div className="oh-rq-row-meta">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect?.(item.queueId)}
+            disabled={busy}
+            title="Select for bulk skip"
+            style={{ marginRight: 4, cursor: busy ? "default" : "pointer" }}
+            aria-label={`Select line ${item.queueId} for bulk action`}
+          />
           <span className="oh-rq-pill oh-rq-pill-account">{item.account}</span>
           <span className="oh-rq-pill oh-rq-pill-vendor">{item.vendor || "—"}</span>
           <span className={`oh-rq-pill oh-rq-pill-reason oh-rq-pill-reason-${item.reason || "blank"}`}>{reasonLabelFor(item)}</span>

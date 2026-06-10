@@ -489,6 +489,42 @@ export async function handleSkipQueue(body) {
   }
 }
 
+// ── PR B commit 4: bulk-skip-by-filter ──
+// Loops the REAL skipReviewQueueLine per-row so every guard fires (already-
+// non-pending check, queue row found, etc.). Partial success: per-row results
+// returned; one failure does NOT roll back the others. Caller surfaces which
+// failed. Sequential (not parallel) to keep Sheets API rate limits comfortable
+// at typical batch sizes (~20-50 rows).
+export async function handleBulkSkipQueue(body) {
+  try {
+    const { queueIds, email } = body || {};
+    if (!Array.isArray(queueIds) || queueIds.length === 0) {
+      return { success: false, error: "queueIds (non-empty array) required" };
+    }
+    const results = [];
+    for (const queueId of queueIds) {
+      try {
+        if (!queueId) {
+          results.push({ queueId, success: false, error: "queueId required" });
+          continue;
+        }
+        await skipReviewQueueLine({ queueId, email: email || "" });
+        results.push({ queueId, success: true });
+      } catch (e) {
+        // Per-row failure does not abort the batch. Common case: row was
+        // resolved in another tab between the operator's selection load
+        // and the bulk-skip submit ("queue row already resolved: status=...").
+        results.push({ queueId, success: false, error: e.message });
+      }
+    }
+    const successCount = results.filter((r) => r.success).length;
+    const failCount    = results.length - successCount;
+    return { success: true, results, successCount, failCount };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ── PR B commit 2: review_queue Match-Confirm (accept-suggested + pick-different) ──
 // itemId is the operator-confirmed catalog item_id. source is "accept_suggested"
 // when the operator clicked Accept on the AI's suggestion, or "manual_pick" when
