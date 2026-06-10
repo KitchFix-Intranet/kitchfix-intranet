@@ -120,10 +120,10 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
     }
   }
 
-  // PR B commit 2: Match-Confirm POST. Body shape:
+  // PR B commit 2/3: Match-Confirm POST. Body shape:
   //   { queueId, itemId, source: "accept_suggested" | "manual_pick" }
   // The modal calls this with itemId set (either suggestedMatchId on Accept,
-  // or operator's pick from catalog search in commit 3).
+  // or operator's pick from the inline catalog search).
   async function handleResolveMatch(input) {
     setBusyQueueId(input.queueId);
     try {
@@ -138,6 +138,34 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
         return null;
       }
       showToast?.(json.error || "Match failed", "error");
+      return json;
+    } catch (e) {
+      showToast?.("Network error", "error");
+      return { error: e.message };
+    } finally {
+      setBusyQueueId(null);
+    }
+  }
+
+  // PR B commit 3: Create-new-from-queue POST. Body shape:
+  //   { queueId, name, category, unit }
+  // Creates the catalog item (reusing the existing createInventoryItem with
+  // skipPriceHistory=true to suppress the generic manual-add row) + appends
+  // the ONE invoiceUuid-tied price_history row + alias + queue flip.
+  async function handleResolveCreate(input) {
+    setBusyQueueId(input.queueId);
+    try {
+      const res = await fetch("/api/ops/inventory", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve-queue-create", ...input }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        showToast?.(`Catalog item created: ${json.name}`, "success");
+        return null;
+      }
+      showToast?.(json.error || "Create failed", "error");
       return json;
     } catch (e) {
       showToast?.("Network error", "error");
@@ -205,6 +233,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
           item={matchModalItem}
           onClose={() => setMatchModalItem(null)}
           onResolveMatch={handleResolveMatch}
+          onResolveCreate={handleResolveCreate}
           onSkip={handleSkip}
         />
       ) : null}

@@ -65,6 +65,7 @@ import {
   resolveReviewQueueLine,
   skipReviewQueueLine,
   resolveReviewQueueMatch,
+  resolveReviewQueueCreate,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -504,6 +505,29 @@ export async function handleResolveQueueMatch(body) {
       itemId,
       source: source || "accept_suggested",
       email: body.email || "",
+    });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B commit 3: Create-new-from-queue ──
+// Operator clicked "Create as new catalog item" in the modal. Creates the
+// catalog item (with skipPriceHistory=true so the internal manual-add row is
+// suppressed), then writes the alias + the SINGLE invoiceUuid-tied
+// manual_resolve price_history row + flips the queue.
+export async function handleResolveQueueCreate(body) {
+  try {
+    const { queueId, name, category, unit } = body || {};
+    if (!queueId)                      return { success: false, error: "queueId required" };
+    if (!name || !String(name).trim()) return { success: false, error: "name required" };
+    const result = await resolveReviewQueueCreate({
+      queueId,
+      name:     String(name).trim(),
+      category: category || "Food",
+      unit:     unit || "",
+      email:    body.email || "",
     });
     return { success: true, ...result };
   } catch (error) {
