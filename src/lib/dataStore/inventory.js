@@ -2428,6 +2428,136 @@ async function skipReviewQueueLineSheets({ queueId, email }) {
   };
 }
 
+// ── Sheets: confirm a catalog match for a review_queue line (PR B commit 2) ──
+// Match-Confirm path. Operator picks an itemId (either the suggested match
+// from the AI matcher, or - in commit 3 - a different catalog item via inline
+// search). Writes three rows in order:
+//
+//   W1. item_aliases append - links queueRow.lineItemText to the picked itemId
+//       so next week's identical SKU auto-matches instead of re-queuing.
+//       Mirrors the cron auto-match alias shape (kitchfix-inventory-cron
+//       index.js:881-890) byte-for-byte on data cols (aliasText, vendor,
+//       learnedAt). Operator-bearing cols differ for honest semantics:
+//       confidence=100 (operator-confirmed, not AI estimate), learnedBy=email
+//       (operator identity), source="manual_resolve" (distinguishes manual
+//       writes from ai_cron writes - the source enum is the consumer-facing
+//       provenance flag).
+//
+//   W2. price_history append - real invoiceUuid in col F, raw extracted
+//       unitPrice (no normalization). Single row per resolve event (no
+//       "manual-add" second row - one event = one price record, per the
+//       Q3 decision: writing both would re-introduce the duplicate-row
+//       pattern that polluted price_history pre-cleanup).
+//
+//   W3. review_queue flip - status='accepted', reviewedBy, reviewedAt,
+//       resultItemId (col M, previously unused, now records the linked item).
+//
+// Six guards, in order, all before any write:
+//   1. queueId required
+//   2. itemId required (operator must have picked something)
+//   3. queue row found
+//   4. status is pending (or blank)
+//   5. invoiceUuid non-empty - the empty-invoiceUuid refuse. Was implicit on
+//      the arithmetic path (those rows always carry invoiceUuid). Explicit
+//      here so the honest-write discipline is visible in code: never write a
+//      price_history row un-tied to a real invoice.
+//   6. ai_line_items lookup: exactly one match (ambiguity guard from B-1).
+//      Refusing on 2+ matches prevents silently price-tying to the wrong
+//      physical line when descriptions repeat on the same invoice.
+async function resolveReviewQueueMatchSheets({ queueId, itemId, source, email }) {
+  if (!queueId) throw new Error("queueId required");
+  if (!itemId)  throw new Error("itemId required");
+
+  const { rows: queueRows } = await readSheetSA(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  let queueRowIdx = -1;
+  let queueRow = null;
+  for (let i = 0; i < queueRows.length; i++) {
+    if (queueRows[i][RQ_IDX.queueId] === queueId) {
+      queueRowIdx = i;
+      queueRow = queueRows[i];
+      break;
+    }
+  }
+  if (!queueRow) throw new Error(`queue row not found: ${queueId}`);
+  const status = String(queueRow[RQ_IDX.status] || "").trim().toLowerCase();
+  if (status && status !== "pending") throw new Error(`queue row already resolved: status=${status}`);
+
+  const account      = queueRow[RQ_IDX.account];
+  const invoiceUuid  = String(queueRow[RQ_IDX.invoiceId] || "").trim();
+  const lineItemText = String(queueRow[RQ_IDX.lineItemText] || "").trim();
+  const vendor       = queueRow[RQ_IDX.vendor] || "";
+  const invoiceDate  = queueRow[RQ_IDX.invoiceDate] || "";
+
+  if (!invoiceUuid) throw new Error("invoiceUuid empty - cannot price-tie to invoice");
+
+  const { rows: liRows } = await readSheetSA(SHEET_IDS.AI_LINE_ITEMS, account);
+  const matches = [];
+  for (let i = 0; i < liRows.length; i++) {
+    const r = liRows[i];
+    if (String(r[AI_LI_IDX.invoiceUuid] || "").trim() === invoiceUuid &&
+        String(r[AI_LI_IDX.description] || "").trim() === lineItemText) {
+      matches.push({ idx: i, row: r });
+    }
+  }
+  if (matches.length === 0) {
+    throw new Error(`ai_line_items row not found for invoiceUuid=${invoiceUuid.slice(0,8)} desc="${lineItemText.slice(0,30)}"`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`ambiguous_line: ${matches.length} ai_line_items rows match (invoiceUuid, "${lineItemText.slice(0,30)}") on account=${account}. Cannot determine which line to price-tie. Skip this row.`);
+  }
+  const liRow = matches[0].row;
+  const unitPrice = parseNum(liRow[AI_LI_IDX.unitPrice]) || 0;
+
+  const now = new Date().toISOString();
+
+  // W1. item_aliases append (8 cols).
+  await appendRowSA(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB, [
+    generateId("alias"),       // A aliasId
+    lineItemText,              // B aliasText
+    itemId,                    // C itemId (operator's pick)
+    vendor,                    // D vendor
+    100,                       // E confidence (operator-confirmed)
+    email || "",               // F learnedBy
+    now,                       // G learnedAt
+    "manual_resolve",          // H source
+  ]);
+
+  // W2. price_history append (7 cols). Raw unitPrice, no normalization.
+  await appendRowSA(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB, [
+    itemId,                                 // A itemId
+    account,                                // B account
+    vendor,                                 // C vendor
+    unitPrice,                              // D price
+    String(invoiceDate).slice(0, 10),       // E invoiceDate
+    invoiceUuid,                            // F invoiceUuid (non-empty by guard)
+    now,                                    // G recordedAt
+  ]);
+
+  // W3. review_queue flip.
+  const queueRowA1 = queueRowIdx + 2;
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${queueRowA1}`,       values: [["accepted"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${queueRowA1}`,   values: [[email || ""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${queueRowA1}`,   values: [[now]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.resultItemId)}${queueRowA1}`, values: [[itemId]] },
+  ]);
+
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+
+  return {
+    queueId,
+    invoiceUuid,
+    account,
+    itemId,
+    source: source || "accept_suggested",
+    price: unitPrice,
+    resolvedAt: now,
+    resolvedBy: email || "",
+  };
+}
+
 // ── PG side: dormant adapters that fire when isDualWrite("review_queue") flips ──
 // Module 7 has not shipped yet; today these no-op because the dual-write
 // flag is off for review_queue / ai_line_items inventory tables. When the
@@ -2567,6 +2697,98 @@ async function skipReviewQueueLinePostgres({ queueId, email }) {
   return { queueId, invoiceUuid: qrow.invoice_id, account: qrow.account, resolvedAt: now, resolvedBy: email || "" };
 }
 
+// ── PG: confirm a catalog match for a review_queue line (PR B commit 2) ──
+// Mirror of resolveReviewQueueMatchSheets. Fires when isDualWrite("review_queue")
+// flips. Three writes mirror the Sheets path; same six guards in same order.
+//
+// vendor_id resolution: uses the existing resolveVendorIdPostgres helper to
+// look up vendors.id by name. If the vendor isn't resolvable, warn-log and
+// skip the alias + price_history inserts but still flip the queue row -
+// Sheets is authoritative and the queue should not stay pending just because
+// PG can't resolve a vendor name. Same defensive pattern as
+// createInventoryItemPostgres (line ~1503).
+async function resolveReviewQueueMatchPostgres({ queueId, itemId, source, email }) {
+  if (!queueId) throw new Error("queueId required");
+  if (!itemId)  throw new Error("itemId required");
+
+  const supa = getServiceClient();
+  const now = new Date().toISOString();
+
+  // 1) Find the queue row + status guard
+  const { data: qrow, error: qerr } = await supa.from("review_queue").select("*").eq("id", queueId).single();
+  if (qerr || !qrow) throw new Error(`PG queue row not found: ${queueId}`);
+  if (qrow.status !== "pending") throw new Error(`PG queue row already resolved: status=${qrow.status}`);
+
+  const invoiceUuid  = qrow.invoice_id;
+  const lineItemText = qrow.line_item_text;
+  const account      = qrow.account;
+  const vendor       = qrow.vendor || "";
+  const invoiceDate  = qrow.invoice_date;
+
+  if (!invoiceUuid) throw new Error("PG invoiceUuid empty - cannot price-tie to invoice");
+
+  // 2) Ambiguity guard - exactly one matching ai_line_items row.
+  const { data: lirows, error: lierr } = await supa.from("ai_line_items")
+    .select("id, invoice_uuid, description, unit, unit_price, vendor, invoice_date")
+    .eq("invoice_uuid", invoiceUuid)
+    .eq("description",  lineItemText)
+    .limit(2);
+  if (lierr) throw new Error(`PG ai_line_items lookup: ${lierr.message}`);
+  if (!lirows || !lirows[0]) throw new Error(`PG ai_line_items not found`);
+  if (lirows.length > 1) {
+    throw new Error(`ambiguous_line: multiple PG ai_line_items rows match (invoice_uuid, "${(lineItemText||"").slice(0,30)}"). Cannot determine which line to price-tie. Skip this row.`);
+  }
+  const li = lirows[0];
+  const unitPrice = parseNum(li.unit_price) || 0;
+
+  // 3) Resolve vendor display name -> vendor_id token. If missing, skip the
+  //    PG alias + price_history inserts (Sheets still wrote them).
+  const vendorId = await resolveVendorIdPostgres(vendor);
+
+  if (vendorId) {
+    // W1. item_aliases insert.
+    const { error: aliasErr } = await supa.from("item_aliases").insert({
+      item_id:    itemId,
+      alias_text: lineItemText,
+      vendor_id:  vendorId,
+      confidence: 100,
+      learned_by: email || null,
+      source:     "manual_resolve",
+      learned_at: now,
+    });
+    if (aliasErr) throw new Error(`PG item_aliases insert: ${aliasErr.message}`);
+
+    // W2. price_history insert. Raw unitPrice (no normalization). Real invoiceUuid.
+    const { error: phErr } = await supa.from("price_history").insert({
+      item_id:              itemId,
+      account,
+      vendor_id:            vendorId,
+      price:                unitPrice,
+      effective_date:       invoiceDate ? String(invoiceDate).slice(0, 10) : null,
+      invoice_id:           invoiceUuid,
+      source_or_invoice_id: invoiceUuid,
+      source:               "manual_resolve",
+      recorded_at:          now,
+      recorded_by:          email || null,
+    });
+    if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+  } else {
+    console.warn(`[resolveReviewQueueMatchPostgres] vendor "${vendor}" not resolvable to vendor_id; skipping PG alias + price_history (Sheets already wrote them)`);
+  }
+
+  // W3. review_queue flip - always runs, even if vendor_id missing (Sheets
+  //     side flipped the queue, PG must match or the queue would diverge).
+  const { error: qUpdErr } = await supa.from("review_queue").update({
+    status:         "accepted",
+    reviewed_by:    email || null,
+    reviewed_at:    now,
+    result_item_id: itemId,
+  }).eq("id", queueId);
+  if (qUpdErr) throw new Error(`PG review_queue update: ${qUpdErr.message}`);
+
+  return { queueId, invoiceUuid, account, itemId, source: source || "accept_suggested", price: unitPrice, resolvedAt: now, resolvedBy: email || "" };
+}
+
 // ── Orchestrators (Sheets always; PG when isDualWrite flag flips) ──
 
 export async function listReviewQueueLines(input = {}) {
@@ -2601,6 +2823,23 @@ export async function skipReviewQueueLine(input) {
       await skipReviewQueueLinePostgres(input);
     } catch (e) {
       console.error("[skipReviewQueueLine] PG mirror failed:", e.message);
+    }
+  }
+  return result;
+}
+
+// PR B commit 2: Match-Confirm path orchestrator. Sheets always; PG mirror on
+// isDualWrite("review_queue") or isDualWrite("item_aliases") or
+// isDualWrite("price_history") flips - any one of the three flags being on
+// is enough to want the PG side to mirror, because all three target stores
+// are touched.
+export async function resolveReviewQueueMatch(input) {
+  const result = await resolveReviewQueueMatchSheets(input);
+  if (isDualWrite("review_queue") || isDualWrite("item_aliases") || isDualWrite("price_history")) {
+    try {
+      await resolveReviewQueueMatchPostgres(input);
+    } catch (e) {
+      console.error("[resolveReviewQueueMatch] PG mirror failed:", e.message);
     }
   }
   return result;

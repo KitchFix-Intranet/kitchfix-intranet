@@ -20,6 +20,7 @@ import {
   handleMergeItems,
   handleResolveQueue,
   handleSkipQueue,
+  handleResolveQueueMatch,
   handleSaveLocations,
   handleSaveSortOrder,
   handleAdminCorrect,
@@ -91,8 +92,9 @@ export async function POST(request) {
       case "update-item": return NextResponse.json(await handleUpdateItem(body));
       case "batch-move-items": return NextResponse.json(await handleBatchMoveItems(body));
       case "merge-items": return NextResponse.json(await handleMergeItems(body));
-      case "resolve-queue": return NextResponse.json(await handleResolveQueue(body));
-      case "skip-queue":    return NextResponse.json(await handleSkipQueue(body));
+      case "resolve-queue":       return NextResponse.json(await handleResolveQueue(body));
+      case "skip-queue":          return NextResponse.json(await handleSkipQueue(body));
+      case "resolve-queue-match": return NextResponse.json(await handleResolveQueueMatch(body));
       case "save-locations": return NextResponse.json(await handleSaveLocations(body));
       case "save-sort-order": return NextResponse.json(await handleSaveSortOrder(body));
       case "add-subzone": return NextResponse.json(await handleAddSubZone(body));

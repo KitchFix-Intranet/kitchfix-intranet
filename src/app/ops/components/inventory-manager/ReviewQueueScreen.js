@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import ReviewQueueRow from "./ReviewQueueRow";
+import ReviewQueueResolveModal from "./ReviewQueueResolveModal";
 import { bucketCounts } from "./reviewQueueLogic";
 
 export default function ReviewQueueScreen({ showToast, onBack }) {
@@ -17,6 +18,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
   const [filterReason, setFilterReason]   = useState("");
   const [filterVendor, setFilterVendor]   = useState("");
   const [busyQueueId, setBusyQueueId]     = useState(null);
+  const [matchModalItem, setMatchModalItem] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,6 +120,33 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
     }
   }
 
+  // PR B commit 2: Match-Confirm POST. Body shape:
+  //   { queueId, itemId, source: "accept_suggested" | "manual_pick" }
+  // The modal calls this with itemId set (either suggestedMatchId on Accept,
+  // or operator's pick from catalog search in commit 3).
+  async function handleResolveMatch(input) {
+    setBusyQueueId(input.queueId);
+    try {
+      const res = await fetch("/api/ops/inventory", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve-queue-match", ...input }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        showToast?.(`Matched to catalog`, "success");
+        return null;
+      }
+      showToast?.(json.error || "Match failed", "error");
+      return json;
+    } catch (e) {
+      showToast?.("Network error", "error");
+      return { error: e.message };
+    } finally {
+      setBusyQueueId(null);
+    }
+  }
+
   return (
     <div className="oh-rq-screen">
       <div className="oh-rq-header">
@@ -171,6 +200,15 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       {error ? <div className="oh-rq-error">Error: {error}</div> : null}
       {loading ? <div className="oh-rq-loading">Loading review queue…</div> : null}
 
+      {matchModalItem ? (
+        <ReviewQueueResolveModal
+          item={matchModalItem}
+          onClose={() => setMatchModalItem(null)}
+          onResolveMatch={handleResolveMatch}
+          onSkip={handleSkip}
+        />
+      ) : null}
+
       {!loading && visibleItems.length === 0
         ? <div className="oh-rq-empty">{items.length === 0 ? "No pending review_queue lines." : "No lines match the active filters."}</div>
         : (
@@ -181,6 +219,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
                 item={it}
                 onResolve={handleResolve}
                 onSkip={handleSkip}
+                onOpenMatchModal={setMatchModalItem}
                 busy={busyQueueId === it.queueId}
               />
             ))}

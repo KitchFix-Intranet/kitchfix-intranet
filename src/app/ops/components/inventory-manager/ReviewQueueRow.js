@@ -14,7 +14,7 @@ import { canonicalActionFor, reasonLabelFor } from "./reviewQueueLogic";
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
 
-export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
+export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, busy }) {
   const [draftQty, setDraftQty] = useState(item.quantity ?? "");
   const [draftUnit, setDraftUnit] = useState(item.unit || "");
   const [softAlert, setSoftAlert] = useState(null); // { message, accept: () => fn }
@@ -143,7 +143,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
           </>
         ) : action === "MATCH_CONFIRM" ? (
           <div className="oh-rq-low-match">
-            <button disabled className="oh-rq-btn oh-rq-btn-resolve" title="Match-confirm modal ships in commit 2 of this PR">Review match</button>
+            <button onClick={() => onOpenMatchModal?.(item)} disabled={busy} className="oh-rq-btn oh-rq-btn-resolve">Review match</button>
             <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
           </div>
         ) : (

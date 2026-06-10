@@ -64,6 +64,7 @@ import {
   listReviewQueueLines,
   resolveReviewQueueLine,
   skipReviewQueueLine,
+  resolveReviewQueueMatch,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -481,6 +482,29 @@ export async function handleSkipQueue(body) {
     const { queueId, email } = body || {};
     if (!queueId) return { success: false, error: "queueId required" };
     const result = await skipReviewQueueLine({ queueId, email: email || "" });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B commit 2: review_queue Match-Confirm (accept-suggested + pick-different) ──
+// itemId is the operator-confirmed catalog item_id. source is "accept_suggested"
+// when the operator clicked Accept on the AI's suggestion, or "manual_pick" when
+// the operator searched the catalog and picked a different item (commit 3). All
+// writes use source="manual_resolve" in the data stores - the body's source is
+// audit metadata only.
+export async function handleResolveQueueMatch(body) {
+  try {
+    const { queueId, itemId, source } = body || {};
+    if (!queueId) return { success: false, error: "queueId required" };
+    if (!itemId)  return { success: false, error: "itemId required (operator must pick a catalog item)" };
+    const result = await resolveReviewQueueMatch({
+      queueId,
+      itemId,
+      source: source || "accept_suggested",
+      email: body.email || "",
+    });
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
