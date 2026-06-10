@@ -2172,6 +2172,18 @@ const AI_LI_IDX = {
   invoiceUuid: 0, timestamp: 1, account: 2, vendor: 3, invoiceNumber: 4,
   invoiceDate: 5, lineNum: 6, description: 7, quantity: 8, unit: 9,
   unitPrice: 10, extendedPrice: 11, category: 12,
+  // ── Stage A fields (intranet PR #133 / kitchfix-inventory-cron index.js:428-434) ──
+  // Labelled invoice-side fields parsed alongside the core qty/price/amount.
+  // For catch-weight: weightLineValue is the T/WT value when extraction
+  // captured it (Sysco beef rows often DON'T - then catch-weight detection
+  // falls through to the existing inline qty input, no UX regression).
+  itemNumber:      15,
+  packSize:        16,
+  orderedCount:    17,
+  shippedCount:    18,
+  uomRaw:          19,
+  amountStageA:    20,
+  weightLineValue: 21,
 };
 // invoice_submissions_26 column index for rawDriveUrl
 const SUB_RAW_DRIVE_URL_IDX = 16;
@@ -2274,6 +2286,12 @@ async function listReviewQueueLinesSheets({ account, reason, vendor } = {}) {
       unit:               li ? (li[AI_LI_IDX.unit]   || "")      : "",
       unitPrice:          li ? parseNum(li[AI_LI_IDX.unitPrice]) : null,
       amount:             li ? parseNum(li[AI_LI_IDX.extendedPrice]) : null,
+      // Stage A fields. Null when extraction didn't capture them (legacy rows,
+      // certain invoice formats) - catch-weight detection then returns null
+      // and the row falls through to the existing inline qty input.
+      weightLineValue:    li ? parseNum(li[AI_LI_IDX.weightLineValue]) : null,
+      shippedCount:       li ? parseNum(li[AI_LI_IDX.shippedCount])    : null,
+      uomRaw:             li ? (li[AI_LI_IDX.uomRaw] || "")             : "",
       suggestedMatchId:   r[RQ_IDX.suggestedMatchId]   || "",
       suggestedMatchName: r[RQ_IDX.suggestedMatchName] || "",
       confidence:         parseNum(r[RQ_IDX.confidence]) || 0,
@@ -2789,6 +2807,13 @@ async function listReviewQueueLinesPostgres({ account, reason, vendor } = {}) {
       unit:               li?.unit || "",
       unitPrice:          li ? parseNum(li.unit_price)    : null,
       amount:             li ? parseNum(li.extended_price): null,
+      // PG ai_line_items does not carry Stage A fields today (Module 7
+      // migration would add them). Return null so detectCatchWeight returns
+      // null and the row falls through to the existing inline qty input.
+      // Sheets-side reads ARE today's canonical source so this is dormant.
+      weightLineValue:    null,
+      shippedCount:       null,
+      uomRaw:             "",
       suggestedMatchId:   q.suggested_match_id   || "",
       suggestedMatchName: q.suggested_match_name || "",
       confidence:         parseNum(q.confidence) || 0,

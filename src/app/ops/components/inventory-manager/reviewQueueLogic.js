@@ -41,6 +41,46 @@ export function reasonLabelFor(item) {
   }
 }
 
+// Catch-weight detection (Tier A only - the system genuinely READ a weight
+// off the invoice; we never show the operator a back-calculated guess).
+//
+// A row qualifies for the catch-weight combined-resolve modal when ALL of:
+//   1. Reason is arithmetic_fail (the only kind of row this modal serves)
+//   2. Stage A weightLineValue is present + positive
+//   3. unitPrice and amount are present + positive (otherwise the math check
+//      below is undefined)
+//   4. weightLineValue * unitPrice reconciles with amount within the B-1
+//      soft-check tolerance (0.02 * |amount| + 0.01) - same gate the resolve
+//      itself enforces, so detection NEVER suggests a weight that would
+//      fail the soft-check.
+//
+// Returns { tier: "A", suggestedQty, suggestedUnit } on match, null otherwise.
+// Null means: row falls through to the existing inline qty input. No UX
+// regression vs B-1.
+//
+// suggestedUnit is "lb" by default. uomRaw may say "LB"/"CASE"/etc - we
+// default to "lb" since by-the-pound is the dominant catch-weight pattern
+// in this codebase's domain (food service proteins, dairy, deli).
+// Operator can edit in the modal.
+export function detectCatchWeight(item) {
+  if (item?.reason !== "arithmetic_fail") return null;
+  const w  = Number(item.weightLineValue);
+  const up = Number(item.unitPrice);
+  const am = Number(item.amount);
+  if (!Number.isFinite(w)  || w  <= 0) return null;
+  if (!Number.isFinite(up) || up <= 0) return null;
+  if (!Number.isFinite(am) || am <= 0) return null;
+  const calc      = w * up;
+  const delta     = Math.abs(calc - am);
+  const tolerance = 0.02 * Math.abs(am) + 0.01;
+  if (delta > tolerance) return null;
+  return {
+    tier:          "A",
+    suggestedQty:  w,
+    suggestedUnit: "lb",
+  };
+}
+
 // Three-bucket counts for the dashboard stats bar. Built from the same
 // canonical-action rules used to render rows.
 export function bucketCounts(items) {
