@@ -14,10 +14,15 @@ import { canonicalActionFor, reasonLabelFor } from "./reviewQueueLogic";
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
 
-export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, onToggleSelect, selected, busy }) {
+export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, onQuickAccept, onToggleSelect, selected, busy }) {
   const [draftQty, setDraftQty] = useState(item.quantity ?? "");
   const [draftUnit, setDraftUnit] = useState(item.unit || "");
   const [softAlert, setSoftAlert] = useState(null); // { message, accept: () => fn }
+  // PR B commit 4.5: inline quick-accept loading flag. Row owns its own busy
+  // state for the inline Accept button so the label can show "Accepting..."
+  // while the request is in flight without coupling to the screen's
+  // busyQueueId (which is also set by modal-fired actions).
+  const [quickAccepting, setQuickAccepting] = useState(false);
   const qtyRef = useRef(null);
 
   // Keep local state in sync when the underlying item changes (e.g. after a
@@ -57,6 +62,16 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
 
   async function handleSkip() {
     await onSkip({ queueId: item.queueId });
+  }
+
+  async function handleQuickAccept() {
+    if (!item.suggestedMatchId || isAmbiguous) return;
+    setQuickAccepting(true);
+    try {
+      await onQuickAccept?.(item);
+    } finally {
+      setQuickAccepting(false);
+    }
   }
 
   // Math display for the inline-qty row (so Kevin sees the implied math
@@ -152,8 +167,18 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
           </>
         ) : action === "MATCH_CONFIRM" ? (
           <div className="oh-rq-low-match">
-            <button onClick={() => onOpenMatchModal?.(item)} disabled={busy} className="oh-rq-btn oh-rq-btn-resolve">Review match</button>
-            <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
+            {item.suggestedMatchId && !isAmbiguous ? (
+              <button
+                onClick={handleQuickAccept}
+                disabled={busy || quickAccepting}
+                className="oh-rq-btn oh-rq-btn-resolve"
+                title={`Accept ${item.suggestedMatchName} (${Math.round(Number(item.confidence) || 0)}%)`}
+              >
+                {quickAccepting ? "Accepting..." : "Accept"}
+              </button>
+            ) : null}
+            <button onClick={() => onOpenMatchModal?.(item)} disabled={busy || quickAccepting} className="oh-rq-btn oh-rq-btn-skip" title="Review match in modal (pick different / create new)">Review</button>
+            <button onClick={handleSkip} disabled={busy || quickAccepting} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
           </div>
         ) : (
           <div className="oh-rq-low-match">

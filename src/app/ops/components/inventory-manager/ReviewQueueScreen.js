@@ -330,6 +330,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
                 onResolve={handleResolve}
                 onSkip={handleSkip}
                 onOpenMatchModal={setMatchModalItem}
+                onQuickAccept={(item) => handleResolveMatch({ queueId: item.queueId, itemId: item.suggestedMatchId, source: "accept_suggested" })}
                 onToggleSelect={toggleSelect}
                 selected={selectedIds.has(it.queueId)}
                 busy={busyQueueId === it.queueId || bulkBusy}

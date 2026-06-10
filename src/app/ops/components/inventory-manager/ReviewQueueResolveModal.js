@@ -25,7 +25,10 @@ const UNITS = ["case", "each", "box", "pack", "gallon", "lb", "oz", "bag", "doze
 
 export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch, onResolveCreate, onSkip }) {
   const [mode, setMode] = useState("overview");   // "overview" | "pick" | "create"
-  const [busy, setBusy] = useState(false);
+  // PR B commit 4.5: busy is now an action enum so the active button can show
+  // a "...ing" label while still disabling siblings. Truthy = something in
+  // flight; exact value tells the UI which button to relabel.
+  const [busy, setBusy] = useState(null);          // null | "accept" | "pick" | "create" | "skip"
   const [error, setError] = useState(null);
 
   const hasSuggestion = !!item.suggestedMatchId;
@@ -74,26 +77,26 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
   // ── Actions ──
   async function handleAccept() {
     if (!hasSuggestion || isAmbiguous) return;
-    setBusy(true); setError(null);
+    setBusy("accept"); setError(null);
     const res = await onResolveMatch({
       queueId: item.queueId,
       itemId:  item.suggestedMatchId,
       source:  "accept_suggested",
     });
-    setBusy(false);
+    setBusy(null);
     if (res?.error) { setError(res.error); return; }
     onClose();
   }
 
   async function handlePick(pickedItemId) {
     if (isAmbiguous) return;
-    setBusy(true); setError(null);
+    setBusy("pick"); setError(null);
     const res = await onResolveMatch({
       queueId: item.queueId,
       itemId:  pickedItemId,
       source:  "manual_pick",
     });
-    setBusy(false);
+    setBusy(null);
     if (res?.error) { setError(res.error); return; }
     onClose();
   }
@@ -101,22 +104,22 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
   async function handleCreate() {
     if (isAmbiguous) return;
     if (!createName.trim()) { setError("Name required"); return; }
-    setBusy(true); setError(null);
+    setBusy("create"); setError(null);
     const res = await onResolveCreate({
       queueId:  item.queueId,
       name:     createName.trim(),
       category: createCategory,
       unit:     createUnit || item.unit || "case",
     });
-    setBusy(false);
+    setBusy(null);
     if (res?.error) { setError(res.error); return; }
     onClose();
   }
 
   async function handleSkip() {
-    setBusy(true); setError(null);
+    setBusy("skip"); setError(null);
     const res = await onSkip({ queueId: item.queueId });
-    setBusy(false);
+    setBusy(null);
     if (res?.error) { setError(res.error); return; }
     onClose();
   }
@@ -128,7 +131,7 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
           <h3 id="oh-rq-modal-title" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
             {mode === "overview" ? "Review match" : mode === "pick" ? "Pick a different catalog item" : "Create as new catalog item"}
           </h3>
-          <button onClick={onClose} disabled={busy} style={closeBtnStyle} aria-label="Close">x</button>
+          <button onClick={onClose} disabled={!!busy} style={closeBtnStyle} aria-label="Close">x</button>
         </div>
 
         <div style={bodyStyle}>
@@ -171,19 +174,19 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-                <button onClick={handleAccept} disabled={busy || !hasSuggestion || isAmbiguous} style={primaryBtnStyle} title={!hasSuggestion ? "No suggestion to accept" : isAmbiguous ? "Disabled: ambiguous line" : ""}>
-                  Accept this match
+                <button onClick={handleAccept} disabled={!!busy || !hasSuggestion || isAmbiguous} style={primaryBtnStyle} title={!hasSuggestion ? "No suggestion to accept" : isAmbiguous ? "Disabled: ambiguous line" : ""}>
+                  {busy === "accept" ? "Accepting..." : "Accept this match"}
                 </button>
-                <button onClick={() => setMode("pick")} disabled={busy || isAmbiguous} style={secondaryBtnStyle}>
+                <button onClick={() => setMode("pick")} disabled={!!busy || isAmbiguous} style={secondaryBtnStyle}>
                   Pick a different item
                 </button>
-                <button onClick={() => setMode("create")} disabled={busy || isAmbiguous} style={secondaryBtnStyle}>
+                <button onClick={() => setMode("create")} disabled={!!busy || isAmbiguous} style={secondaryBtnStyle}>
                   Create as new catalog item
                 </button>
-                <button onClick={handleSkip} disabled={busy} style={skipBtnStyle}>
-                  Skip
+                <button onClick={handleSkip} disabled={!!busy} style={skipBtnStyle}>
+                  {busy === "skip" ? "Skipping..." : "Skip"}
                 </button>
-                <button onClick={onClose} disabled={busy} style={cancelBtnStyle}>
+                <button onClick={onClose} disabled={!!busy} style={cancelBtnStyle}>
                   Cancel
                 </button>
               </div>
@@ -200,7 +203,7 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
                   onChange={(e) => setPickSearch(e.target.value)}
                   placeholder="Search catalog by name, vendor, or item id..."
                   autoFocus
-                  disabled={busy || catalogLoading}
+                  disabled={!!busy || catalogLoading}
                   style={searchInputStyle}
                 />
                 <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
@@ -214,8 +217,8 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
                   <div style={{ color: "#94a3b8", fontStyle: "italic", padding: 12 }}>No items match &quot;{pickSearch}&quot;</div>
                 ) : (
                   pickResults.map((c) => (
-                    <button key={c.itemId} onClick={() => handlePick(c.itemId)} disabled={busy || isAmbiguous} style={pickResultStyle}>
-                      <div style={{ fontWeight: 600 }}>{c.name}</div>
+                    <button key={c.itemId} onClick={() => handlePick(c.itemId)} disabled={!!busy || isAmbiguous} style={pickResultStyle}>
+                      <div style={{ fontWeight: 600 }}>{c.name} {busy === "pick" ? <span style={{ color: "#64748b", fontWeight: 400 }}>· linking...</span> : null}</div>
                       <div style={{ color: "#64748b", fontSize: 12 }}>
                         {c.primaryVendor || "-"}
                         {c.lastPrice ? ` · ${fmtUsd(c.lastPrice)}/${c.unit || "ea"}` : ""}
@@ -226,7 +229,7 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                <button onClick={() => { setMode("overview"); setError(null); }} disabled={busy} style={cancelBtnStyle}>Back</button>
+                <button onClick={() => { setMode("overview"); setError(null); }} disabled={!!busy} style={cancelBtnStyle}>Back</button>
               </div>
             </>
           ) : null}
@@ -237,17 +240,17 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
               <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
                 <label style={labelStyle}>
                   <span>Name</span>
-                  <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} disabled={busy} style={inputStyle} autoFocus />
+                  <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} disabled={!!busy} style={inputStyle} autoFocus />
                 </label>
                 <label style={labelStyle}>
                   <span>Category</span>
-                  <select value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} disabled={busy} style={inputStyle}>
+                  <select value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} disabled={!!busy} style={inputStyle}>
                     {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label style={labelStyle}>
                   <span>Unit</span>
-                  <select value={createUnit || "case"} onChange={(e) => setCreateUnit(e.target.value)} disabled={busy} style={inputStyle}>
+                  <select value={createUnit || "case"} onChange={(e) => setCreateUnit(e.target.value)} disabled={!!busy} style={inputStyle}>
                     {[...new Set([createUnit, ...UNITS].filter(Boolean))].map((u) => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </label>
@@ -257,8 +260,10 @@ export default function ReviewQueueResolveModal({ item, onClose, onResolveMatch,
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                <button onClick={handleCreate} disabled={busy || isAmbiguous || !createName.trim()} style={primaryBtnStyle}>Create + resolve</button>
-                <button onClick={() => { setMode("overview"); setError(null); }} disabled={busy} style={cancelBtnStyle}>Back</button>
+                <button onClick={handleCreate} disabled={!!busy || isAmbiguous || !createName.trim()} style={primaryBtnStyle}>
+                  {busy === "create" ? "Creating..." : "Create + resolve"}
+                </button>
+                <button onClick={() => { setMode("overview"); setError(null); }} disabled={!!busy} style={cancelBtnStyle}>Back</button>
               </div>
             </>
           ) : null}
