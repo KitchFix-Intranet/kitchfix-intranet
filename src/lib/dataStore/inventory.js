@@ -2130,3 +2130,478 @@ export async function reactivateItem(input) {
     await reactivateItemPostgres(input);
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// REVIEW DASHBOARD PR B-1: list + resolve + skip
+//
+// list:    enrich pending review_queue rows with the line item details
+//          (unitPrice, amount from ai_line_items) + the invoice's rawDriveUrl
+//          (from invoice_submissions). Server-side join across 3 tables so
+//          the dashboard renders a dense actionable list in one round-trip.
+//
+// resolve: the arithmetic_fail mechanic. Operator types a corrected qty.
+//          Server updates ai_line_items.quantity (+ unit), appends a
+//          price_history row keyed to the real invoiceUuid + corrected
+//          qty + actual unitPrice, and flips review_queue.status='accepted'
+//          with reviewedBy + reviewedAt. Cron's PR A foundation reads the
+//          non-pending status next night and stops re-trying the invoice.
+//
+// skip:    no fake price_history. Just flip review_queue.status='rejected'
+//          + reviewedBy + reviewedAt. PR A reads 'rejected' (also non-
+//          pending) and stops re-trying.
+//
+// Status values are lowercase per the PG review_queue_status enum
+// (pending | accepted | rejected) and the existing Sheets convention.
+// PR A in the cron does `if (status && status !== "pending")` so both
+// 'accepted' and 'rejected' break the chronic-fail loop.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Sheets: AI_LINE_ITEMS per-account tab column order (matches dataStore/invoice.js
+// LINE_IDX; redeclared here so the helpers stay self-contained).
+const AI_LI_IDX = {
+  invoiceUuid: 0, timestamp: 1, account: 2, vendor: 3, invoiceNumber: 4,
+  invoiceDate: 5, lineNum: 6, description: 7, quantity: 8, unit: 9,
+  unitPrice: 10, extendedPrice: 11, category: 12,
+};
+// invoice_submissions_26 column index for rawDriveUrl
+const SUB_RAW_DRIVE_URL_IDX = 16;
+const SUB_UUID_IDX = 0;
+
+// Helper: A1 column letter for a 0-indexed column number (A=0, B=1, ..., AA=26).
+function colLetter(idx) {
+  let n = idx;
+  let s = "";
+  while (n >= 0) {
+    s = String.fromCharCode((n % 26) + 65) + s;
+    n = Math.floor(n / 26) - 1;
+  }
+  return s;
+}
+
+// ── Sheets: list pending review_queue lines + join ai_line_items + raw drive url ──
+async function listReviewQueueLinesSheets({ account, reason, vendor } = {}) {
+  const { rows: queueRows } = await readSheetSA(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+
+  // Filter to pending only (the dashboard's main mode). B-2 will add the
+  // resolved-history view as a second tab; today we only list pending.
+  const pending = queueRows.filter((r) => {
+    const st = String(r[RQ_IDX.status] || "").trim().toLowerCase();
+    if (st && st !== "pending") return false;
+    if (account && r[RQ_IDX.account] !== account) return false;
+    if (reason && String(r[RQ_IDX.reason] || "").trim() !== reason) return false;
+    if (vendor && r[RQ_IDX.vendor] !== vendor) return false;
+    return true;
+  });
+
+  // Collect distinct accounts + uuids we need to join against.
+  const accountSet = new Set(pending.map((r) => r[RQ_IDX.account]).filter(Boolean));
+  const uuidSet = new Set(pending.map((r) => r[RQ_IDX.invoiceId]).filter(Boolean));
+
+  // Read AI_LINE_ITEMS per-account tabs (just the accounts we need).
+  // Key the lookup by (invoiceUuid + description) since review_queue doesn't
+  // carry lineNum. If two lines on the same invoice share description, the
+  // first match wins; this is a rare edge case (the audit found 0 cross-
+  // account collisions; within-invoice repeats are chronic re-fires, not
+  // distinct lines).
+  const liByKey = new Map();
+  const liTimestampByKey = new Map();
+  // Ambiguity flag: count how many ai_line_items rows share each
+  // (invoiceUuid, description) key. When >1, the row cannot be safely
+  // resolved (we don't know which physical line the qty update should
+  // land on). UI surfaces this so the operator sees it BEFORE clicking
+  // Resolve; the resolve path also guards (refuse-on-ambiguity).
+  const liCountByKey = new Map();
+  for (const acct of accountSet) {
+    try {
+      const { rows: liRows } = await readSheetSA(SHEET_IDS.AI_LINE_ITEMS, acct);
+      for (const r of liRows) {
+        const u = String(r[AI_LI_IDX.invoiceUuid] || "").trim();
+        const d = String(r[AI_LI_IDX.description] || "").trim();
+        if (!u || !d) continue;
+        if (!uuidSet.has(u)) continue;
+        const k = `${u}::${d}`;
+        const ts = String(r[AI_LI_IDX.timestamp] || "");
+        liCountByKey.set(k, (liCountByKey.get(k) || 0) + 1);
+        // Prefer the most recently written row if multiple exist for the
+        // same (uuid, description) - mirrors the cron's "newest read" view.
+        if (!liByKey.has(k) || ts > (liTimestampByKey.get(k) || "")) {
+          liByKey.set(k, r);
+          liTimestampByKey.set(k, ts);
+        }
+      }
+    } catch (e) {
+      // Account tab might not exist - skip silently, matches existing dataStore
+      // behavior for sparse per-account fan-out.
+    }
+  }
+
+  // Read invoice_submissions_26 once to build the rawDriveUrl lookup.
+  const { rows: subRows } = await readSheetSA(SHEET_IDS.COLLECTION, "invoice_submissions_26");
+  const rawDriveUrlByUuid = new Map();
+  for (const r of subRows) {
+    const u = String(r[SUB_UUID_IDX] || "").trim();
+    if (!u || !uuidSet.has(u)) continue;
+    const url = String(r[SUB_RAW_DRIVE_URL_IDX] || "").trim();
+    if (url) rawDriveUrlByUuid.set(u, url);
+  }
+
+  // Enrich and return.
+  const items = pending.map((r) => {
+    const invoiceUuid = String(r[RQ_IDX.invoiceId] || "").trim();
+    const lineItemText = String(r[RQ_IDX.lineItemText] || "").trim();
+    const k = `${invoiceUuid}::${lineItemText}`;
+    const li = liByKey.get(k);
+    return {
+      queueId:            String(r[RQ_IDX.queueId] || "").trim(),
+      account:            r[RQ_IDX.account] || "",
+      vendor:             r[RQ_IDX.vendor] || "",
+      invoiceUuid,
+      invoiceDate:        r[RQ_IDX.invoiceDate] || "",
+      invoiceNumber:      li ? (li[AI_LI_IDX.invoiceNumber] || "") : "",
+      lineItemText,
+      description:        lineItemText,
+      quantity:           li ? parseNum(li[AI_LI_IDX.quantity])  : null,
+      unit:               li ? (li[AI_LI_IDX.unit]   || "")      : "",
+      unitPrice:          li ? parseNum(li[AI_LI_IDX.unitPrice]) : null,
+      amount:             li ? parseNum(li[AI_LI_IDX.extendedPrice]) : null,
+      suggestedMatchId:   r[RQ_IDX.suggestedMatchId]   || "",
+      suggestedMatchName: r[RQ_IDX.suggestedMatchName] || "",
+      confidence:         parseNum(r[RQ_IDX.confidence]) || 0,
+      reason:             r[RQ_IDX.reason] || "",
+      rawDriveUrl:        rawDriveUrlByUuid.get(invoiceUuid) || "",
+      ambiguous:          (liCountByKey.get(k) || 0) > 1,
+    };
+  });
+
+  // Filter out invoice-level holds. The 45 overcount_suspect_reextract rows
+  // have a different resolution path (re-extract the invoice) - they don't
+  // get the line-resolve dashboard treatment per Kevin's scope fence.
+  const actionable = items.filter((it) => it.reason !== "overcount_suspect_reextract");
+
+  return { items: actionable };
+}
+
+// ── Sheets: resolve a single arithmetic_fail line ──
+async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUnit, email }) {
+  if (!queueId) throw new Error("queueId required");
+  if (correctedQty == null || isNaN(Number(correctedQty))) throw new Error("correctedQty required");
+
+  // 1) Find the review_queue row by queueId.
+  const { rows: queueRows } = await readSheetSA(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  let queueRowIdx = -1;
+  let queueRow = null;
+  for (let i = 0; i < queueRows.length; i++) {
+    if (queueRows[i][RQ_IDX.queueId] === queueId) {
+      queueRowIdx = i;
+      queueRow = queueRows[i];
+      break;
+    }
+  }
+  if (!queueRow) throw new Error(`queue row not found: ${queueId}`);
+  if (queueRow[RQ_IDX.reason] === "overcount_suspect_reextract") {
+    throw new Error("overcount_suspect_reextract lines are not resolvable via this path");
+  }
+  const status = String(queueRow[RQ_IDX.status] || "").trim().toLowerCase();
+  if (status && status !== "pending") throw new Error(`queue row already resolved: status=${status}`);
+
+  const account     = queueRow[RQ_IDX.account];
+  const invoiceUuid = String(queueRow[RQ_IDX.invoiceId] || "").trim();
+  const lineItemText = String(queueRow[RQ_IDX.lineItemText] || "").trim();
+
+  // 2) Find the matching ai_line_items row + update its quantity (+ unit if provided).
+  // Ambiguity guard: review_queue doesn't carry lineNum, so within-invoice
+  // distinct lines sharing the same description (e.g. two "BEEF FLANK" rows
+  // with different actual quantities) would silently overwrite the wrong
+  // row if we picked first-match. Refuse instead and surface to the
+  // operator. B-2 plans to add lineNum to the queue row writer for a
+  // natural fix; the list endpoint pre-flags ambiguity (ambiguous: true)
+  // so the UI can disable Resolve before the operator even tries.
+  const { rows: liRows } = await readSheetSA(SHEET_IDS.AI_LINE_ITEMS, account);
+  const matches = [];
+  for (let i = 0; i < liRows.length; i++) {
+    const r = liRows[i];
+    if (String(r[AI_LI_IDX.invoiceUuid] || "").trim() === invoiceUuid &&
+        String(r[AI_LI_IDX.description] || "").trim() === lineItemText) {
+      matches.push({ idx: i, row: r });
+    }
+  }
+  if (matches.length === 0) {
+    throw new Error(`ai_line_items row not found for invoiceUuid=${invoiceUuid.slice(0,8)} desc="${lineItemText.slice(0,30)}"`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`ambiguous_line: ${matches.length} ai_line_items rows match (invoiceUuid, "${lineItemText.slice(0,30)}") on account=${account}. Cannot determine which line to update without lineNum. Skip this row or wait for PR B-2.`);
+  }
+  const liRowIdx = matches[0].idx;
+  const liRow    = matches[0].row;
+
+  const unitPrice = parseNum(liRow[AI_LI_IDX.unitPrice]) || 0;
+  const amount    = parseNum(liRow[AI_LI_IDX.extendedPrice]) || 0;
+  const vendor    = liRow[AI_LI_IDX.vendor] || queueRow[RQ_IDX.vendor] || "";
+  const invoiceDate = liRow[AI_LI_IDX.invoiceDate] || queueRow[RQ_IDX.invoiceDate] || "";
+  const now = new Date().toISOString();
+
+  // ai_line_items quantity is col I (index 8). Unit is col J (index 9).
+  // +2 = 1 for the header row + 1 for A1 1-indexing.
+  const liRowA1 = liRowIdx + 2;
+  const liUpdates = [
+    { range: `${account}!${colLetter(AI_LI_IDX.quantity)}${liRowA1}`, values: [[Number(correctedQty)]] },
+  ];
+  if (correctedUnit) {
+    liUpdates.push({ range: `${account}!${colLetter(AI_LI_IDX.unit)}${liRowA1}`, values: [[String(correctedUnit)]] });
+  }
+  await batchUpdateRangesSA(SHEET_IDS.AI_LINE_ITEMS, liUpdates);
+
+  // 3) Append a price_history row keyed to the REAL invoice (not "manual-verify"
+  //    like verifyItemPriceSheets does for catalog-side price corrections).
+  //    Source field carries the invoiceUuid so the cron can trace provenance.
+  const itemId = queueRow[RQ_IDX.suggestedMatchId] || ""; // empty if no match - skipped at price_history append below
+  if (itemId) {
+    await appendRowSA(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB, [
+      itemId,
+      account,
+      vendor,
+      unitPrice,
+      String(invoiceDate).slice(0, 10),
+      invoiceUuid,           // source-or-invoice-id col carries the canonical invoiceUuid
+      now,
+    ]);
+  }
+
+  // 4) Flip review_queue row: status='accepted', reviewedBy=email, reviewedAt=now.
+  const queueRowA1 = queueRowIdx + 2;
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${queueRowA1}`,     values: [["accepted"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${queueRowA1}`, values: [[email || ""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${queueRowA1}`, values: [[now]] },
+  ]);
+
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+  invalidateCache(SHEET_IDS.AI_LINE_ITEMS, account);
+
+  return {
+    queueId,
+    invoiceUuid,
+    account,
+    correctedQty: Number(correctedQty),
+    correctedUnit: correctedUnit || liRow[AI_LI_IDX.unit] || "",
+    unitPrice,
+    amount,
+    pricedAgainstItemId: itemId || null,
+    resolvedAt: now,
+    resolvedBy: email || "",
+  };
+}
+
+// ── Sheets: skip a single line (Option B: no fake price_history) ──
+async function skipReviewQueueLineSheets({ queueId, email }) {
+  if (!queueId) throw new Error("queueId required");
+  const { rows: queueRows } = await readSheetSA(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  let queueRowIdx = -1;
+  let queueRow = null;
+  for (let i = 0; i < queueRows.length; i++) {
+    if (queueRows[i][RQ_IDX.queueId] === queueId) {
+      queueRowIdx = i;
+      queueRow = queueRows[i];
+      break;
+    }
+  }
+  if (!queueRow) throw new Error(`queue row not found: ${queueId}`);
+  const status = String(queueRow[RQ_IDX.status] || "").trim().toLowerCase();
+  if (status && status !== "pending") throw new Error(`queue row already resolved: status=${status}`);
+
+  const now = new Date().toISOString();
+  const queueRowA1 = queueRowIdx + 2;
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${queueRowA1}`,     values: [["rejected"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${queueRowA1}`, values: [[email || ""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${queueRowA1}`, values: [[now]] },
+  ]);
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+
+  return {
+    queueId,
+    invoiceUuid: String(queueRow[RQ_IDX.invoiceId] || "").trim(),
+    account: queueRow[RQ_IDX.account] || "",
+    resolvedAt: now,
+    resolvedBy: email || "",
+  };
+}
+
+// ── PG side: dormant adapters that fire when isDualWrite("review_queue") flips ──
+// Module 7 has not shipped yet; today these no-op because the dual-write
+// flag is off for review_queue / ai_line_items inventory tables. When the
+// flag flips, the same input shape produces equivalent PG writes.
+
+async function listReviewQueueLinesPostgres({ account, reason, vendor } = {}) {
+  const supa = getServiceClient();
+  let q = supa.from("review_queue").select("*").eq("status", "pending");
+  if (account) q = q.eq("account", account);
+  if (reason)  q = q.eq("reason",  reason);
+  if (vendor)  q = q.eq("vendor",  vendor);
+  const { data: queueRows, error } = await q;
+  if (error) throw new Error(`PG review_queue: ${error.message}`);
+
+  const uuidSet = new Set((queueRows || []).map((r) => r.invoice_id).filter(Boolean));
+  const uuids = [...uuidSet];
+
+  // Bulk fetch matching ai_line_items + invoice_submissions
+  let liRows = [];
+  let subRows = [];
+  if (uuids.length > 0) {
+    const [li, sub] = await Promise.all([
+      supa.from("ai_line_items").select("invoice_uuid, description, quantity, unit, unit_price, extended_price, vendor, invoice_number, invoice_date").in("invoice_uuid", uuids),
+      supa.from("invoice_submissions").select("id, raw_drive_url").in("id", uuids),
+    ]);
+    if (li.error)  throw new Error(`PG ai_line_items: ${li.error.message}`);
+    if (sub.error) throw new Error(`PG invoice_submissions: ${sub.error.message}`);
+    liRows  = li.data  || [];
+    subRows = sub.data || [];
+  }
+
+  const liByKey = new Map();
+  const liCountByKey = new Map();   // ambiguity flag - same semantics as the Sheets path
+  for (const r of liRows) {
+    const k = `${r.invoice_uuid}::${r.description}`;
+    if (!liByKey.has(k)) liByKey.set(k, r);
+    liCountByKey.set(k, (liCountByKey.get(k) || 0) + 1);
+  }
+  const rawDriveByUuid = new Map();
+  for (const r of subRows) rawDriveByUuid.set(r.id, r.raw_drive_url || "");
+
+  const items = (queueRows || []).map((q) => {
+    const k = `${q.invoice_id}::${q.line_item_text}`;
+    const li = liByKey.get(k);
+    return {
+      queueId:            q.id,                       // PG uses UUID; Sheets uses 'q_<uid>'
+      account:            q.account || "",
+      vendor:             q.vendor  || (li?.vendor || ""),
+      invoiceUuid:        q.invoice_id || "",
+      invoiceDate:        q.invoice_date || (li?.invoice_date || ""),
+      invoiceNumber:      li?.invoice_number || "",
+      lineItemText:       q.line_item_text || "",
+      description:        q.line_item_text || "",
+      quantity:           li ? parseNum(li.quantity)      : null,
+      unit:               li?.unit || "",
+      unitPrice:          li ? parseNum(li.unit_price)    : null,
+      amount:             li ? parseNum(li.extended_price): null,
+      suggestedMatchId:   q.suggested_match_id   || "",
+      suggestedMatchName: q.suggested_match_name || "",
+      confidence:         parseNum(q.confidence) || 0,
+      reason:             q.reason || "",
+      rawDriveUrl:        rawDriveByUuid.get(q.invoice_id) || "",
+      ambiguous:          (liCountByKey.get(k) || 0) > 1,
+    };
+  }).filter((it) => it.reason !== "overcount_suspect_reextract");
+
+  return { items };
+}
+
+async function resolveReviewQueueLinePostgres({ queueId, correctedQty, correctedUnit, email }) {
+  const supa = getServiceClient();
+  const now = new Date().toISOString();
+
+  // 1) Find the queue row
+  const { data: qrow, error: qerr } = await supa.from("review_queue").select("*").eq("id", queueId).single();
+  if (qerr || !qrow) throw new Error(`PG queue row not found: ${queueId}`);
+  if (qrow.status !== "pending") throw new Error(`PG queue row already resolved: status=${qrow.status}`);
+
+  // 2) Find matching ai_line_items row + ambiguity guard (mirror of Sheets path).
+  const { data: lirows, error: lierr } = await supa.from("ai_line_items")
+    .select("id, invoice_uuid, description, unit, unit_price, extended_price, vendor, invoice_date")
+    .eq("invoice_uuid", qrow.invoice_id)
+    .eq("description",  qrow.line_item_text)
+    .limit(2);   // pull 2 to detect ambiguity without paginating
+  if (lierr) throw new Error(`PG ai_line_items lookup: ${lierr.message}`);
+  if (!lirows || !lirows[0]) throw new Error(`PG ai_line_items not found`);
+  if (lirows.length > 1) {
+    throw new Error(`ambiguous_line: multiple PG ai_line_items rows match (invoice_uuid, "${(qrow.line_item_text||"").slice(0,30)}"). Cannot determine which to update without lineNum. Skip or wait for PR B-2.`);
+  }
+  const li = lirows[0];
+
+  // 3) Update ai_line_items.quantity (+ unit)
+  const liPatch = { quantity: Number(correctedQty) };
+  if (correctedUnit) liPatch.unit = String(correctedUnit);
+  const { error: liUpdErr } = await supa.from("ai_line_items").update(liPatch).eq("id", li.id);
+  if (liUpdErr) throw new Error(`PG ai_line_items update: ${liUpdErr.message}`);
+
+  // 4) Append price_history (only if we have a suggested itemId)
+  const itemId = qrow.suggested_match_id || null;
+  if (itemId) {
+    const phRow = {
+      item_id:           itemId,
+      account:           qrow.account,
+      vendor_id:         li.vendor || qrow.vendor,
+      price:             parseNum(li.unit_price) || 0,
+      invoice_date:      String(li.invoice_date || qrow.invoice_date || "").slice(0, 10) || null,
+      invoice_id:        qrow.invoice_id,
+      recorded_at:       now,
+    };
+    const { error: phErr } = await supa.from("price_history").insert(phRow);
+    if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+  }
+
+  // 5) Flip review_queue status
+  const { error: qUpdErr } = await supa.from("review_queue").update({
+    status: "accepted",
+    reviewed_by: email || null,
+    reviewed_at: now,
+  }).eq("id", queueId);
+  if (qUpdErr) throw new Error(`PG review_queue update: ${qUpdErr.message}`);
+
+  return { queueId, invoiceUuid: qrow.invoice_id, account: qrow.account, resolvedAt: now, resolvedBy: email || "" };
+}
+
+async function skipReviewQueueLinePostgres({ queueId, email }) {
+  const supa = getServiceClient();
+  const now = new Date().toISOString();
+  const { data: qrow, error: qerr } = await supa.from("review_queue").select("status, invoice_id, account").eq("id", queueId).single();
+  if (qerr || !qrow) throw new Error(`PG queue row not found: ${queueId}`);
+  if (qrow.status !== "pending") throw new Error(`PG queue row already resolved: status=${qrow.status}`);
+  const { error: updErr } = await supa.from("review_queue").update({
+    status: "rejected",
+    reviewed_by: email || null,
+    reviewed_at: now,
+  }).eq("id", queueId);
+  if (updErr) throw new Error(`PG review_queue update: ${updErr.message}`);
+  return { queueId, invoiceUuid: qrow.invoice_id, account: qrow.account, resolvedAt: now, resolvedBy: email || "" };
+}
+
+// ── Orchestrators (Sheets always; PG when isDualWrite flag flips) ──
+
+export async function listReviewQueueLines(input = {}) {
+  // Reads route to whichever store is the read-side per the cutover config.
+  // For PR B-1 today, review_queue read flag is off so Sheets is canonical.
+  // When the read flag flips for Module 7, the PG path takes over.
+  if (isReadFromPostgres("review_queue")) {
+    return await listReviewQueueLinesPostgres(input);
+  }
+  return await listReviewQueueLinesSheets(input);
+}
+
+export async function resolveReviewQueueLine(input) {
+  const result = await resolveReviewQueueLineSheets(input);
+  if (isDualWrite("review_queue") || isDualWrite("ai_line_items")) {
+    try {
+      await resolveReviewQueueLinePostgres(input);
+    } catch (e) {
+      // Mirror existing dataStore behavior: log + continue. Sheets is
+      // authoritative until Module 7 ships, so a PG mirror failure does
+      // not roll back the Sheets write.
+      console.error("[resolveReviewQueueLine] PG mirror failed:", e.message);
+    }
+  }
+  return result;
+}
+
+export async function skipReviewQueueLine(input) {
+  const result = await skipReviewQueueLineSheets(input);
+  if (isDualWrite("review_queue")) {
+    try {
+      await skipReviewQueueLinePostgres(input);
+    } catch (e) {
+      console.error("[skipReviewQueueLine] PG mirror failed:", e.message);
+    }
+  }
+  return result;
+}

@@ -19,6 +19,7 @@ import {
   handleBatchMoveItems,
   handleMergeItems,
   handleResolveQueue,
+  handleSkipQueue,
   handleSaveLocations,
   handleSaveSortOrder,
   handleAdminCorrect,
@@ -55,7 +56,11 @@ export async function GET(request) {
       case "bootstrap": return NextResponse.json(await handleInventoryBootstrap({ account, fresh }));
       case "catalog": return NextResponse.json(await handleCatalogGet({ account }));
       case "history": return NextResponse.json(await handleHistoryGet({ account }));
-      case "review-queue": return NextResponse.json(await handleReviewQueueGet({ account }));
+      case "review-queue": {
+        const reason = searchParams.get("reason") || "";
+        const vendor = searchParams.get("vendor") || "";
+        return NextResponse.json(await handleReviewQueueGet({ account, reason, vendor }));
+      }
       case "print": return NextResponse.json(await handlePrint({ account }));
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -87,6 +92,7 @@ export async function POST(request) {
       case "batch-move-items": return NextResponse.json(await handleBatchMoveItems(body));
       case "merge-items": return NextResponse.json(await handleMergeItems(body));
       case "resolve-queue": return NextResponse.json(await handleResolveQueue(body));
+      case "skip-queue":    return NextResponse.json(await handleSkipQueue(body));
       case "save-locations": return NextResponse.json(await handleSaveLocations(body));
       case "save-sort-order": return NextResponse.json(await handleSaveSortOrder(body));
       case "add-subzone": return NextResponse.json(await handleAddSubZone(body));
