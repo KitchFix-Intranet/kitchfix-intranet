@@ -66,6 +66,7 @@ import {
   skipReviewQueueLine,
   resolveReviewQueueMatch,
   resolveReviewQueueCreate,
+  getCatalogItemDetail,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -553,6 +554,20 @@ export async function handleResolveQueueMatch(body) {
 // catalog item (with skipPriceHistory=true so the internal manual-add row is
 // suppressed), then writes the alias + the SINGLE invoiceUuid-tied
 // manual_resolve price_history row + flips the queue.
+// PR B commit 5: read-only catalog item detail peek for the inline expand
+// on the suggested-match row affordance. Returns one item + derived purchase
+// summary (vendors bought from, total price_history count, recent 5 prices).
+export async function handleCatalogItemDetail({ itemId, account }) {
+  try {
+    if (!itemId) return { success: false, error: "itemId required" };
+    const result = await getCatalogItemDetail({ itemId, account });
+    if (!result.item) return { success: false, error: "Catalog item not found" };
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function handleResolveQueueCreate(body) {
   try {
     const { queueId, name, category, unit } = body || {};

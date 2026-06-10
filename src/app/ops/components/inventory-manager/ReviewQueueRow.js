@@ -23,6 +23,11 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
   // while the request is in flight without coupling to the screen's
   // busyQueueId (which is also set by modal-fired actions).
   const [quickAccepting, setQuickAccepting] = useState(false);
+  // PR B commit 5: catalog-detail peek state. Lazy-load on first expand.
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detail, setDetail] = useState(null);          // { item: {...} }
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(null);
   const qtyRef = useRef(null);
 
   // Keep local state in sync when the underlying item changes (e.g. after a
@@ -74,6 +79,25 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
     }
   }
 
+  async function toggleDetail() {
+    if (detailOpen) { setDetailOpen(false); return; }
+    setDetailOpen(true);
+    if (detail || detailLoading || !item.suggestedMatchId) return;
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const qs = new URLSearchParams({ action: "catalog-item", itemId: item.suggestedMatchId, account: item.account || "" });
+      const res = await fetch(`/api/ops/inventory?${qs.toString()}`);
+      const json = await res.json();
+      if (json.success) setDetail(json);
+      else setDetailError(json.error || "Failed to load");
+    } catch (e) {
+      setDetailError(e.message);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   // Math display for the inline-qty row (so Kevin sees the implied math
   // before he commits): correctedQty x unitPrice ?= amount.
   const liveCalc = (() => {
@@ -116,11 +140,57 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
           <span title="extracted qty">qty: <strong>{fmtNum(item.quantity)}</strong> {item.unit}</span>
           <span title="extracted unit price">× <strong>{fmtUsd(item.unitPrice)}</strong>/unit</span>
           <span title="extracted line amount">= <strong>{fmtUsd(item.amount)}</strong></span>
-          {item.suggestedMatchName
-            ? <span className="oh-rq-row-match">→ <em>{item.suggestedMatchName}</em> ({Math.round(item.confidence)}%)</span>
-            : null
-          }
+          {item.suggestedMatchName ? (
+            item.suggestedMatchId ? (
+              <button
+                type="button"
+                className="oh-rq-row-match"
+                onClick={toggleDetail}
+                style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left" }}
+                title={detailOpen ? "Click to collapse" : "Click to inspect this catalog item before accepting"}
+              >
+                → <em>{item.suggestedMatchName}</em> ({Math.round(item.confidence)}%) <span style={{ color: "#94a3b8", fontSize: 11 }}>{detailOpen ? "▾" : "▸"}</span>
+              </button>
+            ) : (
+              <span className="oh-rq-row-match">→ <em>{item.suggestedMatchName}</em> ({Math.round(item.confidence)}%)</span>
+            )
+          ) : null}
         </div>
+        {detailOpen ? (
+          <div style={detailPanelStyle}>
+            {detailLoading ? <span style={{ color: "#64748b", fontSize: 12 }}>Loading catalog details…</span> : null}
+            {detailError ? <span style={{ color: "#991b1b", fontSize: 12 }}>Error: {detailError}</span> : null}
+            {detail?.item ? (
+              <>
+                <div style={detailGridStyle}>
+                  <div><span style={detailLabelStyle}>Unit</span><strong style={detailValueStyle}>{detail.item.unit || "—"}</strong></div>
+                  <div><span style={detailLabelStyle}>Category</span><strong style={detailValueStyle}>{detail.item.category || "—"}</strong></div>
+                  <div><span style={detailLabelStyle}>Primary vendor</span><strong style={detailValueStyle}>{detail.item.primaryVendor || "—"}</strong></div>
+                  <div><span style={detailLabelStyle}>Last price</span><strong style={detailValueStyle}>{detail.item.lastPrice ? `$${detail.item.lastPrice.toFixed(2)}` : "—"}{detail.item.lastPriceDate ? ` on ${detail.item.lastPriceDate}` : ""}</strong></div>
+                  <div><span style={detailLabelStyle}>Last price vendor</span><strong style={detailValueStyle}>{detail.item.lastPriceVendor || "—"}</strong></div>
+                  <div><span style={detailLabelStyle}>Purchase history</span><strong style={detailValueStyle}>{detail.item.purchaseCount} buys{detail.item.vendors?.length > 1 ? ` · ${detail.item.vendors.length} vendors` : ""}</strong></div>
+                </div>
+                {(item.unit && detail.item.unit && item.unit.toLowerCase() !== detail.item.unit.toLowerCase()) ? (
+                  <div style={unitMismatchStyle}>
+                    ⚠ Unit mismatch: this line is in <strong>{item.unit}</strong>, catalog item is tracked in <strong>{detail.item.unit}</strong>. Verify these are the same pack size before accepting.
+                  </div>
+                ) : null}
+                {detail.item.recent && detail.item.recent.length > 1 ? (
+                  <div style={recentPricesStyle}>
+                    <span style={detailLabelStyle}>Recent prices</span>
+                    {detail.item.recent.map((p, i) => (
+                      <div key={i} style={recentRowStyle}>
+                        <span style={{ color: "#64748b" }}>{p.date}</span>
+                        <span>{p.vendor}</span>
+                        <strong>${p.price.toFixed(2)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="oh-rq-row-action">
@@ -190,3 +260,30 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
     </div>
   );
 }
+
+// PR B commit 5 - inline catalog detail peek styles (kept local to this
+// component since the design is bespoke to the row and not reused elsewhere).
+const detailPanelStyle = {
+  marginTop: 8, padding: 10, background: "#f8fafc", border: "1px solid #e2e8f0",
+  borderRadius: 6, fontSize: 12, color: "#1e293b",
+};
+const detailGridStyle = {
+  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "6px 16px",
+};
+const detailLabelStyle = {
+  display: "block", color: "#64748b", fontSize: 11, marginBottom: 1,
+};
+const detailValueStyle = {
+  display: "block", fontWeight: 600, fontSize: 13,
+};
+const unitMismatchStyle = {
+  marginTop: 8, padding: "6px 10px", background: "#fef3c7", color: "#92400e",
+  border: "1px solid #fde68a", borderRadius: 4, fontSize: 12,
+};
+const recentPricesStyle = {
+  marginTop: 10, paddingTop: 8, borderTop: "1px solid #e2e8f0",
+};
+const recentRowStyle = {
+  display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 12,
+  padding: "2px 0", fontSize: 12,
+};

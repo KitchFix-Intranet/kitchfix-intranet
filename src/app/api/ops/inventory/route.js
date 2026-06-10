@@ -23,6 +23,7 @@ import {
   handleResolveQueueMatch,
   handleResolveQueueCreate,
   handleBulkSkipQueue,
+  handleCatalogItemDetail,
   handleSaveLocations,
   handleSaveSortOrder,
   handleAdminCorrect,
@@ -65,6 +66,10 @@ export async function GET(request) {
         return NextResponse.json(await handleReviewQueueGet({ account, reason, vendor }));
       }
       case "print": return NextResponse.json(await handlePrint({ account }));
+      case "catalog-item": {
+        const itemId = searchParams.get("itemId") || "";
+        return NextResponse.json(await handleCatalogItemDetail({ itemId, account }));
+      }
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
   } catch (error) {

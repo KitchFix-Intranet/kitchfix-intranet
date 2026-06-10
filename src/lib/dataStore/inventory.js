@@ -3063,6 +3063,59 @@ export async function resolveReviewQueueMatch(input) {
   return result;
 }
 
+// PR B commit 5: Catalog item detail peek (read-only) for the inline
+// expand-on-click affordance in the Review Queue row. Returns one catalog
+// row's display fields + a derived purchase summary from price_history.
+// Sheets-side canonical read (matches the existing catalog read pattern in
+// listReviewQueueLinesSheets). No PG mirror - this is a UI-only fetch.
+export async function getCatalogItemDetail({ itemId, account }) {
+  if (!itemId) throw new Error("itemId required");
+
+  const [catData, phData] = await Promise.all([
+    readSheetSA(SHEET_IDS.INVENTORY, "item_catalog"),
+    readSheetSA(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB),
+  ]);
+
+  const catRow = (catData.rows || []).find(
+    (r) => String(r[CAT_IDX.itemId] || "").trim() === itemId
+  );
+  if (!catRow) return { item: null };
+
+  // Derived: distinct vendors + purchase count + most-recent 5 prices.
+  // PRICE_HISTORY positional: 0 itemId, 1 account, 2 vendor, 3 price, 4 date,
+  // 5 invoiceUuid, 6 recordedAt.
+  const itemPrices = (phData.rows || []).filter(
+    (r) => String(r[0] || "").trim() === itemId
+  );
+  const vendors = [...new Set(itemPrices.map((r) => String(r[2] || "").trim()).filter(Boolean))];
+  const recent = [...itemPrices]
+    .sort((a, b) => String(b[4] || "").localeCompare(String(a[4] || "")))
+    .slice(0, 5)
+    .map((r) => ({
+      date:   r[4] || "",
+      vendor: r[2] || "",
+      price:  parseNum(r[3]) || 0,
+    }));
+
+  return {
+    item: {
+      itemId:           catRow[CAT_IDX.itemId]          || "",
+      name:             catRow[CAT_IDX.name]            || "",
+      account:          catRow[CAT_IDX.account]         || "",
+      unit:             catRow[CAT_IDX.unit]            || "",
+      category:         catRow[CAT_IDX.category]        || "",
+      primaryVendor:    catRow[CAT_IDX.primaryVendor]   || "",
+      lastPrice:        parseNum(catRow[CAT_IDX.lastPrice]) || 0,
+      lastPriceDate:    catRow[CAT_IDX.lastPriceDate]   || "",
+      lastPriceVendor:  catRow[CAT_IDX.lastPriceVendor] || "",
+      active:           catRow[CAT_IDX.active] === "TRUE" || catRow[CAT_IDX.active] === true,
+      purchaseCount:    itemPrices.length,
+      vendors,
+      recent,
+    },
+  };
+}
+
 // PR B commit 3: Create-new-from-queue orchestrator. The Sheets path's
 // createInventoryItem call (W0) handles its own PG inventory_items dual-write
 // via the existing INVENTORY_ITEMS_FLAG inside createInventoryItem. The PG
