@@ -1,11 +1,13 @@
 "use client";
-// PR B-1: Review Queue dashboard. Top-level screen inside InventoryManager.
+// PR B commit 1: Review Queue dashboard. Top-level screen inside InventoryManager.
 // Lists held lines, filters by account/reason/vendor, fires resolve + skip
-// against /api/ops/inventory. B-2 adds: low_match_confidence catalog match
-// modal + Resolved tab/history view.
+// against /api/ops/inventory. Stats bar now buckets by CANONICAL ACTION
+// (inline-qty / match-confirm / skip-only), not raw reason, so the count
+// matches the actions available to Kevin.
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import ReviewQueueRow from "./ReviewQueueRow";
+import { bucketCounts } from "./reviewQueueLogic";
 
 export default function ReviewQueueScreen({ showToast, onBack }) {
   const [items, setItems] = useState([]);
@@ -52,12 +54,16 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
     (!filterVendor  || it.vendor  === filterVendor)
   ), [items, filterAccount, filterReason, filterVendor]);
 
-  const totals = useMemo(() => ({
-    all:           items.length,
-    arithmetic:    items.filter((i) => i.reason === "arithmetic_fail").length,
-    lowMatch:      items.filter((i) => i.reason === "low_match_confidence").length,
-    filtered:      visibleItems.length,
-  }), [items, visibleItems]);
+  const totals = useMemo(() => {
+    const b = bucketCounts(items);
+    return {
+      all:          items.length,
+      inlineQty:    b.inlineQty,
+      matchConfirm: b.matchConfirm,
+      skipOnly:     b.skipOnly,
+      filtered:     visibleItems.length,
+    };
+  }, [items, visibleItems]);
 
   async function handleResolve(input) {
     setBusyQueueId(input.queueId);
@@ -123,9 +129,11 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       <div className="oh-rq-stats">
         <span><strong>{totals.all}</strong> pending</span>
         <span className="oh-rq-stats-sep">·</span>
-        <span><strong>{totals.arithmetic}</strong> arithmetic_fail</span>
+        <span><strong>{totals.inlineQty}</strong> math fails</span>
         <span className="oh-rq-stats-sep">·</span>
-        <span><strong>{totals.lowMatch}</strong> low_match_confidence</span>
+        <span><strong>{totals.matchConfirm}</strong> match-confirm</span>
+        <span className="oh-rq-stats-sep">·</span>
+        <span><strong>{totals.skipOnly}</strong> skip-only</span>
         {totals.filtered !== totals.all
           ? <><span className="oh-rq-stats-sep">·</span><span>{totals.filtered} visible</span></>
           : null

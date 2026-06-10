@@ -1,11 +1,15 @@
 "use client";
-// PR B-1: one row in the Review Queue dashboard.
-// Renders a single held line. Mechanic 1 (arithmetic_fail) shows an inline
-// qty input + Resolve. Mechanic 2 (low_match_confidence) shows "Select match"
-// which opens a modal (B-2 - left as a stub button in B-1).
-// Skip button is universal.
+// PR B commit 1: one row in the Review Queue dashboard.
+// Routes by canonical action (canonicalActionFor):
+//   INLINE_QTY    arithmetic_fail - inline qty input + Resolve (B-1, unchanged)
+//   MATCH_CONFIRM has a suggested match - "Review match" button (commit 2 wires
+//                 the ResolveModal; commit 1 ships the button disabled with a
+//                 clear "ships next" affordance)
+//   SKIP_ONLY     no actionable path - clear label + Skip button.
+// No more "Unsupported reason" stub. Skip button is universal.
 
 import { useState, useRef, useEffect } from "react";
+import { canonicalActionFor, reasonLabelFor } from "./reviewQueueLogic";
 
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
@@ -24,8 +28,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
     setSoftAlert(null);
   }, [item.queueId]);
 
-  const isArithmetic = item.reason === "arithmetic_fail";
-  const isLowMatch   = item.reason === "low_match_confidence";
+  const action = canonicalActionFor(item);
   // Ambiguity flag from the server: 2+ ai_line_items rows share the same
   // (invoiceUuid, description). Resolve would silently overwrite the wrong
   // physical line - the server-side guard refuses, but we also disable the
@@ -77,7 +80,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
         <div className="oh-rq-row-meta">
           <span className="oh-rq-pill oh-rq-pill-account">{item.account}</span>
           <span className="oh-rq-pill oh-rq-pill-vendor">{item.vendor || "—"}</span>
-          <span className={`oh-rq-pill oh-rq-pill-reason oh-rq-pill-reason-${item.reason}`}>{item.reason}</span>
+          <span className={`oh-rq-pill oh-rq-pill-reason oh-rq-pill-reason-${item.reason || "blank"}`}>{reasonLabelFor(item)}</span>
           {isAmbiguous ? <span className="oh-rq-pill oh-rq-pill-ambiguous" title="Two+ lines on this invoice share this description. Resolve disabled until B-2 adds lineNum to the queue row.">⚠ duplicate description — skip only</span> : null}
           {item.rawDriveUrl
             ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" className="oh-rq-link">📄 #{item.invoiceNumber || item.invoiceUuid.slice(0, 8)}</a>
@@ -97,7 +100,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
       </div>
 
       <div className="oh-rq-row-action">
-        {isArithmetic ? (
+        {action === "INLINE_QTY" ? (
           <>
             <div className="oh-rq-input-group">
               <label>Corrected qty</label>
@@ -127,7 +130,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
               }
             </div>
             <div className="oh-rq-buttons">
-              <button onClick={() => handleResolve(false)} disabled={busy || isAmbiguous || draftQty === ""} className="oh-rq-btn oh-rq-btn-resolve" title={isAmbiguous ? "Disabled: ambiguous line - skip only until PR B-2 adds lineNum" : ""}>Resolve</button>
+              <button onClick={() => handleResolve(false)} disabled={busy || isAmbiguous || draftQty === ""} className="oh-rq-btn oh-rq-btn-resolve" title={isAmbiguous ? "Disabled: ambiguous line - skip only until lineNum is in the queue row" : ""}>Resolve</button>
               <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
             </div>
             {softAlert ? (
@@ -138,14 +141,14 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, busy }) {
               </div>
             ) : null}
           </>
-        ) : isLowMatch ? (
+        ) : action === "MATCH_CONFIRM" ? (
           <div className="oh-rq-low-match">
-            <span className="oh-rq-low-match-stub">Catalog match resolve ships in PR B-2</span>
+            <button disabled className="oh-rq-btn oh-rq-btn-resolve" title="Match-confirm modal ships in commit 2 of this PR">Review match</button>
             <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
           </div>
         ) : (
           <div className="oh-rq-low-match">
-            <span className="oh-rq-low-match-stub">Unsupported reason: {item.reason}</span>
+            <span className="oh-rq-low-match-stub">No catalog match suggested - skip or wait for catalog search</span>
             <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
           </div>
         )}
