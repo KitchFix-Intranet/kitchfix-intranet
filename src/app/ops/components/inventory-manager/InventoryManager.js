@@ -5,6 +5,7 @@ import LocationSetup from "./LocationSetup";
 import ProductPlacement from "./ProductPlacement";
 import ItemReview from "./ItemReview";
 import ItemCatalog from "./ItemCatalog";
+import ReviewQueueScreen from "./ReviewQueueScreen";
 
 const Icon = ({ d, size = 16, color = "#64748b", sw = 2, style = {} }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
@@ -219,6 +220,11 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
       onComplete={async () => { setScreen("home"); await loadBootstrap(account, true); }}
       onGoToPlacement={async () => { await loadBootstrap(account, true); setScreen("placement"); }}
       showToast={showToast} />;
+  } else if (screen === "review-queue") {
+    content = <ReviewQueueScreen
+      showToast={showToast}
+      onBack={() => setScreen("home")}
+    />;
   } else if (screen === "catalog") {
     content = <ItemCatalog catalogItems={catalogItems} locations={locations} excludedItems={excludedItems} archivedItems={archivedItems} aliases={aliases} itemPrices={itemPrices}
       onUpdateCatalogItem={(itemId, fields) => {
@@ -267,6 +273,10 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
       { key:"review", label:"Item review", desc:"Scan for duplicates and clean up your catalog", icon:icons.sparkle, color:"#d97706", active:true },
       { key:"placement", label:"Product placement", desc: unassigned > 0 ? `${unassigned} items not yet assigned to a location` : "Manage zones, shelves, and organize items", badge:unassigned, icon:icons.grid, color:"#2563eb", active:true },
       { key:"catalog", label:"Item catalog", desc:`View all ${stats.totalItems} items across your vendors`, icon:icons.list, color:"#8b5cf6", active:true },
+      // PR B-1: review_queue dashboard. Admin-only - visible to everyone in
+      // InventoryManager since page.js already gates this whole view to
+      // INV_MANAGER_DEV_USERS. No additional gating needed at the tile level.
+      { key:"review-queue", label:"Review Queue", desc:"Resolve held invoice lines (math fails / low-confidence matches)", icon:icons.clipboard, color:"#ea580c", active:true },
       { key:"history", label:"Count history", desc:"Review past counts and compare periods", icon:icons.clipboard, color:"#0891b2", active:false },
     ];
 
@@ -310,6 +320,7 @@ onAddSubZone={(parentLocationId, name, icon, color) => {
                 if (item.key === "placement") setScreen("placement");
                 else if (item.key === "review") setScreen("review");
                 else if (item.key === "catalog") setScreen("catalog");
+                else if (item.key === "review-queue") setScreen("review-queue");
               }}>
               <span className="oh-inv-mgmt-manage-card-icon" style={{background:item.color+"20"}}><Icon d={item.icon} size={16} color={item.color} sw={2}/></span>
               <div className="oh-inv-mgmt-manage-card-body">

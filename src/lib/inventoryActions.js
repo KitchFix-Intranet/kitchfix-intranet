@@ -61,6 +61,9 @@ import {
   updateCatalogItem,
   archiveItem,
   reactivateItem,
+  listReviewQueueLines,
+  resolveReviewQueueLine,
+  skipReviewQueueLine,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -408,7 +411,81 @@ export async function handleExcludeItem({ account, itemId, email }) {
   }
 }
 
-export async function handleResolveQueue(body) { return { success: false, error: "Week 3" }; }
+// ── PR B-1: review_queue resolve (arithmetic_fail mechanic) ──
+//
+// Soft-check (Kevin's guard): the resolve path must NOT silently write new
+// arithmetic nonsense. Before writing, verify that
+//   |correctedQty * unitPrice - amount| <= 2% * |amount| + 0.01
+// (the same tolerance the cron's arithmetic gate uses). If the math doesn't
+// reconcile and the caller did NOT pass acceptArithmeticMismatch=true, the
+// handler refuses and returns the values so the UI can show
+// "14.6 x $30.24 = $441.50 but the line amount is $X - resolve anyway?"
+// On the second call (with acceptArithmeticMismatch=true), the resolve
+// proceeds and the soft-check failure is recorded in the response for the
+// audit log (B-2's History tab surfaces it).
+function softCheckArithmetic(correctedQty, unitPrice, amount) {
+  const calc = Number(correctedQty || 0) * Number(unitPrice || 0);
+  const ext  = Number(amount || 0);
+  const tol  = 0.02 * Math.abs(ext) + 0.01;
+  const delta = Math.abs(calc - ext);
+  return {
+    pass: delta <= tol,
+    calc, ext, tol, delta,
+  };
+}
+
+export async function handleResolveQueue(body) {
+  try {
+    const { queueId, correctedQty, correctedUnit, acceptArithmeticMismatch } = body || {};
+    if (!queueId)                            return { success: false, error: "queueId required" };
+    if (correctedQty == null || isNaN(Number(correctedQty))) return { success: false, error: "correctedQty required" };
+
+    // Look up the line for the soft-check. List endpoint returns the
+    // enriched shape; we just look up one item.
+    const { items } = await listReviewQueueLines({});
+    const target = items.find((it) => it.queueId === queueId);
+    if (!target) return { success: false, error: "queue row not found or already resolved" };
+
+    const soft = softCheckArithmetic(Number(correctedQty), target.unitPrice, target.amount);
+    if (!soft.pass && !acceptArithmeticMismatch) {
+      return {
+        success: false,
+        error: "arithmetic_mismatch",
+        softCheck: {
+          ...soft,
+          message: `${Number(correctedQty)} x $${Number(target.unitPrice).toFixed(2)} = $${soft.calc.toFixed(2)} but the line amount is $${soft.ext.toFixed(2)}. Resolve anyway?`,
+        },
+      };
+    }
+
+    const result = await resolveReviewQueueLine({
+      queueId,
+      correctedQty: Number(correctedQty),
+      correctedUnit: correctedUnit || target.unit || "",
+      email: body.email || "",
+    });
+
+    return {
+      success: true,
+      ...result,
+      softCheck: { ...soft, overridden: !soft.pass },
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B-1: review_queue skip (Option B - no fake price_history) ──
+export async function handleSkipQueue(body) {
+  try {
+    const { queueId, email } = body || {};
+    if (!queueId) return { success: false, error: "queueId required" };
+    const result = await skipReviewQueueLine({ queueId, email: email || "" });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
 export async function handleSaveLocations({ account, locations, email }) {
   try {
@@ -467,7 +544,15 @@ export async function handleDeactivateLocation({ account, locationId }) {
 export async function handleAdminCorrect(body) { return { success: false, error: "Week 4" }; }
 export async function handleScan(body) { return { success: false, error: "Week 3" }; }
 export async function handleHistoryGet({ account }) { return { success: true, sessions: [] }; }
-export async function handleReviewQueueGet({ account }) { return { success: true, items: [] }; }
+// ── PR B-1: review_queue listing (pending only; B-2 adds the resolved tab) ──
+export async function handleReviewQueueGet({ account, reason, vendor }) {
+  try {
+    const { items } = await listReviewQueueLines({ account, reason, vendor });
+    return { success: true, items };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
 // handleDedupCatalog RETIRED per audit BR4. PG UNIQUE constraints on
 // inventory_items + merge_inventory_items() RPC replace it.
