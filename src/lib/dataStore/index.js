@@ -127,6 +127,11 @@ export {
   listReviewQueueLines,
   resolveReviewQueueLine,
   skipReviewQueueLine,
+  resolveReviewQueueMatch,
+  resolveReviewQueueCreate,
+  getCatalogItemDetail,
+  undoLastAction,
+  getCanonicalUnits,
 } from "./inventory.js";
 
 // Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no

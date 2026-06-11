@@ -64,6 +64,11 @@ import {
   listReviewQueueLines,
   resolveReviewQueueLine,
   skipReviewQueueLine,
+  resolveReviewQueueMatch,
+  resolveReviewQueueCreate,
+  getCatalogItemDetail,
+  undoLastAction,
+  getCanonicalUnits,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -481,6 +486,129 @@ export async function handleSkipQueue(body) {
     const { queueId, email } = body || {};
     if (!queueId) return { success: false, error: "queueId required" };
     const result = await skipReviewQueueLine({ queueId, email: email || "" });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B commit 4: bulk-skip-by-filter ──
+// Loops the REAL skipReviewQueueLine per-row so every guard fires (already-
+// non-pending check, queue row found, etc.). Partial success: per-row results
+// returned; one failure does NOT roll back the others. Caller surfaces which
+// failed. Sequential (not parallel) to keep Sheets API rate limits comfortable
+// at typical batch sizes (~20-50 rows).
+export async function handleBulkSkipQueue(body) {
+  try {
+    const { queueIds, email } = body || {};
+    if (!Array.isArray(queueIds) || queueIds.length === 0) {
+      return { success: false, error: "queueIds (non-empty array) required" };
+    }
+    const results = [];
+    for (const queueId of queueIds) {
+      try {
+        if (!queueId) {
+          results.push({ queueId, success: false, error: "queueId required" });
+          continue;
+        }
+        await skipReviewQueueLine({ queueId, email: email || "" });
+        results.push({ queueId, success: true });
+      } catch (e) {
+        // Per-row failure does not abort the batch. Common case: row was
+        // resolved in another tab between the operator's selection load
+        // and the bulk-skip submit ("queue row already resolved: status=...").
+        results.push({ queueId, success: false, error: e.message });
+      }
+    }
+    const successCount = results.filter((r) => r.success).length;
+    const failCount    = results.length - successCount;
+    return { success: true, results, successCount, failCount };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B commit 2: review_queue Match-Confirm (accept-suggested + pick-different) ──
+// itemId is the operator-confirmed catalog item_id. source is "accept_suggested"
+// when the operator clicked Accept on the AI's suggestion, or "manual_pick" when
+// the operator searched the catalog and picked a different item (commit 3). All
+// writes use source="manual_resolve" in the data stores - the body's source is
+// audit metadata only.
+export async function handleResolveQueueMatch(body) {
+  try {
+    const { queueId, itemId, source } = body || {};
+    if (!queueId) return { success: false, error: "queueId required" };
+    if (!itemId)  return { success: false, error: "itemId required (operator must pick a catalog item)" };
+    const result = await resolveReviewQueueMatch({
+      queueId,
+      itemId,
+      source: source || "accept_suggested",
+      email: body.email || "",
+    });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ── PR B commit 3: Create-new-from-queue ──
+// Operator clicked "Create as new catalog item" in the modal. Creates the
+// catalog item (with skipPriceHistory=true so the internal manual-add row is
+// suppressed), then writes the alias + the SINGLE invoiceUuid-tied
+// manual_resolve price_history row + flips the queue.
+// PR B commit 6: undo last action. Token-driven reversal with refuse-on-
+// divergence guard. Token is opaque to the client - they pass back whatever
+// the last action returned in result.undo.
+export async function handleUndoAction(body) {
+  try {
+    const token = body?.token;
+    if (!token) return { success: false, error: "token required" };
+    const result = await undoLastAction(token);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// PR B commit 8: GET the canonical units list (col A of units_canonical
+// tab). Adding a new standard unit later = add a row to the tab; no code
+// change needed. The list is small (15 today) and stable enough that the
+// screen fetches it once on mount.
+export async function handleUnitList() {
+  try {
+    const result = await getCanonicalUnits();
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// PR B commit 5: read-only catalog item detail peek for the inline expand
+// on the suggested-match row affordance. Returns one item + derived purchase
+// summary (vendors bought from, total price_history count, recent 5 prices).
+export async function handleCatalogItemDetail({ itemId, account }) {
+  try {
+    if (!itemId) return { success: false, error: "itemId required" };
+    const result = await getCatalogItemDetail({ itemId, account });
+    if (!result.item) return { success: false, error: "Catalog item not found" };
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleResolveQueueCreate(body) {
+  try {
+    const { queueId, name, category, unit } = body || {};
+    if (!queueId)                      return { success: false, error: "queueId required" };
+    if (!name || !String(name).trim()) return { success: false, error: "name required" };
+    const result = await resolveReviewQueueCreate({
+      queueId,
+      name:     String(name).trim(),
+      category: category || "Food",
+      unit:     unit || "",
+      email:    body.email || "",
+    });
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };

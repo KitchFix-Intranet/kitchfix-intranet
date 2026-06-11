@@ -20,6 +20,12 @@ import {
   handleMergeItems,
   handleResolveQueue,
   handleSkipQueue,
+  handleResolveQueueMatch,
+  handleResolveQueueCreate,
+  handleBulkSkipQueue,
+  handleCatalogItemDetail,
+  handleUndoAction,
+  handleUnitList,
   handleSaveLocations,
   handleSaveSortOrder,
   handleAdminCorrect,
@@ -62,6 +68,11 @@ export async function GET(request) {
         return NextResponse.json(await handleReviewQueueGet({ account, reason, vendor }));
       }
       case "print": return NextResponse.json(await handlePrint({ account }));
+      case "catalog-item": {
+        const itemId = searchParams.get("itemId") || "";
+        return NextResponse.json(await handleCatalogItemDetail({ itemId, account }));
+      }
+      case "unit-list": return NextResponse.json(await handleUnitList());
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
   } catch (error) {
@@ -91,8 +102,12 @@ export async function POST(request) {
       case "update-item": return NextResponse.json(await handleUpdateItem(body));
       case "batch-move-items": return NextResponse.json(await handleBatchMoveItems(body));
       case "merge-items": return NextResponse.json(await handleMergeItems(body));
-      case "resolve-queue": return NextResponse.json(await handleResolveQueue(body));
-      case "skip-queue":    return NextResponse.json(await handleSkipQueue(body));
+      case "resolve-queue":       return NextResponse.json(await handleResolveQueue(body));
+      case "skip-queue":          return NextResponse.json(await handleSkipQueue(body));
+      case "resolve-queue-match":  return NextResponse.json(await handleResolveQueueMatch(body));
+      case "resolve-queue-create": return NextResponse.json(await handleResolveQueueCreate(body));
+      case "bulk-skip-queue":      return NextResponse.json(await handleBulkSkipQueue(body));
+      case "undo-action":          return NextResponse.json(await handleUndoAction(body));
       case "save-locations": return NextResponse.json(await handleSaveLocations(body));
       case "save-sort-order": return NextResponse.json(await handleSaveSortOrder(body));
       case "add-subzone": return NextResponse.json(await handleAddSubZone(body));
