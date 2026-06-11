@@ -2267,6 +2267,28 @@ async function listReviewQueueLinesSheets({ account, reason, vendor } = {}) {
     if (url) rawDriveUrlByUuid.set(u, url);
   }
 
+  // PR B commit 5.5: enrich rows with the catalog item's last price + last
+  // unit + last vendor for the suggested match. Lets the row UI show the
+  // operator what the catalog item charges TODAY (the "is this a 20% jump?"
+  // gut-check inline, no detail-panel click required).
+  const catalogItemIds = new Set(
+    pending.map((r) => String(r[RQ_IDX.suggestedMatchId] || "").trim()).filter(Boolean)
+  );
+  const catalogByItemId = new Map();
+  if (catalogItemIds.size > 0) {
+    const catData = await readSheetSA(SHEET_IDS.INVENTORY, "item_catalog");
+    for (const r of catData.rows || []) {
+      const id = String(r[CAT_IDX.itemId] || "").trim();
+      if (!id || !catalogItemIds.has(id)) continue;
+      catalogByItemId.set(id, {
+        unit:            r[CAT_IDX.unit]            || "",
+        lastPrice:       parseNum(r[CAT_IDX.lastPrice]) || 0,
+        lastPriceDate:   r[CAT_IDX.lastPriceDate]   || "",
+        lastPriceVendor: r[CAT_IDX.lastPriceVendor] || "",
+      });
+    }
+  }
+
   // Enrich and return.
   const items = pending.map((r) => {
     const invoiceUuid = String(r[RQ_IDX.invoiceId] || "").trim();
@@ -2298,6 +2320,12 @@ async function listReviewQueueLinesSheets({ account, reason, vendor } = {}) {
       reason:             r[RQ_IDX.reason] || "",
       rawDriveUrl:        rawDriveUrlByUuid.get(invoiceUuid) || "",
       ambiguous:          (liCountByKey.get(k) || 0) > 1,
+      // PR B commit 5.5 enrichments. catalogLast* are populated when the
+      // row has a suggested catalog match; null when it doesn't.
+      catalogLastPrice:   catalogByItemId.get(String(r[RQ_IDX.suggestedMatchId] || "").trim())?.lastPrice ?? null,
+      catalogLastUnit:    catalogByItemId.get(String(r[RQ_IDX.suggestedMatchId] || "").trim())?.unit ?? null,
+      catalogLastVendor:  catalogByItemId.get(String(r[RQ_IDX.suggestedMatchId] || "").trim())?.lastPriceVendor ?? null,
+      catalogLastDate:    catalogByItemId.get(String(r[RQ_IDX.suggestedMatchId] || "").trim())?.lastPriceDate ?? null,
     };
   });
 
@@ -2814,6 +2842,12 @@ async function listReviewQueueLinesPostgres({ account, reason, vendor } = {}) {
       weightLineValue:    null,
       shippedCount:       null,
       uomRaw:             "",
+      // PR B commit 5.5: catalog last-price enrichment is Sheets-canonical
+      // today (Module 7 hasn't shipped). PG path returns nulls.
+      catalogLastPrice:   null,
+      catalogLastUnit:    null,
+      catalogLastVendor:  null,
+      catalogLastDate:    null,
       suggestedMatchId:   q.suggested_match_id   || "",
       suggestedMatchName: q.suggested_match_name || "",
       confidence:         parseNum(q.confidence) || 0,

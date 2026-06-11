@@ -140,6 +140,18 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
           <span title="extracted qty">qty: <strong>{fmtNum(item.quantity)}</strong> {item.unit}</span>
           <span title="extracted unit price">× <strong>{fmtUsd(item.unitPrice)}</strong>/unit</span>
           <span title="extracted line amount">= <strong>{fmtUsd(item.amount)}</strong></span>
+          {item.catalogLastPrice && Number(item.catalogLastPrice) > 0 ? (() => {
+            const lastPrice = Number(item.catalogLastPrice);
+            const thisPrice = Number(item.unitPrice);
+            const delta = thisPrice > 0 && lastPrice > 0 ? ((thisPrice - lastPrice) / lastPrice) * 100 : null;
+            const color = delta == null ? "#64748b" : Math.abs(delta) < 1 ? "#64748b" : delta > 0 ? "#dc2626" : "#16a34a";
+            const arrow = delta == null ? "" : Math.abs(delta) < 1 ? "" : delta > 0 ? "↑" : "↓";
+            return (
+              <span title={`Catalog last-price: ${fmtUsd(lastPrice)}/${item.catalogLastUnit || "unit"} on ${item.catalogLastDate || ""} via ${item.catalogLastVendor || ""}`} style={{ color, marginLeft: 6, fontSize: 12 }}>
+                catalog {fmtUsd(lastPrice)}{item.catalogLastUnit ? `/${item.catalogLastUnit}` : ""} {arrow}{delta != null && Math.abs(delta) >= 1 ? ` ${Math.abs(delta).toFixed(0)}%` : ""}
+              </span>
+            );
+          })() : null}
           {item.suggestedMatchName ? (
             item.suggestedMatchId ? (
               <button

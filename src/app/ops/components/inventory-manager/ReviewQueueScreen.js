@@ -22,6 +22,12 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
   // PR B commit 4: multi-select for bulk-skip. Set of queueId strings.
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // PR B commit 5.5: sort order for the visible list.
+  const [sortBy, setSortBy] = useState("default");      // "default" | "vendor" | "reason" | "confidence"
+  // PR B commit 5.5: session counters (since component mount). Resets on
+  // refresh or page reload - the goal is a single-session progress meter, not
+  // an audit trail.
+  const [sessionStats, setSessionStats] = useState({ resolved: 0, skipped: 0, created: 0 });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,11 +59,22 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
 
   // Server already filters; we re-filter client-side only when the user
   // changes the dropdown without re-fetching (snappier UX).
-  const visibleItems = useMemo(() => items.filter((it) =>
-    (!filterAccount || it.account === filterAccount) &&
-    (!filterReason  || it.reason  === filterReason)  &&
-    (!filterVendor  || it.vendor  === filterVendor)
-  ), [items, filterAccount, filterReason, filterVendor]);
+  const visibleItems = useMemo(() => {
+    const filtered = items.filter((it) =>
+      (!filterAccount || it.account === filterAccount) &&
+      (!filterReason  || it.reason  === filterReason)  &&
+      (!filterVendor  || it.vendor  === filterVendor)
+    );
+    if (sortBy === "default") return filtered;
+    const REASON_RANK = { arithmetic_fail: 0, low_match_confidence: 1, possible_new: 2, "": 3, overcount_suspect_reextract: 4 };
+    const cmp = (a, b) => {
+      if (sortBy === "vendor")     return (a.vendor || "").localeCompare(b.vendor || "");
+      if (sortBy === "reason")     return (REASON_RANK[a.reason] ?? 9) - (REASON_RANK[b.reason] ?? 9);
+      if (sortBy === "confidence") return (Number(a.confidence) || 0) - (Number(b.confidence) || 0);  // lowest first = most attention
+      return 0;
+    };
+    return [...filtered].sort(cmp);
+  }, [items, filterAccount, filterReason, filterVendor, sortBy]);
 
   const totals = useMemo(() => {
     const b = bucketCounts(items);
@@ -82,6 +99,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
         // Remove the resolved item from the visible list. No reload - the
         // server side handles dedup; this is just UI continuity.
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        setSessionStats((s) => ({ ...s, resolved: s.resolved + 1 }));
         showToast?.(`Resolved: qty=${input.correctedQty}`, "success");
         return null;
       }
@@ -110,6 +128,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       const json = await res.json();
       if (json.success) {
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        setSessionStats((s) => ({ ...s, skipped: s.skipped + 1 }));
         showToast?.("Skipped", "success");
         return null;
       }
@@ -137,6 +156,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       const json = await res.json();
       if (json.success) {
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        setSessionStats((s) => ({ ...s, resolved: s.resolved + 1 }));
         showToast?.(`Matched to catalog`, "success");
         return null;
       }
@@ -189,6 +209,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       const succeededIds = new Set((json.results || []).filter((r) => r.success).map((r) => r.queueId));
       const failedRows   = (json.results || []).filter((r) => !r.success);
       setItems((prev) => prev.filter((i) => !succeededIds.has(i.queueId)));
+      setSessionStats((s) => ({ ...s, skipped: s.skipped + succeededIds.size }));
       // Clear selection of succeeded rows; keep failed rows selected so the
       // operator sees what's still here.
       setSelectedIds((prev) => {
@@ -224,6 +245,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       const json = await res.json();
       if (json.success) {
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
+        setSessionStats((s) => ({ ...s, resolved: s.resolved + 1, created: s.created + 1 }));
         showToast?.(`Catalog item created: ${json.name}`, "success");
         return null;
       }
@@ -261,6 +283,13 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
           ? <><span className="oh-rq-stats-sep">·</span><button onClick={selectAllVisible} style={bulkLinkInlineStyle}>Select all visible</button></>
           : null
         }
+        {(sessionStats.resolved + sessionStats.skipped) > 0 ? (
+          <><span className="oh-rq-stats-sep">·</span>
+            <span style={sessionPillStyle} title={`This session: ${sessionStats.resolved} resolved (${sessionStats.created} created new), ${sessionStats.skipped} skipped`}>
+              session: <strong>{sessionStats.resolved}</strong> resolved · <strong>{sessionStats.skipped}</strong> skipped
+            </span>
+          </>
+        ) : null}
       </div>
 
       {selectedIds.size > 0 ? (
@@ -300,8 +329,17 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
             {vendorOptions.map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </label>
-        {filterAccount || filterReason || filterVendor
-          ? <button className="oh-rq-clear" onClick={() => { setFilterAccount(""); setFilterReason(""); setFilterVendor(""); }}>Clear filters</button>
+        <label>
+          Sort
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="default">Default</option>
+            <option value="vendor">Vendor (A-Z)</option>
+            <option value="reason">Reason (math first)</option>
+            <option value="confidence">Confidence (lowest first)</option>
+          </select>
+        </label>
+        {filterAccount || filterReason || filterVendor || sortBy !== "default"
+          ? <button className="oh-rq-clear" onClick={() => { setFilterAccount(""); setFilterReason(""); setFilterVendor(""); setSortBy("default"); }}>Clear filters</button>
           : null
         }
       </div>
@@ -359,4 +397,8 @@ const bulkLinkStyle = {
 const bulkLinkInlineStyle = {
   background: "transparent", border: "none", color: "#2563eb",
   textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: 13,
+};
+const sessionPillStyle = {
+  background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0",
+  borderRadius: 4, padding: "2px 8px", fontSize: 12,
 };
