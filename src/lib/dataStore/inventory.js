@@ -3099,7 +3099,7 @@ async function resolveReviewQueueMatchPostgres({ queueId, itemId, source, email 
 
   // 2) Ambiguity guard - exactly one matching ai_line_items row.
   const { data: lirows, error: lierr } = await supa.from("ai_line_items")
-    .select("id, invoice_uuid, description, unit, unit_price, vendor, invoice_date")
+    .select("id, invoice_uuid, description, unit, unit_price, vendor_name, invoice_date")
     .eq("invoice_uuid", invoiceUuid)
     .eq("description",  lineItemText)
     .limit(2);
@@ -3151,7 +3151,7 @@ async function resolveReviewQueueCreatePostgres({ queueId, itemId, email }) {
 
   // Ambiguity guard - exactly one matching ai_line_items row.
   const { data: lirows, error: lierr } = await supa.from("ai_line_items")
-    .select("id, invoice_uuid, description, unit, unit_price, vendor, invoice_date")
+    .select("id, invoice_uuid, description, unit, unit_price, vendor_name, invoice_date")
     .eq("invoice_uuid", invoiceUuid)
     .eq("description",  lineItemText)
     .limit(2);
