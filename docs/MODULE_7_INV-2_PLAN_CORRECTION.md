@@ -22,6 +22,14 @@ actually requires now.
 The one-line summary: **INV-2 is no longer "write the rewires." It is "verify the pre-built
 rewires and flip four flags as a single atomic group."**
 
+**Status of the rest of Module 7 (verified live 2026-06-11):** INV-1 (schema) and INV-3
+(backfill) are **done and verified against real rows** — the rename, vendor FKs, dropped
+`priceAtLastCount`, generated columns, views, junction table, and widened price-history key all
+landed; FK-integrity and generated-column checks pass live; backfill row counts match. The
+`item_catalog` / `inventory_items` dual name is the intentional Sheets-tab-vs-PG-table contract,
+not a half-rename. So INV-2 is the only remaining build phase — and §2a is the gate in front of
+it.
+
 ---
 
 ## 1. Corrected handler enumeration: 30 → 35
@@ -58,11 +66,16 @@ Every Review Queue resolve path already has a dormant Postgres mirror. INV-2's p
 workstream is verifying each produces writes equivalent to its Sheets path — **forward and
 reverse.**
 
-This is not box-checking. **We have a live instance of why it matters:** the
-`undoReconcilePostgres` `.eq("description", null)` no-op we caught and fixed *this session* was
-exactly one of these dormant mirrors — it looked correct and silently did nothing. There are 10
-of these paths. At least one already shipped broken. Verifying the artifact, not trusting the
-mirror, is the standing principle that has protected this data all along.
+This is not box-checking. **Three of these dormant mirrors have now been confirmed shipped
+broken — every one we have actually inspected.** (1) `undoReconcilePostgres` had an
+`.eq("description", null)` PostgREST no-op — caught and fixed this session. (2) The Match /
+Create / Undo mirrors write enum values (`manual_resolve`, `manual_resolve_reverted`) that do
+not exist in the live DB — engine-confirmed via `22P02` rejection. (3) The arithmetic-fail
+mirror `resolveReviewQueueLinePostgres` has four distinct bugs in one insert (see §2a). The
+score on inspected mirrors is 3-for-3 broken. This is no longer a precaution — it is a
+demonstrated pattern: **assume every unverified mirror is broken until proven otherwise against
+a real row.** Verifying the artifact, not trusting the mirror, is the standing principle that
+has protected this data all along.
 
 | # | Path | Forward writes | Reverse (Undo) writes |
 |---|---|---|---|
@@ -76,6 +89,45 @@ against **both** its mid-day-sample behavior and a larger batch, so the practica
 surface is ~10 forward+reverse checks. Each verified the same way: run the resolve in dual-write,
 read the real PG row, confirm it matches what the Sheets path wrote. **Eye-verified, not
 count-verified.**
+
+## 2a. HARD CUTOVER PREREQUISITES (must land before the §3 flag flip)
+
+These are not "verify" items — they are confirmed defects with a known fix, found by recon on
+2026-06-11. They must be fixed **and re-verified** before the four RQ flags are flipped, and
+before `feat/review-queue-complete-tool` merges to main carrying the broken mirrors. None fire
+today (feat branch unmerged, flags off, failures are loud not silent), so they are gating, not
+urgent.
+
+**P1 — Enum members missing (engine-confirmed `22P02`).** The Match / Pick-different / Create
+paths (`writeMatchResolutionPostgres`) write `source: "manual_resolve"` to both `item_aliases`
+and `price_history`; the Undo reversers write `source: "manual_resolve_reverted"` and *filter*
+on `"manual_resolve"` in their WHERE clauses. Neither value exists in the live enums
+(`inventory_alias_source` = manual/ocr_learned/merge/item_review/ai_cron; `price_history_source`
+= manual_add/manual_verify/invoice_ocr/merge). Fix — four single-DDL statements, no column
+rewrite:
+```sql
+ALTER TYPE inventory_alias_source  ADD VALUE 'manual_resolve';
+ALTER TYPE inventory_alias_source  ADD VALUE 'manual_resolve_reverted';
+ALTER TYPE price_history_source     ADD VALUE 'manual_resolve';
+ALTER TYPE price_history_source     ADD VALUE 'manual_resolve_reverted';
+```
+Both the write value AND the WHERE-filter value must exist, or Undo silently matches zero rows
+even after the writes succeed.
+
+**P2 — `resolveReviewQueueLinePostgres` (arithmetic-fail mirror) has four bugs in one insert.**
+This path's PG `price_history` insert: (a) omits `source` (NOT NULL → `23502`); (b) omits
+`source_or_invoice_id` (NOT NULL → `23502`); (c) sets `vendor_id` to a vendor *name* string
+("Sysco") instead of an id ("SYS-339") → FK violation `23503` — the name→id lookup already
+exists elsewhere in the same file; (d) writes a column `invoice_date` that does not exist on
+`price_history` (schema column is `effective_date`) → PostgREST 400. All four are conform-the-
+code-to-the-schema fixes; the schema is correct and fixed. **Note:** the sibling B-1 arithmetic
+path is already on `main` — confirm whether main's version carries the same four bugs (it is
+flag-gated off, but it is the one defect not purely future-gated).
+
+**P3 — Re-verify all 10 mirrors after P1/P2.** Fixing the obvious bugs is not the same as the
+mirror being correct — that conflation is exactly what the 3-for-3 broken record warns against.
+After P1 and P2 land, every mirror gets the §2 eye-verification against a real row. "Fixed" means
+"verified," not "looks right."
 
 ---
 
@@ -177,8 +229,10 @@ not a doubling. The increase is verification surface (10 paths) and cutover care
 
 ## INV-2 workstreams, in dependency order
 
+0. **Land the §2a hard prerequisites** — P1 enum `ALTER TYPE`s, P2 the four-bug arithmetic-fail
+   insert, P3 re-verify. *This is the gate; nothing else proceeds until it clears.*
 1. **Verify 10 PG mirrors** (forward + reverse), eye-verified against real rows. *Highest value
-   — at least one already shipped broken.*
+   — 3 of 3 inspected mirrors shipped broken; assume the rest are too.*
 2. **Resolve read-canonical** for review_queue / ai_line_items / item_aliases / price_history.
 3. **Flip the four RQ flags as one atomic group** (§3 — they cannot be staged).
 4. **Verify Create-new's `skipPriceHistory` suppression survives** the shared-function rewire (§4).
