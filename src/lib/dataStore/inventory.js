@@ -3493,12 +3493,26 @@ async function undoReconcilePostgres(token) {
     // If 2+ matches: concurrent-insert ambiguity, see note above.
     // Both: silent skip.
   }
-  // price_history mark reverted (idempotent via source='manual_resolve' filter)
+  // price_history mark reverted.
+  // Fix A (mechanical half): source filter is 'invoice_ocr' (the value the
+  // P2-fixed forward path writes), not 'manual_resolve' (the original code's
+  // mistaken filter that silently matched zero rows).
+  // Fix B (over-revert): WHERE includes recorded_at because the Reconcile
+  // fingerprint carries recordedAt (not price - Reconcile's fingerprint shape
+  // is {itemId, invoiceUuid, recordedAt}, while Match's is {itemId, invoiceUuid,
+  // price, recordedAt}). recorded_at is set at forward-write time so it's
+  // uniquely identifying.
+  // Marker semantics: SET source='manual_resolve_reverted' is PROVISIONAL.
+  // Semantically imperfect for an invoice_ocr row (that enum value is the
+  // operator-resolution marker) but enum-valid and reversible. The right
+  // marker for OCR-sourced rows depends on Task #131 (PG-vs-Sheets revert
+  // parity decision); revisit when that lands.
   if (token.priceHistoryFingerprint) {
     await supa.from("price_history").update({ source: "manual_resolve_reverted" })
-      .eq("item_id",    token.priceHistoryFingerprint.itemId)
-      .eq("invoice_id", token.priceHistoryFingerprint.invoiceUuid)
-      .eq("source",     "manual_resolve");
+      .eq("item_id",     token.priceHistoryFingerprint.itemId)
+      .eq("invoice_id",  token.priceHistoryFingerprint.invoiceUuid)
+      .eq("recorded_at", token.priceHistoryFingerprint.recordedAt)
+      .eq("source",      "invoice_ocr");
   }
   // queue row flip back
   await supa.from("review_queue").update({
@@ -3544,11 +3558,17 @@ async function undoMatchPostgres(token) {
       .eq("alias_text",  token.aliasFingerprint.aliasText)
       .eq("source",      "manual_resolve");
   }
-  // price_history mark reverted
+  // price_history mark reverted.
+  // Fix B (over-revert): WHERE includes price because Match's fingerprint
+  // captures it. Closes the edge case where two manual_resolve rows for the
+  // same (item_id, invoice_id) at different prices would both get reverted.
+  // Source filter 'manual_resolve' is correct here (Match forward writes
+  // 'manual_resolve' for both alias + price_history).
   if (token.priceHistoryFingerprint) {
     await supa.from("price_history").update({ source: "manual_resolve_reverted" })
       .eq("item_id",    token.priceHistoryFingerprint.itemId)
       .eq("invoice_id", token.priceHistoryFingerprint.invoiceUuid)
+      .eq("price",      token.priceHistoryFingerprint.price)
       .eq("source",     "manual_resolve");
   }
   await supa.from("review_queue").update({
