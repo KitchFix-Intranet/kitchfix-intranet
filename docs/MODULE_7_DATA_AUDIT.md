@@ -243,6 +243,9 @@ The pre-launch safety net (lesson of the 2026-06-03 silent gap). Doesn't block s
 **8 core tables + 1 junction (`merge_history_items`)** — `zone_corrections` dropped per investigation (vestigial). The 8: `inventory_items` (renamed from item_catalog), `item_aliases`, `storage_locations`, `count_sessions`, `count_items`, `price_history`, `review_queue`, `merge_history`. Embeds the resolved decisions: vendor_id FK (D2), account CHECK (D6), `count_items.extended_price` generated + status enum **and separate `updated_at`** (D7), totals **derived via view, not stored** (D7 Option B), self-FK on locations, FK `price_history.invoice_id → invoice_submissions`, UNIQUE/ON CONFLICT on price_history, RLS-ready account identity (D1). `merge_inventory_items()` stored proc (D7/P4). PG views for bootstrap derivations incl. the 6 count totals and current-count window (D8). `dataStore/inventory.js` adapters dormant behind cutover flags. **No behavior change yet.**
 
 **INV-2 — Handler rewire (~14–18h).**
+
+> **Superseded by [MODULE_7_INV-2_PLAN_CORRECTION.md](MODULE_7_INV-2_PLAN_CORRECTION.md) (2026-06-11).**
+
 30 handlers route through `dataStore/inventory.js`. `accountMatch` removed (D6). `handleDedupCatalog` retired. `opsUtils` cache becomes a no-op (D8). The 7 stub handlers stay stubs (resolver deferred per D9). `priceAtLastCount` reads become a join (D5).
 
 **INV-3 — Backfill (~6–8h).**
