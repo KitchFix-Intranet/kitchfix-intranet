@@ -68,6 +68,7 @@ import {
   resolveReviewQueueCreate,
   getCatalogItemDetail,
   undoLastAction,
+  getCanonicalUnits,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -563,6 +564,19 @@ export async function handleUndoAction(body) {
     const token = body?.token;
     if (!token) return { success: false, error: "token required" };
     const result = await undoLastAction(token);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// PR B commit 8: GET the canonical units list (col A of units_canonical
+// tab). Adding a new standard unit later = add a row to the tab; no code
+// change needed. The list is small (15 today) and stable enough that the
+// screen fetches it once on mount.
+export async function handleUnitList() {
+  try {
+    const result = await getCanonicalUnits();
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };

@@ -28,6 +28,17 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
   // refresh or page reload - the goal is a single-session progress meter, not
   // an audit trail.
   const [sessionStats, setSessionStats] = useState({ resolved: 0, skipped: 0, created: 0 });
+  // PR B commit 8: canonical units list. Fetched once on mount, passed to
+  // every row's qty input dropdown. Adding a new standard unit later = add
+  // a row to the units_canonical Sheets tab; no code change needed.
+  const [canonicalUnits, setCanonicalUnits] = useState([]);
+  useEffect(() => {
+    fetch("/api/ops/inventory?action=unit-list")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setCanonicalUnits(json.units || []); })
+      .catch(() => { /* fall back to empty - row component handles missing list */ });
+  }, []);
+
   // PR B commit 6: undo state. Single slot (last action only). undoToken is
   // an opaque blob the server returns; we pass it back to the undo endpoint.
   // undoLabel is the human-readable description shown in the banner.
@@ -440,6 +451,7 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
                 onQuickAccept={(item) => handleResolveMatch({ queueId: item.queueId, itemId: item.suggestedMatchId, source: "accept_suggested" })}
                 onToggleSelect={toggleSelect}
                 selected={selectedIds.has(it.queueId)}
+                canonicalUnits={canonicalUnits}
                 busy={busyQueueId === it.queueId || bulkBusy}
               />
             ))}

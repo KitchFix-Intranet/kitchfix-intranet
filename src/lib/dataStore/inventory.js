@@ -3174,6 +3174,29 @@ export async function resolveReviewQueueMatch(input) {
   return result;
 }
 
+// PR B commit 8: Read the canonical units list from the units_canonical tab
+// (col A only - col B variants are recorded for a future normalization pass
+// and not used by the dropdown today). Sheets-canonical reference tab. NO
+// PG mirror by design - this is a Sheets-only reference. Read once at the
+// ReviewQueueScreen mount, passed down as a prop to avoid per-row fetches.
+export async function getCanonicalUnits() {
+  try {
+    const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, "units_canonical");
+    const units = (rows || [])
+      .map((r) => String(r[0] || "").trim())
+      .filter((u) => u && u.toLowerCase() !== "canonical");  // skip header if present
+    return { units };
+  } catch (e) {
+    // Tab missing or unreadable - return a safe fallback so the UI doesn't
+    // collapse. The operator can still use the free-text-style fallback
+    // listed here. Logged so we notice if the tab disappeared.
+    console.warn("[getCanonicalUnits] units_canonical tab read failed:", e.message);
+    return {
+      units: ["case", "each", "lb", "oz", "gal", "box", "bag", "pack", "jar", "bottle", "can", "bunch", "tub", "dozen", "tray"],
+    };
+  }
+}
+
 // PR B commit 5: Catalog item detail peek (read-only) for the inline
 // expand-on-click affordance in the Review Queue row. Returns one catalog
 // row's display fields + a derived purchase summary from price_history.

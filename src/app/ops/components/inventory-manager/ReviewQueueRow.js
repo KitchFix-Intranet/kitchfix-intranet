@@ -14,7 +14,7 @@ import { canonicalActionFor, reasonLabelFor, detectSuspectedCatchWeight } from "
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
 
-export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, onQuickAccept, onToggleSelect, selected, busy }) {
+export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchModal, onQuickAccept, onToggleSelect, selected, canonicalUnits, busy }) {
   const [draftQty, setDraftQty] = useState(item.quantity ?? "");
   const [draftUnit, setDraftUnit] = useState(item.unit || "");
   const [softAlert, setSoftAlert] = useState(null); // { message, accept: () => fn }
@@ -53,6 +53,21 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
   // the badge above the qty input + the inline "verify against invoice"
   // language. The qty pre-fill happened in the effect above.
   const suspectedCatchWeight = detectSuspectedCatchWeight(item);
+
+  // PR B commit 8: unit-dropdown handling. Three cases:
+  //   1. draftUnit is in canonicalUnits  -> show standard option selected
+  //   2. draftUnit is blank/null/"other" -> show "- select unit -" placeholder
+  //                                         with no valid default, forces a pick
+  //   3. draftUnit is non-standard       -> show as an extra option labelled
+  //                                         "(non-standard)" so the operator
+  //                                         sees what it is and can choose to
+  //                                         keep or swap. NEVER auto-rewritten.
+  const canonicalList = Array.isArray(canonicalUnits) ? canonicalUnits : [];
+  const unitInCanonical = !!draftUnit && canonicalList.some(
+    (u) => u.toLowerCase() === String(draftUnit).toLowerCase()
+  );
+  const unitIsPickRequired = !draftUnit || String(draftUnit).toLowerCase() === "other";
+  const unitIsNonStandard = !unitInCanonical && !unitIsPickRequired;
   // Ambiguity flag from the server: 2+ ai_line_items rows share the same
   // (invoiceUuid, description). Resolve would silently overwrite the wrong
   // physical line - the server-side guard refuses, but we also disable the
@@ -239,14 +254,22 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
                 disabled={busy || isAmbiguous}
                 className="oh-rq-input"
               />
-              <input
-                type="text"
+              <select
                 value={draftUnit}
                 onChange={(e) => setDraftUnit(e.target.value)}
-                placeholder="unit (lb, case, ea)"
                 disabled={busy || isAmbiguous}
                 className="oh-rq-input oh-rq-input-unit"
-              />
+                style={unitIsPickRequired ? { borderColor: "#dc2626" } : unitIsNonStandard ? { borderColor: "#f59e0b" } : undefined}
+                title={unitIsNonStandard ? `Current unit "${draftUnit}" is not in the canonical list. Pick a standard one or keep as-is.` : unitIsPickRequired ? "Pick a unit before resolving" : ""}
+              >
+                {unitIsPickRequired ? <option value="">- select unit -</option> : null}
+                {canonicalList.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+                {unitIsNonStandard ? (
+                  <option value={draftUnit}>{draftUnit} (non-standard)</option>
+                ) : null}
+              </select>
             </div>
             <div className={`oh-rq-live-math ${liveCalc != null && !liveOk ? "oh-rq-live-math-warn" : ""}`}>
               {liveCalc != null
@@ -265,7 +288,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
               </div>
             ) : null}
             <div className="oh-rq-buttons">
-              <button onClick={() => handleResolve(false)} disabled={busy || isAmbiguous || draftQty === ""} className="oh-rq-btn oh-rq-btn-resolve" title={isAmbiguous ? "Disabled: ambiguous line - skip only until lineNum is in the queue row" : ""}>Resolve</button>
+              <button onClick={() => handleResolve(false)} disabled={busy || isAmbiguous || draftQty === "" || unitIsPickRequired} className="oh-rq-btn oh-rq-btn-resolve" title={isAmbiguous ? "Disabled: ambiguous line - skip only until lineNum is in the queue row" : unitIsPickRequired ? "Pick a unit before resolving" : ""}>Resolve</button>
               <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
             </div>
             {softAlert ? (

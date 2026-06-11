@@ -25,6 +25,7 @@ import {
   handleBulkSkipQueue,
   handleCatalogItemDetail,
   handleUndoAction,
+  handleUnitList,
   handleSaveLocations,
   handleSaveSortOrder,
   handleAdminCorrect,
@@ -71,6 +72,7 @@ export async function GET(request) {
         const itemId = searchParams.get("itemId") || "";
         return NextResponse.json(await handleCatalogItemDetail({ itemId, account }));
       }
+      case "unit-list": return NextResponse.json(await handleUnitList());
       default: return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
   } catch (error) {

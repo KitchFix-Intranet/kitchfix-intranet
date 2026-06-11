@@ -131,6 +131,7 @@ export {
   resolveReviewQueueCreate,
   getCatalogItemDetail,
   undoLastAction,
+  getCanonicalUnits,
 } from "./inventory.js";
 
 // Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no
