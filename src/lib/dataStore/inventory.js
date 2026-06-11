@@ -2476,6 +2476,8 @@ async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUn
       queueId,
       queueRowA1,
       account,
+      invoiceUuid,                              // for the PG reverser row lookup
+      lineItemText,                             // for the PG reverser row lookup
       aiLineItemsRowA1: liRowA1,
       originalQty,
       originalUnit,
@@ -3410,13 +3412,28 @@ async function undoReconcileSheets(token) {
 
 async function undoReconcilePostgres(token) {
   const supa = getServiceClient();
-  // ai_line_items revert
-  if (token.originalQty != null) {
-    const patch = { quantity: Number(token.originalQty) };
-    if (token.originalUnit !== undefined) patch.unit = String(token.originalUnit || "");
-    await supa.from("ai_line_items").update(patch)
-      .eq("invoice_uuid", token.priceHistoryFingerprint?.invoiceUuid || "")
-      .eq("description", null);  // intentionally no-op when invoiceUuid unknown
+  // ai_line_items revert. Mirror of the forward path's row-lookup pattern
+  // at resolveReviewQueueLinePostgres - find by invoice_uuid + description
+  // (with ambiguity guard), then update by primary id. The forward path
+  // THROWS on ambiguity (operator sees the error and skips). The reverse
+  // path SILENTLY SKIPS on ambiguity because the only way to reach undo
+  // is if the forward path succeeded; if we see 2+ matches now, a
+  // concurrent insert created a duplicate after our action - skip is the
+  // safe fallback rather than updating the wrong row.
+  if (token.originalQty != null && token.invoiceUuid && token.lineItemText) {
+    const { data: lirows } = await supa.from("ai_line_items")
+      .select("id")
+      .eq("invoice_uuid", token.invoiceUuid)
+      .eq("description",  token.lineItemText)
+      .limit(2);
+    if (lirows && lirows.length === 1) {
+      const patch = { quantity: Number(token.originalQty) };
+      if (token.originalUnit !== undefined) patch.unit = String(token.originalUnit || "");
+      await supa.from("ai_line_items").update(patch).eq("id", lirows[0].id);
+    }
+    // If 0 matches: PG hasn't mirrored this row yet (Sheets-only era).
+    // If 2+ matches: concurrent-insert ambiguity, see note above.
+    // Both: silent skip.
   }
   // price_history mark reverted (idempotent via source='manual_resolve' filter)
   if (token.priceHistoryFingerprint) {
