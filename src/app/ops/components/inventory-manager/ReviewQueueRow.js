@@ -129,6 +129,15 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
 
   return (
     <div className="oh-rq-row" data-busy={busy ? "1" : "0"}>
+      {suspectedCatchWeight && action === "INLINE_QTY" ? (
+        <div style={catchWeightBadgeStyle}>
+          <strong>🔎 Suspected catch-weight</strong>
+          <span> · priced per-lb, implied <strong>~{suspectedCatchWeight.impliedWeight.toFixed(2)} lb</strong> pre-filled. </span>
+          <span style={{ color: "#92400e", fontWeight: 600 }}>Verify against the invoice</span>
+          {item.rawDriveUrl ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline", marginLeft: 4 }}>(open PDF)</a> : null}
+          <span> - edit below if wrong, then Resolve.</span>
+        </div>
+      ) : null}
       <div className="oh-rq-row-head">
         <div className="oh-rq-row-meta">
           <input
@@ -222,14 +231,6 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
       <div className="oh-rq-row-action">
         {action === "INLINE_QTY" ? (
           <>
-            {suspectedCatchWeight ? (
-              <div style={catchWeightBadgeStyle}>
-                <strong>🔎 Suspected catch-weight</strong>
-                <span> · priced per-lb, implied <strong>~{suspectedCatchWeight.impliedWeight.toFixed(2)} lb</strong> pre-filled below. </span>
-                <span style={{ color: "#92400e", fontWeight: 600 }}>Verify against the invoice</span>
-                <span> {item.rawDriveUrl ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>(open PDF)</a> : ""} - edit if wrong, then Resolve.</span>
-              </div>
-            ) : null}
             <div className="oh-rq-input-group">
               <label>Corrected qty</label>
               <input
@@ -322,6 +323,9 @@ const recentRowStyle = {
   padding: "2px 0", fontSize: 12,
 };
 const catchWeightBadgeStyle = {
+  // Full-width strip at the top of the row. Spans the whole row width so it
+  // doesn't push the action panel and break the flex layout below.
   background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a",
-  borderRadius: 4, padding: "6px 10px", marginBottom: 8, fontSize: 12, lineHeight: 1.5,
+  borderRadius: 4, padding: "6px 10px", marginBottom: 8, fontSize: 12,
+  lineHeight: 1.5, width: "100%", boxSizing: "border-box",
 };
