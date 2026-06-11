@@ -2972,7 +2972,7 @@ async function resolveReviewQueueLinePostgres({ queueId, correctedQty, corrected
 
   // 2) Find matching ai_line_items row + ambiguity guard (mirror of Sheets path).
   const { data: lirows, error: lierr } = await supa.from("ai_line_items")
-    .select("id, invoice_uuid, description, unit, unit_price, extended_price, vendor, invoice_date")
+    .select("id, invoice_uuid, description, unit, unit_price, extended_price, vendor_name, invoice_date")
     .eq("invoice_uuid", qrow.invoice_id)
     .eq("description",  qrow.line_item_text)
     .limit(2);   // pull 2 to detect ambiguity without paginating
@@ -2998,7 +2998,7 @@ async function resolveReviewQueueLinePostgres({ queueId, correctedQty, corrected
   //    the price + invoice provenance are OCR-sourced, not manual.
   const itemId = qrow.suggested_match_id || null;
   if (itemId) {
-    const vendorName = li.vendor || qrow.vendor || "";
+    const vendorName = li.vendor_name || qrow.vendor || "";
     const vendorId = await resolveVendorIdPostgres(vendorName);
     if (vendorId) {
       // Resolve effective_date through the same precedence ladder used by
