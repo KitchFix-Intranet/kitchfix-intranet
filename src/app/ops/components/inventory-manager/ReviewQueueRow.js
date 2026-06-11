@@ -128,16 +128,7 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
   const liveOk  = liveDelta != null && liveTol != null && liveDelta <= liveTol;
 
   return (
-    <div className="oh-rq-row" data-busy={busy ? "1" : "0"}>
-      {suspectedCatchWeight && action === "INLINE_QTY" ? (
-        <div style={catchWeightBadgeStyle}>
-          <strong>🔎 Suspected catch-weight</strong>
-          <span> · priced per-lb, implied <strong>~{suspectedCatchWeight.impliedWeight.toFixed(2)} lb</strong> pre-filled. </span>
-          <span style={{ color: "#92400e", fontWeight: 600 }}>Verify against the invoice</span>
-          {item.rawDriveUrl ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline", marginLeft: 4 }}>(open PDF)</a> : null}
-          <span> - edit below if wrong, then Resolve.</span>
-        </div>
-      ) : null}
+    <div className="oh-rq-row" data-busy={busy ? "1" : "0"} style={suspectedCatchWeight ? { borderLeft: "3px solid #f59e0b" } : undefined}>
       <div className="oh-rq-row-head">
         <div className="oh-rq-row-meta">
           <input
@@ -152,6 +143,11 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
           <span className="oh-rq-pill oh-rq-pill-account">{item.account}</span>
           <span className="oh-rq-pill oh-rq-pill-vendor">{item.vendor || "—"}</span>
           <span className={`oh-rq-pill oh-rq-pill-reason oh-rq-pill-reason-${item.reason || "blank"}`}>{reasonLabelFor(item)}</span>
+          {suspectedCatchWeight ? (
+            <span style={catchWeightPillStyle} title={`Implied weight from amount ÷ unit price. Pre-filled in the qty input. Verify against the invoice before resolving.`}>
+              🔎 catch-weight: ~{suspectedCatchWeight.impliedWeight.toFixed(2)} lb
+            </span>
+          ) : null}
           {isAmbiguous ? <span className="oh-rq-pill oh-rq-pill-ambiguous" title="Two+ lines on this invoice share this description. Resolve disabled until B-2 adds lineNum to the queue row.">⚠ duplicate description — skip only</span> : null}
           {item.rawDriveUrl
             ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" className="oh-rq-link">📄 #{item.invoiceNumber || item.invoiceUuid.slice(0, 8)}</a>
@@ -258,6 +254,16 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
                 : <span className="oh-rq-live-math-muted">enter a quantity</span>
               }
             </div>
+            {suspectedCatchWeight ? (
+              <div style={catchWeightHintStyle}>
+                Pre-filled from amount ÷ unit price.
+                {item.rawDriveUrl ? (
+                  <> <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>Verify against invoice ↗</a></>
+                ) : (
+                  <> Verify against invoice.</>
+                )}
+              </div>
+            ) : null}
             <div className="oh-rq-buttons">
               <button onClick={() => handleResolve(false)} disabled={busy || isAmbiguous || draftQty === ""} className="oh-rq-btn oh-rq-btn-resolve" title={isAmbiguous ? "Disabled: ambiguous line - skip only until lineNum is in the queue row" : ""}>Resolve</button>
               <button onClick={handleSkip} disabled={busy} className="oh-rq-btn oh-rq-btn-skip">Skip</button>
@@ -322,10 +328,19 @@ const recentRowStyle = {
   display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 12,
   padding: "2px 0", fontSize: 12,
 };
-const catchWeightBadgeStyle = {
-  // Full-width strip at the top of the row. Spans the whole row width so it
-  // doesn't push the action panel and break the flex layout below.
+// PR B commit 7 (revised): integrated catch-weight cues that don't fight the
+// row's flex layout. Three subtle elements working together:
+//   1. Amber left-border on the row (inline style on .oh-rq-row) - visual
+//      flag without consuming any horizontal space.
+//   2. Small pill in the meta row alongside reason/account/vendor - tells
+//      the operator WHAT was detected and the implied weight.
+//   3. Small italic hint below the live-math line in the action area -
+//      tells the operator WHAT TO DO (verify, then resolve).
+const catchWeightPillStyle = {
   background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a",
-  borderRadius: 4, padding: "6px 10px", marginBottom: 8, fontSize: 12,
-  lineHeight: 1.5, width: "100%", boxSizing: "border-box",
+  borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 500,
+  whiteSpace: "nowrap",
+};
+const catchWeightHintStyle = {
+  color: "#92400e", fontSize: 11, fontStyle: "italic", marginTop: 4,
 };
