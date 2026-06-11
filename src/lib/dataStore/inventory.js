@@ -2607,6 +2607,8 @@ async function writeMatchResolutionPostgres({
   supa, queueId, itemId, lineItemText, account, vendor, vendorId, invoiceUuid, invoiceDate, unitPrice, email, now,
 }) {
   if (vendorId) {
+    // item_aliases insert - not date-gated. An alias is correct to write
+    // regardless of whether we can anchor the price_history row to a date.
     const { error: aliasErr } = await supa.from("item_aliases").insert({
       item_id:    itemId,
       alias_text: lineItemText,
@@ -2618,19 +2620,39 @@ async function writeMatchResolutionPostgres({
     });
     if (aliasErr) throw new Error(`PG item_aliases insert: ${aliasErr.message}`);
 
-    const { error: phErr } = await supa.from("price_history").insert({
-      item_id:              itemId,
-      account,
-      vendor_id:            vendorId,
-      price:                unitPrice,
-      effective_date:       invoiceDate ? String(invoiceDate).slice(0, 10) : null,
-      invoice_id:           invoiceUuid,
-      source_or_invoice_id: invoiceUuid,
-      source:               "manual_resolve",
-      recorded_at:          now,
-      recorded_by:          email || null,
-    });
-    if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+    // Resolve effective_date through a precedence ladder before the
+    // price_history insert. effective_date is NOT NULL in the schema and
+    // must be invoice-anchored (a manual_resolve row represents an
+    // operator-confirmed extracted price, not a synthetic price).
+    //   1. invoiceDate (caller-passed, from queue row's invoice_date)
+    //   2. invoice_submissions.invoice_date via invoiceUuid
+    //   3. skip+warn (no fallback to today's date)
+    let effDate = invoiceDate ? String(invoiceDate).slice(0, 10) : null;
+    if (!effDate && invoiceUuid) {
+      const { data: inv } = await supa.from("invoice_submissions")
+        .select("invoice_date")
+        .eq("id", invoiceUuid)
+        .maybeSingle();
+      if (inv?.invoice_date) effDate = String(inv.invoice_date).slice(0, 10);
+    }
+
+    if (effDate) {
+      const { error: phErr } = await supa.from("price_history").insert({
+        item_id:              itemId,
+        account,
+        vendor_id:            vendorId,
+        price:                unitPrice,
+        effective_date:       effDate,
+        invoice_id:           invoiceUuid,
+        source_or_invoice_id: invoiceUuid,
+        source:               "manual_resolve",
+        recorded_at:          now,
+        recorded_by:          email || null,
+      });
+      if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+    } else {
+      console.warn(`[writeMatchResolutionPostgres] no invoice_date resolvable for queueId=${queueId} (invoiceDate empty and invoice_submissions.invoice_date also empty); skipping PG price_history insert (Sheets already wrote it)`);
+    }
   } else {
     console.warn(`[writeMatchResolutionPostgres] vendor "${vendor}" not resolvable to vendor_id; skipping PG alias + price_history (Sheets already wrote them)`);
   }
@@ -2979,20 +3001,41 @@ async function resolveReviewQueueLinePostgres({ queueId, correctedQty, corrected
     const vendorName = li.vendor || qrow.vendor || "";
     const vendorId = await resolveVendorIdPostgres(vendorName);
     if (vendorId) {
-      const phRow = {
-        item_id:              itemId,
-        account:              qrow.account,
-        vendor_id:            vendorId,
-        price:                parseNum(li.unit_price) || 0,
-        effective_date:       String(li.invoice_date || qrow.invoice_date || "").slice(0, 10) || null,
-        invoice_id:           qrow.invoice_id,
-        source_or_invoice_id: qrow.invoice_id,
-        source:               "invoice_ocr",
-        recorded_at:          now,
-        recorded_by:          email || null,
-      };
-      const { error: phErr } = await supa.from("price_history").insert(phRow);
-      if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+      // Resolve effective_date through the same precedence ladder used by
+      // writeMatchResolutionPostgres. effective_date is NOT NULL in the
+      // schema and must be invoice-anchored.
+      //   1. li.invoice_date else qrow.invoice_date (the two existing sources)
+      //   2. invoice_submissions.invoice_date via qrow.invoice_id
+      //   3. skip+warn (no fallback to today's date)
+      let effDate = null;
+      if (li.invoice_date)        effDate = String(li.invoice_date).slice(0, 10);
+      else if (qrow.invoice_date) effDate = String(qrow.invoice_date).slice(0, 10);
+      if (!effDate && qrow.invoice_id) {
+        const { data: inv } = await supa.from("invoice_submissions")
+          .select("invoice_date")
+          .eq("id", qrow.invoice_id)
+          .maybeSingle();
+        if (inv?.invoice_date) effDate = String(inv.invoice_date).slice(0, 10);
+      }
+
+      if (effDate) {
+        const phRow = {
+          item_id:              itemId,
+          account:              qrow.account,
+          vendor_id:            vendorId,
+          price:                parseNum(li.unit_price) || 0,
+          effective_date:       effDate,
+          invoice_id:           qrow.invoice_id,
+          source_or_invoice_id: qrow.invoice_id,
+          source:               "invoice_ocr",
+          recorded_at:          now,
+          recorded_by:          email || null,
+        };
+        const { error: phErr } = await supa.from("price_history").insert(phRow);
+        if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+      } else {
+        console.warn(`[resolveReviewQueueLinePostgres] no invoice_date resolvable for queueId=${queueId} (li.invoice_date, qrow.invoice_date, and invoice_submissions.invoice_date all empty); skipping PG price_history insert (Sheets already wrote it)`);
+      }
     } else {
       console.warn(`[resolveReviewQueueLinePostgres] vendor "${vendorName}" not resolvable to vendor_id; skipping PG price_history insert (Sheets already wrote it)`);
     }
