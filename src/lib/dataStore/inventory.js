@@ -3493,22 +3493,17 @@ async function undoReconcilePostgres(token) {
     // If 2+ matches: concurrent-insert ambiguity, see note above.
     // Both: silent skip.
   }
-  // price_history mark reverted.
-  // Fix A (mechanical half): source filter is 'invoice_ocr' (the value the
-  // P2-fixed forward path writes), not 'manual_resolve' (the original code's
-  // mistaken filter that silently matched zero rows).
-  // Fix B (over-revert): WHERE includes recorded_at because the Reconcile
-  // fingerprint carries recordedAt (not price - Reconcile's fingerprint shape
-  // is {itemId, invoiceUuid, recordedAt}, while Match's is {itemId, invoiceUuid,
-  // price, recordedAt}). recorded_at is set at forward-write time so it's
-  // uniquely identifying.
-  // Marker semantics: SET source='manual_resolve_reverted' is PROVISIONAL.
-  // Semantically imperfect for an invoice_ocr row (that enum value is the
-  // operator-resolution marker) but enum-valid and reversible. The right
-  // marker for OCR-sourced rows depends on Task #131 (PG-vs-Sheets revert
-  // parity decision); revisit when that lands.
+  // price_history revert via DELETE (resolves Task #131).
+  // PG-vs-Sheets parity: Sheets tombstones by blanking itemId + price +
+  // source_or_invoice_id. On PG we cannot blank itemId (NOT NULL + FK to
+  // inventory_items - a blanked value would violate the FK), so DELETE is
+  // the only mechanism that achieves the same load-bearing semantic: the
+  // row no longer participates in the cron's processedInvoices set built
+  // from source_or_invoice_id, matching Sheets' "functionally non-existent"
+  // state. WHERE targeting unchanged from batch 3 (Fix A source filter +
+  // Fix B recorded_at discriminator).
   if (token.priceHistoryFingerprint) {
-    await supa.from("price_history").update({ source: "manual_resolve_reverted" })
+    await supa.from("price_history").delete()
       .eq("item_id",     token.priceHistoryFingerprint.itemId)
       .eq("invoice_id",  token.priceHistoryFingerprint.invoiceUuid)
       .eq("recorded_at", token.priceHistoryFingerprint.recordedAt)
@@ -3551,21 +3546,26 @@ async function undoMatchSheets(token) {
 
 async function undoMatchPostgres(token) {
   const supa = getServiceClient();
-  // alias mark reverted - idempotent via source filter
+  // alias revert via DELETE (resolves Task #131).
+  // PG-vs-Sheets parity: Sheets tombstones by blanking itemId + vendor. On
+  // PG we cannot blank item_id (NOT NULL + FK to inventory_items - blanking
+  // would violate the FK), so DELETE achieves the same load-bearing semantic:
+  // the alias no longer participates in the cron's (item_id, alias_normalized)
+  // matching, matching Sheets' "functionally non-existent" state. WHERE
+  // unchanged - UNIQUE on (item_id, alias_normalized) guarantees at most 1
+  // matching row.
   if (token.aliasFingerprint) {
-    await supa.from("item_aliases").update({ source: "manual_resolve_reverted" })
+    await supa.from("item_aliases").delete()
       .eq("item_id",     token.itemId)
       .eq("alias_text",  token.aliasFingerprint.aliasText)
       .eq("source",      "manual_resolve");
   }
-  // price_history mark reverted.
-  // Fix B (over-revert): WHERE includes price because Match's fingerprint
-  // captures it. Closes the edge case where two manual_resolve rows for the
-  // same (item_id, invoice_id) at different prices would both get reverted.
-  // Source filter 'manual_resolve' is correct here (Match forward writes
-  // 'manual_resolve' for both alias + price_history).
+  // price_history revert via DELETE (resolves Task #131 - same rationale).
+  // WHERE keeps the Fix B price discriminator from batch 3 (Match's fingerprint
+  // captures price). Source filter 'manual_resolve' matches the Match forward
+  // path's writes.
   if (token.priceHistoryFingerprint) {
-    await supa.from("price_history").update({ source: "manual_resolve_reverted" })
+    await supa.from("price_history").delete()
       .eq("item_id",    token.priceHistoryFingerprint.itemId)
       .eq("invoice_id", token.priceHistoryFingerprint.invoiceUuid)
       .eq("price",      token.priceHistoryFingerprint.price)
