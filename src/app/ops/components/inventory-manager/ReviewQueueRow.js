@@ -9,7 +9,7 @@
 // No more "Unsupported reason" stub. Skip button is universal.
 
 import { useState, useRef, useEffect } from "react";
-import { canonicalActionFor, reasonLabelFor } from "./reviewQueueLogic";
+import { canonicalActionFor, reasonLabelFor, detectSuspectedCatchWeight } from "./reviewQueueLogic";
 
 const fmtNum = (n) => (n == null || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtUsd = (n) => (n == null || isNaN(Number(n))) ? "—" : "$" + Number(n).toFixed(2);
@@ -31,14 +31,28 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
   const qtyRef = useRef(null);
 
   // Keep local state in sync when the underlying item changes (e.g. after a
-  // sibling resolve that re-orders the list).
+  // sibling resolve that re-orders the list). PR B commit 7: when the row
+  // is a suspected catch-weight (back-calc), pre-fill the corrected qty +
+  // unit with the implied weight as a SUGGESTION the operator verifies.
+  // Nothing persists until they click Resolve - the existing reconcile write
+  // path runs unchanged.
   useEffect(() => {
-    setDraftQty(item.quantity ?? "");
-    setDraftUnit(item.unit || "");
+    const cw = detectSuspectedCatchWeight(item);
+    if (cw) {
+      setDraftQty(cw.impliedWeight.toFixed(2));
+      setDraftUnit(cw.suggestedUnit);
+    } else {
+      setDraftQty(item.quantity ?? "");
+      setDraftUnit(item.unit || "");
+    }
     setSoftAlert(null);
   }, [item.queueId]);
 
   const action = canonicalActionFor(item);
+  // PR B commit 7: suspected catch-weight flag for INLINE_QTY rows. Drives
+  // the badge above the qty input + the inline "verify against invoice"
+  // language. The qty pre-fill happened in the effect above.
+  const suspectedCatchWeight = detectSuspectedCatchWeight(item);
   // Ambiguity flag from the server: 2+ ai_line_items rows share the same
   // (invoiceUuid, description). Resolve would silently overwrite the wrong
   // physical line - the server-side guard refuses, but we also disable the
@@ -208,6 +222,14 @@ export default function ReviewQueueRow({ item, onResolve, onSkip, onOpenMatchMod
       <div className="oh-rq-row-action">
         {action === "INLINE_QTY" ? (
           <>
+            {suspectedCatchWeight ? (
+              <div style={catchWeightBadgeStyle}>
+                <strong>🔎 Suspected catch-weight</strong>
+                <span> · priced per-lb, implied <strong>~{suspectedCatchWeight.impliedWeight.toFixed(2)} lb</strong> pre-filled below. </span>
+                <span style={{ color: "#92400e", fontWeight: 600 }}>Verify against the invoice</span>
+                <span> {item.rawDriveUrl ? <a href={item.rawDriveUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>(open PDF)</a> : ""} - edit if wrong, then Resolve.</span>
+              </div>
+            ) : null}
             <div className="oh-rq-input-group">
               <label>Corrected qty</label>
               <input
@@ -298,4 +320,8 @@ const recentPricesStyle = {
 const recentRowStyle = {
   display: "grid", gridTemplateColumns: "100px 1fr auto", gap: 12,
   padding: "2px 0", fontSize: 12,
+};
+const catchWeightBadgeStyle = {
+  background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a",
+  borderRadius: 4, padding: "6px 10px", marginBottom: 8, fontSize: 12, lineHeight: 1.5,
 };

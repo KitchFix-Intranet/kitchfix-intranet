@@ -81,6 +81,33 @@ export function detectCatchWeight(item) {
   };
 }
 
+// PR B commit 7: SUSPECTED catch-weight (Tier B back-calc, structural guess
+// only). Used by the INLINE_QTY row to pre-fill the corrected qty + unit
+// as a SUGGESTION the operator verifies against the invoice. NOTHING writes
+// until the operator clicks Resolve - the existing reconcile write path is
+// reused unchanged.
+//
+// Rule: amount / unitPrice yields a plausible weight (2-500), the original
+// case-count math fails (which is given because we only flag arithmetic_fail
+// rows), and we're on an arithmetic_fail row.
+//
+// This is DISTINCT from detectCatchWeight (Tier A above), which only fires
+// when extraction captured an actual weightLineValue. Tier B is the back-
+// calc - the system surfaces what the math STRUCTURALLY suggests, the
+// operator verifies against the invoice and edits if wrong.
+//
+// Returns { impliedWeight, suggestedUnit: "lb" } on match, null otherwise.
+export function detectSuspectedCatchWeight(item) {
+  if (item?.reason !== "arithmetic_fail") return null;
+  const up = Number(item.unitPrice);
+  const am = Number(item.amount);
+  if (!Number.isFinite(up) || up <= 0) return null;
+  if (!Number.isFinite(am) || am <= 0) return null;
+  const implied = am / up;
+  if (implied < 2 || implied > 500) return null;
+  return { impliedWeight: implied, suggestedUnit: "lb" };
+}
+
 // Three-bucket counts for the dashboard stats bar. Built from the same
 // canonical-action rules used to render rows.
 export function bucketCounts(items) {
