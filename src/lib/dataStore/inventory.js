@@ -2967,20 +2967,35 @@ async function resolveReviewQueueLinePostgres({ queueId, correctedQty, corrected
   const { error: liUpdErr } = await supa.from("ai_line_items").update(liPatch).eq("id", li.id);
   if (liUpdErr) throw new Error(`PG ai_line_items update: ${liUpdErr.message}`);
 
-  // 4) Append price_history (only if we have a suggested itemId)
+  // 4) Append price_history (only if we have a suggested itemId AND a
+  //    vendor name resolvable to a vendor_id). Mirrors the field shape used
+  //    by writeMatchResolutionPostgres (line ~2620) so the two arithmetic
+  //    + match paths converge on the same schema-correct insert.
+  //    source='invoice_ocr': this row reflects a cron-extracted price tied
+  //    to a real invoice (only the quantity needed human reconciliation);
+  //    the price + invoice provenance are OCR-sourced, not manual.
   const itemId = qrow.suggested_match_id || null;
   if (itemId) {
-    const phRow = {
-      item_id:           itemId,
-      account:           qrow.account,
-      vendor_id:         li.vendor || qrow.vendor,
-      price:             parseNum(li.unit_price) || 0,
-      invoice_date:      String(li.invoice_date || qrow.invoice_date || "").slice(0, 10) || null,
-      invoice_id:        qrow.invoice_id,
-      recorded_at:       now,
-    };
-    const { error: phErr } = await supa.from("price_history").insert(phRow);
-    if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+    const vendorName = li.vendor || qrow.vendor || "";
+    const vendorId = await resolveVendorIdPostgres(vendorName);
+    if (vendorId) {
+      const phRow = {
+        item_id:              itemId,
+        account:              qrow.account,
+        vendor_id:            vendorId,
+        price:                parseNum(li.unit_price) || 0,
+        effective_date:       String(li.invoice_date || qrow.invoice_date || "").slice(0, 10) || null,
+        invoice_id:           qrow.invoice_id,
+        source_or_invoice_id: qrow.invoice_id,
+        source:               "invoice_ocr",
+        recorded_at:          now,
+        recorded_by:          email || null,
+      };
+      const { error: phErr } = await supa.from("price_history").insert(phRow);
+      if (phErr) throw new Error(`PG price_history insert: ${phErr.message}`);
+    } else {
+      console.warn(`[resolveReviewQueueLinePostgres] vendor "${vendorName}" not resolvable to vendor_id; skipping PG price_history insert (Sheets already wrote it)`);
+    }
   }
 
   // 5) Flip review_queue status
