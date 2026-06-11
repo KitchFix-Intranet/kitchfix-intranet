@@ -28,6 +28,58 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
   // refresh or page reload - the goal is a single-session progress meter, not
   // an audit trail.
   const [sessionStats, setSessionStats] = useState({ resolved: 0, skipped: 0, created: 0 });
+  // PR B commit 6: undo state. Single slot (last action only). undoToken is
+  // an opaque blob the server returns; we pass it back to the undo endpoint.
+  // undoLabel is the human-readable description shown in the banner.
+  // undoItem stores the row data so we can restore it to the visible list
+  // on a successful undo (avoiding a full reload).
+  const [undoToken, setUndoToken] = useState(null);
+  const [undoLabel, setUndoLabel] = useState("");
+  const [undoItem, setUndoItem] = useState(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+
+  // Auto-clear the undo offer after 30s (the convenience window; the real
+  // safety is the fingerprint guard, which catches divergence regardless of
+  // elapsed time).
+  useEffect(() => {
+    if (!undoToken) return;
+    const t = setTimeout(() => { setUndoToken(null); setUndoLabel(""); setUndoItem(null); }, 30000);
+    return () => clearTimeout(t);
+  }, [undoToken]);
+
+  // Helper used by every successful action handler to register the undo
+  // offer. Stores token + label + the original row so undo can restore it.
+  const offerUndo = useCallback((token, label, itemRow) => {
+    setUndoToken(token);
+    setUndoLabel(label);
+    setUndoItem(itemRow);
+  }, []);
+
+  async function handleUndoClick() {
+    if (!undoToken || undoBusy) return;
+    setUndoBusy(true);
+    try {
+      const res = await fetch("/api/ops/inventory", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "undo-action", token: undoToken }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (undoItem) setItems((prev) => [undoItem, ...prev]);
+        // Walk back session counters.
+        if (undoToken.type === "skip") setSessionStats((s) => ({ ...s, skipped: Math.max(0, s.skipped - 1) }));
+        else                            setSessionStats((s) => ({ ...s, resolved: Math.max(0, s.resolved - 1) }));
+        showToast?.("Undone", "success");
+        setUndoToken(null); setUndoLabel(""); setUndoItem(null);
+      } else {
+        showToast?.(json.error || "Undo failed", "error");
+      }
+    } catch (e) {
+      showToast?.("Network error", "error");
+    } finally {
+      setUndoBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,10 +148,10 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       });
       const json = await res.json();
       if (json.success) {
-        // Remove the resolved item from the visible list. No reload - the
-        // server side handles dedup; this is just UI continuity.
+        const itemRow = items.find((i) => i.queueId === input.queueId) || null;
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
         setSessionStats((s) => ({ ...s, resolved: s.resolved + 1 }));
+        if (json.undo) offerUndo(json.undo, `Reconciled qty=${input.correctedQty}`, itemRow);
         showToast?.(`Resolved: qty=${input.correctedQty}`, "success");
         return null;
       }
@@ -127,8 +179,10 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       });
       const json = await res.json();
       if (json.success) {
+        const itemRow = items.find((i) => i.queueId === input.queueId) || null;
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
         setSessionStats((s) => ({ ...s, skipped: s.skipped + 1 }));
+        if (json.undo) offerUndo(json.undo, `Skipped`, itemRow);
         showToast?.("Skipped", "success");
         return null;
       }
@@ -155,8 +209,10 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       });
       const json = await res.json();
       if (json.success) {
+        const itemRow = items.find((i) => i.queueId === input.queueId) || null;
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
         setSessionStats((s) => ({ ...s, resolved: s.resolved + 1 }));
+        if (json.undo) offerUndo(json.undo, `Matched to catalog`, itemRow);
         showToast?.(`Matched to catalog`, "success");
         return null;
       }
@@ -246,7 +302,10 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
       if (json.success) {
         setItems((prev) => prev.filter((i) => i.queueId !== input.queueId));
         setSessionStats((s) => ({ ...s, resolved: s.resolved + 1, created: s.created + 1 }));
-        showToast?.(`Catalog item created: ${json.name}`, "success");
+        // PR B commit 6: Create-new is EXCLUDED from undo (per design). The
+        // new catalog row may already be referenced by other processes -
+        // archive-via-Item-Catalog is the clean recovery path.
+        showToast?.(`Catalog item created: ${json.name} (use Item Catalog to archive if needed - undo not supported)`, "success");
         return null;
       }
       showToast?.(json.error || "Create failed", "error");
@@ -291,6 +350,16 @@ export default function ReviewQueueScreen({ showToast, onBack }) {
           </>
         ) : null}
       </div>
+
+      {undoToken ? (
+        <div style={undoBannerStyle}>
+          <span>{undoLabel} - changed your mind?</span>
+          <button onClick={handleUndoClick} disabled={undoBusy} style={undoBtnStyle}>
+            {undoBusy ? "Undoing..." : "Undo"}
+          </button>
+          <span style={{ color: "#64748b", fontSize: 11 }}>(auto-clears in 30s)</span>
+        </div>
+      ) : null}
 
       {selectedIds.size > 0 ? (
         <div style={bulkBarStyle}>
@@ -401,4 +470,13 @@ const bulkLinkInlineStyle = {
 const sessionPillStyle = {
   background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0",
   borderRadius: 4, padding: "2px 8px", fontSize: 12,
+};
+const undoBannerStyle = {
+  display: "flex", alignItems: "center", gap: 10,
+  background: "#e0f2fe", color: "#0c4a6e", border: "1px solid #bae6fd",
+  borderRadius: 6, padding: "8px 12px", margin: "8px 0", fontSize: 13,
+};
+const undoBtnStyle = {
+  background: "#0284c7", color: "#fff", border: "none", borderRadius: 4,
+  padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
 };

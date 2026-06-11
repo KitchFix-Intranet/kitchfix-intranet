@@ -2189,6 +2189,18 @@ const AI_LI_IDX = {
 const SUB_RAW_DRIVE_URL_IDX = 16;
 const SUB_UUID_IDX = 0;
 
+// PR B commit 6 (undo): post-write find. After an appendRowSA, scan the
+// tab from the end and return the 1-based rowA1 of the LAST row matching
+// the predicate. Used to capture rowA1 for undo tokens. One extra tab read
+// per append - cost is negligible at the operator interactive rate.
+async function findAppendedRowA1(sheetId, tabName, predicate) {
+  const { rows } = await readSheetSA(sheetId, tabName);
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (predicate(rows[i])) return i + 2; // +1 for 1-based, +1 for header row
+  }
+  return null;
+}
+
 // Helper: A1 column letter for a 0-indexed column number (A=0, B=1, ..., AA=26).
 function colLetter(idx) {
   let n = idx;
@@ -2396,6 +2408,12 @@ async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUn
   const invoiceDate = liRow[AI_LI_IDX.invoiceDate] || queueRow[RQ_IDX.invoiceDate] || "";
   const now = new Date().toISOString();
 
+  // PR B commit 6 (undo): capture pre-action ai_line_items state so the
+  // reconcile reverser can restore qty/unit to what they were before this
+  // resolve overwrote them.
+  const originalQty  = parseNum(liRow[AI_LI_IDX.quantity]);
+  const originalUnit = liRow[AI_LI_IDX.unit] || "";
+
   // ai_line_items quantity is col I (index 8). Unit is col J (index 9).
   // +2 = 1 for the header row + 1 for A1 1-indexing.
   const liRowA1 = liRowIdx + 2;
@@ -2411,6 +2429,7 @@ async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUn
   //    like verifyItemPriceSheets does for catalog-side price corrections).
   //    Source field carries the invoiceUuid so the cron can trace provenance.
   const itemId = queueRow[RQ_IDX.suggestedMatchId] || ""; // empty if no match - skipped at price_history append below
+  let priceHistoryRowA1 = null;
   if (itemId) {
     await appendRowSA(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB, [
       itemId,
@@ -2421,6 +2440,12 @@ async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUn
       invoiceUuid,           // source-or-invoice-id col carries the canonical invoiceUuid
       now,
     ]);
+    // Find the appended row by unique-enough fingerprint (itemId + invoiceUuid + recordedAt).
+    priceHistoryRowA1 = await findAppendedRowA1(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB, (r) =>
+      String(r[0] || "").trim() === itemId &&
+      String(r[5] || "").trim() === invoiceUuid &&
+      String(r[6] || "").trim() === now
+    );
   }
 
   // 4) Flip review_queue row: status='accepted', reviewedBy=email, reviewedAt=now.
@@ -2446,6 +2471,21 @@ async function resolveReviewQueueLineSheets({ queueId, correctedQty, correctedUn
     pricedAgainstItemId: itemId || null,
     resolvedAt: now,
     resolvedBy: email || "",
+    undo: {
+      type: "reconcile",
+      queueId,
+      queueRowA1,
+      account,
+      aiLineItemsRowA1: liRowA1,
+      originalQty,
+      originalUnit,
+      correctedQty: Number(correctedQty),
+      correctedUnit: correctedUnit || originalUnit || "",
+      priceHistoryRowA1,
+      priceHistoryFingerprint: itemId ? { itemId, invoiceUuid, recordedAt: now } : null,
+      actionTimestamp: now,
+      actionEmail: email || "",
+    },
   };
 }
 
@@ -2481,6 +2521,13 @@ async function skipReviewQueueLineSheets({ queueId, email }) {
     account: queueRow[RQ_IDX.account] || "",
     resolvedAt: now,
     resolvedBy: email || "",
+    undo: {
+      type: "skip",
+      queueId,
+      queueRowA1,
+      actionTimestamp: now,
+      actionEmail: email || "",
+    },
   };
 }
 
@@ -2496,8 +2543,9 @@ async function writeMatchResolutionSheets({
   // W1. item_aliases append (8 cols). Cron parity (kitchfix-inventory-cron
   // index.js:881-890) on data cols; operator-bearing cols differ as
   // documented in commit 2.
+  const aliasId = generateId("alias");
   await appendRowSA(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB, [
-    generateId("alias"),                         // A aliasId
+    aliasId,                                     // A aliasId
     lineItemText,                                // B aliasText
     itemId,                                      // C itemId
     vendor,                                      // D vendor
@@ -2506,6 +2554,8 @@ async function writeMatchResolutionSheets({
     now,                                         // G learnedAt
     "manual_resolve",                            // H source
   ]);
+  const aliasRowA1 = await findAppendedRowA1(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB,
+    (r) => String(r[0] || "").trim() === aliasId);
 
   // W2. price_history append (7 cols). Raw unitPrice, no normalization.
   // Real invoiceUuid in col F (guaranteed non-empty by upstream guard #5).
@@ -2518,6 +2568,11 @@ async function writeMatchResolutionSheets({
     invoiceUuid,                                 // F invoiceUuid
     now,                                         // G recordedAt
   ]);
+  const priceHistoryRowA1 = await findAppendedRowA1(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB, (r) =>
+    String(r[0] || "").trim() === itemId &&
+    String(r[5] || "").trim() === invoiceUuid &&
+    String(r[6] || "").trim() === now
+  );
 
   // W3. review_queue flip.
   const queueRowA1 = queueRowIdx + 2;
@@ -2531,6 +2586,16 @@ async function writeMatchResolutionSheets({
   invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
   invalidateCache(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB);
   invalidateCache(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+
+  // PR B commit 6 (undo): return the rowA1s + fingerprints so the caller
+  // can fold them into the undo token.
+  return {
+    aliasId,
+    aliasRowA1,
+    priceHistoryRowA1,
+    aliasFingerprint:        { aliasId, aliasText: lineItemText, itemId, vendor, learnedAt: now },
+    priceHistoryFingerprint: { itemId, invoiceUuid, price: unitPrice, recordedAt: now },
+  };
 }
 
 // PG mirror of writeMatchResolutionSheets. If vendorId is null, skip W1/W2
@@ -2658,7 +2723,7 @@ async function resolveReviewQueueMatchSheets({ queueId, itemId, source, email })
   const unitPrice = parseNum(liRow[AI_LI_IDX.unitPrice]) || 0;
 
   const now = new Date().toISOString();
-  await writeMatchResolutionSheets({
+  const writeResult = await writeMatchResolutionSheets({
     itemId, queueRowIdx, lineItemText, vendor, account, invoiceUuid, invoiceDate, unitPrice, email, now,
   });
 
@@ -2671,6 +2736,18 @@ async function resolveReviewQueueMatchSheets({ queueId, itemId, source, email })
     price: unitPrice,
     resolvedAt: now,
     resolvedBy: email || "",
+    undo: {
+      type: "match",
+      queueId,
+      queueRowA1: queueRowIdx + 2,
+      itemId,
+      aliasRowA1: writeResult.aliasRowA1,
+      aliasFingerprint: writeResult.aliasFingerprint,
+      priceHistoryRowA1: writeResult.priceHistoryRowA1,
+      priceHistoryFingerprint: writeResult.priceHistoryFingerprint,
+      actionTimestamp: now,
+      actionEmail: email || "",
+    },
   };
 }
 
@@ -3164,4 +3241,249 @@ export async function resolveReviewQueueCreate(input) {
     }
   }
   return sheetsResult;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR B commit 6: Undo (last-action reversal with refuse-on-divergence guard)
+// ════════════════════════════════════════════════════════════════════════════
+// Reverses the LAST action only (skip / reconcile / match). No history stack.
+// Create-new excluded - the new catalog row may already be referenced by other
+// processes; archive-via-Item-Catalog is the clean recovery path.
+//
+// Two-phase per type: (1) read current state and verify fingerprints match
+// what the action wrote, (2) if all guards pass, perform the reversal. The
+// guard is the load-bearing safety: an intervening write (anything that
+// modified the same row between the action and the undo) causes the
+// fingerprint check to fail with a clear message naming which row diverged,
+// rather than silently reverting the wrong data.
+//
+// Sheets mark-reverted strategy: blank the load-bearing field on appended
+// rows (itemId on item_aliases; itemId + invoiceUuid + price=0 on
+// price_history). Downstream readers (cron, ItemCatalog UI) filter on those
+// fields, so the row becomes a no-op without row-deletion fragility.
+// PG mark-reverted: source -> 'manual_resolve_reverted' on aliases +
+// price_history. The .eq("source", "manual_resolve") in the WHERE clause
+// gives idempotent double-undo protection on the PG side.
+
+async function readPriceHistoryRow(rowA1) {
+  const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+  return rows[rowA1 - 2] || null;
+}
+async function readAliasRow(rowA1) {
+  const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB);
+  return rows[rowA1 - 2] || null;
+}
+async function readQueueRow(rowA1) {
+  const { rows } = await readSheetSA(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  return rows[rowA1 - 2] || null;
+}
+async function readAiLineItemsRow(account, rowA1) {
+  const { rows } = await readSheetSA(SHEET_IDS.AI_LINE_ITEMS, account);
+  return rows[rowA1 - 2] || null;
+}
+
+// ── Guard helpers (refuse-on-divergence). Throw with a clear message ──
+function verifyQueueRowMatches(row, expectedStatus, token) {
+  if (!row) throw new Error("Can't undo: queue row not found");
+  const status     = String(row[RQ_IDX.status]     || "").trim().toLowerCase();
+  const reviewedBy = String(row[RQ_IDX.reviewedBy] || "").trim();
+  const reviewedAt = String(row[RQ_IDX.reviewedAt] || "").trim();
+  if (status !== expectedStatus) throw new Error(`Can't undo: queue row status changed (now '${status}', expected '${expectedStatus}')`);
+  if (reviewedBy !== (token.actionEmail || ""))   throw new Error("Can't undo: queue row was reviewed by someone else");
+  if (reviewedAt !== token.actionTimestamp)       throw new Error("Can't undo: queue row was modified after your action");
+}
+
+function verifyPriceHistoryRowMatches(row, fingerprint) {
+  if (!row) throw new Error("Can't undo: price_history row not found");
+  if (String(row[0] || "").trim() === "")  throw new Error("Can't undo: price_history row was already reverted");
+  if (String(row[5] || "").trim() === "")  throw new Error("Can't undo: price_history row was already reverted");
+  if (String(row[0] || "").trim() !== fingerprint.itemId)      throw new Error("Can't undo: price_history itemId diverged");
+  if (String(row[5] || "").trim() !== fingerprint.invoiceUuid) throw new Error("Can't undo: price_history invoiceUuid diverged");
+  if (String(row[6] || "").trim() !== fingerprint.recordedAt)  throw new Error("Can't undo: price_history recordedAt diverged");
+}
+
+function verifyAliasRowMatches(row, fingerprint) {
+  if (!row) throw new Error("Can't undo: item_aliases row not found");
+  if (String(row[2] || "").trim() === "") throw new Error("Can't undo: alias row was already reverted");
+  if (String(row[0] || "").trim() !== fingerprint.aliasId)   throw new Error("Can't undo: alias aliasId diverged");
+  if (String(row[2] || "").trim() !== fingerprint.itemId)    throw new Error("Can't undo: alias itemId diverged");
+  if (String(row[1] || "").trim() !== fingerprint.aliasText) throw new Error("Can't undo: alias aliasText diverged");
+}
+
+function verifyAiLineItemsRowMatches(row, token) {
+  if (!row) throw new Error("Can't undo: ai_line_items row not found");
+  const qty  = parseNum(row[AI_LI_IDX.quantity]);
+  const unit = String(row[AI_LI_IDX.unit] || "").trim();
+  if (Number(qty) !== Number(token.correctedQty)) throw new Error("Can't undo: line quantity was changed since your action");
+  if (token.correctedUnit && unit !== String(token.correctedUnit).trim()) throw new Error("Can't undo: line unit was changed since your action");
+}
+
+// ── Reverser: SKIP ──
+async function undoSkipSheets(token) {
+  const queueRow = await readQueueRow(token.queueRowA1);
+  verifyQueueRowMatches(queueRow, "rejected", token);
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${token.queueRowA1}`,     values: [["pending"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${token.queueRowA1}`, values: [[""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${token.queueRowA1}`, values: [[""]] },
+  ]);
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+}
+
+async function undoSkipPostgres(token) {
+  const supa = getServiceClient();
+  const { data: qrow } = await supa.from("review_queue").select("status, reviewed_by, reviewed_at").eq("id", token.queueId).maybeSingle();
+  if (!qrow) return; // no PG mirror to revert
+  if (qrow.status !== "rejected") return; // already differs; let Sheets be canonical
+  await supa.from("review_queue").update({
+    status: "pending", reviewed_by: null, reviewed_at: null,
+  }).eq("id", token.queueId).eq("status", "rejected");
+}
+
+// ── Reverser: RECONCILE (arithmetic_fail Resolve) ──
+async function undoReconcileSheets(token) {
+  // Three independent guards.
+  const queueRow = await readQueueRow(token.queueRowA1);
+  verifyQueueRowMatches(queueRow, "accepted", token);
+
+  const liRow = await readAiLineItemsRow(token.account, token.aiLineItemsRowA1);
+  verifyAiLineItemsRowMatches(liRow, token);
+
+  if (token.priceHistoryRowA1 && token.priceHistoryFingerprint) {
+    const phRow = await readPriceHistoryRow(token.priceHistoryRowA1);
+    verifyPriceHistoryRowMatches(phRow, token.priceHistoryFingerprint);
+  }
+
+  // Reversals.
+  const liUpdates = [
+    { range: `${token.account}!${colLetter(AI_LI_IDX.quantity)}${token.aiLineItemsRowA1}`,
+      values: [[token.originalQty != null ? Number(token.originalQty) : ""]] },
+  ];
+  if (token.originalUnit !== undefined) {
+    liUpdates.push({ range: `${token.account}!${colLetter(AI_LI_IDX.unit)}${token.aiLineItemsRowA1}`,
+      values: [[String(token.originalUnit || "")]] });
+  }
+  await batchUpdateRangesSA(SHEET_IDS.AI_LINE_ITEMS, liUpdates);
+
+  if (token.priceHistoryRowA1) {
+    await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+      { range: `${PRICE_HISTORY_TAB}!A${token.priceHistoryRowA1}`, values: [[""]] },  // blank itemId
+      { range: `${PRICE_HISTORY_TAB}!D${token.priceHistoryRowA1}`, values: [[0]] },   // zero price
+      { range: `${PRICE_HISTORY_TAB}!F${token.priceHistoryRowA1}`, values: [[""]] },  // blank invoiceUuid
+    ]);
+  }
+
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${token.queueRowA1}`,       values: [["pending"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${token.queueRowA1}`,   values: [[""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${token.queueRowA1}`,   values: [[""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.resultItemId)}${token.queueRowA1}`, values: [[""]] },
+  ]);
+
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+  invalidateCache(SHEET_IDS.AI_LINE_ITEMS, token.account);
+}
+
+async function undoReconcilePostgres(token) {
+  const supa = getServiceClient();
+  // ai_line_items revert
+  if (token.originalQty != null) {
+    const patch = { quantity: Number(token.originalQty) };
+    if (token.originalUnit !== undefined) patch.unit = String(token.originalUnit || "");
+    await supa.from("ai_line_items").update(patch)
+      .eq("invoice_uuid", token.priceHistoryFingerprint?.invoiceUuid || "")
+      .eq("description", null);  // intentionally no-op when invoiceUuid unknown
+  }
+  // price_history mark reverted (idempotent via source='manual_resolve' filter)
+  if (token.priceHistoryFingerprint) {
+    await supa.from("price_history").update({ source: "manual_resolve_reverted" })
+      .eq("item_id",    token.priceHistoryFingerprint.itemId)
+      .eq("invoice_id", token.priceHistoryFingerprint.invoiceUuid)
+      .eq("source",     "manual_resolve");
+  }
+  // queue row flip back
+  await supa.from("review_queue").update({
+    status: "pending", reviewed_by: null, reviewed_at: null, result_item_id: null,
+  }).eq("id", token.queueId).eq("status", "accepted");
+}
+
+// ── Reverser: MATCH (Accept-suggested / Pick-different) ──
+async function undoMatchSheets(token) {
+  const queueRow = await readQueueRow(token.queueRowA1);
+  verifyQueueRowMatches(queueRow, "accepted", token);
+
+  const aliasRow = await readAliasRow(token.aliasRowA1);
+  verifyAliasRowMatches(aliasRow, token.aliasFingerprint);
+
+  const phRow = await readPriceHistoryRow(token.priceHistoryRowA1);
+  verifyPriceHistoryRowMatches(phRow, token.priceHistoryFingerprint);
+
+  // Reversals: blank load-bearing fields on the two appended rows + queue flip.
+  await batchUpdateRangesSA(SHEET_IDS.INVENTORY, [
+    { range: `${ITEM_ALIASES_TAB}!C${token.aliasRowA1}`, values: [[""]] },  // blank itemId
+    { range: `${ITEM_ALIASES_TAB}!D${token.aliasRowA1}`, values: [[""]] },  // blank vendor
+    { range: `${PRICE_HISTORY_TAB}!A${token.priceHistoryRowA1}`, values: [[""]] }, // blank itemId
+    { range: `${PRICE_HISTORY_TAB}!D${token.priceHistoryRowA1}`, values: [[0]] },  // zero price
+    { range: `${PRICE_HISTORY_TAB}!F${token.priceHistoryRowA1}`, values: [[""]] }, // blank invoiceUuid
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.status)}${token.queueRowA1}`,       values: [["pending"]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedBy)}${token.queueRowA1}`,   values: [[""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.reviewedAt)}${token.queueRowA1}`,   values: [[""]] },
+    { range: `${REVIEW_QUEUE_TAB}!${colLetter(RQ_IDX.resultItemId)}${token.queueRowA1}`, values: [[""]] },
+  ]);
+
+  invalidateCache(SHEET_IDS.INVENTORY, REVIEW_QUEUE_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, ITEM_ALIASES_TAB);
+  invalidateCache(SHEET_IDS.INVENTORY, PRICE_HISTORY_TAB);
+}
+
+async function undoMatchPostgres(token) {
+  const supa = getServiceClient();
+  // alias mark reverted - idempotent via source filter
+  if (token.aliasFingerprint) {
+    await supa.from("item_aliases").update({ source: "manual_resolve_reverted" })
+      .eq("item_id",     token.itemId)
+      .eq("alias_text",  token.aliasFingerprint.aliasText)
+      .eq("source",      "manual_resolve");
+  }
+  // price_history mark reverted
+  if (token.priceHistoryFingerprint) {
+    await supa.from("price_history").update({ source: "manual_resolve_reverted" })
+      .eq("item_id",    token.priceHistoryFingerprint.itemId)
+      .eq("invoice_id", token.priceHistoryFingerprint.invoiceUuid)
+      .eq("source",     "manual_resolve");
+  }
+  await supa.from("review_queue").update({
+    status: "pending", reviewed_by: null, reviewed_at: null, result_item_id: null,
+  }).eq("id", token.queueId).eq("status", "accepted");
+}
+
+// ── Orchestrator: dispatch by token.type ──
+export async function undoLastAction(token) {
+  if (!token || !token.type) throw new Error("Undo token required");
+  if (token.type === "skip") {
+    await undoSkipSheets(token);
+    if (isDualWrite("review_queue")) {
+      try { await undoSkipPostgres(token); }
+      catch (e) { console.error("[undoLastAction/skip] PG mirror failed:", e.message); }
+    }
+    return { type: "skip", queueId: token.queueId };
+  }
+  if (token.type === "reconcile") {
+    await undoReconcileSheets(token);
+    if (isDualWrite("review_queue") || isDualWrite("price_history") || isDualWrite("ai_line_items")) {
+      try { await undoReconcilePostgres(token); }
+      catch (e) { console.error("[undoLastAction/reconcile] PG mirror failed:", e.message); }
+    }
+    return { type: "reconcile", queueId: token.queueId };
+  }
+  if (token.type === "match") {
+    await undoMatchSheets(token);
+    if (isDualWrite("review_queue") || isDualWrite("item_aliases") || isDualWrite("price_history")) {
+      try { await undoMatchPostgres(token); }
+      catch (e) { console.error("[undoLastAction/match] PG mirror failed:", e.message); }
+    }
+    return { type: "match", queueId: token.queueId };
+  }
+  throw new Error(`Undo not supported for type='${token.type}' (create_new is excluded by design)`);
 }

@@ -130,6 +130,7 @@ export {
   resolveReviewQueueMatch,
   resolveReviewQueueCreate,
   getCatalogItemDetail,
+  undoLastAction,
 } from "./inventory.js";
 
 // Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no

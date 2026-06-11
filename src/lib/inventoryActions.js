@@ -67,6 +67,7 @@ import {
   resolveReviewQueueMatch,
   resolveReviewQueueCreate,
   getCatalogItemDetail,
+  undoLastAction,
 } from "@/lib/dataStore";
 
 const MH_ACTION_IDX = 8;
@@ -554,6 +555,20 @@ export async function handleResolveQueueMatch(body) {
 // catalog item (with skipPriceHistory=true so the internal manual-add row is
 // suppressed), then writes the alias + the SINGLE invoiceUuid-tied
 // manual_resolve price_history row + flips the queue.
+// PR B commit 6: undo last action. Token-driven reversal with refuse-on-
+// divergence guard. Token is opaque to the client - they pass back whatever
+// the last action returned in result.undo.
+export async function handleUndoAction(body) {
+  try {
+    const token = body?.token;
+    if (!token) return { success: false, error: "token required" };
+    const result = await undoLastAction(token);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 // PR B commit 5: read-only catalog item detail peek for the inline expand
 // on the suggested-match row affordance. Returns one item + derived purchase
 // summary (vendors bought from, total price_history count, recent 5 prices).
