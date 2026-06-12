@@ -1,17 +1,20 @@
 # KitchFix Intranet — Migration Status (canonical)
 
-**Last verified:** 2026-06-11
+> 🔒 **Migration project phase CLOSED 2026-06-12.** See [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) for the project handoff (what was done, decisions made, dispositions for remaining items, proven patterns + lessons, how to resume). This doc remains the canonical CURRENT-STATE reference for which modules sit on PG vs Sheets and how the cutover control plane works.
+
+**Last verified:** 2026-06-12
 **This is the canonical current-state doc.** Other docs should point here for migration status rather than describing it themselves. The 2026-06-11 doc audit established that status claims scattered across `CLAUDE.md`, `PROJECT_DASHBOARD.md`, `ARCHITECTURE.md`, and the module READMEs drift in parallel — this file consolidates one verified source.
 
 ---
 
 ## Executive summary
 
-The intranet is **mid-migration from Google Sheets to Supabase Postgres**, executed as a strangler-fig dual-write/per-module cutover. As of 2026-06-11:
+The intranet sits on a **Sheets + PG dual data layer**, the product of a strangler-fig dual-write/per-module migration that ran ~2026-04 through 2026-06-12. As of 2026-06-12:
 
-- **6 of 8 modules cut over** to PG with dual-write to Sheets as rollback net (News, Directory, People-submissions, Vendor, Invoice, Playbook).
-- **Module 7 Smart Inventory is in flight** — schema + backfill complete, all PG mirrors verified live across batches 1-4 this session, RQ tool merged via PR #136 today (admin-gated, Sheets-only until the final cutover). Code-ready for the §3 four-flag atomic cutover.
-- **The remaining tail** (Labor, Incidents, legacy monthly-count, Financial, Service Calendar, Module 8 cron, and the unbuilt Sheets-decommission capability) is enumerated below with verified scope.
+- **6 modules CUT OVER** to PG with dual-write to Sheets as rollback net (News, Directory, People-submissions, Vendor, Invoice, Playbook/OPD).
+- **Smart Inventory (Module 7) + Module 8 cron PARKED** 2026-06-12 - prototype #1 was over-built (see [`modules/INVENTORY_MODULE.md`](modules/INVENTORY_MODULE.md) for the parking reasoning + the queries-over-facts v2 vision). Data accumulates as input for v2.
+- **Remaining roadmap items (Calendar, Labor, Financial, Legacy Inv Count, Incidents, Dugout)** sit on Sheets with per-item dispositions ranging from "migrate as standalone project" (Calendar - one genuine migration remaining) to "leave + rebuild later" (most). See §"Remaining roadmap" below; full reasoning in the close-out doc.
+- **Sheets retirement is deferred indefinitely** for the cut-over modules. Sheets stays as rollback; there's also a structural gap (§"Structural gap" below) that means there's no code mechanism to turn Sheets writes off yet.
 
 ---
 
@@ -73,107 +76,69 @@ Six modules cut over, one in flight, the rest enumerated in the roadmap section.
 
 ---
 
-## Smart Inventory cutover — exact remaining gate
+## Smart Inventory — PARKED 2026-06-12
 
-The Module 7 cutover is the §3 four-flag atomic flip per `docs/MODULE_7_INV-2_PLAN_CORRECTION.md`. **The four flags must flip together — they cannot be staged.**
+Module 7 (Smart Inventory) and Module 8 (Railway cron) were on track for the four-flag atomic cutover - cutover prerequisites cleared, all 10 RQ PG mirrors verified live. Parked instead.
 
-### Why atomic (from the plan correction, §3)
+**Why parked:** prototype #1 was over-built. 700 of 893 review_queue rows were arithmetic_fail (PACK/Cases conflation). The v2 vision is **queries-over-facts**: no cron, no batch matching pass, no review queue - inventory views computed on demand from OCR'd line-item facts. Each item is "a creature with a profile" - aggregated identity built from its facts. Full reasoning in [`modules/INVENTORY_MODULE.md`](modules/INVENTORY_MODULE.md).
 
-- `resolveReviewQueueMatch` fires its PG writes if ANY of `review_queue` OR `item_aliases` OR `price_history` flag is on.
-- `resolveReviewQueueLine` fires its PG writes if ANY of `review_queue` OR `ai_line_items` flag is on.
-- `review_queue` appears in both gates, so the two gates share a flag.
+**What "parked" means in practice:**
+- Code stays running as-is; the cron continues writing PG nightly (data accumulates as input for v2).
+- The legacy `/ops` monthly-count flow stays on Sheets and keeps serving real submissions until SI v2 absorbs the use case.
+- No active development; no migration in either direction.
+- Fate decided when SI un-parks (likely a queries-over-facts rebuild + Module 8 retirement).
 
-Flipping any subset causes PG writes to tables whose own flags are still off, splitting a single resolve action across a half-migrated surface — the exact silent-divergence failure mode this project exists to prevent.
-
-### Cutover prerequisites — all cleared
-
-| Gate | Status |
-|---|---|
-| §2a P1 — enum `ALTER TYPE`s for `manual_resolve` / `manual_resolve_reverted` | ✓ applied live to Supabase via Studio |
-| §2a P2 — four-bug arithmetic-fail INSERT fix in `resolveReviewQueueLinePostgres` | ✓ shipped via PR #136 |
-| §2a P3 — all 10 RQ mirrors (8 PG + 2 Sheets reversers) verified live | ✓ via batches 1-4 sentinel-row probes this session |
-| Task #131 — PG-vs-Sheets revert parity decision (vanish via DELETE) | ✓ resolved, shipped via PR #136 |
-
-### Remaining gates before flag flip
-
-1. **Cron-side mop** — one-time cleanup of the existing PG.inventory_items duplicate population (~73 PG groups / 88 excess rows as of last probe). The Bug 1 cron fix (cron commit `e73ff43`) stops new dups from being produced; the existing population needs a separate cleanup pass before cutover so the post-flip PG state is clean.
-2. **48h coverage probe** — `scripts/_probe_dup_coverage_split.mjs` runs against the cron's nightly output. Need 1-2 clean nightly runs post-Bug-1-fix to confirm dup-group count stops growing. Re-run 2026-06-12 morning + 2026-06-13 morning to close.
-
-### Not a gate (clarification)
-
-The **legacy `/ops` monthly-count flow is SEPARATE from Smart Inventory** — distinct Sheets tab (`inventory_submissions` on `SHEET_IDS.COLLECTION`), distinct spreadsheet, distinct data layer (direct `appendRowSA` in `/api/ops`, not via `dataStore.inventory`). Migrating Smart Inventory does NOT involve the monthly-count flow. See the roadmap item below for the legacy monthly-count decision.
+The previously-listed Smart Inventory cutover gates are no longer applicable - the four-flag flip will not happen. See [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) §C.3 for the parking decision detail.
 
 ---
 
-## Remaining work — sized roadmap
+## Remaining roadmap — dispositions (2026-06-12)
 
-Ordered by what's gated on what. Sizing estimates are based on the per-surface Pass-2 deep-trace.
+The migration project closed 2026-06-12. The dispositions below replace the prior "sized roadmap" - they're decisions about each remaining item, not engineering scope estimates. Full reasoning in [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) §D.
 
-### 1. Smart Inventory four-flag cutover
+### Service Calendar — MIGRATE (the one genuine migration remaining)
 
-- **State:** code-ready, P3 complete
-- **Gated on:** cron-side mop + 48h cron coverage probe (2026-06-12 + 2026-06-13 nightly runs)
-- **Work:** flip 4 flags atomically in Vercel env (`DUAL_WRITE_TABLES` += `review_queue,ai_line_items,item_aliases,price_history` → no-cache redeploy → smoke test → add same 4 to `READ_FROM_POSTGRES_OPS` → no-cache redeploy → 24-48h wait window). Operational scheduling, not engineering.
+- **Disposition:** migrate as a standalone project when prioritized
+- **Why:** real, used (97 service_config rows + ongoing day-level writes, 10 wired actions, no stubs)
+- **Why "standalone project" and not "more migration debt":** per-account year-grid + year-coded tab shape (`Projections - 2026`, `Actuals - 2026`, `Clicker Counts - 2026`) doesn't map cleanly to PG. It's a real schema design problem - grid-shape to event-row normalization + an annual tab-rotation operational concern - not a swap. Worth its own scoped effort.
+- **Current state:** [`src/app/api/service-calendar/route.js`](../src/app/api/service-calendar/route.js) (679 lines), 10 wired actions, direct Sheets via `readSheetSA`/`appendRowSA`/`updateRangeSA`, no orchestrator, no PG schema
 
-### 2. Leadership Dugout — QUICK
+### Labor / Season Planner — LEAVE ON SHEETS, rebuild next year
 
-- **State:** Sheets-only display tool (read-only)
-- **Scope:** Repoint reads to PG. No writes. No backfill (data already in PG via M3 submissions if applicable, or shared tabs already cut over).
-- **Est:** ~2-4h. Likely small enough to batch with another module.
+- **Disposition:** leave on Sheets; rebuild on PG when the annual labor cycle gets attention
+- **Why:** migration is half-redesign anyway (same per-account year-grid shape as Calendar). The labor tool will likely be redesigned as part of the annual financial cycle - better to rebuild on PG fresh than migrate-then-redesign.
+- **Current state:** lives inside [`src/app/api/ops/route.js`](../src/app/api/ops/route.js) monolith (1238 lines, 16+ actions), writes `labor_plans` (24 rows), `labor_sold_revenue` (12), `deep_clean_days` (0) on COLLECTION; reads per-account `Projections - 2026` and `Actuals - 2026` tabs
 
-### 3. Financial — AUDIT-FIRST
+### Financial — LEAVE ON SHEETS, dies with Labor
 
-- **State:** Pass-2 found `/api/financial/route.js` is a 53-line proxy to `/api/ops` that is **currently unused** — the frontend (`FinancialTool.js:10-12`) calls `/api/ops` directly per `const API = '/api/ops'`. The proxy was created in anticipation of a backend split that never happened.
-- **Decision needed:** retire the dead proxy scaffolding, OR build the actual `/api/financial` split before touching data. Migrating `/financial` data effectively means migrating Labor (same data pipe).
-- **Not a straight migration** — needs a routing-architecture decision first. Est dependent on direction.
+- **Disposition:** leave; not a standalone migration target
+- **Why:** [`src/app/api/financial/route.js`](../src/app/api/financial/route.js) is 54 lines of pure HTTP proxy to /ops Labor. The real backend is Labor. A standalone /financial backend would be a future build, not a migration.
 
-### 4. Labor / Season Planner — BIG (~15-25h)
+### Legacy Inventory Count — LEAVE ON SHEETS, retire year-end
 
-- **State:** Pure Sheets, 7 tabs across 2 spreadsheets, 3 write paths
-- **Reads:** `SHEET_IDS.HUB / accounts / period_data / homestand_schedule / labor_budgets` + `SHEET_IDS.COLLECTION / labor_plans / deep_clean_days / labor_sold_revenue`
-- **Writes:** `appendRowSA` to `labor_plans`, `labor_sold_revenue`, `deep_clean_days` (all append-only)
-- **Scope:** 3-5 new PG tables, ~5 new dataStore orchestrators, multi-year backfill of `labor_plans`. `accounts` already PG; `period_data` and `homestand_schedule` are reference data.
-- **Side effects:** None — append-only data, no Drive/Calendar/Slack entanglement.
-- **Brings along for free:** `/financial` (same data pipe) + `/ops/executive` (the ExecutiveDashboard component reads labor-bootstrap data via FinancialTool).
-- **Est:** ~15-25h by analogy to M5/M6 cutover playbook. Bigger than Vendor (3 tabs), comparable to Invoice in scope.
+- **Disposition:** keep running on Sheets; retire when Smart Inventory v2 absorbs the use case
+- **Why:** superseded by Smart Inventory (parked). 37 `inventory_submissions` rows. Single tab, single read action (`inventory-history`), single write action (`submit-inventory`). Migrating something we plan to retire is waste.
 
-### 5. Incidents — HARD, NOT QUICK (~15-25h)
+### Incidents — LEAVE ON SHEETS, build Supabase-native when prioritized
 
-**Common misconception to correct:** the existing doc references say *"incidents structure-only EMPTY per audit"* — this is sometimes read as "PG schema already exists, just needs backfill, will be quick." That is **wrong**.
+- **Disposition:** keep the Sheets code running; rebuild on PG when the feature gets product attention
+- **Why:** 0 rows ever submitted. Full submission code path IS built (Drive folder tree + Calendar event + Slack post + email + PDF generation + escalation deadlines per [`src/lib/incidentActions.js`](../src/lib/incidentActions.js)) but never used. No data to migrate, no coverage gap. The external side-effect entanglement is real and needs design before any rebuild.
+- **Standing concern:** when the feature returns, design the side-effect coordination first - per CLAUDE.md's Phase-3 note, the dual-write window for incidents would need special handling so side effects don't fire twice. Skip the dual-write window entirely by building Supabase-native from scratch.
 
-- **State:** PURELY Sheets — 6 read sites + 1 append + multiple cell updates in `/api/people/route.js` against `SHEETS.INCIDENTS` on `SHEET_IDS.COLLECTION`. **NO `dataStore/incident.js` exists.** No dormant adapter, no orchestrators. The "PG schema" referenced in audits is a design artifact in the Sheets audit, never built or applied.
-- **Hard part:** external side-effect entanglement, NOT data volume. An incident submission fires: Drive folder tree creation, Drive file uploads, Calendar event creation (`createIncident30DayEvent`), Slack notifications, Gmail send, PDF generation with `pdf-lib`, SOP escalation deadline computation. Status transitions fire additional Slack + Calendar updates. The row stores Drive folder ID, Drive URL, PDF URL, escalation timestamp, calendar event ID — coupled across 4 external systems.
-- **Migration complexity:** the dual-write window needs special handling so side effects don't fire twice. Either (a) gate side effects on a single canonical-store flag separate from the data dual-write, or (b) make side effects idempotent enough to fire on each store-write, or (c) accept a "Sheets-side fires side effects, PG-side just mirrors data" asymmetry during the window. Each option has design implications worth a dedicated audit before the schema PR.
-- **Est:** ~15-25h covering the design audit + schema + dormant adapters + handler rewire + backfill + cutover. The side-effect coordination work alone is comparable to a small module.
+### Leadership Dugout — LEAVE ON SHEETS, standalone build-with-migration when returned to
 
-### 6. Legacy `/ops` monthly-count — DECIDE FIRST
+- **Disposition:** defer the whole module
+- **Why:** hybrid - WOW Plans wired (~25 rows real data across 4 active tabs) + Cycle Review stubs (15+ unwired action handlers returning `{ todo: action }`). Migrating WOW Plans now + building Cycle Review later means a hybrid module across both stores. Better as one coherent piece when People Portal gets product attention.
+- **Current state:** [`src/app/api/people/leadership-dugout/route.js`](../src/app/api/people/leadership-dugout/route.js) (537 lines), 4 helper libs (`performanceChain.js`, `wowPlanActions.js`, `performanceAcl.js`, `performanceActions.js`), all direct Sheets, no orchestrator, no PG schema
 
-- **State:** Sheets-only, distinct from Smart Inventory. Single tab (`inventory_submissions` on COLLECTION), 13-column shape (5 dollar amounts per period per account: food/packaging/supplies/snacks/beverages totals + notes), 1 read site (`inventory-history` GET), 1 write site (`submit-inventory` POST).
-- **Question:** does Smart Inventory **supersede** this flow? Smart Inventory does item-by-item per-zone counts; legacy monthly-count is per-category dollar totals. If Smart Inventory's eventual count-submit flow rolls up to those totals, the legacy flow is redundant and should be retired, not migrated.
-- **Decision needed BEFORE migrating:** confirm whether the legacy 5-totals flow has any users today, and whether Smart Inventory will produce the same totals as derived rollups.
-- **Est:** ~3-5h **IF** migrated (single-tab append-only, trivial). **0h** if retired. Make this a conscious decision before doing the work.
+### Module 8 — Railway cron (separate repo)
 
-### 7. Service Calendar — LAST
+- **Disposition:** parked with Smart Inventory
+- **Why:** cron's role (catalog matching) likely goes away in SI v2 (queries-over-facts has no catalog to match against). Decision rides with SI un-parking. Repo: `kitchfix-inventory-cron` (separate from intranet).
 
-- **State:** Pure Sheets, deliberately deferred per `docs/PROJECT_DASHBOARD.md` recommended-sequence item 11 (*"defer service-calendar/performance/GL_CODES"*)
-- **Rationale for deferral:** complex multi-day schedule data with day-level config + actuals, lower-traffic surface
-- **Est:** unscoped. Defer until Labor and Incidents are done.
+### Sheets decommission capability — STANDING GAP
 
-### 8. Module 8 — Railway cron (separate repo)
-
-- **Repo:** `kitchfix-inventory-cron` (parallel to the intranet)
-- **State:** Sheets-only writes today. Cron processes invoice line items and writes to `item_catalog` (Sheets) per the legacy schema.
-- **Gated on:** Smart Inventory going live (the cron needs to write to PG via the same dataStore dispatch the intranet uses). The cron's read of PG is what makes Sheets decommission-able for Smart Inventory tabs.
-- **Est:** unscoped; spans the cross-repo boundary. Per the migration order, this is the last engineering work before the migration arc is "done."
-
-### 9. Sheets decommission capability — UNBUILT
-
-The control-plane gap noted above. Today no module can flip Sheets writes OFF — the code lacks the mechanism. Real "Sheets becomes frozen backup, PG is sole writer" requires:
-- inverted orchestrator semantics, OR
-- a third flag (`FREEZE_SHEETS_TABLES` or equivalent)
-- plus per-orchestrator audit to confirm no behavior depends on Sheets-being-written
-
-**Est:** ~6-10h for the code change + per-module verification, deferred until the cron is migrated and the Sheets quota / reliability becomes a real concern (it isn't today).
+The `cutover.js` control plane has no decommission state. Removing a table from `DUAL_WRITE_TABLES` stops PG writes (state-4 misconfiguration), not Sheets. Real "Sheets becomes frozen backup, PG is sole writer" requires inverted semantics OR a third `FREEZE_SHEETS_TABLES` flag. Not built; not urgent (Sheets quota / reliability isn't a real concern today). Worth fixing only if Sheets becomes a liability.
 
 ---
 
@@ -189,18 +154,18 @@ Every intranet surface (route) → which module/data-store it's driven by → cu
 | People hub — **Action Center** (the `activity` view, name resolved Pass-2) | `/people` → `activity` | `<ActionCenter>` component; reads M3 submissions history | **CUT OVER** (M3, PG) |
 | People hub — New Hire Wizard | `/people` → `newhire` | M3 submissions for the write; localStorage for drafts | **CUT OVER** (M3, PG) for the submit |
 | People hub — Personnel Action Form | `/people` → `paf` | Same as New Hire | **CUT OVER** (M3, PG) for the submit |
-| People hub — **Incidents** | `/people` → `incidents` | IncidentTool; reads + writes Sheets directly via `/api/people` against `SHEETS.INCIDENTS` | **NOT STARTED** (Sheets-only; no dormant adapter) |
-| People hub — Leadership Dugout | `/people` → `leadership-dugout` | LeadershipDugoutTool; reads via `/api/people/leadership-dugout` (Sheets direct) | **NOT STARTED** (Sheets-only read-only) |
+| People hub — **Incidents** | `/people` → `incidents` | IncidentTool; reads + writes Sheets directly via `/api/people` against `SHEETS.INCIDENTS` | **LEAVE ON SHEETS** (0 rows ever submitted; rebuild Supabase-native when prioritized — see [`CLOSEOUT`](MIGRATION_PROJECT_CLOSEOUT.md) §D) |
+| People hub — Leadership Dugout | `/people` → `leadership-dugout` | LeadershipDugoutTool; reads + writes via `/api/people/leadership-dugout` (Sheets direct) | **LEAVE ON SHEETS** (hybrid: WOW Plans wired + Cycle Review stubs; rebuild as one piece — see CLOSEOUT §D) |
 | People hub — Admin queue | `/people` → `admin` | Mixed: M3 submissions actions + Sheets for incidents | Mixed |
 | Ops hub — home | `/ops` → `home` | OpsHome card grid (display only) | n/a |
-| Ops hub — Inventory (LEGACY monthly count) | `/ops` → `inventory` | InventoryTool; reads + writes `inventory_submissions` tab on COLLECTION via `/api/ops` (Sheets direct) | **NOT STARTED** (Sheets-only) — *decision pending: replace vs migrate* |
-| Ops hub — **Smart Inventory + Review Queue** (admin-gated) | `/ops` → `inv-manager` | InventoryManager + ReviewQueueScreen; reads + writes via `dataStore.inventory` (8 PG mirrors present, flags OFF) | **IN-FLIGHT** (Sheets-only effective behavior until four-flag cutover) |
-| Ops hub — Labor / Season Planner | `/ops` → `labor` | LaborTool; reads + writes 7 Sheets tabs via `/api/ops` | **NOT STARTED** (Sheets-only) |
+| Ops hub — Inventory (LEGACY monthly count) | `/ops` → `inventory` | InventoryTool; reads + writes `inventory_submissions` tab on COLLECTION via `/api/ops` (Sheets direct) | **LEAVE ON SHEETS** — retire when SI v2 absorbs the use case (see CLOSEOUT §D) |
+| Ops hub — **Smart Inventory + Review Queue** (admin-gated) | `/ops` → `inv-manager` | InventoryManager + ReviewQueueScreen; reads + writes via `dataStore.inventory` (8 PG mirrors present, flags OFF) | **PARKED 2026-06-12** (queries-over-facts v2 vision — see [`modules/INVENTORY_MODULE.md`](modules/INVENTORY_MODULE.md)) |
+| Ops hub — Labor / Season Planner | `/ops` → `labor` | LaborTool; reads + writes 7 Sheets tabs via `/api/ops` | **LEAVE ON SHEETS** — rebuild next year (see CLOSEOUT §D) |
 | Ops hub — Invoices | `/ops` → `invoices` | M6 Invoice (PG) | **CUT OVER** |
 | Ops hub — Vendors | `/ops` → `vendors` | M5 Vendor (PG) | **CUT OVER** |
 | Ops hub — Executive | (no `/ops` route; component live on `/financial`) | `<ExecutiveDashboard>` — pure presentation component; data via labor-bootstrap (Sheets) | Rides labor's data pipe |
-| Financial | `/financial` | FinancialTool; calls `/api/ops` directly (proxy `/api/financial` exists but unused, see Roadmap §3) | **NOT STARTED** (rides labor pipe; needs proxy decision first) |
-| Service Calendar | `/service-calendar` | ServiceCalendar; reads + writes Sheets via `/api/service-calendar` | **NOT STARTED** (deferred) |
+| Financial | `/financial` | FinancialTool; calls `/api/ops` directly (proxy `/api/financial` exists but unused) | **LEAVE ON SHEETS** — dies with Labor (see CLOSEOUT §D) |
+| Service Calendar | `/service-calendar` | ServiceCalendar; reads + writes Sheets via `/api/service-calendar` | **MIGRATE** as standalone project when prioritized — the one genuine migration remaining (see CLOSEOUT §D) |
 | Playbook | `/playbook` | OPD docs + Sousai search; reads from PG via `getServiceClient` direct (not via dataStore) | **PG-NATIVE** (never lived in Sheets) |
 | Playbook admin | `/playbook/admin` | Same as above | **PG-NATIVE** |
 
@@ -215,27 +180,26 @@ Every intranet surface (route) → which module/data-store it's driven by → cu
 
 ## Doc accuracy note
 
-The 2026-06-11 MD audit pass found significant staleness across the existing status-describing docs:
+The 2026-06-11 audit found significant staleness across status-describing docs. The 2026-06-12 close-out resolved most of that drift:
 
-- **`CLAUDE.md`** still frames the work as "Phase 3 = Pending, starting with Incidents." Pre-migration framing; broken pointers to archived `MIGRATION.md`, `SPEC_INTRANET_AI_SEARCH.md`, `TEAM_KNOWLEDGE.md`.
-- **`docs/PROJECT_DASHBOARD.md`** header dated 2026-05-28, status line says "3 modules cut over / NEXT: Module 4 TBD." Body has PR descriptions through ~#99 but the front matter reads as if Modules 4-7 haven't happened.
-- **`docs/ARCHITECTURE.md`** "Last verified 2026-05-05," describes the database as Google Sheets without mentioning PG.
-- **`docs/modules/INVENTORY_MODULE.md`** says "Pre-Module-7. Work not started." Module 7 is in flight.
-- **`README.md`** module table predates the migration.
+- **`CLAUDE.md`** updated 2026-06-12 - current-state section rewritten, danger zones refreshed, findings cleaned up
+- **`docs/PROJECT_DASHBOARD.md`** archived 2026-06-12 to `docs/archive/PROJECT_DASHBOARD_2026-05-28.md` (session log style; fully superseded by this doc + the close-out)
+- **`docs/ARCHITECTURE.md`** updated 2026-06-12 - data layer section rewritten to reflect Sheets + PG dual reality, module map drift fixed, cron status updated
+- **`docs/modules/INVENTORY_MODULE.md`** rewritten 2026-06-12 to reflect parked state + the queries-over-facts v2 vision
 
-These need follow-up update or supersedes-by-pointer fixes. Until they're reconciled, **this file is the canonical current-state truth**. Other docs should point here for status rather than describing it themselves.
-
-When updating those docs:
-- For state claims that drift quickly (migration progress, module counts), replace with a pointer to this file.
+When updating any future doc that touches migration status:
+- For state claims that drift quickly (migration progress, module counts), point at this file instead of describing them locally.
 - For stable framing (architecture patterns, conventions, design principles), update in place.
-- Use the supersedes-by-pointer pattern (proven on `docs/MODULE_7_DATA_AUDIT.md` PART 4 → `MODULE_7_INV-2_PLAN_CORRECTION.md`) when full rewriting isn't worth it.
+- The close-out doc is the project handoff; this doc is the live current-state.
 
 ---
 
 ## See also
 
-- `docs/MODULE_7_INV-2_PLAN_CORRECTION.md` — INV-2 cutover prerequisites + §3 four-flag atomic constraint
-- `docs/architecture/CUTOVER_PLAYBOOK.md` — canonical cutover procedure (validated across M5/M6)
-- `docs/MIGRATION_APPROACH.md` — operating mode (fast-as-safe, still authoritative)
-- `docs/FINANCE_STACK_PLAN.md` — the original 12-PR scope (mostly executed; reference for remaining M7/M8)
-- `src/lib/cutover.js` — the control plane itself
+- [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) — the project handoff (decisions, dispositions, patterns + lessons, how to resume)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — current architecture (Sheets + PG dual data layer, auth boundary, module map)
+- [`modules/INVENTORY_MODULE.md`](modules/INVENTORY_MODULE.md) — Smart Inventory parked state + v2 queries-over-facts vision
+- [`MODULE_7_INV-2_PLAN_CORRECTION.md`](MODULE_7_INV-2_PLAN_CORRECTION.md) — INV-2 cutover prerequisites (historical reference; SI parking superseded this plan)
+- [`MIGRATION_APPROACH.md`](MIGRATION_APPROACH.md) — operating mode (fast-as-safe) and the agent/Kevin workflow
+- [`FINANCE_STACK_PLAN.md`](FINANCE_STACK_PLAN.md) — the original 12-PR scope (executed through Module 6; remainder superseded by the close-out dispositions)
+- [`src/lib/cutover.js`](../src/lib/cutover.js) — the control plane itself

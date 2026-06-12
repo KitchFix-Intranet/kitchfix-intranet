@@ -1,8 +1,8 @@
 # CLAUDE.md - KitchFix Ops Hub
 
-> ⚠️ **STATUS: portions of this document are out of date.** [`docs/MIGRATION_STATUS.md`](docs/MIGRATION_STATUS.md) is the canonical source of truth for current system state (last major update: 2026-06-12 — invoice-capture-to-PG fixed, Smart Inventory parked, no-wipe decision). The high-level project shape and danger zones below are still accurate. Verify any specific module status, migration phase claim, or backlog item against `docs/MIGRATION_STATUS.md` before relying on it. Full reconciliation is a tracked do-later item.
-
 You are joining a working production codebase. This file is your briefing. Read it fully before touching anything.
+
+> 📌 **Migration project phase CLOSED 2026-06-12.** For the project handoff, see [`docs/MIGRATION_PROJECT_CLOSEOUT.md`](docs/MIGRATION_PROJECT_CLOSEOUT.md). For current per-module Sheets-vs-PG state, see [`docs/MIGRATION_STATUS.md`](docs/MIGRATION_STATUS.md). This CLAUDE.md captures the long-stable bits (architecture framing, safety rules, danger zones, working agreement) - state-of-the-world claims live in those two docs.
 
 ## What this project is
 
@@ -10,32 +10,28 @@ The KitchFix Ops Hub is a Next.js 16 / React 19 internal intranet that serves Ex
 
 The maintainer is Kevin Fietek, solo developer and Director of Operations. He is the only person with commit access.
 
-## What we are doing right now (May 2026)
+## Current project state (June 2026 onward)
 
-We are mid-migration through a multi-phase architectural arc. Read `docs/MIGRATION.md` for the full plan. The short version:
+The Supabase migration project closed 2026-06-12. **The intranet now sits on a Sheets + PG dual data layer.** Six modules cut over to PG with dual-write to Sheets as rollback net: News, Directory, People-submissions, Vendor, Invoice, Playbook/OPD. Smart Inventory (Module 7) and the Railway cron (Module 8) are parked - prototype #1 was over-built; the v2 vision is queries-over-facts with no cron (see [`docs/modules/INVENTORY_MODULE.md`](docs/modules/INVENTORY_MODULE.md)). Remaining surfaces (Labor, Financial, Legacy Inv Count, Service Calendar, Incidents, Leadership Dugout) sit on Sheets with per-item dispositions in [`docs/MIGRATION_PROJECT_CLOSEOUT.md`](docs/MIGRATION_PROJECT_CLOSEOUT.md) §D.
 
-- **Phase 0 - Done.** Foundations: repo private, previews working, Claude Code adopted, src-backup removed.
-- **Phase 1 - In progress.** Safety net and ergonomics: test suite, CI, observability, AI SDK consolidation, runbook, backup scripts. **No architectural changes in Phase 1.**
-- **Phase 2 - Pending.** TypeScript foundation. Convert `src/lib/*.js` to `.ts`.
-- **Phase 3 - Pending.** Supabase migration, module by module, starting with Incidents.
-- **Phase 4 - Pending.** shadcn/ui + Tailwind v4 + mobile-first + PWA.
-- **Phase 5 - Pending.** Route splitting, naming (Option A - `/ops` dissolves into top-level modules), Dashboard rebuild.
+**Build mode, not migration mode.** New features are built Supabase-native using the `dataStore` orchestrator + flag-dispatch pattern (the pattern the six cut-over modules use). **Do NOT copy from still-on-Sheets modules** (dugout, labor, calendar, incidents, financial proxy) - they use the old direct-Sheets pattern that's no longer the model. See `docs/MIGRATION_PROJECT_CLOSEOUT.md` §H for the pattern contrast.
 
-The migration order for Phase 3 is dependency-ordered (not Hub-ordered): Incidents → Vendors → Invoices → Inventory → Service Calendar → Season Tracker → Analytics → PAF → New Hire → Action Center & Admin Queue → Leadership Dugout → Reports → Directory → Financial → Dashboard.
+**Migrations don't auto-apply on deploy.** SQL files in `docs/migrations/` are not run by Vercel - they're applied manually in Supabase Studio. The 2026-06-12 silent-gap incident happened because Stage A code deployed before the matching pr-9-1 migration was applied. When shipping schema changes: apply in Studio first, verify via probe script, then ship the dependent code.
 
 ## Read these before doing anything
 
 In this order, every session:
 
-1. `docs/ARCHITECTURE.md` - five-pillar Sheets model, auth boundary, module map
-2. `docs/CONVENTIONS.md` - action-dispatch APIs, CSS prefixes, sheet column conventions
-3. `docs/GOTCHAS.md` - hard-won lessons. Read before debugging anything that smells familiar.
-4. `docs/MIGRATION.md` - the migration plan
-5. `docs/BUSINESS_NOTES.md` - living reference for niche business knowledge (domain rules, account-specific quirks, stakeholder preferences, calculation methodology, historical context). Consult before assuming business logic is wrong. Update when audits or debug sessions surface new rules. Items tagged [PRESERVE THROUGH MIGRATION] must survive Stage 1 schema design.
-6. `docs/TEAM_KNOWLEDGE.md` - NEW as of 2026-05-17 evening. Team-facing knowledge corpus (how-to, policy, glossary, account-specific, tool reference). Seed corpus for the future Sous AI intranet search feature. Feed organically when audits or work surface team-facing knowledge.
-7. `docs/SPEC_INTRANET_AI_SEARCH.md` - NEW as of 2026-05-17 evening. Passive brain dump for product thinking about the future Sous AI intranet search feature. Not a build spec yet; will be refined when Stage 1+ work begins. Drop things in when they come up.
+1. [`docs/MIGRATION_PROJECT_CLOSEOUT.md`](docs/MIGRATION_PROJECT_CLOSEOUT.md) - the project handoff (decisions, dispositions for remaining items, proven patterns + lessons, how to resume). Read this first.
+2. [`docs/MIGRATION_STATUS.md`](docs/MIGRATION_STATUS.md) - canonical current-state (which modules are on PG vs Sheets, cutover control plane, structural gaps).
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - 30,000-ft view: stack, the Sheets + PG dual data layer, auth boundary, module map.
+4. [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) - action-dispatch APIs, CSS prefixes, sheet column conventions.
+5. [`docs/GOTCHAS.md`](docs/GOTCHAS.md) - hard-won lessons. Read before debugging anything that smells familiar.
+6. [`docs/BUSINESS_NOTES.md`](docs/BUSINESS_NOTES.md) - living reference for niche business knowledge (domain rules, account-specific quirks, stakeholder preferences, calculation methodology, historical context). Consult before assuming business logic is wrong.
+7. [`docs/TEAM_KNOWLEDGE.md`](docs/TEAM_KNOWLEDGE.md) - team-facing knowledge corpus (how-to, policy, glossary, account-specific, tool reference). Seed corpus for the future Sous AI intranet search feature.
+8. [`docs/SPEC_INTRANET_AI_SEARCH.md`](docs/SPEC_INTRANET_AI_SEARCH.md) - passive brain dump for product thinking about the future Sous AI intranet search feature.
 
-The first four documents are canonical for technical questions. BUSINESS_NOTES.md is canonical for domain rules. TEAM_KNOWLEDGE.md is the seed corpus for the future Sous AI search feature. SPEC_INTRANET_AI_SEARCH.md is a parking lot for product thinking about that same feature. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
+The close-out + status docs are canonical for current state. ARCHITECTURE.md is canonical for the spatial mental model. BUSINESS_NOTES.md is canonical for domain rules. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
 
 ## Working agreement
 
@@ -57,29 +53,33 @@ The first four documents are canonical for technical questions. BUSINESS_NOTES.m
 
 These files have outsized blast radius. Edit only with explicit user approval and never in autonomous "make it work" mode:
 
-- `src/lib/sheets.js` - the data layer. Changes here affect every module.
+- `src/lib/sheets.js` - the Sheets-side data layer. Changes here affect every module that still touches Sheets (which is all six cut-over modules dual-writing + every not-yet-migrated module).
+- `src/lib/cutover.js` - the migration control plane. Changes here change every cut-over module's behavior simultaneously.
+- `src/lib/dataStore/*.js` - per-module orchestrators. Each file is the load-bearing data path for its module. The dual-write pattern (Sheets unconditional + PG conditional via `isDualWrite`) is preserved in every orchestrator - if you break it, you break the rollback net.
 - `src/lib/auth.js` - NextAuth config. Breaking this logs everyone out.
 - `src/middleware.js` - request gating. Breaking this exposes routes.
 - `vercel.json` - cron schedules and deploy config. Wrong values break production silently.
 - `next.config.mjs` - framework config. Wrong values break the build.
 - `package.json` - dependencies. Don't `npm uninstall` anything without confirming.
+- `docs/migrations/*.sql` - migrations don't auto-apply. New migration files require manual Studio paste + a verify probe before the dependent code ships. See [`docs/MIGRATION_PROJECT_CLOSEOUT.md`](docs/MIGRATION_PROJECT_CLOSEOUT.md) §E for the 2026-06-12 silent-gap incident this rule comes from.
 - Anything matching `.env*` - **never read, never write, never echo contents to terminal or chat.** If you need to know what an env var contains, ask Kevin.
 
-## Findings to know about (from May 11, 2026 calibration)
+## Standing findings (post-migration-project)
 
-These are real issues identified in the codebase that are in the Phase 1 backlog:
+These are real issues in the codebase. Several items from the May 2026 calibration were resolved during the migration project; the surviving items below are what's still live.
 
-1. **Two parallel service-account implementations exist.** The canonical one lives in `src/lib/sheets.js` (`getServiceAccountSheetsClient()`). There is a second, hand-rolled JWT path in `src/app/api/people/route.js` (lines 80-151) that uses `getServiceToken` / `importPrivateKey` / `signJwt` via `crypto.subtle` for domain-wide delegation. Its local `readSheet` / `appendRow` / `updateCell` / `updateRow` helpers do **not** have the `SA` naming suffix despite using the service account. This breaks the convention that makes the auth boundary visually obvious. Phase 1 cleanup target.
+1. **OAuth scope is overly permissive.** `src/lib/auth.js` requests full `drive` scope rather than `drive.file`. Any code path that accidentally uses a user token has full Drive access, not just per-file. Reduction target whenever auth gets attention.
 
-2. **OAuth scope is overly permissive.** `src/lib/auth.js` requests full `drive` scope rather than `drive.file`. Any code path that accidentally uses a user token has full Drive access, not just per-file. Phase 1 reduction target.
+2. **Incidents module has external side-effect entanglement.** A single submit creates a Drive folder tree, uploads files, creates a Calendar event, posts Slack, sends email, builds a stamped PDF, and computes SOP escalation deadlines. The row stores Drive folder ID, Drive URL, PDF URL, escalation timestamp, and calendar event ID. **The Incidents feature has 0 rows ever submitted** despite the full machinery being wired - it's never been used in production. Disposition is "rebuild Supabase-native when prioritized" (see CLOSEOUT §D). The side-effect coordination still needs design work whenever that rebuild happens.
 
-3. **`next dev` is opting out of Turbopack.** `package.json` has `"dev": "next dev --webpack"`. Next 16 defaults to Turbopack, which is significantly faster. Five-minute Phase 1 win.
+3. **Sheets-decommission structural gap.** `src/lib/cutover.js` has no flag to turn Sheets writes OFF for cut-over modules. Removing a table from `DUAL_WRITE_TABLES` stops PG writes (state-4 misconfiguration), not Sheets writes. Not urgent (Sheets quota / reliability isn't a real concern today) but worth knowing.
 
-4. **Analytics sheet has hit Google Sheets' 10M cell limit.** Events are silently failing in production. Phase 3 Postgres migration of Analytics fixes this permanently; in the meantime, may need to archive old rows.
+### Resolved during the migration project (no longer live)
 
-5. **`googleapis` and `google-auth-library` are pinned with caret ranges** (`^171`, `^10`). No lockfile constraints. Supply-chain concern. Phase 1 evaluation.
-
-6. **Incidents module has external side-effect entanglement.** A single submit creates a Drive folder tree, uploads files, creates a Calendar event, posts Slack, sends email, builds a stamped PDF, and computes SOP escalation deadlines. The row stores Drive folder ID, Drive URL, PDF URL, escalation timestamp, and calendar event ID. The Phase 3 dual-write pattern needs special handling for Incidents to avoid duplicate side-effects during the two-week window. Settle this before Phase 3 begins.
+- **Two parallel service-account implementations** - resolved. The hand-rolled JWT path (`getServiceToken` / `importPrivateKey` / `signJwt` via `crypto.subtle`) in `src/app/api/people/route.js` has been removed; everything routes through `getServiceAccountSheetsClient()` in `src/lib/sheets.js`.
+- **`next dev` opting out of Turbopack** - resolved. `package.json` is now `"dev": "next dev"` (Next 16 defaults to Turbopack).
+- **Analytics sheet 10M cell limit** - resolved by teardown. The dashboard/cron/API surface was deleted (PR 1-3 of the analytics teardown); only a no-op `logEventSA` stub remains in `src/lib/analytics.js` while `auth.js` and `incident-reminders` still import it.
+- **`googleapis` + `google-auth-library` caret pins** - resolved. Now exact-pinned at `"10.5.0"` and `"171.4.0"`.
 
 ## Communication style
 
