@@ -1361,9 +1361,22 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
     const baseVendor = metadata.vendor || parsed.vendor || "";
     const baseInvNum = metadata.invoiceNumber || parsed.invoiceNumber || "";
     const baseInvDate = metadata.invoiceDate || parsed.invoiceDate || "";
-    const lineItems = items.map((item) => ({
+    const lineItems = items.map((item, idx) => ({
       // Existing fields — backwards compat for cron read at Sheets cols A-M.
-      lineNum:       item.lineNum || 0,
+      // Re-sequence line_num as a clean 1..N over actual extracted lines
+      // instead of trusting Claude's labels. Claude's OCR sometimes emits the
+      // same line_num twice on dense invoices (confirmed: fd004ff4 Ben E Keith
+      // line 38, 8232e2b4 Cheney Brothers line 10). The PG partial unique
+      // index ai_line_items_new_dedup_idx ON (invoice_uuid, line_num) WHERE
+      // is_historical=FALSE rejects the second row with 23505, the whole
+      // batch insert throws, and the invoice silently strands with rows in
+      // Sheets but none in PG. Static inspection of both confirmed cases
+      // showed the dup'd lines are real distinct items (different
+      // descriptions, quantities, prices), so we re-sequence rather than
+      // dedup — losing data isn't acceptable. line_num is a row counter, not
+      // semantic data; the original Claude label survives in raw_json for
+      // debugging.
+      lineNum:       idx + 1,
       description:   item.description || "",
       quantity:      item.quantity || 0,
       unit:          item.unit || "",
