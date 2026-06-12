@@ -1296,65 +1296,36 @@ export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
       return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
     };
 
-const imageBlocks = pages.slice(0, 6).map((page) => {
-        const data = getPageData(page);
+    const imageBlocks = pages.slice(0, 6).map((page) => {
+      const data = getPageData(page);
       const base64 = resizeForScan(data);
       const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
 
-    const prompt = EXTRACTION_PROMPT;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
-        messages: [{ role: "user", content: [...imageBlocks, { type: "text", text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[AI Scan] API error:", res.status, errText);
-      await markScanStatus(invoiceUuid, "failed");
+    // Retry-wrapped Claude call. Audits over the 2026-06-12 fix-bundle window
+    // (last 30 days) showed transient one-shot failures were the dominant
+    // pass-rate hit: invoices marked 'failed' that re-extracted cleanly on
+    // the very next call. Retry covers API errors (429/5xx/network), JSON
+    // parse failures, and 0-item returns. accountKey check + outer catch are
+    // NOT retried (input validation / unexpected error).
+    const extraction = await extractWithRetry(invoiceUuid, apiKey, imageBlocks);
+    if (!extraction.ok) {
+      console.error(`[AI Scan] ${invoiceUuid}: extraction failed: ${extraction.cause}`);
+      await markScanStatus(invoiceUuid, "failed", extraction.cause);
       return;
     }
-
-    const result = await res.json();
-    const text = result.content?.[0]?.text || "";
-
-    let parsed;
-    try {
-      const cleanJson = text.replace(/```json\s*|```/g, "").trim();
-      parsed = JSON.parse(cleanJson);
-    } catch (parseErr) {
-      console.error("[AI Scan] JSON parse failed:", parseErr.message);
-      await markScanStatus(invoiceUuid, "failed");
-      return;
-    }
-
-    // Invariant: ai_scan_status = 'complete' iff insertAILineItems was
-    // called and succeeded. Every earlier failure mode (empty extraction,
-    // missing account on metadata, swallowed insert error) used to fall
-    // through to markScanStatus('complete') below, producing "silent
-    // gaps": invoices marked complete with zero ai_line_items. See the
-    // 2026-06-08 investigation of the 12 stranded invoices.
-    const items = parsed.lineItems || [];
-    if (items.length === 0) {
-      console.warn(`[AI Scan] ${invoiceUuid}: Claude returned 0 line items; marking failed`);
-      await markScanStatus(invoiceUuid, "failed");
-      return;
-    }
+    const parsed = extraction.parsed;
+    const items = extraction.items;
 
     const accountKey = metadata.account;
     if (!accountKey) {
       // PR 6.2 (L1) dropped the "Invoice Uploads" junk-drawer fallback;
       // the Sheets orchestrator throws when accountKey is missing. Mark
       // failed (was silently complete-with-zero-rows pre-fix).
-      console.warn(`[AI Scan] ${invoiceUuid}: missing account on metadata; cannot write line items; marking failed`);
-      await markScanStatus(invoiceUuid, "failed");
+      const cause = "metadata.account missing - cannot route to per-account Sheets tab";
+      console.warn(`[AI Scan] ${invoiceUuid}: ${cause}`);
+      await markScanStatus(invoiceUuid, "failed", cause);
       return;
     }
 
@@ -1422,9 +1393,116 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
     console.log(`[AI Scan] ${invoiceUuid}: Extracted ${lineItems.length} line items`);
 
   } catch (error) {
-    console.error("[AI Scan] Error:", error.message);
-    await markScanStatus(invoiceUuid, "failed");
+    const cause = `unexpected error in extractAndStoreLineItems: ${error.message}`;
+    console.error(`[AI Scan] ${invoiceUuid}: ${cause}`);
+    await markScanStatus(invoiceUuid, "failed", cause);
   }
+}
+
+// ── Claude extraction with retry on transient failures ──────────────────────
+//
+// Wraps the Claude OCR call in a bounded retry loop. Audits over the
+// 2026-06-12 fix-bundle window showed that the dominant pass-rate hit was
+// transient one-shot failures - invoices marked 'failed' that re-extracted
+// cleanly on the very next call. None of the 6 sampled "failed" Cheney /
+// Peddler's / Shamrock invoices required a different model or layout
+// handling; both production and the candidate newer model succeeded on the
+// same input the second time.
+//
+// What's retried:
+//   - Network errors (fetch threw - DNS / connection refused / etc.)
+//   - HTTP 429 (rate limit)
+//   - HTTP 5xx (server-side)
+//   - JSON parse failures on Claude's response text
+//   - 0-item returns (Claude's output is non-deterministic; same image
+//     can yield N items once and 0 the next call)
+//
+// What's NOT retried:
+//   - HTTP 4xx other than 429 (auth / malformed request - retry won't help)
+//   - missing accountKey on metadata (input validation, handled in caller)
+//   - outer-catch unexpected errors (handled in caller)
+//
+// 0-item AFTER retries: distinct cause string ("possible non-invoice or
+// unreadable layout") so we can diagnose them separately from one-shot
+// transients.
+async function extractWithRetry(invoiceUuid, apiKey, imageBlocks) {
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [1000, 3000]; // before attempts 2 and 3
+
+  let lastResult = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      const wait = BACKOFF_MS[attempt - 2];
+      console.log(`[AI Scan] ${invoiceUuid}: retry ${attempt}/${MAX_ATTEMPTS} after ${wait}ms (last: ${(lastResult?.cause || "").slice(0, 80)})`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    lastResult = await callClaudeOnce(apiKey, imageBlocks);
+    if (lastResult.ok) {
+      if (attempt > 1) {
+        console.log(`[AI Scan] ${invoiceUuid}: extraction succeeded on attempt ${attempt}/${MAX_ATTEMPTS}`);
+      }
+      return { ok: true, parsed: lastResult.parsed, items: lastResult.items, attempts: attempt };
+    }
+    if (!lastResult.retryable) {
+      return { ok: false, cause: lastResult.cause, attempts: attempt };
+    }
+  }
+
+  // Exhausted retries. If the final attempt was a 0-item return, surface a
+  // distinct cause - those are diagnostically different from API/parse fails
+  // (likely a non-invoice photo, blank page, or genuinely unextractable layout).
+  const cause = lastResult.zeroItems
+    ? `Claude returned 0 line items after ${MAX_ATTEMPTS} attempts - possible non-invoice or unreadable layout`
+    : `${lastResult.cause} (after ${MAX_ATTEMPTS} attempts)`;
+  return { ok: false, cause, attempts: MAX_ATTEMPTS };
+}
+
+// ── One attempt at the Claude extraction call ────────────────────────────
+// Returns a unified result object:
+//   success:  { ok: true, parsed, items }
+//   failure:  { ok: false, retryable: bool, cause: string, zeroItems?: true }
+async function callClaudeOnce(apiKey, imageBlocks) {
+  let res;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8192,
+        messages: [{ role: "user", content: [...imageBlocks, { type: "text", text: EXTRACTION_PROMPT }] }],
+      }),
+    });
+  } catch (fetchErr) {
+    // Network-level failure (DNS, connection refused, timeout) - retryable
+    return { ok: false, retryable: true, cause: `Claude API network error: ${fetchErr.message}` };
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    // 429 (rate limit) and 5xx (server-side) are retryable.
+    // Other 4xx (401/403/400/etc.) are auth/request errors - retry won't help.
+    const retryable = res.status === 429 || (res.status >= 500 && res.status < 600);
+    return { ok: false, retryable, cause: `Claude API ${res.status}: ${errText.slice(0, 200)}` };
+  }
+
+  const result = await res.json();
+  const text = result.content?.[0]?.text || "";
+
+  let parsed;
+  try {
+    const cleanJson = text.replace(/```json\s*|```/g, "").trim();
+    parsed = JSON.parse(cleanJson);
+  } catch (parseErr) {
+    return { ok: false, retryable: true, cause: `Claude output JSON parse failed: ${parseErr.message}` };
+  }
+
+  const items = parsed.lineItems || [];
+  if (items.length === 0) {
+    return { ok: false, retryable: true, cause: "Claude returned 0 line items", zeroItems: true };
+  }
+
+  return { ok: true, parsed, items };
 }
 
 async function markScanStatus(uuid, status, errorMessage = null) {
