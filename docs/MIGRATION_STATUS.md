@@ -105,6 +105,16 @@ The **legacy `/ops` monthly-count flow is SEPARATE from Smart Inventory** — di
 
 ---
 
+## Scheduled audits
+
+Operational follow-ups on shipped work. Not engineering items - calendar checkpoints.
+
+### Post-fix audit — invoice-capture-to-PG (week of June 19)
+
+One week after the Module 6 dual-write fix (pr-9-1 + PR #138 + PR #139, shipped 2026-06-12), audit a week of live invoice uploads for zero failures/gaps. Confirm `pg_failed` holds at zero on normal traffic and new uploads land complete (line items + Stage A fields populated in PG). If clean -> invoice-capture-to-PG confirmed done. If a new failure cause appeared, `ai_scan_error` captured it -> fix, then done.
+
+Quick check command: `node --env-file=.env.local scripts/_probe_dual_write_gap_full_history.mjs` (gap probe) + count of `ai_scan_status='pg_failed'` rows over the prior week.
+
 ## Remaining work — sized roadmap
 
 Ordered by what's gated on what. Sizing estimates are based on the per-surface Pass-2 deep-trace.
