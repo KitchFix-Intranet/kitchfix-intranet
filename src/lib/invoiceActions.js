@@ -1393,8 +1393,15 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
     try {
       await insertAILineItems(invoiceUuid, lineItems, { accountKey, module: "ops" });
     } catch (insErr) {
-      console.error(`[AI Scan] ${invoiceUuid}: line item insert failed:`, insErr.message);
-      await markScanStatus(invoiceUuid, "failed");
+      // Distinguish dual-write PG failures from Sheets / OCR failures so the
+      // silent gap (Sheets has rows, PG empty, status looked like a normal
+      // OCR fail) becomes visible. PG adapter errors are prefixed
+      // "[dataStore.invoice.pg]"; everything else is treated as a Sheets-path
+      // failure and keeps the existing 'failed' status.
+      const isPgFailure = insErr.message.includes("[dataStore.invoice.pg]");
+      const status = isPgFailure ? "pg_failed" : "failed";
+      console.error(`[AI Scan] ${invoiceUuid}: line item insert ${status}:`, insErr.message);
+      await markScanStatus(invoiceUuid, status, isPgFailure ? insErr.message : null);
       return;
     }
 
@@ -1407,14 +1414,21 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
   }
 }
 
-async function markScanStatus(uuid, status) {
+async function markScanStatus(uuid, status, errorMessage = null) {
   // PR 6.2 (S4): the previous updateScanStatus stub only wrote to a log
   // line because the Sheets schema never had a dedicated ai_scan_status
   // column. PG does (PR 6.1), so we propagate via updateInvoiceFields -
   // a no-op on the Sheets side when no FIELD_TO_COL mapping exists, an
   // actual update on the PG side once dual-write is on for invoices.
+  //
+  // status='pg_failed' (Module 6 dual-write visibility fix, m6-pg-failed-
+  // visibility.sql) means Sheets has line items but the PG insert threw.
+  // Caller passes the throw message via errorMessage so the row records
+  // the precise cause - this is the gap-recurrence safety net.
   try {
-    await updateInvoiceFields(uuid, { aiScanStatus: status }, { module: "ops" });
+    const fields = { aiScanStatus: status };
+    if (errorMessage !== null) fields.aiScanError = errorMessage;
+    await updateInvoiceFields(uuid, fields, { module: "ops" });
   } catch (e) {
     console.warn(`[AI Scan] ${uuid}: status update failed (non-blocking):`, e.message);
   }
