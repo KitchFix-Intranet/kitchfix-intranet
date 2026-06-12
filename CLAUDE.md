@@ -1,5 +1,7 @@
 # CLAUDE.md - KitchFix Ops Hub
 
+> ⚠️ **STATUS: portions of this document are out of date.** [`docs/MIGRATION_STATUS.md`](docs/MIGRATION_STATUS.md) is the canonical source of truth for current system state (last major update: 2026-06-12 — invoice-capture-to-PG fixed, Smart Inventory parked, no-wipe decision). The high-level project shape and danger zones below are still accurate. Verify any specific module status, migration phase claim, or backlog item against `docs/MIGRATION_STATUS.md` before relying on it. Full reconciliation is a tracked do-later item.
+
 You are joining a working production codebase. This file is your briefing. Read it fully before touching anything.
 
 ## What this project is

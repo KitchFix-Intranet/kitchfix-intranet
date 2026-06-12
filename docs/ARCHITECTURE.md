@@ -1,5 +1,7 @@
 # Architecture - KitchFix Ops Hub
 
+> ⚠️ **STATUS: portions of this document may be out of date.** Last verified 2026-05-05; multiple module cutovers and the Module 6 invoice-capture-to-PG fix landed since. [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md) is the canonical source of truth for current per-module migration state. Architectural patterns (five-pillar Sheets model, auth boundary, dual-write orchestrator pattern) are still broadly accurate; specific table-by-table claims may have drifted. Verify against `MIGRATION_STATUS.md` before relying on a module-specific detail. Full reconciliation is a tracked do-later item.
+
 > **Purpose:** The 30,000-ft view of how this system is wired. Read this before touching anything new.
 >
 > **Last verified:** 2026-05-05
