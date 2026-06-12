@@ -287,6 +287,7 @@ function canonicalFromPgRow(row) {
     correctedFromUuid: row.corrected_from_uuid || "",
     dupeOverride:      row.dupe_override ? "not_duplicate" : "",
     aiScanStatus:      row.ai_scan_status || null,
+    aiScanError:       row.ai_scan_error || null,
     aiScanComplete:    !!row.ai_scan_complete,
     isHistorical:      !!row.is_historical,
     dataProvenance:    row.data_provenance || "app_scan",
@@ -903,6 +904,7 @@ async function updateInvoiceFieldsPostgres(uuid, fields) {
     payload.dupe_override = fields.dupeOverride === "not_duplicate" || fields.dupeOverride === true;
   }
   if ("aiScanStatus" in fields) payload.ai_scan_status = fields.aiScanStatus || null;
+  if ("aiScanError" in fields) payload.ai_scan_error = fields.aiScanError || null;
   if (Object.keys(payload).length === 0) return;
   const { error } = await supabase
     .from("invoice_submissions")
