@@ -142,6 +142,34 @@ The `cutover.js` control plane has no decommission state. Removing a table from 
 
 ---
 
+## Known signal noise + small latent bugs (post 2026-06-15 OCR work)
+
+Three items surfaced during the post-fix recovery work that didn't warrant immediate fix but are documented here so they don't get mistaken for new problems.
+
+### (a) Cron recon false-positives on "ai_scan_complete=TRUE with 0 ai_line_items"
+
+The weekend cron recon (in `kitchfix-inventory-cron`) periodically reports invoices in this shape. Investigation on 2026-06-15 confirmed the cron is reading a stale/lagged view of PG: of 6 invoices it flagged that morning, 5 actually had line items in PG (counts 9, 4, 9, 43, 39) - the recon snapshot was just out of date. Only 1 was a true silent gap (a pre-fix 6/8 anomaly that was honest-state-corrected by setting it to `pg_failed`).
+
+**This signal will recur in future weekend digests** until the cron's recon is rewritten. When it does: investigate by reading PG directly (`scripts/_probe_silent_gap_complete_with_zero.mjs` shows the pattern) rather than acting on the recon's claim. Real silent gaps would show `complete` + PG=0 AND Sheets=0; recon-stale ones show populated stores.
+
+Fix lives in the cron repo. Low priority - the false positives are just noise in the digest, not a production problem.
+
+### (b) Rescan canary's post-flight Sheets count reads with the wrong uuid
+
+`scripts/_rescan_silent_gap.mjs` correctly passes `sub.client_uuid` to `extractAndStoreLineItems` (fixed 2026-06-13 in the sub.id-vs-client_uuid bug cleanup), but its post-flight verification at line ~366 reads Sheets with `String(r[0]).trim() === sub.id`. Read-side version of the same identifier bug. Result: the canary's "Sheets ai_line_items: 0" in the post-flight output is unreliable - it under-reports when the write actually succeeded.
+
+The 2026-06-15 rescans of `5a447c0a` and `29c8ff9f` both printed "Sheets=0" in the canary output, but the orchestrator wrote Sheets unconditionally before any errors could occur, so the rows are there.
+
+Fix: one-line change in the canary, swap `sub.id` to `sub.client_uuid` in the Sheets filter. Low priority because PG count is the load-bearing post-flight signal and that one IS correct.
+
+### (c) f098571f Cheney Brothers has 18 Sheets rows vs 9 PG rows
+
+A single invoice from 2026-06-11 has Sheets/PG imbalance: 18 Sheets rows but only 9 in PG. Likely a pre-fix artifact from an extraction that failed half-way and then retried, leaving Sheets duplicated. Not a silent gap (both stores have data), just unequal. Low priority cleanup target if Sheets/PG parity ever becomes important for this single invoice.
+
+---
+
+---
+
 ## Surface-to-module map (reference table)
 
 Every intranet surface (route) → which module/data-store it's driven by → current effective state. Includes Pass-2 clarifications.
