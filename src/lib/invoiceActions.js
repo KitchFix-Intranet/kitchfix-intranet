@@ -1469,7 +1469,21 @@ async function callClaudeOnce(apiKey, imageBlocks) {
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
+        // Raised from 8192 -> 16384 after the 2026-06-12 sweep audit found
+        // two persistent failures (5a447c0a What Chefs Want, 29c8ff9f Truly
+        // Good Foods) whose JSON output truncated at the old cap. Verified
+        // against this model via scripts/_probe_max_tokens_16384_verification.mjs:
+        //   - API accepts 16384 cleanly
+        //   - Both failed invoices now produce complete valid JSON
+        //     (48 items / 8203 out_t, 52 items / 9296 out_t - just over 8192)
+        //   - 3 normal invoices (1/16/34 items) extract identically; small
+        //     invoices use modest token counts (267/2649/5866) so the higher
+        //     ceiling has no cost impact on the typical case
+        // 16384 leaves ~7000 tokens of headroom over the largest observed
+        // response, comfortably handling invoices with 100+ line items.
+        // Cost: only used when actually generated. max_tokens is a ceiling,
+        // not a target - normal invoices won't pay more.
+        max_tokens: 16384,
         messages: [{ role: "user", content: [...imageBlocks, { type: "text", text: EXTRACTION_PROMPT }] }],
       }),
     });
