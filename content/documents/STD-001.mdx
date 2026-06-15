@@ -1,0 +1,354 @@
+---
+id: STD-001
+title: Documentation Format Standard
+doc_class: STD
+shelf: Brand & Standards
+status: Live
+version: "1.1"
+card_line: "The format every internal KitchFix document follows. Typography, color, callouts, tables, page architecture."
+summary: "The Standard that defines format for every KitchFix internal document. Covers document classification, page architecture, typography hierarchy (Oswald display + Mulish body with Arial fallback), color palette (locked hex), banners and callouts (Anchor, Promise, Critical, Note), tables (Reference, SOP Process, RACI), cross-references and linking, naming-versioning-lifecycle, approval and review chain by class, document anatomy by class. STD-001 governs format - content is governed by each doc's approval chain."
+keywords:
+  - STD-001
+  - format
+  - typography
+  - callout
+  - anchor
+  - critical
+  - note
+  - promise
+  - color palette
+  - brand
+  - Oswald
+  - Mulish
+  - navy
+  - template
+owner: "Senior Director of Operations"
+approver: "SLT"
+audience: corporate
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+approval:
+  approved_version: "1.1"
+  approved_by: "SLT"
+  approved_date: 2026-06-09
+  method: SLT-approved
+last_reviewed: 2026-06-09
+review_interval_months: 12
+effective_date: 2026-06-09
+sort_order: 10
+non_canonical_blocks:
+  - "Callout examples in Section 07 (Promise / Anchor / Critical / Note bodies are illustrative)"
+relationships:
+  - { to: STD-002, type: references, from_section: "section 13 sub-standard" }
+  - { to: STD-003, type: references, from_section: "section 13 sub-standard pending" }
+  - { to: STD-004, type: references, from_section: "section 13 sub-standard" }
+---
+
+# 01 Purpose and Scope
+
+This Standard defines the format for every KitchFix internal document. Operations, HR, culinary, finance, leadership - same rules, same look, same behavior.
+
+If a document is produced for internal use and lives in a KitchFix repository, it follows this Standard. The Standard governs format, not content. Content is governed by the document's own approval chain.
+
+> ANCHOR: Trust is what we sell. Every document we produce is either earning that trust or eroding it. The Standard exists so that every leader, on every account, in every season, can recognize a KitchFix document at a glance and trust the format to mean the same thing every time.
+
+## In Scope
+
+- Long-form playbooks (PB)
+- Standards (STD)
+- Policies (POL)
+- Standard Operating Procedures (SOP)
+- Templates (TPL)
+- Checklists (CHK)
+- Reference cards (REF)
+- Signed agreements (AGR)
+
+## Out of Scope
+
+Three registers fall outside this Standard. Each will be governed by a sub-standard:
+
+- Posters and infographics - different visual register; STD-002 Visual Communication Standard.
+- Memos, emails, Slack-formatted communications - STD-003 Internal Communication Standard pending.
+- External-facing materials - client decks, sales, marketing - governed by external brand standards.
+
+# 02 Document Classification System
+
+Every document has a class. The class determines required elements, approval chain, and review cadence.
+
+The class prefix is the first part of every document ID.
+
+| Code | Class | Description |
+|---|---|---|
+| PB | Playbook | Long-form reference doc, system-level. Read for orientation and as standing reference. |
+| STD | Standard | Defines what gets enforced. Sets the rules other docs must follow. |
+| POL | Policy | HR/legal-grade rules. Governs employment relationship. |
+| SOP | Standard Operating Procedure | Process-driven, repeatable. Describes the steps to perform a task. |
+| TPL | Template | Reusable form. Filled in by an operator each cycle. |
+| CHK | Checklist | Sequential checks for a defined operation. |
+| REF | Reference card | Quick-reference one-pager. Visual-heavy, minimal text. |
+| AGR | Signed Agreement | Acknowledgement-required. The artifact is the signature. |
+
+## Document IDs
+
+Format: [CODE]-[NUMBER]. Numbers are assigned sequentially within each class by the document owner. Numbers are never reused.
+
+# 03 Page Architecture
+
+Every page in the system shares the same structural skeleton.
+
+- Page size - US Letter 8.5 by 11 inches.
+- Margins - 1.0 inch all sides.
+- Orientation - Portrait. Landscape only for tables/diagrams that demand width.
+- Page break - Required before every section opener (H1). Each section begins on a new page.
+- Header - Document ID + version (left), document title in italic (right). Faint sky-blue rule beneath. Mulish 8pt, gray.
+- Footer - KITCHFIX wordmark (left), classification in italic (center), Page X / Y (right).
+- Cover page - No header. No footer.
+
+# 04 Typography Hierarchy
+
+Two fonts. Five heading levels. One workhorse SubHead device.
+
+## 4.1 Font Families
+
+- Display - Oswald Medium. Document titles, section opener titles, all H1-equivalents.
+- Body - Mulish Regular and ExtraBold. All other text.
+- Fallback - Oswald falls to a condensed sans, then Arial; Mulish falls to Arial.
+
+## 4.2 Type Scale
+
+| Style | Size | Weight | Color | Use |
+|---|---|---|---|---|
+| Cover Title | 48pt | Bold | Navy | Title on cover page |
+| Cover Subtitle | 14pt | Italic | Navy | Subtitle on cover page |
+| Section Label | 9pt CAPS | Bold | Navy | "SECTION 04" eyebrow above each H1 |
+| H1 Section Title | 24pt | Bold | Navy | Section opener title |
+| H2 Sub-section | 14pt | Bold | Navy | Sub-sections (4.1, 4.2, etc.) |
+| H3 Sub-sub | 11pt | Bold | Navy | Lower headings |
+| SubHead | 10.5pt | Bold | Navy | Workhorse device. No rule. |
+| Lede | 11pt italic | Regular | Gray | Italic intro paragraph after H1 or H2 |
+| Body | 10.5pt | Regular | Black | All body text and bullets |
+| Body Bold | 10.5pt | Bold | Navy | Inline emphasis within body |
+| Caption | 9pt italic | Regular | Dark Gray | Image captions, signature labels |
+
+## 4.3 The SubHead Device
+
+The missing rung between H3 and body. The workhorse that makes dense operational content scannable.
+
+SubHead is a sub-heading without a rule. Bold navy 10.5pt. Modest space-before, tight space-after.
+
+**Flavor A - Sentence + prose**: SubHead is a full sentence ending in a period. One or two short prose paragraphs follow beneath.
+
+**Flavor B - Noun phrase + bullets**: SubHead is a short noun phrase, no period. Two to five bullets follow beneath.
+
+## 4.4 Content Density Rules
+
+- Three or more parallel actions go to SubHead + Bullets.
+- Principle or values content goes to SubHead Flavor A + prose.
+- Single concept with aspects goes to BulletLabeled.
+- Reference data goes to Table.
+- Standalone statement of doctrine goes to Promise Callout or Anchor Banner.
+
+> ANCHOR: Operator-first. A leader should be able to scan any section of any KitchFix document and know what to do without reading every word. If the format does not support that, the format is wrong - not the leader.
+
+## 4.5 Bullet Patterns
+
+- **Bullet** - Plain bullet. No lead-in label.
+- **BulletLabeled** - Bold navy lead-in label, em-dash, body text.
+- **PLabeled** - Same pattern as BulletLabeled but as a paragraph, not a bullet.
+
+## 4.6 Heading Rule Weights
+
+| Heading | Rule Weight | Purpose |
+|---|---|---|
+| H1 | 1.5pt heavy sky-blue rule beneath | Section opener - strongest visual anchor |
+| H2 | 0.75pt medium sky-blue rule beneath | Sub-section - visible but secondary |
+| H3 | 0.5pt faint sky-blue rule beneath | Theme - minimal but distinguishable |
+| SubHead | No rule | Bold navy color and weight do the work |
+
+# 05 Color Palette and Usage Rules
+
+PFS brand colors only. No additions. No substitutions. The palette is locked.
+
+| Color | Hex | Use |
+|---|---|---|
+| Navy | #153968 | All headings, primary banners, accent borders, table header fills, SubHead text, bullet labels |
+| Navy Dark | #0E2647 | Callout body text, cover hero metadata |
+| Sky Blue | #7DB9D5 | Heading rules, cover accent rule, TOC eyebrow numbers, cover middle-word accent |
+| Anchor Tint | #C4E3E8 | Anchor Banner fill |
+| Navy Tint | #E3EDF7 | Promise Callout fill |
+| Note Gray | #EEF6F8 | Note Callout fill, zebra row fill in long tables |
+| Red Tint | #FCE4E4 | Critical Banner fill |
+| Red Dark | #8B1F1F | Critical Banner text |
+| Mid Gray | #6B7785 | Lede text, em-dash separators, TOC page numbers, footer chrome |
+| Dark Gray | #303030 | Captions, header chrome, secondary text |
+| Black | #000000 | Body text |
+| White | #FFFFFF | Reverse text on Navy fills, default cell background |
+| Table Border | #CCCCCC | All table cell borders |
+| Cover Hairline | #D0D7E2 | Cover metadata block row rules |
+| Link | #153968 | Hyperlink text - navy, underlined |
+
+# 06 Logos and Brand Marks
+
+The PFS Primary Logo system. Three orientations (Vertical, Horizontal, Circle), two color variants (Navy, White). Six approved files. No additions, no substitutions, no recreations.
+
+> ANCHOR: The logo is the brand mark. Operators inside our facilities, clients receiving our documents, players walking through our dining rooms - all of them recognize the brand at a glance through the logo.
+
+# 07 Banners and Callouts
+
+Four emphasis devices. Each signals a different rule weight. Use sparingly.
+
+## 7.1 Promise Callout
+
+Navy-tinted panel for Mission, Vision, and Promise statements. Lower weight than Anchor; higher weight than Note.
+
+<NonCanonical>
+EXAMPLE - illustrative content for format demonstration only:
+
+We believe in the transformative power of genuine hospitality to instill confidence, enhance performance, and ensure every partner feels cared for, and poised to excel.
+</NonCanonical>
+
+Spec: Fill #E3EDF7, Text #0E2647 italic, padding top/bottom 280 DXA, left/right 320 DXA. cantSplit: true on the row. Maximum three per document. Reserved for constitutional statements.
+
+## 7.2 Anchor Banner
+
+Sky-tinted panel for the key principle of a section. "If you only remember one thing, remember this."
+
+<NonCanonical>
+EXAMPLE:
+
+ANCHOR: Operator-first. A leader should be able to scan any section of any KitchFix document and know what to do without reading every word.
+</NonCanonical>
+
+Spec: Fill #C4E3E8, Label "ANCHOR" Oswald SemiBold 9pt CAPS Navy, Text #0E2647 regular. Maximum one per H2 section.
+
+## 7.3 Critical Banner
+
+Red-tinted panel for absolute prohibitions. The action must never happen, under any circumstance.
+
+<NonCanonical>
+EXAMPLE:
+
+CRITICAL: You do not raise KitchFix internal issues with the Client. Ever.
+</NonCanonical>
+
+Spec: Fill #FCE4E4, Label "CRITICAL" Red Dark, Text #8B1F1F bold. Use only when the consequence of breach is termination, legal action, or both.
+
+## 7.4 Note Callout
+
+Gray-tinted panel for operational notes, definitions, and contextual expansions. Lowest emphasis.
+
+<NonCanonical>
+EXAMPLE:
+
+NOTE: Note Callouts may appear multiple times per section. They carry information the reader needs but does not need to remember as the rule of the section.
+</NonCanonical>
+
+Spec: Fill #EEF6F8, Label "NOTE" Dark Gray, Text #303030 regular. No limit.
+
+## 7.5 Page-Break Behavior
+
+Every callout, every type, every time: cantSplit: true on the table row. Callouts that break across pages lose their visual integrity.
+
+# 08 Tables
+
+Three standard table formats: Reference Table (comparison data), SOP Process Table (sequential steps), RACI Table (accountability mapping). All use DXA widths, 1pt #CCCCCC borders, Navy header fill on the first row.
+
+# 09 Cross-References and Linking
+
+Every cross-reference uses the Document ID, not "this link" or "the document we discussed." Files move. IDs are stable.
+
+Format: "see SOP-014 section 3.2" or "per AGR-001 The Big Rules."
+
+Every document ends with a Related Documents block listing every cross-referenced document by ID, title, and (where applicable) link.
+
+# 10 Naming, Versioning and Lifecycle
+
+## Filename format
+
+[Title]_[ID]_v[Version].docx
+
+- Title - document title with underscores replacing spaces.
+- ID - class prefix and number (PB-001, STD-001, AGR-001).
+- Version - v[major]_[minor].
+
+## Version format
+
+- Major bump (1.0 to 2.0) - structural change, signature reset (for AGR class), new approval cycle.
+- Minor bump (1.0 to 1.1) - correction, clarification, formatting fix. No resignature needed.
+
+## Cover metadata block
+
+Required on every document.
+
+- Document ID
+- Title
+- Version (with effective date)
+- Owner (role title, not personal name)
+- Approved By (roles, dates) - required at v1.0 and above
+- Next Review (date)
+- Classification
+
+## Default review cadence
+
+- Annual - most documents.
+- Quarterly - high-change documents.
+- Per-event - AGR class.
+
+# 11 Approval and Review Chain
+
+| Class | Approver | Required Reviewers |
+|---|---|---|
+| PB | SLT | Theme owner |
+| STD | SLT | Theme owner |
+| POL | SLT + counsel | People Ops |
+| AGR | SLT + counsel | People Ops |
+| SOP | Senior Director of Operations | Theme owner + end-user pilot |
+| TPL | Senior Director of Operations | Theme owner |
+| CHK | Senior Director of Operations | Theme owner + end-user pilot |
+| REF | Senior Director of Operations | Theme owner |
+
+# 12 Document Anatomy by Class
+
+Every document shares the same architectural skeleton. Class-specific elements stack on top.
+
+## Universal - Every Class
+
+- Cover page (logo placement, title, subtitle, accent rule, metadata block)
+- Header on body pages
+- Footer on body pages
+- Body content
+- Related Documents block
+
+## Class-Specific Add-ons
+
+| Class | Required Add-ons |
+|---|---|
+| PB | TOC (always for over 10 pages), How to Use This Playbook section |
+| STD | TOC if over 10 pages, Approval block at end, Worked examples |
+| POL | TOC if over 10 pages, Counsel review notation, Approval block |
+| AGR | Acknowledgement and Agreement signature page (full page) |
+| SOP | Purpose and Scope at start, SOP Process Table for steps, End-user pilot notation |
+| TPL | Instructions block at top, Sample/example row in tables |
+| CHK | One-page typical, Checkbox formatting, Signature line at bottom |
+| REF | One-page, Visual-heavy, Minimal body text |
+
+# 13 Out of Scope - Sub-Standards
+
+Three sub-standards round out the system.
+
+- **STD-002 Visual Communication Standard** - posters, infographics, signage. In review v0.2.
+- **STD-003 Internal Communication Standard** - memos, emails, Slack. Pending.
+- **STD-004 Documentation Repository Standard** - front-matter schema and repo structure. In review v0.1.
+
+# 14 Approval
+
+This Standard is itself an STD-class document. Its approval chain follows Section 11.
+
+## Changes in v1.1
+
+- Brand fonts are now the build standard - Section 4. Oswald (display) and Mulish (body) are primary, with a defined fallback chain.
+- Palette pinned - Section 5. Exact hex locked for every token.
+- Cover: navy logo top-left and a clean first page are now standard.
+- Version drift corrected - running header and metadata block now agree at v1.1.

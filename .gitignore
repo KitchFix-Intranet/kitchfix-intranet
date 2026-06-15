@@ -48,3 +48,6 @@ playwright/.cache/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# OPD audit/scratch working data (not committed)
+.scratch/

@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kitchfix.com/opd/schema/frontmatter.schema.json",
+  "title": "OPD Document Frontmatter",
+  "description": "The frontmatter block of every /content/documents/<ID>.mdx file. Mirrors the OPD `documents` table plus governance and scope. Validates as a catalog row source.",
+  "type": "object",
+  "required": ["id", "title", "doc_class", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\\d{3}(-[A-Z]+)?$",
+      "description": "Stable doc ID. POSTER-NNN maps to doc_class POST."
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "doc_class": {
+      "type": "string",
+      "enum": ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"]
+    },
+    "shelf": {
+      "type": ["string", "null"],
+      "enum": [
+        "Safety",
+        "Operations",
+        "HR & People",
+        "Culinary",
+        "Brand & Standards",
+        "Finance",
+        "Site & Client",
+        null
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"],
+      "description": "Tightened to the 6-set in pr-7-8 (Draft retired; In Build absorbed the semantics)."
+    },
+    "version": { "type": ["string", "null"] },
+    "card_line": { "type": ["string", "null"] },
+    "summary": { "type": ["string", "null"] },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "surfaces": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Named widgets / tools / workflows this doc appears on (e.g. 'kitchen', 'incident-reporting', 'new-hire-onboarding'). Projection populates document_surfaces from this field."
+    },
+    "owner": {
+      "type": ["string", "null"],
+      "description": "Role title, never a personal name. Validated at gate time."
+    },
+    "approver": { "type": ["string", "null"] },
+    "audience": {
+      "type": ["string", "null"],
+      "enum": ["operator", "corporate", "internal", null]
+    },
+    "classification": {
+      "type": "string",
+      "default": "KitchFix Internal"
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["en", "es"],
+      "default": "en"
+    },
+    "in_corpus": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this doc enters the SousAI corpus. -ES translations: false."
+    },
+    "applies_to": {
+      "description": "Resolver override context. company-wide, or scoped to states / account / role.",
+      "oneOf": [
+        { "type": "string", "const": "company-wide" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "states": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^[A-Z]{2}$" },
+              "minItems": 1
+            },
+            "account": { "type": "string" },
+            "role": { "type": "string" }
+          }
+        }
+      ],
+      "default": "company-wide"
+    },
+    "translation_of": {
+      "type": ["string", "null"],
+      "description": "ID of the English source doc. Set on -ES translations."
+    },
+    "source_version": {
+      "type": ["string", "null"],
+      "description": "The English source version this translation reflects. Drives the -ES parity report."
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_version", "approved_by", "approved_date", "method"],
+      "properties": {
+        "approved_version": { "type": "string" },
+        "approved_by": {
+          "type": "string",
+          "description": "Role title or named body (e.g. 'VP Operations', 'SLT + Counsel'). Not a personal name."
+        },
+        "approved_date": { "type": "string", "format": "date" },
+        "method": {
+          "type": "string",
+          "enum": ["recorded sign-off", "counsel-cleared", "SLT-approved", "owner-acknowledged"]
+        }
+      }
+    },
+    "last_reviewed": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "review_interval_months": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 12,
+      "description": "12 default; shorter for legal POLs."
+    },
+    "effective_date": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "print_required": { "type": "boolean", "default": false },
+    "critical": { "type": "boolean", "default": false },
+    "pinned": { "type": "boolean", "default": false },
+    "sort_order": { "type": "integer", "default": 100 },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "ID of doc this supersedes. Becomes a superseded_by relationship at projection time."
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["to", "type"],
+        "properties": {
+          "to": {
+            "type": "string",
+            "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\\d{3}(-[A-Z]+)?$"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["references", "implements", "supersedes", "superseded_by", "derived_from", "related"]
+          },
+          "from_section": {
+            "type": ["string", "null"],
+            "description": "Section in this doc where the reference lives. Optional but useful for traceability."
+          }
+        }
+      },
+      "default": []
+    },
+    "obligations": {
+      "type": "array",
+      "description": "Recurring deadlines / renewals / obligations this doc carries. Feeds the derived compliance calendar + cert matrix.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "cadence", "owner"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "permit_renewal",
+              "cert_renewal",
+              "review",
+              "training",
+              "audit",
+              "inspection",
+              "report",
+              "other"
+            ]
+          },
+          "cadence": {
+            "type": "string",
+            "enum": ["annual", "biannual", "quarterly", "monthly", "weekly", "daily", "one-time", "per-event"]
+          },
+          "next_due": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "owner": { "type": "string" },
+          "source_section": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "applies_to": {
+            "description": "Optional per-obligation scope when the doc covers obligations that vary by state/account/role.",
+            "oneOf": [
+              { "type": "string", "const": "company-wide" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "states": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]{2}$" } },
+                  "account": { "type": "string" },
+                  "role": { "type": "string" }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "default": []
+    },
+    "derived": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set true on /content/derived/*.generated.mdx outputs. Not hand-editable. Gate rejects edits to derived: true files."
+    },
+    "non_canonical_blocks": {
+      "type": "array",
+      "description": "List of section IDs in this doc that are example / specimen / template content - NOT canonical (defends SousAI hard floor rule 7).",
+      "items": { "type": "string" },
+      "default": []
+    }
+  }
+}
