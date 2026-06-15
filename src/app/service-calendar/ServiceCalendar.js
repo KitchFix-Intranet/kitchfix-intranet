@@ -3,8 +3,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import DayDetail from "./DayDetail";
 import ServiceConfig from "./ServiceConfig";
 
-const ADMIN_EMAILS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
-
 const GREEN = "#0F6E56";
 const AMBER = "#EF9F27";
 const RED = "#dc2626";
@@ -89,14 +87,12 @@ export default function ServiceCalendar({ showToast, session }) {
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
-  const focusRef = useRef(null);
 
   // Bulk mode
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState(new Set());
   const [bulkPanelOpen, setBulkPanelOpen] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
-  const bulkRef = useRef(null);
 
   useEffect(() => {
     fetch("/api/service-calendar?action=sc-accounts")
