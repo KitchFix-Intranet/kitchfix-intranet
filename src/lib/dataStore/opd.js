@@ -26,6 +26,7 @@ const DOCUMENTS_TABLE     = "documents";
 const RELATIONSHIPS_TABLE = "document_relationships";
 const SURFACES_TABLE      = "document_surfaces";
 const ISSUES_TABLE        = "document_issues";
+const PINS_TABLE          = "document_pins";
 
 // Doc IDs are stable text handles (PB-006, SOP-002, REF-005-A, LEGACY-PR ...).
 // Strict A-Z/0-9/hyphen pattern. Used to gate the only place we interpolate
@@ -75,19 +76,62 @@ export async function listDocuments(
       .neq("status", "Retired")
       .in("status", stats);
     if (shelf) q = q.eq("shelf", shelf);
+    // Pin sort is now overlay-sourced (post-query). Keep stable secondary
+    // ordering at the DB level; the JS pass below re-sorts to put pinned
+    // first while preserving the secondary order within each group.
     q = q
-      .order("pinned",     { ascending: false })
       .order("sort_order", { ascending: true })
       .order("title",      { ascending: true });
   }
 
   const { data, error } = await q;
   if (error) throw new Error(`opd.listDocuments: ${error.message}`);
-  return data || [];
+  const rows = data || [];
+  return decoratePinned(rows, archivedOnly ? "preserve" : "sort");
+}
+
+/**
+ * Attach overlay-sourced `pinned` to each row, sourced from document_pins.
+ * Pre-pr-7-9 the documents.pinned column was authoritative; post-pr-7-9 the
+ * presence of a document_pins row is. This helper overwrites documents.pinned
+ * on the returned row so the rest of the read path (and any UI rendering it)
+ * sees the overlay value. documents.pinned stays in the DB but is no longer
+ * read; the column drop is deferred to a later PR.
+ *
+ * mode:
+ *   - "sort": after attaching pinned, re-sort with pinned DESC as the
+ *     primary key while preserving the input ordering for ties. The DB
+ *     query intentionally drops `order("pinned")` so this is the only
+ *     place pinned affects ordering.
+ *   - "preserve": attach pinned but do NOT re-sort (used by the archive
+ *     view which has its own archived_at-first ordering and where
+ *     pinned-up-top would be wrong).
+ *   - "skip": attach pinned but do not query the overlay; just stamp
+ *     pinned=false on every row. Used when the caller already has the
+ *     overlay set (e.g., from a batched bootstrap fetch).
+ */
+async function decoratePinned(rows, mode = "sort") {
+  if (rows.length === 0) return rows;
+  const sb = getServiceClient();
+  const ids = rows.map((r) => r.id);
+  const { data: pins, error } = await sb
+    .from(PINS_TABLE)
+    .select("doc_id")
+    .in("doc_id", ids);
+  if (error) throw new Error(`opd.decoratePinned: ${error.message}`);
+  const pinSet = new Set((pins || []).map((p) => p.doc_id));
+  for (const r of rows) r.pinned = pinSet.has(r.id);
+  if (mode === "sort") {
+    // Stable sort: pinned first, then preserve the DB ordering (sort_order
+    // ASC, title ASC) for both pinned and unpinned groups.
+    rows.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  }
+  return rows;
 }
 
 /**
  * Fetch a single document by ID. Returns null if not found.
+ * pinned is sourced from document_pins (the overlay), not documents.pinned.
  */
 export async function getDocument(id, opts = {}) {
   const sb = getServiceClient();
@@ -97,6 +141,9 @@ export async function getDocument(id, opts = {}) {
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`opd.getDocument: ${error.message}`);
+  if (!data) return data;
+  const { data: pin } = await sb.from(PINS_TABLE).select("doc_id").eq("doc_id", id).maybeSingle();
+  data.pinned = !!pin;
   return data;
 }
 
@@ -195,6 +242,12 @@ export async function createDocument(data, opts = {}) {
  * Partial update. Stamps updated_at = now() at the orchestrator (the schema
  * default only fires on INSERT). Caller's patch can override updated_at
  * if a specific timestamp is needed; otherwise we set it from JS clock.
+ *
+ * Post-pr-7-9: `pinned` is NOT a valid field here. Pin moved to the
+ * document_pins overlay; route handlers redirect `pinned` patches to
+ * setPinned / clearPinned before calling this function. If a caller still
+ * passes `pinned`, it lands on the documents.pinned column (kept for
+ * rollback) but is no longer read.
  */
 export async function updateDocument(id, patch, opts = {}) {
   const sb = getServiceClient();
@@ -206,7 +259,32 @@ export async function updateDocument(id, patch, opts = {}) {
     .select()
     .single();
   if (error) throw new Error(`opd.updateDocument: ${error.message}`);
+  // Re-source pinned from the overlay so the returned row reflects the
+  // canonical post-pr-7-9 truth (not the deprecated documents.pinned column).
+  const { data: pin } = await sb.from(PINS_TABLE).select("doc_id").eq("doc_id", id).maybeSingle();
+  data.pinned = !!pin;
   return data;
+}
+
+/**
+ * Pin a document. Idempotent (ON CONFLICT DO NOTHING). The `pinned_by`
+ * email is captured for an eventual audit / "who pinned this" surface.
+ */
+export async function setPinned(id, pinned_by, opts = {}) {
+  const sb = getServiceClient();
+  const { error } = await sb
+    .from(PINS_TABLE)
+    .upsert({ doc_id: id, pinned_by, pinned_at: new Date().toISOString() }, { onConflict: "doc_id" });
+  if (error) throw new Error(`opd.setPinned: ${error.message}`);
+}
+
+/**
+ * Unpin a document. Idempotent (no-op if not pinned).
+ */
+export async function clearPinned(id, opts = {}) {
+  const sb = getServiceClient();
+  const { error } = await sb.from(PINS_TABLE).delete().eq("doc_id", id);
+  if (error) throw new Error(`opd.clearPinned: ${error.message}`);
 }
 
 /**

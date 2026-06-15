@@ -41,6 +41,7 @@ import {
   ALL_STATUSES,
 } from "../_shared";
 import SlideOverReader from "../SlideOverReader";
+import SousModal from "../sous-demo/SousModal";
 
 // Status options for the in-row dropdown - same canonical workflow values
 // the API allows. Includes Retired (the only status not in ALL_STATUSES) so
@@ -194,6 +195,8 @@ function AdminDashboard({
   // Create modal visibility. Decoupled from the doc state because no doc
   // exists yet at the moment the modal opens.
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // SousAI demo modal visibility. Demo-only preview surface.
+  const [sousModalOpen, setSousModalOpen] = useState(false);
 
   const total = docs.length;
 
@@ -359,6 +362,7 @@ function AdminDashboard({
         activeCount={total}
         archivedCount={archivedDocs?.length ?? null}
         onCreateClick={() => setShowCreateModal(true)}
+        onSousClick={() => setSousModalOpen(true)}
       />
 
       {activeTab === "worklist" && (
@@ -555,6 +559,8 @@ function AdminDashboard({
       {openDocId && (
         <SlideOverReader docId={openDocId} onClose={() => setOpenDocId(null)} isOwner={true} />
       )}
+
+      <SousModal open={sousModalOpen} onClose={() => setSousModalOpen(false)} />
     </div>
   );
 }
@@ -1137,7 +1143,7 @@ function DisplayCell({ children, isSaved, error, onClick, onDismissError }) {
 // + New Document trigger. Archive count is null until the user opens the
 // Archive tab for the first time (we lazy-fetch); the count badge is
 // hidden during that gap so it doesn't show "0" misleadingly.
-function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateClick }) {
+function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateClick, onSousClick }) {
   return (
     <div className="pb-admin-tabnav" role="tablist" aria-label="Admin views">
       <button
@@ -1163,6 +1169,18 @@ function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateCl
         )}
       </button>
       <div className="pb-admin-tabnav-spacer" />
+      <button
+        type="button"
+        onClick={onSousClick}
+        className="pb-admin-sous-btn"
+        title="Summon SousAI (preview - opens in place)"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+        Ask Sous
+        <span className="pb-admin-sous-tag">Preview</span>
+      </button>
       <button
         type="button"
         className="pb-admin-new-btn"

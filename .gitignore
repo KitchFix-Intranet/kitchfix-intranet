@@ -51,3 +51,6 @@ playwright/.cache/
 
 # OPD audit/scratch working data (not committed)
 .scratch/
+
+# Phase A PR1 dry-run sample renders (transient)
+scripts/content/.dryrun-samples/
