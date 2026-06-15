@@ -1,0 +1,584 @@
+---
+id: TPL-014
+title: SLA Template - Blank Fill-In
+doc_class: TPL
+shelf: Site & Client
+status: In Build
+version: "0.1"
+card_line: "The blank fill-in SLA template every KitchFix account SLA is built against. Implements PB-005."
+summary: "TPL-014 is the blank fill-in template every KitchFix account SLA is built against. Built on the SLA OS (PB-005). Ten-section structure: Commercial Terms, Scope of Services, Service Calendar, Operational SOP, Nutrition & Allergens, Communication & Confidentiality & Conduct, Performance & Accountability, Specialty & Custom, Operational Standards, Financials & Reporting. KitchFix Level standards are pre-stated as the floor; account-specific tuning and any client override are documented in write-in fields. A section that does not apply is marked N/A with a reason - never left blank. Section 1 Commercial Terms is reviewed by legal before execution; sections 2-10 Operating SLA are reviewed annually at the ABR."
+keywords:
+  - TPL-014
+  - SLA template
+  - SLA OS
+  - PB-005
+  - blank fill-in
+  - floor-then-override
+  - ABR
+  - service calendar
+  - allergen
+  - PB-002
+  - Latin commitment
+  - The Big Rules
+  - AGR-001
+  - commercial terms
+  - operating SLA
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+sort_order: 40
+non_canonical_blocks:
+  - "All bracketed write-in prompts and field placeholder rows are wrapped in <NonCanonical> (template-as-canonical risk - this is the blank shell, not a binding SLA)"
+relationships:
+  - { to: PB-005, type: implements, from_section: "the ten-section structure this template implements" }
+  - { to: PB-006, type: references, from_section: "section 4 / section 5 / section 8 / section 9 culinary floor" }
+  - { to: PB-001, type: references, from_section: "section 6 / section 7 leadership floor" }
+  - { to: PB-002, type: references, from_section: "section 5 allergen single source of truth" }
+  - { to: AGR-001, type: references, from_section: "section 6 conduct standards" }
+  - { to: SOP-001, type: references, from_section: "section 7 internal performance reviews" }
+  - { to: SOP-002, type: references, from_section: "section 6 incident response and escalation" }
+  - { to: STD-001, type: references, from_section: "governs the format of this template" }
+---
+
+<SourceGoverns doc="PB-005" />
+
+> CRITICAL: BLANK TEMPLATE · DRAFT v0.1 - INTERNAL REVIEW ONLY · NOT A CURRENT ACCOUNT
+
+# How to Use This Template
+
+Read this first. It explains the ten-section structure, the floor-then-override hierarchy, and the three things you will see on every page.
+
+> ANCHOR: This template is the shell. KitchFix Level standards are pre-stated as the floor. Your job is to confirm the floor, tune what is account-specific, and document any client override. The floor holds at every account unless an override is written down and signed off.
+
+## The Ten-Section Structure
+
+Every account SLA follows the same ten sections, in the same order, so a leader who knows where Section 4 lives in one SLA knows where it lives in every other one. Account-specific content fills the structure; the structure does not change.
+
+Section 1 - Commercial Terms - reviewed by legal before execution. Updated at renewal.
+
+Sections 2-10 - Operating SLA - reviewed annually at the ABR. Material changes mid-year are documented as amendments and folded in at the next ABR.
+
+## The Floor-Then-Override Hierarchy
+
+KitchFix Level standards apply at every account by default. The Allergen Playbook (PB-002), the Culinary OS floor (PB-006), the Big Rules (AGR-001), ServSafe currency, and the menu approval workflow are the floor. Where the client's own guidelines are silent, the KitchFix floor applies.
+
+Account-level overrides are documented in the section the override applies to - with the rationale and the signing authority who approved it. KitchFix Level SOPs are never edited to accommodate an account. The override lives here, in the SLA.
+
+## Three Things You Will See on Every Page
+
+Floor - A line led by the bold navy word "Floor" states a KitchFix Level standard. Carry it forward. Only change it by documenting an override.
+
+Write-in fields - Italic gray text in brackets, like [ fill in ], is a prompt. Replace it with the account-specific answer, or write "N/A-" with a reason. Never leave it bracketed in a finished draft.
+
+OPEN notes - A gray NOTE callout that begins "OPEN-" is a question or gap for the site team to close. These are expected in a working draft. Resolve each one or escalate it before the draft goes to the client.
+
+> NOTE: This is a working template, not a finished SLA. Blanks, bracketed prompts, and OPEN notes are the point - they tell the site team exactly what to fill and what to confirm. Polish comes later, on the way to the client conversation.
+
+# 01 Commercial Terms
+
+Contractual foundation. Reviewed by legal before execution. Updated at renewal.
+
+> NOTE: Legal Review - cure periods, indemnification, limitation of liability, IP, and audit-rights language cannot be drafted by the field. Section 1 in full requires legal review (Counsel: John) before execution.
+
+## Parties
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| KitchFix legal entity | Floor - CJK Foods LLC dba KitchFix. |
+| KitchFix authorized signatory | [ Name, title ] |
+| Client legal entity (full legal name) | [ Full legal entity name ] |
+| Client authorized signatory | [ Name, title ] |
+</NonCanonical>
+
+## Term and Renewal
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Initial term - effective date | [ Date ] |
+| Initial term - expiration date | [ Date ] |
+| Renewal term length | [ Years ] |
+| Annual SLA Review (ABR) date | [ Date - the structured contract-level conversation that runs every year ] |
+| Notice required for non-renewal | [ Days ] |
+</NonCanonical>
+
+## Termination, Force Majeure, Pricing, Insurance, IP
+
+Write-in below. Insurance carries the KitchFix Level floor coverage; confirm and adjust per account.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Termination for convenience / for cause | [ Cure period, notice, material-breach definition, transition obligations - legal review ] |
+| Force majeure | [ Event list, notice window, service continuation/suspension - region-specific events cross-referenced to section 9 ] |
+| Pricing model | [ Fee model or full-service. Per-meal rates / fixed fees. Service fee. Escalator. Billing cadence. Payment terms ] |
+| Insurance held by KitchFix | Floor - CGL $2M/occ · $4M agg; Product Liability $1M/occ; Commercial Auto $1M CSL; Workers' Comp statutory; Umbrella $5M. Client named additional insured. Confirm per account. |
+| Insurance required of client | [ Client coverage; KitchFix named additional insured as required to operate on client property ] |
+| Intellectual property & data rights | [ Recipe IP, menu IP, photo/footage rights, operational data ownership, trademark use - legal review ] |
+</NonCanonical>
+
+# 02 Scope of Services
+
+What KitchFix provides, what the client provides, and what is explicitly out of scope.
+
+## KitchFix Provides
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Services delivered | [ Full food service operation, menu development, procurement, execution, plating, service ] |
+| Points of service | [ Clubhouse, dining room, weight room, training room, suite, fueling stations ] |
+| Equipment KitchFix brings | [ List ] |
+| Staffing structure by meal period | [ Coverage during ramp, peak, off-cycle ] |
+| KitchFix Level SOP compliance | Floor - Allergen Playbook, ServSafe standards, menu approval workflow, and communication conventions apply in full. |
+</NonCanonical>
+
+## Client Provides
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Facility access | [ Kitchen, dining, storage, loading dock / receiving ] |
+| Beverages / smoothie / coffee program | [ Where applicable ] |
+| Utilities, trash & waste handling, cleaning chemicals | [ Confirm split ] |
+| Client-owned equipment | [ List ] |
+</NonCanonical>
+
+## Visitor & Overflow · Vehicle & Transportation · Exclusions
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Visitor / overflow services | [ Visiting team service, front office events, suite catering, road-trip catering, cross-facility transport ] |
+| Vehicle & transportation | [ KitchFix vehicles on client property, food transport, driver/insurance/parking, accident reporting ] |
+| Exclusions (out of scope) | [ Items historically requested but not included; add-ons priced separately; anything requiring a change order ] |
+</NonCanonical>
+
+# 03 Service Calendar
+
+The annual operating calendar covers every operating day of the year, with per-day service profile and pricing.
+
+> NOTE: OPEN - legacy SOPs frequently omit the Service Calendar entirely. Attach the current operating calendar and confirm every operating day is documented before this section is considered complete.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Annual calendar | [ Spring Training, regular season, post-season, off-season, holidays, blackout dates, travel days. Game-type indicator per day ] |
+| Per-day service profile | [ Meal types by day: breakfast / arrival / BP / pregame / postgame / snack / fueling. Per-meal rate or fixed-fee allocation. Special-service days ] |
+| Schedule changes | [ Process to document in-season changes. Authority to commit (SL / RDO / VPO). Pricing impact ] |
+</NonCanonical>
+
+# 04 Operational SOP
+
+How KitchFix operates the account day to day. Account-specific operating standards build on the KitchFix culinary floor (PB-006).
+
+## Menu Development and Approval
+
+### Approval workflow
+
+Floor - Every menu cycle passes the same workflow before service: Site Leader builds the menu - Director of Culinary reviews - Site Leader adjusts from feedback and submits to client - client gives feedback and/or approves. Menu changes require SLA + Director of Culinary + Dietitian + CHM (where applicable) sign-off.
+
+Floor - Latin every meal period is a KitchFix non-negotiable culinary commitment.
+
+### Cycle structure & lead time
+
+Floor - PDC - four-to-six-week rotating cycle, refreshed seasonally (Spring Training, Extended ST, FCL, Instructional League). Two-week menu lead.
+
+Floor - MLB Clubhouse - series-based cycle; one approved menu document per home series, one tab per game day named by date. Seven-day lead, forty-eight-hour final lock.
+
+Floor - Visiting clubhouses - series-based menus per the client's catering requests.
+
+Floor - Substitutions for product quality or availability are documented same-day and communicated to the dietitian.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account approval parties (names) | [ Site Leader / EC, Director of Culinary, team Dietitian, MiLB coordinator or CHM where applicable ] |
+| Account menu best practices | [ e.g. two protein options at lunch/dinner with at least one lean; no two same proteins same day; soup rotation; composed salad rotation ] |
+</NonCanonical>
+
+## Meal Specifications by Period
+
+### Standard meal service framework (floor)
+
+Breakfast - Eggs, breakfast proteins, starches (potatoes, pancakes, waffles), specialties (handhelds), Latin option, fruits, yogurts, oatmeal.
+
+Lunch (Arrival) - Meal-sized portion of cooked protein, carbohydrate, and vegetable per person.
+
+Pre-game - Focused, lighter portion that fuels game-time without overloading; handhelds for on-the-go.
+
+Dinner - Heavier-focused meal that may include richer items, still offering variety of protein, starch, and vegetables.
+
+Mini Meal - Protein-forward snack between meal and game times; not a full balanced meal.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Per-period portion targets & specifics | [ Account portion targets (oz/person), hot/cold balance, carb-protein-produce ratios, account dietary directives per meal period ] |
+</NonCanonical>
+
+## Service Formats
+
+### Core stations every kitchen runs (floor)
+
+Hot line - Buffet line per the standard meal service framework.
+
+Oatmeal bar - Oatmeal with the standard topping suite.
+
+Salad bar - Build-your-own: romaine + one additional leafy green, standard veggie suite, protein toppings, seeds/nuts, dressings per SLA.
+
+Sandwich & deli bar - Whole grain and sourdough breads, assorted deli meats, multiple cheeses, fresh vegetables, approved house sauces on the side.
+
+Always Available - Stocked grab-and-go all day: parfaits, hard-boiled eggs, avocado halves, sandwiches/wraps, salads, whole fruit, snackables.
+
+Beverage program - Coffee, hot tea, milk, juice. Bottled/sports/specialty beverages per SLA.
+
+### Specialty stations - activated where SLA scopes them
+
+Omelet / made-to-order breakfast · made-to-order lunch (standard at MLB Clubhouse) · pizza station with scratch dough · smoothie · acai · juice & shot bar · snackie/appetizer · action stations · snack & beverage stations.
+
+### Sourcing (floor)
+
+Floor - Whole, minimally processed ingredients are the default. Every site sources from reputable Meat, Seafood, Broadline, and Bakery vendors. Specialty vendors permitted with approval. Wild-caught fish, free-range poultry/pork, lean/grass-fed beef, seasonal/local produce, organic where available within the account budget per SLA.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Specialty stations activated at this account | [ List + composition of each ] |
+| Beverage / hydration program detail | [ Bottled, fountain, sports drinks, milk alternatives ] |
+| Approved vendor list | [ Meat, Seafood, Broadline, Bakery, + any specialty vendors approved ] |
+</NonCanonical>
+
+## Change Management
+
+Floor - Operational changes follow: written request (verbal followed same-day in writing) - Site Leader + RDO evaluate operational/financial impact within seven days - material changes require Director of Culinary, Dietitian, and RDO sign-off; pricing-impact changes require VPO sign-off - approved changes logged - SLA reconciled to actual practice at the next ABR.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account change-approval authorities | [ Who approves on each side ] |
+</NonCanonical>
+
+# 05 Nutrition Guidelines and Allergen Standards
+
+Nutrition philosophy and guidelines, portion standards, allergen handling, and emergency response. The Allergen Playbook (PB-002) is the company-wide standard; account overrides are documented here.
+
+## Nutrition Guidelines & Portion Standards
+
+Floor - The dietitian sets the program; KitchFix executes it. Where the team's guidelines are silent, the KitchFix culinary baseline applies. Lean proteins lead. Vegetables present at every meal. Whole grains anchor the carbohydrate program. Fried, par-fried, and pre-breaded items are restricted.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account nutrition guidelines / team document | [ Reference the team's nutrition operating guidelines; attach. Performance nutrition framework: training, recovery, travel, in-game ] |
+| Portion standards | [ Per-meal portion guidelines; athlete-specific portioning; plating/service standards ] |
+</NonCanonical>
+
+## Protein Framework (floor)
+
+Lean - Primary direction at every meal period - skinless chicken breast, turkey, white-fleshed fish, lean beef (flank, ground, tres major, sirloin), pork tenderloin. Lean leads the menu.
+
+Heavy - Reserved primarily for arrival or dinner - chicken thighs, brisket, short rib, sausages, pork shoulder.
+
+High-end - Per budget and client requirements, traditionally post-game - beef tenderloin, ribeye, striploin, sea bass, halibut.
+
+Cadence - Lean every meal period. Cured/processed meats cadence controlled per SLA. Heavy and high-end per budget and SLA.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account protein products & cadence | [ Exact products and cadence per account ] |
+</NonCanonical>
+
+## Ingredient Principles (floor)
+
+Grains & starches - Full carbohydrate library. Breads whole-grain through gluten-free. Rice white through brown, basmati, jasmine, sushi, arborio. Pasta regular, whole grain, couscous, chickpea, gluten-free. Potatoes, sweet potatoes, plantains, yuca, and other tubers carry the same weight as grains. The cuisine and meal period decide which carbohydrate is on the line.
+
+Dairy - Whole, skim, chocolate, and non-dairy alternatives per SLA. Greek yogurt, cream cheese, sour cream, half-and-half, non-dairy creamers, butter. Fresh, aged, and culturally specific cheeses chosen by the dish. Avoid highly processed cheeses (American slices, jar sauces, pre-melted blends) unless permitted.
+
+Vegetables & fruit - Variety is the operating principle - across categories and preparations so the same vegetable rarely lands the same way twice in a week. Fruit covers tropical, stone, citrus, berry, melon - whole and fresh-cut, focused on seasonality. Pre-game skews away from cruciferous and chili-heavy preparations for digestive comfort.
+
+Approved fats & oils - Avocado oil (high-heat), extra virgin olive oil (finishing/salad/low-heat), olive oil (medium-heat), sesame oil (Asian finishing), butter (sparingly), beef tallow (par-frying only when SLA approves), specialty fats* (truffle oil, coconut oil, ghee). *Allergens must always be identified.
+
+## Restricted and Prohibited Products (floor)
+
+### Restricted - clarify in SLA before use
+
+Pre-breaded items (freshly breaded and baked permitted per SLA) · frozen prepared items as a primary protein/starch/vegetable · iceberg lettuce (approved greens: spinach, chopped romaine, kale, arugula, spring mix) · highly processed snacks on the open line · peanuts/tree nuts as individually contained, labeled toppings or single-use packaging · soy sauce as a retail bottle on the sauce station or in pre-made sauces with transparent allergen labeling.
+
+### Prohibited - never used in our operations
+
+Seed oils (grapeseed, canola, sunflower, soy, blends) · nut oils (peanut, tree nut) · peanuts/tree nuts as a buffet-line ingredient · soy sauce as a buffet production ingredient (use tamari or coconut aminos).
+
+## Cooking Methods (floor)
+
+Approved - Grilling, baking, roasting, broiling, pan-searing, sautéing, steaming, braising/stewing, poaching. Par-frying with approved oils, baked to finish, only when approved in the SLA.
+
+Prohibited - Deep frying. Microwaves may be provided to the club for players to reheat their own food only.
+
+> CRITICAL: Par-frying is permitted only when the SLA approves it, with approved oils, baked to finish. Deep frying is prohibited at every account.
+
+## Allergen Position
+
+> CRITICAL: The KitchFix Allergen Playbook (PB-002) applies in full at every account and is the single source of truth. No allergen-free meal or station claims - ever. Severe allergy is a Chef-level case-by-case decision in coordination with the team dietitian.
+
+### Standing positions (floor)
+
+Top 9 allergens (milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soybeans, sesame) tracked and labeled at every meal period in English and Spanish; labeling complete before food enters the line.
+
+No peanuts or tree nuts on the open buffet; limited individually-packaged exceptions with clear labeling per the Playbook.
+
+Vendor substitutions evaluated against the original allergen profile before service; new Top 9 allergens require dietitian notification.
+
+Segregated storage, dedicated utensils, color-coded handling per the Playbook.
+
+No account-level overrides unless documented here with rationale, approval trail, and Director of Culinary sign-off.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account-level allergen overrides | Floor - None unless documented. [ If overrides apply: rationale, approval trail, Director of Culinary sign-off. If none: "No overrides apply." ] |
+</NonCanonical>
+
+## Severe Allergy and Emergency Response
+
+Floor - Players, coaches, or staff with severe allergies are flagged to KitchFix in advance by the team dietitian. Accommodation plans are built per individual through the Chef and dietitian. Anaphylaxis - team medical staff is the primary responder; KitchFix Site Leader is notified immediately, food prep in the affected area is paused, 911 is contacted by team medical. KitchFix preserves food samples, ingredient lists, and prep records as requested.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account emergency contacts | [ Client medical / training contact, KitchFix Site Leader, RDO ] |
+</NonCanonical>
+
+# 06 Communication, Confidentiality, and Conduct
+
+How KitchFix and the client communicate, what stays inside the facility, and the conduct standard every KitchFix team member holds.
+
+## Points of Contact
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Client-side contacts | [ Primary, secondary, escalation; RD/nutrition; medical/training ] |
+| KitchFix-side contacts | [ Site Leader, RDO, VPO - roles, responsibilities, contact info ] |
+</NonCanonical>
+
+## Communication Cadence (floor)
+
+Floor - Bi-weekly RDO + SL + Client check-in (minimum). Daily operational communication channel. Quarterly client reviews: Pre-ST (PDC) or Pre-Season (MLB), Post-ST/Post-Season, ABR/SLA, EOY.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account cadence specifics | [ Channels, weekly reporting where applicable, review dates ] |
+</NonCanonical>
+
+## Escalation Paths (floor)
+
+Operational - Site Leader - RDO - VPO.
+
+Commercial - VPO - CEO.
+
+Emergency - Defined by issue type (food safety, security, medical, facility), with response-time expectations.
+
+## Confidentiality
+
+Floor - All information inside the client facility is confidential - player health, performance, contract status, personal information, injuries, conversations overheard, things seen. None of it leaves the facility. Per AGR-001 The Big Rules · Confidentiality.
+
+> NOTE: OPEN - confidentiality language and any NDA references should be coordinated with legal and the client's legal team before execution.
+
+## Standards of Professional Conduct
+
+> CRITICAL: AGR-001 The Big Rules apply to every KitchFix team member, dishwasher to VPO: no photos, no autographs, no fraternizing, no media, no inside information shared, no dietary advice from KitchFix staff, no talk of gambling or PED use.
+
+# 07 Performance and Accountability
+
+How performance against the SLA is measured, reviewed, and remediated. The structure that makes the SLA enforceable rather than aspirational.
+
+## Performance Measurement (floor)
+
+Floor - Operational audits - self-audits and corporate audits, two waves per year per contract type. Audit rubric tied to SLA standards. Wins and corrective actions tracked to closure.
+
+## Client-Facing Reviews (floor)
+
+Floor - Pre-ST or Pre-Season Review (~2 weeks before ramp). Post-ST or Post-Season Review (within 30 days of close, including client survey). ABR / SLA Review (annual, contract-level). EOY Review (after EOY close).
+
+## Client Surveys (floor)
+
+Floor - Survey content areas: food quality, service, hospitality, communication, alignment. Responses feed the quarterly reviews and surface patterns to KitchFix leadership.
+
+## Remediation (floor)
+
+Floor - Performance gaps addressed on corrective-action timelines. Escalation if remediation does not produce change. Dispute resolution before invoking termination clauses.
+
+## Performance Reporting
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| What the client receives | [ Format, cadence, which audit summaries are shared; visibility into internal scoring ] |
+</NonCanonical>
+
+# 08 Specialty and Custom
+
+Account-specific service offerings outside the standard operating profile.
+
+## Outside Catering & Special Events
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Outside catering | Floor - Events outside the standard scope are scoped and approved separately from the SLA - a conversation and agreement between client, Site Leader, and corporate. [ Definition, approval/notice requirements, pricing, coordination ] |
+| Special events | [ Family days, kids' nights, Fun Money, holiday meals, Opening Day, post-season, retirement/championship celebrations - budget and approval per type ] |
+</NonCanonical>
+
+## Latin Cuisine Commitment
+
+> CRITICAL: Latin every meal period is a KitchFix non-negotiable and applies at every account. Latin cooking is present throughout the day and replicated faithfully, per our commitment to authenticity.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account Latin program | [ Cuisine origin, regional preferences, dish library ] |
+</NonCanonical>
+
+## Action Stations (floor)
+
+Floor - Action stations bring craft to the dining room as a moment, not just a menu item - a KitchFix chef prepares a specialty dish in front of the player. Every action station is chef-driven, themed, approved through the menu workflow, and intentional. The chef-player interaction is the value, not the menu item alone. Cadence is set per SLA.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account action-station cadence & themes | [ Cadence, station themes ] |
+</NonCanonical>
+
+## Food Holidays and Cultural / Religious Meals (floor)
+
+Floor - Halal, Kosher, Hindu vegetarian, and other religious dietary needs are accommodated case by case through the dietitian and Chef, to the best of our abilities and within the scope of the facility. Food holidays, special events, cultural observances, and themed days (e.g. Taco Tuesday) are planned when relevant. All non-standard menus go through the approval workflow per client requests via the SLA.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Account cultural / holiday programming | [ Accommodations, themed days, approval notes ] |
+</NonCanonical>
+
+# 09 Operational Standards
+
+The day-to-day operating bar at the account. What the client can expect to walk into every shift, every meal period.
+
+## Service Times · Opening & Closing
+
+### Pre-service line check (floor)
+
+Line check by Site Leader or Sous Chef before service starts; allergen labels verified against the menu.
+
+Hot line ready 15 minutes before service; cold line and salad bar ready 30 minutes before.
+
+Cleanliness of dining room, buffet lines, and stations verified by the Site Leader or Sous Chef before the first guest arrives.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Service times | [ Meal-period start/end, pre-shift timing, service-window enforcement ] |
+| Opening & closing standards | [ Daily open/close; end-of-week / homestand / cycle close ] |
+</NonCanonical>
+
+## Quality Control and Tasting (floor)
+
+Daily tasting - Every hot line dish is personally tasted by the Site Leader or Sous Chef before service - every sauce, soup, protein, starch - adjusted if needed and signed off. Tasting is the last quality control before food meets the player.
+
+Plating & presentation - Portion held to spec; every dish presented to a standard the chef would put their name on; hot food hot, cold food cold, temperatures verified; line stays stocked through service.
+
+## Staffing & Equipment
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Staffing | [ Minimums by meal period; salaried leadership presence; hourly ratios; peak/ramp/travel coverage ] |
+| Equipment | [ KitchFix-owned vs client-owned; maintenance split; capital planning cycle ] |
+</NonCanonical>
+
+## Sanitation, Food Safety & Certifications
+
+Floor (sanitation) - Food safety is part of every shift: temperature logs, sanitizer concentration, three-compartment-sink protocol, holding times, allergen storage, daily sanitation.
+
+> CRITICAL: ServSafe currency is required for every salaried leader (Food Manager + Allergens) and every cook (Food Handler + Allergens). MSDS current for chemicals in use.
+
+> NOTE: OPEN - sanitation & food-safety detail references a dedicated SOP (placeholder "SOP-XXX" in PB-006 section 3.14). Assign and insert the real Document ID once the Sanitation & Food Safety SOP is finalized.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Pest control & inspection cadence | [ Vendor, schedule, sanitation KPIs ] |
+| Health inspection & regulatory cooperation | [ Notification chain, documentation, findings response, league/governing-body inspections ] |
+| Facility access & security | [ Key/badge management, escort, restricted areas, background checks ] |
+</NonCanonical>
+
+## Branding, Signage & Presentation (floor)
+
+Floor - Brand-compliant signage in the dining area follows KitchFix and client brand standards. Allergen labeling at every meal period in English and Spanish. Nutritional information per client requirement.
+
+> NOTE: OPEN - branding/signage references a Brand Standards / Signage document (placeholder "SOP-XXX" in PB-006 section 3.15). Assign and insert the real Document ID once finalized.
+
+## Transition · Sustainability · Region-Specific
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| End-of-season transition | [ Shutdown checklist, equipment storage, inventory & vendor close-out, document archive, facility handoff ] |
+| Sustainability & environmental | [ Composting, sourcing, packaging, single-use plastics, ESG where applicable ] |
+| Region-specific protocols | [ Hurricane prep (FL), earthquake (West Coast), winter closures (Midwest/NE), wildfire smoke, heat-index, local health-dept quirks ] |
+</NonCanonical>
+
+# 10 Financials and Reporting
+
+The financial operating model and the reporting cadence that supports it.
+
+> NOTE: Legal Review - audit-rights language requires legal review, particularly for fee-model accounts where the client owns food cost and KitchFix manages it.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| Financial model designation | [ Fee model or full-service; account labor formula; revenue base incl. service fees; pricing-adjustment mechanism ] |
+| Period-end reporting | [ Participants (Site Leader, AP, RDO); deliverables; variance commentary; account KPIs ] |
+| Year-end reporting | [ Participants; annual deliverables; inputs to renewal preparation ] |
+| Billing reconciliation | [ Billing cycle, reconciliation, dispute timeline, signing authority for invoices ] |
+| Change-order pricing | [ How scope changes get priced; approval thresholds; T&M vs fixed-fee ] |
+| Audit rights | [ Client audit rights; KitchFix right to audit client inputs (meal counts, headcounts, schedules); notice; confidentiality - legal review ] |
+</NonCanonical>
+
+# Execution - Signatures
+
+Both parties execute the operating SLA. Section 1 Commercial Terms is executed under legal review.
+
+<NonCanonical>
+| Field | Entry / KitchFix Floor |
+|---|---|
+| KitchFix - CJK Foods LLC dba KitchFix | [ Name / title ] |
+| Signature | ____________________________ Date: ______________ |
+| Client - [ legal entity ] | [ Name / title ] |
+| Signature | ____________________________ Date: ______________ |
+</NonCanonical>
+
+# Related Documents
+
+Documents referenced throughout this template. Linked by Document ID - IDs are stable; filenames may change.
+
+| Doc ID | Title | Notes |
+|---|---|---|
+| PB-005 | SLA OS Handbook | The ten-section structure this template implements. |
+| PB-006 | Culinary OS Handbook | KitchFix culinary floor. Source for section 4 / section 5 / section 8 / section 9 culinary standards. |
+| PB-001 | Leadership OS Handbook | Leadership & operating system. Source for section 6 / section 7 standards. |
+| PB-002 | Allergen Playbook | Single source of truth for allergen handling. Section 5. |
+| AGR-001 | The Big Rules · Confidentiality | Conduct standards. Section 6. |
+| SOP-001 | Leadership Performance System | Internal performance reviews. Companion to section 7. |
+| SOP-002 | Safety & Incident Management | Incident response. Companion to section 6 escalation. |
+| STD-001 | Documentation Format Standard | Governs the format of this template. |
+| [ pending ] | Sanitation & Food Safety SOP | Referenced in section 9 - assign Document ID when finalized. |
+| [ pending ] | Brand Standards / Signage | Referenced in section 9 - assign Document ID when finalized. |

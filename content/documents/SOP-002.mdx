@@ -1,0 +1,296 @@
+---
+id: SOP-002
+title: Safety and Incident Management
+doc_class: SOP
+shelf: Safety
+status: Live
+version: "2.1"
+card_line: "How KitchFix identifies, responds to, reports, investigates, and closes safety and operational incidents."
+summary: "The KitchFix safety and incident system of record. Defines who responds, what gets reported, how fast, on what cadence, against what classification, and how findings get acted on. Covers 9 incident types, 4 severity tiers, the 6-step universal response, the notification matrix, type-specific procedures (employee injury, vehicle, allergen, foodborne illness, food safety, property/equipment, non-employee, near-miss, security), workers comp coordination, confidential reporting, and 30-day follow-up."
+keywords:
+  - incident
+  - safety
+  - severity
+  - S1
+  - anaphylaxis
+  - vehicle
+  - allergen
+  - foodborne
+  - near-miss
+  - workers comp
+  - FORM-001
+  - FORM-002
+  - POST-001
+surfaces:
+  - incident-reporting
+owner: "Director of People Operations"
+approver: "Senior Director of Operations"
+audience: operator
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+approval:
+  approved_version: "2.1"
+  approved_by: "Senior Director of Operations"
+  approved_date: 2026-05-04
+  method: recorded sign-off
+last_reviewed: 2026-05-04
+review_interval_months: 12
+effective_date: 2026-05-04
+sort_order: 10
+relationships:
+  - { to: POL-001, type: references, from_section: "§01 + §09" }
+  - { to: PB-003, type: references, from_section: "§01 (out-of-scope boundary)" }
+  - { to: FORM-001, type: references, from_section: "§7.1" }
+  - { to: FORM-002, type: references, from_section: "§7.2" }
+  - { to: PB-002, type: references, from_section: "§7.3" }
+  - { to: SOP-004, type: references, from_section: "§8.5" }
+  - { to: REF-001, type: references, from_section: "§10 + App A" }
+  - { to: POST-001, type: references, from_section: "Appendix B" }
+# F5 2026-06-15: Removed TPL-017 relationship (retired; superseded by the intranet Incident Log).
+# Body text references the Incident Log (intranet) where the operator-facing instrument is named.
+---
+
+# 01 Purpose and Scope
+
+How KitchFix identifies, responds to, reports, investigates, and closes safety and operational incidents across all sites.
+
+## Purpose
+
+This SOP holds KitchFix to a single response standard for safety and operational incidents. It defines who responds, what gets reported, how fast, on what cadence, against what classification, and how findings get acted on.
+
+The system does four things:
+
+- Sets a single classification (severity tier and incident type) so every report routes consistently regardless of who files it.
+- Captures the response in writing within time tied to severity, so investigation has facts to work from.
+- Drives root-cause review and corrective action on every incident, so the same incident does not happen twice.
+- Holds the company accountable to follow-through - 30-day check-in on injuries, quarterly trend reviews, annual SOP review.
+
+> ANCHOR: When uncertain, classify up. HR can downgrade during triage. Under-classifying delays response. Over-classifying costs nothing.
+
+## Scope
+
+**Applies to**
+
+- All employees - salaried, hourly, full-time, part-time, seasonal - at every KitchFix site.
+- All incidents involving employees, clients, players, vendors, visitors, or KitchFix property.
+- All KitchFix sites, all contract types (PDC, MLB Clubhouse, MiLB), and all corporate operations.
+
+**Excludes**
+
+- HR grievances and employee concerns - harassment, discrimination, wage disputes - follow the Employee Concerns Policy.
+- Quality complaints unrelated to safety - follow Service Recovery Playbook (PB-003).
+- Disciplinary action - handled through Human Resources Formal Disciplinary Process. This SOP may surface patterns that trigger HR escalation; the formal disciplinary process lives outside it.
+
+## No Retaliation
+
+> ANCHOR: No employee will be disciplined for reporting an incident, near-miss, or hazard in good faith. Retaliation against a reporter is itself a terminable offense and is reportable under this SOP.
+
+# 02 Roles and Routing
+
+Who owns what. Who escalates to whom. Named by role, not by person.
+
+## Core Roles
+
+**People Operations** - Operational owner of this SOP. Triages every report. Coordinates the workers compensation carrier. Owns root-cause review, corrective action, 30-day follow-up with affected employees, and quarterly trend reporting.
+
+**Senior Director of Operations** - SOP approver. Signs off on the standard, reviews quarterly trend reports, approves material changes to procedures, partners with HR on investigation patterns and corrective action.
+
+**VP of Operations** - Escalation Authority. Escalation point for legal, regulatory, or media-facing matters. Final operational decision-maker on incidents that may impact client relationships, regulatory standing, or company reputation.
+
+**Regional Director of Operations (RDO East / RDO West)** - Regional escalation point and field leadership owner. Cc'd on every incident in their assigned region. Partners with the Site Leader on response coordination during S1 and S2 incidents.
+
+**Site Leader** - Senior KitchFix employee on shift. First authority on scene. Initiates the report. Preserves evidence. Owns immediate response until corporate or HR takes coordination.
+
+**Manager of Record** - Direct supervisor of the involved employee. Owns report submission within the SOP for the severity tier. Failure to file within SOP is a documented performance issue.
+
+# 03 Incident Types
+
+Every reportable event is classified into one of nine types. When an event spans multiple types, classify by the most severe and cross-reference the others in the report.
+
+1. **Employee Injury or Illness** - Any work-related injury, illness, or exposure to an employee.
+2. **Vehicle Incident** - Any accident or mechanical failure involving a KitchFix or business-use vehicle.
+3. **Allergen Reaction** - Suspected or confirmed allergic reaction following consumption of KitchFix food. PB-002 Allergen Playbook governs.
+4. **Suspected Foodborne Illness** - Reported illness in two or more individuals, or one with characteristic symptoms, after eating KitchFix food.
+5. **Food Safety Incident** - Cross-contact, temperature abuse, contaminated product, foreign object, or suspected recall - caught before illness occurred.
+6. **Property or Equipment Damage** - Damage exceeding $250, or any damage to safety-critical equipment.
+7. **Non-Employee Injury** - Injury to a player, client, vendor, or visitor on KitchFix-controlled premises.
+8. **Near-Miss** - An event that did not cause harm but had clear potential to.
+9. **Security or Altercation** - Verbal or physical altercation, theft, threat, trespass, or any event requiring police involvement that is not a vehicle accident.
+
+# 04 Severity Tiers
+
+Four tiers. Severity drives notification timing, channel, and documentation SLA.
+
+- **S1 Life-Safety / Regulatory** - Immediate threat to life or regulatory exposure. Examples: anaphylaxis, loss of consciousness, seizure, severe bleeding, vehicle accident with injury, suspected foodborne illness in 2+ individuals.
+- **S2 Medical / Significant** - Medical attention beyond first aid; lost-time potential. Examples: cut requiring stitches, burn requiring clinic, sprain or fracture, vehicle damage with no injury, cross-contact identified after plating.
+- **S3 First Aid / Minor** - Resolved on-site; no lost time. Examples: minor cut or burn, slip with no injury, cross-contact caught before service, damage $250-1,000.
+- **S4 Near-Miss / Hazard** - No harm occurred; conditions or near-event noted.
+
+Severity is set at the moment of report. Triage by People Operations confirms or downgrades the tier.
+
+# 05 Response - Six Steps, Every Incident
+
+Six steps. Every incident, every type, every severity. Type-specific procedures in Section 7 layer on top.
+
+1. **Respond** - Address immediate safety. If life-threatening, call 911 first, then notify.
+2. **Stabilize** - Remove the hazard. Pull contaminated food and utensils. Cordon off damage.
+3. **Notify** - Per the Notification Matrix (Section 6). For S1, the call comes first - do not wait for the form.
+4. **Document** - Submit the report through the People Portal Incident Center within the SLA for the severity tier.
+5. **Investigate** - Within 48 hours, Manager of Record participates in root-cause review with People Operations.
+6. **Close** - Within 7 days, document corrective action. At 30 days, People Operations checks in with any injured employee.
+
+See Appendix B - POST-001 Incident Reporting v1.2 for the operator-facing wall artifact.
+
+# 06 Notification Matrix
+
+Notification timing runs from the moment the incident is identified, not from form submission. For S1 and S2, the phone call comes first - documentation follows within the SLA.
+
+| Tier | Timing | Channel | Recipients | Doc SOP |
+|---|---|---|---|---|
+| S1 | Within <Fact id="incident_S1_window" /> | Phone to HR; Slack + email to all others | HR, CEO, VPO, Dir Culinary, Sr Dir Ops, Regional | 4 hours |
+| S2 | Within <Fact id="incident_S2_window" /> | Slack + email | HR, CEO, VPO, Dir Culinary, Sr Dir Ops, Regional | 12 hours |
+| S3 | Within <Fact id="incident_S3_window" /> | Email summary | HR, CEO, VPO, Dir Culinary, Sr Dir Ops, Regional | 24 hours |
+| S4 | Weekly digest | Auto-aggregated email | HR, Regional | 24 hours |
+
+> CRITICAL: S1 phone call is non-delegable. The Site Leader or Manager of Record makes the S1 call personally - not a junior staff member.
+
+## Phone Call Sequence for S1
+
+When an S1 phone call is required, the order is:
+
+1. Call 911 if there is any life-safety concern. Always before any internal notification.
+2. Call People Operations directly. Voicemail acceptable only with a callback number left along with a Slack message.
+3. Slack and email the rest of the recipient list within the S1 notification window.
+4. Begin the People Portal report within 4 hours.
+
+# 07 Type-Specific Procedures
+
+These layer onto the six universal steps in Section 5. Where the Allergen Playbook (PB-002) provides additional detail, that document governs.
+
+## 7.1 Employee Injury or Illness
+
+Manager escorts employee to treatment if needed. Provide the workers compensation carrier info (Section 10). If employee refuses care, complete FORM-001 Refusal of Medical Treatment Form. Both employee and manager sign. Submit to Human Resources within 24 hours.
+
+## 7.2 Vehicle Incident
+
+Any injury is S1, call 911. Call police for any other-vehicle, injury, or property-damage incident. Obtain police report number. Notify VP of Operations for all vehicle incidents, regardless of severity. Use FORM-002 Vehicle Incident Worksheet.
+
+## 7.3 Allergen Reaction
+
+See PB-002 Allergen Playbook §06 for the full protocol. Medical response is always Step 1. Severe goes 911. Pull suspected item and utensils. Notify within 10 minutes. Client communication runs through corporate, not the Site Leader.
+
+## 7.4 Suspected Foodborne Illness
+
+Always S1. Two or more reports - or one with characteristic symptoms - qualifies for S1. Preserve all suspected food. Pull menu items from production until cleared. Health department contact is corporate-only.
+
+## 7.5 Food Safety Incident
+
+Pull and segregate. Label DO NOT USE. If served, escalate to S1. The incident becomes a foodborne illness watch. Photograph product, packaging, and lot codes before any disposal.
+
+## 7.6 Property or Equipment Damage
+
+If safety-critical equipment is damaged, tag out of service and notify HR regardless of dollar value. Do not attempt repair on safety-critical equipment without authorization. Photograph from multiple angles.
+
+## 7.7 Non-Employee Injury
+
+Render aid to level of training. Offer to summon medical. Do not admit fault, speculate on cause, or offer compensation. All non-employee injuries are S2 minimum. Player injury or any offsite medical care is S1.
+
+## 7.8 Near-Miss
+
+Document within 24 hours while details are fresh. Classify S4 unless the potential outcome would have been S1 or S2.
+
+## 7.9 Security or Altercation
+
+Do not engage physically except in self-defense. Call 911 for any threat of violence, weapon, or active assault. Employee involved as either party means notify People Operations before any further action. No social media. No discussion outside the operation.
+
+# 08 Documentation, Investigation and Closure
+
+Every incident gets documented, investigated, and closed. The cadence below holds the company accountable to follow-through.
+
+## 8.1 Submission Paths
+
+**Manager (primary)** - People Portal in the KitchFix intranet. Required of Manager of Record.
+
+**Employee (backstop)** - Routes directly to HR, not to the manager. Use when a manager is the subject of the report or when the manager cannot be reached.
+
+**Paper (exception)** - PDF maintained by People Operations. Manually entered into the Portal on receipt.
+
+## 8.2 What Every Report Must Include
+
+- Date, time, exact location.
+- All parties involved with roles.
+- Witnesses with contact info.
+- Factual description without speculation.
+- Injury or damage detail.
+- Immediate actions taken.
+- Photos of scene, damage, and any equipment involved.
+
+## 8.3 Site Action Cadence
+
+- 24 hours - Initial documentation complete. Witness statements collected.
+- 48 hours - Root-cause analysis complete. HR leads structured review with Manager of Record and Site Leader.
+- 7 days - Corrective action defined and implemented. Recorded in the Portal with owner and completion date.
+- 30 days - For any injury, HR checks in with the affected employee. Confirms recovery, captures concerns, verifies no retaliation.
+- Quarterly - Trend report compiled by HR, reviewed with VP of Operations and Senior Director of Operations.
+
+## 8.4 Investigation Principles
+
+**Investigate the system, not the person** - The default question is what conditions allowed this to happen, not who did it. Discipline is a separate track per Section 8.5.
+
+**Ask why five times** - Stop at the first and you patch a symptom. Five layers of why surface the conditions that produced the incident.
+
+**Distinguish corrective from preventive** - Corrective action fixes this incident. Preventive action prevents the next one. Both are required for closure.
+
+## 8.5 When Discipline Is Appropriate
+
+Incidents are not, by default, performance issues. Discipline is appropriate only for: willful disregard of a known procedure, falsification of a report, retaliation against a reporter, or repeat violation of the same standard after documented coaching.
+
+When discipline is appropriate, it follows SOP-004 Formal Disciplinary Process.
+
+# 09 Confidential Reporting
+
+A confidential path exists for hazards and near-misses where the reporter wants attribution shielded. Confidential reporting is available for hazards and near-misses. HR retains the identity for follow-up and audit purposes only.
+
+**Not eligible for confidential reporting**
+
+- Actual incidents - these become workers comp records and require full attribution.
+- HR matters - harassment, discrimination, wage disputes - follow the Employee Concerns Policy (POL-001).
+
+# 10 Workers Compensation
+
+Workers comp coverage and claim coordination.
+
+| Field | Value |
+|---|---|
+| Carrier | <Fact id="wc_carrier" /> |
+| Policy Number | <Fact id="wc_policy_number" /> |
+| Insured Entity | CJK Foods LLC dba KitchFix |
+| Claim Coordinator | Human Resources |
+
+## Multi-State Operations
+
+KitchFix operates in <Fact id="operating_states" />. State-specific filing requirements vary materially. REF-001 Workers Comp State Annex (Appendix A) governs state-by-state filing details.
+
+REF-001 Workers Comp State Annex is currently a placeholder shell pending content from the carrier and counsel. Until the Annex is populated, claim coordination defers to Human Resources and the carrier for state-specific guidance.
+
+## Employee Rights
+
+- Medical treatment for work-related injury.
+- Choice of provider subject to state panel rules.
+- Wage replacement for qualifying lost time.
+- Return-to-work accommodation per state law and individual circumstance.
+- No retaliation for filing a claim.
+
+# 11 Training
+
+All managers complete this SOP at hire. Annual refresher in pre-season. New site standup includes SOP-002 review during launch week.
+
+# 12 Review Cadence
+
+Annual review by People Operations and Senior Director of Operations. Material changes (severity tier definitions, notification matrix, type-specific procedures) require SLT approval. Version stamp updates with each change.
+
+# 13 Approval
+
+Approved by Senior Director of Operations 2026-05-04. Effective 2026-05-04.

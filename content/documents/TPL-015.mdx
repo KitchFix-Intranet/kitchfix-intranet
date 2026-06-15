@@ -1,0 +1,272 @@
+---
+id: TPL-015
+title: Legacy SOP Intake Worksheet
+doc_class: TPL
+shelf: Site & Client
+status: In Build
+version: "1.0"
+card_line: "Per-account intake worksheet filled out before opening a dedicated SLA rebuild chat."
+summary: "TPL-015 is the per-account intake worksheet filled out before opening the dedicated SLA rebuild chat for that account. Captures Account Identity, Account Team (KitchFix side + Client side), Commercial Snapshot, Operating Reality (meal service profile, staffing, distinctive elements), Legacy SOP Assessment (date, completeness, known issues, named references to verify), Renewal/Client Conversation Plan with target milestone dates, and Supporting Materials Inventory. Output feeds directly into the chat's Account Context section. Confidence Check at end gates whether the chat is ready to open."
+keywords:
+  - TPL-015
+  - intake worksheet
+  - SLA rebuild
+  - legacy SOP
+  - account context
+  - draft 1
+  - SLA chat
+  - PB-005
+  - TPL-014
+  - REF-005-A
+  - REF-005-B
+  - account team
+  - commercial snapshot
+  - milestone dates
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+effective_date: 2026-05-05
+sort_order: 50
+relationships:
+  - { to: TPL-014, type: references, from_section: "the fillable template every Draft is built against" }
+  - { to: PB-005, type: references, from_section: "the framework structure" }
+  - { to: REF-005-A, type: references, from_section: "PDC contract type reference" }
+  - { to: REF-005-B, type: references, from_section: "MLB Clubhouse contract type reference" }
+  - { to: STD-001, type: references, from_section: "governs the format of this worksheet" }
+---
+
+# 01 How to Use
+
+One worksheet per account. Fill before opening the dedicated chat.
+
+## 1.1 Workflow
+
+| Step | Action |
+|---|---|
+| 1 | Copy this worksheet to a working file named for the account. |
+| 2 | Fill in every field below. If a field does not apply, write 'N/A'. Do not leave blank. |
+| 3 | Pull the legacy SOP/SLA for this account from the archive. |
+| 4 | Open a new Claude chat for this account. |
+| 5 | Paste the SLA Rebuild Handoff Prompt as the first message. |
+| 6 | Copy your filled Account Context from this worksheet into the prompt's Account Context section. |
+| 7 | Attach: PB-005, TPL-014, REF-005-A, REF-005-B, and the legacy SOP. |
+| 8 | Send. The chat is now ready to begin Draft 1. |
+
+## 1.2 Why This Matters
+
+The new chat does not know anything about this account when it opens. The quality of Draft 1 depends entirely on how completely this worksheet is filled. A complete worksheet means Draft 1 lands close to the mark. A thin worksheet means Draft 1 will have wide gaps that take additional turns to close.
+
+> ANCHOR: Treat this worksheet as the most important step in the SLA rebuild for each account. Time invested here saves time in every downstream draft and conversation.
+
+# 02 Account Identity
+
+The basics. Who, where, what type of contract.
+
+| Field | Entry |
+|---|---|
+| Account name (full, e.g. 'St. Louis Cardinals Player Development Complex') | |
+| Short name for filenames (no spaces, e.g. 'StLouisCardinals') | |
+| Contract type (PDC / MLB Clubhouse / MiLB) | |
+| Facility name | |
+| City, State | |
+| Address | |
+
+# 03 Account Team
+
+Who runs the operation on each side.
+
+## 3.1 KitchFix Side
+
+| Role | Name | Email / Phone |
+|---|---|---|
+| Site Leader / Executive Chef | | |
+| Sous Chef | | |
+| Hospitality Manager (if applicable) | | |
+| RDO | | |
+| VPO | Joe Lessard | |
+| Senior Director of Operations | Kevin Fietek | |
+| CEO | Josh Katt | |
+
+## 3.2 Client Side
+
+| Role | Name | Email / Phone |
+|---|---|---|
+| Client legal entity (full legal name) | - | - |
+| Client primary contact (name, title) | | |
+| Client secondary contact (name, title) | | |
+| Client escalation contact (name, title) | | |
+| Client RD / nutrition contact | | |
+| Client medical / training contact | | |
+| Client procurement / AP contact | | |
+| Client legal contact (for SLA execution) | | |
+
+# 04 Commercial Snapshot
+
+Contract terms, financial model, renewal cycle status.
+
+| Field | Entry |
+|---|---|
+| Financial model (Fee model / Full-service) | |
+| Initial term - effective date | |
+| Initial term - expiration date | |
+| Renewal term length (years) | |
+| Annual SLA Review (ABR) date | |
+| Renewal cycle status (in renewal / mid-term / approaching renewal) | |
+| Notice required for non-renewal (days) | |
+| Counsel of record (KitchFix side) | John |
+| Counsel of record (Client side) | |
+
+# 05 Operating Reality
+
+What does this account actually look like today? Brief description so the chat can ground Draft 1 in reality.
+
+## 5.1 Meal Service Profile
+
+| Field | Entry |
+|---|---|
+| Number of distinct meal periods per day | |
+| Meal periods served (breakfast / arrival / BP / pregame / postgame / snack / fueling) | |
+| Approximate plates per day at peak | |
+| Approximate plates per day off-peak | |
+| Visitor clubhouse service (Y/N) | |
+| Road food coordination (Y/N) | |
+| Suite catering (Y/N) | |
+| Front office / special events (count per year) | |
+
+## 5.2 Staffing
+
+| Field | Entry |
+|---|---|
+| Salaried headcount (current) | |
+| Approximate hourly headcount at peak | |
+| Approximate hourly headcount off-peak | |
+| Dedicated dietitian on KitchFix payroll (Y/N - name) | |
+| Site triad complete (Y/N - note gaps) | |
+
+## 5.3 Distinctive Elements
+
+Anything unusual that does not fit the standard pattern. Useful context for the chat.
+
+| Element | Description |
+|---|---|
+| Distinctive element 1 | |
+| Distinctive element 2 | |
+| Distinctive element 3 | |
+| Distinctive element 4 | |
+
+# 06 Legacy SOP Assessment
+
+What you already know about the legacy doc - date, completeness, quality, known stale content.
+
+| Field | Entry |
+|---|---|
+| Legacy SOP filename / archive location | |
+| Approximate date the legacy SOP was written | |
+| Most recent revision date (if known) | |
+| Author or original owner (if known) | |
+| Approximate page count of legacy SOP | |
+| Overall completeness (Comprehensive / Partial / Skeletal) | |
+
+## 6.1 Known Issues - Surface These to the Chat
+
+What do you already know is broken, stale, or missing in the legacy SOP for this account? Listing these here means the chat surfaces them explicitly in Draft 1 rather than missing them.
+
+| # | Known issue | Type (Stale / Gap / Verify / Misc) |
+|---|---|---|
+| 1 | | |
+| 2 | | |
+| 3 | | |
+| 4 | | |
+| 5 | | |
+| 6 | | |
+| 7 | | |
+| 8 | | |
+
+## 6.2 Named References to Verify
+
+People, vendors, or equipment named in the legacy SOP that may have changed. The chat will flag these for verification with the site team.
+
+| Reference in legacy SOP | Current status (still in role / changed / removed / unknown) |
+|---|---|
+| | |
+
+# 07 Renewal / Client Conversation Plan
+
+Working backwards from the client conversation date. Sets target dates for each draft milestone.
+
+| Milestone | Target Date |
+|---|---|
+| Open SLA rebuild chat (today, ideally) | |
+| Draft 1 (Internal Working Draft) ready for my review | |
+| Kevin redline pass on Draft 1 complete | |
+| Site Leader review session scheduled | |
+| Site Leader edits applied - Draft 2 ready for VPO/Sr Dir Ops sign-off | |
+| VPO/Sr Dir Ops sign-off on Draft 2 | |
+| Draft 3 (Client Conversation Draft) ready | |
+| Client conversation scheduled | |
+| Execution target | |
+
+## 7.1 Stakeholders for Each Milestone
+
+| Milestone | Required participants |
+|---|---|
+| Draft 1 review | Kevin |
+| Site Leader review | Kevin, RDO, Site Leader, Hospitality Manager |
+| VPO/Sr Dir Ops sign-off | Joe Lessard, Kevin |
+| Client conversation | |
+| Execution | |
+
+# 08 Supporting Materials Inventory
+
+Beyond the legacy SOP, what else can the chat use to ground Draft 1 in current operating reality?
+
+Check what is available for this account. Attach what you have to the new chat alongside the legacy SOP.
+
+| Material | Available? (Y/N) | Filename / location |
+|---|---|---|
+| Recent menu cycle document | | |
+| Current operating calendar | | |
+| Most recent audit findings | | |
+| Recent post-season review | | |
+| Client correspondence on standing scope questions | | |
+| Most recent financial P&L summary | | |
+| Site equipment inventory | | |
+| Current org chart for the site | | |
+| Vendor list / contract vendor agreements | | |
+| Any disputed scope items in writing | | |
+
+# 09 Confidence Check
+
+Before opening the chat, confirm you have what you need.
+
+If any of these checkboxes are not Y, do not open the chat yet - close the gap first.
+
+| Check | Y / N |
+|---|---|
+| I have the legacy SOP/SLA file for this account | |
+| I have completed Sections 02-04 of this worksheet (Identity / Team / Commercial) | |
+| I have completed Section 05 (Operating Reality) - at minimum the meal service profile and staffing | |
+| I have completed Section 06 (Legacy SOP Assessment) - at minimum the known issues list | |
+| I have set target dates in Section 07 (Renewal Plan) | |
+| I have identified which supporting materials I will attach (Section 08) | |
+| The site team is aware that the SLA rebuild process is starting for their account | |
+| The client is aware (or will be aware before Draft 3) that we are updating the SLA | |
+
+# Related Documents
+
+Documents referenced throughout this template. Linked by Document ID - IDs are stable; filenames may change.
+
+| Doc ID | Title | Notes |
+|---|---|---|
+| STD-001 | Documentation Format Standard | Governs the format of this worksheet. |
+| PB-005 | SLA OS Handbook | The framework structure. |
+| TPL-014 | SLA Template - Blank Fill-In | The fillable template every Draft is built against. |
+| REF-005-A | SLA Example - Sea Slugs PDC | PDC contract type reference. |
+| REF-005-B | SLA Example - Sasquatches MLB | MLB Clubhouse contract type reference. |
+| - | SLA Rebuild Handoff Prompt | Paste into new chat as first message. Pair with this worksheet. |
+| - | SLA Rebuild Roll-up Tracker | Cross-account status tracker. |

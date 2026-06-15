@@ -1,0 +1,107 @@
+---
+id: SOP-015
+title: Emergency Food Safety
+doc_class: SOP
+shelf: Safety
+status: In Build
+version: "1.1"
+card_line: "What to do when power, water, or refrigeration fails - protect the guest first, even if it means stopping service."
+summary: "Defines KitchFix's response to imminent food-safety hazards at every account: power loss / refrigeration failure (keep doors closed, monitor temps, action table by food state), water loss or contamination (stop water-dependent operations, use bottled or hauled potable water under a boil advisory, no bare-hand or unsafe-water contact, resume only when confirmed potable), other imminent hazards (sewage backup, flooding, fire - cease operations, notify EC + RDO + health department, discard exposed food, do not reopen without approval), and return-to-operation verification (refrigeration back at temperature, water potable, clean/sanitize/restock, EC documents and signs off). When you cannot ensure safety, cease the affected operation. §03 power-loss table rewritten at F5 (2026-06-15) from SOP-008 logic; uses cold_hold_temp / tphc_clock / frozen_temp tokens so the rule is single-sourced. Pending Britt's review of the rewritten table - safety wording is the Director of Culinary's call. Related Documents now correctly references SOP-002 §07.4 (foodborne-illness response) instead of the retired SOP-016."
+keywords:
+  - emergency
+  - power loss
+  - refrigeration failure
+  - water contamination
+  - boil water
+  - sewage backup
+  - imminent hazard
+  - stop service
+  - when in doubt throw it out
+  - SOP-015
+owner: "Director of Culinary"
+approver: "SLT + Director of Culinary"
+audience: operator
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+sort_order: 10
+relationships:
+  - { to: SOP-008, type: references, from_section: "Related Documents" }
+# F5 2026-06-15: Removed SOP-016 relationship (retired; absorbed into SOP-002 §07.4). SOP-002 relationship below carries the canonical pointer.
+  - { to: TPL-018, type: references, from_section: "Related Documents" }
+  - { to: SOP-002, type: references, from_section: "Related Documents" }
+---
+
+# 01 Purpose and Scope
+
+No power, no safe water, no refrigeration - these are imminent health hazards. When food safety cannot be assured, the default is to protect the guest, even if that means stopping service.
+
+> ANCHOR: Emergencies are where shortcuts get taken and people get sick. This SOP makes the safe choice the default choice when the kitchen loses power, water, or cold.
+
+This SOP defines how KitchFix responds to utility failures and imminent hazards at every account. It applies to every employee; the Person in Charge directs the response.
+
+# 02 General Principles
+
+- When you cannot ensure safety, cease the affected operation.
+- Notify the Executive Chef and RDO immediately.
+- Some events require local health-department notification before reopening.
+- Monitor and record temperatures and actions throughout the event.
+
+> CRITICAL: When in doubt, throw it out. Never serve food you cannot verify is safe.
+
+# 03 Power Loss and Refrigeration Failure
+
+Cold air is a resource - protect it. Keep doors closed and watch the clock and the thermometer.
+
+- Keep cooler and freezer doors closed. A closed cooler holds temperature for hours; an open one loses it in minutes.
+- Monitor and log temperatures throughout the outage.
+- Per SOP-008: hold cold at <Fact id="cold_hold_temp" />, frozen at <Fact id="frozen_temp" />, hot at <Fact id="hot_hold_temp" />. Anything out of range must be addressed by the rules below.
+
+> CRITICAL: This table is the disposition for an unplanned outage. The default rule is temperature control per SOP-008. The <Fact id="tphc_clock" /> below is the TPHC (Time as Public Health Control) carve-out and is measured from the moment the food left temperature control, not from the start of the outage.
+
+| Situation | Action |
+|---|---|
+| Cold TCS food still at <Fact id="cold_hold_temp" /> | Safe. Keep it cold - move to a working unit, add ice, or transfer to a refrigerated truck. |
+| Cold TCS food that has risen above <Fact id="cold_hold_temp" /> | TPHC path. Safe only on the <Fact id="tphc_clock" /> measured from when it left temperature control. After <Fact id="tphc_clock" />, discard. Do NOT re-cool to <Fact id="cold_hold_temp" /> and continue holding. |
+| Frozen food still frozen (solid, ice crystals intact) | Safe. Refreeze or use. If thawed to refrigerator temperatures, treat as cold TCS above. |
+| Frozen food fully thawed and above <Fact id="cold_hold_temp" /> | TPHC path - apply the <Fact id="tphc_clock" /> from the moment it left frozen, then discard. |
+| Hot-held food with no heat source | TPHC path. Apply the <Fact id="tphc_clock" /> from the moment it lost heat, then discard. |
+| Any food past its <Fact id="tphc_clock" /> limit or of uncertain history | Discard. When in doubt, throw it out. |
+
+> NOTE: This rewrite (F5, 2026-06-15) replaces the v1.0 table that contradicted SOP-008 by treating "41F to 135F" as a 4-hour holding zone. The corrected logic above mirrors SOP-008's temperature-control default with TPHC as the documented monitored exception. Britt (Director of Culinary) reviews the wording for operator clarity before this version goes Live.
+
+# 04 Water Loss or Contamination
+
+- Stop any operation that needs water - handwashing, warewashing, cooking, ice, and beverages.
+- Under a boil-water advisory, use bottled or hauled potable water, or cease operations.
+- No bare-hand or unsafe-water contact with food.
+- Resume only when the water supply is confirmed potable.
+
+# 05 Other Imminent Hazards
+
+Sewage backup, flooding, fire, and similar events make the space unsafe for food.
+
+- Cease operations in the affected area.
+- Notify the Executive Chef, RDO, and the local health department.
+- Discard all exposed food.
+- Clean and sanitize affected areas. Do not reopen without approval.
+
+# 06 Returning to Operation
+
+- Verify refrigeration is back at temperature.
+- Confirm the water supply is potable.
+- Clean, sanitize, and restock as needed.
+- The Executive Chef documents the event and signs off before reopening.
+
+# Related Documents
+
+Documents this references or governs. Cross-references use the Document ID, which resolves to the current version.
+
+| Document ID | Title | Status |
+|---|---|---|
+| SOP-008 | Food Safety Management | Live |
+| SOP-002 | Safety and Incident Management (§07.4 Suspected Foodborne Illness) | Live |
+| TPL-018 | Daily Food Safety Log | Live |
+| SOP-002 | Safety and Incident Management | Live |

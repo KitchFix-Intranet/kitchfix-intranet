@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kitchfix.com/opd/schema/facts.schema.json",
+  "title": "OPD Operational Facts (with overrides)",
+  "description": "The typed load-bearing values referenced by `<Fact id=...>` tokens in MDX. Per brief §3.3. Override-bearing facts declare dimensions (state, account, role) and variants.",
+  "type": "object",
+  "patternProperties": {
+    "^[a-z][a-zA-Z0-9_]*$": {
+      "$ref": "#/$defs/fact"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "fact": {
+      "type": "object",
+      "required": ["scope", "default", "owner"],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["global", "override-bearing"]
+        },
+        "default": {
+          "$ref": "#/$defs/valueBlock",
+          "description": "Floor value. For override-bearing facts the resolver falls back to this when no override matches."
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["state", "account", "role"]
+          },
+          "default": []
+        },
+        "overrides": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/override" },
+          "default": []
+        },
+        "owner": {
+          "type": "string",
+          "description": "Role title or function that owns the fact (e.g. 'Food Safety', 'Human Resources', 'Finance')."
+        },
+        "last_reviewed": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "description": { "type": ["string", "null"] },
+        "non_canonical": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set true on facts that are example / specimen values, not canonical (defends SousAI hard floor rule 7)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scope": { "const": "override-bearing" } }, "required": ["scope"] },
+          "then": { "required": ["dimensions"], "properties": { "dimensions": { "minItems": 1 } } }
+        },
+        {
+          "if": { "properties": { "scope": { "const": "global" } }, "required": ["scope"] },
+          "then": {
+            "properties": {
+              "overrides": {
+                "maxItems": 0,
+                "description": "Global facts must not carry overrides."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "valueBlock": {
+      "type": "object",
+      "required": ["value", "authority"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "The fact value rendered into prose. String most often; number / object for typed values.",
+          "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "object" }]
+        },
+        "unit": { "type": ["string", "null"] },
+        "authority": {
+          "type": "string",
+          "description": "Source of truth: 'Company blanket floor', 'FDA Food Code 3-401.11', 'NY Labor Law Article 19 §651', 'counsel confirmed 2026-06-12', etc."
+        },
+        "effective_date": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "expires_date": {
+          "type": ["string", "null"],
+          "format": "date"
+        }
+      }
+    },
+    "override": {
+      "type": "object",
+      "required": ["when"],
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "state": { "type": "string", "pattern": "^[A-Z]{2}$" },
+            "account": { "type": "string" },
+            "role": { "type": "string" }
+          }
+        },
+        "value": {
+          "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "object" }]
+        },
+        "unit": { "type": ["string", "null"] },
+        "authority": { "type": "string" },
+        "effective_date": { "type": ["string", "null"], "format": "date" },
+        "expires_date": { "type": ["string", "null"], "format": "date" },
+        "note": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+---
+id: POST-003
+title: Kitchen Safety Posting
+doc_class: POST
+shelf: Safety
+status: In Build
+version: "1.0"
+card_line: "Floor-facing kitchen-safety posting. Distills SOP-008 plus kitchen-safety basics. EN+ES combined on one posting."
+summary: "Floor-facing kitchen-safety posting, single bilingual doc (EN + ES). Built to STD-002 v0.2: three-zone POST layout, 8 icon tiles (Iconify Lucide/MDI), brand palette, Arial fallback, 8.5 by 11 portrait. Ships as editable PPTX master + published PDF per STD-002 §11. Source: SOP-008 Food Safety Management. POST class takes the SousAI stub path - this MDX summary is the corpus-side content."
+keywords:
+  - kitchen safety
+  - posting
+  - bilingual
+  - EN+ES
+  - SOP-008
+  - knife
+  - hot
+  - chemical
+  - lifting
+  - slip
+  - POST-003
+owner: "Director of Culinary"
+approver: "Senior Director of Operations"
+audience: operator
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+sort_order: 5
+print_required: true
+critical: true
+relationships:
+  - { to: SOP-008, type: derived_from, from_section: "SOP-008 + kitchen-safety basics" }
+  - { to: STD-002, type: implements, from_section: "Built to STD-002 v0.2 three-zone POST layout" }
+  - { to: PB-002, type: references, from_section: "Allergens callout (PB-002 Top 9)" }
+  - { to: PB-007, type: references, from_section: "Hot surfaces + kitchen-safety detail" }
+  - { to: POST-001, type: related, from_section: "Severity matrix - sibling poster" }
+  - { to: SOP-002, type: derived_from, from_section: "Notify per SOP-002 severity matrix" }
+  - { to: FORM-008, type: references, from_section: "Hygiene + sick-staff control" }
+---
+
+<SourceGoverns doc="SOP-008" />
+
+# Kitchen Safety - Posted Summary
+
+A wall-mounted reference for every kitchen. The binding text is SOP-008 Food Safety Management. This posting is the floor-facing summary built under STD-002 v0.2 visual standard.
+
+## Eight focus areas (icon tiles)
+
+- **Knives** - keep them sharp, walk with the blade down and back to your body, never catch a falling knife.
+- **Hot surfaces** - "behind, hot, knife, heavy" call-out is the kitchen language; PPE per task per PB-007.
+- **Slip / trip / fall** - clean as you go, dry the floor, never run, mark wet floors.
+- **Burns and fire** - cover burns immediately, grease fires get smothered not watered, know where the fire extinguisher and pull station are.
+- **Chemicals and HazCom** - SDS sheets accessible per OSHA HazCom; never mix; quat sanitizer <Fact id="quat_ppm" /> per SOP-008 §10.
+- **Lifting and ergonomics** - lift with legs, get help on anything over 50 lb, use the cart.
+- **Allergens** - the Top 9 per PB-002; cross-contact prevention disciplines per PB-002 §03.
+- **Hygiene and health** - handwashing per SOP-008 §11; sick staff do not handle food per FORM-008.
+
+## In an emergency
+
+- Call 911 first if life-safety risk exists.
+- Stabilize and remove the hazard.
+- Notify per SOP-002 severity matrix (see POST-001 for the call-by-tier reference).
+- Document in the People Portal Incident Center.
+
+## Bilingual
+
+This posting ships as one bilingual sheet (EN + ES combined). Per STD-002 §08, safety content is strongly recommended for bilingual production. Translation workflow per STD-002 §8.3.
+
+## Where to find the binding standard
+
+The full food-safety management system - all 15 sections, every threshold, every monitoring requirement - lives in SOP-008 Food Safety Management. Related kitchen-safety detail (knives, PPE, ergonomics, HazCom, fire) lives in PB-007 Workplace Safety Manual.

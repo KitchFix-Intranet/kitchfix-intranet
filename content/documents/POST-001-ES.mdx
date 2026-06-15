@@ -1,0 +1,51 @@
+---
+id: POST-001-ES
+title: Reporte de Incidentes (Cartel)
+doc_class: POST
+shelf: Safety
+status: Live
+version: "1.2"
+card_line: "Cartel mural de los niveles de severidad y la secuencia de respuesta a incidentes. Compañero en español de POST-001."
+summary: "La versión en español del cartel mural POST-001 Incident Reporting Posting. Distila SOP-002 secciones 04 y 06 al lenguaje legible en planta para el personal hispanohablante. La versión vinculante en inglés es POST-001 v1.2; este cartel se mantiene en paridad de versión con su fuente en inglés. Excluido del corpus SousAI por convención (Audit Brief sección 4 - los documentos -ES son carteles de pared, no consultados por Sous)."
+keywords:
+  - incidente
+  - severidad
+  - S1
+  - S2
+  - S3
+  - S4
+  - notificación
+  - respuesta
+  - cartel
+  - español
+  - POST-001-ES
+owner: "Director of People Operations"
+approver: "Senior Director of Operations"
+audience: operator
+classification: "KitchFix Internal"
+lang: es
+in_corpus: false
+translation_of: POST-001
+source_version: "1.2"
+applies_to: company-wide
+approval:
+  approved_version: "1.2"
+  approved_by: "Senior Director of Operations"
+  approved_date: 2026-05-04
+  method: recorded sign-off
+last_reviewed: 2026-05-04
+review_interval_months: 12
+effective_date: 2026-05-04
+print_required: true
+critical: true
+sort_order: 5
+relationships:
+  - { to: POST-001, type: derived_from, from_section: "Spanish translation of POST-001" }
+  - { to: SOP-002, type: derived_from, from_section: "SOP-002 section 04 + section 06" }
+---
+
+# Spanish translation - body in posting PDF asset
+
+POST-001-ES is the Spanish wall posting paired with POST-001. It mirrors the English content section-for-section: severity tiers, notification windows, the six-step response, and the phone-tree note. The bound print asset is the source of truth for the operator-facing language; this MDX exists to project a catalog row and track parity with POST-001 v1.2.
+
+Per Audit Brief section 4 (English-only corpus convention), -ES documents do not enter the SousAI corpus. The validation gate flags this translation as stale if POST-001's current version exceeds source_version (parity tracking).

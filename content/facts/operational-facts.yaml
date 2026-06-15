@@ -1,0 +1,298 @@
+# OPD Operational Facts - typed load-bearing values
+#
+# Validated against content/schema/facts.schema.json.
+# Per F3 (built 2026-06-15 from Kevin's confirmed set + Tier 2 shells):
+#   - Tier 1: 25 global facts, defaults + authorities Kevin-confirmed
+#   - Tier 2: 7 override-bearing facts:
+#       - 3 floor-confirmed (sick_accrual, overtime_threshold, record_retention_disciplinary)
+#       - 4 quarantined (meal_break_rule, rest_break_rule, pay_band_hourly, pay_band_leadership)
+#         flagged non_canonical: true so the resolver knows the value is unresolved;
+#         the corpus must NOT teach Sous a quarantined fact as canonical.
+#
+# State-variant population happens at F4 / F5 once counsel + Finance confirm.
+# Pay bands (REF-006, REF-007) stay in_corpus:false until Finance validates against
+# Rippling. Meal/rest breaks stay quarantined until counsel completes per-state research.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Supplemental globals (carried from F1 seed - referenced by SOP-002 frontmatter
+# tokens; not in the Kevin-confirmed Tier 1 list but operationally needed)
+# ─────────────────────────────────────────────────────────────────────────────
+
+wc_policy_number:
+  scope: global
+  default:
+    value: "83 WEC BP9792"
+    authority: "Workers compensation policy issued to CJK Foods LLC dba KitchFix"
+  owner: "People Operations"
+  last_reviewed: 2026-06-01
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 1 - Global facts (Kevin-confirmed 2026-06-15)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Food-safety temperatures (SOP-008 governs)
+
+cold_hold_temp:
+  scope: global
+  default:
+    value: "≤ 41F"
+    authority: "SOP-008 / FDA Food Code"
+  owner: "Food Safety"
+
+hot_hold_temp:
+  scope: global
+  default:
+    value: "≥ 135F"
+    authority: "SOP-008 / FDA Food Code"
+  owner: "Food Safety"
+
+frozen_temp:
+  scope: global
+  default:
+    value: "≤ 0F"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+danger_zone:
+  scope: global
+  default:
+    value: "41F - 135F"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+cook_temp_poultry:
+  scope: global
+  default:
+    value: "165F (15s)"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+cook_temp_ground:
+  scope: global
+  default:
+    value: "155F (17s)"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+cook_temp_wholemuscle_fish:
+  scope: global
+  default:
+    value: "145F (15s)"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+cooling_rule:
+  scope: global
+  default:
+    value: "135F to 70F in 2 hours, 70F to 41F in 4 hours (6 hours total)"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+reheat_rule:
+  scope: global
+  default:
+    value: "165F within 2 hours"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+tphc_clock:
+  scope: global
+  default:
+    value: "4 hours"
+    authority: "SOP-008 (Time as Public Health Control)"
+  owner: "Food Safety"
+
+date_mark_max:
+  scope: global
+  default:
+    value: "7 days at 41F"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+quat_ppm:
+  scope: global
+  default:
+    value: "200 - 400 ppm"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+warewash_rinse:
+  scope: global
+  default:
+    value: "180F manifold (~160F surface)"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+threecomp_wash_temp:
+  scope: global
+  default:
+    value: "≥ 110F"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+storage_off_floor:
+  scope: global
+  default:
+    value: "6 inches"
+    authority: "SOP-008"
+  owner: "Food Safety"
+
+# Brand + company
+
+brand_promise:
+  scope: global
+  default:
+    value: "Best Food, Best Service, Best Hospitality"
+    authority: "PB-001"
+  owner: "Senior Director of Operations"
+
+operating_states:
+  scope: global
+  default:
+    value: "AZ, FL, IL, KY, MO, NY, OH, TX (8 states; IL is corporate-only)"
+    authority: "Company"
+  owner: "Senior Director of Operations"
+
+# HR / classification
+
+ft_threshold_hours:
+  scope: global
+  default:
+    value: "30 hrs/week"
+    authority: "POL-013"
+  owner: "People Operations"
+
+# Workers comp + incident
+
+wc_carrier:
+  scope: global
+  default:
+    value: "The Hartford"
+    authority: "Confirmed (KitchFix workers compensation carrier)"
+  owner: "People Operations"
+  last_reviewed: 2026-06-01
+
+incident_S1_window:
+  scope: global
+  default:
+    value: "15 minutes"
+    authority: "SOP-002 section 06 Notification Matrix"
+  owner: "People Operations"
+
+incident_S2_window:
+  scope: global
+  default:
+    value: "30 minutes"
+    authority: "SOP-002 section 06 Notification Matrix"
+  owner: "People Operations"
+
+incident_S3_window:
+  scope: global
+  default:
+    value: "4 hours"
+    authority: "SOP-002 section 06 Notification Matrix"
+  owner: "People Operations"
+
+# Substance + leave + discipline
+
+bac_limit:
+  scope: global
+  default:
+    value: "0.08%"
+    authority: "POL-003 / federal standard"
+  owner: "People Operations"
+
+fmla_worksite_threshold:
+  scope: global
+  default:
+    value: "50 employees within 75 miles"
+    authority: "FMLA statute"
+  owner: "People Operations"
+
+pip_standard_days:
+  scope: global
+  default:
+    value: "30 days (60-day option)"
+    authority: "SOP-004"
+  owner: "People Operations"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 2 - Override-bearing facts (state dimension)
+# Floor values confirmed where noted; state variants land at F4/F5 from SMEs.
+# Quarantined facts (non_canonical: true) must NOT enter the corpus as canonical;
+# their literal occurrences in source MDX are deliberately NOT tokenized at F3.
+# ─────────────────────────────────────────────────────────────────────────────
+
+sick_accrual:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "1 hour per 30 worked"
+    authority: "Company blanket floor; state statutes may bump up"
+  overrides: []
+  owner: "People Operations"
+  description: "Floor confirmed. Per-state bumps (NY, AZ, others) pending counsel review at F4/F5."
+
+overtime_threshold:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "40 hrs/week"
+    authority: "FLSA federal baseline"
+  overrides: []
+  owner: "People Operations"
+  description: "Federal weekly OT floor confirmed. Daily-OT states (CA, AK, NV, others if applicable) pending counsel review at F4/F5."
+
+record_retention_disciplinary:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "3 years"
+    authority: "SOP-004 floor; state record-retention laws may extend"
+  overrides: []
+  owner: "People Operations"
+  description: "Floor confirmed at 3 years. Longer state retention requirements pending counsel review."
+
+meal_break_rule:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "PENDING - counsel review per-state"
+    authority: "PENDING - no federal floor; pure state-driven"
+  overrides: []
+  owner: "People Operations"
+  non_canonical: true
+  description: "QUARANTINED at F3. Counsel completes per-state research at F4/F5. DO NOT tokenize meal-break literals in MDX until values land; literal occurrences in POL-008 / POL-015 stay literal."
+
+rest_break_rule:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "PENDING - counsel review per-state"
+    authority: "PENDING - no federal floor; pure state-driven"
+  overrides: []
+  owner: "People Operations"
+  non_canonical: true
+  description: "QUARANTINED at F3. Same posture as meal_break_rule."
+
+pay_band_hourly:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "PENDING - REF-006 DRAFT; Finance validation against Rippling pending"
+    authority: "PENDING - REF-006 carries draft values, in_corpus: false"
+  overrides: []
+  owner: "People Operations"
+  non_canonical: true
+  description: "QUARANTINED at F3. REF-006 is in_corpus:false until Finance confirms rates. DO NOT tokenize REF-006 band values; they are not yet canonical."
+
+pay_band_leadership:
+  scope: override-bearing
+  dimensions: [state]
+  default:
+    value: "PENDING - REF-007 DRAFT; Finance validation against Rippling pending"
+    authority: "PENDING - REF-007 carries draft values, in_corpus: false"
+  overrides: []
+  owner: "People Operations"
+  non_canonical: true
+  description: "QUARANTINED at F3. REF-007 is in_corpus:false and corporate-only restricted."
