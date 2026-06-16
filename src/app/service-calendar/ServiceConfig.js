@@ -1,13 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-
-const ADMIN_EMAILS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
+import { SC_ADMINS } from "@/lib/admin";
 
 function fmtPrice(n) { return "$" + Number(n).toFixed(2).replace(/\.00$/, ""); }
 
 export default function ServiceConfig({ account, serviceGroups, session, showToast, onClose, onConfigChanged }) {
   const email = session?.user?.email?.toLowerCase().trim() || "";
-  const isAdmin = ADMIN_EMAILS.includes(email);
+  const isAdmin = SC_ADMINS.includes(email);
 
   const [groups, setGroups] = useState([]);
   const [saving, setSaving] = useState(false);

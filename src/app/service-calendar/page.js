@@ -1,12 +1,15 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
 import "@/app/ops/css/ops-shared.css";
 import "./ops-sc.css";
 
-// ── Dev Gate: only these emails see the live tool ──
-const DEV_EMAILS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
+// Page-level gate. Currently identical to SC_ADMINS - only the two
+// listed emails see the live tool; everyone else gets the Coming Soon
+// screen. When the site-lead rollout expands access, swap this for a
+// dedicated SC_DEV_EMAILS list in admin.js.
 export default function ServiceCalendarPage() {
   const { data: session, status } = useSession();
   const [heroImage, setHeroImage] = useState("");
@@ -48,7 +51,7 @@ export default function ServiceCalendarPage() {
 
   const email = session?.user?.email?.toLowerCase().trim() || "";
   const firstName = session?.user?.name?.split(" ")[0] || "Chef";
-  const isDev = DEV_EMAILS.includes(email);
+  const isDev = SC_ADMINS.includes(email);
 
   if (!isDev) {
     return (
