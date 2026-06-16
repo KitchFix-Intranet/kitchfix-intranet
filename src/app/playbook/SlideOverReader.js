@@ -129,6 +129,8 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
     document: doc,
     relationships,
     surfaces,
+    content_html,
+    content_html_es,
     drive_view_url,
     drive_preview_url,
     drive_view_url_es,
@@ -138,24 +140,37 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
 
-  // EN/ES language selection - only meaningful when BOTH URLs are present.
-  // Default is "en"; reset back to "en" whenever the reader navigates to a
-  // different doc (the back/forward via relationship clicks rebinds doc.id,
-  // and we don't want a previous doc's language preference to leak forward).
+  // EN/ES language selection - only meaningful when SOMETHING (html OR drive)
+  // exists for both languages. Default is "en"; reset back to "en" whenever
+  // the reader navigates to a different doc (the back/forward via relationship
+  // clicks rebinds doc.id, and we don't want a previous doc's language
+  // preference to leak forward).
   const [lang, setLang] = useState("en");
   useEffect(() => { setLang("en"); }, [doc.id]);
 
-  const hasEn = !!drive_preview_url;
-  const hasEs = !!drive_preview_url_es;
+  // Phase A3: per-language source resolution. Prefer rendered HTML from
+  // document_content (populated by the A4 projection); fall back to the
+  // Drive iframe per-language when content_html is missing. The fallback
+  // is throwaway code, removed in A7 once every Live doc has a content row.
+  const hasEn = !!content_html || !!drive_preview_url;
+  const hasEs = !!content_html_es || !!drive_preview_url_es;
   const showLangToggle = hasEn && hasEs;
-  // Active language. If only one of the two is present, the toggle is hidden
-  // and we just render whichever exists; we never show an empty iframe.
   const activeLang = showLangToggle
     ? lang
     : (hasEn ? "en" : (hasEs ? "es" : "en"));
+  const activeHtml       = activeLang === "es" ? content_html_es      : content_html;
   const activeViewUrl    = activeLang === "es" ? drive_view_url_es    : drive_view_url;
   const activePreviewUrl = activeLang === "es" ? drive_preview_url_es : drive_preview_url;
+  const hasContent = !!activeHtml;
   const hasFile = !!activePreviewUrl;
+  const hasAny = hasContent || hasFile;
+
+  // Full-view toggle for the html-rendered path. Minimal placeholder - lifts
+  // the reader-frame's max-height cap so the rendered body can extend. Phase
+  // B owns the real full-view UX (modal / dedicated route). Drive iframe
+  // mode already has its own "Open in Drive" external escape hatch.
+  const [fullView, setFullView] = useState(false);
+  useEffect(() => { setFullView(false); }, [doc.id, activeLang]);
 
   return (
     <div className="pb-slide-body">
@@ -174,7 +189,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             {doc.status}
           </span>
           {doc.critical && <span className="pb-critical-chip">⚠ Critical</span>}
-          {!hasFile && <span className="pb-nofile-chip">No file yet</span>}
+          {!hasAny && <span className="pb-nofile-chip">No file yet</span>}
         </div>
         <h2 className="pb-slide-title">{doc.title}</h2>
         {doc.card_line && <p className="pb-slide-cardline">{doc.card_line}</p>}
@@ -216,20 +231,24 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         </div>
       )}
 
-      {/* Reader frame
-          - Keyed on `${doc.id}-${activeLang}` so EN/ES language swaps trigger
-            a CSS opacity dip on the wrapper (the existing iframe-reload was
-            a hard cut otherwise; the brief fade signals "different file").
-          - Skeleton (pb-iframe-skeleton) shows until iframe onLoad fires;
-            covers Drive's own loading state with a quiet shimmer.
-          - Pop-out button (top-right corner of frame) is the visible "open
-            full-size in Drive" escape hatch that doesn't require finding the
-            actions row. */}
+      {/* Reader frame - Phase A3 dual-path:
+            - If content_html is present (A4-populated): render the HTML body
+              directly. dangerouslySetInnerHTML is OK here because the HTML is
+              owner-authored output from our own projection pipeline
+              (scripts/content/project-catalog.mjs + lib/md_to_html.mjs), not
+              user input. The renderer also escapes user-content at HTML emit
+              time. NOT to be used with externally-sourced HTML.
+            - Else if drive_preview_url is present: render the Drive iframe
+              fallback as before. This branch is removed in A7 once every
+              Live doc has a content row.
+            - Else: the "No file attached yet" empty state.
+          - Keyed on `${doc.id}-${activeLang}-${hasContent}` so swaps between
+            html-render and iframe-render also trigger the swap animation. */}
       <div
-        className="pb-reader-frame"
-        key={`${doc.id}-${activeLang}`}
+        className={`pb-reader-frame${hasContent && fullView ? " pb-reader-frame--fullview" : ""}`}
+        key={`${doc.id}-${activeLang}-${hasContent ? "html" : "drive"}`}
       >
-        {hasFile && (
+        {hasFile && !hasContent && (
           <a
             className="pb-reader-popout"
             href={activeViewUrl}
@@ -245,7 +264,12 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             </svg>
           </a>
         )}
-        {hasFile ? (
+        {hasContent ? (
+          <div
+            className="pb-reader-html"
+            dangerouslySetInnerHTML={{ __html: activeHtml }}
+          />
+        ) : hasFile ? (
           <>
             <div className="pb-iframe-skeleton" aria-hidden="true" />
             <iframe
@@ -270,21 +294,34 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         )}
       </div>
 
-      {/* Actions - single primary "Open in Drive" + Report issue. The
-          previous Print button just opened the same Drive URL, so it was
-          redundant chrome. Pop-out icon on the iframe (above) covers the
-          discoverability case. */}
+      {/* Actions - Phase A3:
+            - html-rendered path: primary action is "Open full view" (in-place
+              expand via fullView state; Phase B owns the real full-view UX).
+            - Drive iframe path: primary action stays "Open in Drive" pointing
+              at the Drive view URL (same as before A3).
+            - No-file path: disabled "Open in Drive" placeholder. */}
       <div className="pb-slide-actions">
-        <a
-          className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
-          href={activeViewUrl || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!hasFile}
-          onClick={(e) => { if (!hasFile) e.preventDefault(); }}
-        >
-          Open in Drive
-        </a>
+        {hasContent ? (
+          <button
+            type="button"
+            className="pb-action pb-action--primary"
+            onClick={() => setFullView((v) => !v)}
+            aria-pressed={fullView}
+          >
+            {fullView ? "Exit full view" : "Open full view"}
+          </button>
+        ) : (
+          <a
+            className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
+            href={activeViewUrl || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!hasFile}
+            onClick={(e) => { if (!hasFile) e.preventDefault(); }}
+          >
+            Open in Drive
+          </a>
+        )}
         <button
           className="pb-action pb-action--ghost"
           onClick={() => setReportOpen((r) => !r)}

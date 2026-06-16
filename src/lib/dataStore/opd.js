@@ -27,6 +27,7 @@ const RELATIONSHIPS_TABLE = "document_relationships";
 const SURFACES_TABLE      = "document_surfaces";
 const ISSUES_TABLE        = "document_issues";
 const PINS_TABLE          = "document_pins";
+const CONTENT_TABLE       = "document_content";
 
 // Doc IDs are stable text handles (PB-006, SOP-002, REF-005-A, LEGACY-PR ...).
 // Strict A-Z/0-9/hyphen pattern. Used to gate the only place we interpolate
@@ -144,6 +145,24 @@ export async function getDocument(id, opts = {}) {
   if (!data) return data;
   const { data: pin } = await sb.from(PINS_TABLE).select("doc_id").eq("doc_id", id).maybeSingle();
   data.pinned = !!pin;
+  return data;
+}
+
+/**
+ * Fetch rendered display HTML from document_content. Returns null when no
+ * row exists for the (doc_id, lang) pair - the reader falls back to the
+ * Drive iframe in that case (Phase A3 dual-path; the fallback is removed
+ * in A7 once Drive retires). Populated by the A4 projection apply.
+ */
+export async function getDocumentContent(id, lang = "en", opts = {}) {
+  const sb = getServiceClient();
+  const { data, error } = await sb
+    .from(CONTENT_TABLE)
+    .select("html, content_hash, rendered_at")
+    .eq("doc_id", id)
+    .eq("lang", lang)
+    .maybeSingle();
+  if (error) throw new Error(`opd.getDocumentContent: ${error.message}`);
   return data;
 }
 

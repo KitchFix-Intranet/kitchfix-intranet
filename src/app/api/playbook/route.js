@@ -22,11 +22,14 @@ import { NextResponse } from "next/server";
 import {
   listDocuments,
   getDocument,
+  getDocumentContent,
   getRelationships,
   getSurfaces,
   createIssue,
   createDocument,
   updateDocument,
+  setPinned,
+  clearPinned,
 } from "@/lib/dataStore";
 import {
   canViewPlaybook,
@@ -226,10 +229,16 @@ export async function GET(request) {
       if (!id) {
         return NextResponse.json({ error: "Missing id" }, { status: 400 });
       }
-      const [doc, rels, surfs] = await Promise.all([
+      // Phase A3: pull rendered HTML from document_content alongside the
+      // legacy Drive URLs. Both en + es rows are best-effort - null when
+      // unpopulated; the reader falls back to the Drive iframe per-language
+      // when content_html is missing. Populated by the A4 projection apply.
+      const [doc, rels, surfs, contentEn, contentEs] = await Promise.all([
         getDocument(id, { module: MODULE }),
         getRelationships(id, { module: MODULE }),
         getSurfaces(id, { module: MODULE }),
+        getDocumentContent(id, "en", { module: MODULE }),
+        getDocumentContent(id, "es", { module: MODULE }),
       ]);
       if (!doc) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -282,6 +291,11 @@ export async function GET(request) {
         document: doc,
         relationships: enriched,
         surfaces: surfs,
+        // Phase A3 dual-path: content_html when present, else the reader
+        // falls back to the Drive iframe via drive_preview_url. A7 retires
+        // the Drive fallback once every Live doc has a content row.
+        content_html: contentEn?.html || null,
+        content_html_es: contentEs?.html || null,
         drive_view_url: driveViewUrl,
         drive_preview_url: drivePreviewUrl,
         drive_view_url_es: driveViewUrlEs,
