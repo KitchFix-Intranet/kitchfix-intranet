@@ -36,6 +36,8 @@ import {
   isCorporateEmail,
   visibleStatuses,
   filterDocuments,
+  viewerTier,
+  canSeeDoc,
 } from "@/lib/opdAcl";
 import { getServiceClient } from "@/lib/supabase";
 import {
@@ -205,13 +207,18 @@ export async function GET(request) {
         });
       }
 
-      // Owner: full visible-doc set with audience filter applied server-side.
+      // Owner: full visible-doc set with status + access_level filters applied
+      // server-side. The access_level filter (pr-7-11) drops docs the viewer's
+      // tier can't see; restricted / slt cards never reach an unrestricted
+      // viewer's bootstrap response.
       const isCorp = await isCorporateEmail(actualEmail);
       const allDocs = await listDocuments(
         { statuses: visibleStatuses(isCorp) },
         { module: MODULE }
       );
-      const visible = filterDocuments(allDocs, isCorp);
+      const statusVisible = filterDocuments(allDocs, isCorp);
+      const tier = viewerTier(actualEmail);
+      const visible = statusVisible.filter((d) => canSeeDoc(tier, d.access_level));
       return NextResponse.json({
         email: actualEmail,
         isOwner: true,
@@ -241,6 +248,15 @@ export async function GET(request) {
         getDocumentContent(id, "es", { module: MODULE }),
       ]);
       if (!doc) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      // pr-7-11 access-tier gate. The owner-only check above protects /playbook
+      // as a whole; this per-doc check closes the direct-ID bypass at the
+      // detail handler. We return 404 (not 403) so a viewer without the right
+      // tier cannot probe for which IDs exist - the doc looks indistinguishable
+      // from a non-existent one.
+      const tier = viewerTier(actualEmail);
+      if (!canSeeDoc(tier, doc.access_level)) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
