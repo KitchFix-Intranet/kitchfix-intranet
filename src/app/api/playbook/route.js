@@ -448,13 +448,37 @@ export async function POST(request) {
       if (!v.ok) {
         return NextResponse.json({ error: v.error }, { status: 400 });
       }
-      // updateDocument throws on PG errors (FK / CHECK / row-not-found surfaces
-      // an error.message that bubbles up). It also stamps updated_at and runs
-      // .select().single() so the returned row reflects the actual post-write
-      // state - that's our read-validate.
-      let updated;
+      // pr-7-9: pin moves to the document_pins overlay. Intercept pinned
+      // from the validated patch, route it to setPinned / clearPinned, and
+      // remove it from the catalog patch before updateDocument runs. If the
+      // patch is pinned-only, we still need to return the post-write row
+      // shape so the client sees the canonical pinned value.
+      const pinChange = ("pinned" in v.clean) ? v.clean.pinned : undefined;
+      const catalogPatch = { ...v.clean };
+      delete catalogPatch.pinned;
+
       try {
-        updated = await updateDocument(id, v.clean, { module: MODULE });
+        if (pinChange === true) {
+          await setPinned(id, actualEmail, { module: MODULE });
+        } else if (pinChange === false) {
+          await clearPinned(id, { module: MODULE });
+        }
+      } catch (e) {
+        return NextResponse.json({ error: e?.message || "pin write failed" }, { status: 400 });
+      }
+
+      // If the catalog patch is empty (pin-only change), re-fetch the row so
+      // the response carries the overlay-derived pinned value.
+      let updated;
+      if (Object.keys(catalogPatch).length === 0) {
+        updated = await getDocument(id, { module: MODULE });
+        if (!updated) {
+          return NextResponse.json({ error: `Document ${id} not found` }, { status: 404 });
+        }
+        return NextResponse.json({ ok: true, document: updated });
+      }
+      try {
+        updated = await updateDocument(id, catalogPatch, { module: MODULE });
       } catch (e) {
         // Distinguish "row missing" from generic write errors so the client
         // can react sensibly (e.g. dropdown still showed a stale id).

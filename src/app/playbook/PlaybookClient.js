@@ -45,10 +45,12 @@ function operatorStatusLabel(s) {
 // order regardless of which subset actually appears in the data. Mirrors
 // _shared.ALL_STATUSES but defined locally to keep the chip-row import
 // surface tight.
+//
+// pr-7-8 dropped 'Draft' from the schema (10 prod Draft rows migrated to
+// In Build); chip order now matches the 6-set.
 const STATUS_CHIP_ORDER = [
   "Live",
   "In Build",
-  "Draft",
   "Pending",
   "Placeholder",
   "Blocked",

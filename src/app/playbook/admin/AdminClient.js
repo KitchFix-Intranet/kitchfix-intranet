@@ -48,8 +48,12 @@ import SlideOverReader from "../SlideOverReader";
 // the next bootstrap (filterDocuments excludes them); current worklist still
 // shows the retired row until refresh - that asymmetry is fine for the
 // power-user surface.
+//
+// pr-7-8 dropped 'Draft' from the schema (10 prod Draft rows migrated to
+// In Build). Status options now reflect the 6-set (5 active + Retired for
+// the retire-from-worklist affordance).
 const STATUS_EDIT_OPTIONS = [
-  "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",
+  "Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired",
 ];
 
 // Class options - ordered by usage frequency in the seed catalog (rough).

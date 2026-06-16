@@ -52,6 +52,8 @@ playwright/.cache/
 # OPD audit/scratch working data (not committed)
 .scratch/
 
+# Phase A PR1 dry-run sample renders (transient)
+scripts/content/.dryrun-samples/
 # Service Calendar one-time import intermediate (regeneratable via
 # python3 scripts/_extract_sc_xlsx.py)
 scripts/_sc_extract.json

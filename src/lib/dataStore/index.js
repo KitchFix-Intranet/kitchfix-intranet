@@ -136,6 +136,9 @@ export {
 
 // Project OPD · The Playbook (greenfield PG-only domain — no Sheets, no
 // cutover flags, no dispatch primitives). Module name: 'playbook'.
+// pr-7-9 added document_pins as an overlay for pinned state; setPinned /
+// clearPinned write to it directly. Reads source pinned from the overlay
+// via decoratePinned (internal to listDocuments / getDocument).
 export {
   listDocuments,
   getDocument,
@@ -146,4 +149,6 @@ export {
   createDocument,
   updateDocument,
   createIssue,
+  setPinned,
+  clearPinned,
 } from "./opd.js";
