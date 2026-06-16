@@ -73,15 +73,25 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     setTouched(newTouched);
   }, [editValues, touched, day.projected]);
 
-  // Categorize groups
+  // Categorize groups. A group is "active" if EITHER a projection OR an
+  // actual on any of its services is non-zero. The actual check matters
+  // for days like a PDC Battery Camp Sunday where projections are all
+  // zero but the operator served flat-fee items (Coffee Service, Pre-Game
+  // Snack). Without it the popup would label such groups "off today"
+  // while the green banner says "Actuals recorded" - the contradiction
+  // that surfaced this bug.
   const { activeGroups, inactiveGroups } = useMemo(() => {
     const active = [], inactive = [];
     for (const g of serviceGroups) {
-      if (g.services.some(s => (day.projected[s.colIndex] ?? 0) > 0)) active.push(g);
+      const hasAnyValue = g.services.some(s =>
+        (day.projected[s.colIndex] ?? 0) > 0 ||
+        (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0)
+      );
+      if (hasAnyValue) active.push(g);
       else inactive.push(g);
     }
     return { activeGroups: active, inactiveGroups: inactive };
-  }, [serviceGroups, day.projected]);
+  }, [serviceGroups, day.projected, day.actual, day.hasActuals]);
 
   // Get effective value: if touched use editValues, else 0 (empty = 0 on save)
   const getVal = useCallback((colIndex) => {

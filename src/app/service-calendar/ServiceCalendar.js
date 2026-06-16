@@ -144,9 +144,16 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const dayStatus = useCallback((day) => {
     if (!day) return "off";
-    const allZero = Object.values(day.projected).every(v => v === null || v === 0);
-    if (day.hasActuals && allZero) return "no-service";
-    if (day.hasActuals) return "entered";
+    // Status describes what was ACTUALLY served, not what was projected.
+    // A day where projections were all zero but operators recorded service
+    // (e.g. unexpected catering, flat-fee items like Coffee/Fountain Bev
+    // showing up on a Battery Camp Sunday) is "entered", not "no-service".
+    // A day where actuals were entered but all values are 0 is the real
+    // "no-service" - the operator confirmed nothing was served.
+    if (day.hasActuals) {
+      const allZeroActuals = Object.values(day.actual).every(v => v == null || v === 0);
+      return allZeroActuals ? "no-service" : "entered";
+    }
     if (day.isPast && day.isLocked) return "overdue";
     if (day.isPast) return "needs-entry";
     return "future";
