@@ -1,5 +1,9 @@
 # Playbook Engine Audit (read-only)
 
+> NOTE (2026-06-16): Sections describing Drive-based SousAI ingestion reflect pre-A5 state.
+> A5 swapped the ingestion source to resolved MDX; A7 retired the Drive ingestion code path.
+> See docs/GOTCHAS.md and the A5/A7 PRs. The rest of this snapshot remains accurate.
+
 **Date:** 2026-06-15
 **Scope:** Map how `/playbook`, `/playbook/admin`, and the SousAI demo work *today*, against the actual code in `src/`. Read-only; no code, schema, or content changes.
 **Source of truth:** repo files cited below. `src-backup/` ignored per brief.

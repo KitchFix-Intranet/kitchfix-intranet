@@ -28,7 +28,6 @@ import { createClient } from "@supabase/supabase-js";
 import { embedDocument } from "../src/lib/sousai/index.js";
 
 const DOC_ID = "PB-002";
-const DRIVE_FILE_ID = "1oH7CNiBh1EQg-3QhBgpUYPFnGE1UnernCKrBXKbNVTk";
 const SAMPLE_CHUNK_INDEX = 28; // Section 06 > 6.1 Six Steps > Step 4
 
 function looksLikeOpenAiAuthError(err) {
@@ -37,13 +36,12 @@ function looksLikeOpenAiAuthError(err) {
 }
 
 try {
-  console.log(`Embedding ${DOC_ID} (Drive file ${DRIVE_FILE_ID}) ...`);
+  console.log(`Embedding ${DOC_ID} ...`);
   console.log();
 
   const t0 = Date.now();
   const result = await embedDocument({
     docId: DOC_ID,
-    driveFileId: DRIVE_FILE_ID,
   });
   const elapsedSec = ((Date.now() - t0) / 1000).toFixed(1);
 
