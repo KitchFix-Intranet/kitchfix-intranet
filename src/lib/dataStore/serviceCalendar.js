@@ -119,6 +119,32 @@ function throwOnError(error, op) {
   if (error) throw new Error(`[dataStore.sc] ${op}: ${error.message}`);
 }
 
+// Walk a select query in 1000-row chunks until exhausted. Caller passes a
+// builder fn that returns a fresh PostgREST query each call (so we can
+// re-apply .range per page). The query MUST include a deterministic
+// .order() chain - without it, page boundaries can repeat or skip rows.
+//
+// Reason this exists: PostgREST silently caps single-call results at its
+// configured max-rows (typically 1000). For sc_daily_revenue on an active
+// account that's well under the per-account row count - the year heatmap
+// silently dropped most dates and rendered them as transparent dots
+// (reading as grey). This helper makes "fetch everything" safe.
+async function fetchAllPaginated(supa, buildQuery, opLabel) {
+  const PAGE = 1000;
+  const out = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await buildQuery(supa).range(from, from + PAGE - 1);
+    if (error) throw new Error(`[dataStore.sc] ${opLabel}: ${error.message}`);
+    if (!data || data.length === 0) break;
+    for (const r of data) out.push(r);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return out;
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // loadAccountConfig
@@ -278,16 +304,20 @@ async function loadMonthDataPostgres(accountKey, year, month) {
   // Fetch with explicit range to bypass the 1000-default ceiling for
   // wider months (PDC accounts with 13 services * 31 days = 403 rows
   // - within default - but TBJ-FL with 21 services * 31 = 651, still
-  // under. The range still helps catch a future growth surprise.)
-  const { data: viewRows, error: viewErr } = await supa
-    .from("sc_daily_revenue")
-    .select("*")
-    .eq("account_key", accountKey)
-    .gte("service_date", first)
-    .lte("service_date", last)
-    .range(0, 9999)
-    .order("service_date", { ascending: true });
-  throwOnError(viewErr, "loadMonthData.view");
+  // under. Paginate anyway so the year-view bug class (PostgREST cap
+  // silently dropping rows) can't ever bite this path either.
+  const viewRows = await fetchAllPaginated(
+    supa,
+    (q) => q
+      .from("sc_daily_revenue")
+      .select("*")
+      .eq("account_key", accountKey)
+      .gte("service_date", first)
+      .lte("service_date", last)
+      .order("service_date", { ascending: true })
+      .order("service_id",   { ascending: true }),
+    "loadMonthData.view"
+  );
 
   // Bucket rows by date.
   const dayBuckets = new Map();
@@ -405,27 +435,39 @@ async function loadYearSummaryPostgres(accountKey, year) {
   const supa = getServiceClient();
   const { first, last } = yearBounds(year);
 
-  const [summaryRes, daysRes] = await Promise.all([
-    supa
-      .from("sc_month_summary")
-      .select("*")
-      .eq("account_key", accountKey)
-      .gte("month", first)
-      .lte("month", last)
-      .order("month", { ascending: true }),
-    supa
+  // PostgREST caps single-call rows at its configured max-rows even when
+  // .range() asks for more. For accounts with > 1000 sc_daily_revenue
+  // rows (every active account once you multiply 13+ services by 357
+  // days), a single .range(0, 99999) silently returns the first 1000 -
+  // status classification gets incomplete data and dates in the dropped
+  // pages render as transparent dots on the year heatmap (reading as
+  // grey against the page background). Chunk through with 1000-row pages
+  // and a deterministic order so every day reaches dayState.
+  const summaryRes = await supa
+    .from("sc_month_summary")
+    .select("*")
+    .eq("account_key", accountKey)
+    .gte("month", first)
+    .lte("month", last)
+    .order("month", { ascending: true });
+  throwOnError(summaryRes.error, "loadYearSummary.summary");
+
+  const daysRows = await fetchAllPaginated(
+    supa,
+    (q) => q
       .from("sc_daily_revenue")
       .select(
-        "service_date, projected_count, actual_count, " +
+        "service_date, service_id, projected_count, actual_count, " +
         "has_actuals, has_projection, game_type"
       )
       .eq("account_key", accountKey)
       .gte("service_date", first)
       .lte("service_date", last)
-      .range(0, 99999),
-  ]);
-  throwOnError(summaryRes.error, "loadYearSummary.summary");
-  throwOnError(daysRes.error,    "loadYearSummary.days");
+      .order("service_date", { ascending: true })
+      .order("service_id",   { ascending: true }),
+    "loadYearSummary.days"
+  );
+  const daysRes = { data: daysRows };
 
   // Reduce the view rows to per-day status. Multiple services per
   // (account, date) means we union: hasAct=true if ANY service row has
