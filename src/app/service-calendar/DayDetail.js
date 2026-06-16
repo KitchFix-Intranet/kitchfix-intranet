@@ -292,8 +292,17 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
       <div className="sc-day-body">
         {activeGroups.map(group => {
-          const activeSvcs = group.services.filter(s => (day.projected[s.colIndex] ?? 0) > 0);
-          const inactiveSvcs = group.services.filter(s => (day.projected[s.colIndex] ?? 0) === 0);
+          // Per-service active/inactive split must consider actuals, not just
+          // projections - same actuals-first-class rule applied to the group
+          // categorization above. Without this, days like Jan 4 Battery Camp
+          // (Pre-Game Snack/Coffee/Fountain Bev actuals with zero projection)
+          // collapse the served-services behind the "+ N more services"
+          // expander, leaving the active group header rendering empty.
+          const hasValue = (s) =>
+            (day.projected[s.colIndex] ?? 0) > 0 ||
+            (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0);
+          const activeSvcs = group.services.filter(hasValue);
+          const inactiveSvcs = group.services.filter((s) => !hasValue(s));
           const gs = groupSummary(group);
           const extrasOpen = expandedExtras.has(group.name);
           const groupTouched = group.services.some(s => touched.has(s.colIndex));

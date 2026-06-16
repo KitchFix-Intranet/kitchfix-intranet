@@ -116,9 +116,12 @@ export default function ServiceCalendar({ showToast, session }) {
 
   useEffect(() => {
     if (viewMode !== "year" || !selectedAccount) return;
+    // reloadKey is in the dep array so a save in the month view also
+    // refreshes the year heatmap on next visit; without it, the heatmap
+    // showed stale grey dots after data flipped to "entered" in PG.
     fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}`)
       .then(r => r.json()).then(d => { if (d.success) setYearData(d.months); }).catch(() => {});
-  }, [viewMode, selectedAccount]);
+  }, [viewMode, selectedAccount, reloadKey]);
 
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
@@ -176,8 +179,10 @@ export default function ServiceCalendar({ showToast, session }) {
     if (!data?.account) return { success: false, error: "No account loaded" };
     setSaving(true);
     try {
+      // spreadsheetId + sheetRow were leftover from the Sheets-era route;
+      // the PG route ignores them. Dropped to keep the payload honest.
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
+        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
       const result = await res.json();
       if (result.success) {
         showToast(`Actuals saved for ${day.date}`, "success");
@@ -232,8 +237,9 @@ export default function ServiceCalendar({ showToast, session }) {
       const day = dayMap[dk];
       if (!day) continue;
       try {
+        // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
+          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
         const result = await res.json();
         if (result.success) successCount++;
       } catch { /* continue */ }
@@ -255,8 +261,9 @@ export default function ServiceCalendar({ showToast, session }) {
       const entries = [];
       for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
       try {
+        // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
+          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
         const result = await res.json();
         if (result.success) successCount++;
       } catch { /* continue */ }
@@ -496,7 +503,12 @@ export default function ServiceCalendar({ showToast, session }) {
                 const md = yearData?.find(m => m.month === mKey);
                 const isCurrent = mi === new Date().getMonth();
                 const pct = md && md.totalDays > 0 ? Math.round(md.daysWithActuals / md.totalDays * 100) : 0;
-                const noService = md && md.projectedRevenue === 0 && md.totalDays > 0;
+                // A month is "no services this month" only when BOTH projected
+                // and actual revenue are zero. Without the actualRevenue check,
+                // a month where operators served unprojected items (e.g. all
+                // flat-fee Coffee Service days) would mistakenly render as
+                // empty. Same actuals-first-class rule.
+                const noService = md && md.projectedRevenue === 0 && md.actualRevenue === 0 && md.totalDays > 0;
 
                 // Build mini calendar + day lookup
                 const mWeeks = getCalendarWeeks(year, mi);
