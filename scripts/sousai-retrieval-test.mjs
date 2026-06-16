@@ -26,6 +26,22 @@ import { embedTexts } from "../src/lib/sousai/embed.js";
 const TOP_N = 5;
 const PREVIEW_CHARS = 150;
 
+// pr-7-12 dropped the 2-arg match_document_chunks() overload; the function
+// now ALWAYS takes allowed_levels TEXT[] (NULL = no filter). The harness
+// reads ALLOWED_LEVELS from the env so each retrieval test can scope to a
+// tier without code edits:
+//   ALLOWED_LEVELS=unrestricted node ... (default operator viewer)
+//   ALLOWED_LEVELS=unrestricted,restricted,slt node ... (SLT viewer)
+//   ALLOWED_LEVELS= node ... (NULL / unfiltered, service-role only)
+// The default is 'unrestricted' so the harness matches the normal operator
+// scope and doesn't accidentally surface tier-restricted content to a test
+// run that didn't ask for it.
+const ALLOWED_LEVELS = (process.env.ALLOWED_LEVELS ?? "unrestricted")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const ALLOWED_LEVELS_ARG = ALLOWED_LEVELS.length > 0 ? ALLOWED_LEVELS : null;
+
 // Regression suite for retrieval at 8+ docs / 190+ chunks. Replaces the
 // preliminary 9-question set that validated retrieval at 4 docs - that
 // set proved retrieval works on the first corpus but didn't exercise
@@ -129,6 +145,7 @@ for (let i = 0; i < QUESTIONS.length; i++) {
   const { data, error } = await sb.rpc("match_document_chunks", {
     query_embedding: queryEmbedding,
     match_count: TOP_N,
+    allowed_levels: ALLOWED_LEVELS_ARG,
   });
 
   if (error) {

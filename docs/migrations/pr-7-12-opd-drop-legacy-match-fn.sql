@@ -1,0 +1,49 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- pr-7-12-opd-drop-legacy-match-fn.sql
+-- SousAI · drop the legacy 2-arg match_document_chunks() overload
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- pr-7-11-opd-access-level.sql added a 3-arg variant of match_document_chunks
+-- (query_embedding, match_count, allowed_levels TEXT[]) via CREATE OR REPLACE
+-- FUNCTION expecting that to replace the prior 2-arg version. Postgres treats
+-- different argument lists as DIFFERENT functions (CREATE OR REPLACE only
+-- replaces a function with the exact same signature), so what actually
+-- happened is the 3-arg variant was ADDED alongside the 2-arg legacy. The
+-- result is an overloaded name PostgREST can't disambiguate when callers
+-- omit allowed_levels:
+--
+--   "Could not choose the best candidate function between:
+--      match_document_chunks(query_embedding, match_count),
+--      match_document_chunks(query_embedding, match_count, allowed_levels)"
+--
+-- This migration drops the 2-arg signature so only the 3-arg version remains.
+-- Callers that previously omitted allowed_levels (the test harness) must now
+-- pass it explicitly. Default-NULL semantics in the function body mean an
+-- explicit `null` argument behaves identically to the pre-pr-7-11 unfiltered
+-- query, so it's a 1-line caller fix and no behavior change.
+--
+-- IDEMPOTENT:
+--   DROP FUNCTION IF EXISTS - safe to re-run.
+--
+-- ROLLBACK:
+--   Re-create the 2-arg legacy signature from pr-8-2-sousai-match-fn.sql:
+--     CREATE OR REPLACE FUNCTION match_document_chunks(
+--       query_embedding vector(1536),
+--       match_count int DEFAULT 5
+--     ) ... (full body from pr-8-2)
+--   Then both overloads coexist again and the ambiguity returns. The
+--   correct rollback is "fix the caller, don't restore the overload."
+--
+-- VERIFY (after apply):
+--   \df match_document_chunks
+--   -- expected: ONE function row, 3 arguments (query_embedding, match_count,
+--   -- allowed_levels). The 2-arg row is gone.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DROP FUNCTION IF EXISTS match_document_chunks(vector(1536), int);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- End pr-7-12. The test harness (scripts/sousai-retrieval-test.mjs) and any
+-- future caller must pass allowed_levels - either an explicit TEXT[] from
+-- opdAcl.allowedAccessLevels(viewerTier(email)) or NULL for unfiltered queries.
+-- ─────────────────────────────────────────────────────────────────────────────
