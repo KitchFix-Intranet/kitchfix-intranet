@@ -237,6 +237,7 @@ function resolveAndRender(doc, docsMap, facts) {
   return {
     html,
     content_hash,
+    lang: fm.lang || "en",
     factResolutions: r2.resolutions,
     includes: r1.includes,
     nonCanonicalCount: nc.count,
@@ -450,20 +451,133 @@ function valEq(a, b) {
   return false;
 }
 
-// ─── 6. Apply path (scaffolded, NOT executed in PR1) ────────────────────────
+// ─── 6. Apply path ──────────────────────────────────────────────────────────
 /**
- * Staging-then-swap apply plan. Builds a single Postgres transaction that:
- *   1. Creates staging tables (documents_staging, document_relationships_staging,
- *      document_surfaces_staging, document_content_staging).
- *   2. Inserts the full projected dataset into staging.
- *   3. In one transaction: TRUNCATE the destination tables (except documents,
- *      where archive_document RPC is called for the would-archive set so the
- *      existing-row archived flag flips atomically and any document_chunks
- *      are deleted - per pr-7-7 RPC contract), then COPY staging -> live.
- *   4. Validates row counts post-swap.
+ * Execute the projection plan against the live Postgres tables.
  *
- * This function returns the plan as a structured object; it does NOT execute.
- * Phase A3 (post-dry-run-review) is the PR that runs apply.
+ * SAFETY MODEL: A4 uses "logical staging" rather than true SQL CREATE TABLE
+ * staging tables (the Supabase REST client cannot run DDL). Each step is
+ * either idempotent (UPSERT-by-PK) or has a sub-second delete-then-insert
+ * swap window (relationships, surfaces - both small tables, ~370 + 10 rows).
+ * The local JSON backup captured pre-apply (.scratch/a4-backup/) is the
+ * rollback net if anything fails mid-swap.
+ *
+ * Step order matters for FK integrity:
+ *   1. UPSERT documents - brings new IDs into existence; preserves operator-
+ *      owned fields (source_drive_id, source_drive_id_es, pinned, archived,
+ *      archived_at, storage_path*, created_at) by omitting them from the
+ *      upsert payload (PostgREST UPDATE SET col=EXCLUDED.col only fires for
+ *      columns in the INSERT list).
+ *   2. Archive via archive_document RPC - flips archived=true AND deletes
+ *      document_chunks atomically per pr-7-7 contract.
+ *   3. Delete-then-insert document_relationships - all-or-nothing swap.
+ *   4. Delete-then-insert document_surfaces - same.
+ *   5. UPSERT document_content on (doc_id, lang) - by-PK idempotent.
+ *
+ * On any step failure: log the error, halt, return. The script does NOT
+ * try to auto-rollback. Manual rollback path is to restore from the
+ * pre-apply JSON backup.
+ */
+async function executeApply({ diff, render, corpus, supabaseUrl, supabaseKey }) {
+  const { createClient } = await import("@supabase/supabase-js");
+  const sb = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const log = { steps: [], ok: false, errors: [] };
+  const halt = (step, err) => {
+    log.errors.push({ step, msg: err?.message || String(err) });
+    return log;
+  };
+
+  // Build doc-id -> lang map from corpus (for content rows)
+  const langByDoc = {};
+  for (const d of corpus) {
+    if (d.id) langByDoc[d.id] = d.frontmatter?.lang || "en";
+  }
+
+  try {
+    // ── Step 1: UPSERT documents ────────────────────────────────────────────
+    const docRows = [
+      ...diff.docPlan.insert,
+      ...diff.docPlan.update.map((u) => u.row),
+    ];
+    console.log(`  [1/5] UPSERT documents: ${docRows.length} rows (${diff.docPlan.insert.length} insert + ${diff.docPlan.update.length} update)`);
+    if (docRows.length > 0) {
+      // Stamp updated_at; let schema defaults fire for created_at on inserts.
+      const stamped = docRows.map((r) => ({ ...r, updated_at: new Date().toISOString() }));
+      const { error } = await sb.from("documents").upsert(stamped, { onConflict: "id" });
+      if (error) return halt("documents_upsert", error);
+      log.steps.push({ step: "documents_upsert", count: docRows.length });
+    }
+
+    // ── Step 2: Archive (3 docs via archive_document RPC) ──────────────────
+    console.log(`  [2/5] Archive via archive_document RPC: ${diff.docPlan.archive.length} docs`);
+    for (const a of diff.docPlan.archive) {
+      const { data, error } = await sb.rpc("archive_document", { p_doc_id: a.id });
+      if (error) return halt(`archive_${a.id}`, error);
+      const row = data?.[0] || {};
+      log.steps.push({ step: "archive", id: a.id, chunks_deleted: row.chunks_deleted ?? 0 });
+      console.log(`    archived ${a.id} (chunks_deleted=${row.chunks_deleted ?? 0})`);
+    }
+
+    // ── Step 3: Replace document_relationships ─────────────────────────────
+    console.log(`  [3/5] Replace document_relationships (delete-all then insert ${diff.relPlan.length})`);
+    {
+      // Delete every row: filter on id NOT IS NULL (every row's id is UUID NOT NULL).
+      const { error: delErr } = await sb.from("document_relationships").delete().not("id", "is", null);
+      if (delErr) return halt("relationships_delete", delErr);
+      const relRows = diff.relPlan.map((r) => ({
+        from_doc: r.from_doc,
+        to_doc: r.to_doc,
+        rel_type: r.rel_type,
+      }));
+      if (relRows.length > 0) {
+        const { error: insErr } = await sb.from("document_relationships").insert(relRows);
+        if (insErr) return halt("relationships_insert", insErr);
+      }
+      log.steps.push({ step: "relationships_replace", count: relRows.length });
+    }
+
+    // ── Step 4: Replace document_surfaces ──────────────────────────────────
+    console.log(`  [4/5] Replace document_surfaces (delete-all then insert ${diff.surfPlan.length})`);
+    {
+      const { error: delErr } = await sb.from("document_surfaces").delete().not("id", "is", null);
+      if (delErr) return halt("surfaces_delete", delErr);
+      const surfRows = diff.surfPlan.map((s) => ({ doc_id: s.doc_id, surface: s.surface }));
+      if (surfRows.length > 0) {
+        const { error: insErr } = await sb.from("document_surfaces").insert(surfRows);
+        if (insErr) return halt("surfaces_insert", insErr);
+      }
+      log.steps.push({ step: "surfaces_replace", count: surfRows.length });
+    }
+
+    // ── Step 5: UPSERT document_content ────────────────────────────────────
+    const contentRows = render
+      .filter((r) => r.html && !r.render_error)
+      .map((r) => ({
+        doc_id: r.id,
+        lang: langByDoc[r.id] || r.lang || "en",
+        html: r.html,
+        content_hash: r.content_hash,
+        rendered_at: new Date().toISOString(),
+      }));
+    console.log(`  [5/5] UPSERT document_content: ${contentRows.length} rows`);
+    if (contentRows.length > 0) {
+      const { error } = await sb.from("document_content").upsert(contentRows, { onConflict: "doc_id,lang" });
+      if (error) return halt("content_upsert", error);
+      log.steps.push({ step: "content_upsert", count: contentRows.length });
+    }
+
+    log.ok = true;
+    return log;
+  } catch (e) {
+    return halt("uncaught", e);
+  }
+}
+
+/**
+ * Build a structured plan summary for the dry-run report. Does not execute.
  */
 function buildApplyPlan(diff, render) {
   return {
@@ -756,17 +870,7 @@ async function main() {
   const args = process.argv.slice(2);
   const mode = args.includes("--apply") ? "apply" : "dry-run";
 
-  if (mode === "apply") {
-    console.error("");
-    console.error("REFUSED - PR1 is dry-run only.");
-    console.error("Apply is scaffolded in code but is not executable in this PR.");
-    console.error("Review docs/opd/foundation/PROJECTION_DRYRUN.md, land Phase A1 migrations,");
-    console.error("then PR3 / Phase A3 executes the apply path.");
-    console.error("");
-    process.exit(2);
-  }
-
-  console.log("Phase A · MDX -> Postgres projection · dry-run");
+  console.log(`Phase A · MDX -> Postgres projection · ${mode}`);
   console.log("");
 
   // 1. Parse
@@ -808,7 +912,7 @@ async function main() {
   const applyPlan = buildApplyPlan(diff, render);
   console.log(`  ${diff.docPlan.insert.length} insert, ${diff.docPlan.update.length} update, ${diff.docPlan.archive.length} archive`);
 
-  // Write report + samples
+  // Write report + samples (both modes - dry-run report stays useful post-apply too)
   const reportPath = writeDryRunReport({ corpus, validation, diff, render, applyPlan, live });
   const samples = writeSampleHtml(renderById);
 
@@ -817,12 +921,46 @@ async function main() {
   console.log(`Dry-run report: ${reportPath.replace(REPO_ROOT + "/", "")}`);
   console.log(`Sample HTML:    ${samples.length} files in scripts/content/.dryrun-samples/`);
   console.log("──────────────────────────────────────────────────");
-  console.log("");
-  console.log("Apply path: built but NOT executed. PR3 runs apply after Kevin reviews this report.");
 
   if (validation.errors.length > 0) {
     console.log("");
-    console.log(`NOTE: ${validation.errors.length} validation errors. Fix in MDX before --apply runs.`);
+    console.log(`HALT: ${validation.errors.length} validation errors. Fix in MDX before --apply runs.`);
+    process.exit(1);
+  }
+
+  if (mode === "dry-run") {
+    console.log("");
+    console.log("Dry-run only. Run with --apply to write to Postgres.");
+    return;
+  }
+
+  // ── APPLY ─────────────────────────────────────────────────────────────────
+  console.log("");
+  console.log("══════════════════════════════════════════════════");
+  console.log("APPLY · writing to Postgres (production)");
+  console.log("══════════════════════════════════════════════════");
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required.");
+    process.exit(1);
+  }
+  const applyLog = await executeApply({
+    diff,
+    render,
+    corpus,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+  console.log("");
+  if (applyLog.ok) {
+    console.log("APPLY OK · all 5 steps complete");
+    for (const s of applyLog.steps) {
+      console.log(`  ${s.step}: ${JSON.stringify({ ...s, step: undefined })}`);
+    }
+  } else {
+    console.error("APPLY FAILED · halted on:");
+    for (const e of applyLog.errors) console.error(`  ${e.step}: ${e.msg}`);
+    console.error("");
+    console.error("Local JSON backup is in .scratch/a4-backup/ - manual rollback path.");
     process.exit(1);
   }
 }

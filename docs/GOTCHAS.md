@@ -43,6 +43,38 @@ Setting frozen rows/columns *before* a merge operation in the same `batchUpdate`
 
 ---
 
+## Postgres & OPD projection
+
+### Non-atomic projection swap (relationships + surfaces)
+
+The OPD projection's `--apply` (`scripts/content/project-catalog.mjs`) replaces `document_relationships` and `document_surfaces` via **delete-then-insert**, NOT a transaction. The Supabase REST / `supabase-js` client cannot do `BEGIN..COMMIT` or DDL, so there is no way to wrap the two calls in a single Postgres transaction from JS.
+
+If the delete succeeds and the immediately-following insert fails (network blip, schema CHECK violation, etc.), that table is left **empty** until a re-run. The window is sub-second, but it is real.
+
+**Recovery, in order of cheapness:**
+1. Re-run `--apply`. The diff recomputes from MDX and re-inserts the same row set.
+2. If re-run fails too (e.g. a CHECK constraint snuck in), restore from `.scratch/a4-backup/*-postapply-*.json` (the apply captures pre + post snapshots).
+
+**Future hardening:** move the swap into a Postgres function (RPC) that wraps the delete + insert in a transaction; then it's an `sb.rpc('replace_document_relationships', ...)` call from JS.
+
+### `archive_document` RPC re-archive behavior is unverified
+
+The projection's `computeDiff` skips already-archived docs:
+
+```js
+for (const row of live.documents) {
+  if (mdxIds.has(row.id)) continue;
+  if (row.archived) continue;   // <- already-archived rows skipped here
+  docPlan.archive.push({ id: row.id, ... });
+}
+```
+
+This means re-running `--apply` never re-calls `archive_document` on an already-archived doc, so the RPC's re-archive behavior has never been exercised by the projection. The pr-7-7 contract reads "atomic flip + chunks delete in one transaction"; whether the RPC errors or no-ops on a doc that is already `archived=true` is **not documented and not verified by the projection itself**.
+
+**Current risk: zero** - the diff logic prevents it. **Future risk:** if any future code path bypasses `computeDiff` and calls `archive_document` directly on an already-archived id, test the RPC's behavior first (call it once against a known-archived doc and inspect both the error path and the row state).
+
+---
+
 ## Time & Dates
 
 ### Vercel runs in UTC - date comparisons need normalization
@@ -340,3 +372,4 @@ Two Ops Hub modules - Inventory (legacy) and Invoice Capture - both use the `oh-
 
 - **2026-05-13** - Auth state from `storageState` is environment-scoped. NextAuth session cookies are domain-locked to the URL where login happened - a `user.json` generated against `localhost:3000` does NOT work when tests target `kitchfix-intranet.vercel.app`. The browser refuses to send cookies cross-domain, NextAuth sees no session, middleware bounces to `/login`. **Fix:** regenerate `tests/.auth/user.json` against the target environment using `PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app npm run test:e2e:setup -- --headed`. Cost: 30 minutes of CI failure debugging before realizing cookie domain was the issue. See `docs/TESTING.md` "Refreshing the auth state secret" for the full procedure.
 - **2026-05-13** - Three new entries from Phase 1 push day: (1) Drive API + shared drives requires `supportsAllDrives: true` - found while building `/api/cron/backup-sheets`. (2) `SHEET_IDS.INVENTORY` is an empty string footgun - real ID resolves from env var. (3) New "Git & Workflow" section with `git checkout -b` silent-failure recovery - committed to main by accident mid-bump, ~10 min recovery.
+- **2026-06-16** - Two entries surfaced during Phase A A4 (OPD projection executor) review: (1) projection swap is non-atomic - relationships + surfaces delete-then-insert can leave a table empty if the delete succeeds and the insert fails (Supabase REST has no `BEGIN..COMMIT`); local JSON backup is the rollback net. (2) `archive_document` re-archive behavior is unverified because the diff skips already-archived rows; not a current risk but worth knowing if future code bypasses the diff.
