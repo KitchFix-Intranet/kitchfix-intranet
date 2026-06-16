@@ -428,9 +428,12 @@ async function loadYearSummaryPostgres(accountKey, year) {
   throwOnError(daysRes.error,    "loadYearSummary.days");
 
   // Reduce the view rows to per-day status. Multiple services per
-  // (account, date) means we union: hasAct=true if ANY service row
-  // has actuals; allZeroProj=true if EVERY service projection is
-  // null or zero.
+  // (account, date) means we union: hasAct=true if ANY service row has
+  // actuals; anyNonZeroAct=true if ANY actual count is > 0. We classify
+  // from actuals (what was served), not from projections (what was
+  // planned). A day with all-zero projections but non-zero actuals -
+  // e.g. unexpected catering on a Battery Camp Sunday - is "entered",
+  // not "no-service".
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const lockCutoff = new Date(today);
@@ -443,14 +446,14 @@ async function loadYearSummaryPostgres(accountKey, year) {
       st = {
         date: r.service_date,
         hasAct: false,
-        anyNonZeroProj: false,
+        anyNonZeroAct: false,
         gameType: r.game_type || "",
       };
       dayState.set(r.service_date, st);
     }
     if (r.has_actuals) st.hasAct = true;
-    const pv = r.projected_count;
-    if (pv != null && Number(pv) > 0) st.anyNonZeroProj = true;
+    const av = r.actual_count;
+    if (av != null && Number(av) > 0) st.anyNonZeroAct = true;
     if (!st.gameType && r.game_type) st.gameType = r.game_type;
   }
 
@@ -458,7 +461,7 @@ async function loadYearSummaryPostgres(accountKey, year) {
     const d = new Date(s.date + "T12:00:00");
     const isPast = d < today;
     const isOverdue = d < lockCutoff;
-    if (s.hasAct && !s.anyNonZeroProj) return "no-service";
+    if (s.hasAct && !s.anyNonZeroAct) return "no-service";
     if (s.hasAct) return "entered";
     if (isPast && isOverdue) return "overdue";
     if (isPast) return "needs-entry";
