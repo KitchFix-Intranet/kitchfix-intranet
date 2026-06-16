@@ -406,6 +406,12 @@ function mdxToDocRow(fm) {
     next_review: null,
     is_historical: false,
     data_provenance: "batch_rebuild",
+    // pr-7-11: hierarchical access gate. Absent or null frontmatter ->
+    // 'unrestricted' (the schema NOT NULL DEFAULT also enforces this, but
+    // setting it explicitly here keeps the diff honest about what gets
+    // written and prevents the upsert from leaving it untouched on existing
+    // rows). Validator catches unknown values upstream.
+    access_level: fm.access_level || "unrestricted",
     // source_drive_id / source_drive_id_es preserved separately - projection
     // does NOT clobber them since they are operator/admin choices. The dry-run
     // report includes a NOTE about this.
@@ -421,7 +427,7 @@ function diffRow(existing, planned) {
     "title", "doc_class", "status", "version", "shelf", "card_line", "summary",
     "owner", "approver", "audience", "classification", "print_required", "critical",
     "sort_order", "effective_date", "last_reviewed", "next_review", "is_historical",
-    "data_provenance",
+    "data_provenance", "access_level",
   ];
   for (const f of fields) {
     if (planned[f] !== undefined && !valEq(existing[f], planned[f])) {

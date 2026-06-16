@@ -56,7 +56,14 @@
     "approver": { "type": ["string", "null"] },
     "audience": {
       "type": ["string", "null"],
-      "enum": ["operator", "corporate", "internal", null]
+      "enum": ["operator", "corporate", "internal", null],
+      "description": "Descriptive label only - not an access gate. The actual access gate is access_level."
+    },
+    "access_level": {
+      "type": ["string", "null"],
+      "enum": ["unrestricted", "restricted", "slt", null],
+      "default": "unrestricted",
+      "description": "Hierarchical access tier. unrestricted = all @kitchfix.com sessions; restricted = the Restricted + SLT groups; slt = SLT only. Null in frontmatter projects to 'unrestricted'. See pr-7-11."
     },
     "classification": {
       "type": "string",
