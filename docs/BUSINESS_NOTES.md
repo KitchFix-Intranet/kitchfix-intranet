@@ -21,6 +21,21 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 ## Account-level rules
 
+### Account types - PDC / MLB / MiLB + billing models
+
+**How our sites work**
+
+- **PDC (Player Development Complex)** - spring training and year-round training facilities. The biggest, busiest operations. Headcounts swing daily (50 one day, 240 the next) depending on who's in camp, the season phase, and which teams are on site.
+- **MLB (Major League Clubhouse)** - the kitchen inside the stadium for the home team during the regular season. Roughly 60-75 people eating the same three meals every game day. Predictable and consistent.
+- **MiLB (Minor League)** - like MLB but for the farm-system affiliates. Smaller operations, smaller rosters, shorter seasons.
+
+**How billing works** - every account is one of two billing models:
+
+- **Per-Meal Accounts (6): CIN-AZ, TXR-AZ, TBJ-FL, TBR-FL, TBJ-NY, CIN-KY.** You count the meals, we bill the client for what you counted. Counts multiplied by the per-plate price calculate the invoice (e.g. 75 lunches at $18.42 = $1,381.50). **The actuals ARE the billing data - if they aren't entered, we don't bill.**
+- **Fee Accounts (5): STL-FL, STL-MO, CIN-OH, TXR-TX-H, TXR-TX-V.** The client pays a set amount regardless of counts. Service-calendar projections are for operational planning (food prep, staffing) only; the bill does not change based on the numbers entered.
+
+> Note: the billing model is not yet encoded as an account flag in the system - it lives here as operational reference. Surfacing it in the data model / UI (so per-meal vs fee accounts can be treated differently where counts are entered) is a separate, unscoped thread.
+
 ### GL_CODES per-account tab structure
 - **What:** GL codes live in a separate Google Sheet (`SHEET_IDS.GL_CODES`) where each account has its own tab. The tab name is resolved via `getGLTabName(accountKey)`. Invoice submissions read the relevant tab to populate the GL code dropdown.
 - **Why:** Different accounts have different GL code structures (Cardinals chart of accounts differs from Rangers, etc.). Per-tab isolation prevents code-pollution and lets accounts manage their own GL structure independently.
