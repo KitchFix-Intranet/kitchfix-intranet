@@ -21,7 +21,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "@supabase/supabase-js";
-import { extractGoogleDoc } from "./extract.js";
+import { extractMdx } from "./extractMdx.js";
 import { chunkSections } from "./chunk.js";
 import { embedTexts } from "./embed.js";
 import { replaceChunksForDoc } from "./store.js";
@@ -36,17 +36,25 @@ import { replaceChunksForDoc } from "./store.js";
 export const SKIP_TEXT_EXTRACTION_CLASSES = ["POST"];
 
 /**
- * Embed one document end-to-end. Idempotent: re-running fully replaces
- * the existing chunks for (docId, language).
+ * Embed one document end-to-end from the MDX source of truth. Idempotent:
+ * re-running fully replaces the existing chunks for (docId, language).
+ *
+ * A5: ingestion source swapped from Drive Docs API to resolved MDX. The
+ * driveFileId parameter is gone; ingestion now reads
+ * content/documents/{docId}.mdx, runs it through the projection's resolver,
+ * and feeds the resulting {driveTitle, sections} to the same chunker the
+ * Drive path used. chunk.js, embed.js, store.js are unchanged.
  *
  * @param {object} opts
- * @param {string} opts.docId          document_chunks.doc_id - must exist in documents
- * @param {string} opts.driveFileId    Google Drive file ID for the Doc
+ * @param {string} opts.docId          document_chunks.doc_id - must exist in documents AND in content/documents/
  * @param {string} [opts.language]     defaults to "en"
+ * @param {object} [opts.docsMap]      corpus-level docsMap for Include resolution;
+ *                                     build once with extractMdx.buildDocsMap()
+ *                                     and pass through for corpus loops. If absent,
+ *                                     the extractor builds one on demand (slower).
  * @returns {Promise<{
  *   docId: string,
  *   docTitle: string,
- *   driveFileId: string,
  *   language: string,
  *   chunkingPath: 'structure-aware' | 'size-based-fallback',
  *   chunksReplaced: { deleted: number, inserted: number },
@@ -56,16 +64,15 @@ export const SKIP_TEXT_EXTRACTION_CLASSES = ["POST"];
  *   - documents.{id} doesn't exist (the FK on document_chunks.doc_id would
  *     fail at insert anyway; we surface the issue earlier with a clearer error)
  *   - documents.{id}.doc_class is in SKIP_TEXT_EXTRACTION_CLASSES (use
- *     embedPosterStub instead - a 0-section extraction from a poster PDF
- *     is harder to debug than a clear up-front error)
- *   - extraction fails (Drive permission, Doc API not enabled, etc)
+ *     embedPosterStub instead - posters get the meta-stub path)
+ *   - the MDX file doesn't exist at content/documents/{docId}.mdx
+ *   - extraction/resolution fails
  *   - embedding fails (OPENAI_API_KEY missing, 401, 429, dim mismatch)
  *   - the delete-then-insert step fails partway through (chunks may be in
  *     an inconsistent state - re-run to recover)
  */
-export async function embedDocument({ docId, driveFileId, language = "en" }) {
+export async function embedDocument({ docId, language = "en", docsMap }) {
   if (!docId) throw new Error("embedDocument: docId is required");
-  if (!driveFileId) throw new Error("embedDocument: driveFileId is required");
 
   const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -75,8 +82,8 @@ export async function embedDocument({ docId, driveFileId, language = "en" }) {
 
   // ── 1. Resolve canonical title + class guard from the catalog ────────────
   // documents.title is the operator-facing citation text Sous will surface
-  // (e.g. "Allergen Playbook"), not the Drive filename. The chunker uses
-  // this on every chunk's contextual header.
+  // (e.g. "Allergen Playbook"). The chunker uses this on every chunk's
+  // contextual header.
   //
   // doc_class is pulled for the SKIP_TEXT_EXTRACTION_CLASSES guard - posters
   // route through embedPosterStub, not text extraction.
@@ -97,8 +104,8 @@ export async function embedDocument({ docId, driveFileId, language = "en" }) {
   }
   const docTitle = docRow.title;
 
-  // ── 2. Extract ────────────────────────────────────────────────────────────
-  const extracted = await extractGoogleDoc(driveFileId);
+  // ── 2. Extract from MDX (A5: was Drive Docs API) ─────────────────────────
+  const extracted = await extractMdx(docId, { docsMap });
 
   // ── 3. Chunk ──────────────────────────────────────────────────────────────
   const { path, chunks } = chunkSections(extracted, {
@@ -141,7 +148,6 @@ export async function embedDocument({ docId, driveFileId, language = "en" }) {
   return {
     docId,
     docTitle,
-    driveFileId,
     language,
     chunkingPath: path,
     chunksReplaced,
@@ -299,7 +305,7 @@ export async function restoreDocument({ docId }) {
 
   const { data: docRow, error: docErr } = await supabase
     .from("documents")
-    .select("id, title, doc_class, source_drive_id, archived")
+    .select("id, title, doc_class, archived")
     .eq("id", docId)
     .single();
   if (docErr || !docRow) {
@@ -317,13 +323,22 @@ export async function restoreDocument({ docId }) {
     const r = await embedPosterStub({ docId });
     chunksInserted = r.chunksReplaced.inserted;
     restorePath = "poster-stub";
-  } else if (docRow.source_drive_id) {
-    const r = await embedDocument({ docId, driveFileId: docRow.source_drive_id });
-    chunksInserted = r.chunksReplaced.inserted;
-    restorePath = "full-extract";
   } else {
-    chunksInserted = 0;
-    restorePath = "no-content";
+    // A5: MDX is the source. Try the embed; if the MDX file is missing
+    // (e.g. an archived LEGACY-* row that was never part of the foundation),
+    // fall through to 'no-content' rather than failing the restore.
+    try {
+      const r = await embedDocument({ docId });
+      chunksInserted = r.chunksReplaced.inserted;
+      restorePath = "full-extract";
+    } catch (e) {
+      if (/not found/i.test(e.message || "")) {
+        chunksInserted = 0;
+        restorePath = "no-content";
+      } else {
+        throw e;
+      }
+    }
   }
 
   const { error: updateErr } = await supabase
