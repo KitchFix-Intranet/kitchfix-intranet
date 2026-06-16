@@ -1278,6 +1278,103 @@
 }
 .pb-no-file p { font-size: 12px; line-height: 1.5; margin: 0; max-width: 280px; }
 
+/* ─── Phase A3: rendered HTML body (document_content) ──────────────────────
+   Used when the projection has populated document_content for a doc. The
+   reader-frame holds this scrollable body instead of the Drive iframe.
+   Body headings are deliberately styled below .pb-slide-title (19px navy
+   bold) so the reader's own doc-title remains the page-level header and the
+   body's "# 01 ..." reads as the first section under it - not a competing
+   title. Drive iframe styling is untouched. */
+.pb-reader-html {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 22px 28px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #1f2937;
+  background: white;
+}
+.pb-reader-html h1 {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--kf-navy);
+  margin: 22px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--kf-border);
+}
+.pb-reader-html h1:first-child { margin-top: 0; }
+.pb-reader-html h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+  margin: 18px 0 6px;
+}
+.pb-reader-html h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin: 14px 0 4px;
+}
+.pb-reader-html p { margin: 8px 0; }
+.pb-reader-html ul, .pb-reader-html ol { margin: 8px 0 8px 22px; padding: 0; }
+.pb-reader-html li { margin: 3px 0; }
+.pb-reader-html code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.pb-reader-html pre {
+  background: #f8fafc;
+  border: 1px solid var(--kf-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+.pb-reader-html pre code { background: transparent; padding: 0; }
+.pb-reader-html a { color: var(--kf-playbook-teal); text-decoration: underline; }
+.pb-reader-html hr { border: 0; border-top: 1px solid var(--kf-border); margin: 16px 0; }
+.pb-reader-html table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 13px;
+  width: 100%;
+}
+.pb-reader-html th, .pb-reader-html td {
+  border: 1px solid var(--kf-border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.pb-reader-html th { background: #f4f6f8; font-weight: 700; }
+.pb-reader-html blockquote {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 4px solid #94a3b8;
+  background: #f8fafc;
+  border-radius: 0 6px 6px 0;
+}
+.pb-reader-html blockquote.callout-anchor   { border-left-color: var(--kf-navy); background: #eef2f7; }
+.pb-reader-html blockquote.callout-note     { border-left-color: #2563eb; background: #eff6ff; }
+.pb-reader-html blockquote.callout-critical { border-left-color: #b91c1c; background: #fef2f2; }
+.pb-reader-html blockquote.callout-warning  { border-left-color: #d97706; background: #fffbeb; }
+.pb-reader-html blockquote.callout-tip      { border-left-color: #059669; background: #ecfdf5; }
+
+/* Phase A3 minimal full-view: lifts the reader-frame's max-height cap so
+   the rendered body can extend down. Phase B replaces with a real modal /
+   dedicated route. Drive iframe mode never uses this (it has its own
+   Open-in-Drive external escape). */
+.pb-reader-frame--fullview {
+  max-height: none;
+  aspect-ratio: auto;
+  min-height: 70vh;
+}
+
 /* ─── Slide-over action row ──────────────────────────────────────────────── */
 .pb-slide-actions {
   display: flex;

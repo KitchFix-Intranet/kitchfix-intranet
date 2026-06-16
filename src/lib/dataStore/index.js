@@ -139,9 +139,12 @@ export {
 // pr-7-9 added document_pins as an overlay for pinned state; setPinned /
 // clearPinned write to it directly. Reads source pinned from the overlay
 // via decoratePinned (internal to listDocuments / getDocument).
+// pr-7-10 added document_content as the rendered-HTML store; getDocumentContent
+// reads it (returns null when no row exists - reader falls back to Drive iframe).
 export {
   listDocuments,
   getDocument,
+  getDocumentContent,
   getRelationships,
   getSurfaces,
   getDocumentsForSurface,
