@@ -162,15 +162,29 @@ export default function ServiceCalendar({ showToast, session }) {
     return { meals, revenue: rev };
   }, [priceLookup]);
 
+  // P0-2: returns the API result ({ success, error? }) so DayDetail's
+  // executeSave can gate the success screen on a confirmed write. Empty
+  // entries are guarded upstream (DayDetail won't even call onSave).
   const handleSave = useCallback(async (day, entries) => {
-    if (!data?.account) return; setSaving(true);
+    if (!data?.account) return { success: false, error: "No account loaded" };
+    setSaving(true);
     try {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
       const result = await res.json();
-      if (result.success) { showToast(`Actuals saved for ${day.date}`, "success"); setReloadKey(k => k + 1); }
-      else showToast(result.error || "Save failed", "error");
-    } catch { showToast("Network error", "error"); } finally { setSaving(false); }
+      if (result.success) {
+        showToast(`Actuals saved for ${day.date}`, "success");
+        setReloadKey(k => k + 1);
+        return result;
+      }
+      showToast(result.error || "Save failed", "error");
+      return result;
+    } catch {
+      showToast("Network error", "error");
+      return { success: false, error: "Network error" };
+    } finally {
+      setSaving(false);
+    }
   }, [data, showToast]);
 
   const handleConfirmAsProjected = useCallback(async (day) => {
@@ -189,12 +203,21 @@ export default function ServiceCalendar({ showToast, session }) {
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
+    // P0-1: only include services where the chef actually typed a value.
+    // An untouched bulk input means "leave this service alone for each day"
+    // - we must NOT write 0 to it (would zero out existing actuals).
     const entries = [];
     for (const g of data.serviceGroups) {
       for (const s of g.services) {
         const val = bulkValues[s.colIndex];
-        entries.push({ colIndex: s.colIndex, value: val !== undefined && val !== "" ? Number(val) : 0 });
+        if (val !== undefined && val !== "") {
+          entries.push({ colIndex: s.colIndex, value: Number(val) });
+        }
       }
+    }
+    if (entries.length === 0) {
+      showToast("Enter at least one value before bulk saving", "error");
+      return;
     }
     setSaving(true);
     let successCount = 0;

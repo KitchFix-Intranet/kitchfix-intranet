@@ -106,25 +106,49 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   const hasTouchedAny = touched.size > 0;
 
-  const executeSave = useCallback(() => {
+  const executeSave = useCallback(async () => {
+    // P0-1: ONLY send touched services. Untouched services are preserved
+    // by the orchestrator (no row written = existing PG row left alone).
+    // Saving with no touched fields is a no-op; the Save button is already
+    // disabled in that case via hasTouchedAny.
     const entries = [];
     for (const g of serviceGroups) {
-      for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: getVal(s.colIndex) }); }
+      for (const s of g.services) {
+        if (touched.has(s.colIndex)) {
+          entries.push({ colIndex: s.colIndex, value: getVal(s.colIndex) });
+        }
+      }
     }
-    onSave(day, entries);
-    setShowReview(null);
-    setJustSaved(true);
-  }, [serviceGroups, getVal, day, onSave]);
+    if (entries.length === 0) {
+      setShowReview(null);
+      return;
+    }
+    // P0-2: await the save before showing the success screen. If the
+    // request fails (toast shown by handleSave), keep the review modal
+    // open so the chef can retry without losing what they typed.
+    const result = await onSave(day, entries);
+    if (result?.success) {
+      setShowReview(null);
+      setJustSaved(true);
+    }
+  }, [serviceGroups, touched, getVal, day, onSave]);
 
-  const executeConfirmAll = useCallback(() => {
-    // Fill all with projections then save
+  const executeConfirmAll = useCallback(async () => {
+    // User explicitly chose "All match projections" - intent is to apply
+    // the projection value to every service. Send every service, including
+    // those with projection=0 (records "no service occurred" intentionally).
     const entries = [];
     for (const g of serviceGroups) {
-      for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); }
+      for (const s of g.services) {
+        entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
+      }
     }
-    onSave(day, entries);
-    setShowReview(null);
-    setJustSaved(true);
+    // P0-2: same await + success-gate as executeSave.
+    const result = await onSave(day, entries);
+    if (result?.success) {
+      setShowReview(null);
+      setJustSaved(true);
+    }
   }, [serviceGroups, day, onSave]);
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
@@ -180,14 +204,18 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           </div>
           <div className="sc-day-review-body">
             {serviceGroups.map(group => {
+              // P0-1 review surface: regular save shows ONLY services the
+              // chef touched (intentional 0 included). Confirm-all keeps the
+              // "services with projections > 0" filter since that's the
+              // intent of that flow.
               const svcs = group.services.filter(s => {
                 if (isConfirmAll) return (day.projected[s.colIndex] ?? 0) > 0;
-                return getVal(s.colIndex) > 0;
+                return touched.has(s.colIndex);
               });
               if (svcs.length === 0) return null;
               const gs = isConfirmAll
                 ? { meals: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0), 0), revenue: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0) * sv.price, 0) }
-                : groupSummary(group);
+                : { meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0), revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0) };
               return (
                 <div key={group.name} className="sc-day-review-group">
                   <div className="sc-day-review-group-name">{group.name} · {fmtPrice(group.services[0]?.price || 0)}/plate</div>
