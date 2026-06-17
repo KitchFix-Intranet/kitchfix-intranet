@@ -748,6 +748,53 @@
   color: #085041;
 }
 
+/* ════════════════════════════════════════════════════════════════
+   MiLB HYBRID MODE — per-meal mechanics (revenue, urgency, actuals
+   required) with schedule rhythm overlay (DAY/NIGHT border accent
+   set inline; OFF days recess visually so game days pop). Triggered
+   by data-category="MiLB" on sc-root (AAA + MILB level accounts).
+   Per-meal mechanics inherited unchanged from the default cascade;
+   these rules only add the schedule-aware polish.
+   ════════════════════════════════════════════════════════════════ */
+
+/* OFF days recede: paler bg, shorter tile, drop the redundant
+   "No service" text and the "—" em-dash badge. The OFF label
+   in .sc-tile-game already says everything needed. */
+[data-category="MiLB"] .sc-tile--no-service {
+  background: #f9fafb;
+  min-height: 56px;
+}
+[data-category="MiLB"] .sc-tile--no-service .sc-tile-noservice { display: none; }
+[data-category="MiLB"] .sc-tile--no-service .sc-badge { display: none; }
+[data-category="MiLB"] .sc-tile--no-service .sc-tile-game {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Game-day tiles: meals count and revenue typography bumped so the
+   active homestand week reads as the main event. Status urgency
+   (overdue/needs-entry bg + badge) inherited from per-meal cascade. */
+[data-category="MiLB"] .sc-tile--active:not(.sc-tile--no-service) .sc-tile-meals {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+[data-category="MiLB"] .sc-tile-rev--actual {
+  color: #064e3b;                       /* darker green - billing actual */
+  font-weight: 700;
+}
+[data-category="MiLB"] .sc-tile-rev--projected {
+  color: #475569;                       /* readable dark grey - estimate */
+}
+
+/* DAY/NIGHT game-type label gets a small visual lift: heavier weight
+   + slight letterspacing, color hint that pairs with the border. */
+[data-category="MiLB"] .sc-tile--active:not(.sc-tile--no-service) .sc-tile-game {
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.06em;
+}
+
 /* Card stats */
 .sc-year-card-stats { display: flex; justify-content: space-between; font-size: var(--type-caption); color: #6b7280; margin-bottom: var(--space-1); }
 .sc-year-card-rev { font-weight: 600; color: #9ca3af; }

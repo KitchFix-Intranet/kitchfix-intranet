@@ -159,6 +159,13 @@ export default function ServiceCalendar({ showToast, session }) {
     data?.account?.billingModel === "flat_fee" && !!data?.homestandMap;
   const homestandMap = data?.homestandMap || {};
 
+  // MiLB hybrid: per-meal mechanics + schedule rhythm. Game-day rhythm
+  // surfaces via DAY/NIGHT border accent; OFF days recess visually so
+  // the active homestand week pops. Out-of-season month cards show a
+  // neutral caption instead of "0/0 entered $0" which reads as a failure
+  // state for months that aren't expected to have data.
+  const isMilb = data?.account?.category === "MiLB";
+
   // Fee-account metrics: count game-day completion + identify the
   // homestand the month is sitting in. Only computed when isFeeAccount;
   // ignored for per-meal display.
@@ -404,7 +411,7 @@ export default function ServiceCalendar({ showToast, session }) {
   };
 
   return (
-    <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"}>
+    <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <div className="sc-card">
         <div className="sc-header">
           <div className="sc-header-account">
@@ -559,17 +566,29 @@ export default function ServiceCalendar({ showToast, session }) {
                           // shows "here's your season at a glance", not
                           // "here's everything you're behind on". Per-meal
                           // keeps the original entered/overdue/needs logic.
+                          const gameType = dd.meta?.gameType || "";
+
                           let borderColor;
                           if (isFeeAccount) {
                             if (status === "off-season") borderColor = "transparent";
                             else if (status === "prep") borderColor = "#cbd5e1";   // very muted prep
                             else if (status === "entered") borderColor = GREEN;     // operator logged
                             else borderColor = "#1e3a8a";                            // navy game day schedule
+                          } else if (isMilb) {
+                            // MiLB hybrid: border-left encodes the schedule
+                            // rhythm (DAY game = warm amber, NIGHT game = navy,
+                            // OFF day = receded grey). Urgency still surfaces
+                            // through the tile bg + status badge so operators
+                            // see what needs entering.
+                            const gt = (gameType || "").toLowerCase();
+                            if (status === "no-service") borderColor = "#e5e7eb";    // off day, recede
+                            else if (gt.includes("day")) borderColor = "#fbbf24";    // amber - day game
+                            else if (gt.includes("night")) borderColor = "#1e3a8a";  // navy - night game
+                            else borderColor = "#94a3b8";                            // unknown / unscheduled
                           } else {
                             borderColor = status === "entered" || status === "no-service" ? GREEN : status === "overdue" ? RED : status === "needs-entry" ? AMBER : "#e5e7eb";
                           }
                           const bg = isBulkSelected ? "#E1F5EE" : status === "overdue" ? "#fef2f2" : status === "needs-entry" ? "#fffbeb" : isFocused ? "#f0fdf4" : "#fff";
-                          const gameType = dd.meta?.gameType || "";
 
                           // Fee account: off-season days render as
                           // unclickable off tiles (no homestand activity).
@@ -588,7 +607,7 @@ export default function ServiceCalendar({ showToast, session }) {
 
                           return (
                             <div key={di}
-                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""}`}
+                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""}`}
                               style={{ borderLeftColor: borderColor, background: bg }}
                               onClick={handleTileClick}>
                               <div className="sc-tile-top">
@@ -721,9 +740,15 @@ export default function ServiceCalendar({ showToast, session }) {
                 // pre-aggregated homestandSummary is missing or empty.
                 // Per-meal account: "no services" requires both rev =0.
                 const hs = md?.homestandSummary;
+                // MiLB out-of-season months have totalDays === 0 (no
+                // schedule rows for that month). "0/0 entered $0" reads
+                // as a 100% failure state; replace with a neutral
+                // "Out of season" caption instead.
                 const noService = isFeeAccount
                   ? !hs || (hs.gameDays === 0 && hs.prepDays === 0)
-                  : (md && md.projectedRevenue === 0 && md.actualRevenue === 0 && md.totalDays > 0);
+                  : isMilb
+                    ? !md || md.totalDays === 0
+                    : (md && md.projectedRevenue === 0 && md.actualRevenue === 0 && md.totalDays > 0);
 
                 // Build mini calendar + day lookup
                 const mWeeks = getCalendarWeeks(year, mi);
@@ -798,7 +823,7 @@ export default function ServiceCalendar({ showToast, session }) {
                     </div>
 
                     {noService ? (
-                      <div className="sc-year-card-noservice">{isFeeAccount ? "No homestands this month" : "No services this month"}</div>
+                      <div className="sc-year-card-noservice">{isFeeAccount ? "No homestands this month" : isMilb ? "Out of season" : "No services this month"}</div>
                     ) : isFeeAccount ? (
                       <>
                         <div className="sc-year-card-stats">
