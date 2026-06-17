@@ -47,7 +47,7 @@ relationships:
   - { to: STD-004, type: references, from_section: "section 13 sub-standard" }
 ---
 
-# 01 Purpose and Scope
+# Purpose and Scope
 
 This Standard defines the format for every KitchFix internal document. Operations, HR, culinary, finance, leadership - same rules, same look, same behavior.
 
@@ -85,7 +85,7 @@ Three registers fall outside this Standard. Each will be governed by a sub-stand
 - Memos, emails, Slack-formatted communications - STD-003 Internal Communication Standard pending.
 - External-facing materials - client decks, sales, marketing - governed by external brand standards.
 
-# 02 Document Classification System
+# Document Classification System
 
 *(Unchanged from v1.1.)*
 
@@ -106,7 +106,7 @@ Every document has a class. The class determines required elements, approval cha
 
 Format: [CODE]-[NUMBER]. Numbers are assigned sequentially within each class by the document owner. Numbers are never reused.
 
-# 03 Page Architecture
+# Page Architecture
 
 *(Print rendering. Screen architecture in 3.2.)*
 
@@ -131,7 +131,7 @@ The screen reader renders the same document as a single continuous reading colum
 
 The screen and print share **everything below the page-architecture layer** - type, color, callouts, tables, hierarchy are identical. Page architecture is the one layer that legitimately differs by medium.
 
-# 04 Typography Hierarchy
+# Typography Hierarchy
 
 > **[CHANGED v1.2] This is the core change in v1.2.** The type system is now **Oswald (display) + Inter (body)**, applied identically across screen and print. v1.1 specified Mulish for body; the screen reader never used Mulish (it used Inter), so the Standard and the live screen diverged from day one. v1.2 resolves the divergence by making **Inter the body face for both renderings** - so screen and print are one consistent system - while keeping **Oswald as the display face** for cover titles and section headings, which carries the brand character that a generic body face alone would not.
 
@@ -198,7 +198,7 @@ The screen and print share **everything below the page-architecture layer** - ty
 | H3 | 0.5pt faint sky-blue rule beneath | Theme |
 | SubHead | No rule | Color and weight do the work |
 
-# 05 Color Palette and Usage Rules
+# Color Palette and Usage Rules
 
 *(Unchanged from v1.1. The palette is locked - PFS brand colors only.)*
 
@@ -220,7 +220,7 @@ The screen and print share **everything below the page-architecture layer** - ty
 | Cover Hairline | #D0D7E2 | Cover metadata row rules |
 | Link | #153968 | Hyperlink text - navy, underlined |
 
-# 06 Logos and Brand Marks
+# Logos and Brand Marks
 
 *(Unchanged. [CONFIRMED v1.2] Cover uses the **Vertical** Navy mark.)*
 
@@ -230,7 +230,7 @@ The document **cover** uses the **Vertical Navy** mark.
 
 > ANCHOR: The logo is the brand mark. Operators inside our facilities, clients receiving our documents, players walking through our dining rooms - all recognize the brand at a glance through the logo.
 
-# 07 Banners and Callouts
+# Banners and Callouts
 
 *(Unchanged from v1.1. Four emphasis devices, each a different rule weight. Use sparingly. They render identically on screen and print - colored fills must print, not just borders.)*
 
@@ -240,13 +240,13 @@ The document **cover** uses the **Vertical Navy** mark.
 - **7.4 Note Callout** - Gray-tinted (#EEF6F8), label "NOTE" Dark Gray. Operational notes, definitions, context. No limit.
 - **7.5 Page-break behavior (print)** - callouts never split across a page break; they stay whole.
 
-# 08 Tables
+# Tables
 
 *(Unchanged in intent; Word-specific "DXA widths" language retired.)*
 
 Three standard formats: Reference Table (comparison data), SOP Process Table (sequential steps), RACI Table (accountability mapping). All use 1pt #CCCCCC borders and a Navy header-row fill with white text. Long tables may use Note-Gray zebra rows.
 
-# 09 Cross-References and Linking
+# Cross-References and Linking
 
 *(Unchanged in intent. [CHANGED v1.2] Related Documents now renders from frontmatter.)*
 
@@ -254,7 +254,7 @@ Every cross-reference uses the Document ID, not "this link" or "the document we 
 
 **[CHANGED v1.2]** Every document ends with a **Related Documents** block. It is **rendered automatically from the document's frontmatter `relationships`** (ID, title, and relationship type), not authored by hand - so it stays accurate as relationships change.
 
-# 10 Naming, Versioning and Lifecycle
+# Naming, Versioning and Lifecycle
 
 ## [CHANGED v1.2] Source and output
 
@@ -286,7 +286,7 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 
 *(Unchanged.)* Annual (most), Quarterly (high-change), Per-event (AGR).
 
-# 11 Approval and Review Chain
+# Approval and Review Chain
 
 *(Unchanged from v1.1.)*
 
@@ -301,7 +301,7 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 | CHK | Senior Director of Operations | Theme owner + end-user pilot |
 | REF | Senior Director of Operations | Theme owner |
 
-# 12 Document Anatomy by Class
+# Document Anatomy by Class
 
 *(Unchanged from v1.1. Universal skeleton + class-specific add-ons. These are the minimal per-class differences.)*
 
@@ -329,7 +329,7 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 
 The TOC is **generated automatically** from the document's H1 section titles (H1 only - not sub-sections), with page numbers. It appears on documents over 10 pages and where the class requires it (above). On screen, an optional in-page section list may stand in for the TOC.
 
-# 13 Out of Scope - Sub-Standards
+# Out of Scope - Sub-Standards
 
 *(Unchanged.)*
 
@@ -337,7 +337,7 @@ The TOC is **generated automatically** from the document's H1 section titles (H1
 - **STD-003 Internal Communication Standard** - memos, emails, Slack. Pending.
 - **STD-004 Documentation Repository Standard** - frontmatter schema and repo structure. In review.
 
-# 14 Approval
+# Approval
 
 This Standard is itself an STD-class document. Its approval chain follows Section 11.
 
