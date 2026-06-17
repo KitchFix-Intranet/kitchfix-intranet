@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { formatCompactDollar } from "@/lib/opsUtils";
 
 const INVOICE_ADMIN_USERS = [
   "k.fietek@kitchfix.com",
@@ -13,6 +12,12 @@ const INVOICE_ADMIN_USERS = [
 ];
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCompactDollar = (v) => {
+  const n = Math.abs(Number(v) || 0);
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + Math.round(n);
+};
 const REASON_CHIPS = ["Invoice #", "Date", "Total", "GL codes", "Wrong vendor", "Bad scan", "Duplicate"];
 
 export function isInvoiceAdmin(email) {

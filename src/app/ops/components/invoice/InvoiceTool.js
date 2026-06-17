@@ -3,9 +3,14 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import GLCodeTable from "@/app/ops/components/invoice/GLCodeTable";
 import VendorSetup from "@/app/ops/components/invoice/VendorSetup";
 import InvoiceAdmin, { isInvoiceAdmin } from "@/app/ops/components/invoice/InvoiceAdmin";
-import { formatCompactDollar } from "@/lib/opsUtils";
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCompactDollar = (v) => {
+  const n = Math.abs(Number(v) || 0);
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + Math.round(n);
+};
 
 const LAST_ACCT_KEY = "kf_inv_last_account";
 const QUEUE_KEY = "kf_invoice_offline_queue";
