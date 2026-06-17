@@ -730,7 +730,7 @@ export default function ServiceCalendar({ showToast, session }) {
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Future</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future-service" />Upcoming service</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
                 </>
               )}
@@ -803,15 +803,21 @@ export default function ServiceCalendar({ showToast, session }) {
                             // type ring overlay - homestand dayType is
                             // already encoded in the status (prep) and
                             // border is added via attribute selector.
+                            // TODAY indicator: amber ring on the day-of dot, applied
+                            // to every account mode (fee/MiLB/per-meal). Renders as
+                            // an extra class on top of the status color.
+                            const isTodayDot = dk === today;
+                            const todayClass = isTodayDot ? "sc-dot--today" : "";
+
                             if (isFeeAccount) {
                               // In-month days with no homestand schedule entry
                               // (and no projection/actual data) render as grey
                               // blocks like the explicit off-season days, so
                               // empty months read as a full calendar grid
                               // instead of a blank stencil.
-                              if (!dayInfo) return <div key={di} className="sc-dot sc-dot--off-season" />;
-                              if (dayInfo.status === "off-season") return <div key={di} className="sc-dot sc-dot--off-season" />;
-                              return <div key={di} className={`sc-dot sc-dot--${dayInfo.status}`} />;
+                              if (!dayInfo) return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} />;
+                              if (dayInfo.status === "off-season") return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} />;
+                              return <div key={di} className={`sc-dot sc-dot--${dayInfo.status} ${todayClass}`} />;
                             }
 
                             // Universal: in-month days without homestand/projection/
@@ -819,26 +825,31 @@ export default function ServiceCalendar({ showToast, session }) {
                             // weekday vs weekend. Completes the calendar grid - was
                             // missing Sat/Sun dots before.
                             if (!dayInfo) {
-                              return <div key={di} className="sc-dot sc-dot--off-day" />;
+                              return <div key={di} className={`sc-dot sc-dot--off-day ${todayClass}`} />;
                             }
                             const gameType = dayInfo?.gameType?.toLowerCase() || "";
 
-                            // MiLB: future days with a scheduled game type (DAY or
-                            // NIGHT) get a distinct "upcoming-game" color so they
-                            // visually separate from unscheduled future off-days.
-                            // Plain "future" off-days stay grey.
+                            // Status remap for future days:
+                            //   - MiLB with scheduled gameType (DAY/NIGHT) -> "upcoming-game" (sky blue)
+                            //   - Per-meal (PDC + STL-FL fallback) -> "future-service" (light green),
+                            //     so the upcoming service schedule reads as a separate signal from
+                            //     off-days without data.
+                            // Fee accounts are handled above; MiLB OFF and per-meal off days
+                            // (without dayInfo) already render as grey via earlier branches.
                             let resolvedStatus = dayInfo.status;
                             if (isMilb && dayInfo.status === "future" &&
                                 (gameType.includes("day") || gameType.includes("night")) &&
                                 gameType !== "off") {
                               resolvedStatus = "upcoming-game";
+                            } else if (!isFeeAccount && !isMilb && dayInfo.status === "future") {
+                              resolvedStatus = "future-service";
                             }
 
                             let gameClass = "";
                             if (gameType.includes("home")) gameClass = "sc-dot--home";
                             else if (gameType.includes("away")) gameClass = "sc-dot--away";
                             else if (gameType === "off") gameClass = "sc-dot--day-off";
-                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass}`} />;
+                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass} ${todayClass}`} />;
                           })}
                         </div>
                       ))}
