@@ -82,16 +82,33 @@
 .pb-stub-email strong { color: var(--kf-navy); font-weight: 700; }
 
 /* ─── Hero band ─────────────────────────────────────────────────────────── */
-/* PR 7.3 Batch A item 3 — tightened ~25% so documents reach above the fold
-   faster. Was 28/22 mobile, 36/28 desktop; now 20/14 mobile, 24/18 desktop. */
+/* A6: hero now uses the .kf-hero-bg + .kf-hero-overlay sibling-page pattern
+   (same as home, Directory, Service Calendar, Financial). The image is picked
+   server-side from the hero_images PG pool. The two absolute layers (bg
+   image + glass overlay) sit underneath .pb-hero-content via z-index.
+   The teal bottom rule stays as the brand accent. */
 .pb-hero {
-  background: linear-gradient(135deg, var(--kf-navy) 0%, #1a4580 100%);
+  background: var(--kf-navy);
   border-radius: 20px;
   padding: 20px 20px 14px;
   margin-bottom: 16px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(15, 48, 87, 0.15);
+  min-height: 200px;
+}
+.pb-hero-bg {
+  /* Inherits .kf-hero-bg from globals.css (position absolute, cover, z 0).
+     The pb-hero-bg class is a hook to override z-index inside the rounded
+     hero (the global rule lives in z 0 which we keep). */
+  border-radius: 20px;
+}
+.pb-hero-overlay {
+  /* Inherits .kf-hero-overlay - same dark-blue gradient + tint variants. */
+  border-radius: 20px;
+  /* Slight tightening of the gradient so text contrast over photos stays
+     comfortably above 4.5:1 even on bright kitchen photography. */
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(15, 23, 42, 0.88) 100%);
 }
 .pb-hero::after {
   content: '';
@@ -99,8 +116,12 @@
   left: 0; right: 0; bottom: 0;
   height: 3px;
   background: var(--kf-playbook-teal);
+  z-index: 2;
 }
-.pb-hero-content { position: relative; z-index: 1; }
+.pb-hero-content {
+  position: relative;
+  z-index: 2;
+}
 .pb-hero-tag {
   font-family: 'Inter', sans-serif;
   font-size: 26px;
@@ -110,13 +131,24 @@
   letter-spacing: -0.4px;
 }
 .pb-hero-sub {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 13px;
   line-height: 1.4;
   margin: 0 0 12px;
   max-width: 560px;
 }
-.pb-ask-bar {
+
+/* ─── Hero search row + Ask SousAI button (A6) ──────────────────────────── */
+/* Search bar + Ask SousAI button side-by-side. On mobile the row stacks so
+   the Ask button is a full-width second control under the search bar,
+   keeping both at floor-friendly tap targets. */
+.pb-search-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.pb-search-bar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -124,38 +156,72 @@
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  flex: 1 1 240px;
+  min-width: 0;
 }
-.pb-ask-bar svg { color: var(--kf-playbook-teal); flex-shrink: 0; }
-.pb-ask-input {
+.pb-search-bar svg { color: var(--kf-playbook-teal); flex-shrink: 0; }
+.pb-search-input {
   flex: 1;
   border: none;
   outline: none;
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   color: var(--kf-navy);
   background: transparent;
   min-width: 0;
 }
-.pb-ask-input::placeholder { color: #6B7785; }
-.pb-ask-clear {
+.pb-search-input::placeholder { color: #6B7785; }
+.pb-search-clear {
   background: #f1f5f9;
   color: #475569;
   border: none;
   border-radius: 50%;
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
   font-weight: 600;
 }
-.pb-ask-clear:hover { background: #e2e8f0; }
+.pb-search-clear:hover { background: #e2e8f0; }
+
+.pb-sous-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--kf-playbook-teal);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  min-height: 48px;
+}
+.pb-sous-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.pb-sous-btn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .pb-search-bar { flex-basis: 100%; }
+  .pb-sous-btn { flex-basis: 100%; justify-content: center; }
+}
 
 @media (min-width: 640px) {
   .pb-hero { padding: 24px 28px 18px; }
   .pb-hero-tag { font-size: 28px; }
   .pb-hero-sub { font-size: 14px; }
-  .pb-ask-bar { padding: 12px 16px; }
-  .pb-ask-input { font-size: 15px; }
+  .pb-search-bar { padding: 12px 16px; }
+  .pb-search-input { font-size: 15px; }
 }
 
 /* ─── Sticky search (slides in once the hero is scrolled past) ───────────── */
@@ -220,7 +286,7 @@
   flex: 1;
   border: none;
   outline: none;
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   color: var(--kf-navy);
   background: transparent;
@@ -281,7 +347,7 @@
 /* ─── Controls row: chips + view toggle on one line ──────────────────────── */
 .pb-controls-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -290,6 +356,11 @@
   flex: 1;
   min-width: 0;
 }
+.pb-controls-row .pb-chip-stack {
+  flex: 1;
+  min-width: 0;
+}
+.pb-controls-row .pb-chip-stack .pb-chip-row { flex: none; }
 
 /* ─── View toggle (Cards / List) ─────────────────────────────────────────── */
 .pb-view-toggle {
@@ -631,7 +702,7 @@
    no card-sized white box. Applies to genuinely empty shelves (Finance)
    AND to shelves emptied by an active filter ("no matches"). */
 .pb-shelf-empty-inline {
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
   color: #6B7785;
@@ -1000,13 +1071,22 @@
   right: 0;
   bottom: 0;
   width: 100%;
-  max-width: 520px;
+  /* A6: widened from 520 to 720 to give the reader column real breathing
+     room. Slide-over remains the quick preview; the full-page route is the
+     real reading surface. Mobile rule below keeps it full-width on <1024px. */
+  max-width: 720px;
   background: white;
   z-index: 4001;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
   animation: pb-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (max-width: 1023px) {
+  /* Floor-first: <1024px renders Comfortable. A 720px slide-over on a
+     375px screen is a takeover; force full-width so the panel behaves as
+     a bottom-sheet-ish full-viewport reader on mobile and tablet. */
+  .pb-slide { max-width: 100vw; }
 }
 @keyframes pb-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pb-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
@@ -1438,7 +1518,7 @@
   border: 1px solid var(--kf-border);
   border-radius: 8px;
   padding: 10px 12px;
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   color: var(--kf-navy);
   resize: vertical;
@@ -1499,7 +1579,7 @@
 }
 .pb-sousai-text {
   flex: 1;
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   color: #6B7785;
   font-style: italic;
@@ -1730,5 +1810,548 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   A6 experiential batch additions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Chip stack: two filter rows under the controls row ─────────────────── */
+.pb-chip-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ─── Class-family chips (second filter axis, A6) ───────────────────────── */
+.pb-chip-row--family {
+  /* Same scroll-snap horizontal behavior as the primary chip row inherits
+     from .pb-chip-row above. The family chips render in 4 family colors so
+     the operator scans them by the same family-color used on the cards. */
+}
+.pb-chip--family {
+  /* Family chips inherit the base .pb-chip pill shape; the per-family
+     classes below tint the resting and active states with the same color
+     family used on .pb-class-chip cards. */
+}
+/* gov family - navy */
+.pb-chip--family-gov {
+  background: rgba(21, 57, 104, 0.08);
+  color: var(--kf-navy);
+  border-color: rgba(21, 57, 104, 0.18);
+}
+.pb-chip--family-gov.pb-chip--on {
+  background: var(--kf-navy);
+  color: white;
+  border-color: var(--kf-navy);
+}
+/* proc family - teal (page house color) */
+.pb-chip--family-proc {
+  background: rgba(15, 110, 86, 0.08);
+  color: var(--kf-playbook-teal);
+  border-color: rgba(15, 110, 86, 0.18);
+}
+.pb-chip--family-proc.pb-chip--on {
+  background: var(--kf-playbook-teal);
+  color: white;
+  border-color: var(--kf-playbook-teal);
+}
+/* tool family - amber/sand */
+.pb-chip--family-tool {
+  background: rgba(217, 119, 6, 0.08);
+  color: #92400e;
+  border-color: rgba(217, 119, 6, 0.18);
+}
+.pb-chip--family-tool.pb-chip--on {
+  background: #d97706;
+  color: white;
+  border-color: #d97706;
+}
+/* ref family - manila/sepia */
+.pb-chip--family-ref {
+  background: rgba(120, 53, 15, 0.06);
+  color: #78350f;
+  border-color: rgba(120, 53, 15, 0.15);
+}
+.pb-chip--family-ref.pb-chip--on {
+  background: #78350f;
+  color: white;
+  border-color: #78350f;
+}
+
+/* ─── Collapsible metadata sections (A6, native <details>) ───────────────── */
+.pb-slide-section--collapsible {
+  /* Override the default .pb-slide-section block model to behave as a
+     <details> container. The summary handles the click; default browser
+     marker is hidden in favor of our chevron pseudo. */
+}
+.pb-slide-section--collapsible > summary.pb-slide-section-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+  user-select: none;
+}
+.pb-slide-section--collapsible > summary.pb-slide-section-summary::-webkit-details-marker {
+  display: none;
+}
+.pb-slide-section--collapsible > summary.pb-slide-section-summary::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 150ms ease;
+  margin-left: auto;
+  opacity: 0.55;
+}
+.pb-slide-section--collapsible[open] > summary.pb-slide-section-summary::after {
+  transform: rotate(45deg);
+}
+.pb-slide-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #475569;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  min-width: 18px;
+}
+.pb-slide-section--collapsible[open] > summary.pb-slide-section-summary + * {
+  margin-top: 10px;
+}
+.pb-slide-section--summary {
+  /* Summary section stays plain - non-collapsible. No chevron, no toggle. */
+}
+
+/* ─── Ask SousAI overlay (A6 shell) ─────────────────────────────────────── */
+.pb-sous-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 4000;
+  animation: pb-fade-in 0.18s ease;
+}
+.pb-sous-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 480px;
+  background: white;
+  z-index: 4001;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  animation: pb-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (max-width: 1023px) {
+  .pb-sous-panel { max-width: 100vw; }
+}
+.pb-sous-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--kf-border);
+  flex-shrink: 0;
+}
+.pb-sous-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--kf-navy);
+}
+.pb-sous-title h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--kf-navy);
+}
+.pb-sous-close {
+  background: transparent;
+  border: none;
+  color: #6B7785;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+.pb-sous-close:hover { background: #f1f5f9; }
+.pb-sous-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 24px 20px;
+}
+.pb-sous-coming {
+  text-align: center;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 16px 0;
+}
+.pb-sous-coming-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pb-sous-coming h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 8px;
+}
+.pb-sous-coming p {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #475569;
+  margin: 0 0 10px;
+}
+.pb-sous-meanwhile {
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-style: italic;
+}
+.pb-sous-foot {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--kf-border);
+  flex-shrink: 0;
+  background: #f8fafc;
+}
+.pb-sous-input-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.pb-sous-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  background: transparent;
+  color: var(--kf-navy);
+  min-width: 0;
+}
+.pb-sous-input::placeholder { color: #94a3b8; }
+.pb-sous-send {
+  background: var(--kf-playbook-teal);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: not-allowed;
+  flex-shrink: 0;
+}
+.pb-sous-disclaimer {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Full-page reader (A6) · /playbook/d/[docId]
+   Wide centered reading column. App chrome strips out under @media print.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pb-fullpage-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 16px 16px 80px;
+  font-family: 'Inter', sans-serif;
+  color: var(--kf-navy);
+}
+.pb-fullpage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 16px;
+  flex-wrap: wrap;
+}
+.pb-fullpage-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kf-navy);
+  text-decoration: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.pb-fullpage-back:hover {
+  border-color: var(--kf-playbook-teal);
+  background: #f8fafc;
+}
+.pb-fullpage-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pb-fullpage-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--kf-navy);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.pb-fullpage-print:hover { background: #1a4580; }
+.pb-fullpage-article {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid var(--kf-border);
+  padding: 32px 36px;
+  box-shadow: 0 2px 8px rgba(15, 48, 87, 0.04);
+}
+.pb-fullpage-head {
+  border-bottom: 1px solid var(--kf-border);
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+}
+.pb-fullpage-class-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pb-fullpage-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 8px;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+.pb-fullpage-cardline {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: #475569;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.pb-fullpage-meta {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #6B7785;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+.pb-fullpage-id {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 700;
+  color: var(--kf-navy);
+}
+.pb-fullpage-body {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #1f2937;
+}
+.pb-fullpage-body h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 28px 0 12px;
+  letter-spacing: -0.3px;
+}
+.pb-fullpage-body h1:first-child { margin-top: 0; }
+.pb-fullpage-body h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #334155;
+  margin: 24px 0 10px;
+}
+.pb-fullpage-body h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #475569;
+  margin: 18px 0 6px;
+}
+.pb-fullpage-body p { margin: 10px 0; }
+.pb-fullpage-body ul, .pb-fullpage-body ol { margin: 10px 0 10px 24px; padding: 0; }
+.pb-fullpage-body li { margin: 4px 0; }
+.pb-fullpage-body code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.pb-fullpage-body blockquote {
+  margin: 14px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--kf-playbook-teal);
+  background: #f8fafc;
+  border-radius: 4px;
+}
+.pb-fullpage-body blockquote.callout {
+  border-left-width: 4px;
+}
+.pb-fullpage-body blockquote.callout-critical {
+  border-left-color: #B53030;
+  background: #FCE4E4;
+}
+.pb-fullpage-body blockquote.callout-anchor {
+  border-left-color: var(--kf-navy);
+  background: #C4E3E8;
+}
+.pb-fullpage-body blockquote.callout-note {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+.pb-fullpage-body blockquote.callout-warning {
+  border-left-color: #d97706;
+  background: #FBEFD0;
+}
+.pb-fullpage-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.pb-fullpage-body th,
+.pb-fullpage-body td {
+  border: 1px solid var(--kf-border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.pb-fullpage-body th {
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--kf-navy);
+}
+.pb-fullpage-drive-fallback {
+  text-align: center;
+  padding: 24px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+.pb-fullpage-empty,
+.pb-fullpage-loading,
+.pb-fullpage-notfound,
+.pb-fullpage-error {
+  text-align: center;
+  padding: 48px 24px;
+  color: #6B7785;
+  font-family: 'Inter', sans-serif;
+}
+.pb-fullpage-notfound h1,
+.pb-fullpage-error h1 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0 0 10px;
+}
+.pb-fullpage-loading {
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .pb-fullpage-article {
+    padding: 20px 18px;
+    border-radius: 12px;
+  }
+  .pb-fullpage-title { font-size: 22px; }
+  .pb-fullpage-body { font-size: 14px; }
+  .pb-fullpage-actions { gap: 8px; }
+}
+
+/* ─── @media print - operator hits Print/Save PDF on the full-page reader.
+   Strip app chrome (TopNav, toolbar, drive-fallback link) so the printed
+   artifact is clean + branded + paginated. */
+@media print {
+  body {
+    background: white !important;
+  }
+  /* Hide global app chrome - TopNav, NeedHelpButton, anything else not
+     on the doc body. The page is a doc; pages around it shouldn't print. */
+  nav,
+  .kf-topnav,
+  .pb-fullpage-no-print {
+    display: none !important;
+  }
+  .pb-fullpage-wrap {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+  .pb-fullpage-article {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+  }
+  .pb-fullpage-title {
+    font-size: 22pt;
+  }
+  .pb-fullpage-body {
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+  }
+  .pb-fullpage-body h1 { font-size: 16pt; margin-top: 16pt; page-break-after: avoid; }
+  .pb-fullpage-body h2 { font-size: 13pt; margin-top: 12pt; page-break-after: avoid; }
+  .pb-fullpage-body h3 { font-size: 11pt; margin-top: 10pt; page-break-after: avoid; }
+  .pb-fullpage-body p,
+  .pb-fullpage-body li { orphans: 3; widows: 3; }
+  .pb-fullpage-body blockquote { page-break-inside: avoid; }
+  .pb-fullpage-body table { page-break-inside: avoid; }
+  /* Print footer - simple meta line so the printed artifact is identifiable. */
+  .pb-fullpage-head {
+    border-bottom: 2pt solid var(--kf-navy);
+    padding-bottom: 8pt;
+    margin-bottom: 16pt;
   }
 }

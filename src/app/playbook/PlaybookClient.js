@@ -65,7 +65,14 @@ export default function PlaybookClient() {
   const [boot, setBoot]         = useState(null);
   const [query, setQuery]       = useState("");
   const [filter, setFilter]     = useState("all");
+  // Class-family filter axis (gov / proc / tool / ref / all). Kept separate
+  // from `filter` so the operator can combine "Pinned + family proc" without
+  // either axis clobbering the other.
+  const [family, setFamily]     = useState("all");
   const [openDocId, setOpenDocId] = useState(null);
+  // Ask SousAI overlay shell. Live caller lands in Phase B; today the overlay
+  // shows a coming-soon state so the affordance is visible end-to-end.
+  const [sousOpen, setSousOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/playbook?action=bootstrap")
@@ -90,8 +97,12 @@ export default function PlaybookClient() {
       setQuery={setQuery}
       filter={filter}
       setFilter={setFilter}
+      family={family}
+      setFamily={setFamily}
       openDocId={openDocId}
       setOpenDocId={setOpenDocId}
+      sousOpen={sousOpen}
+      setSousOpen={setSousOpen}
     />
   );
 }
@@ -362,19 +373,25 @@ function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollaps
 // ════════════════════════════════════════════════════════════════════════════
 // Playbook page (owner view)
 // ════════════════════════════════════════════════════════════════════════════
-function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, setOpenDocId }) {
-  const { documents, shelves, isOwner } = bootstrap;
-  const isSearching = !!query.trim() || filter !== "all";
+function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFamily, openDocId, setOpenDocId, sousOpen, setSousOpen }) {
+  const { documents, shelves, isOwner, heroImage } = bootstrap;
+  const isSearching = !!query.trim() || filter !== "all" || family !== "all";
 
   // Search + filter. Status filters use the prefix "status:Live", "status:Draft",
   // etc. (added dynamically based on availableStatuses) so they don't collide
-  // with the static "all" / "pinned" filter ids.
+  // with the static "all" / "pinned" filter ids. The class-family axis (gov /
+  // proc / tool / ref) is a separate state tracked alongside `filter` so the
+  // operator can combine them (e.g. "All Pinned of family proc").
   const filteredDocs = useMemo(() => {
     let out = documents;
     if (filter === "pinned") out = out.filter((d) => d.pinned);
     else if (filter.startsWith("status:")) {
       const target = filter.slice(7);
       out = out.filter((d) => d.status === target);
+    }
+
+    if (family !== "all") {
+      out = out.filter((d) => (CLASS_FAMILY[d.doc_class] || "ref") === family);
     }
 
     const q = query.trim().toLowerCase();
@@ -494,7 +511,13 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
 
   return (
     <div className="pb-wrap">
-      <Hero query={query} setQuery={setQuery} isOwner={isOwner} />
+      <Hero
+        query={query}
+        setQuery={setQuery}
+        isOwner={isOwner}
+        heroImage={heroImage}
+        onOpenSous={() => setSousOpen(true)}
+      />
       {/* Sentinel just below the hero - IntersectionObserver in useStickyHero
           flips state when its bounds cross above the TopNav line, triggering
           the slim sticky search bar's slide-in. Zero size, negative margin
@@ -502,7 +525,10 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
       <div ref={sentinelRef} aria-hidden="true" style={{ height: 0, marginTop: -1 }} />
       <StickySearch query={query} setQuery={setQuery} visible={stickyShown} />
       <div className="pb-controls-row">
-        <FilterChipsBar filter={filter} setFilter={setFilter} availableStatuses={availableStatuses} />
+        <div className="pb-chip-stack">
+          <FilterChipsBar filter={filter} setFilter={setFilter} availableStatuses={availableStatuses} />
+          <FamilyChipsBar family={family} setFamily={setFamily} />
+        </div>
         <ViewToggle view={viewMode} setView={setViewMode} />
       </div>
       {documents.length === 0 ? (
@@ -527,7 +553,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
                 name={shelfName}
                 docs={docsByShelf[shelfName]}
                 view={viewMode}
-                staggerKey={`${filter}|${query}`}
+                staggerKey={`${filter}|${family}|${query}`}
                 onOpen={(id) => setOpenDocId(id)}
                 isSearching={isSearching}
                 isCollapsed={collapsed.has(shelfName)}
@@ -545,16 +571,99 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, openDocId, se
           isOwner={isOwner}
         />
       )}
+
+      {sousOpen && <SousAIOverlay onClose={() => setSousOpen(false)} />}
     </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SousAI overlay shell - Phase A6 ships the affordance + the panel chrome.
+// The live retrieval+chat caller wires in Phase B; today the overlay shows a
+// coming-soon state so the operator sees the planned UX without a fake chat.
+// ESC closes; backdrop click closes; body scroll-locks while open. Mirrors
+// SlideOverReader's open/close pattern.
+// ════════════════════════════════════════════════════════════════════════════
+function SousAIOverlay({ onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="pb-sous-backdrop" onClick={onClose} />
+      <aside className="pb-sous-panel" role="dialog" aria-modal="true" aria-label="Ask SousAI">
+        <div className="pb-sous-head">
+          <div className="pb-sous-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+            </svg>
+            <h2>Ask SousAI</h2>
+          </div>
+          <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="pb-sous-body">
+          <div className="pb-sous-coming">
+            <div className="pb-sous-coming-icon" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+            </div>
+            <h3>Live SousAI is coming soon</h3>
+            <p>
+              The retrieval engine is proven (the corpus is embedded and the access gate is enforced). The chat wiring lands in Phase B. When it does, this panel becomes the conversation surface for the whole playbook.
+            </p>
+            <p className="pb-sous-meanwhile">
+              Meanwhile: the search bar to the left filters the catalog by title, card line, and keywords - good enough to find a doc when you know roughly what you are looking for.
+            </p>
+          </div>
+        </div>
+        <div className="pb-sous-foot">
+          <div className="pb-sous-input-shell" aria-disabled="true" title="Disabled until Phase B wires the live caller">
+            <input
+              type="text"
+              placeholder="Ask a question..."
+              disabled
+              className="pb-sous-input"
+              aria-label="Ask SousAI a question (disabled)"
+            />
+            <button type="button" className="pb-sous-send" disabled aria-disabled="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          </div>
+          <p className="pb-sous-disclaimer">Phase B wiring drops the live caller into this same input.</p>
+        </div>
+      </aside>
+    </>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // Hero band + ask bar
 // ════════════════════════════════════════════════════════════════════════════
-function Hero({ query, setQuery, isOwner }) {
+function Hero({ query, setQuery, isOwner, heroImage, onOpenSous }) {
   return (
     <div className="pb-hero">
+      {/* Sibling-page hero treatment: BG image behind a navy-to-dark gradient
+          overlay. heroImage is picked server-side in the bootstrap from the
+          global hero_images pool (team_key IS NULL). Null heroImage falls
+          back to the flat navy background-color baked into .kf-hero-bg. */}
+      <div
+        className="kf-hero-bg pb-hero-bg"
+        style={heroImage ? { backgroundImage: `url('${heroImage}')` } : undefined}
+        aria-hidden="true"
+      />
+      <div className="kf-hero-overlay pb-hero-overlay" aria-hidden="true" />
       {/* Owner-only link to the build dashboard. Operators never see this.
           Gated on the bootstrap's isOwner (which the API computed from the
           actual signed-in email, not anything client-supplied). */}
@@ -572,30 +681,48 @@ function Hero({ query, setQuery, isOwner }) {
       <div className="pb-hero-content">
         <h1 className="pb-hero-tag">The Playbook</h1>
         <p className="pb-hero-sub">
-          Operational documents — every shelf, every site, one place.
+          Operational documents - every shelf, every site, one place.
         </p>
-        <div className="pb-ask-bar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Ask SousAI, or search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pb-ask-input"
-            aria-label="Search the playbook"
-          />
-          {query && (
-            <button
-              className="pb-ask-clear"
-              aria-label="Clear search"
-              onClick={() => setQuery("")}
-            >
-              ×
-            </button>
-          )}
+        {/* Search + Ask SousAI split. Search is client-side filter (same
+            behavior as before, just labeled and isolated). Ask SousAI opens
+            the overlay shell. The overlay's live caller wires in Phase B;
+            today the overlay shows a coming-soon state when opened. */}
+        <div className="pb-search-row">
+          <div className="pb-search-bar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search the playbook..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pb-search-input"
+              aria-label="Search the playbook"
+            />
+            {query && (
+              <button
+                className="pb-search-clear"
+                aria-label="Clear search"
+                onClick={() => setQuery("")}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className="pb-sous-btn"
+            onClick={onOpenSous}
+            aria-label="Ask SousAI"
+            title="Ask SousAI"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+            </svg>
+            <span>Ask SousAI</span>
+          </button>
         </div>
       </div>
     </div>
@@ -623,7 +750,7 @@ function StickySearch({ query, setQuery, visible }) {
         </svg>
         <input
           type="search"
-          placeholder="Ask SousAI, or search…"
+          placeholder="Search the playbook..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pb-sticky-search-input"
@@ -685,6 +812,51 @@ function FilterChipsBar({ filter, setFilter, availableStatuses }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Class-family chips - second filter axis alongside FilterChipsBar.
+//
+// Design decision (Hick's Law): the doc_class set has 10 values
+// (PB / SOP / TPL / REF / STD / POL / AGR / FORM / POST / CHK) which is too
+// many to live as a second chip row without overloading the operator's
+// scan. The 4 class FAMILIES already encoded in _shared.js' CLASS_FAMILY
+// (gov / proc / tool / ref) collapse those 10 into 4 scannable buckets that
+// align with the color-by-family treatment already on the cards:
+//
+//   proc  - the procedural doctrine (PB + SOP)        [page house teal]
+//   gov   - governance (STD + POL + AGR)              [navy]
+//   tool  - work tools (TPL + FORM + CHK)             [sand/amber]
+//   ref   - postings + references (POST + REF)        [manilla]
+//
+// Hover/title surfaces which classes each family contains so the operator
+// who knows "I need an SOP" can find it via Procedures.
+// ════════════════════════════════════════════════════════════════════════════
+const FAMILY_CHIPS = [
+  { id: "all",  label: "All types", title: "All document classes" },
+  { id: "proc", label: "Procedures", title: "Playbooks (PB) and SOPs" },
+  { id: "gov",  label: "Governance", title: "Standards (STD), Policies (POL), Agreements (AGR)" },
+  { id: "tool", label: "Tools",      title: "Templates (TPL), Forms (FORM), Checklists (CHK)" },
+  { id: "ref",  label: "Postings & refs", title: "Postings/Posters (POST) and References (REF)" },
+];
+
+function FamilyChipsBar({ family, setFamily }) {
+  return (
+    <div className="pb-chip-row pb-chip-row--family" role="tablist" aria-label="Document type filter">
+      {FAMILY_CHIPS.map((c) => (
+        <button
+          key={c.id}
+          role="tab"
+          aria-selected={family === c.id}
+          onClick={() => setFamily(c.id)}
+          className={`pb-chip pb-chip--family${family === c.id ? " pb-chip--on" : ""}${c.id !== "all" ? ` pb-chip--family-${c.id}` : ""}`}
+          title={c.title}
+        >
+          {c.label}
+        </button>
+      ))}
     </div>
   );
 }
