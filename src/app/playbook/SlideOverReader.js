@@ -306,9 +306,10 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
           <Link
             href={`/playbook/d/${encodeURIComponent(doc.id)}${activeLang === "es" ? "?lang=es" : ""}`}
             className="pb-action pb-action--primary"
+            aria-label={`Read full document: ${doc.title}`}
             prefetch={false}
           >
-            Open full page
+            Read full document
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginLeft: 6 }}>
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               <polyline points="15 3 21 3 21 9" />

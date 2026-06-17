@@ -21,13 +21,10 @@ import SlideOverReader from "./SlideOverReader";
 // visual treatment came off cards — the chip filtered to docs that look
 // identical to non-critical ones, so it had no signal-to-action ratio in
 // the operator view. The `critical` column stays in the data model intact.
-// Status chips (Ready, Draft, Pending, Placeholder, etc.) are appended
-// dynamically at render time from whatever distinct statuses exist in the
-// visible documents — they aren't hardcoded here.
-const FILTER_CHIPS = [
-  { id: "all",    label: "All" },
-  { id: "pinned", label: "Pinned" },
-];
+// Status filter values now feed the StatusFilterSelect dropdown (A6 polish);
+// the dropdown shows static All + Pinned options plus the dynamic status
+// options (Ready, In Build, etc.) drawn from whatever statuses exist in the
+// visible documents.
 
 // Operator-readable status labels. Only "Live" → "Ready" right now — the
 // floor reads "ready to use" more naturally than the workflow term "Live".
@@ -525,9 +522,9 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
       <div ref={sentinelRef} aria-hidden="true" style={{ height: 0, marginTop: -1 }} />
       <StickySearch query={query} setQuery={setQuery} visible={stickyShown} />
       <div className="pb-controls-row">
-        <div className="pb-chip-stack">
-          <FilterChipsBar filter={filter} setFilter={setFilter} availableStatuses={availableStatuses} />
-          <FamilyChipsBar family={family} setFamily={setFamily} />
+        <div className="pb-filter-bar">
+          <StatusFilterSelect filter={filter} setFilter={setFilter} availableStatuses={availableStatuses} />
+          <TypeFilterSelect family={family} setFamily={setFamily} />
         </div>
         <ViewToggle view={viewMode} setView={setViewMode} />
       </div>
@@ -750,7 +747,7 @@ function StickySearch({ query, setQuery, visible }) {
         </svg>
         <input
           type="search"
-          placeholder="Search the playbook..."
+          placeholder="Search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pb-sticky-search-input"
@@ -773,91 +770,65 @@ function StickySearch({ query, setQuery, visible }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Filter chips — static (All / Pinned) + dynamic status chips (Ready, Draft,
-// Pending, ...). Status chips are appended from availableStatuses (computed
-// upstream from the visible document set) so the row only ever shows filters
-// that would return results. The Live status renders as "Ready" via
-// operatorStatusLabel; all other statuses keep their canonical workflow names.
+// Filter dropdowns - status and type axes (A6 polish #2).
+//
+// Replaced the two pill rows from #169 with two compact native <select>s.
+// Pill rows consumed vertical space above the catalog; the conventional
+// filter-bar pattern (Jakob's Law: matches admin UIs everywhere) is more
+// honest about "these are filter controls" and sparser visually.
+//
+// Native <select> is the floor-first-correct choice:
+//   - Works on phone (touch-optimized native picker)
+//   - Keyboard-accessible by default (arrow keys, type-to-jump)
+//   - No new dep, no JS-driven custom dropdown to maintain
+//
+// Trade-off: the family-color tie-in from the pill row (gov navy, proc
+// teal, etc.) is gone - the dropdown is one neutral color. The cards still
+// carry family color, which is where the operator scans for it anyway.
+//
+// The selects compose the two filter axes (status + type) independently;
+// the operator combines them ("In Build" + "Procedures") just like the
+// pill rows did. State (`filter`, `family`) is unchanged from the
+// underlying logic.
 // ════════════════════════════════════════════════════════════════════════════
-function FilterChipsBar({ filter, setFilter, availableStatuses }) {
+function StatusFilterSelect({ filter, setFilter, availableStatuses }) {
   return (
-    <div className="pb-chip-row" role="tablist" aria-label="Document filters">
-      {FILTER_CHIPS.map((c) => (
-        <button
-          key={c.id}
-          role="tab"
-          aria-selected={filter === c.id}
-          onClick={() => setFilter(c.id)}
-          className={`pb-chip${filter === c.id ? " pb-chip--on" : ""}`}
-        >
-          {c.label}
-        </button>
-      ))}
-      {availableStatuses && availableStatuses.length > 0 && (
-        <span className="pb-chip-sep" aria-hidden="true" />
-      )}
-      {(availableStatuses || []).map((s) => {
-        const id = `status:${s}`;
-        const active = filter === id;
-        return (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={active}
-            onClick={() => setFilter(id)}
-            className={`pb-chip pb-chip--status${active ? " pb-chip--on" : ""}`}
-            title={`Show only ${s} documents`}
-          >
-            {operatorStatusLabel(s)}
-          </button>
-        );
-      })}
-    </div>
+    <label className="pb-filter-select-wrap" aria-label="Filter by status">
+      <span className="pb-filter-label">Status</span>
+      <select
+        className="pb-filter-select"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      >
+        <option value="all">All</option>
+        <option value="pinned">Pinned</option>
+        {(availableStatuses || []).map((s) => (
+          <option key={s} value={`status:${s}`}>{operatorStatusLabel(s)}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Class-family chips - second filter axis alongside FilterChipsBar.
-//
-// Design decision (Hick's Law): the doc_class set has 10 values
-// (PB / SOP / TPL / REF / STD / POL / AGR / FORM / POST / CHK) which is too
-// many to live as a second chip row without overloading the operator's
-// scan. The 4 class FAMILIES already encoded in _shared.js' CLASS_FAMILY
-// (gov / proc / tool / ref) collapse those 10 into 4 scannable buckets that
-// align with the color-by-family treatment already on the cards:
-//
-//   proc  - the procedural doctrine (PB + SOP)        [page house teal]
-//   gov   - governance (STD + POL + AGR)              [navy]
-//   tool  - work tools (TPL + FORM + CHK)             [sand/amber]
-//   ref   - postings + references (POST + REF)        [manilla]
-//
-// Hover/title surfaces which classes each family contains so the operator
-// who knows "I need an SOP" can find it via Procedures.
-// ════════════════════════════════════════════════════════════════════════════
-const FAMILY_CHIPS = [
-  { id: "all",  label: "All types", title: "All document classes" },
-  { id: "proc", label: "Procedures", title: "Playbooks (PB) and SOPs" },
-  { id: "gov",  label: "Governance", title: "Standards (STD), Policies (POL), Agreements (AGR)" },
-  { id: "tool", label: "Tools",      title: "Templates (TPL), Forms (FORM), Checklists (CHK)" },
-  { id: "ref",  label: "Postings & refs", title: "Postings/Posters (POST) and References (REF)" },
-];
-
-function FamilyChipsBar({ family, setFamily }) {
+// Class-family axis (4 families from _shared.js' CLASS_FAMILY, plus All).
+// Same design decision as #169 (Hick's Law: 4 families instead of 10
+// classes) - now expressed as a dropdown instead of a chip row.
+function TypeFilterSelect({ family, setFamily }) {
   return (
-    <div className="pb-chip-row pb-chip-row--family" role="tablist" aria-label="Document type filter">
-      {FAMILY_CHIPS.map((c) => (
-        <button
-          key={c.id}
-          role="tab"
-          aria-selected={family === c.id}
-          onClick={() => setFamily(c.id)}
-          className={`pb-chip pb-chip--family${family === c.id ? " pb-chip--on" : ""}${c.id !== "all" ? ` pb-chip--family-${c.id}` : ""}`}
-          title={c.title}
-        >
-          {c.label}
-        </button>
-      ))}
-    </div>
+    <label className="pb-filter-select-wrap" aria-label="Filter by document type">
+      <span className="pb-filter-label">Type</span>
+      <select
+        className="pb-filter-select"
+        value={family}
+        onChange={(e) => setFamily(e.target.value)}
+      >
+        <option value="all">All types</option>
+        <option value="proc" title="Playbooks (PB) and SOPs">Procedures</option>
+        <option value="gov"  title="Standards (STD), Policies (POL), Agreements (AGR)">Governance</option>
+        <option value="tool" title="Templates (TPL), Forms (FORM), Checklists (CHK)">Tools</option>
+        <option value="ref"  title="Postings/Posters (POST) and References (REF)">Postings & refs</option>
+      </select>
+    </label>
   );
 }
 
