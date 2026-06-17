@@ -6,6 +6,7 @@ import {
   loadAccountConfig,
   loadMonthData,
   loadYearSummary,
+  loadHomestandContext,
   saveActuals,
   saveBulkActuals,
   updateServiceConfig,
@@ -81,7 +82,7 @@ async function loadAccountList() {
   const [accountsRes, svcsRes] = await Promise.all([
     supa
       .from("accounts")
-      .select("team_key, name, level")
+      .select("team_key, name, level, billing_model")
       .eq("active", true)
       .order("team_key", { ascending: true }),
     supa
@@ -92,13 +93,17 @@ async function loadAccountList() {
   if (accountsRes.error) throw new Error("[sc.route] loadAccountList accounts: " + accountsRes.error.message);
   if (svcsRes.error) throw new Error("[sc.route] loadAccountList services: " + svcsRes.error.message);
 
+  // billing_model surfaced so the UI can fork its rendering for fee
+  // accounts (flat_fee = homestand-driven display) vs per-meal accounts
+  // (revenue-driven display). See ServiceCalendar.js isFeeAccount.
   const accountsWithServices = new Set((svcsRes.data || []).map((r) => r.account_key));
   return (accountsRes.data || [])
     .filter((a) => accountsWithServices.has(a.team_key))
     .map((a) => ({
-      key:      a.team_key,
-      category: levelToCategory(a.level),
-      name:     a.name || a.team_key,
+      key:          a.team_key,
+      category:     levelToCategory(a.level),
+      name:         a.name || a.team_key,
+      billingModel: a.billing_model || null,
     }));
 }
 
@@ -106,7 +111,7 @@ async function loadAccountInfo(accountKey) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from("accounts")
-    .select("name, level")
+    .select("name, level, billing_model")
     .eq("team_key", accountKey)
     .maybeSingle();
   if (error) throw new Error("[sc.route] loadAccountInfo: " + error.message);
@@ -255,13 +260,33 @@ export async function GET(request) {
       const category = levelToCategory(accountInfo.level);
       const serviceGroups = transformServiceGroups(config);
       const days = transformDays(monthData.days);
+      const billingModel = accountInfo.billing_model || null;
 
-      return NextResponse.json({
+      // Homestand context: only fetched + included for flat_fee accounts.
+      // STL-FL is flat_fee but has zero homestand rows; the resulting
+      // empty {} signals "no homestand data" to the UI, which falls
+      // back to per-meal display for that account. The 4 MLB fee
+      // accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) return a populated
+      // map keyed by YYYY-MM-DD.
+      let homestandMap = null;
+      if (billingModel === "flat_fee") {
+        // Month-range bounds match the loadMonthData month exactly.
+        const first = `${String(year)}-${String(month).padStart(2, "0")}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const last = `${String(year)}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        const map = await loadHomestandContext(accountKey, first, last);
+        // Only include in response when there IS data, so the UI's
+        // !!data.homestandMap gate works for STL-FL too.
+        if (Object.keys(map).length > 0) homestandMap = map;
+      }
+
+      const responsePayload = {
         success: true,
         account: {
           key: accountKey,
           category,
           name: accountInfo.name || accountKey,
+          billingModel,
           // spreadsheetId kept on the response shape for legacy parity;
           // the UI still echoes it back in the POST body but the
           // PG route ignores it.
@@ -274,7 +299,9 @@ export async function GET(request) {
         // tolerates an empty array.
         overrides: [],
         accounts,
-      });
+      };
+      if (homestandMap) responsePayload.homestandMap = homestandMap;
+      return NextResponse.json(responsePayload);
     }
 
     // ── sc-year-summary: 12-month rollup for heatmap ──
@@ -296,20 +323,27 @@ export async function GET(request) {
       return NextResponse.json({
         success: true,
         accountKey,
-        months: summary.months.map((m) => ({
-          month:             m.month,
-          // period + camp at the month level were Sheets-era display
-          // labels. Empty strings keep the UI happy.
-          period:            "",
-          camp:              "",
-          totalDays:         m.totalServiceDays,
-          daysWithActuals:   m.daysWithActuals,
-          projectedRevenue:  m.totalProjectedRevenue,
-          actualRevenue:     m.totalActualRevenue,
-          projectedCovers:   m.totalProjectedMeals,
-          actualCovers:      m.totalActualMeals,
-          days:              m.days,
-        })),
+        months: summary.months.map((m) => {
+          const monthOut = {
+            month:             m.month,
+            // period + camp at the month level were Sheets-era display
+            // labels. Empty strings keep the UI happy.
+            period:            "",
+            camp:              "",
+            totalDays:         m.totalServiceDays,
+            daysWithActuals:   m.daysWithActuals,
+            projectedRevenue:  m.totalProjectedRevenue,
+            actualRevenue:     m.totalActualRevenue,
+            projectedCovers:   m.totalProjectedMeals,
+            actualCovers:      m.totalActualMeals,
+            days:              m.days,
+          };
+          // Fee accounts: pre-aggregated homestand counts for the year
+          // card (game days entered / total, homestand IDs in month).
+          // Omitted on per-meal accounts.
+          if (m.homestandSummary) monthOut.homestandSummary = m.homestandSummary;
+          return monthOut;
+        }),
       });
     }
 

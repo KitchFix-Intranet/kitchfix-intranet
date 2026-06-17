@@ -432,6 +432,35 @@
 .sc-dot--away { box-shadow: inset 0 0 0 1.5px #7c3aed; }
 .sc-dot--day-off { box-shadow: inset 0 0 0 1.5px #9ca3af; }
 
+/* ════════════════════════════════════════════════════════════════
+   FEE-ACCOUNT FORK — homestand-driven display for the 4 MLB fee
+   accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V). STL-FL stays on
+   per-meal display (Kevin's decision); the fork is gated on
+   data-billing="flat_fee" on sc-root AND data.homestandMap being
+   present from the route, so STL-FL never trips this CSS.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Heatmap: new statuses */
+.sc-dot--prep { background: #94a3b8; }                    /* muted blue-grey, not actionable */
+.sc-dot--off-season { background: transparent; }           /* invisible between homestands */
+
+/* Legend dot for prep */
+.sc-legend-dot--prep { background: #94a3b8; }
+
+/* Badge for prep status on month tiles */
+.sc-badge--prep { background: #f1f5f9; color: #475569; font-size: 12px; }
+.sc-badge--offseason { background: transparent; color: transparent; }
+
+/* Month-view tile variants for fee accounts */
+.sc-tile--prep { opacity: 0.85; background: #f8fafc; }
+.sc-tile--between-homestands { background: transparent; border: none; opacity: 0.25; min-height: 44px; cursor: default; }
+.sc-tile--between-homestands:hover { transform: none; box-shadow: none; }
+
+/* Attribute-selector overrides scoped to fee-account display so
+   per-meal accounts stay byte-identical to their prior look. */
+[data-billing="flat_fee"] .sc-tile-rev--projected,
+[data-billing="flat_fee"] .sc-tile-rev--future { display: none; } /* no projected $ on fee tiles */
+
 /* Card stats */
 .sc-year-card-stats { display: flex; justify-content: space-between; font-size: var(--type-caption); color: #6b7280; margin-bottom: var(--space-1); }
 .sc-year-card-rev { font-weight: 600; color: #9ca3af; }

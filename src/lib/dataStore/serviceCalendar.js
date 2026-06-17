@@ -431,6 +431,52 @@ export async function loadMonthData(accountKey, year, month) {
 //   "needs-entry"  - past date within LOCK_DAYS, no actuals
 //   "future"       - any future date
 
+// ═══════════════════════════════════════════════════════════════
+// loadHomestandContext
+// ═══════════════════════════════════════════════════════════════
+//
+// Per-date lookup of homestand context for fee-account display
+// (homestand grouping visuals, off-day urgency suppression between
+// homestands, delivery vs revenue metrics). The data layer is
+// intentionally kept separate from the sc_* core tables - this helper
+// reads sc_homestand_schedule (a PG mirror of the HUB sheet's
+// homestand_schedule tab seeded by scripts/_seed_sc_homestand_schedule.mjs).
+//
+// Return shape:
+//   {
+//     "YYYY-MM-DD": { homestandId: "HS1", dayType: "GAME", opponent: "CIN" },
+//     ...
+//   }
+// Days not in sc_homestand_schedule are absent from the map - the UI
+// reads "key missing" as "not part of the season" (renders invisible).
+//
+// Returns an empty object (not null) if the account has zero homestand
+// rows, so callers can check `Object.keys(map).length` for the
+// "has homestand data" gate.
+
+export async function loadHomestandContext(accountKey, firstDate, lastDate) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("sc_homestand_schedule")
+    .select("service_date, homestand_id, day_type, opponent")
+    .eq("account_key", accountKey)
+    .gte("service_date", firstDate)
+    .lte("service_date", lastDate)
+    .order("service_date", { ascending: true });
+  throwOnError(error, "loadHomestandContext");
+
+  const map = {};
+  for (const r of data || []) {
+    map[r.service_date] = {
+      homestandId: r.homestand_id,
+      dayType:     r.day_type,
+      opponent:    r.opponent || "",
+    };
+  }
+  return map;
+}
+
+
 async function loadYearSummaryPostgres(accountKey, year) {
   const supa = getServiceClient();
   const { first, last } = yearBounds(year);
@@ -454,8 +500,8 @@ async function loadYearSummaryPostgres(accountKey, year) {
 
   // billing_model lets classify() distinguish per-meal accounts (where a
   // past day with all-zero projections + no actuals means "planned off-
-  // day, nothing to enter") from flat_fee accounts (whose year-view
-  // semantics are being redesigned separately - left untouched here).
+  // day, nothing to enter") from flat_fee accounts (which use homestand-
+  // driven classification - see homestand branch in classify() below).
   const billingRes = await supa
     .from("accounts")
     .select("billing_model")
@@ -463,6 +509,16 @@ async function loadYearSummaryPostgres(accountKey, year) {
     .maybeSingle();
   throwOnError(billingRes.error, "loadYearSummary.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
+
+  // Fetch homestand data ONLY for fee accounts. Per-meal accounts never
+  // touch sc_homestand_schedule (no data exists for them) so we save the
+  // query. STL-FL is flat_fee but has zero homestand rows; homestandMap
+  // is empty for it and classify() falls back to the per-meal path.
+  let homestandMap = {};
+  if (billingModel === "flat_fee") {
+    homestandMap = await loadHomestandContext(accountKey, first, last);
+  }
+  const hasHomestandData = Object.keys(homestandMap).length > 0;
 
   const daysRows = await fetchAllPaginated(
     supa,
@@ -521,43 +577,132 @@ async function loadYearSummaryPostgres(accountKey, year) {
     if (!st.gameType && r.game_type) st.gameType = r.game_type;
   }
 
+  // Fee accounts: ensure every homestand date has a dayState entry even
+  // if it's not in sc_daily_revenue (e.g. PREP/OPEN/CLOSE days that have
+  // no projection rows). Without this, those dates would silently drop
+  // from the year response and render as gaps in the heatmap.
+  if (billingModel === "flat_fee" && hasHomestandData) {
+    for (const date of Object.keys(homestandMap)) {
+      if (!dayState.has(date)) {
+        dayState.set(date, {
+          date,
+          hasAct: false,
+          anyNonZeroAct: false,
+          hasProj: false,
+          anyNonZeroProj: false,
+          gameType: "",
+        });
+      }
+    }
+  }
+
   function classify(s) {
     const d = new Date(s.date + "T12:00:00");
     const isPast = d < today;
     const isOverdue = d < lockCutoff;
+
+    // ── Fee-account branch: homestand-driven classification ──
+    // Fires for flat_fee accounts that have a homestand schedule loaded
+    // (the 4 MLB fee accounts: CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V).
+    // STL-FL is flat_fee but has zero homestand rows, so hasHomestandData
+    // is false and it falls through to the per-meal branch (per Kevin's
+    // decision to keep STL-FL on the per-meal display).
+    if (billingModel === "flat_fee" && hasHomestandData) {
+      const hs = homestandMap[s.date];
+      if (!hs) return "off-season";              // not in schedule -> invisible
+      if (hs.dayType !== "GAME") return "prep";  // PREP/OPEN/CLOSE/CLEAN
+      // GAME day classification mirrors per-meal: actuals/past/future
+      if (s.hasAct) return "entered";
+      if (isPast) return "needs-entry";          // real missed entry
+      return "future";
+    }
+
+    // ── Per-meal branch (unchanged) ──
     if (s.hasAct && !s.anyNonZeroAct) return "no-service";
     if (s.hasAct) return "entered";
-    // 2026-06-17 (this PR): per-meal accounts treat a past day with all-zero
+    // 2026-06-17 (PR #167): per-meal accounts treat a past day with all-zero
     // projections AND no actuals as "no-service" (planned off-day, nothing
     // to enter). Without this branch the day fell through to "needs-entry"
     // (yellow) or "overdue" (red), surfacing a false alarm the operator
-    // can't act on. flat_fee accounts are gated out of this branch - their
-    // year-view semantics are being redesigned separately, and the current
-    // overdue/needs-entry behavior stays as-is until that work lands.
+    // can't act on. flat_fee accounts use the homestand branch above.
     if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && isPast && billingModel !== "flat_fee") return "no-service";
     if (isPast && isOverdue) return "overdue";
     if (isPast) return "needs-entry";
     return "future";
   }
 
-  // Bucket day states by month for the response.
+  // Bucket day states by month for the response. For fee accounts the
+  // homestand fields (homestandId, dayType, opponent) come through so
+  // the UI can render homestand context on each dot without a second
+  // round-trip.
   const daysByMonth = new Map();
   for (const s of dayState.values()) {
     const monthKey = s.date.slice(0, 7);
     if (!daysByMonth.has(monthKey)) daysByMonth.set(monthKey, []);
-    daysByMonth.get(monthKey).push({
+    const dayEntry = {
       date:     s.date,
       status:   classify(s),
       gameType: s.gameType || "",
-    });
+    };
+    const hs = homestandMap[s.date];
+    if (hs) {
+      dayEntry.homestandId = hs.homestandId;
+      dayEntry.dayType     = hs.dayType;
+      dayEntry.opponent    = hs.opponent;
+    }
+    daysByMonth.get(monthKey).push(dayEntry);
   }
   for (const arr of daysByMonth.values()) {
     arr.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  const months = (summaryRes.data || []).map((row) => {
-    const monthKey = String(row.month).slice(0, 7);
-    return {
+  // Fee accounts: pre-compute per-month homestand aggregates so the UI
+  // can render "X of Y game days" + "X of Y homestands complete" on the
+  // year cards without recomputing from days[]. Per-meal accounts skip
+  // this block entirely (homestandSummary omitted from response).
+  const homestandSummaryByMonth = new Map();
+  if (billingModel === "flat_fee" && hasHomestandData) {
+    for (const [monthKey, days] of daysByMonth.entries()) {
+      let gameDays = 0, gameDaysEntered = 0, prepDays = 0;
+      const homestandIds = new Set();
+      for (const d of days) {
+        if (d.dayType === "GAME") {
+          gameDays++;
+          if (d.status === "entered") gameDaysEntered++;
+        } else if (d.dayType) {
+          prepDays++;
+        }
+        if (d.homestandId) homestandIds.add(d.homestandId);
+      }
+      homestandSummaryByMonth.set(monthKey, {
+        gameDays,
+        gameDaysEntered,
+        prepDays,
+        homestandIds: [...homestandIds].sort((a, b) => {
+          // Sort HS1, HS2, ... numerically rather than lexicographically
+          // so HS10 doesn't sort before HS2.
+          const na = parseInt(String(a).replace(/[^0-9]/g, ""), 10) || 0;
+          const nb = parseInt(String(b).replace(/[^0-9]/g, ""), 10) || 0;
+          return na - nb;
+        }),
+      });
+    }
+  }
+
+  // Fee accounts: sc_month_summary may be missing months that have no
+  // sc_daily_revenue rows but DO have homestand dates (PREP/OPEN/CLOSE
+  // only). Backfill from daysByMonth so those months still appear.
+  const monthsFromSummary = new Set((summaryRes.data || []).map((r) => String(r.month).slice(0, 7)));
+  const allMonthKeys = new Set([...monthsFromSummary, ...daysByMonth.keys()]);
+  const sortedMonthKeys = [...allMonthKeys].sort();
+
+  const summaryByMonth = new Map(
+    (summaryRes.data || []).map((r) => [String(r.month).slice(0, 7), r])
+  );
+
+  const months = sortedMonthKeys.map((monthKey) => {
+    const row = summaryByMonth.get(monthKey) || {};
+    const monthObj = {
       month:                  monthKey,
       totalServiceDays:       Number(row.total_service_days)        || 0,
       daysWithActuals:        Number(row.days_with_actuals)         || 0,
@@ -568,6 +713,10 @@ async function loadYearSummaryPostgres(accountKey, year) {
       revenueVariance:        Number(row.revenue_variance)          || 0,
       days:                   daysByMonth.get(monthKey)             || [],
     };
+    if (homestandSummaryByMonth.has(monthKey)) {
+      monthObj.homestandSummary = homestandSummaryByMonth.get(monthKey);
+    }
+    return monthObj;
   });
 
   return { year: Number(year), months };
