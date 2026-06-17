@@ -1109,6 +1109,9 @@ Upload, code &amp; submit to AP.
                                   {s.vendor}
                                   <span className="oh-inv-hist-status" style={{ background: statusColor.bg, color: statusColor.color }}>{statusLabel}</span>
                                 </span>
+                                {s.status === "returned" && s.rejectionNote && (
+                                  <span className="oh-inv-hist-reject-teaser">{s.rejectionNote.length > 60 ? s.rejectionNote.slice(0, 60) + "..." : s.rejectionNote}</span>
+                                )}
                                 <span className="oh-inv-history-meta">
                                   {s.invoiceNumber ? `#${s.invoiceNumber} · ` : ""}{s.invoiceDate ? new Date(s.invoiceDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}{s.type === "credit" ? " · Credit" : ""} · {s.pageCount} pg{historyAccount !== "__current__" ? ` · ${s.account}` : ""}
                                 </span>

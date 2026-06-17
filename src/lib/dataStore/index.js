@@ -88,6 +88,7 @@ export {
   getInvoiceSubmissionByUuid,
   findDuplicateSubmission,
   getInvoiceRejectionsForSubmission,
+  getLatestRejectionsForSubmissions,
   getAILineItemsForInvoice,
   getGLCodes,
   upsertInvoiceSubmission,
