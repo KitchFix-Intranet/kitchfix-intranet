@@ -637,7 +637,16 @@ async function loadYearSummaryPostgres(accountKey, year) {
     // "upcoming-service" on the year heatmap - operators saw the whole
     // back half of the season as scheduled service when most of those
     // days are planned off-days.
-    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && billingModel !== "flat_fee") return "no-service";
+    //
+    // Gate: any account that ISN'T using the homestand-driven schedule
+    // view. flat_fee + hasHomestandData = the 4 MLB fee accounts
+    // (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) - those use the homestand
+    // branch above and skip this. STL-FL is flat_fee but has no
+    // homestand rows; Kevin requires its operators to use actuals so
+    // it gets the per-meal treatment here. Matches the frontend
+    // isFeeAccount gate exactly (data.account.billingModel ===
+    // "flat_fee" && !!data.homestandMap).
+    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && !(billingModel === "flat_fee" && hasHomestandData)) return "no-service";
     if (isPast && isOverdue) return "overdue";
     if (isPast) return "needs-entry";
     return "future";
