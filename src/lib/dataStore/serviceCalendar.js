@@ -693,9 +693,13 @@ export async function saveBulkActuals(accountKey, entries, email) {
 // Applies admin changes to the service catalog. Two change types:
 //
 //   { type: "price", serviceId, newPrice, effectiveDate? }
-//     -> appends a new sc_service_prices row. effectiveDate defaults
-//        to today. The ledger is append-only; previous prices remain.
-//        sc_daily_revenue resolves the price-at-date via LATERAL.
+//     -> upserts a sc_service_prices row keyed by (service_id, effective_date).
+//        effectiveDate defaults to today. If the admin corrects a price
+//        twice in the same day, the second change UPDATEs the first row
+//        rather than failing the uq_sc_service_prices_service_date
+//        unique constraint. The ledger is otherwise append-only:
+//        prior-day prices are never touched, and sc_daily_revenue
+//        resolves price-at-date via LATERAL against the full history.
 //
 //   { type: "deactivate", serviceId }
 //     -> sets sc_services.active = false. Existing projections/
@@ -718,13 +722,20 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
 
   for (const ch of changes) {
     if (ch.type === "price") {
-      const { error } = await supa.from(SC_TABLES.prices).insert({
-        service_id:     ch.serviceId,
-        price:          Number(ch.newPrice),
-        effective_date: ch.effectiveDate || today,
-        created_by:     email,
-        notes:          ch.notes || null,
-      });
+      // Upsert (not insert) so a same-day re-correction updates the
+      // existing row instead of failing on uq_sc_service_prices_service_date.
+      // Admins routinely tweak a price more than once during config
+      // setup; before this, the second tweak threw 23505 from PG.
+      const { error } = await supa.from(SC_TABLES.prices).upsert(
+        {
+          service_id:     ch.serviceId,
+          price:          Number(ch.newPrice),
+          effective_date: ch.effectiveDate || today,
+          created_by:     email,
+          notes:          ch.notes || null,
+        },
+        { onConflict: "service_id,effective_date" }
+      );
       throwOnError(error, `updateServiceConfig.price[${applied}]`);
       applied++;
     } else if (ch.type === "deactivate") {
