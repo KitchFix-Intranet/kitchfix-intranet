@@ -65,6 +65,29 @@ const SHELVES = [
 
 const MODULE = "playbook";
 
+// ─── Hero image · global pool (team_key IS NULL) ────────────────────────────
+// Mirrors the pattern used by sibling pages (home, Directory, Service Calendar,
+// Financial). Query the hero_images PG table for global-pool rows, pick one
+// at random on each bootstrap load. Returns null when the table is empty or
+// the lookup fails - the client renders the flat navy hero in that case.
+async function pickHeroImage() {
+  try {
+    const supa = getServiceClient();
+    const { data, error } = await supa
+      .from("hero_images")
+      .select("url")
+      .is("team_key", null);
+    if (error) return null;
+    const urls = (data || [])
+      .map((r) => r.url)
+      .filter((u) => u && String(u).includes("http"));
+    if (urls.length === 0) return null;
+    return urls[Math.floor(Math.random() * urls.length)];
+  } catch {
+    return null;
+  }
+}
+
 // ─── Editing allowlist + validation sets (action=update-document) ───────────
 //
 // The owner edits catalog fields directly from /playbook/admin's worklist:
@@ -222,10 +245,10 @@ export async function GET(request) {
       const includeRetired = searchParams.get("include_retired") === "true";
       const baseStatuses = visibleStatuses(isCorp);
       const statuses = includeRetired ? [...baseStatuses, "Retired"] : baseStatuses;
-      const allDocs = await listDocuments(
-        { statuses },
-        { module: MODULE }
-      );
+      const [allDocs, heroImage] = await Promise.all([
+        listDocuments({ statuses }, { module: MODULE }),
+        pickHeroImage(),
+      ]);
       // If admin requested retired, skip the unconditional Retired-strip in
       // filterDocuments and just trust the status list we pulled.
       const statusVisible = includeRetired
@@ -238,6 +261,7 @@ export async function GET(request) {
         isOwner: true,
         shelves: SHELVES,
         documents: visible,
+        heroImage,
       });
     }
 
