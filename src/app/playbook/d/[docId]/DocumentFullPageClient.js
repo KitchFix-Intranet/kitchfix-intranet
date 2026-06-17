@@ -390,6 +390,30 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
         </section>
       )}
 
+      {/* Screen-only in-page section list. STD-001 v1.2 §3.2: screen reader
+          may surface an optional in-page TOC stand-in. Uses the SAME
+          tocEntries memo that drives the print TOC (one source of truth),
+          and the SAME gate (>= TOC_MIN_H1 sections, not CHK/REF). Anchor
+          hrefs hit the same H1 ids the useEffect applied for the print TOC.
+          Print-hidden via .pb-fullpage-no-print. */}
+      {shouldShowToc(doc.doc_class, tocEntries.length) && (
+        <nav className="pb-screen-toc pb-fullpage-no-print" aria-label="Document contents">
+          <h2 className="pb-screen-toc-title">Contents</h2>
+          <ol className="pb-screen-toc-list">
+            {tocEntries.map((entry, i) => (
+              <li key={entry.id} className="pb-screen-toc-row">
+                <a className="pb-screen-toc-link" href={`#${entry.id}`}>
+                  <span className="pb-screen-toc-num">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="pb-screen-toc-text">{entry.title}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
+
       {/* Reading column - the body. The body article IS what prints starting
           after the cover (page 1) and TOC (page 2 if present). */}
       <article className="pb-fullpage-article">
@@ -421,6 +445,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
           <div
             ref={bodyRef}
             className="pb-fullpage-body"
+            data-doc-class={doc.doc_class || ""}
             dangerouslySetInnerHTML={{ __html: activeHtml }}
           />
         ) : activeDriveUrl ? (
