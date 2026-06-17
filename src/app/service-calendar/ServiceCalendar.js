@@ -97,7 +97,29 @@ export default function ServiceCalendar({ showToast, session }) {
   useEffect(() => {
     fetch("/api/service-calendar?action=sc-accounts")
       .then(r => r.json())
-      .then(d => { if (d.success && d.accounts?.length) { const sorted = d.accounts.sort((a, b) => (CAT_ORDER[a.category]||9) - (CAT_ORDER[b.category]||9) || a.key.localeCompare(b.key)); setAccounts(sorted); setSelectedAccount(sorted[0].key); } })
+      .then(d => {
+        if (!d.success || !d.accounts?.length) return;
+        const sorted = d.accounts.sort((a, b) => (CAT_ORDER[a.category]||9) - (CAT_ORDER[b.category]||9) || a.key.localeCompare(b.key));
+        setAccounts(sorted);
+        // Account-selection fallback chain:
+        //   1. user's mapped account (defaultAccount from user_accounts)
+        //   2. CIN-AZ (corp/admin/unmapped operator default)
+        //   3. first account in the sorted list
+        // The match-against-list check guards against a mapping pointing
+        // at an account that isn't currently imported (e.g. CORP rows
+        // from the contacts seed; CORP has no sc_services so it's not in
+        // the dropdown).
+        const fallbacks = [d.defaultAccount, "CIN - AZ"].filter(Boolean);
+        let initial = sorted[0].key;
+        for (const f of fallbacks) {
+          if (sorted.find(a => a.key === f)) { initial = f; break; }
+        }
+        setSelectedAccount(initial);
+        // Mount always lands the user on the year view - the season-at-
+        // a-glance is the right first read, and they can dropdown into
+        // the month for entry.
+        setViewMode("year");
+      })
       .catch(() => showToast("Failed to load accounts", "error"));
   }, [showToast]);
 

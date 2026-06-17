@@ -216,9 +216,29 @@ export async function GET(request) {
     }
 
     // ── sc-accounts: list every imported account ──
+    //
+    // Also returns defaultAccount: the account_key the requesting user is
+    // mapped to in user_accounts (seeded from the contacts table via
+    // docs/migrations/sc-3-user-accounts-seed.sql). The frontend uses this
+    // to auto-select the user's account on mount with fallback to CIN-AZ.
     if (action === "sc-accounts") {
       const accounts = await loadAccountList();
-      return NextResponse.json({ success: true, accounts });
+      let defaultAccount = null;
+      if (email) {
+        try {
+          const supa = getServiceClient();
+          const { data, error } = await supa
+            .from("user_accounts")
+            .select("account")
+            .ilike("email", email)
+            .limit(1);
+          if (!error && data?.[0]?.account) defaultAccount = data[0].account;
+        } catch {
+          // user_accounts missing or query failed - swallow, frontend
+          // falls back to CIN-AZ -> first account.
+        }
+      }
+      return NextResponse.json({ success: true, accounts, defaultAccount });
     }
 
     // ── sc-load: full month data for one account ──
