@@ -2209,10 +2209,16 @@
   padding: 32px 36px;
   box-shadow: 0 2px 8px rgba(15, 48, 87, 0.04);
 }
+/* Phase 3 polish: screen header tightened to read as a deliberate document
+   header (the screen equivalent of the print cover). Slightly heavier
+   bottom rule in sky-blue to echo the print cover's accent; meta line
+   gets a touch more breathing room; class-row sits cleanly above the
+   Oswald title. The title itself is already Oswald 36px/Bold-700 navy
+   from PR 1 - that's the cover title at screen size, matched. */
 .pb-fullpage-head {
-  border-bottom: 1px solid var(--kf-border);
-  margin-bottom: 24px;
-  padding-bottom: 18px;
+  border-bottom: 1.5px solid #7DB9D5;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
 }
 .pb-fullpage-class-row {
   display: flex;
@@ -2249,6 +2255,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0;
+  margin-top: 14px;
 }
 .pb-fullpage-id {
   font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
@@ -2515,8 +2522,13 @@
 }
 .pb-print-cover-logo {
   display: block;
+  /* Vertical Navy mark is 528x558 (nearly 1:1, slightly taller). At
+     1.4in width the height computes to ~1.48in - sits cleanly above
+     the title block. If the Vertical asset is ever swapped for a
+     more rectangular variant, raise max-height to constrain instead. */
   width: 1.4in;
   height: auto;
+  max-height: 1.6in;
   margin: 0 0 0.4in;
 }
 .pb-print-cover-title {
@@ -2588,7 +2600,20 @@
 }
 
 /* @page rules - margins + running header/footer + page numbers.
-   Top of cascade so they apply to the entire document on print. */
+   Top of cascade so they apply to the entire document on print.
+
+   Phase 2 PR 3: explicitly claim ALL six standard margin boxes (including
+   @top-center, which PR 1/PR 2 left undefined). When @top-center is
+   undefined, Chrome's print-to-PDF defaults inject the document date +
+   title into that box; defining it (even as empty) tells Chrome the
+   margin area is author-controlled and suppresses the default chrome.
+   Same protection applied at @page :first below for the cover page.
+
+   Honest limitation: when the user's Chrome print dialog has "Headers
+   and footers" toggled ON, Chrome may still inject defaults regardless
+   of CSS. CSS does not have a guaranteed kill switch for that. The
+   print-button tooltip in DocumentFullPageClient.js notes the dialog
+   setting; floor-first default-off behavior is what this CSS achieves. */
 @page {
   size: letter;
   margin: 1in;
@@ -2599,6 +2624,11 @@
     color: #6B7785;
     padding-bottom: 6pt;
     border-bottom: 0.5pt solid #7DB9D5;
+  }
+  @top-center {
+    /* Author-claimed; empty so Chrome's default date/title header lands
+       on nothing rather than falling back to its built-in chrome. */
+    content: "";
   }
   @top-right {
     content: string(doc-title);
@@ -2635,10 +2665,112 @@
    STD-001 v1.2 §03: "Cover page - No header. No footer." */
 @page :first {
   @top-left { content: none; }
+  @top-center { content: none; }
   @top-right { content: none; }
   @bottom-left { content: none; }
   @bottom-center { content: none; }
   @bottom-right { content: none; }
+}
+
+/* ─── Print TOC (STD-001 v1.2 §12) ─────────────────────────────────────────
+   Page 2 of the PDF when present. Auto-rendered from H1 section titles only.
+   Page numbers via CSS target-counter() - supported in Chrome's print-to-PDF
+   since ~Chrome 95 (2021). If Kevin's print-preview reveals the numbers
+   don't hold on long docs, comment out the .pb-print-toc-page::before
+   content line below to ship a plain TOC (the rest of the structure stays;
+   the dotted leader trails to an empty right margin cleanly).
+   ─────────────────────────────────────────────────────────────────────── */
+.pb-print-toc {
+  page-break-after: always;
+  page-break-before: always;
+  padding: 0.4in 0 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.pb-print-toc-title {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 28pt;
+  font-weight: 700;
+  color: var(--kf-navy);
+  margin: 0 0 0.1in;
+  letter-spacing: -0.3pt;
+  line-height: 1.1;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid #7DB9D5;
+}
+.pb-print-toc-title::before {
+  content: "SECTION 00";
+  display: block;
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 1.5pt;
+  text-transform: uppercase;
+  color: var(--kf-navy);
+  margin-bottom: 4pt;
+}
+.pb-print-toc-list {
+  list-style: none;
+  margin: 0.3in 0 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  color: #0E2647;
+}
+.pb-print-toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12pt;
+  margin: 0;
+  padding: 7pt 0;
+  border-bottom: 0.25pt solid #D0D7E2;
+  page-break-inside: avoid;
+}
+.pb-print-toc-num {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 10pt;
+  font-weight: 600;
+  letter-spacing: 0.6pt;
+  color: #7DB9D5;
+  width: 0.4in;
+  flex-shrink: 0;
+}
+.pb-print-toc-link {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6pt;
+  text-decoration: none;
+  color: #0E2647;
+  font-size: 11pt;
+  font-weight: 500;
+}
+.pb-print-toc-text {
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.pb-print-toc-dots {
+  flex: 1;
+  border-bottom: 0.5pt dotted #6B7785;
+  margin: 0 4pt 3pt;
+  min-width: 0.5in;
+}
+.pb-print-toc-page {
+  font-family: 'Inter', sans-serif;
+  font-size: 11pt;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--kf-navy);
+  min-width: 0.3in;
+  text-align: right;
+  flex-shrink: 0;
+}
+/* CSS target-counter() resolves at paint time to the page number where the
+   anchor target lives. The TOC <a> hrefs point at H1 ids assigned by the
+   client useEffect; the counter pulls the page number from each H1's print
+   layout position. If this stops working in a future Chrome, comment out
+   the content line to ship a plain TOC. */
+.pb-print-toc-page::before {
+  content: target-counter(attr(href url), page);
 }
 
 /* Print-side overrides for the rendered body section eyebrow + H1 rules.
@@ -2668,5 +2800,104 @@
     margin: 10pt 0 4pt;
     page-break-after: avoid;
     border-bottom-width: 0.5pt;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Phase 3 polish - screen TOC + screen<->print parity + per-class print rules
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Screen-only in-page section list (STD-001 v1.2 §3.2). Same gate as the
+   print TOC; renders as a clean navy numbered list above the body. Anchors
+   jump in-page via #id; scroll-margin-top on h1s gives a comfortable
+   landing position. Hidden in print (the print TOC handles that side). */
+.pb-screen-toc {
+  background: #f8fafc;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 18px 22px 16px;
+  margin: 0 0 28px;
+  font-family: 'Inter', sans-serif;
+}
+.pb-screen-toc-title {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--kf-navy);
+  margin: 0 0 12px;
+}
+.pb-screen-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+@media (min-width: 720px) {
+  .pb-screen-toc-list { grid-template-columns: 1fr 1fr; column-gap: 18px; }
+}
+.pb-screen-toc-row {
+  margin: 0;
+  padding: 0;
+}
+.pb-screen-toc-link {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--kf-navy);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pb-screen-toc-link:hover {
+  background: rgba(15, 110, 86, 0.08);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-screen-toc-num {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #7DB9D5;
+  flex-shrink: 0;
+  min-width: 1.6em;
+}
+.pb-screen-toc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Smooth-scroll for in-page anchor jumps + comfortable landing position so
+   the section eyebrow has air above it. Applies on screen only - print is
+   paginated and these have no effect. */
+html { scroll-behavior: smooth; }
+.pb-fullpage-body h1 { scroll-margin-top: 80px; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Per-class print rule: AGR signature page starts on a fresh page.
+   STD-001 v1.2 §12: AGR has "an Acknowledgement and Agreement signature
+   page (full page; no running footer on the signature page)." Both AGR
+   docs in the corpus (AGR-001, AGR-002) put the signature section at the
+   last H1 of the body. Forcing a page break before the last H1 ensures
+   the signature lives on a clean fresh page.
+
+   Note: footer suppression on just that page (per the standard's "no
+   running footer on the signature page" rule) is NOT done in this PR -
+   it would need named-page machinery and a wrapping element around the
+   signature section to apply a `page: signature` named-page. The
+   page-break is the high-confidence part; the footer suppression is
+   noted as a future refinement. */
+@media print {
+  .pb-fullpage-body[data-doc-class="AGR"] > h1:last-of-type {
+    page-break-before: always;
   }
 }

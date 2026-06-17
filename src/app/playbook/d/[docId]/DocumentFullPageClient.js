@@ -24,7 +24,7 @@
 // EN/ES language toggle when both variants are present.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "../../playbook.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "../../_shared";
@@ -60,12 +60,38 @@ function nextReviewLine(nextReview) {
 
 // Approval line: approver + approval date. The MDX `approval.approved_date`
 // is NOT in PG today (the projection doesn't extract it from the approval
-// block). So the approval-date side renders an em-dash for now; once the
-// projection extracts approval block fields, this fills in automatically.
+// block). pr-7-14 projects approval.approved_date to a new documents column;
+// once the migration applies + projection runs, the cover renders the real
+// date for docs whose MDX carries an approval block.
 function approvalLine(approver, approvedDate) {
   const a = orDash(approver);
   const d = orDash(approvedDate);
   return `${a} · ${d}`;
+}
+
+// STD-001 v1.2 §12: TOC is generated from H1 section titles only. CHK and
+// REF classes get NO TOC regardless of length. Other classes get a TOC
+// when the doc carries enough H1 sections to warrant it.
+//
+// "Over 10 pages" intent is hard to enforce at render time (we don't know
+// page count before paint). The pragmatic proxy is H1 count: a doc with 4
+// or more H1 sections likely spans enough pages to benefit from a TOC.
+// Short docs (FORM, single-section REF, 1-3 H1s) skip it cleanly.
+const TOC_MIN_H1 = 4;
+const TOC_EXCLUDED_CLASSES = new Set(["CHK", "REF"]);
+
+function shouldShowToc(docClass, h1Count) {
+  if (TOC_EXCLUDED_CLASSES.has(docClass)) return false;
+  return h1Count >= TOC_MIN_H1;
+}
+
+// Slugify H1 text for stable ids (used as TOC anchor targets).
+function slugifyHeading(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
 }
 
 export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
@@ -101,30 +127,98 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
     };
   }, [docId]);
 
-  // PR 1 bridge for the H1 leading-number prefix.
+  // TOC + body H1 wiring.
   //
-  // Current MDX corpus authors `# 01 Purpose and Scope` as H1s. The CSS
-  // counter approach for the SECTION 01 eyebrow would otherwise double-
-  // number (SECTION 01 + 01 Purpose and Scope). Strip the leading numeric
-  // prefix from each H1's text content after the HTML mounts. PR 2 will
-  // strip these prefixes from the MDX source corpus-wide, at which point
-  // this strip becomes a no-op and the CSS counter still produces the
-  // correct eyebrow numbering.
+  // PR 2 used a post-paint useEffect to populate tocEntries from the live
+  // DOM, but that meant the TOC <section> wasn't in JSX on the same render
+  // the body mounted - it took an extra render after setTocEntries fired.
+  // Kevin's print test caught a case where the TOC was missing on PB-002,
+  // which the race window explains.
+  //
+  // PR 3 fix: parse H1s from activeHtml SYNCHRONOUSLY via useMemo so
+  // tocEntries is available on the SAME render the body mounts. No race
+  // window; the TOC reliably appears for qualifying docs.
+  //
+  // The useEffect below still runs - it applies the SAME ids derived in
+  // the memo to the live DOM H1s so the TOC anchor hrefs match the H1 ids
+  // that target-counter() looks up. One source of truth (the memo); two
+  // consumers (TOC JSX + live DOM).
   const bodyRef = useRef(null);
-  const htmlSig =
-    lang + (data?.content_html?.length || 0) + (data?.content_html_es?.length || 0);
+  // Resolve activeHtml here so the memo can parse it; the same value gets
+  // recomputed below for the body render (the cost is trivial).
+  const previewActiveLang = data
+    ? data.content_html && data.content_html_es
+      ? lang
+      : data.content_html
+        ? "en"
+        : "es"
+    : "en";
+  const previewActiveHtml = data
+    ? previewActiveLang === "es"
+      ? data.content_html_es
+      : data.content_html
+    : null;
+  const tocEntries = useMemo(() => {
+    if (!previewActiveHtml) return [];
+    // Parse every <h1>...</h1> from the rendered HTML. The renderer
+    // (md_to_html.mjs) emits clean <h1>text</h1> with no attributes,
+    // so a non-greedy match across newlines is reliable.
+    const H1_RE = /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi;
+    const LEADING_NUM_RE = /^\s*\d{1,3}(\.\d+)?\s+/;
+    const usedIds = new Set();
+    const entries = [];
+    let match;
+    let idx = 0;
+    while ((match = H1_RE.exec(previewActiveHtml)) !== null) {
+      // Strip any inner HTML tags (the renderer can emit <em>/<strong>
+      // inside h1 if the markdown source has them) and HTML entities.
+      const raw = match[1]
+        .replace(/<[^>]*>/g, "")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+      const stripped = raw.replace(LEADING_NUM_RE, "").trim();
+      if (!stripped) {
+        idx++;
+        continue;
+      }
+      let id = slugifyHeading(stripped) || `section-${idx + 1}`;
+      let dedupId = id;
+      let n = 2;
+      while (usedIds.has(dedupId)) {
+        dedupId = `${id}-${n++}`;
+      }
+      id = dedupId;
+      usedIds.add(id);
+      entries.push({ id, title: stripped });
+      idx++;
+    }
+    return entries;
+  }, [previewActiveHtml]);
+
   useEffect(() => {
-    if (!bodyRef.current) return;
+    if (!bodyRef.current || tocEntries.length === 0) return;
     const h1s = bodyRef.current.querySelectorAll("h1");
     const LEADING_NUM_RE = /^\s*\d{1,3}(\.\d+)?\s+/;
-    h1s.forEach((h1) => {
+    h1s.forEach((h1, idx) => {
+      // Strip a leading numeric prefix if any (defense-in-depth no-op
+      // post PR-2 corpus cleanup; catches any new doc that re-introduces
+      // a "01 " prefix).
       const original = h1.textContent || "";
       const stripped = original.replace(LEADING_NUM_RE, "");
       if (stripped !== original) {
         h1.textContent = stripped;
       }
+      // Apply the SAME id from the memo so the TOC anchors hit them.
+      // tocEntries is parsed from the SAME HTML this DOM was set to, so
+      // indices align.
+      if (tocEntries[idx]) {
+        h1.id = tocEntries[idx].id;
+      }
     });
-  }, [htmlSig]);
+  }, [previewActiveHtml, tocEntries]);
 
   if (loading) {
     return (
@@ -227,7 +321,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
       <section className="pb-print-cover pb-print-only" aria-hidden="true">
         <img
           className="pb-print-cover-logo"
-          src="/PFS_PrimaryLogo_Navy_Circle.png"
+          src="/PFS_PrimaryLogo_Navy_Vertical.png"
           alt="KitchFix"
         />
         <h1 className="pb-print-cover-title">{orDash(doc.title)}</h1>
@@ -252,7 +346,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
           </div>
           <div className="pb-print-cover-row">
             <dt>Approved By</dt>
-            <dd>{approvalLine(doc.approver, null /* approval.approved_date not projected to PG yet - see follow-up */)}</dd>
+            <dd>{approvalLine(doc.approver, doc.approved_date)}</dd>
           </div>
           <div className="pb-print-cover-row">
             <dt>Next Review</dt>
@@ -265,8 +359,63 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
         </dl>
       </section>
 
+      {/* Print-only Table of Contents. STD-001 v1.2 §12: H1 section titles
+          only, with page numbers via CSS target-counter(). Renders only when:
+          (a) the doc has at least TOC_MIN_H1 H1 sections AND
+          (b) the doc class isn't CHK or REF (those don't get a TOC).
+          Hidden on screen via .pb-print-only (same mechanism as the cover).
+          The TOC appears between cover (page 1) and body (page 3+).
+          Page numbers come from target-counter(attr(href url), page) in CSS
+          (see playbook.css). Chrome's print-to-PDF supports this since ~Chrome
+          95 (2021). If a future browser regression breaks the numbers, the
+          fallback is to drop the .pb-print-toc-page span and ship a plain
+          TOC - one CSS edit. */}
+      {shouldShowToc(doc.doc_class, tocEntries.length) && (
+        <section className="pb-print-toc pb-print-only" aria-hidden="true">
+          <h2 className="pb-print-toc-title">Contents</h2>
+          <ol className="pb-print-toc-list">
+            {tocEntries.map((entry, i) => (
+              <li key={entry.id} className="pb-print-toc-row">
+                <span className="pb-print-toc-num">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <a className="pb-print-toc-link" href={`#${entry.id}`}>
+                  <span className="pb-print-toc-text">{entry.title}</span>
+                  <span className="pb-print-toc-dots" aria-hidden="true" />
+                  <span className="pb-print-toc-page" />
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Screen-only in-page section list. STD-001 v1.2 §3.2: screen reader
+          may surface an optional in-page TOC stand-in. Uses the SAME
+          tocEntries memo that drives the print TOC (one source of truth),
+          and the SAME gate (>= TOC_MIN_H1 sections, not CHK/REF). Anchor
+          hrefs hit the same H1 ids the useEffect applied for the print TOC.
+          Print-hidden via .pb-fullpage-no-print. */}
+      {shouldShowToc(doc.doc_class, tocEntries.length) && (
+        <nav className="pb-screen-toc pb-fullpage-no-print" aria-label="Document contents">
+          <h2 className="pb-screen-toc-title">Contents</h2>
+          <ol className="pb-screen-toc-list">
+            {tocEntries.map((entry, i) => (
+              <li key={entry.id} className="pb-screen-toc-row">
+                <a className="pb-screen-toc-link" href={`#${entry.id}`}>
+                  <span className="pb-screen-toc-num">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="pb-screen-toc-text">{entry.title}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
+
       {/* Reading column - the body. The body article IS what prints starting
-          on page 2 after the cover's page-break-after. */}
+          after the cover (page 1) and TOC (page 2 if present). */}
       <article className="pb-fullpage-article">
         {/* Screen-only header block - the screen equivalent of the cover.
             On print the cover above replaces it. */}
@@ -296,6 +445,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
           <div
             ref={bodyRef}
             className="pb-fullpage-body"
+            data-doc-class={doc.doc_class || ""}
             dangerouslySetInnerHTML={{ __html: activeHtml }}
           />
         ) : activeDriveUrl ? (

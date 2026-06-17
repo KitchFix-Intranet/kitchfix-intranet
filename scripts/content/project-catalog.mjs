@@ -405,6 +405,11 @@ function mdxToDocRow(fm) {
     sort_order: fm.sort_order ?? 100,
     effective_date: fm.effective_date || null,
     last_reviewed: fm.last_reviewed || null,
+    // pr-7-14: STD-001 v1.2 cover renders approver + approval date. The
+    // approver column already exists; this projects the approval block's
+    // approved_date out of frontmatter. Null when the approval block is
+    // absent (placeholder/in-build docs) - the cover renders an em-dash.
+    approved_date: fm.approval?.approved_date || null,
     // next_review computed later in projection (last_reviewed + review_interval_months);
     // for the dry-run we surface null so the planned-update field is honest about
     // what gets written.
@@ -432,7 +437,7 @@ function diffRow(existing, planned) {
     "title", "doc_class", "status", "version", "shelf", "card_line", "summary",
     "owner", "approver", "audience", "classification", "print_required", "critical",
     "sort_order", "effective_date", "last_reviewed", "next_review", "is_historical",
-    "data_provenance", "access_level",
+    "data_provenance", "access_level", "approved_date",
   ];
   for (const f of fields) {
     if (planned[f] !== undefined && !valEq(existing[f], planned[f])) {

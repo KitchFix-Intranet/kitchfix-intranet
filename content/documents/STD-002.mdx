@@ -48,7 +48,7 @@ relationships:
   - { to: POSTER-001, type: references, from_section: "canonical example" }
 ---
 
-# 01 Purpose and Scope
+# Purpose and Scope
 
 STD-002 governs the visual artifacts KitchFix produces - postings, posters, infographics, and signage. Different register from body docs. Same brand discipline.
 
@@ -70,7 +70,7 @@ STD-001 governs body documents - playbooks, standards, policies, SOPs. STD-002 g
 - External-facing collateral - governed by external brand standards.
 - Menu boards and menu cards - governed by Culinary, not Operations.
 
-# 02 Visual Document Classes
+# Visual Document Classes
 
 Four classes. POST, POSTER, INFO, SIGN. Each has a defined purpose, document ID prefix, and expected lifecycle.
 
@@ -78,7 +78,7 @@ Source documents - every visual artifact derives from a source document. POST de
 
 > CRITICAL: Visuals never replace the source document. They reference it. A POST that contradicts its source SOP is non-compliant by definition.
 
-# 03 Format Specifications
+# Format Specifications
 
 - POST default 8.5 by 11 inch portrait, US Letter. Office-printer compatible. Tabloid 11 by 17 alternate for high-traffic.
 - POSTER 18 by 24 inch portrait standard; 24 by 36 alternate for high-visibility locations.
@@ -87,13 +87,13 @@ Source documents - every visual artifact derives from a source document. POST de
 
 > CRITICAL: A POST that cannot print on a standard office color printer is non-compliant.
 
-# 04 Typography for Visuals
+# Typography for Visuals
 
 14pt body minimum on POST and POSTER. Tile-internal exception (8.5pt on POST/INFO, 10pt on POSTER) when the tile carries an icon plus a hero-scale name and the small text is reference-list data, not the primary safety message.
 
 Fonts: Oswald Bold for Hero and Section Header; Mulish Bold for Subhead, Mulish Regular for Body. Arial fallback chain identical to STD-001.
 
-# 05 Color System for Visuals
+# Color System for Visuals
 
 Brand colors from STD-001 plus the severity color system. Severity tiers map to fills and tints:
 
@@ -104,13 +104,13 @@ Brand colors from STD-001 plus the severity color system. Severity tiers map to 
 
 > ANCHOR: Color is never the only signal. Every severity color pairs with a text label and an icon. The triple-signal pattern is non-negotiable.
 
-# 06 Iconography
+# Iconography
 
 Iconify-aggregated icon library. Lucide preferred, MDI second, Tabler third, Phosphor fourth, Font Awesome fifth, Game Icons for food/ingredient icons.
 
 Severity icon mapping locked: S1 = Lucide alert-triangle filled red. S2 = Lucide alert-circle outlined amber. S3 = Lucide info outlined green. S4 = Lucide check-circle outlined green.
 
-# 07 Layout Patterns
+# Layout Patterns
 
 ## 7.1 Three-Zone POST Layout
 
@@ -136,38 +136,38 @@ When a POST carries a phone-tree contact list, an explicit instruction band name
 
 > CRITICAL: Phone numbers belong in the directory, not on the wall. Posting personal cell numbers in clubhouses, kitchens, or break rooms exposes them to anyone in the building.
 
-# 08 Bilingual Standards EN+ES
+# Bilingual Standards EN+ES
 
 EN+ES is recommended, not required. Safety, allergen, and incident-response content strongly recommended for ES. Translation workflow: AI drafts, Sr Director Operations reviews, People Operations approves, both languages publish together. EN and ES share version numbers.
 
-# 09 Logo Use on Visuals
+# Logo Use on Visuals
 
 STD-001 §6 governs the logo system. Visual-specific exceptions: smaller minimum sizes (0.4 inch tall on POST), alpha-channel verification required on master logo files (raw KitchFix-supplied PNGs are RGB with black backplates baked in; strip before use, save with "_t" suffix).
 
-# 10 Production and Print Specs
+# Production and Print Specs
 
 Office printer for POST and INFO portrait (24lb white paper, matte, sRGB, no bleed). Print shop for POSTER and large-format SIGN.
 
-# 11 Editable Source Files
+# Editable Source Files
 
 Every visual artifact ships as a pair: an editable PPTX master in `/Visual Artifacts/Sources/` and a published PDF in `/Visual Artifacts/Published/`. PPTX is the master; PDF is the artifact. Edits happen in the PPTX.
 
 > ANCHOR: PPTX is the master. PDF is the artifact. Edits happen in the PPTX. The PDF is regenerated from the PPTX at every version cut.
 
-# 12 Lifecycle and Update Cadence
+# Lifecycle and Update Cadence
 
 POST quarterly review, POSTER annual, INFO at source SOP review, SIGN annual or per-event. Corner version stamp on every artifact (bottom-right).
 
-# 13 Approval and Review Chain
+# Approval and Review Chain
 
 POST approver Senior Director of Operations. POSTER approver SLT. INFO approver Senior Director of Operations. SIGN approver Senior Director of Operations.
 
 > ANCHOR: Before any visual artifact is approved (first publication or any subsequent version), the artifact must be cross-checked against its source-of-truth document. Conflicts must be resolved before approval, not after.
 
-# 14 Document Anatomy by Class
+# Document Anatomy by Class
 
 Required elements per class. All visual artifacts ship: editable .pptx, published .pdf, companion approval .docx in `/Visual Artifacts/Approval/`.
 
-# 15 Approval and Changes
+# Approval and Changes
 
 v0.2 promotes STD-002 from draft to live status. Material changes from v0.1: tile-internal exception, whitespace ceiling, S2 hybrid treatment, Iconify-aggregated icon library, severity icon mapping confirmed, during/after time separation, reactive-above-reflective, phone-tree gap pattern, bilingual softened to recommended, alpha-channel verification, editable source files (PPTX master + PDF), source-of-truth SOP cross-check, approval companion .docx codified.
