@@ -850,6 +850,56 @@ async function readLatestRejectionsForSubmissionsPostgres(uuids) {
   return out;
 }
 
+async function readUnfixedReturnedInvoicesPostgres() {
+  // Used by the daily cron to email/notify operators whose invoices were
+  // returned by AP but not yet corrected after 3 days. Two round-trips:
+  // (1) all submissions with status='returned' AND status_updated_at
+  //     older than 3 days
+  // (2) any submissions that point back at those via corrected_from_uuid
+  //     (operator did re-submit, but the new row may not have flipped the
+  //     original to 'corrected' yet - belt-and-suspenders check)
+  // Returns only the still-unfixed submissions.
+  const supabase = getServiceClient();
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+  const { data: returned, error: retErr } = await supabase
+    .from("invoice_submissions")
+    .select("client_uuid, submitter_email, vendor_name, invoice_number, account_key, total_amount, status_updated_at")
+    .eq("status", "returned")
+    .lt("status_updated_at", threeDaysAgo);
+  if (retErr) throw new Error(`[dataStore.invoice.pg] getUnfixedReturnedInvoices returned lookup: ${retErr.message}`);
+  if (!returned || returned.length === 0) return [];
+
+  const uuids = returned.map((r) => r.client_uuid);
+  const { data: corrections, error: corrErr } = await supabase
+    .from("invoice_submissions")
+    .select("corrected_from_uuid")
+    .in("corrected_from_uuid", uuids);
+  if (corrErr) throw new Error(`[dataStore.invoice.pg] getUnfixedReturnedInvoices corrections lookup: ${corrErr.message}`);
+  const correctedSet = new Set((corrections || []).map((c) => c.corrected_from_uuid).filter(Boolean));
+
+  return returned
+    .filter((r) => !correctedSet.has(r.client_uuid))
+    .map((r) => ({
+      uuid:            r.client_uuid,
+      submitterEmail:  r.submitter_email || "",
+      vendorName:      r.vendor_name || "",
+      invoiceNumber:   r.invoice_number || "",
+      accountKey:      r.account_key || "",
+      totalAmount:     r.total_amount != null ? Number(r.total_amount) : 0,
+      statusUpdatedAt: pgTimestampToCanonical(r.status_updated_at),
+    }));
+}
+
+async function readUnfixedReturnedInvoicesSheets() {
+  // No Sheets implementation: the daily-cron 3-day reminder is a PG-era
+  // capability that depends on status_updated_at semantics + the
+  // corrected_from_uuid back-reference query. If the cutover is rolled
+  // back, the cron should not fire (silent no-op + console warning) rather
+  // than try to scan the whole sheet for stale returned rows.
+  console.warn("[dataStore.invoice] getUnfixedReturnedInvoices: Sheets path is a no-op; cron 3-day reminder requires PG read.");
+  return [];
+}
+
 async function readAILineItemsForInvoicePostgres(invoiceUuid) {
   if (!invoiceUuid) return [];
   const supabase = getServiceClient();
@@ -1252,6 +1302,27 @@ export async function getLatestRejectionsForSubmissions(uuids, opts = {}) {
     return readLatestRejectionsForSubmissionsPostgres(uuids);
   }
   return readLatestRejectionsForSubmissionsSheets(uuids);
+}
+
+/**
+ * Submissions that were returned by AP more than 3 days ago AND have NOT
+ * yet been corrected (no other submission carries their uuid as
+ * corrected_from_uuid). Used by the daily cron for the 3-day reminder
+ * email + bell. Returns an array of plain summary objects:
+ *   { uuid, submitterEmail, vendorName, invoiceNumber, accountKey,
+ *     totalAmount, statusUpdatedAt }
+ * Empty when nothing is overdue.
+ *
+ *   opts: { module? }
+ *
+ * NOTE: Sheets path is intentionally a no-op (returns []) - the 3-day
+ * reminder is a PG-era capability. See readUnfixedReturnedInvoicesSheets.
+ */
+export async function getUnfixedReturnedInvoices(opts = {}) {
+  if (isReadFromPostgres(INVOICE_SUBMISSIONS_FLAG, opts.module)) {
+    return readUnfixedReturnedInvoicesPostgres();
+  }
+  return readUnfixedReturnedInvoicesSheets();
 }
 
 /**

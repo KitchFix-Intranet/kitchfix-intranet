@@ -89,6 +89,7 @@ export {
   findDuplicateSubmission,
   getInvoiceRejectionsForSubmission,
   getLatestRejectionsForSubmissions,
+  getUnfixedReturnedInvoices,
   getAILineItemsForInvoice,
   getGLCodes,
   upsertInvoiceSubmission,

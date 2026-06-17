@@ -1182,7 +1182,7 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
     }
 
 // ── Invoice Actions (POST) ──
-if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject", "invoice-unreject", "invoice-dismiss-dupe", "invoice-delete-dupe"].includes(action)) {
+if (["invoice-submit", "vendor-add", "invoice-duplicate-check", "invoice-ocr", "invoice-photo-gate", "invoice-consistency-check", "invoice-reject", "invoice-unreject", "invoice-dismiss-dupe", "invoice-delete-dupe", "invoice-archive", "invoice-unarchive"].includes(action)) {
             const result = await handleInvoicePost(action, body, token, email, userName);
           if (result) {
               // Bell notification for invoice rejection

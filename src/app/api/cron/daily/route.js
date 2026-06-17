@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { SHEET_IDS, readSheetSA, appendRowSA } from "@/lib/sheets";
+import { getUnfixedReturnedInvoices } from "@/lib/dataStore";
+import { sendEmailSA } from "@/lib/gmail";
 
 // ═══════════════════════════════════════
 // DAILY CRON - Notification Generator
@@ -241,6 +243,65 @@ await writeNotification("ALL", `[OPS] New period started - ${label}`, "period_st
         await writeNotification("ALL", `[CELEBRATION] Happy ${years}Anniversary, ${name}! 🎉`, "anniversary", name);
         written++;
       }
+    }
+
+    // ─── Invoice: unfixed returned invoices (3-day reminder) ───
+    // Dedup via alreadyFired with eventType "invoice_unfixed_3d" + dedupKey=uuid
+    // means one ping per rejection. If the operator never fixes it, they only
+    // get reminded once (not daily). Archive (status='archived') and correction
+    // (status='corrected') both naturally drop the row from the query.
+    try {
+      const unfixed = await getUnfixedReturnedInvoices({ module: "ops" });
+      for (const inv of unfixed) {
+        const dedupKey = inv.uuid;
+        if (alreadyFired(notifRows, "invoice_unfixed_3d", dedupKey)) continue;
+
+        const submitter = inv.submitterEmail;
+        if (!submitter) continue;
+
+        const totalFmt = `$${Number(inv.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+        const vendor = inv.vendorName || "Unknown vendor";
+        const invNum = inv.invoiceNumber ? ` #${inv.invoiceNumber}` : "";
+
+        await writeNotification(
+          submitter,
+          `Invoice needs fix: ${vendor}${invNum} ${totalFmt}`,
+          "invoice_unfixed_3d",
+          dedupKey
+        );
+        written++;
+
+        const apEmail = process.env.INVOICE_AP_EMAIL || "k.fietek@kitchfix.com";
+        const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <h2 style="color: #153968;">Invoice Needs Attention</h2>
+        <p>An invoice you submitted was returned by AP more than 3 days ago and still needs to be fixed:</p>
+        <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Vendor</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${vendor}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Invoice #</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${inv.invoiceNumber || "N/A"}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Account</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${inv.accountKey || "N/A"}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Total</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${totalFmt}</td></tr>
+        </table>
+        <p>Please log in to <a href="https://kitchfix-intranet.vercel.app/ops">Invoice Capture</a> and use <strong>Fix & Resubmit</strong> to correct and resubmit this invoice.</p>
+        <p style="color: #64748b; font-size: 12px;">This is an automated reminder from KitchFix Ops Hub.</p>
+      </div>
+    `;
+
+        try {
+          await sendEmailSA({
+            sender: apEmail,
+            displayName: "KitchFix Invoice Capture",
+            to: submitter,
+            subject: `Action needed: ${vendor}${invNum} invoice returned - please fix and resubmit`,
+            html,
+            replyTo: apEmail,
+          });
+        } catch (emailErr) {
+          console.warn(`[Cron] Invoice reminder email failed for ${inv.uuid}:`, emailErr.message);
+        }
+      }
+    } catch (err) {
+      console.error("[Cron] Invoice unfixed reminders failed:", err.message);
     }
 
 console.log(`[Cron]   ✅ Done. ${written} notifications written.`);
