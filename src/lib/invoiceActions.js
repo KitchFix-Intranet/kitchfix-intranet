@@ -442,7 +442,7 @@ A mostly-blank page with only a URL, page number, or footer text at the bottom i
 
 const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Analyze this invoice image.
 
-STEP 1 — IMAGE QUALITY CHECK:
+STEP 1 - IMAGE QUALITY CHECK:
 If the image is too blurry, too dark, severely cropped, upside down, not an invoice, or otherwise unreadable, respond ONLY with:
 {
   "readable": false,
@@ -455,7 +455,7 @@ IMPORTANT: A mostly-blank page with only a URL or footer text is a normal traili
 Reason examples: "Document is too blurry to read", "Document is too dark to read", "Invoice is cut off - key details are missing", "This doesn't appear to be an invoice"
 Suggestion examples: "Please re-export the PDF or try a different file", "Try downloading the invoice again from the vendor portal", "Upload the full invoice including all pages", "Please upload an invoice document"
 
-STEP 2 — If readable, extract fields and respond with:
+STEP 2 - If readable, extract fields and respond with:
 {
   "readable": true,
   "confidence": "high" | "medium" | "low",
@@ -468,7 +468,8 @@ STEP 2 — If readable, extract fields and respond with:
 Rules:
 - Return ONLY valid JSON. No markdown, no explanation, no backticks.
 - For dates, always convert to YYYY-MM-DD.
-- For amounts, return a plain number (no $, no commas). Use the INVOICE TOTAL / grand total from the summary section — this is the final amount due at the bottom of the last page. NEVER use subtotals, group totals, or per-category totals.
+- For amounts, return a plain number (no $, no commas). Use the INVOICE TOTAL / grand total from the summary section - this is the final amount due, usually at the bottom of the last page. NEVER use subtotals, group totals, or per-category totals.
+- The grand total is typically the LARGEST dollar amount on the invoice and is usually labeled "Invoice Total", "Grand Total", "Total Due", "Amount Due", "Balance Due", or "TOTAL". If multiple total-like amounts are visible, choose the largest one. Do not use subtotals, group totals, or per-category totals when a grand total is also visible.
 
 VENDOR NAME RULES:
 - vendorName = the company that ISSUED the invoice, NOT the ordering platform.
@@ -476,6 +477,8 @@ VENDOR NAME RULES:
 - IGNORE browser chrome, page headers/footers, and platform names like "Cut+Dry", "cutanddry.com", "BlueCart", "Orderve", "ChefSheet". These are ordering platforms, not vendors.
 - Look for a "Vendor:" label, company logo, or letterhead INSIDE the document body.
 - Common KitchFix vendors: Ben E. Keith, What Chefs Want, Fresh Point, Sysco, US Foods, Fortune Fish & Gourmet, Samuels Seafood, Performance Foodservice, Kuna Foodservice, Rolling Lawn Farms, City Seafood, Lohr Distribution, Truly Good Foods.
+- Fresh Point (a Sysco subsidiary) invoices may be printed on Ben E. Keith distribution letterhead. If the document shows BOTH "Fresh Point" and "Ben E. Keith" anywhere on the page (including small print or footers), return "Fresh Point" as the vendor.
+- "Fresh Point" and "FreshPoint" are the same vendor. Always return "Fresh Point" (with the space).
 
 INVOICE NUMBER RULES:
 - Look first for a field explicitly labeled "Invoice #" or "Invoice Number".
@@ -484,9 +487,25 @@ INVOICE NUMBER RULES:
 - EXCEPTION: For "What Chefs Want" invoices (from Cut+Dry / cutanddry.com), ALWAYS use the "Reference #" as the invoice number, NOT the "Order #". The Reference # is typically a shorter number (e.g. 12524109) compared to the longer Order # (e.g. 928127343).
 - NEVER use "Customer ID" as the invoice number.
 - Return only the number value, not the label (e.g. "906637520" not "Order #: 906637520").
+- NEVER use these as invoice number, even if no "Invoice #" field exists: Customer ID, Customer #, Account #, Account Number, Bill of Lading (BOL) #, Delivery Ticket #, Document #, Manifest #, Route #, Stop #, Truck #, Driver #, PO # (the customer's purchase order is theirs, not the vendor's invoice ID).
+- For Cheney Brothers invoices: use the number labeled "Invoice #" in the header (typically format like "06-910xxxxxx" or "20-910xxxxxx"). Do NOT use the "Order #" or "Account #" fields.
+- For Sysco invoices: use the number labeled "Invoice Number" in the header box (e.g. "532093915", "103349834"). Do NOT use "Order #", "Customer #", or any "Item Number" from the line item table.
+- For Fresh Point invoices: use the number labeled "Invoice #" or "Invoice Number". Do NOT use "Order #" or "PO #".
+- Preserve the full invoice number EXACTLY as printed, including any leading zeros (e.g. "00243986" not "243986"), prefixes (e.g. "INV25729"), and embedded dashes/hyphens.
+- If the number wraps to a second line on the document, concatenate both parts in printed order.
+- If you must choose between two candidate numbers, prefer the one closest to a label containing the word "Invoice" or "INV".
+
+INVOICE DATE RULES:
+- invoiceDate = the date the INVOICE was issued by the vendor, not the delivery date, due date, order date, posting date, or service date.
+- Look first for a field labeled "Invoice Date", "Inv. Date", "Date Issued", or just "Date" adjacent to the invoice number.
+- IGNORE "Due Date", "Delivery Date", "Service Date", "Ship Date", "Order Date", "PO Date", "Posting Date". These are NOT the invoice date.
+- If two dates are visible and one is labeled "Invoice Date" and the other "Due Date", use the Invoice Date. They are different dates.
+- Read the year EXACTLY as printed adjacent to the invoice date label. Do NOT infer or assume the current year. Some invoices are from prior years (e.g. 2020) and were submitted late - the year must be preserved as printed.
+- For Kuna Foodservice invoices: the date is in the top-right header labeled "INVOICE DATE" in format MM/DD/YY (e.g. "06/05/26" = June 5, 2026). The page is often rotated landscape - read the date in its printed orientation. Interpret a 2-digit year of "26" as 2026, "25" as 2025, "24" as 2024 (NOT 1926 or 2125). Do NOT confuse with the "TERMS" line (e.g. "14 DAYS") which describes payment terms, not a date.
+- For Cintas and Alsco Uniforms invoices: invoices may legitimately be from prior years (e.g. 2020). Read the year exactly as printed; do not default to the current year.
 
 - confidence: "high" = all 4 fields clearly extracted, "medium" = 2-3 fields extracted, "low" = only 1 field or uncertain.
-- If a field cannot be determined, use null — never guess.`;
+- If a field cannot be determined, use null - never guess.`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
