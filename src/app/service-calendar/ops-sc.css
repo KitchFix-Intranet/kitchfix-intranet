@@ -471,10 +471,10 @@
   background: #0F6E56;                  /* green - operator logged */
 }
 [data-billing="flat_fee"] .sc-dot--prep {
-  background: #e2e8f0;                  /* very pale - barely visible */
+  background: #a5b4fc;                  /* periwinkle - sibling to navy, clearly distinct */
 }
 [data-billing="flat_fee"] .sc-dot--off-season {
-  background: transparent;              /* invisible */
+  background: #f1f5f9;                  /* light grey - non-game / non-prep, visible */
 }
 
 /* Defensive: if classify ever returns urgency statuses for a fee
@@ -527,9 +527,10 @@
               0 1px 1px rgba(15,110,86,0.22);
 }
 [data-billing="flat_fee"] .sc-dot--prep {
-  background: #cbd5e1;                                              /* a touch darker so it doesn't disappear */
-  opacity: 0.55;
+  background: #a5b4fc;                                              /* periwinkle - sibling to navy */
+  opacity: 1;
 }
+[data-billing="flat_fee"] .sc-legend-dot--prep { background: #a5b4fc; }
 
 /* ── YEAR CARD STATS: stronger typography + HS badge as a pill ── */
 [data-billing="flat_fee"] .sc-year-card-stats {
@@ -627,51 +628,71 @@
   transform: translateY(-1px);
 }
 
-/* "vs OPP" line gets stronger typographic treatment */
+/* "vs OPP" line - darkened to near-black for headline weight. */
 [data-billing="flat_fee"] .sc-tile-game {
   font-size: 11px;
   font-weight: 700;
-  color: #1e3a8a;
+  color: #0f172a;                                  /* darkest - VS OPP is the headline */
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 2px;
   font-style: normal;
 }
 
-/* "HS3" line: smaller, muted, monospace-ish for code-like read */
+/* "HS3" line - darkened too, still secondary to VS OPP. */
 [data-billing="flat_fee"] .sc-tile-meals {
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
+  color: #334155;                                  /* darker slate - HS# the support */
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-style: normal;
 }
 
-/* ── PREP TILE: visibly part of the homestand but not the main event ── */
+/* All fee-account tile date numbers (game day, prep, between-homestand)
+   share the same readable dark slate so the calendar reads as a uniform
+   grid, not a stencil of activated days. */
+[data-billing="flat_fee"] .sc-tile-date {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* ── PREP TILE: periwinkle accent ties it to the year-view prep dot,
+   visually distinct from both navy game days and off-season tiles. ── */
 [data-billing="flat_fee"] .sc-tile--prep {
-  background: #f8fafc;
-  opacity: 1;                                          /* opacity removed; styled directly instead */
-  border-left-color: #cbd5e1 !important;               /* override inline navy */
-  border-left-style: dashed !important;
+  background: #f5f7ff;                                 /* very pale periwinkle wash */
+  opacity: 1;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #a5b4fc !important;           /* periwinkle border-left */
 }
 [data-billing="flat_fee"] .sc-tile--prep .sc-tile-game {
-  color: #64748b;
+  color: #4338ca;                                      /* indigo dark - readable PREP label */
   font-size: 10px;
 }
 [data-billing="flat_fee"] .sc-tile--prep .sc-tile-meals {
-  color: #94a3b8;
+  color: #6366f1;                                      /* indigo mid - HS# */
   font-size: 10px;
 }
 
-/* ── OFF-SEASON / BETWEEN-HOMESTAND TILES: faint but present ── */
+/* ── BETWEEN-HOMESTAND TILES: every day gets a real bordered card,
+   matching the rhythm of game-day tiles instead of vanishing into
+   the background. Date numbers read at the same darkness as game
+   day numbers so the calendar feels like a single grid. ── */
 [data-billing="flat_fee"] .sc-tile--between-homestands {
-  opacity: 0.35;                                       /* up from 0.25 - more visible */
-  min-height: 52px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  opacity: 1;
+  min-height: 60px;
+  cursor: default;
+}
+[data-billing="flat_fee"] .sc-tile--between-homestands:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: #e2e8f0;
 }
 [data-billing="flat_fee"] .sc-tile--between-homestands .sc-tile-date {
-  color: #cbd5e1;
-  font-weight: 400;
+  color: #1e293b;
+  font-weight: 500;
 }
 
 /* ── MONTH METRICS STRIP: tighter typography on the 3-block layout ── */
