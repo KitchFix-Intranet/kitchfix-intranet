@@ -630,7 +630,14 @@ async function loadYearSummaryPostgres(accountKey, year) {
     // to enter). Without this branch the day fell through to "needs-entry"
     // (yellow) or "overdue" (red), surfacing a false alarm the operator
     // can't act on. flat_fee accounts use the homestand branch above.
-    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && isPast && billingModel !== "flat_fee") return "no-service";
+    // Per-meal accounts: any day with projection rows that are ALL zero AND
+    // no actuals = planned off day, regardless of past/future. Without
+    // this, future zero-projection days (Joe entered blank or 0 in the
+    // projections tab) flipped to "future" and rendered as light-green
+    // "upcoming-service" on the year heatmap - operators saw the whole
+    // back half of the season as scheduled service when most of those
+    // days are planned off-days.
+    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && billingModel !== "flat_fee") return "no-service";
     if (isPast && isOverdue) return "overdue";
     if (isPast) return "needs-entry";
     return "future";
