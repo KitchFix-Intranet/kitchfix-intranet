@@ -807,6 +807,27 @@
   background: #93c5fd;
 }
 
+/* PDC / per-meal accounts: future days with projection data render as a
+   light-green "upcoming service" instead of plain grey, so the schedule
+   reads as visible-but-not-billed. Off days (no projection / no actual)
+   stay grey via .sc-dot--off-day. */
+.sc-dot--future-service {
+  background: #bbf7d0;
+  opacity: 1;
+}
+.sc-legend-dot--future-service {
+  background: #bbf7d0;
+}
+
+/* TODAY indicator: amber ring on every account mode's year heatmap.
+   Drawn as an outset box-shadow so it stacks on top of inset gameType
+   rings (sc-dot--home etc) without being overridden by background. */
+.sc-dot--today {
+  box-shadow: 0 0 0 2px #f59e0b !important;
+  position: relative;
+  z-index: 1;
+}
+
 /* Game-day tiles: meals count and revenue typography bumped so the
    active homestand week reads as the main event. Status urgency
    (overdue/needs-entry bg + badge) inherited from per-meal cascade. */
