@@ -24,6 +24,7 @@ import {
   mergeVendors,
   getInvoiceSubmissions,
   getInvoiceSubmissionByUuid,
+  getLatestRejectionsForSubmissions,
   findDuplicateSubmission,
   getGLCodes,
   upsertInvoiceSubmission,
@@ -79,6 +80,36 @@ function toLegacySubmission(c) {
     correctedFromUuid: c.correctedFromUuid,
     dupeOverride:      c.dupeOverride,
   };
+}
+
+// Mutates `submissions` in place: for any submission with status='returned',
+// hydrate rejectionReason/Note/By/At from the PG invoice_rejections child
+// table (or from the Sheets submission row's R-U if reading from Sheets).
+// canonicalFromPgRow leaves these fields empty since rejections are
+// normalized into a separate PG table; this post-query enrichment fills
+// them so the operator history banner has data to render.
+// One batch query for the whole list; no-op when no returned rows present.
+// Non-blocking: catches and logs errors so a rejection-fetch failure
+// doesn't break the whole history view.
+async function hydrateRejectionData(submissions) {
+  const returnedUuids = submissions
+    .filter((s) => s.status === "returned")
+    .map((s) => s.uuid);
+  if (returnedUuids.length === 0) return;
+  try {
+    const rejections = await getLatestRejectionsForSubmissions(returnedUuids, { module: "ops" });
+    for (const sub of submissions) {
+      const rej = rejections[sub.uuid];
+      if (rej) {
+        sub.rejectionReason = rej.rejectionReason;
+        sub.rejectionNote   = rej.rejectionNote;
+        sub.rejectedBy      = rej.rejectedBy;
+        sub.rejectedAt      = rej.rejectedAt;
+      }
+    }
+  } catch (err) {
+    console.warn("[Invoice] Rejection hydration failed (non-blocking):", err.message);
+  }
 }
 
 // PR 6.2 (C5 + S1): GL codes are stored flat in the dataStore. The
@@ -187,6 +218,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       // Pre-PR-6.2 hard deletes were invisible to history; preserve that UX
       // by filtering soft-deleted rows at the handler boundary.
       recentSubmissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+      await hydrateRejectionData(recentSubmissions);
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
     }
@@ -211,7 +243,9 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       scope: "all",
       module: "ops",
     });
-    return { success: true, history: rows.filter((r) => r.status !== "deleted").map(toLegacySubmission) };
+    const history = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+    await hydrateRejectionData(history);
+    return { success: true, history };
   }
 
   // ── Admin: All Submissions ──

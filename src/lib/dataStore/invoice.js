@@ -429,6 +429,34 @@ async function readInvoiceRejectionsForSubmissionSheets(uuid) {
   }];
 }
 
+async function readLatestRejectionsForSubmissionsSheets(uuids) {
+  // Sheets path: rejection metadata is embedded in cols R-U of each
+  // submission row. One sheet read for the whole batch (avoids N+1).
+  // Returns a map { uuid: { rejectionReason, rejectionNote, rejectedBy,
+  // rejectedAt } } matching the PG-path shape. Submissions without any
+  // rejection data are omitted from the map.
+  if (!uuids || uuids.length === 0) return {};
+  const wanted = new Set(uuids.map(String));
+  const { rows } = await safeRead(SHEET_IDS.COLLECTION, INVOICE_SUBMISSIONS_TAB);
+  const out = {};
+  for (const r of rows) {
+    const u = String(r[SUB_IDX.uuid] || "").trim();
+    if (!wanted.has(u)) continue;
+    const reason = String(r[SUB_IDX.rejectionReason] || "").trim();
+    const note   = String(r[SUB_IDX.rejectionNote]   || "").trim();
+    const by     = String(r[SUB_IDX.rejectedBy]      || "").trim();
+    const at     = String(r[SUB_IDX.rejectedAt]      || "").trim();
+    if (!reason && !note && !by && !at) continue;
+    out[u] = {
+      rejectionReason: reason,
+      rejectionNote:   note,
+      rejectedBy:      by,
+      rejectedAt:      at,
+    };
+  }
+  return out;
+}
+
 async function readAILineItemsForInvoiceSheets(invoiceUuid, accountKey) {
   // Sheets adapter requires the accountKey to locate the per-account tab.
   // PG adapter does not (account_key column is in row).
@@ -775,6 +803,51 @@ async function readInvoiceRejectionsForSubmissionPostgres(submissionUuid) {
     unrejectedAt: pgTimestampToCanonical(r.unrejected_at),
     unrejectedBy: r.unrejected_by || "",
   }));
+}
+
+async function readLatestRejectionsForSubmissionsPostgres(uuids) {
+  // Batch fetcher used by operator history hydration. Two round-trips:
+  // (1) client_uuid -> id mapping (invoice_rejections.submission_id FKs the
+  //     integer id, not the client_uuid)
+  // (2) active rejections for those ids
+  // Returns { client_uuid: { rejectionReason, rejectionNote, rejectedBy,
+  // rejectedAt } }. "Active" = unrejected_at IS NULL. If a submission has
+  // multiple active rows (defensive; should be 0 or 1), the most recent
+  // by rejected_at wins.
+  if (!uuids || uuids.length === 0) return {};
+  const supabase = getServiceClient();
+  const { data: subs, error: subErr } = await supabase
+    .from("invoice_submissions")
+    .select("id, client_uuid")
+    .in("client_uuid", uuids);
+  if (subErr) throw new Error(`[dataStore.invoice.pg] getLatestRejections submission lookup: ${subErr.message}`);
+  if (!subs || subs.length === 0) return {};
+  const idToUuid = new Map();
+  const ids = [];
+  for (const s of subs) {
+    idToUuid.set(s.id, s.client_uuid);
+    ids.push(s.id);
+  }
+  const { data: rejs, error: rejErr } = await supabase
+    .from("invoice_rejections")
+    .select("submission_id, rejected_at, rejected_by, reason, note")
+    .in("submission_id", ids)
+    .is("unrejected_at", null)
+    .order("rejected_at", { ascending: false });
+  if (rejErr) throw new Error(`[dataStore.invoice.pg] getLatestRejections: ${rejErr.message}`);
+  const out = {};
+  for (const r of rejs || []) {
+    const uuid = idToUuid.get(r.submission_id);
+    if (!uuid) continue;
+    if (out[uuid]) continue; // first occurrence = most recent (ordered DESC)
+    out[uuid] = {
+      rejectionReason: r.reason || "",
+      rejectionNote:   r.note || "",
+      rejectedBy:      r.rejected_by || "",
+      rejectedAt:      pgTimestampToCanonical(r.rejected_at),
+    };
+  }
+  return out;
 }
 
 async function readAILineItemsForInvoicePostgres(invoiceUuid) {
@@ -1156,6 +1229,29 @@ export async function getInvoiceRejectionsForSubmission(submissionUuid, opts = {
     return readInvoiceRejectionsForSubmissionPostgres(submissionUuid);
   }
   return readInvoiceRejectionsForSubmissionSheets(submissionUuid);
+}
+
+/**
+ * Batch fetch the most recent ACTIVE rejection per submission UUID.
+ * Used by operator history to hydrate rejection reason / note / by / at
+ * after the main submissions read. The PG submissions read path leaves
+ * these fields empty (rejections live in a separate child table); this
+ * function fills them via a post-query enrichment.
+ *
+ * Returns a map { uuid: { rejectionReason, rejectionNote, rejectedBy,
+ * rejectedAt } } that callers merge into their submission objects.
+ * Submissions with no active rejection are absent from the map.
+ *
+ * Empty input -> empty map (no network call).
+ *
+ *   opts: { module? }
+ */
+export async function getLatestRejectionsForSubmissions(uuids, opts = {}) {
+  if (!uuids || uuids.length === 0) return {};
+  if (isReadFromPostgres(INVOICE_REJECTIONS_TAB, opts.module)) {
+    return readLatestRejectionsForSubmissionsPostgres(uuids);
+  }
+  return readLatestRejectionsForSubmissionsSheets(uuids);
 }
 
 /**
