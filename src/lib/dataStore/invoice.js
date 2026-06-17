@@ -670,7 +670,16 @@ async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
     item.catchWeightMarker || "",                                                       // W (22)
     item.rawColumns != null ? JSON.stringify(item.rawColumns) : "",                     // X (23)
   ]);
-  await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
+  // appendRowsSA catches Sheets API errors and returns {success:false, error}
+  // instead of throwing. The pre-2026-06-17 code path didn't check the return,
+  // so a Sheets-API failure silently no-op'd while the caller proceeded to
+  // write PG -- the inverse silent-gap shape of the 2026-06-12 pg_failed bug.
+  // Surface failures here so insertAILineItems' Sheets-first ordering leaves
+  // a clean both-stores-empty state when Sheets errors.
+  const r = await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
+  if (!r || r.success !== true) {
+    throw new Error(`[dataStore.invoice.sheets] insertAILineItems: ${r?.error || "unknown Sheets append failure"}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

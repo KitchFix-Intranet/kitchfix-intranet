@@ -166,6 +166,20 @@ Fix: one-line change in the canary, swap `sub.id` to `sub.client_uuid` in the Sh
 
 A single invoice from 2026-06-11 has Sheets/PG imbalance: 18 Sheets rows but only 9 in PG. Likely a pre-fix artifact from an extraction that failed half-way and then retried, leaving Sheets duplicated. Not a silent gap (both stores have data), just unequal. Low priority cleanup target if Sheets/PG parity ever becomes important for this single invoice.
 
+### (d) `appendRowsSA` swallow-failure shape in 3 other dual-write modules
+
+`src/lib/sheets.js:146` `appendRowsSA` catches Sheets API errors and returns `{success:false, error}` instead of throwing. The invoice line-item path (`insertAILineItemsSheets` at `src/lib/dataStore/invoice.js:673`) was fixed in 2026-06-17 to check the return and throw, after the inverse silent-gap surfaced as PG-rows-with-no-Sheets-rows during the post-OCR-outage rescan. Three other production callers have the same swallow-failure shape and were NOT touched:
+
+- `src/lib/dataStore/inventory.js:667` — `submitCountSessionSheets` (monthly count submit)
+- `src/lib/dataStore/directory.js:726` — `replaceContactsForAccount` (per-account contacts replace)
+- `src/lib/dataStore/shared.js:162` — generic replace-pattern primitive (foundation for additional modules)
+
+Same bug shape: a Sheets API transient (rate limit, 5xx, network) is caught, message is `console.error`'d, function returns `{success:false}`, caller awaits and proceeds. For count/contacts this means the operation looks successful to the user but the row never lands in Sheets; depending on dual-write flag state, PG may or may not get the row, so either silent data loss OR silent drift.
+
+The invoice fix used Option B (narrow: check the return only in the invoice path) because the other 3 modules weren't audited for what surfacing failures would do to their UX/flow. Follow-up audit needed: for each of the 3, decide whether to (i) check the return locally (mirroring the invoice fix), or (ii) make `appendRowsSA` itself throw (broader fix, fixes all callers including any future ones). Has not happened in production to date as far as we know; surfaced today only because 4 fresh subprocesses raced on the same spreadsheet during recovery. Sequential live traffic would rarely trip it. Not urgent but worth closing before a similar concurrency event surfaces it.
+
+Related: the m6 migration's `COMMENT ON COLUMN invoice_submissions.ai_scan_error` says "NULL on Sheets-only OCR failures" — that comment became inaccurate when the invoice-side fix shipped (Sheets failures now capture cause). No data migration needed; comment is stale only. Update if/when the m6 migration is touched for another reason.
+
 ---
 
 ---
