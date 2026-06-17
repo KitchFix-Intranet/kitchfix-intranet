@@ -63,6 +63,23 @@ The original five-spreadsheet model. Still load-bearing for unmigrated modules +
 
 **When designing a new feature, build Supabase-native** using the `dataStore` orchestrator pattern (see "Module map" below). The Sheets-only pattern persists in legacy modules but is not the model for new work. See [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) §H for the pattern contrast.
 
+### OPD: MDX is the source of truth, Postgres holds the overlay
+
+The Playbook / OPD module is the one place in the stack where the source of truth is **not** Postgres. After the doc-format arc, repo-canonical MDX (`content/documents/*.mdx`) holds document content + identity + structure. The projection script (`scripts/content/project-catalog.mjs --apply`) derives the Postgres `documents` row from MDX on every run. Postgres holds an **overlay** of operational-lifecycle fields that the projection PRESERVES (never overwrites) so the dashboard can own them as instant, no-deploy edits.
+
+The boundary:
+
+| Lives in | Fields | Edit path |
+|---|---|---|
+| **MDX (`content/documents/*.mdx`)** - the document | id, title, doc_class, version, shelf, sort_order, card_line, summary, keywords, owner, approver, audience, classification, print_required, critical, effective_date, last_reviewed, approved_date, content body, relationships, surfaces | Edit the MDX file -> run projection -> changes land in Postgres on next apply |
+| **Postgres overlay** - operational lifecycle | status, access_level, pinned (in `document_pins`), archived / archived_at, source_drive_id* (dead, retiring), storage_path (reserved) | Edit via the Build Dashboard (becoming "OPD Command") - instant, persists across projection applies |
+
+**The rule:** editing an MDX-authored field anywhere except the MDX file is a silent-data-loss trap. The dashboard can show a value and accept an edit, but the next `--apply` overwrites it. The dashboard rebuild (OPD Command) makes this boundary visible at the cell level - overlay fields are editable; MDX-authored fields are read-only with an "edit in MDX" affordance.
+
+**Projection preserves overlay by omission:** fields the projection doesn't include in `mdxToDocRow` aren't written. PostgREST `.upsert(rows, { onConflict: "id" })` only updates columns present in the INSERT list, so omitted columns ride through ON CONFLICT untouched. Status is the exception (NOT NULL with no default) and uses conditional include - see `GOTCHAS.md` "`documents.status` is NOT NULL with no default."
+
+**Drive is retired as an OPD content source.** The doc-format arc replaced Drive-hosted PDFs with in-app MDX rendering (cover, TOC, print/PDF, the works). `documents.source_drive_id` / `_es` columns and a reader iframe fallback still exist but are scheduled for deletion once the operator-catalog alive-test in `PlaybookClient.js` is unwired from Drive.
+
 ### Cutover control plane
 
 `src/lib/cutover.js` parses two env-var-derived flag sets at module load:
