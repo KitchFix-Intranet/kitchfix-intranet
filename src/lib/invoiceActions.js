@@ -217,7 +217,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       // PR 6.2 C10: invoice-delete-dupe is now a soft delete (status='deleted').
       // Pre-PR-6.2 hard deletes were invisible to history; preserve that UX
       // by filtering soft-deleted rows at the handler boundary.
-      recentSubmissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+      recentSubmissions = rows.filter((r) => r.status !== "deleted" && r.status !== "archived").map(toLegacySubmission);
       await hydrateRejectionData(recentSubmissions);
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
@@ -243,7 +243,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       scope: "all",
       module: "ops",
     });
-    const history = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+    const history = rows.filter((r) => r.status !== "deleted" && r.status !== "archived").map(toLegacySubmission);
     await hydrateRejectionData(history);
     return { success: true, history };
   }
@@ -1221,6 +1221,75 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
     }
 
     return { success: true, deleted: true };
+  }
+
+  // ───────────────────────────────────────────────────────────────
+  // invoice-archive / invoice-unarchive
+  //
+  // *** REQUIRED MIGRATION (run in Supabase SQL editor BEFORE deploy) ***
+  //     ALTER TABLE invoice_submissions DROP CONSTRAINT IF EXISTS invoice_submissions_status_check;
+  //     ALTER TABLE invoice_submissions ADD CONSTRAINT invoice_submissions_status_check
+  //       CHECK (status IN ('sent', 'returned', 'corrected', 'deleted', 'archived'));
+  // Without this migration, updateInvoiceFields will fail on the PG path
+  // with a CHECK constraint violation when archiving. Sheets writes do
+  // not have this constraint.
+  // ───────────────────────────────────────────────────────────────
+  if (action === "invoice-archive") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const orig = await getInvoiceSubmissionByUuid(uuid, { module: "ops" });
+    if (!orig) return { success: false, error: "Submission not found" };
+
+    try {
+      await updateInvoiceFields(uuid, {
+        status: "archived",
+        statusUpdatedAt: new Date().toISOString(),
+      }, { module: "ops" });
+    } catch (e) {
+      console.error(`[Invoice] Archive failed for ${uuid}:`, e.message);
+      return { success: false, error: "Failed to archive" };
+    }
+
+    console.log(`[Invoice] Archived: ${orig.vendorName} #${orig.invoiceNumber} uuid=${uuid} by ${email}`);
+
+    if (process.env.SLACK_INVOICE_WEBHOOK) {
+      const totalFmt = `$${Number(orig.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🗄️ Invoice archived: ${orig.vendorName || "?"} ${totalFmt}`,
+          blocks: [{
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*🗄️ Invoice Archived*\n*Vendor:* ${orig.vendorName || "Unknown"}\n*Account:* ${orig.accountKey || "N/A"}\n*Invoice #:* ${orig.invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Archived by:* ${email}`,
+            },
+          }],
+        }),
+      }).catch(() => {});
+    }
+
+    return { success: true };
+  }
+
+  if (action === "invoice-unarchive") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    try {
+      await updateInvoiceFields(uuid, {
+        status: "sent",
+        statusUpdatedAt: new Date().toISOString(),
+      }, { module: "ops" });
+    } catch (e) {
+      console.error(`[Invoice] Unarchive failed for ${uuid}:`, e.message);
+      return { success: false, error: "Failed to unarchive" };
+    }
+
+    console.log(`[Invoice] Unarchived: uuid=${uuid} by ${email}`);
+    return { success: true };
   }
 
   return null;

@@ -2156,6 +2156,8 @@
 /* ═══ Delete duplicate ═══ */
 .oh-inv-hist-action-btn--delete { border-color: #fca5a5; color: #991b1b; }
 .oh-inv-hist-action-btn--delete:hover { background: #fef2f2; }
+.oh-inv-hist-action-btn--archive { color: #64748b; }
+.oh-inv-hist-action-btn--archive:hover { color: #475569; background: #f1f5f9; }
 .oh-inv-adm-delete-warn {
   display: flex;
   align-items: flex-start;
