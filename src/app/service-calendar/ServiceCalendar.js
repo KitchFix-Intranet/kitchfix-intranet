@@ -145,6 +145,20 @@ export default function ServiceCalendar({ showToast, session }) {
   const variance = metrics.actRev - metrics.projRev;
   const completionPct = metrics.total > 0 ? Math.round(metrics.complete / metrics.total * 100) : 0;
 
+  // Fee-account fork: triggers only for flat_fee accounts that HAVE
+  // homestand data. STL-FL is flat_fee but has zero rows in
+  // sc_homestand_schedule, so isFeeAccount is false for it and the
+  // per-meal display renders (Kevin's decision: STL-FL operators are
+  // required to use actuals, same UI as PDC accounts). Per the route's
+  // sc-load action, homestandMap is omitted when empty.
+  //
+  // Declared HERE (not at the bottom of the component) because the
+  // feeMetrics + dayStatus hooks below reference them in their
+  // dependency arrays - JavaScript TDZ otherwise.
+  const isFeeAccount =
+    data?.account?.billingModel === "flat_fee" && !!data?.homestandMap;
+  const homestandMap = data?.homestandMap || {};
+
   // Fee-account metrics: count game-day completion + identify the
   // homestand the month is sitting in. Only computed when isFeeAccount;
   // ignored for per-meal display.
@@ -388,16 +402,6 @@ export default function ServiceCalendar({ showToast, session }) {
     "prep": { icon: "·", className: "sc-badge--prep" },
     "off-season": { icon: "", className: "sc-badge--offseason" },
   };
-
-  // Fee-account fork: triggers only for flat_fee accounts that HAVE
-  // homestand data. STL-FL is flat_fee but has zero rows in
-  // sc_homestand_schedule, so isFeeAccount is false for it and the
-  // per-meal display renders (Kevin's decision: STL-FL operators are
-  // required to use actuals, same UI as PDC accounts). Per the route's
-  // sc-load action, homestandMap is omitted when empty.
-  const isFeeAccount =
-    data?.account?.billingModel === "flat_fee" && !!data?.homestandMap;
-  const homestandMap = data?.homestandMap || {};
 
   return (
     <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"}>
