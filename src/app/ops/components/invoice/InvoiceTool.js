@@ -183,6 +183,7 @@ const [dragOver, setDragOver] = useState(false);
   const [adminStats, setAdminStats] = useState(null);
     const [historySearch, setHistorySearch] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState("all");
+  const [historyStatus, setHistoryStatus] = useState("all");
   const [historyAccount, setHistoryAccount] = useState("__current__");
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -799,25 +800,27 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
     }
   }, [activeTab, historyAccount, loadHistoryForAccount]);
 
-  const returnedCount = useMemo(() => recentSubmissions.filter((s) => s.status === "returned").length, [recentSubmissions]);
+  const historySource = useMemo(() => historyData !== null ? historyData : recentSubmissions, [historyData, recentSubmissions]);
 
-    const historySource = historyData !== null ? historyData : recentSubmissions;
+  const returnedCount = useMemo(() => historySource.filter((s) => s.status === "returned").length, [historySource]);
 
-    
   const filteredSubmissions = useMemo(() => {
     let list = historySource;
     if (historySearch.trim()) {
       const q = historySearch.toLowerCase();
       list = list.filter((s) => s.vendor.toLowerCase().includes(q) || (s.invoiceNumber || "").toLowerCase().includes(q));
     }
+    // Time period filter (week / month / all)
     if (historyPeriod === "week") list = list.filter((s) => new Date(s.timestamp) >= new Date(Date.now() - 7 * 86400000));
     else if (historyPeriod === "month") list = list.filter((s) => new Date(s.timestamp) >= new Date(Date.now() - 30 * 86400000));
-    else if (historyPeriod === "needsfix") list = list.filter((s) => s.status === "returned");
+    // Status filter (independent of time period)
+    if (historyStatus === "returned") list = list.filter((s) => s.status === "returned");
+    else if (historyStatus === "corrected") list = list.filter((s) => s.status === "corrected");
     list = [...list].sort((a, b) => (a.status === "returned" ? 0 : 1) - (b.status === "returned" ? 0 : 1));
     return list;
-  }, [historySource, historySearch, historyPeriod]);
+  }, [historySource, historySearch, historyPeriod, historyStatus]);
 
-  useEffect(() => { setHistoryVisible(20); }, [historySearch, historyPeriod, historyAccount]);
+  useEffect(() => { setHistoryVisible(20); }, [historySearch, historyPeriod, historyStatus, historyAccount]);
 
   const periodSummary = useMemo(() => {
     const src = historySource;
@@ -1046,9 +1049,15 @@ Upload, code &amp; submit to AP.
                   {historySearch && <button className="oh-inv-history-search-clear" onClick={() => setHistorySearch("")}>×</button>}
                 </div>
                 <div className="oh-inv-history-periods">
-                  {[["all","All"],["week","7 Days"],["month","30 Days"],["needsfix","Needs fix"]].map(([val, label]) => (
+                  {[["week","7 Days"],["month","30 Days"],["all","All Time"]].map(([val, label]) => (
                     <button key={val} className={`oh-inv-period-pill${historyPeriod === val ? " oh-inv-period-pill--active" : ""}`} onClick={() => setHistoryPeriod(val)}>{label}</button>
                   ))}
+                  <span className="oh-inv-pill-divider" />
+                  <button className={`oh-inv-period-pill${historyStatus === "all" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setHistoryStatus("all")}>All</button>
+                  <button className={`oh-inv-period-pill${historyStatus === "returned" ? " oh-inv-period-pill--active" : ""}`}
+                    style={historyStatus !== "returned" && returnedCount > 0 ? { borderColor: "#fca5a5", color: "#991b1b" } : {}}
+                    onClick={() => setHistoryStatus("returned")}>Returned{returnedCount > 0 ? ` (${returnedCount})` : ""}</button>
+                  <button className={`oh-inv-period-pill${historyStatus === "corrected" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setHistoryStatus("corrected")}>Corrected</button>
                 </div>
               </div>
 
@@ -1057,7 +1066,7 @@ Upload, code &amp; submit to AP.
               ) : (
                 <>
                   {(() => {
-                    if (historyPeriod === "needsfix") return null;
+                    if (historyStatus !== "all") return null;
                     const ps = historyPeriod === "month" ? periodSummary.month : historyPeriod === "week" ? periodSummary.week : periodSummary.all;
                     const label = historyPeriod === "month" ? "30 days" : historyPeriod === "week" ? "7 days" : "All time";
                     if (ps.count === 0) return null;
@@ -1070,11 +1079,11 @@ Upload, code &amp; submit to AP.
                       </div>
                     );
                   })()}
-                  {returnedCount > 0 && historyPeriod !== "needsfix" && (
+                  {returnedCount > 0 && historyStatus !== "returned" && (
                     <div className="oh-inv-hist-returned-alert">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                       <span className="oh-inv-hist-returned-alert-text">{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
-                      <button className="oh-inv-hist-returned-alert-btn" onClick={() => setHistoryPeriod("needsfix")}>View</button>
+                      <button className="oh-inv-hist-returned-alert-btn" onClick={() => setHistoryStatus("returned")}>View</button>
                     </div>
                   )}
                   {filteredSubmissions.length === 0 && historySource.length === 0 ? (
@@ -1089,7 +1098,7 @@ Upload, code &amp; submit to AP.
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                       <p className="oh-inv-empty-title">No results</p>
                       <p className="oh-inv-empty-desc">Try a different search or time period.</p>
-                      <button className="oh-inv-empty-cta" onClick={() => { setHistorySearch(""); setHistoryPeriod("all"); }}>Clear filters</button>
+                      <button className="oh-inv-empty-cta" onClick={() => { setHistorySearch(""); setHistoryPeriod("all"); setHistoryStatus("all"); }}>Clear filters</button>
                     </div>
                   ) : (
                     <div className="oh-inv-history-list">
