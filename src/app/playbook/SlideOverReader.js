@@ -303,10 +303,17 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             - No-file path: disabled "Open in Drive" placeholder. */}
       <div className="pb-slide-actions">
         {hasContent ? (
+          // A6 polish-2 #7: open in a new tab so the operator keeps the
+          // catalog open while reading (matches the external-link icon's
+          // promise, and gives a sane "back to where I was" without losing
+          // the slide-over's nav stack). target=_blank + rel=noopener for
+          // basic safety.
           <Link
             href={`/playbook/d/${encodeURIComponent(doc.id)}${activeLang === "es" ? "?lang=es" : ""}`}
             className="pb-action pb-action--primary"
-            aria-label={`Read full document: ${doc.title}`}
+            aria-label={`Read full document: ${doc.title} (opens in a new tab)`}
+            target="_blank"
+            rel="noopener noreferrer"
             prefetch={false}
           >
             Read full document

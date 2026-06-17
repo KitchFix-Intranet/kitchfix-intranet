@@ -234,8 +234,14 @@
 
 @media (min-width: 640px) {
   .pb-hero { padding: 24px 28px 18px; }
-  .pb-hero-tag { font-size: 28px; }
-  .pb-hero-sub { font-size: 14px; }
+  /* A6 polish-2 #3: title bumped 28 -> 36 + tighter tracking so it commands
+     the space against the rich hero photo. The pre-polish title sat below
+     the Comfortable-mode --type-h1 floor (32px) and read as under-weighted. */
+  .pb-hero-tag { font-size: 36px; letter-spacing: -0.6px; }
+  /* A6 polish-2 #4: subtitle alpha 0.78 -> 0.85 and size 14 -> 15 so it
+     reads confidently through the lighter middle of the new 3-stop hero
+     gradient. Still well below the title visually. */
+  .pb-hero-sub { font-size: 15px; color: rgba(255, 255, 255, 0.85); }
   .pb-search-bar { padding: 12px 16px; }
   .pb-search-input { font-size: 15px; }
 }
@@ -339,21 +345,28 @@
   align-items: center;
   gap: 6px;
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  /* A6 polish-2 #5: bumped from 11px to 12px so the owner's primary admin
+     entry is findable on a busy hero photo. */
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  padding: 5px 10px;
+  color: white;
+  /* Glass-chip treatment: backdrop blur + stronger background alpha so the
+     chip reads on any hero image the rotation surfaces. Mirrors the
+     backdrop-blur pattern used elsewhere (people.css, ops-shared.css). */
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 6px 12px;
   border-radius: 999px;
   text-decoration: none;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .pb-admin-link:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.26);
   color: white;
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 .pb-admin-link:focus-visible {
   outline: 2px solid var(--kf-playbook-teal);
@@ -419,8 +432,12 @@
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: var(--kf-navy);
-  padding: 8px 26px 8px 4px;
+  /* A6 polish-2 #6: value text navy -> slate (#334155) so the chip reads
+     less heavy and the value/label color-balance feels less front-loaded.
+     Plus +4px right padding so the value doesn't crowd the chevron at the
+     narrow "All" state. */
+  color: #334155;
+  padding: 8px 30px 8px 4px;
   /* Chevron - same SVG pattern Directory uses (directory.css:1235) so the
      visual language stays consistent across the app. */
   background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
@@ -438,11 +455,19 @@
 /* ─── View toggle (Cards / List) ─────────────────────────────────────────── */
 .pb-view-toggle {
   display: inline-flex;
+  align-items: center;
   background: white;
   border: 1px solid var(--kf-border);
   border-radius: 999px;
   padding: 2px;
   flex-shrink: 0;
+  /* A6 polish-2 #1: pin the toggle to the right of .pb-controls-row so the
+     filter dropdowns stay left-grouped (Jakob's Law admin filter bar) and
+     the view toggle anchors to the row's right edge. */
+  margin-left: auto;
+  /* Match the dropdown baseline (.pb-filter-select min-height: 40px) so the
+     filter bar and toggle share a horizontal axis. */
+  min-height: 40px;
 }
 .pb-view-btn {
   display: inline-flex;
@@ -2343,8 +2368,19 @@
 }
 
 /* ─── @media print - operator hits Print/Save PDF on the full-page reader.
-   Strip app chrome (TopNav, toolbar, drive-fallback link) so the printed
-   artifact is clean + branded + paginated. */
+   A6 polish-2 #2: QUICK PATCH only. The previous version overshot in two
+   ways:
+     (1) color: #000 on .pb-fullpage-body cascaded to all headings, killing
+         the navy hierarchy.
+     (2) No print-color-adjust meant browsers default-stripped background
+         fills, so callout boxes (.callout-anchor / -critical / -note /
+         -warning) and table-header tints rendered as raw text with only
+         their left-border surviving.
+   Fix: strip app chrome + add page-break rules (what print rules are FOR),
+   then let the document design carry through unchanged. The Document
+   Format Standard arc (queued, separate) is the comprehensive fix that
+   will codify every doc class's print/screen/PDF treatment per STD-001.
+   This is the "print isn't embarrassing now" scaffolding until that lands. */
 @media print {
   body {
     background: white !important;
@@ -2367,13 +2403,28 @@
     padding: 0;
     border-radius: 0;
   }
+  /* Force colored fills + borders to print so callout boxes survive the
+     browser's default "save ink" stripping. Without this, the screen styles
+     for blockquote.callout-* and table headers print as raw text. */
+  .pb-fullpage-body,
+  .pb-fullpage-body blockquote,
+  .pb-fullpage-body blockquote.callout,
+  .pb-fullpage-body blockquote.callout-anchor,
+  .pb-fullpage-body blockquote.callout-critical,
+  .pb-fullpage-body blockquote.callout-note,
+  .pb-fullpage-body blockquote.callout-warning,
+  .pb-fullpage-body th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .pb-fullpage-title {
     font-size: 22pt;
   }
+  /* Note: NO `color: #000` here - the screen heading colors (navy on h1)
+     carry through so hierarchy survives print. */
   .pb-fullpage-body {
     font-size: 11pt;
     line-height: 1.5;
-    color: #000;
   }
   .pb-fullpage-body h1 { font-size: 16pt; margin-top: 16pt; page-break-after: avoid; }
   .pb-fullpage-body h2 { font-size: 13pt; margin-top: 12pt; page-break-after: avoid; }
@@ -2382,7 +2433,7 @@
   .pb-fullpage-body li { orphans: 3; widows: 3; }
   .pb-fullpage-body blockquote { page-break-inside: avoid; }
   .pb-fullpage-body table { page-break-inside: avoid; }
-  /* Print footer - simple meta line so the printed artifact is identifiable. */
+  /* Print header - meta line so the printed artifact is identifiable. */
   .pb-fullpage-head {
     border-bottom: 2pt solid var(--kf-navy);
     padding-bottom: 8pt;
