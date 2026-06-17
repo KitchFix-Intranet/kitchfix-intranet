@@ -736,7 +736,7 @@ export default function ServiceCalendar({ showToast, session }) {
               {isFeeAccount ? (
                 <>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day scheduled</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Scheduled game day</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
                 </>
               ) : isMilb ? (
@@ -744,7 +744,7 @@ export default function ServiceCalendar({ showToast, session }) {
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Upcoming game day</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Scheduled game day</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
                 </>
               ) : (
@@ -772,8 +772,10 @@ export default function ServiceCalendar({ showToast, session }) {
                 const hs = md?.homestandSummary;
                 // MiLB out-of-season months have totalDays === 0 (no
                 // schedule rows for that month). "0/0 entered $0" reads
-                // as a 100% failure state; replace with a neutral
-                // "Out of season" caption instead.
+                // as a 100% failure state; the noService gate fires
+                // instead and the card shows the shared "Off-season"
+                // caption (same text + style used for fee-no-homestand
+                // and PDC-no-projection months).
                 const noService = isFeeAccount
                   ? !hs || (hs.gameDays === 0 && hs.prepDays === 0)
                   : isMilb
@@ -878,7 +880,7 @@ export default function ServiceCalendar({ showToast, session }) {
                     </div>
 
                     {noService ? (
-                      <div className="sc-year-card-noservice">{isFeeAccount ? "No homestands this month" : isMilb ? "Out of season" : "No services this month"}</div>
+                      <div className="sc-year-card-noservice">Off-season</div>
                     ) : isFeeAccount ? (
                       <>
                         <div className="sc-year-card-stats">
