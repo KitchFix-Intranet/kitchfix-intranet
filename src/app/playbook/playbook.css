@@ -2515,8 +2515,13 @@
 }
 .pb-print-cover-logo {
   display: block;
+  /* Vertical Navy mark is 528x558 (nearly 1:1, slightly taller). At
+     1.4in width the height computes to ~1.48in - sits cleanly above
+     the title block. If the Vertical asset is ever swapped for a
+     more rectangular variant, raise max-height to constrain instead. */
   width: 1.4in;
   height: auto;
+  max-height: 1.6in;
   margin: 0 0 0.4in;
 }
 .pb-print-cover-title {
@@ -2588,7 +2593,20 @@
 }
 
 /* @page rules - margins + running header/footer + page numbers.
-   Top of cascade so they apply to the entire document on print. */
+   Top of cascade so they apply to the entire document on print.
+
+   Phase 2 PR 3: explicitly claim ALL six standard margin boxes (including
+   @top-center, which PR 1/PR 2 left undefined). When @top-center is
+   undefined, Chrome's print-to-PDF defaults inject the document date +
+   title into that box; defining it (even as empty) tells Chrome the
+   margin area is author-controlled and suppresses the default chrome.
+   Same protection applied at @page :first below for the cover page.
+
+   Honest limitation: when the user's Chrome print dialog has "Headers
+   and footers" toggled ON, Chrome may still inject defaults regardless
+   of CSS. CSS does not have a guaranteed kill switch for that. The
+   print-button tooltip in DocumentFullPageClient.js notes the dialog
+   setting; floor-first default-off behavior is what this CSS achieves. */
 @page {
   size: letter;
   margin: 1in;
@@ -2599,6 +2617,11 @@
     color: #6B7785;
     padding-bottom: 6pt;
     border-bottom: 0.5pt solid #7DB9D5;
+  }
+  @top-center {
+    /* Author-claimed; empty so Chrome's default date/title header lands
+       on nothing rather than falling back to its built-in chrome. */
+    content: "";
   }
   @top-right {
     content: string(doc-title);
@@ -2635,6 +2658,7 @@
    STD-001 v1.2 §03: "Cover page - No header. No footer." */
 @page :first {
   @top-left { content: none; }
+  @top-center { content: none; }
   @top-right { content: none; }
   @bottom-left { content: none; }
   @bottom-center { content: none; }

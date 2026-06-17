@@ -24,7 +24,7 @@
 // EN/ES language toggle when both variants are present.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "../../playbook.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "../../_shared";
@@ -127,42 +127,64 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
     };
   }, [docId]);
 
-  // Post-render walk of the rendered body H1s.
+  // TOC + body H1 wiring.
   //
-  // Two responsibilities in this one pass:
+  // PR 2 used a post-paint useEffect to populate tocEntries from the live
+  // DOM, but that meant the TOC <section> wasn't in JSX on the same render
+  // the body mounted - it took an extra render after setTocEntries fired.
+  // Kevin's print test caught a case where the TOC was missing on PB-002,
+  // which the race window explains.
   //
-  // (a) [PR 1 bridge - now defense-in-depth] Strip a leading numeric
-  //     prefix from each H1 text content if present. PR 2 stripped these
-  //     from MDX source corpus-wide, so this is normally a no-op on the
-  //     fresh corpus; left in place so any newly authored doc that
-  //     accidentally re-introduces a "01 " prefix still renders cleanly
-  //     (the CSS counter owns numbering either way).
+  // PR 3 fix: parse H1s from activeHtml SYNCHRONOUSLY via useMemo so
+  // tocEntries is available on the SAME render the body mounts. No race
+  // window; the TOC reliably appears for qualifying docs.
   //
-  // (b) [PR 2 new] Assign a stable id to each H1 and collect (id, title)
-  //     pairs into state so the TOC component can render <a> entries
-  //     whose hrefs resolve to those ids via target-counter() in print.
+  // The useEffect below still runs - it applies the SAME ids derived in
+  // the memo to the live DOM H1s so the TOC anchor hrefs match the H1 ids
+  // that target-counter() looks up. One source of truth (the memo); two
+  // consumers (TOC JSX + live DOM).
   const bodyRef = useRef(null);
-  const [tocEntries, setTocEntries] = useState([]);
-  const htmlSig =
-    lang + (data?.content_html?.length || 0) + (data?.content_html_es?.length || 0);
-  useEffect(() => {
-    if (!bodyRef.current) {
-      setTocEntries([]);
-      return;
-    }
-    const h1s = bodyRef.current.querySelectorAll("h1");
+  // Resolve activeHtml here so the memo can parse it; the same value gets
+  // recomputed below for the body render (the cost is trivial).
+  const previewActiveLang = data
+    ? data.content_html && data.content_html_es
+      ? lang
+      : data.content_html
+        ? "en"
+        : "es"
+    : "en";
+  const previewActiveHtml = data
+    ? previewActiveLang === "es"
+      ? data.content_html_es
+      : data.content_html
+    : null;
+  const tocEntries = useMemo(() => {
+    if (!previewActiveHtml) return [];
+    // Parse every <h1>...</h1> from the rendered HTML. The renderer
+    // (md_to_html.mjs) emits clean <h1>text</h1> with no attributes,
+    // so a non-greedy match across newlines is reliable.
+    const H1_RE = /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi;
     const LEADING_NUM_RE = /^\s*\d{1,3}(\.\d+)?\s+/;
-    const entries = [];
     const usedIds = new Set();
-    h1s.forEach((h1, idx) => {
-      const original = h1.textContent || "";
-      const stripped = original.replace(LEADING_NUM_RE, "");
-      if (stripped !== original) {
-        h1.textContent = stripped;
+    const entries = [];
+    let match;
+    let idx = 0;
+    while ((match = H1_RE.exec(previewActiveHtml)) !== null) {
+      // Strip any inner HTML tags (the renderer can emit <em>/<strong>
+      // inside h1 if the markdown source has them) and HTML entities.
+      const raw = match[1]
+        .replace(/<[^>]*>/g, "")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+      const stripped = raw.replace(LEADING_NUM_RE, "").trim();
+      if (!stripped) {
+        idx++;
+        continue;
       }
-      const title = stripped.trim();
-      let id = slugifyHeading(title) || `section-${idx + 1}`;
-      // De-dup if two H1s slug to the same id.
+      let id = slugifyHeading(stripped) || `section-${idx + 1}`;
       let dedupId = id;
       let n = 2;
       while (usedIds.has(dedupId)) {
@@ -170,11 +192,33 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
       }
       id = dedupId;
       usedIds.add(id);
-      h1.id = id;
-      entries.push({ id, title });
+      entries.push({ id, title: stripped });
+      idx++;
+    }
+    return entries;
+  }, [previewActiveHtml]);
+
+  useEffect(() => {
+    if (!bodyRef.current || tocEntries.length === 0) return;
+    const h1s = bodyRef.current.querySelectorAll("h1");
+    const LEADING_NUM_RE = /^\s*\d{1,3}(\.\d+)?\s+/;
+    h1s.forEach((h1, idx) => {
+      // Strip a leading numeric prefix if any (defense-in-depth no-op
+      // post PR-2 corpus cleanup; catches any new doc that re-introduces
+      // a "01 " prefix).
+      const original = h1.textContent || "";
+      const stripped = original.replace(LEADING_NUM_RE, "");
+      if (stripped !== original) {
+        h1.textContent = stripped;
+      }
+      // Apply the SAME id from the memo so the TOC anchors hit them.
+      // tocEntries is parsed from the SAME HTML this DOM was set to, so
+      // indices align.
+      if (tocEntries[idx]) {
+        h1.id = tocEntries[idx].id;
+      }
     });
-    setTocEntries(entries);
-  }, [htmlSig]);
+  }, [previewActiveHtml, tocEntries]);
 
   if (loading) {
     return (
@@ -277,7 +321,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
       <section className="pb-print-cover pb-print-only" aria-hidden="true">
         <img
           className="pb-print-cover-logo"
-          src="/PFS_PrimaryLogo_Navy_Circle.png"
+          src="/PFS_PrimaryLogo_Navy_Vertical.png"
           alt="KitchFix"
         />
         <h1 className="pb-print-cover-title">{orDash(doc.title)}</h1>
