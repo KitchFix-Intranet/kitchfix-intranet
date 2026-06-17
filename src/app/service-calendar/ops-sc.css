@@ -504,6 +504,193 @@
 [data-billing="flat_fee"] .sc-tile-rev--projected,
 [data-billing="flat_fee"] .sc-tile-rev--future { display: none; }
 
+/* ════════════════════════════════════════════════════════════════
+   FEE-ACCOUNT REFINEMENT PASS — depth, hierarchy, polish.
+   Targets the "sparse / flat / cavernous" feel that hit on the
+   first deploy. Same color logic (navy schedule, green entered,
+   muted prep) but with intentional depth + typography.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── YEAR HEATMAP DOTS: add depth without changing the palette ── */
+[data-billing="flat_fee"] .sc-dot {
+  border-radius: 3px;
+  position: relative;
+}
+[data-billing="flat_fee"] .sc-dot--future {
+  background: #1e40af;                                              /* slight saturation bump */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12),                 /* top highlight */
+              0 1px 1px rgba(30,64,175,0.18);                       /* tiny lift */
+}
+[data-billing="flat_fee"] .sc-dot--entered {
+  background: #0F6E56;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15),
+              0 1px 1px rgba(15,110,86,0.22);
+}
+[data-billing="flat_fee"] .sc-dot--prep {
+  background: #cbd5e1;                                              /* a touch darker so it doesn't disappear */
+  opacity: 0.55;
+}
+
+/* ── YEAR CARD STATS: stronger typography + HS badge as a pill ── */
+[data-billing="flat_fee"] .sc-year-card-stats {
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+[data-billing="flat_fee"] .sc-year-card-stats > span:first-child {
+  color: #1e293b;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+[data-billing="flat_fee"] .sc-year-card-rev {
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── YEAR PROGRESS BAR: gradient toward homestand-complete ── */
+[data-billing="flat_fee"] .sc-year-bar {
+  height: 4px;                                                       /* slight bump */
+  background: #f1f5f9;
+}
+[data-billing="flat_fee"] .sc-year-bar-fill {
+  background: linear-gradient(90deg, #1e40af 0%, #0F6E56 100%);     /* navy -> green */
+}
+
+/* ── EMPTY MONTH CARDS: "No homestands" as intentional state ── */
+[data-billing="flat_fee"] .sc-year-card-noservice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0 8px;
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Year cards get a consistent min-height so empty months sit at the
+   same physical size as data-rich ones - removes the "broken" feel. */
+[data-billing="flat_fee"] .sc-year-card { min-height: 220px; }
+
+/* Slight border + hover refinement so cards feel like real surfaces. */
+[data-billing="flat_fee"] .sc-year-card {
+  border-color: #e2e8f0;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.2s;
+}
+[data-billing="flat_fee"] .sc-year-card:hover {
+  border-color: #1e40af;
+  box-shadow: 0 8px 24px rgba(30,64,175,0.10);
+}
+[data-billing="flat_fee"] .sc-year-card--current {
+  border-color: #0F6E56;
+}
+
+/* ── LEGEND polish: cleaner spacing + slightly taller blocks ── */
+[data-billing="flat_fee"] .sc-year-legend {
+  gap: 18px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+[data-billing="flat_fee"] .sc-legend-item {
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  gap: 7px;
+}
+[data-billing="flat_fee"] .sc-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+[data-billing="flat_fee"] .sc-legend-dot--future { background: #1e40af; }
+
+/* ── MONTH-VIEW GAME-DAY TILE: more presence, clearer hierarchy ── */
+[data-billing="flat_fee"] .sc-tile--active {
+  border: 1px solid #e2e8f0;
+  border-left-width: 3px;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+}
+[data-billing="flat_fee"] .sc-tile--active:hover {
+  border-color: #1e40af;
+  box-shadow: 0 4px 12px rgba(30,64,175,0.12);
+  transform: translateY(-1px);
+}
+
+/* "vs OPP" line gets stronger typographic treatment */
+[data-billing="flat_fee"] .sc-tile-game {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  font-style: normal;
+}
+
+/* "HS3" line: smaller, muted, monospace-ish for code-like read */
+[data-billing="flat_fee"] .sc-tile-meals {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-style: normal;
+}
+
+/* ── PREP TILE: visibly part of the homestand but not the main event ── */
+[data-billing="flat_fee"] .sc-tile--prep {
+  background: #f8fafc;
+  opacity: 1;                                          /* opacity removed; styled directly instead */
+  border-left-color: #cbd5e1 !important;               /* override inline navy */
+  border-left-style: dashed !important;
+}
+[data-billing="flat_fee"] .sc-tile--prep .sc-tile-game {
+  color: #64748b;
+  font-size: 10px;
+}
+[data-billing="flat_fee"] .sc-tile--prep .sc-tile-meals {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* ── OFF-SEASON / BETWEEN-HOMESTAND TILES: faint but present ── */
+[data-billing="flat_fee"] .sc-tile--between-homestands {
+  opacity: 0.35;                                       /* up from 0.25 - more visible */
+  min-height: 52px;
+}
+[data-billing="flat_fee"] .sc-tile--between-homestands .sc-tile-date {
+  color: #cbd5e1;
+  font-weight: 400;
+}
+
+/* ── MONTH METRICS STRIP: tighter typography on the 3-block layout ── */
+[data-billing="flat_fee"] .sc-metric-label {
+  color: #475569;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+[data-billing="flat_fee"] .sc-metric-hero {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+/* Month footer: navy accent instead of revenue green */
+[data-billing="flat_fee"] .sc-month-footer-rev {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
 /* Card stats */
 .sc-year-card-stats { display: flex; justify-content: space-between; font-size: var(--type-caption); color: #6b7280; margin-bottom: var(--space-1); }
 .sc-year-card-rev { font-weight: 600; color: #9ca3af; }
