@@ -210,7 +210,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       const { rows } = await getInvoiceSubmissions({
         accountKey: accountParam || undefined,
         page: 1,
-        pageSize: 200,
+        pageSize: 5000,
         scope: "all",
         module: "ops",
       });
@@ -239,7 +239,7 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
     const { rows } = await getInvoiceSubmissions({
       accountKey: accountParam || undefined,
       page: 1,
-      pageSize: 200,
+      pageSize: 5000,
       scope: "all",
       module: "ops",
     });
@@ -261,7 +261,9 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       scope: "all",
       module: "ops",
     });
-    return { success: true, submissions: rows.filter((r) => r.status !== "deleted").map(toLegacySubmission) };
+    const submissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+    await hydrateRejectionData(submissions);
+    return { success: true, submissions };
   }
 
   return null;
