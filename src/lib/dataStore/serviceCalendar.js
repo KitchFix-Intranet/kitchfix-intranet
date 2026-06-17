@@ -452,6 +452,18 @@ async function loadYearSummaryPostgres(accountKey, year) {
     .order("month", { ascending: true });
   throwOnError(summaryRes.error, "loadYearSummary.summary");
 
+  // billing_model lets classify() distinguish per-meal accounts (where a
+  // past day with all-zero projections + no actuals means "planned off-
+  // day, nothing to enter") from flat_fee accounts (whose year-view
+  // semantics are being redesigned separately - left untouched here).
+  const billingRes = await supa
+    .from("accounts")
+    .select("billing_model")
+    .eq("team_key", accountKey)
+    .maybeSingle();
+  throwOnError(billingRes.error, "loadYearSummary.billing_model");
+  const billingModel = billingRes.data?.billing_model || null;
+
   const daysRows = await fetchAllPaginated(
     supa,
     (q) => q
@@ -476,6 +488,11 @@ async function loadYearSummaryPostgres(accountKey, year) {
   // planned). A day with all-zero projections but non-zero actuals -
   // e.g. unexpected catering on a Battery Camp Sunday - is "entered",
   // not "no-service".
+  //
+  // hasProj/anyNonZeroProj mirror the actuals pair and let per-meal
+  // accounts recognize "past day with all-zero projection AND no actuals
+  // entered" as a planned off-day instead of a missed entry. See the
+  // classify() comment below for the gated branch.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const lockCutoff = new Date(today);
@@ -489,13 +506,18 @@ async function loadYearSummaryPostgres(accountKey, year) {
         date: r.service_date,
         hasAct: false,
         anyNonZeroAct: false,
+        hasProj: false,
+        anyNonZeroProj: false,
         gameType: r.game_type || "",
       };
       dayState.set(r.service_date, st);
     }
     if (r.has_actuals) st.hasAct = true;
+    if (r.has_projection) st.hasProj = true;
     const av = r.actual_count;
     if (av != null && Number(av) > 0) st.anyNonZeroAct = true;
+    const pv = r.projected_count;
+    if (pv != null && Number(pv) > 0) st.anyNonZeroProj = true;
     if (!st.gameType && r.game_type) st.gameType = r.game_type;
   }
 
@@ -505,6 +527,14 @@ async function loadYearSummaryPostgres(accountKey, year) {
     const isOverdue = d < lockCutoff;
     if (s.hasAct && !s.anyNonZeroAct) return "no-service";
     if (s.hasAct) return "entered";
+    // 2026-06-17 (this PR): per-meal accounts treat a past day with all-zero
+    // projections AND no actuals as "no-service" (planned off-day, nothing
+    // to enter). Without this branch the day fell through to "needs-entry"
+    // (yellow) or "overdue" (red), surfacing a false alarm the operator
+    // can't act on. flat_fee accounts are gated out of this branch - their
+    // year-view semantics are being redesigned separately, and the current
+    // overdue/needs-entry behavior stays as-is until that work lands.
+    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && isPast && billingModel !== "flat_fee") return "no-service";
     if (isPast && isOverdue) return "overdue";
     if (isPast) return "needs-entry";
     return "future";
