@@ -605,16 +605,21 @@ async function loadYearSummaryPostgres(accountKey, year) {
     // Fires for flat_fee accounts that have a homestand schedule loaded
     // (the 4 MLB fee accounts: CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V).
     // STL-FL is flat_fee but has zero homestand rows, so hasHomestandData
-    // is false and it falls through to the per-meal branch (per Kevin's
-    // decision to keep STL-FL on the per-meal display).
+    // is false and it falls through to the per-meal branch.
+    //
+    // Schedule view, not urgency tracker: fee accounts have never had a
+    // requirement to enter actuals, so a past game day without actuals
+    // is just an unentered scheduled day - not "needs entry" or
+    // "overdue". The fee year view is "here's your season at a glance",
+    // not "here's everything you're behind on". Returning "future" for
+    // any non-entered GAME day keeps the heatmap a clean navy schedule
+    // with green highlights where data was entered.
     if (billingModel === "flat_fee" && hasHomestandData) {
       const hs = homestandMap[s.date];
       if (!hs) return "off-season";              // not in schedule -> invisible
       if (hs.dayType !== "GAME") return "prep";  // PREP/OPEN/CLOSE/CLEAN
-      // GAME day classification mirrors per-meal: actuals/past/future
-      if (s.hasAct) return "entered";
-      if (isPast) return "needs-entry";          // real missed entry
-      return "future";
+      if (s.hasAct) return "entered";            // operator logged data
+      return "future";                            // GAME day, no actuals - schedule
     }
 
     // ── Per-meal branch (unchanged) ──

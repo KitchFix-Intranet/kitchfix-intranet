@@ -145,6 +145,27 @@ export default function ServiceCalendar({ showToast, session }) {
   const variance = metrics.actRev - metrics.projRev;
   const completionPct = metrics.total > 0 ? Math.round(metrics.complete / metrics.total * 100) : 0;
 
+  // Fee-account fork: triggers only for flat_fee accounts that HAVE
+  // homestand data. STL-FL is flat_fee but has zero rows in
+  // sc_homestand_schedule, so isFeeAccount is false for it and the
+  // per-meal display renders (Kevin's decision: STL-FL operators are
+  // required to use actuals, same UI as PDC accounts). Per the route's
+  // sc-load action, homestandMap is omitted when empty.
+  //
+  // Declared HERE (not at the bottom of the component) because the
+  // feeMetrics + dayStatus hooks below reference them in their
+  // dependency arrays - JavaScript TDZ otherwise.
+  const isFeeAccount =
+    data?.account?.billingModel === "flat_fee" && !!data?.homestandMap;
+  const homestandMap = data?.homestandMap || {};
+
+  // MiLB hybrid: per-meal mechanics + schedule rhythm. Game-day rhythm
+  // surfaces via DAY/NIGHT border accent; OFF days recess visually so
+  // the active homestand week pops. Out-of-season month cards show a
+  // neutral caption instead of "0/0 entered $0" which reads as a failure
+  // state for months that aren't expected to have data.
+  const isMilb = data?.account?.category === "MiLB";
+
   // Fee-account metrics: count game-day completion + identify the
   // homestand the month is sitting in. Only computed when isFeeAccount;
   // ignored for per-meal display.
@@ -207,15 +228,16 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const dayStatus = useCallback((day) => {
     if (!day) return "off";
-    // Fee-account branch: homestand-driven classification. Mirrors the
-    // orchestrator's classify() in loadYearSummaryPostgres so month-view
-    // tile colors match the year heatmap exactly.
+    // Fee-account branch: homestand-driven schedule view. Mirrors the
+    // orchestrator's classify() exactly. Fee accounts never had an
+    // actuals-entry requirement, so a past unentered game day is just
+    // an unentered scheduled day - returns "future" (clean schedule),
+    // not "needs-entry" or "overdue" (false urgency).
     if (isFeeAccount) {
       const hs = homestandMap[day.date];
       if (!hs) return "off-season";
       if (hs.dayType !== "GAME") return "prep";
       if (day.hasActuals) return "entered";
-      if (day.isPast) return "needs-entry";
       return "future";
     }
     // Per-meal branch (unchanged).
@@ -388,18 +410,8 @@ export default function ServiceCalendar({ showToast, session }) {
     "off-season": { icon: "", className: "sc-badge--offseason" },
   };
 
-  // Fee-account fork: triggers only for flat_fee accounts that HAVE
-  // homestand data. STL-FL is flat_fee but has zero rows in
-  // sc_homestand_schedule, so isFeeAccount is false for it and the
-  // per-meal display renders (Kevin's decision: STL-FL operators are
-  // required to use actuals, same UI as PDC accounts). Per the route's
-  // sc-load action, homestandMap is omitted when empty.
-  const isFeeAccount =
-    data?.account?.billingModel === "flat_fee" && !!data?.homestandMap;
-  const homestandMap = data?.homestandMap || {};
-
   return (
-    <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"}>
+    <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <div className="sc-card">
         <div className="sc-header">
           <div className="sc-header-account">
@@ -448,10 +460,10 @@ export default function ServiceCalendar({ showToast, session }) {
                     <div className="sc-metric-block">
                       <div className="sc-metric-label">Game days</div>
                       <div className="sc-metric-row">
-                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? AMBER : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
+                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
                         <span className="sc-metric-context">/ {feeMetrics.gameDays} this month</span>
                       </div>
-                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? AMBER : GREEN }} /></div>
+                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN }} /></div>
                     </div>
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
@@ -549,20 +561,34 @@ export default function ServiceCalendar({ showToast, session }) {
                           const st = STATUS[status] || STATUS["future"];
                           const hs = isFeeAccount ? homestandMap[dk] : null;
 
-                          // Fee accounts: navy border for game days, amber
-                          // for prep/open/close, none for off-season. Per-
-                          // meal keeps the existing entered/overdue/needs
-                          // color logic.
+                          // Fee accounts: navy schedule with green when
+                          // entered. No urgency colors - the schedule view
+                          // shows "here's your season at a glance", not
+                          // "here's everything you're behind on". Per-meal
+                          // keeps the original entered/overdue/needs logic.
+                          const gameType = dd.meta?.gameType || "";
+
                           let borderColor;
                           if (isFeeAccount) {
                             if (status === "off-season") borderColor = "transparent";
-                            else if (hs?.dayType === "GAME") borderColor = status === "entered" ? GREEN : status === "needs-entry" ? AMBER : "#1e3a8a"; // navy for future game days
-                            else borderColor = "#94a3b8"; // muted blue-grey for prep/open/close
+                            else if (status === "prep") borderColor = "#cbd5e1";   // very muted prep
+                            else if (status === "entered") borderColor = GREEN;     // operator logged
+                            else borderColor = "#1e3a8a";                            // navy game day schedule
+                          } else if (isMilb) {
+                            // MiLB hybrid: border-left encodes the schedule
+                            // rhythm (DAY game = warm amber, NIGHT game = navy,
+                            // OFF day = receded grey). Urgency still surfaces
+                            // through the tile bg + status badge so operators
+                            // see what needs entering.
+                            const gt = (gameType || "").toLowerCase();
+                            if (status === "no-service") borderColor = "#e5e7eb";    // off day, recede
+                            else if (gt.includes("day")) borderColor = "#fbbf24";    // amber - day game
+                            else if (gt.includes("night")) borderColor = "#1e3a8a";  // navy - night game
+                            else borderColor = "#94a3b8";                            // unknown / unscheduled
                           } else {
                             borderColor = status === "entered" || status === "no-service" ? GREEN : status === "overdue" ? RED : status === "needs-entry" ? AMBER : "#e5e7eb";
                           }
                           const bg = isBulkSelected ? "#E1F5EE" : status === "overdue" ? "#fef2f2" : status === "needs-entry" ? "#fffbeb" : isFocused ? "#f0fdf4" : "#fff";
-                          const gameType = dd.meta?.gameType || "";
 
                           // Fee account: off-season days render as
                           // unclickable off tiles (no homestand activity).
@@ -581,7 +607,7 @@ export default function ServiceCalendar({ showToast, session }) {
 
                           return (
                             <div key={di}
-                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""}`}
+                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""} ${(gameType || "").toUpperCase() === "OFF" ? "sc-tile--off-day" : ""}`}
                               style={{ borderLeftColor: borderColor, background: bg }}
                               onClick={handleTileClick}>
                               <div className="sc-tile-top">
@@ -688,9 +714,16 @@ export default function ServiceCalendar({ showToast, session }) {
               {isFeeAccount ? (
                 <>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Game day needs entry</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day upcoming</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day scheduled</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
+                </>
+              ) : isMilb ? (
+                <>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Upcoming game day</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
                 </>
               ) : (
                 <>
@@ -715,9 +748,15 @@ export default function ServiceCalendar({ showToast, session }) {
                 // pre-aggregated homestandSummary is missing or empty.
                 // Per-meal account: "no services" requires both rev =0.
                 const hs = md?.homestandSummary;
+                // MiLB out-of-season months have totalDays === 0 (no
+                // schedule rows for that month). "0/0 entered $0" reads
+                // as a 100% failure state; replace with a neutral
+                // "Out of season" caption instead.
                 const noService = isFeeAccount
                   ? !hs || (hs.gameDays === 0 && hs.prepDays === 0)
-                  : (md && md.projectedRevenue === 0 && md.actualRevenue === 0 && md.totalDays > 0);
+                  : isMilb
+                    ? !md || md.totalDays === 0
+                    : (md && md.projectedRevenue === 0 && md.actualRevenue === 0 && md.totalDays > 0);
 
                 // Build mini calendar + day lookup
                 const mWeeks = getCalendarWeeks(year, mi);
@@ -765,29 +804,48 @@ export default function ServiceCalendar({ showToast, session }) {
                             // already encoded in the status (prep) and
                             // border is added via attribute selector.
                             if (isFeeAccount) {
-                              if (!dayInfo) return <div key={di} className="sc-dot sc-dot--empty" />;
+                              // In-month days with no homestand schedule entry
+                              // (and no projection/actual data) render as grey
+                              // blocks like the explicit off-season days, so
+                              // empty months read as a full calendar grid
+                              // instead of a blank stencil.
+                              if (!dayInfo) return <div key={di} className="sc-dot sc-dot--off-season" />;
                               if (dayInfo.status === "off-season") return <div key={di} className="sc-dot sc-dot--off-season" />;
                               return <div key={di} className={`sc-dot sc-dot--${dayInfo.status}`} />;
                             }
 
-                            // Per-meal: original behavior preserved.
+                            // Universal: in-month days without homestand/projection/
+                            // actual data render as off-day grey blocks regardless of
+                            // weekday vs weekend. Completes the calendar grid - was
+                            // missing Sat/Sun dots before.
                             if (!dayInfo) {
-                              if (isWeekend) return <div key={di} className="sc-dot sc-dot--empty" />;
                               return <div key={di} className="sc-dot sc-dot--off-day" />;
                             }
                             const gameType = dayInfo?.gameType?.toLowerCase() || "";
+
+                            // MiLB: future days with a scheduled game type (DAY or
+                            // NIGHT) get a distinct "upcoming-game" color so they
+                            // visually separate from unscheduled future off-days.
+                            // Plain "future" off-days stay grey.
+                            let resolvedStatus = dayInfo.status;
+                            if (isMilb && dayInfo.status === "future" &&
+                                (gameType.includes("day") || gameType.includes("night")) &&
+                                gameType !== "off") {
+                              resolvedStatus = "upcoming-game";
+                            }
+
                             let gameClass = "";
                             if (gameType.includes("home")) gameClass = "sc-dot--home";
                             else if (gameType.includes("away")) gameClass = "sc-dot--away";
                             else if (gameType === "off") gameClass = "sc-dot--day-off";
-                            return <div key={di} className={`sc-dot sc-dot--${dayInfo.status} ${gameClass}`} />;
+                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass}`} />;
                           })}
                         </div>
                       ))}
                     </div>
 
                     {noService ? (
-                      <div className="sc-year-card-noservice">{isFeeAccount ? "No homestands this month" : "No services this month"}</div>
+                      <div className="sc-year-card-noservice">{isFeeAccount ? "No homestands this month" : isMilb ? "Out of season" : "No services this month"}</div>
                     ) : isFeeAccount ? (
                       <>
                         <div className="sc-year-card-stats">
