@@ -712,6 +712,42 @@
   font-weight: 700;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   POLISH BATCH: remove last urgency signals on fee-account month
+   view. Status badges hidden (no urgency states fire), TODAY
+   indicator switched from green to navy schedule theme, footer
+   warn-amber swapped for navy-slate (game-day completion isn't
+   an alarm for these accounts).
+   ──────────────────────────────────────────────────────────────── */
+
+/* Tile status badges (top-right circles ✓/○/·) don't convey anything
+   for fee accounts - opponent + HS# is the real signal. Hide them
+   so the tile body breathes. */
+[data-billing="flat_fee"] .sc-tile-top .sc-badge { display: none; }
+
+/* TODAY indicator: navy schedule border + navy pill instead of green */
+[data-billing="flat_fee"] .sc-tile--today {
+  border-color: #1e3a8a !important;
+}
+[data-billing="flat_fee"] .sc-today-pill {
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+/* Footer: replace warn-amber background with navy-slate. The "X of Y
+   entered" line stays informative without implying urgency. */
+[data-billing="flat_fee"] .sc-month-footer--warn {
+  background: #f1f5f9;
+  color: #475569;
+}
+[data-billing="flat_fee"] .sc-month-footer--warn .sc-month-footer-rev {
+  color: #1e3a8a;
+}
+[data-billing="flat_fee"] .sc-month-footer--done {
+  background: #E1F5EE;
+  color: #085041;
+}
+
 /* Card stats */
 .sc-year-card-stats { display: flex; justify-content: space-between; font-size: var(--type-caption); color: #6b7280; margin-bottom: var(--space-1); }
 .sc-year-card-rev { font-weight: 600; color: #9ca3af; }

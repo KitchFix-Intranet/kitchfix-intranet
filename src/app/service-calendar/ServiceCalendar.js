@@ -453,10 +453,10 @@ export default function ServiceCalendar({ showToast, session }) {
                     <div className="sc-metric-block">
                       <div className="sc-metric-label">Game days</div>
                       <div className="sc-metric-row">
-                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? AMBER : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
+                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
                         <span className="sc-metric-context">/ {feeMetrics.gameDays} this month</span>
                       </div>
-                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? AMBER : GREEN }} /></div>
+                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN }} /></div>
                     </div>
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
@@ -771,7 +771,12 @@ export default function ServiceCalendar({ showToast, session }) {
                             // already encoded in the status (prep) and
                             // border is added via attribute selector.
                             if (isFeeAccount) {
-                              if (!dayInfo) return <div key={di} className="sc-dot sc-dot--empty" />;
+                              // In-month days with no homestand schedule entry
+                              // (and no projection/actual data) render as grey
+                              // blocks like the explicit off-season days, so
+                              // empty months read as a full calendar grid
+                              // instead of a blank stencil.
+                              if (!dayInfo) return <div key={di} className="sc-dot sc-dot--off-season" />;
                               if (dayInfo.status === "off-season") return <div key={di} className="sc-dot sc-dot--off-season" />;
                               return <div key={di} className={`sc-dot sc-dot--${dayInfo.status}`} />;
                             }
