@@ -57,6 +57,31 @@ If the delete succeeds and the immediately-following insert fails (network blip,
 
 **Future hardening:** move the swap into a Postgres function (RPC) that wraps the delete + insert in a transaction; then it's an `sb.rpc('replace_document_relationships', ...)` call from JS.
 
+### `documents.status` is NOT NULL with no default, which breaks preserve-by-omission
+
+The OPD projection preserves overlay fields (`source_drive_id`, `pinned`, `archived`, `storage_path`) by simply OMITTING them from `mdxToDocRow`'s returned object. PostgREST's `.upsert(rows, { onConflict: "id" })` translates to `INSERT ... ON CONFLICT (id) DO UPDATE SET col=EXCLUDED.col` only for columns in the INSERT list - omitted columns are untouched on UPDATE and fall to their schema default on INSERT.
+
+This pattern BREAKS for `documents.status`: the column is `TEXT NOT NULL` with no schema default (`pr-7-1-opd-schema.sql:44`). Omitting status fails the INSERT immediately with `null value in column status violates not-null constraint`, before ON CONFLICT can run. The same upsert call fails for every row, including existing-doc rows we only wanted to update.
+
+`access_level` is safe to omit by contrast - it has `NOT NULL DEFAULT 'unrestricted'` (`pr-7-11`).
+
+**Fix (used in the OPD Command overlay migration):** conditional include via an `existing` parameter to `mdxToDocRow`:
+
+```javascript
+function mdxToDocRow(fm, existing = null) {
+  return {
+    // ...
+    status: existing ? existing.status : fm.status,                    // seed on insert, preserve on update
+    access_level: existing ? existing.access_level : (fm.access_level || "unrestricted"),
+    // ...
+  };
+}
+```
+
+On UPDATE the overlay value rides through unchanged (`EXCLUDED.status === existing.status` is a no-op). On INSERT, MDX seeds the value.
+
+**Lesson:** before moving any field to preserve-by-omission, check whether it's NOT NULL with no schema default. If yes, either add a default in a migration or use the conditional-include pattern.
+
 ### `archive_document` RPC re-archive behavior is unverified
 
 The projection's `computeDiff` skips already-archived docs:
@@ -357,6 +382,36 @@ Two Ops Hub modules - Inventory (legacy) and Invoice Capture - both use the `oh-
 
 **Fix when adding new prefixes:** Make them clearly distinct (`oh-inv-mgmt-` not just `oh-im-`). Prefix collisions cause hard-to-debug visual bugs because the wrong module's styles win specificity battles.
 
+### Print CSS strips document design unless you preserve color and claim every `@page` margin box
+
+Two failure modes that together produce "print preview looks like raw unstyled data" in the doc-format arc:
+
+1. **`color: #000` in the `@media print` block cascades to every heading** and kills the navy hierarchy. Headings collapse to flat black, the brand voice is gone.
+2. **Browsers default to NOT printing background fills.** Callout boxes (the colored ANCHOR / NOTE / CRITICAL blockquotes) lose their fills entirely and survive only as a left border. Tables lose their header background.
+
+**Fix:** never set `color: #000` on the print body - let the screen heading colors carry through. Add `print-color-adjust: exact` (plus the `-webkit-` prefix) to the body, every callout blockquote variant, and table headers:
+
+```css
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  blockquote.callout-anchor,
+  blockquote.callout-note,
+  blockquote.callout-critical,
+  blockquote.callout-warning,
+  th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+```
+
+**Related: Chrome's print header/footer (date, URL, page number) cannot be reliably killed from CSS.** Claiming all the standard `@page` margin boxes (including `@top-center` with `content: ""`) suppresses the defaults under normal conditions. But if the user toggles "Headers and footers" ON in the print dialog, Chrome injects them regardless of what the stylesheet says. There is no pure-CSS guaranteed kill switch.
+
+**First seen:** 2026-06-17 doc-format arc (STD-001 v1.2 print/PDF pipeline). Cost: a full polish PR to find both rules.
+
 ### Tailwind is imported but is NOT the system
 
 `globals.css` imports Tailwind v4 as a utility backstop. The primary styling system is vanilla CSS with prefix-isolated classes. Don't write Tailwind-first components - they break the prefix-isolation guarantee and create a mixed system.
@@ -374,3 +429,4 @@ Two Ops Hub modules - Inventory (legacy) and Invoice Capture - both use the `oh-
 - **2026-05-13** - Three new entries from Phase 1 push day: (1) Drive API + shared drives requires `supportsAllDrives: true` - found while building `/api/cron/backup-sheets`. (2) `SHEET_IDS.INVENTORY` is an empty string footgun - real ID resolves from env var. (3) New "Git & Workflow" section with `git checkout -b` silent-failure recovery - committed to main by accident mid-bump, ~10 min recovery.
 - **2026-06-16** - Two entries surfaced during Phase A A4 (OPD projection executor) review: (1) projection swap is non-atomic - relationships + surfaces delete-then-insert can leave a table empty if the delete succeeds and the insert fails (Supabase REST has no `BEGIN..COMMIT`); local JSON backup is the rollback net. (2) `archive_document` re-archive behavior is unverified because the diff skips already-archived rows; not a current risk but worth knowing if future code bypasses the diff.
 - **2026-06-16** - Phase A A7: SousAI Drive ingestion retired. A5 swapped `embedDocument` to read from resolved MDX (`extractMdx`) instead of the Drive Docs API; A7 deleted the now-orphaned Drive path (`src/lib/sousai/extract.js` + the Layer-2 dev rig `scripts/sousai-extract-and-chunk.mjs`). The `documents.readonly` and `drive.readonly` SA scopes leave the codebase with that delete. **Intentionally still present:** the `documents.source_drive_id`/`_es` columns and the reader's Drive iframe fallback in `SlideOverReader.js`/`route.js` - they back the reader until their own separate retirement (post-A7 doc-cleanup pass). The broad `drive` scope in `src/lib/sheets.js` and `src/lib/auth.js` is the standing scope-permissiveness finding, unrelated to A7.
+- **2026-06-17** - Two entries from the doc-format arc + the OPD Command engine scoping: (1) Print CSS strips document design unless `color: #000` is avoided on the print body and `print-color-adjust: exact` is set on the body + callout variants + table headers; Chrome's print header/footer cannot be reliably killed from CSS when the user has "Headers and footers" toggled on. (2) `documents.status` is NOT NULL with no schema default, which breaks the preserve-by-omission pattern that works for the other overlay fields - fix is conditional include via `mdxToDocRow(fm, existing)` so MDX seeds on insert and the existing PG row preserves on update.

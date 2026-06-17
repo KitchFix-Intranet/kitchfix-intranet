@@ -3,24 +3,33 @@
 > **This is a current-state orientation doc. It points to detail, it does not contain it.**
 > If a thread needs depth, follow its deep-doc link. If this file grows past ~2 screens, something belongs in a linked doc instead. History lives in the PR trail; do not re-fill it here.
 
-**Last updated:** 2026-06-16
+**Last updated:** 2026-06-17
 
 ## Right now
 
-KitchFix intranet is live on Vercel; the multi-project Sheets→Postgres migration is well advanced (modules 1-3 cut over, finance stack scoped). The **Service Calendar engine went live on Postgres today** (dev-gated to Kevin + Joe) with five fast-follow PRs closing P0 UI bugs and a year-view pagination cap. In parallel the **OPD/Playbook re-point** is mid-flight - MDX+Postgres becoming the single source of truth so Drive can retire as a source. Today shipped: A1 schema, A3 reader render, A4 projection executor, A5 SousAI MDX swap, A7 Drive retirement, plus access-tier gating.
+KitchFix intranet is live on Vercel; the multi-project Sheets→Postgres migration is well advanced (modules 1-3 cut over, finance stack scoped). The **Service Calendar engine is live on Postgres** (dev-gated to Kevin + Joe). The **OPD/Playbook re-point** has cleared Phase A engine work (A1-A7) and just landed the full **Document Format Standard arc**: STD-001 v1.2 + enterprise-grade in-app + print/PDF rendering (cover, TOC with target-counter page numbers, running footers, Oswald/Inter type, vertical navy logo, per-class polish). Next up is the **OPD Command rebuild** (`/playbook/admin`) - scoped today across a three-way audit; 4-PR sequence queued. Then **SousAI live wiring** as its own arc.
 
 ## Active threads
 
 | Thread | Status | Next step | Deep doc |
 |---|---|---|---|
-| OPD/Playbook re-point (Phase A) | A1/A3/A4/A5/A7 MERGED today (#148/#152/#155/#157/#160); access tiers wired (#154); reader rendering document_content with Drive fallback; projection --apply executor live; SousAI ingestion now from MDX (1290 chunks across 101 docs, 3-tier gate verified); Drive ingestion code retired | A6 Build Dashboard rework - the only remaining Phase A engine item. Scope: authorial fields read-only / edit-in-repo (MDX is source of truth); keep pin / archive / governance + catalog views harvested from STD-005. Then Phase B: live SousAI retrieval caller + hero search wire-up, reader reading-experience UX, shelf taxonomy. | [PHASE_A_PR1_HANDOFF.md](opd/foundation/PHASE_A_PR1_HANDOFF.md) · [PROJECTION_DRYRUN.md](opd/foundation/PROJECTION_DRYRUN.md) · [PLAYBOOK_ENGINE_AUDIT.md](opd/PLAYBOOK_ENGINE_AUDIT.md) |
+| OPD Command rebuild (was Build Dashboard) | Scoped across a three-way audit (Kevin + Chat-Claude + CC) 2026-06-17. Governing principle: dashboard owns operational lifecycle (status, access_level, pin, archive); MDX owns the document (identity + content + structure). Five of eight current editable fields are silent-data-loss traps; three lead KPIs measure retired Drive linkage. Migration path locked: conditional-include via `mdxToDocRow(fm, existing)`, no schema change. | 4-PR sequence A->B->C->D. PR A (safe cleanups: cross-module alive-test fix in `PlaybookClient.js` + New Document deletion). PR B (SOLO: overlay migration with mandatory pre-apply baseline snapshot). PR C (Drive teardown + the cockpit IA - Attention tab + rebuilt Worklist). PR D (governance surfaces: access-tier editor + issues triage). | [BUILD_DASHBOARD_AUDIT_CC.md](opd/BUILD_DASHBOARD_AUDIT_CC.md) · [BUILD_DASHBOARD_ENGINE_MAP_CC.md](opd/BUILD_DASHBOARD_ENGINE_MAP_CC.md) |
+| OPD/Playbook Phase A (engine) | DONE. A1/A3/A4/A5/A7 MERGED (#148/#152/#155/#157/#160); access tiers wired (#154); reader rendering document_content with Drive fallback; projection --apply executor live; SousAI ingestion from MDX (1290 chunks across 101 docs, 3-tier gate verified); Drive ingestion code retired. The **Document Format Standard arc** layered on top: STD-001 v1.2 + enterprise-grade screen + print rendering (PRs #178/#180/#182/#183/#184/#187). | Phase A engine is complete. Next module of work is OPD Command (above row). Then Phase B: SousAI live retrieval caller + hero search, reader reading-experience UX, shelf taxonomy. | [PHASE_A_PR1_HANDOFF.md](opd/foundation/PHASE_A_PR1_HANDOFF.md) · [PROJECTION_DRYRUN.md](opd/foundation/PROJECTION_DRYRUN.md) · [PLAYBOOK_ENGINE_AUDIT.md](opd/PLAYBOOK_ENGINE_AUDIT.md) |
 | OPD content review | Reviewer packets out: Britt (culinary), Counsel (policy), Finance (pay bands + permits). 5 new docs created for ingestion today. | Await markups; record approvals to MDX frontmatter; flip In Build → Live on sign-off | tracked by Kevin (no repo deep-doc) |
-| Service Calendar | LIVE on Postgres (dev-gated to k.fietek + joe@kitchfix.com). PRs MERGED today: #149 cutover, #153 Account Services Brief, #156 P0-1/P0-2 save flow, #158 status-from-actuals, #159 actuals-first-class + pagination fix. 34,457 rows seeded across 7 tables; billing prices corrected to cost basis with effective_date ledger; fee accounts zeroed. | Kevin's testing week in progress (CIN-AZ + TBJ-FL verified, 9 accounts remaining). Awaiting Joe's price-review Excel response. Re-import before cutover to catch Sheets entries during testing. Then dev-gate expansion to operators. Admin Dashboard + Fun Money Tracker confirmed as next deliverables. | [ACCOUNT_SERVICES_BRIEF.md](ACCOUNT_SERVICES_BRIEF.md) · [SC_SPREADSHEET_MAPPING.md](SC_SPREADSHEET_MAPPING.md) · [SC_CONTRACT_BILLING_SUMMARY.md](SC_CONTRACT_BILLING_SUMMARY.md) · [SC_PRICE_COMPARISON.md](SC_PRICE_COMPARISON.md) |
+| Service Calendar | LIVE on Postgres (dev-gated to k.fietek + joe@kitchfix.com). PRs MERGED 2026-06-16: #149 cutover, #153 Account Services Brief, #156 P0-1/P0-2 save flow, #158 status-from-actuals, #159 actuals-first-class + pagination fix. 34,457 rows seeded across 7 tables; billing prices corrected to cost basis with effective_date ledger; fee accounts zeroed. | Kevin's testing week in progress (CIN-AZ + TBJ-FL verified, 9 accounts remaining). Awaiting Joe's price-review Excel response. Re-import before cutover to catch Sheets entries during testing. Then dev-gate expansion to operators. Admin Dashboard + Fun Money Tracker confirmed as next deliverables. | [ACCOUNT_SERVICES_BRIEF.md](ACCOUNT_SERVICES_BRIEF.md) · [SC_SPREADSHEET_MAPPING.md](SC_SPREADSHEET_MAPPING.md) · [SC_CONTRACT_BILLING_SUMMARY.md](SC_CONTRACT_BILLING_SUMMARY.md) · [SC_PRICE_COMPARISON.md](SC_PRICE_COMPARISON.md) |
 | Sheets → Postgres migration | Stage 1 in flight; modules 1-3 cut over; Service Calendar now a 4th cut-over module (dev-only); finance stack (Project 3) scoped (12 PRs) | Per `MIGRATION_STATUS.md` - confirm next module with Kevin | [MIGRATION_STATUS.md](MIGRATION_STATUS.md) · [FINANCE_STACK_PLAN.md](FINANCE_STACK_PLAN.md) · [FINANCE_STACK_AUDIT.md](FINANCE_STACK_AUDIT.md) · [MIGRATION_APPROACH.md](MIGRATION_APPROACH.md) |
 | Open PRs awaiting decision | PR #140 (m6 post-fix audit reminder for June 19); `fix/sc-seed-preserve-manual-prices` branch (pushed a25ce56, never merged) - hardens the seed against re-runs clobbering manual price corrections, complements #159 | Kevin reviews + merges or closes | the PRs themselves |
 
 ## Recently done
 
+- OPD Command rebuild scoped (2026-06-17) - three-way audit closed (Kevin + Chat-Claude + CC), 4-PR sequence A->B->C->D queued, `docs/opd/BUILD_DASHBOARD_AUDIT_CC.md` + `BUILD_DASHBOARD_ENGINE_MAP_CC.md` committed
+- PR #187 MERGED (2026-06-17) - Hide HelpFAB in print/PDF (global `@media print` rule on `.kf-help-wrapper`)
+- PR #184 MERGED (2026-06-17) - Doc-format Phase 3 + per-class polish (final visual pass on the doc reader + print pipeline)
+- PR #183 MERGED (2026-06-17) - Doc-format TOC fix + print chrome suppression + vertical-navy logo swap
+- PR #182 MERGED (2026-06-17) - Doc-format auto-TOC + corpus heading cleanup
+- PR #180 MERGED (2026-06-17) - Doc-format print/PDF visual core (cover, TOC scaffold, page numbers via `target-counter`, Oswald/Inter, callout color preservation)
+- PR #178 MERGED (2026-06-17) - STD-001 v1.2 standard rewrite governing the doc format
+- Main-page redesign arc + A6 content/experiential polish landed across the same session (multiple smaller PRs)
 - PR #160 MERGED (2026-06-16) - Phase A A7: SousAI Drive ingestion retired
 - PR #159 MERGED (2026-06-16) - SC actuals-first-class: per-service active/inactive includes actuals, year-view pagination fix, month noService check, payload cleanup
 - PR #158 MERGED (2026-06-16) - SC day status derived from actuals not projections (3 UI surfaces)
@@ -40,7 +49,7 @@ KitchFix intranet is live on Vercel; the multi-project Sheets→Postgres migrati
 
 ## Pointers
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - five-pillar Sheets model + auth boundary + module map. *Flagged stale on the OPD/Postgres module - P2 doc-drift; fix pending in a later Phase A doc-sync.*
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Sheets + PG dual data layer + auth boundary + module map. Now includes the OPD source-of-truth boundary (MDX-authored vs Postgres overlay).
 - [CONVENTIONS.md](CONVENTIONS.md) - action-dispatch APIs, CSS prefixes, sheet column conventions
 - [GOTCHAS.md](GOTCHAS.md) - hard-won lessons; read before debugging anything that smells familiar
 - [HOW_WE_WORK.md](HOW_WE_WORK.md) - orientation primer for new sessions
