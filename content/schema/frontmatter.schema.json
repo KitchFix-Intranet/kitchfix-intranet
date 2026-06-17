@@ -20,15 +20,19 @@
     "shelf": {
       "type": ["string", "null"],
       "enum": [
-        "Safety",
-        "Operations",
-        "HR & People",
-        "Culinary",
-        "Brand & Standards",
-        "Finance",
-        "Site & Client",
+        "Safety, Health & Incident",
+        "Operations & Leadership",
+        "Service Delivery & Client Accounts",
+        "People & Conduct",
+        "Culinary & Kitchen Operations",
+        "Brand & Documentation Standards",
         null
       ]
+    },
+    "subshelf": {
+      "type": ["string", "null"],
+      "enum": ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F", null],
+      "description": "Optional sub-section inside the parent shelf. Used by People & Conduct (HR-A through HR-F) to expand the rail. Other shelves leave null."
     },
     "status": {
       "type": "string",

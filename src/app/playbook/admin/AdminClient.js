@@ -72,7 +72,11 @@ export default function AdminClient() {
   const [sortDir, setSortDir] = useState("asc");
 
   useEffect(() => {
-    fetch("/api/playbook?action=bootstrap")
+    // include_retired=true makes the bootstrap return Retired-status docs
+    // alongside the Live / In Build / etc. set. The operator reader
+    // (PlaybookClient) omits the flag so Retired stays hidden there. Without
+    // this, the owner who retires a doc loses sight of it on the next refresh.
+    fetch("/api/playbook?action=bootstrap&include_retired=true")
       .then((r) => r.json())
       .then((data) => {
         if (data.error) setError(data.error);

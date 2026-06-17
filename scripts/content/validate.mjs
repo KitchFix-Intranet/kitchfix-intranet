@@ -41,8 +41,12 @@ const RETIRED_IDS = new Set([
 const VALID_STATUSES = new Set(["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"]);
 const VALID_CLASSES = new Set(["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"]);
 const VALID_SHELVES = new Set([
-  "Safety", "Operations", "HR & People", "Culinary",
-  "Brand & Standards", "Finance", "Site & Client",
+  "Safety, Health & Incident",
+  "Operations & Leadership",
+  "Service Delivery & Client Accounts",
+  "People & Conduct",
+  "Culinary & Kitchen Operations",
+  "Brand & Documentation Standards",
 ]);
 const LEGAL_CLASSES = new Set(["POL", "AGR"]);
 
