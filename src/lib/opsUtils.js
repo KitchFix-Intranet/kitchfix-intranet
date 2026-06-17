@@ -104,6 +104,13 @@ export const formatCurrency = (v) => {
   return "$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
+export const formatCompactDollar = (v) => {
+  const n = Math.abs(parseNum(v));
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + Math.round(n).toString();
+};
+
 export const generateId = (prefix = "") => {
   const h = () => Math.random().toString(16).slice(2, 10);
   const id = `${h()}-${h().slice(0, 4)}-${h().slice(0, 4)}-${h()}`;

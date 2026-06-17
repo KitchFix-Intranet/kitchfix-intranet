@@ -12,6 +12,12 @@ const INVOICE_ADMIN_USERS = [
 ];
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCompactDollar = (v) => {
+  const n = Math.abs(Number(v) || 0);
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + Math.round(n);
+};
 const REASON_CHIPS = ["Invoice #", "Date", "Total", "GL codes", "Wrong vendor", "Bad scan", "Duplicate"];
 
 export function isInvoiceAdmin(email) {
@@ -35,6 +41,9 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [archiving, setArchiving] = useState(false);
 
   // Load ALL submissions once, filter client-side for period (no reload flicker)
   const loadSubmissions = useCallback(async () => {
@@ -179,8 +188,14 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
     finally { setDeleting(false); }
   }, [deleteTarget, showToast, loadSubmissions]);
 
-  const handleArchive = useCallback(async (uuid) => {
-    if (!confirm("Archive this invoice? It will be hidden from default views.")) return;
+  const handleArchive = useCallback((submission) => {
+    setArchiveTarget(submission);
+  }, []);
+
+  const confirmArchive = useCallback(async () => {
+    if (!archiveTarget) return;
+    const uuid = archiveTarget.uuid;
+    setArchiving(true);
     try {
       const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invoice-archive", uuid }) });
@@ -188,9 +203,11 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
       if (data.success) {
         showToast("Invoice archived", "success");
         setAllSubmissions((prev) => prev.map((s) => s.uuid === uuid ? { ...s, status: "archived" } : s));
+        setArchiveTarget(null);
       } else { showToast(data.error || "Failed to archive", "error"); }
     } catch { showToast("Network error — try again", "error"); }
-  }, [showToast]);
+    finally { setArchiving(false); }
+  }, [archiveTarget, showToast]);
 
   const handleUnarchive = useCallback(async (uuid) => {
     try {
@@ -258,13 +275,27 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
               onClick={() => setStatusFilter("dupes")}>Dupes ({stats.dupes})</button>
           )}
         </div>
+        <div className="oh-inv-history-periods-mobile">
+          <select className="oh-inv-history-period-select" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            <option value="week">7 Days</option>
+            <option value="month">30 Days</option>
+            <option value="all">All Time</option>
+          </select>
+          <select className="oh-inv-history-period-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="returned">Returned{stats.returned > 0 ? ` (${stats.returned})` : ""}</option>
+            <option value="corrected">Corrected</option>
+            <option value="archived">Archived{stats.archived > 0 ? ` (${stats.archived})` : ""}</option>
+            {stats.dupes > 0 && <option value="dupes">Dupes ({stats.dupes})</option>}
+          </select>
+        </div>
       </div>
 
       <div className="oh-inv-weekly-summary oh-inv-weekly-summary--admin">
         <strong>{stats.sent}</strong><span>sent</span><span>·</span>
         <strong className={stats.returned > 0 ? "oh-inv-stat--returned" : ""}>{stats.returned}</strong><span>returned</span><span>·</span>
         <strong className={stats.corrected > 0 ? "oh-inv-stat--corrected" : ""}>{stats.corrected}</strong><span>corrected</span><span>·</span>
-        <strong>${stats.total >= 1000 ? `${(stats.total / 1000).toFixed(1)}k` : fmt$(stats.total)}</strong>
+        <strong>{formatCompactDollar(stats.total)}</strong>
       </div>
 
       {filtered.length === 0 ? (
@@ -306,11 +337,11 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
                   <div className="oh-inv-hist-detail">
                     {s.status === "returned" && s.rejectionNote && (
                       <div className="oh-inv-hist-reject-banner">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>Returned: {s.rejectionNote}</div>
-                          {s.rejectionReason && <div style={{ fontSize: 10, color: "#b91c1c" }}>Reason: {s.rejectionReason}</div>}
-                          <div style={{ fontSize: 10, color: "#b91c1c" }}>By {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${formatTimestamp(s.rejectedAt)}` : ""}</div>
+                          {s.rejectionReason && <div style={{ fontSize: 10, color: "#92400e" }}>Reason: {s.rejectionReason}</div>}
+                          <div style={{ fontSize: 10, color: "#92400e" }}>By {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${formatTimestamp(s.rejectedAt)}` : ""}</div>
                         </div>
                         <button className="oh-inv-hist-undo-btn" onClick={(e) => { e.stopPropagation(); handleUnreject(s); }}>
                           Undo Return
@@ -357,7 +388,7 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
                         </button>
                       )}
                       {s.status !== "archived" && (
-                        <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--archive" onClick={(e) => { e.stopPropagation(); handleArchive(s.uuid); }}>
+                        <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--archive" onClick={(e) => { e.stopPropagation(); handleArchive(s); }}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 8v13H3V8" /><path d="M1 3h22v5H1z" /><path d="M10 12h4" /></svg>Archive
                         </button>
                       )}
@@ -435,6 +466,30 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
               <button className="oh-inv-adm-reject-cancel" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
               <button className="oh-inv-adm-reject-submit" style={{ background: "#dc2626" }} onClick={handleDeleteDupe} disabled={deleting}>
                 {deleting ? <><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} />Deleting...</> : "Delete Permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {archiveTarget && (
+        <div className="oh-inv-adm-reject-overlay" onClick={() => { if (!archiving) setArchiveTarget(null); }}>
+          <div className="oh-inv-adm-reject-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="oh-inv-adm-reject-header" style={{ background: "#f8fafc", borderColor: "#cbd5e1", color: "#475569" }}>Archive Invoice</div>
+            <div className="oh-inv-adm-reject-body">
+              <div className="oh-inv-adm-reject-invoice">
+                <div className="oh-inv-adm-reject-invoice-name">{archiveTarget.vendor} #{archiveTarget.invoiceNumber}</div>
+                <div className="oh-inv-adm-reject-invoice-meta">{archiveTarget.userEmail?.split("@")[0]} · {archiveTarget.account} · ${fmt$(Math.abs(archiveTarget.totalAmount))}</div>
+              </div>
+              <div className="oh-inv-adm-delete-warn" style={{ background: "#f8fafc", borderColor: "#cbd5e1" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5"><path d="M21 8v13H3V8" /><path d="M1 3h22v5H1z" /><path d="M10 12h4" /></svg>
+                <span>This invoice will be hidden from default views. You can restore it anytime from the Archived filter.</span>
+              </div>
+            </div>
+            <div className="oh-inv-adm-reject-footer">
+              <button className="oh-inv-adm-reject-cancel" onClick={() => setArchiveTarget(null)} disabled={archiving}>Cancel</button>
+              <button className="oh-inv-adm-reject-submit" style={{ background: "#64748b" }} onClick={confirmArchive} disabled={archiving}>
+                {archiving ? <><div className="oh-spinner-sm" style={{ width: 14, height: 14 }} />Archiving...</> : "Archive"}
               </button>
             </div>
           </div>

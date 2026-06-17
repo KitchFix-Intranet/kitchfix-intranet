@@ -5,6 +5,12 @@ import VendorSetup from "@/app/ops/components/invoice/VendorSetup";
 import InvoiceAdmin, { isInvoiceAdmin } from "@/app/ops/components/invoice/InvoiceAdmin";
 
 const fmt$ = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCompactDollar = (v) => {
+  const n = Math.abs(Number(v) || 0);
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + Math.round(n);
+};
 
 const LAST_ACCT_KEY = "kf_inv_last_account";
 const QUEUE_KEY = "kf_invoice_offline_queue";
@@ -828,7 +834,13 @@ setShowSuccess(true); setSessionCount((c) => c + 1);
     const monthAgo = new Date(Date.now() - 30 * 86400000);
     const weekItems = src.filter((s) => new Date(s.timestamp) >= weekAgo);
     const monthItems = src.filter((s) => new Date(s.timestamp) >= monthAgo);
-    const calc = (items) => ({ count: items.length, total: items.reduce((sum, s) => sum + Math.abs(Number(s.totalAmount || 0)), 0) });
+    const calc = (items) => ({
+      count: items.length,
+      total: items.reduce((sum, s) => sum + Math.abs(Number(s.totalAmount || 0)), 0),
+      sent: items.filter((s) => s.status === "sent" || (!s.status && s.emailSent)).length,
+      returned: items.filter((s) => s.status === "returned").length,
+      corrected: items.filter((s) => s.status === "corrected").length,
+    });
     return { week: calc(weekItems), month: calc(monthItems), all: calc(src) };
   }, [historySource]);
 
@@ -1059,6 +1071,18 @@ Upload, code &amp; submit to AP.
                     onClick={() => setHistoryStatus("returned")}>Returned{returnedCount > 0 ? ` (${returnedCount})` : ""}</button>
                   <button className={`oh-inv-period-pill${historyStatus === "corrected" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setHistoryStatus("corrected")}>Corrected</button>
                 </div>
+                <div className="oh-inv-history-periods-mobile">
+                  <select className="oh-inv-history-period-select" value={historyPeriod} onChange={(e) => setHistoryPeriod(e.target.value)}>
+                    <option value="week">7 Days</option>
+                    <option value="month">30 Days</option>
+                    <option value="all">All Time</option>
+                  </select>
+                  <select className="oh-inv-history-period-select" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="returned">Returned{returnedCount > 0 ? ` (${returnedCount})` : ""}</option>
+                    <option value="corrected">Corrected</option>
+                  </select>
+                </div>
               </div>
 
               {historyLoading ? (
@@ -1066,22 +1090,35 @@ Upload, code &amp; submit to AP.
               ) : (
                 <>
                   {(() => {
-                    if (historyStatus !== "all") return null;
                     const ps = historyPeriod === "month" ? periodSummary.month : historyPeriod === "week" ? periodSummary.week : periodSummary.all;
                     const label = historyPeriod === "month" ? "30 days" : historyPeriod === "week" ? "7 days" : "All time";
-                    if (ps.count === 0) return null;
+                    if (historyStatus === "all") {
+                      if (ps.count === 0) return null;
+                      return (
+                        <div className="oh-inv-weekly-summary">
+                          <span>{label}:</span>
+                          <strong>{ps.sent}</strong><span>sent</span><span>·</span>
+                          <strong className={ps.returned > 0 ? "oh-inv-stat--returned" : ""}>{ps.returned}</strong><span>returned</span><span>·</span>
+                          <strong className={ps.corrected > 0 ? "oh-inv-stat--corrected" : ""}>{ps.corrected}</strong><span>corrected</span><span>·</span>
+                          <strong>{formatCompactDollar(ps.total)}</strong>
+                        </div>
+                      );
+                    }
+                    const filteredTotal = filteredSubmissions.reduce((sum, s) => sum + Math.abs(Number(s.totalAmount || 0)), 0);
+                    if (filteredSubmissions.length === 0) return null;
+                    const statusLabel = historyStatus === "returned" ? "Returned" : "Corrected";
                     return (
                       <div className="oh-inv-weekly-summary">
-                        <span>{label}:</span>
-                        <strong>{ps.count} invoice{ps.count > 1 ? "s" : ""}</strong>
+                        <span>{label} · {statusLabel}:</span>
+                        <strong>{filteredSubmissions.length} invoice{filteredSubmissions.length > 1 ? "s" : ""}</strong>
                         <span>·</span>
-                        <strong>${ps.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                        <strong>{formatCompactDollar(filteredTotal)}</strong>
                       </div>
                     );
                   })()}
                   {returnedCount > 0 && historyStatus !== "returned" && (
                     <div className="oh-inv-hist-returned-alert">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                       <span className="oh-inv-hist-returned-alert-text">{returnedCount} invoice{returnedCount > 1 ? "s" : ""} returned by AP — fix and resubmit</span>
                       <button className="oh-inv-hist-returned-alert-btn" onClick={() => setHistoryStatus("returned")}>View</button>
                     </div>
@@ -1135,13 +1172,31 @@ Upload, code &amp; submit to AP.
 
                             {isExpanded && (
                               <div className="oh-inv-hist-detail">
+                                {s.status === "returned" && (
+                                  <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--fix oh-inv-hist-action-btn--fix-top" onClick={() => {
+                                    try {
+                                      const gl = JSON.parse(s.glBreakdown || "[]");
+                                      setVendor({ name: s.vendor, vendorId: s.vendorId });
+                                      setInvoiceNumber(s.invoiceNumber || "");
+                                      setInvoiceDate(s.invoiceDate || "");
+                                      setTotalAmount(String(Math.abs(s.totalAmount)));
+                                      if (gl.length > 0) setGlRows(gl.map((g) => ({ code: g.code || "", name: g.name || "", amount: String(g.amount || "") })));
+                                      setFormType(s.type || "invoice");
+                                      setResubmitSource(s);
+                                      setActiveTab("form");
+                                      showToast("Original data loaded — fix the issue and resubmit", "info");
+                                    } catch { showToast("Could not load original data", "error"); }
+                                  }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>Fix &amp; Resubmit
+                                  </button>
+                                )}
                                 {s.status === "returned" && s.rejectionNote && (
                                   <div className="oh-inv-hist-reject-banner">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                                     <div>
                                       <div style={{ fontWeight: 700, marginBottom: 2 }}>AP: {s.rejectionNote}</div>
-                                      {s.rejectionReason && <div style={{ fontSize: 10, color: "#b91c1c" }}>Reason: {s.rejectionReason}</div>}
-                                      <div style={{ fontSize: 10, color: "#b91c1c" }}>Returned by {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${new Date(s.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</div>
+                                      {s.rejectionReason && <div style={{ fontSize: 10, color: "#92400e" }}>Reason: {s.rejectionReason}</div>}
+                                      <div style={{ fontSize: 10, color: "#92400e" }}>Returned by {s.rejectedBy?.split("@")[0] || "AP"}{s.rejectedAt ? ` · ${new Date(s.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</div>
                                     </div>
                                   </div>
                                 )}
@@ -1169,24 +1224,6 @@ Upload, code &amp; submit to AP.
                                   {driveUrls.length > 0 && <a href={driveUrls[0]} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Stamped PDF</a>}
                                   {s.rawDriveUrl && <a href={s.rawDriveUrl} target="_blank" rel="noopener noreferrer" className="oh-inv-hist-action-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>Raw PDF</a>}
                                   <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); exportReceipt(s); }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>Export</button>
-                                  {s.status === "returned" && (
-                                    <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--fix" onClick={() => {
-                                      try {
-                                        const gl = JSON.parse(s.glBreakdown || "[]");
-                                        setVendor({ name: s.vendor, vendorId: s.vendorId });
-                                        setInvoiceNumber(s.invoiceNumber || "");
-                                        setInvoiceDate(s.invoiceDate || "");
-                                        setTotalAmount(String(Math.abs(s.totalAmount)));
-                                        if (gl.length > 0) setGlRows(gl.map((g) => ({ code: g.code || "", name: g.name || "", amount: String(g.amount || "") })));
-                                        setFormType(s.type || "invoice");
-                                        setResubmitSource(s);
-                                        setActiveTab("form");
-                                        showToast("Original data loaded — fix the issue and resubmit", "info");
-                                      } catch { showToast("Could not load original data", "error"); }
-                                    }}>
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>Fix &amp; Resubmit
-                                    </button>
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -1248,12 +1285,6 @@ Upload, code &amp; submit to AP.
                 >Credit / Return</button>
               </div>
 
-              {formType === "invoice" && (
-                <div className="oh-inv-invoice-notice">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                  <span>Standard vendor invoice — select vendor, enter invoice # and GL coding.</span>
-                </div>
-              )}
               {isCreditMemo && (
                 <div className="oh-inv-credit-notice">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
