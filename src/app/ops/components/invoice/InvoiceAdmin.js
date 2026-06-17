@@ -92,15 +92,20 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
     const sent = accountScoped.filter((s) => s.status === "sent" || s.status === "pending").length;
     const returned = accountScoped.filter((s) => s.status === "returned").length;
     const corrected = accountScoped.filter((s) => s.status === "corrected").length;
+    const archived = accountScoped.filter((s) => s.status === "archived").length;
     const total = accountScoped.reduce((sum, s) => sum + Math.abs(s.totalAmount), 0);
     const dupes = accountScoped.filter((s) => duplicateSet.has(s.uuid)).length;
-    return { sent, returned, corrected, total, count: accountScoped.length, dupes };
+    return { sent, returned, corrected, archived, total, count: accountScoped.length, dupes };
   }, [accountScoped, duplicateSet]);
 
   const filtered = useMemo(() => {
     let list = accountScoped;
+    // Archived always hidden from default views; user must explicitly select
+    // the Archived pill to see them.
+    if (statusFilter !== "archived") list = list.filter((s) => s.status !== "archived");
     if (statusFilter === "returned") list = list.filter((s) => s.status === "returned");
     else if (statusFilter === "corrected") list = list.filter((s) => s.status === "corrected");
+    else if (statusFilter === "archived") list = list.filter((s) => s.status === "archived");
     else if (statusFilter === "dupes") list = list.filter((s) => duplicateSet.has(s.uuid));
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -174,6 +179,31 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
     finally { setDeleting(false); }
   }, [deleteTarget, showToast, loadSubmissions]);
 
+  const handleArchive = useCallback(async (uuid) => {
+    if (!confirm("Archive this invoice? It will be hidden from default views.")) return;
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-archive", uuid }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Invoice archived", "success");
+        setAllSubmissions((prev) => prev.map((s) => s.uuid === uuid ? { ...s, status: "archived" } : s));
+      } else { showToast(data.error || "Failed to archive", "error"); }
+    } catch { showToast("Network error — try again", "error"); }
+  }, [showToast]);
+
+  const handleUnarchive = useCallback(async (uuid) => {
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-unarchive", uuid }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Invoice restored from archive", "success");
+        setAllSubmissions((prev) => prev.map((s) => s.uuid === uuid ? { ...s, status: "sent" } : s));
+      } else { showToast(data.error || "Failed to restore", "error"); }
+    } catch { showToast("Network error — try again", "error"); }
+  }, [showToast]);
+
   function toggleReason(r) { setRejectReasons((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]); }
 
   function formatDate(d) {
@@ -219,6 +249,9 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
             style={statusFilter !== "returned" && stats.returned > 0 ? { borderColor: "#fca5a5", color: "#991b1b" } : {}}
             onClick={() => setStatusFilter("returned")}>Returned{stats.returned > 0 ? ` (${stats.returned})` : ""}</button>
           <button className={`oh-inv-period-pill${statusFilter === "corrected" ? " oh-inv-period-pill--active" : ""}`} onClick={() => setStatusFilter("corrected")}>Corrected</button>
+          <button className={`oh-inv-period-pill${statusFilter === "archived" ? " oh-inv-period-pill--active" : ""}`}
+            style={statusFilter !== "archived" ? { borderColor: "#cbd5e1", color: "#64748b" } : {}}
+            onClick={() => setStatusFilter("archived")}>Archived{stats.archived > 0 ? ` (${stats.archived})` : ""}</button>
           {stats.dupes > 0 && (
             <button className={`oh-inv-period-pill${statusFilter === "dupes" ? " oh-inv-period-pill--active" : ""}`}
               style={statusFilter !== "dupes" ? { borderColor: "#fde68a", color: "#92400e", background: "#fffbeb" } : {}}
@@ -247,8 +280,8 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
             const isDupe = duplicateSet.has(s.uuid);
             let glRows = []; try { glRows = JSON.parse(s.glBreakdown || "[]"); } catch {}
             const driveUrls = (() => { try { return JSON.parse(s.driveUrls || "[]"); } catch { return []; } })();
-            const statusLabel = s.status === "returned" ? "Returned" : s.status === "corrected" ? "Corrected" : "Sent";
-            const statusColor = s.status === "returned" ? { bg: "#fef2f2", color: "#991b1b" } : s.status === "corrected" ? { bg: "#ecfdf5", color: "#065f46" } : { bg: "#eff6ff", color: "#1e40af" };
+            const statusLabel = s.status === "returned" ? "Returned" : s.status === "corrected" ? "Corrected" : s.status === "archived" ? "Archived" : "Sent";
+            const statusColor = s.status === "returned" ? { bg: "#fef2f2", color: "#991b1b" } : s.status === "corrected" ? { bg: "#ecfdf5", color: "#065f46" } : s.status === "archived" ? { bg: "#f1f5f9", color: "#64748b" } : { bg: "#eff6ff", color: "#1e40af" };
 
             return (
               <div key={s.uuid} className={`oh-inv-history-row oh-inv-hist-row--expandable${isExpanded ? " oh-inv-hist-row--open" : ""}${s.status === "returned" ? " oh-inv-hist-row--returned" : ""}${isDupe ? " oh-inv-adm-row--dupe" : ""}`}>
@@ -321,6 +354,16 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
                       {isDupe && (
                         <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--delete" onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>Delete Duplicate
+                        </button>
+                      )}
+                      {s.status !== "archived" && (
+                        <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--archive" onClick={(e) => { e.stopPropagation(); handleArchive(s.uuid); }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 8v13H3V8" /><path d="M1 3h22v5H1z" /><path d="M10 12h4" /></svg>Archive
+                        </button>
+                      )}
+                      {s.status === "archived" && (
+                        <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); handleUnarchive(s.uuid); }}>
+                          Restore from Archive
                         </button>
                       )}
                     </div>
