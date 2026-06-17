@@ -1377,15 +1377,18 @@ export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
     try {
       await insertAILineItems(invoiceUuid, lineItems, { accountKey, module: "ops" });
     } catch (insErr) {
-      // Distinguish dual-write PG failures from Sheets / OCR failures so the
-      // silent gap (Sheets has rows, PG empty, status looked like a normal
-      // OCR fail) becomes visible. PG adapter errors are prefixed
-      // "[dataStore.invoice.pg]"; everything else is treated as a Sheets-path
-      // failure and keeps the existing 'failed' status.
+      // Distinguish dual-write PG failures from Sheets-side failures so each
+      // silent-gap shape becomes visible:
+      //   "[dataStore.invoice.pg]"     -> status='pg_failed' (Sheets has rows, PG empty)
+      //   "[dataStore.invoice.sheets]" -> status='failed'    (both stores empty - Sheets-first ordering)
+      //   anything else                -> status='failed'    (unexpected; capture cause)
+      // ai_scan_error captures insErr.message UNCONDITIONALLY (was: only on
+      // pg_failed). The 2026-06-17 inverse drift incident showed Sheets
+      // failures need the same loud-cause visibility pg_failed already has.
       const isPgFailure = insErr.message.includes("[dataStore.invoice.pg]");
       const status = isPgFailure ? "pg_failed" : "failed";
       console.error(`[AI Scan] ${invoiceUuid}: line item insert ${status}:`, insErr.message);
-      await markScanStatus(invoiceUuid, status, isPgFailure ? insErr.message : null);
+      await markScanStatus(invoiceUuid, status, insErr.message);
       return;
     }
 
