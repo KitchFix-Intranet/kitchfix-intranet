@@ -757,18 +757,54 @@
    these rules only add the schedule-aware polish.
    ════════════════════════════════════════════════════════════════ */
 
-/* OFF days recede: paler bg, shorter tile, drop the redundant
-   "No service" text and the "—" em-dash badge. The OFF label
-   in .sc-tile-game already says everything needed. */
-[data-category="MiLB"] .sc-tile--no-service {
-  background: #f9fafb;
-  min-height: 56px;
-}
+/* OFF days recede via background only - height stays default 80px so
+   the calendar grid reads as a uniform week-row rhythm (was 56px,
+   which created squished rows where every weekday was OFF). The OFF
+   label in .sc-tile-game already telegraphs the state; drop the
+   "No service" text and "—" em-dash badge. */
+[data-category="MiLB"] .sc-tile--no-service { background: #f9fafb; }
 [data-category="MiLB"] .sc-tile--no-service .sc-tile-noservice { display: none; }
 [data-category="MiLB"] .sc-tile--no-service .sc-badge { display: none; }
 [data-category="MiLB"] .sc-tile--no-service .sc-tile-game {
   color: #94a3b8;
   font-weight: 600;
+}
+
+/* OFF tiles (gameType === "OFF" regardless of status) hide the
+   "0 meals / ~$0" projection block - it's noise on a planned off day.
+   Covers FUTURE OFF days which have status="future" and would
+   otherwise render the meals + revenue lines. */
+[data-category="MiLB"] .sc-tile--off-day {
+  background: #f9fafb;
+}
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-meals,
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-rev,
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-noservice,
+[data-category="MiLB"] .sc-tile--off-day .sc-badge { display: none; }
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-game {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Year heatmap polish:
+   - MLB game-type rings (home/away/day-off inset box-shadows) are
+     irrelevant for MiLB - gameType values are DAY/NIGHT/OFF, and
+     the "off" match was putting an unwanted grey ring on every
+     OFF dot. Suppress.
+   - Future days with a scheduled game (DAY/NIGHT) get a sky-blue
+     "upcoming game day" color via the resolvedStatus override in
+     ServiceCalendar.js; future OFF days stay plain grey.
+*/
+[data-category="MiLB"] .sc-dot--home,
+[data-category="MiLB"] .sc-dot--away,
+[data-category="MiLB"] .sc-dot--day-off { box-shadow: none; }
+
+.sc-dot--upcoming-game {
+  background: #93c5fd;
+  opacity: 1;
+}
+.sc-legend-dot--upcoming-game {
+  background: #93c5fd;
 }
 
 /* Game-day tiles: meals count and revenue typography bumped so the

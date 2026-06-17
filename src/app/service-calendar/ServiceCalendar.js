@@ -607,7 +607,7 @@ export default function ServiceCalendar({ showToast, session }) {
 
                           return (
                             <div key={di}
-                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""}`}
+                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""} ${(gameType || "").toUpperCase() === "OFF" ? "sc-tile--off-day" : ""}`}
                               style={{ borderLeftColor: borderColor, background: bg }}
                               onClick={handleTileClick}>
                               <div className="sc-tile-top">
@@ -717,6 +717,14 @@ export default function ServiceCalendar({ showToast, session }) {
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day scheduled</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
                 </>
+              ) : isMilb ? (
+                <>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Upcoming game day</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
+                </>
               ) : (
                 <>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
@@ -806,17 +814,31 @@ export default function ServiceCalendar({ showToast, session }) {
                               return <div key={di} className={`sc-dot sc-dot--${dayInfo.status}`} />;
                             }
 
-                            // Per-meal: original behavior preserved.
+                            // Universal: in-month days without homestand/projection/
+                            // actual data render as off-day grey blocks regardless of
+                            // weekday vs weekend. Completes the calendar grid - was
+                            // missing Sat/Sun dots before.
                             if (!dayInfo) {
-                              if (isWeekend) return <div key={di} className="sc-dot sc-dot--empty" />;
                               return <div key={di} className="sc-dot sc-dot--off-day" />;
                             }
                             const gameType = dayInfo?.gameType?.toLowerCase() || "";
+
+                            // MiLB: future days with a scheduled game type (DAY or
+                            // NIGHT) get a distinct "upcoming-game" color so they
+                            // visually separate from unscheduled future off-days.
+                            // Plain "future" off-days stay grey.
+                            let resolvedStatus = dayInfo.status;
+                            if (isMilb && dayInfo.status === "future" &&
+                                (gameType.includes("day") || gameType.includes("night")) &&
+                                gameType !== "off") {
+                              resolvedStatus = "upcoming-game";
+                            }
+
                             let gameClass = "";
                             if (gameType.includes("home")) gameClass = "sc-dot--home";
                             else if (gameType.includes("away")) gameClass = "sc-dot--away";
                             else if (gameType === "off") gameClass = "sc-dot--day-off";
-                            return <div key={di} className={`sc-dot sc-dot--${dayInfo.status} ${gameClass}`} />;
+                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass}`} />;
                           })}
                         </div>
                       ))}
