@@ -45,3 +45,13 @@ CREATE INDEX IF NOT EXISTS idx_sc_homestand_account_date
 
 -- Matches every other sc_* table's RLS posture (service role only).
 ALTER TABLE sc_homestand_schedule DISABLE ROW LEVEL SECURITY;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- GRANTs: required - Supabase default privileges not configured.
+-- Matches sc-1's GRANT block exactly; without this, the dataStore
+-- service-role client gets 'permission denied for table' on UPSERT.
+-- ═══════════════════════════════════════════════════════════════════
+GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE
+  ON sc_homestand_schedule TO service_role;
+
+GRANT REFERENCES, TRIGGER, TRUNCATE ON sc_homestand_schedule TO anon, authenticated;
