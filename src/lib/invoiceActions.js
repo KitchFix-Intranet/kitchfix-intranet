@@ -348,7 +348,7 @@ A mostly-blank page with only a URL, page number, or footer text at the bottom i
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -496,7 +496,7 @@ INVOICE NUMBER RULES:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 500,
           messages: [{
             role: "user",
@@ -634,7 +634,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -1468,7 +1468,7 @@ async function callClaudeOnce(apiKey, imageBlocks) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         // Raised from 8192 -> 16384 after the 2026-06-12 sweep audit found
         // two persistent failures (5a447c0a What Chefs Want, 29c8ff9f Truly
         // Good Foods) whose JSON output truncated at the old cap. Verified
