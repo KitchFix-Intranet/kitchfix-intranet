@@ -48,17 +48,19 @@ import {
 } from "@/lib/sousai";
 import { validateCreatePayload } from "@/lib/playbookValidation";
 
-// Locked shelf order - Safety first, Site & Client last. Brand & Standards
-// + Finance sit together as the internal/meta pair before Site & Client;
-// Finance still renders empty/short.
+// Locked shelf order - operational domains first, references at the end.
+// A6 6-domain taxonomy: Safety (food + workplace consolidated) -> Ops -> People
+// -> Culinary -> Service Delivery -> Brand standards. Finance dissolved into
+// Operations (PB-009 moved). HR sub-sections inside People & Conduct are
+// carried per-doc on a `subshelf` frontmatter field; the rail expansion that
+// consumes that field lands in a follow-up PR.
 const SHELVES = [
-  "Safety",
-  "Operations",
-  "HR & People",
-  "Culinary",
-  "Brand & Standards",
-  "Finance",
-  "Site & Client",
+  "Safety, Health & Incident",
+  "Operations & Leadership",
+  "People & Conduct",
+  "Culinary & Kitchen Operations",
+  "Service Delivery & Client Accounts",
+  "Brand & Documentation Standards",
 ];
 
 const MODULE = "playbook";
@@ -211,12 +213,24 @@ export async function GET(request) {
       // server-side. The access_level filter (pr-7-11) drops docs the viewer's
       // tier can't see; restricted / slt cards never reach an unrestricted
       // viewer's bootstrap response.
+      //
+      // A6 admin/operator split: by default Retired is excluded for everyone
+      // (operator reader). The admin dashboard passes include_retired=true so
+      // the owner can see + manage retired docs from the worklist. Non-owners
+      // were already rejected above; the param is a no-op for them.
       const isCorp = await isCorporateEmail(actualEmail);
+      const includeRetired = searchParams.get("include_retired") === "true";
+      const baseStatuses = visibleStatuses(isCorp);
+      const statuses = includeRetired ? [...baseStatuses, "Retired"] : baseStatuses;
       const allDocs = await listDocuments(
-        { statuses: visibleStatuses(isCorp) },
+        { statuses },
         { module: MODULE }
       );
-      const statusVisible = filterDocuments(allDocs, isCorp);
+      // If admin requested retired, skip the unconditional Retired-strip in
+      // filterDocuments and just trust the status list we pulled.
+      const statusVisible = includeRetired
+        ? allDocs.filter((d) => statuses.includes(d.status))
+        : filterDocuments(allDocs, isCorp);
       const tier = viewerTier(actualEmail);
       const visible = statusVisible.filter((d) => canSeeDoc(tier, d.access_level));
       return NextResponse.json({

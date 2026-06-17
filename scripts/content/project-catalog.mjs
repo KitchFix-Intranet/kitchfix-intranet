@@ -58,8 +58,12 @@ const SAMPLE_DIR = join(REPO_ROOT, "scripts", "content", ".dryrun-samples");
 
 const VALID_STATUSES = new Set(["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"]);
 const VALID_SHELVES = new Set([
-  "Safety", "Operations", "HR & People", "Culinary",
-  "Brand & Standards", "Finance", "Site & Client",
+  "Safety, Health & Incident",
+  "Operations & Leadership",
+  "Service Delivery & Client Accounts",
+  "People & Conduct",
+  "Culinary & Kitchen Operations",
+  "Brand & Documentation Standards",
 ]);
 const VALID_DOC_CLASSES = new Set([
   "PB", "STD", "POL", "SOP", "TPL", "CHK", "REF", "AGR", "FORM", "POST",
