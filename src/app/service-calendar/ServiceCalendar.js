@@ -207,15 +207,16 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const dayStatus = useCallback((day) => {
     if (!day) return "off";
-    // Fee-account branch: homestand-driven classification. Mirrors the
-    // orchestrator's classify() in loadYearSummaryPostgres so month-view
-    // tile colors match the year heatmap exactly.
+    // Fee-account branch: homestand-driven schedule view. Mirrors the
+    // orchestrator's classify() exactly. Fee accounts never had an
+    // actuals-entry requirement, so a past unentered game day is just
+    // an unentered scheduled day - returns "future" (clean schedule),
+    // not "needs-entry" or "overdue" (false urgency).
     if (isFeeAccount) {
       const hs = homestandMap[day.date];
       if (!hs) return "off-season";
       if (hs.dayType !== "GAME") return "prep";
       if (day.hasActuals) return "entered";
-      if (day.isPast) return "needs-entry";
       return "future";
     }
     // Per-meal branch (unchanged).
@@ -549,15 +550,17 @@ export default function ServiceCalendar({ showToast, session }) {
                           const st = STATUS[status] || STATUS["future"];
                           const hs = isFeeAccount ? homestandMap[dk] : null;
 
-                          // Fee accounts: navy border for game days, amber
-                          // for prep/open/close, none for off-season. Per-
-                          // meal keeps the existing entered/overdue/needs
-                          // color logic.
+                          // Fee accounts: navy schedule with green when
+                          // entered. No urgency colors - the schedule view
+                          // shows "here's your season at a glance", not
+                          // "here's everything you're behind on". Per-meal
+                          // keeps the original entered/overdue/needs logic.
                           let borderColor;
                           if (isFeeAccount) {
                             if (status === "off-season") borderColor = "transparent";
-                            else if (hs?.dayType === "GAME") borderColor = status === "entered" ? GREEN : status === "needs-entry" ? AMBER : "#1e3a8a"; // navy for future game days
-                            else borderColor = "#94a3b8"; // muted blue-grey for prep/open/close
+                            else if (status === "prep") borderColor = "#cbd5e1";   // very muted prep
+                            else if (status === "entered") borderColor = GREEN;     // operator logged
+                            else borderColor = "#1e3a8a";                            // navy game day schedule
                           } else {
                             borderColor = status === "entered" || status === "no-service" ? GREEN : status === "overdue" ? RED : status === "needs-entry" ? AMBER : "#e5e7eb";
                           }
@@ -688,8 +691,7 @@ export default function ServiceCalendar({ showToast, session }) {
               {isFeeAccount ? (
                 <>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Game day needs entry</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day upcoming</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day scheduled</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
                 </>
               ) : (
