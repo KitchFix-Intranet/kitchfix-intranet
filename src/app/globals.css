@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Mulish:wght@400;700&display=swap');
+/* STD-001 v1.2 type system: Oswald (display) + Inter (body), one system
+   across screen + print. Mulish retained as fallback for any remaining
+   legacy references but is no longer required by the standard. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Oswald:wght@500;600;700&family=Mulish:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════
