@@ -60,12 +60,38 @@ function nextReviewLine(nextReview) {
 
 // Approval line: approver + approval date. The MDX `approval.approved_date`
 // is NOT in PG today (the projection doesn't extract it from the approval
-// block). So the approval-date side renders an em-dash for now; once the
-// projection extracts approval block fields, this fills in automatically.
+// block). pr-7-14 projects approval.approved_date to a new documents column;
+// once the migration applies + projection runs, the cover renders the real
+// date for docs whose MDX carries an approval block.
 function approvalLine(approver, approvedDate) {
   const a = orDash(approver);
   const d = orDash(approvedDate);
   return `${a} · ${d}`;
+}
+
+// STD-001 v1.2 §12: TOC is generated from H1 section titles only. CHK and
+// REF classes get NO TOC regardless of length. Other classes get a TOC
+// when the doc carries enough H1 sections to warrant it.
+//
+// "Over 10 pages" intent is hard to enforce at render time (we don't know
+// page count before paint). The pragmatic proxy is H1 count: a doc with 4
+// or more H1 sections likely spans enough pages to benefit from a TOC.
+// Short docs (FORM, single-section REF, 1-3 H1s) skip it cleanly.
+const TOC_MIN_H1 = 4;
+const TOC_EXCLUDED_CLASSES = new Set(["CHK", "REF"]);
+
+function shouldShowToc(docClass, h1Count) {
+  if (TOC_EXCLUDED_CLASSES.has(docClass)) return false;
+  return h1Count >= TOC_MIN_H1;
+}
+
+// Slugify H1 text for stable ids (used as TOC anchor targets).
+function slugifyHeading(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
 }
 
 export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
@@ -101,29 +127,53 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
     };
   }, [docId]);
 
-  // PR 1 bridge for the H1 leading-number prefix.
+  // Post-render walk of the rendered body H1s.
   //
-  // Current MDX corpus authors `# 01 Purpose and Scope` as H1s. The CSS
-  // counter approach for the SECTION 01 eyebrow would otherwise double-
-  // number (SECTION 01 + 01 Purpose and Scope). Strip the leading numeric
-  // prefix from each H1's text content after the HTML mounts. PR 2 will
-  // strip these prefixes from the MDX source corpus-wide, at which point
-  // this strip becomes a no-op and the CSS counter still produces the
-  // correct eyebrow numbering.
+  // Two responsibilities in this one pass:
+  //
+  // (a) [PR 1 bridge - now defense-in-depth] Strip a leading numeric
+  //     prefix from each H1 text content if present. PR 2 stripped these
+  //     from MDX source corpus-wide, so this is normally a no-op on the
+  //     fresh corpus; left in place so any newly authored doc that
+  //     accidentally re-introduces a "01 " prefix still renders cleanly
+  //     (the CSS counter owns numbering either way).
+  //
+  // (b) [PR 2 new] Assign a stable id to each H1 and collect (id, title)
+  //     pairs into state so the TOC component can render <a> entries
+  //     whose hrefs resolve to those ids via target-counter() in print.
   const bodyRef = useRef(null);
+  const [tocEntries, setTocEntries] = useState([]);
   const htmlSig =
     lang + (data?.content_html?.length || 0) + (data?.content_html_es?.length || 0);
   useEffect(() => {
-    if (!bodyRef.current) return;
+    if (!bodyRef.current) {
+      setTocEntries([]);
+      return;
+    }
     const h1s = bodyRef.current.querySelectorAll("h1");
     const LEADING_NUM_RE = /^\s*\d{1,3}(\.\d+)?\s+/;
-    h1s.forEach((h1) => {
+    const entries = [];
+    const usedIds = new Set();
+    h1s.forEach((h1, idx) => {
       const original = h1.textContent || "";
       const stripped = original.replace(LEADING_NUM_RE, "");
       if (stripped !== original) {
         h1.textContent = stripped;
       }
+      const title = stripped.trim();
+      let id = slugifyHeading(title) || `section-${idx + 1}`;
+      // De-dup if two H1s slug to the same id.
+      let dedupId = id;
+      let n = 2;
+      while (usedIds.has(dedupId)) {
+        dedupId = `${id}-${n++}`;
+      }
+      id = dedupId;
+      usedIds.add(id);
+      h1.id = id;
+      entries.push({ id, title });
     });
+    setTocEntries(entries);
   }, [htmlSig]);
 
   if (loading) {
@@ -252,7 +302,7 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
           </div>
           <div className="pb-print-cover-row">
             <dt>Approved By</dt>
-            <dd>{approvalLine(doc.approver, null /* approval.approved_date not projected to PG yet - see follow-up */)}</dd>
+            <dd>{approvalLine(doc.approver, doc.approved_date)}</dd>
           </div>
           <div className="pb-print-cover-row">
             <dt>Next Review</dt>
@@ -265,8 +315,39 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
         </dl>
       </section>
 
+      {/* Print-only Table of Contents. STD-001 v1.2 §12: H1 section titles
+          only, with page numbers via CSS target-counter(). Renders only when:
+          (a) the doc has at least TOC_MIN_H1 H1 sections AND
+          (b) the doc class isn't CHK or REF (those don't get a TOC).
+          Hidden on screen via .pb-print-only (same mechanism as the cover).
+          The TOC appears between cover (page 1) and body (page 3+).
+          Page numbers come from target-counter(attr(href url), page) in CSS
+          (see playbook.css). Chrome's print-to-PDF supports this since ~Chrome
+          95 (2021). If a future browser regression breaks the numbers, the
+          fallback is to drop the .pb-print-toc-page span and ship a plain
+          TOC - one CSS edit. */}
+      {shouldShowToc(doc.doc_class, tocEntries.length) && (
+        <section className="pb-print-toc pb-print-only" aria-hidden="true">
+          <h2 className="pb-print-toc-title">Contents</h2>
+          <ol className="pb-print-toc-list">
+            {tocEntries.map((entry, i) => (
+              <li key={entry.id} className="pb-print-toc-row">
+                <span className="pb-print-toc-num">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <a className="pb-print-toc-link" href={`#${entry.id}`}>
+                  <span className="pb-print-toc-text">{entry.title}</span>
+                  <span className="pb-print-toc-dots" aria-hidden="true" />
+                  <span className="pb-print-toc-page" />
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       {/* Reading column - the body. The body article IS what prints starting
-          on page 2 after the cover's page-break-after. */}
+          after the cover (page 1) and TOC (page 2 if present). */}
       <article className="pb-fullpage-article">
         {/* Screen-only header block - the screen equivalent of the cover.
             On print the cover above replaces it. */}

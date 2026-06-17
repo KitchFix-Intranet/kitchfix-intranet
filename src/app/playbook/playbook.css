@@ -2641,6 +2641,107 @@
   @bottom-right { content: none; }
 }
 
+/* ─── Print TOC (STD-001 v1.2 §12) ─────────────────────────────────────────
+   Page 2 of the PDF when present. Auto-rendered from H1 section titles only.
+   Page numbers via CSS target-counter() - supported in Chrome's print-to-PDF
+   since ~Chrome 95 (2021). If Kevin's print-preview reveals the numbers
+   don't hold on long docs, comment out the .pb-print-toc-page::before
+   content line below to ship a plain TOC (the rest of the structure stays;
+   the dotted leader trails to an empty right margin cleanly).
+   ─────────────────────────────────────────────────────────────────────── */
+.pb-print-toc {
+  page-break-after: always;
+  page-break-before: always;
+  padding: 0.4in 0 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.pb-print-toc-title {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 28pt;
+  font-weight: 700;
+  color: var(--kf-navy);
+  margin: 0 0 0.1in;
+  letter-spacing: -0.3pt;
+  line-height: 1.1;
+  padding-bottom: 8pt;
+  border-bottom: 1.5pt solid #7DB9D5;
+}
+.pb-print-toc-title::before {
+  content: "SECTION 00";
+  display: block;
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 1.5pt;
+  text-transform: uppercase;
+  color: var(--kf-navy);
+  margin-bottom: 4pt;
+}
+.pb-print-toc-list {
+  list-style: none;
+  margin: 0.3in 0 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  color: #0E2647;
+}
+.pb-print-toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12pt;
+  margin: 0;
+  padding: 7pt 0;
+  border-bottom: 0.25pt solid #D0D7E2;
+  page-break-inside: avoid;
+}
+.pb-print-toc-num {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 10pt;
+  font-weight: 600;
+  letter-spacing: 0.6pt;
+  color: #7DB9D5;
+  width: 0.4in;
+  flex-shrink: 0;
+}
+.pb-print-toc-link {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6pt;
+  text-decoration: none;
+  color: #0E2647;
+  font-size: 11pt;
+  font-weight: 500;
+}
+.pb-print-toc-text {
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.pb-print-toc-dots {
+  flex: 1;
+  border-bottom: 0.5pt dotted #6B7785;
+  margin: 0 4pt 3pt;
+  min-width: 0.5in;
+}
+.pb-print-toc-page {
+  font-family: 'Inter', sans-serif;
+  font-size: 11pt;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--kf-navy);
+  min-width: 0.3in;
+  text-align: right;
+  flex-shrink: 0;
+}
+/* CSS target-counter() resolves at paint time to the page number where the
+   anchor target lives. The TOC <a> hrefs point at H1 ids assigned by the
+   client useEffect; the counter pulls the page number from each H1's print
+   layout position. If this stops working in a future Chrome, comment out
+   the content line to ship a plain TOC. */
+.pb-print-toc-page::before {
+  content: target-counter(attr(href url), page);
+}
+
 /* Print-side overrides for the rendered body section eyebrow + H1 rules.
    Most of the screen rules carry through; this just retunes sizes for
    print + ensures the eyebrow color prints. */

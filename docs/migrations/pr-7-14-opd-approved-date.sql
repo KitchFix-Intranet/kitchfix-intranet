@@ -1,0 +1,44 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- pr-7-14-opd-approved-date.sql
+-- OPD · add documents.approved_date for STD-001 v1.2 cover rendering
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- The Document Format Standard v1.2 §10 specifies that the cover page's
+-- "Approved By" row reads the approver + the approval date from frontmatter.
+-- The approver column already exists; the approval date is in MDX
+-- frontmatter's `approval.approved_date` field but has not been projected
+-- to a PG column. This migration adds the column so the projection can
+-- write it and the full-page route can render it on the cover.
+--
+-- Blank values render as em-dashes per §10 (the cover component handles
+-- the null case in JS); this column is nullable and has no default - a
+-- doc without an approval block stays null.
+--
+-- IDEMPOTENT:
+--   ADD COLUMN IF NOT EXISTS - safe to re-run.
+--
+-- ROLLBACK:
+--   ALTER TABLE documents DROP COLUMN approved_date;
+--   The application falls back to null/em-dash for the cover row. No data
+--   loss elsewhere in the system since this column is cover-only.
+--
+-- VERIFY (after apply):
+--   SELECT column_name, data_type, is_nullable
+--   FROM information_schema.columns
+--   WHERE table_name = 'documents' AND column_name = 'approved_date';
+--   Expected: one row, date, YES (nullable).
+--
+-- AFTER APPLY:
+--   Re-run the projection to populate the column for docs whose MDX has
+--   an `approval` block (~15-20 Live docs today):
+--     node --env-file=.env.local scripts/content/project-catalog.mjs --apply
+--   The cover renders the real approval date for those docs; the rest
+--   keep the em-dash placeholder until their frontmatter is filled in.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS approved_date DATE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- End pr-7-14.
+-- ─────────────────────────────────────────────────────────────────────────────
