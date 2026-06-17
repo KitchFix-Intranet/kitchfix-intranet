@@ -532,27 +532,14 @@
 }
 [data-billing="flat_fee"] .sc-legend-dot--prep { background: #a5b4fc; }
 
-/* ── YEAR CARD STATS: stronger typography + HS badge as a pill ── */
-[data-billing="flat_fee"] .sc-year-card-stats {
-  align-items: center;
-  font-size: 12px;
-  margin-top: 4px;
-  margin-bottom: 6px;
-}
-[data-billing="flat_fee"] .sc-year-card-stats > span:first-child {
-  color: #1e293b;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
+/* ── YEAR CARD STATS: match the PDC/MiLB stat-row typography pattern.
+   "X/Y game days" reads in caption grey on the left, "N HS" reads in
+   bold navy on the right - same shape as PDC's "X/Y entered" + "$XXk".
+   The previous pill-style HS badge looked like a different control;
+   typography-only treatment lets the three modes scan as one system. */
 [data-billing="flat_fee"] .sc-year-card-rev {
-  background: #eff6ff;
   color: #1e3a8a;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 /* ── YEAR PROGRESS BAR: gradient toward homestand-complete ── */
@@ -564,19 +551,18 @@
   background: linear-gradient(90deg, #1e40af 0%, #0F6E56 100%);     /* navy -> green */
 }
 
-/* ── EMPTY MONTH CARDS: "No homestands" as intentional state ── */
+/* ── EMPTY MONTH CARDS: shared "Off-season" treatment ──
+   The fee account override previously made this uppercase-letterspaced
+   for an executive-summary feel. Unified to the base italic-grey-mixed-
+   case style so PDC / MLB / MiLB all read the same "Off-season" caption
+   in identical typography. Keeps the centered vertical layout from the
+   fee variant (looked cavernous left-aligned). */
 [data-billing="flat_fee"] .sc-year-card-noservice {
   display: flex;
   flex: 1;
   align-items: center;
   justify-content: center;
   padding: 18px 0 8px;
-  color: #94a3b8;
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 /* Year cards get a consistent min-height so empty months sit at the
@@ -799,12 +785,16 @@
 [data-category="MiLB"] .sc-dot--away,
 [data-category="MiLB"] .sc-dot--day-off { box-shadow: none; }
 
+/* MiLB scheduled game day. Same navy as the MLB fee "game day
+   scheduled" so the cross-account-type vocabulary uses one blue
+   for the same concept. (Class name kept as upcoming-game for the
+   diff stay small; semantically it's now "scheduled game day".) */
 .sc-dot--upcoming-game {
-  background: #93c5fd;
+  background: #1e3a8a;
   opacity: 1;
 }
 .sc-legend-dot--upcoming-game {
-  background: #93c5fd;
+  background: #1e3a8a;
 }
 
 /* PDC / per-meal accounts: future days with projection data render as a
@@ -819,11 +809,13 @@
   background: #bbf7d0;
 }
 
-/* TODAY indicator: amber ring on every account mode's year heatmap.
-   Drawn as an outset box-shadow so it stacks on top of inset gameType
-   rings (sc-dot--home etc) without being overridden by background. */
+/* TODAY indicator: KitchFix brand navy ring on every account mode's
+   year heatmap. Drawn as an outset box-shadow so it stacks on top of
+   inset gameType rings (sc-dot--home etc) without being overridden by
+   background. Navy (was amber) - removes the false-urgency overlap
+   with the PDC "needs entry" amber meaning. */
 .sc-dot--today {
-  box-shadow: 0 0 0 2px #f59e0b !important;
+  box-shadow: 0 0 0 2px #153968 !important;
   position: relative;
   z-index: 1;
 }
