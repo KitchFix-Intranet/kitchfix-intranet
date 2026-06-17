@@ -2209,10 +2209,16 @@
   padding: 32px 36px;
   box-shadow: 0 2px 8px rgba(15, 48, 87, 0.04);
 }
+/* Phase 3 polish: screen header tightened to read as a deliberate document
+   header (the screen equivalent of the print cover). Slightly heavier
+   bottom rule in sky-blue to echo the print cover's accent; meta line
+   gets a touch more breathing room; class-row sits cleanly above the
+   Oswald title. The title itself is already Oswald 36px/Bold-700 navy
+   from PR 1 - that's the cover title at screen size, matched. */
 .pb-fullpage-head {
-  border-bottom: 1px solid var(--kf-border);
-  margin-bottom: 24px;
-  padding-bottom: 18px;
+  border-bottom: 1.5px solid #7DB9D5;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
 }
 .pb-fullpage-class-row {
   display: flex;
@@ -2249,6 +2255,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0;
+  margin-top: 14px;
 }
 .pb-fullpage-id {
   font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
@@ -2793,5 +2800,104 @@
     margin: 10pt 0 4pt;
     page-break-after: avoid;
     border-bottom-width: 0.5pt;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Phase 3 polish - screen TOC + screen<->print parity + per-class print rules
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Screen-only in-page section list (STD-001 v1.2 §3.2). Same gate as the
+   print TOC; renders as a clean navy numbered list above the body. Anchors
+   jump in-page via #id; scroll-margin-top on h1s gives a comfortable
+   landing position. Hidden in print (the print TOC handles that side). */
+.pb-screen-toc {
+  background: #f8fafc;
+  border: 1px solid var(--kf-border);
+  border-radius: 12px;
+  padding: 18px 22px 16px;
+  margin: 0 0 28px;
+  font-family: 'Inter', sans-serif;
+}
+.pb-screen-toc-title {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--kf-navy);
+  margin: 0 0 12px;
+}
+.pb-screen-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+@media (min-width: 720px) {
+  .pb-screen-toc-list { grid-template-columns: 1fr 1fr; column-gap: 18px; }
+}
+.pb-screen-toc-row {
+  margin: 0;
+  padding: 0;
+}
+.pb-screen-toc-link {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--kf-navy);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pb-screen-toc-link:hover {
+  background: rgba(15, 110, 86, 0.08);
+  color: var(--kf-playbook-teal-dark);
+}
+.pb-screen-toc-num {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #7DB9D5;
+  flex-shrink: 0;
+  min-width: 1.6em;
+}
+.pb-screen-toc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Smooth-scroll for in-page anchor jumps + comfortable landing position so
+   the section eyebrow has air above it. Applies on screen only - print is
+   paginated and these have no effect. */
+html { scroll-behavior: smooth; }
+.pb-fullpage-body h1 { scroll-margin-top: 80px; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Per-class print rule: AGR signature page starts on a fresh page.
+   STD-001 v1.2 §12: AGR has "an Acknowledgement and Agreement signature
+   page (full page; no running footer on the signature page)." Both AGR
+   docs in the corpus (AGR-001, AGR-002) put the signature section at the
+   last H1 of the body. Forcing a page break before the last H1 ensures
+   the signature lives on a clean fresh page.
+
+   Note: footer suppression on just that page (per the standard's "no
+   running footer on the signature page" rule) is NOT done in this PR -
+   it would need named-page machinery and a wrapping element around the
+   signature section to apply a `page: signature` named-page. The
+   page-break is the high-confidence part; the footer suppression is
+   noted as a future refinement. */
+@media print {
+  .pb-fullpage-body[data-doc-class="AGR"] > h1:last-of-type {
+    page-break-before: always;
   }
 }
