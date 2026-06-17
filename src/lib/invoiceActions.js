@@ -261,7 +261,9 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       scope: "all",
       module: "ops",
     });
-    return { success: true, submissions: rows.filter((r) => r.status !== "deleted").map(toLegacySubmission) };
+    const submissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+    await hydrateRejectionData(submissions);
+    return { success: true, submissions };
   }
 
   return null;
