@@ -436,9 +436,9 @@
 .sc-year-card-cue { font-size: var(--type-caption); color: transparent; transition: color 0.15s; font-weight: 500; }
 .sc-year-card:hover .sc-year-card-cue { color: #0F6E56; }
 
-/* DOW headers */
+/* DOW headers - readable but still secondary chrome */
 .sc-heatmap-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 2px; }
-.sc-heatmap-dow { text-align: center; font-size: 8px; font-weight: 600; color: #d1d5db; text-transform: uppercase; }
+.sc-heatmap-dow { text-align: center; font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; }
 
 /* Heatmap dot grid */
 .sc-heatmap { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; flex: 1; }

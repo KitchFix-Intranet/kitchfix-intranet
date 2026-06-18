@@ -36,6 +36,13 @@ function dateKey(d) {
 const CAT_ORDER = { PDC: 1, MLB: 2, MiLB: 3 };
 const CAT_LABELS = { PDC: "Player Development", MLB: "Major League", MiLB: "Minor League" };
 
+// Format a Date into "Mon Jun 23" - used by the year heatmap dot tooltips.
+const DOW_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDotDate(d) {
+  return `${DOW_SHORT[d.getDay()]} ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
 function AccountDropdown({ accounts, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -429,10 +436,15 @@ export default function ServiceCalendar({ showToast, session }) {
     if (!yearData) return null;
     let daysRecorded = 0, totalDays = 0, needsEntry = 0, overdue = 0, mealsYTD = 0;
     let gameDaysEntered = 0, totalGameDays = 0;
+    // NOTE: route.js re-keys the orchestrator output before responding:
+    //   totalServiceDays -> totalDays, totalActualMeals -> actualCovers,
+    //   totalProjectedMeals -> projectedCovers. Read the response shape,
+    //   not the orchestrator shape. (First version of this loop read the
+    //   orchestrator names and rendered "169 of 0 days recorded".)
     for (const m of yearData) {
       daysRecorded += m.daysWithActuals || 0;
-      totalDays += m.totalServiceDays || 0;
-      mealsYTD += m.totalActualMeals || 0;
+      totalDays += m.totalDays || 0;
+      mealsYTD += m.actualCovers || 0;
       if (m.homestandSummary) {
         gameDaysEntered += m.homestandSummary.gameDaysEntered || 0;
         totalGameDays += m.homestandSummary.gameDays || 0;
@@ -445,7 +457,8 @@ export default function ServiceCalendar({ showToast, session }) {
       }
     }
     const now = new Date();
-    const todayLabel = `${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+    const shortMonth = MONTHS[now.getMonth()].slice(0, 3);
+    const todayLabel = `${shortMonth} ${now.getDate()}`;
     return { todayLabel, daysRecorded, totalDays, needsEntry, overdue, mealsYTD, gameDaysEntered, totalGameDays };
   }, [yearData]);
 
@@ -775,7 +788,7 @@ export default function ServiceCalendar({ showToast, session }) {
                     <span className="sc-year-banner-sep">|</span>
                     <span className="sc-year-banner-item">{yearBannerStats.gameDaysEntered.toLocaleString("en-US")} of {yearBannerStats.totalGameDays.toLocaleString("en-US")} game days recorded</span>
                     <span className="sc-year-banner-sep">|</span>
-                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals YTD</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals recorded YTD</span>
                   </>
                 ) : (
                   <>
@@ -786,7 +799,7 @@ export default function ServiceCalendar({ showToast, session }) {
                     <span className="sc-year-banner-sep">|</span>
                     <span className="sc-year-banner-item">{yearBannerStats.overdue.toLocaleString("en-US")} overdue</span>
                     <span className="sc-year-banner-sep">|</span>
-                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals YTD</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals recorded YTD</span>
                   </>
                 )}
               </div>
@@ -854,6 +867,16 @@ export default function ServiceCalendar({ showToast, session }) {
                             const dayInfo = dayLookup[dk];
                             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
+                            // Build the hover tooltip. Always shows the date;
+                            // appends " - N meals" when actuals were entered.
+                            // Uses dayInfo.actualMeals (sum across services from
+                            // the orchestrator) so the year view tooltip lines
+                            // up with the month/day detail surface.
+                            const meals = dayInfo?.actualMeals || 0;
+                            const tip = meals > 0
+                              ? `${fmtDotDate(d)} — ${meals.toLocaleString("en-US")} meals`
+                              : fmtDotDate(d);
+
                             // Fee accounts: status comes straight from
                             // the orchestrator classify (entered / needs-
                             // entry / future / prep / off-season). Off-
@@ -873,9 +896,9 @@ export default function ServiceCalendar({ showToast, session }) {
                               // blocks like the explicit off-season days, so
                               // empty months read as a full calendar grid
                               // instead of a blank stencil.
-                              if (!dayInfo) return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} />;
-                              if (dayInfo.status === "off-season") return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} />;
-                              return <div key={di} className={`sc-dot sc-dot--${dayInfo.status} ${todayClass}`} />;
+                              if (!dayInfo) return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} title={tip} />;
+                              if (dayInfo.status === "off-season") return <div key={di} className={`sc-dot sc-dot--off-season ${todayClass}`} title={tip} />;
+                              return <div key={di} className={`sc-dot sc-dot--${dayInfo.status} ${todayClass}`} title={tip} />;
                             }
 
                             // Universal: in-month days without homestand/projection/
@@ -883,7 +906,7 @@ export default function ServiceCalendar({ showToast, session }) {
                             // weekday vs weekend. Completes the calendar grid - was
                             // missing Sat/Sun dots before.
                             if (!dayInfo) {
-                              return <div key={di} className={`sc-dot sc-dot--off-day ${todayClass}`} />;
+                              return <div key={di} className={`sc-dot sc-dot--off-day ${todayClass}`} title={tip} />;
                             }
                             const gameType = dayInfo?.gameType?.toLowerCase() || "";
 
@@ -907,7 +930,7 @@ export default function ServiceCalendar({ showToast, session }) {
                             if (gameType.includes("home")) gameClass = "sc-dot--home";
                             else if (gameType.includes("away")) gameClass = "sc-dot--away";
                             else if (gameType === "off") gameClass = "sc-dot--day-off";
-                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass} ${todayClass}`} />;
+                            return <div key={di} className={`sc-dot sc-dot--${resolvedStatus} ${gameClass} ${todayClass}`} title={tip} />;
                           })}
                         </div>
                       ))}
@@ -919,11 +942,15 @@ export default function ServiceCalendar({ showToast, session }) {
                       <>
                         <div className="sc-year-card-stats">
                           <span>{hs?.gameDaysEntered || 0}/{hs?.gameDays || 0} game days</span>
-                          <span className="sc-year-card-rev">{hs?.homestandIds?.length || 0} HS</span>
+                          <span className="sc-year-card-rev">{hs?.homestandIds?.length || 0} {(hs?.homestandIds?.length || 0) === 1 ? "homestand" : "homestands"}</span>
                         </div>
-                        <div className="sc-year-bar">
-                          <div className={`sc-year-bar-fill ${feePct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: feePct + "%" }} />
-                        </div>
+                        {/* Hide the bar entirely at 0% so empty tracks don't read
+                            as UI debris on months with no entries yet. */}
+                        {feePct > 0 && (
+                          <div className="sc-year-bar">
+                            <div className={`sc-year-bar-fill ${feePct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: feePct + "%" }} />
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -933,9 +960,11 @@ export default function ServiceCalendar({ showToast, session }) {
                             {displayRev > 0 ? fmtK(displayRev) : "$0"}
                           </span>
                         </div>
-                        <div className="sc-year-bar">
-                          <div className={`sc-year-bar-fill ${pct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: pct + "%" }} />
-                        </div>
+                        {pct > 0 && (
+                          <div className="sc-year-bar">
+                            <div className={`sc-year-bar-fill ${pct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: pct + "%" }} />
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -953,6 +982,7 @@ export default function ServiceCalendar({ showToast, session }) {
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Scheduled game day</span>
                   <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-season" />Away / off</span>
                 </>
               ) : isMilb ? (
                 <>
