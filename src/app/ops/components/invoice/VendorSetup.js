@@ -101,7 +101,11 @@ function StepBar({ step }) {
 /* ═══════════════════════════════════════════════════
    VendorSetup — Full Setup Only, 4-Step Stepper
    ═══════════════════════════════════════════════════ */
-export default function VendorSetup({ account, onClose, onCreated }) {
+export default function VendorSetup({ account, onClose, onCreated, showToast }) {
+  const toast = (msg, type = "info") => {
+    if (typeof showToast === "function") showToast(msg, type);
+    else console.error("[VendorSetup]", msg);
+  };
   const [step, setStep]       = useState(0);
   const [form, setForm]       = useState(emptyForm());
   const [saving, setSaving]   = useState(false);
@@ -273,11 +277,11 @@ export default function VendorSetup({ account, onClose, onCreated }) {
           portalUrl:    form.portalUrl.trim() || form.website.trim(),
         });
       } else {
-        alert(data.error || "Failed to save vendor");
+        toast(data.error || "Failed to save vendor", "error");
       }
     } catch (err) {
       console.error("VendorSetup submit error:", err);
-      alert("Network error — try again");
+      toast("Network error - try again", "error");
     } finally {
       setSaving(false);
     }

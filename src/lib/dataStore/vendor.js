@@ -4,6 +4,7 @@ import {
   updateCellSA,
   updateRangeSA,
   batchUpdateRangesSA,
+  clearRangeSA,
   SHEET_IDS,
 } from "@/lib/sheets";
 import { isDualWrite, isReadFromPostgres } from "@/lib/cutover";
@@ -232,7 +233,7 @@ async function readVendorListSheets(opts = {}) {
   }
 
   let vendors = masterResult.rows
-    .filter((r) => r[VM_IDX.vendorId])
+    .filter((r) => r[VM_IDX.vendorId] && String(r[VM_IDX.name] || "").trim())
     .map((r) => {
       const vendorId    = String(r[VM_IDX.vendorId]).trim();
       const links       = linkMap[vendorId] || [];
@@ -598,23 +599,27 @@ async function mergeVendorsSheets(keeperId, dupeIds) {
     await batchUpdateRangesSA(SHEET_IDS.HUB, acctBatchData);
   }
 
-  // 2. Soft-delete dupes (blank B/C/D, mark E as "DELETED") + collect dupe names
+  // 2. Soft-delete dupes: clear the entire row (cols A-J) instead of writing
+  //    empty strings. The previous approach (["", "", "", "DELETED"] in B:E)
+  //    left col A (vendorId) populated and the row passed downstream filters,
+  //    producing blank vendor cards on the portal. PG already handles the
+  //    canonical soft-delete via vendors.deleted_at.
   const dupeNames = [];
-  const masterBatchData = [];
+  const dupeRanges = [];
   masterRows.forEach((row, i) => {
     if (i === 0) return;
     const rowVendorId = String(row[VM_IDX.vendorId] || "").trim();
     if (dupeIds.includes(rowVendorId)) {
       const dupeName = String(row[VM_IDX.name] || "").trim();
       if (dupeName) dupeNames.push(dupeName);
-      masterBatchData.push({
-        range: `${VENDOR_MASTER_TAB}!B${i + 2}:E${i + 2}`,
-        values: [["", "", "", "DELETED"]],
-      });
+      dupeRanges.push(`${VENDOR_MASTER_TAB}!A${i + 2}:J${i + 2}`);
     }
   });
-  if (masterBatchData.length > 0) {
-    await batchUpdateRangesSA(SHEET_IDS.HUB, masterBatchData);
+  if (dupeRanges.length > 0) {
+    // Sequential clears (no batch helper for clear); rows are few per merge.
+    for (const range of dupeRanges) {
+      await clearRangeSA(SHEET_IDS.HUB, range);
+    }
   }
 
   // 3. Append dupe names as aliases on keeper row (pipe string)
@@ -635,7 +640,7 @@ async function mergeVendorsSheets(keeperId, dupeIds) {
 
   return {
     accountRowsReassigned: acctBatchData.length,
-    vendorRowsDeleted:     masterBatchData.length,
+    vendorRowsDeleted:     dupeRanges.length,
     aliasesAdded:          dupeNames,
   };
 }
@@ -662,7 +667,9 @@ async function readVendorListPostgres(opts = {}) {
   const [vendorsRes, accountsRes] = await Promise.all([
     supabase.from("vendors")
       .select("id, name, category, website, notes, created_by, created_at")
-      .is("deleted_at", null),
+      .is("deleted_at", null)
+      .not("name", "is", null)
+      .neq("name", ""),
     supabase.from("vendor_accounts")
       .select("id, vendor_id, account_key, customer_account_num, sales_rep_name, " +
               "sales_rep_phone, sales_rep_email, delivery_days, cutoff_time, " +

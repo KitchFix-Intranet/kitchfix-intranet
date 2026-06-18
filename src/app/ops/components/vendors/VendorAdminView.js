@@ -25,6 +25,7 @@ function AllVendorsTable({ showToast }) {
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sorted = vendors
+    .filter((v) => v.name && String(v.name).trim())
     .filter((v) => {
       const q = search.toLowerCase();
       return !q || v.name?.toLowerCase().includes(q) || v.salesRepName?.toLowerCase().includes(q);
