@@ -442,20 +442,24 @@
   font-size: 11.5px;
   white-space: nowrap;
   padding: 4px 8px;
+  width: 88px;
 }
 .pb-admin-cell-title {
   font-weight: 700;
   color: var(--kf-brand-navy);
-  max-width: 320px;
+  min-width: 240px;
+  max-width: 480px;
 }
 .pb-admin-cell-version {
   font-family: 'Inter', monospace;
   font-size: 11.5px;
   color: var(--kf-muted);
   white-space: nowrap;
+  width: 64px;
 }
 .pb-admin-cell-content {
   text-align: center;
+  width: 96px;
 }
 .pb-admin-cell-pin {
   text-align: center;
@@ -829,10 +833,11 @@
   color: var(--kf-muted);
   text-align: center;
   cursor: default;
+  width: 88px;
 }
 .pb-admin-th--action:hover { color: var(--kf-muted); background: var(--kf-surface-2); }
 .pb-admin-cell-archive {
-  width: 72px;
+  width: 88px;
   text-align: center;
 }
 .pb-admin-cell-restore {
