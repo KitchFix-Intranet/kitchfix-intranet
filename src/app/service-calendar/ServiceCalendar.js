@@ -418,6 +418,37 @@ export default function ServiceCalendar({ showToast, session }) {
     }
   }, [bulkPanelOpen, data]);
 
+  // Year-view banner stats. Aggregates across yearData (months[]):
+  // per-meal/MiLB get days-recorded + needs/overdue counts + meals YTD;
+  // fee accounts get game-days-recorded + meals YTD only (no urgency).
+  // Status names match classify() output - we count days[] across all
+  // months for the urgency tallies; days[].status === "needs-entry" |
+  // "overdue" only appear on per-meal/MiLB classify paths so the same
+  // count loop works for both.
+  const yearBannerStats = useMemo(() => {
+    if (!yearData) return null;
+    let daysRecorded = 0, totalDays = 0, needsEntry = 0, overdue = 0, mealsYTD = 0;
+    let gameDaysEntered = 0, totalGameDays = 0;
+    for (const m of yearData) {
+      daysRecorded += m.daysWithActuals || 0;
+      totalDays += m.totalServiceDays || 0;
+      mealsYTD += m.totalActualMeals || 0;
+      if (m.homestandSummary) {
+        gameDaysEntered += m.homestandSummary.gameDaysEntered || 0;
+        totalGameDays += m.homestandSummary.gameDays || 0;
+      }
+      if (m.days) {
+        for (const d of m.days) {
+          if (d.status === "needs-entry") needsEntry++;
+          else if (d.status === "overdue") overdue++;
+        }
+      }
+    }
+    const now = new Date();
+    const todayLabel = `${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+    return { todayLabel, daysRecorded, totalDays, needsEntry, overdue, mealsYTD, gameDaysEntered, totalGameDays };
+  }, [yearData]);
+
   const STATUS = {
     "entered": { icon: "✓", className: "sc-badge--entered" },
     "no-service": { icon: "—", className: "sc-badge--noservice" },
@@ -732,32 +763,34 @@ export default function ServiceCalendar({ showToast, session }) {
 
         {viewMode === "year" && (
           <div className="sc-year-body sc-fade-in">
-            {/* Color legend - fee accounts get a homestand-centric variant */}
-            <div className="sc-year-legend">
-              {isFeeAccount ? (
-                <>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Scheduled game day</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
-                </>
-              ) : isMilb ? (
-                <>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Scheduled game day</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
-                </>
-              ) : (
-                <>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future-service" />Upcoming service</span>
-                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
-                </>
-              )}
-            </div>
+            {/* At-a-glance stats banner. Per-meal + MiLB share the urgency-
+                aware shape (recorded / needs / overdue); fee accounts use
+                the schedule-only shape (game-days recorded). Meals YTD is
+                shared across all three modes. */}
+            {yearBannerStats && (
+              <div className="sc-year-banner">
+                <span className="sc-year-banner-item">Today: {yearBannerStats.todayLabel}</span>
+                {isFeeAccount ? (
+                  <>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.gameDaysEntered.toLocaleString("en-US")} of {yearBannerStats.totalGameDays.toLocaleString("en-US")} game days recorded</span>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals YTD</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.daysRecorded.toLocaleString("en-US")} of {yearBannerStats.totalDays.toLocaleString("en-US")} days recorded</span>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.needsEntry.toLocaleString("en-US")} need entry</span>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.overdue.toLocaleString("en-US")} overdue</span>
+                    <span className="sc-year-banner-sep">|</span>
+                    <span className="sc-year-banner-item">{yearBannerStats.mealsYTD.toLocaleString("en-US")} meals YTD</span>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="sc-year-grid">
               {MONTHS.map((name, mi) => {
@@ -888,7 +921,9 @@ export default function ServiceCalendar({ showToast, session }) {
                           <span>{hs?.gameDaysEntered || 0}/{hs?.gameDays || 0} game days</span>
                           <span className="sc-year-card-rev">{hs?.homestandIds?.length || 0} HS</span>
                         </div>
-                        <div className="sc-year-bar"><div className="sc-year-bar-fill" style={{ width: feePct + "%" }} /></div>
+                        <div className="sc-year-bar">
+                          <div className={`sc-year-bar-fill ${feePct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: feePct + "%" }} />
+                        </div>
                       </>
                     ) : (
                       <>
@@ -898,12 +933,44 @@ export default function ServiceCalendar({ showToast, session }) {
                             {displayRev > 0 ? fmtK(displayRev) : "$0"}
                           </span>
                         </div>
-                        <div className="sc-year-bar"><div className="sc-year-bar-fill" style={{ width: pct + "%" }} /></div>
+                        <div className="sc-year-bar">
+                          <div className={`sc-year-bar-fill ${pct === 100 ? "sc-year-bar-fill--complete" : "sc-year-bar-fill--progress"}`} style={{ width: pct + "%" }} />
+                        </div>
                       </>
                     )}
                   </div>
                 );
               })}
+            </div>
+
+            {/* Color legend moved below the grid - reference key after
+                you've scanned the year, not chrome at the top. Per-meal
+                gets the urgency legend; MiLB hybrid layers scheduled
+                game-day on top; fee account drops urgency entirely. */}
+            <div className="sc-year-legend">
+              {isFeeAccount ? (
+                <>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Game day entered</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Scheduled game day</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
+                </>
+              ) : isMilb ? (
+                <>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Scheduled game day</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
+                </>
+              ) : (
+                <>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--overdue" />Overdue</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future-service" />Upcoming service</span>
+                  <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off day</span>
+                </>
+              )}
             </div>
           </div>
         )}
