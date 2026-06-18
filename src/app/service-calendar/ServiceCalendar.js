@@ -175,24 +175,28 @@ export default function ServiceCalendar({ showToast, session }) {
       if (day.hasActuals) complete++;
       else if (day.isPast && day.isLocked) overdue++;
       else if (day.isPast) needsEntry++;
+      // Revenue: view-sourced day.totals (effective-dated per-day price
+      // from sc_daily_revenue). Replaces the prior pv * priceLookup
+      // recompute which used a single as-of-today price for every day
+      // and drifted post a mid-period price change. day.totals is
+      // guaranteed present per loadMonthDataPostgres:608. Pace
+      // denominator (enteredProjRev) sums projected revenue ONLY for
+      // days with actuals - same shape as before.
+      projRev += day.totals.projectedRevenue || 0;
+      if (day.hasActuals) {
+        actRev         += day.totals.actualRevenue    || 0;
+        enteredProjRev += day.totals.projectedRevenue || 0;
+      }
+      // Counts still sum from the per-service maps - those are the
+      // count surface and are not affected by price drift.
       for (const ci of Object.keys(day.projected)) {
-        const price = priceLookup[ci] || 0; const pv = day.projected[ci];
-        if (pv != null) {
-          projMeals += pv;
-          projRev += pv * price;
-          // Pace denominator: sum projected revenue ONLY for days where
-          // actuals exist. Lets the strip compare "what got billed" to
-          // "what was forecasted for the days we've actually closed",
-          // instead of comparing partial actuals to the full-month
-          // forecast (the old "variance" that always looked alarming
-          // mid-month).
-          if (day.hasActuals) enteredProjRev += pv * price;
-        }
-        if (day.hasActuals && day.actual[ci] != null) { actMeals += day.actual[ci]; actRev += day.actual[ci] * price; }
+        const pv = day.projected[ci];
+        if (pv != null) projMeals += pv;
+        if (day.hasActuals && day.actual[ci] != null) actMeals += day.actual[ci];
       }
     }
     return { projMeals, actMeals, projRev, actRev, enteredProjRev, complete, needsEntry, overdue, total: data.days.length };
-  }, [data, priceLookup]);
+  }, [data]);
 
   // Pace = actuals vs projection ONLY for the days that have been entered.
   // pacePct is the % delta against the same denominator. Both zero out
@@ -316,13 +320,20 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const daySummary = useCallback((day) => {
     if (!day) return { meals: 0, revenue: 0 };
-    let meals = 0, rev = 0;
+    // Revenue: view-sourced day.totals (effective-dated). Falls back to
+    // projected when no actuals are entered yet. Matches sc_daily_revenue
+    // exactly - was previously a pv * priceLookup recompute that
+    // mis-priced any day before the latest price change.
+    const revenue = day.hasActuals
+      ? (day.totals.actualRevenue    || 0)
+      : (day.totals.projectedRevenue || 0);
+    let meals = 0;
     for (const ci of Object.keys(day.projected)) {
       const val = day.hasActuals && day.actual[ci] != null ? day.actual[ci] : day.projected[ci];
-      if (val != null) { meals += val; rev += val * (priceLookup[ci] || 0); }
+      if (val != null) meals += val;
     }
-    return { meals, revenue: rev };
-  }, [priceLookup]);
+    return { meals, revenue };
+  }, []);
 
   // P0-2: returns the API result ({ success, error? }) so DayDetail's
   // executeSave can gate the success screen on a confirmed write. Empty
