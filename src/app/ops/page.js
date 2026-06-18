@@ -30,6 +30,8 @@ export default function OpsHub() {
   const [confirm, setConfirm] = useState(null);
 
   const userEmail = session?.user?.email || "";
+  const userCategory = config?.userCategory || null;
+  const canUseSeasonTracker = userCategory === "MLB" || userCategory === "CORP";
   const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
 
   const showToast = useCallback((msg, type = "success") => {
@@ -94,19 +96,24 @@ export default function OpsHub() {
       </div>
 
       <div className="oh-bound">
-        <OpsNav view={view} onNavigate={setView} userEmail={userEmail} />
+        <OpsNav view={view} onNavigate={setView} userEmail={userEmail} userCategory={userCategory} />
       </div>
 
       <div className="oh-bound">
-        {view === "home" && <OpsHome config={config} onNavigate={setView} userEmail={userEmail} />}
+        {view === "home" && <OpsHome config={config} onNavigate={setView} userEmail={userEmail} userCategory={userCategory} />}
         {view === "inventory" && (
           <InventoryTool config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} refreshConfig={refreshConfig} />
         )}
         {view === "inv-manager" && isInvManagerEnabled && (
           <InventoryManager config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} />
         )}
-        {view === "labor" && (
+        {view === "labor" && canUseSeasonTracker && (
           <LaborTool config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} />
+        )}
+        {view === "labor" && !canUseSeasonTracker && (
+          <div style={{ padding: "48px 24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
+            Season Tracker is not available for your account.
+          </div>
         )}
         {view === "invoices" && (
           <InvoiceTool config={config} showToast={showToast} openConfirm={openConfirm} onNavigate={setView} />
