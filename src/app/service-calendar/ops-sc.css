@@ -630,6 +630,9 @@
   border-radius: 3px;
 }
 [data-billing="flat_fee"] .sc-legend-dot--future { background: #bbf7d0; }
+/* Matches the in-month away/off dot color set by
+   [data-billing="flat_fee"] .sc-dot--off-season above. */
+[data-billing="flat_fee"] .sc-legend-dot--off-season { background: #f1f5f9; }
 
 /* ── MONTH-VIEW GAME-DAY TILE: more presence, clearer hierarchy ── */
 [data-billing="flat_fee"] .sc-tile--active {
