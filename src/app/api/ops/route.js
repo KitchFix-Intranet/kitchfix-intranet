@@ -440,7 +440,7 @@ function buildLaborContext(scheduleRows, budgetRows, planRows, cleanRows, period
 // PDC LABOR ENGINE — Period-Based Tracking
 // ═══════════════════════════════════════
 
-function buildPDCContext(budgetRows, planRows, periodRows, accountKey) {
+function buildPDCContext(budgetRows, planRows, periodRows, accountKey, scheduleRows = null) {
   function normDate(v) {
     if (!v) return "";
     const s = String(v).trim();
@@ -501,6 +501,66 @@ function buildPDCContext(budgetRows, planRows, periodRows, accountKey) {
       actualPackaging: Number(r[14]) || 0,
     }));
 
+  // Schedule-aware period→homestandId resolution (MLB fix).
+  // labor_plans rows use HS-keys ("HS1", "HS2"...); labor_budgets rows use
+  // P-keys ("P1", "P2"...). For MLB/MiLB accounts the homestand_schedule
+  // sheet bridges the two: each schedule day has a date + homestandId, and
+  // the date falls within exactly one period. PDC accounts have no schedule
+  // rows → the map stays empty → existing period-name matching is preserved.
+  const periodToHsIds = new Map();
+  if (scheduleRows) {
+    for (const r of scheduleRows) {
+      if (String(r[0] || "").trim() !== accountKey) continue;
+      const dayDate = normDate(r[1]);
+      const dayHsId = String(r[5] || "").trim();
+      if (!dayDate || !dayHsId) continue;
+      const matchingPeriod = periods.find((p) =>
+        p.start && p.end && dayDate >= p.start && dayDate <= p.end
+      );
+      if (!matchingPeriod) continue;
+      if (!periodToHsIds.has(matchingPeriod.name)) {
+        periodToHsIds.set(matchingPeriod.name, new Set());
+      }
+      periodToHsIds.get(matchingPeriod.name).add(dayHsId);
+    }
+  }
+
+  // Resolve all plans belonging to a given budget.period. Schedule-aware
+  // when periodToHsIds has entries for the period; falls back to the
+  // legacy period-name match otherwise (PDC).
+  function plansForBudgetPeriod(period) {
+    const hsIds = periodToHsIds.get(period);
+    if (hsIds && hsIds.size > 0) {
+      return plans.filter((pl) => hsIds.has(pl.homestandId));
+    }
+    return plans.filter((pl) => pl.homestandId === period);
+  }
+
+  // Multiple homestands can fall in one period for MLB. Aggregate their
+  // plans into a single synthetic plan that preserves the existing
+  // downstream API (calcPeriodVariance, periodSummary).
+  function aggregatePlans(plansList) {
+    if (plansList.length === 0) return null;
+    if (plansList.length === 1) return plansList[0];
+    const last = plansList[plansList.length - 1];
+    return {
+      planId: last.planId,
+      timestamp: last.timestamp,
+      email: last.email,
+      homestandId: plansList.map((p) => p.homestandId).join(", "),
+      budgetEnvelope: plansList.reduce((s, p) => s + p.budgetEnvelope, 0),
+      carryForward: 0,
+      actualSpent: plansList.reduce((s, p) => s + p.actualSpent, 0),
+      variance: plansList.reduce((s, p) => s + p.variance, 0),
+      cumulativeVariance: last.cumulativeVariance || 0,
+      streakCount: 0,
+      notes: "",
+      revenueActual: plansList.reduce((s, p) => s + (p.revenueActual || 0), 0),
+      actualFood: plansList.reduce((s, p) => s + (p.actualFood || 0), 0),
+      actualPackaging: plansList.reduce((s, p) => s + (p.actualPackaging || 0), 0),
+    };
+  }
+
   const today = fmtDate(new Date());
   const periodCards = [];
   const PEAK_PERIODS = ["P2", "P3"];
@@ -525,7 +585,7 @@ function buildPDCContext(budgetRows, planRows, periodRows, accountKey) {
     const isPeakSeason = PEAK_PERIODS.includes(budget.period);
     const isMaintenance = budget.hourlyBudget === 0 && budget.foodBudget === 0 && budget.packagingBudget === 0 && budget.revenue === 0;
 
-    const plan = plans.filter((pl) => pl.homestandId === budget.period).pop();
+    const plan = aggregatePlans(plansForBudgetPeriod(budget.period));
     let status = "upcoming";
     if (plan) {
       status = "completed";
@@ -616,7 +676,7 @@ function buildPDCContext(budgetRows, planRows, periodRows, accountKey) {
   };
 
   const periodSummary = budgets.map((b) => {
-    const plan = plans.filter((p) => p.homestandId === b.period).pop();
+    const plan = aggregatePlans(plansForBudgetPeriod(b.period));
     const pc = periodCards.find((p) => p.id === b.period);
     const pv = pc ? calcPeriodVariance(pc) : { variance: 0, laborVar: 0, foodVar: 0, packVar: 0 };
     return {
@@ -847,7 +907,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
         const isSeasonalAcct = isMlbLevel || isMilbLevel;
 
         laborData = buildPDCContext(
-          budgetsRaw.rows, plansRaw.rows, periodsRaw.rows, acctParam
+          budgetsRaw.rows, plansRaw.rows, periodsRaw.rows, acctParam, scheduleRaw.rows
         );
 
         const isRevenueFixed = isSeasonalAcct && acctParam !== "TXR - TX - V";
@@ -869,7 +929,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
       }
 
       const crossAccount = laborAccounts.map((acct) => {
-        const ctx = buildPDCContext(budgetsRaw.rows, plansRaw.rows, periodsRaw.rows, acct.key);
+        const ctx = buildPDCContext(budgetsRaw.rows, plansRaw.rows, periodsRaw.rows, acct.key, scheduleRaw.rows);
 
         let nextItem = null;
         const nextPC = ctx.periodCards.find((pc) =>

@@ -1610,3 +1610,102 @@
   .oh-sp-admin-hs-dot { width: 20px; height: 20px; }
   .oh-sp-admin-view-toggle { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SEASON TRACKER LANDING (prefix: oh-st-)
+   Replaces the dead splash with a live account-card grid driven
+   by bootstrap.crossAccount. Same visual language as admin cards.
+   ══════════════════════════════════════════════════════════════ */
+.oh-st-landing {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 24px 36px;
+}
+.oh-st-landing-head {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.oh-st-landing-title {
+  font-family: var(--oh-font-head);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--oh-navy);
+  margin: 0 0 6px;
+}
+.oh-st-landing-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  max-width: 460px;
+  line-height: 1.55;
+  margin: 0 auto;
+}
+.oh-st-landing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.oh-st-acct-card {
+  background: #fff;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.05s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 130px;
+}
+.oh-st-acct-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+.oh-st-acct-card:active { transform: translateY(0); }
+
+/* Variance-driven accent on the left edge */
+.oh-st-acct-card--alert    { border-left: 3px solid #d97706; }
+.oh-st-acct-card--healthy  { border-left: 3px solid #16a34a; }
+.oh-st-acct-card--over     { border-left: 3px solid #dc2626; }
+.oh-st-acct-card--neutral  { border-left: 3px solid transparent; }
+
+.oh-st-acct-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.oh-st-acct-card-key {
+  font-family: var(--oh-font-head);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--oh-navy);
+}
+.oh-st-acct-card-name {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+/* Next-homestand status line */
+.oh-st-acct-card-next {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.oh-st-acct-card-next--active   { color: var(--oh-navy); }
+.oh-st-acct-card-next--alert    { color: #92400e; }
+.oh-st-acct-card-next--upcoming { color: #64748b; font-weight: 500; }
+.oh-st-acct-card-next--neutral  { color: #94a3b8; font-weight: 500; }
+
+.oh-st-acct-card-foot {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: auto;
+}
+
+@media (max-width: 640px) {
+  .oh-st-landing { padding: 16px 14px 28px; }
+  .oh-st-landing-grid { grid-template-columns: 1fr; gap: 10px; }
+}
