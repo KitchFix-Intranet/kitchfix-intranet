@@ -320,8 +320,9 @@ export default function ServiceCalendar({ showToast, session }) {
     const entries = []; for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
     setSaving(true);
     try {
+      // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, spreadsheetId: data.account.spreadsheetId, date: day.date, sheetRow: day.sheetRow, entries }) });
+        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
       const result = await res.json();
       if (result.success) { showToast("Confirmed as projected", "success"); setReloadKey(k => k + 1); }
       else showToast(result.error || "Save failed", "error");
