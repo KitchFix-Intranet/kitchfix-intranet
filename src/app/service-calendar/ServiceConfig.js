@@ -30,7 +30,7 @@ export default function ServiceConfig({ account, serviceGroups, session, showToa
     setGroups(g);
     const prices = {};
     for (const grp of serviceGroups) {
-      for (const s of grp.services) { prices[`${grp.name}::${s.name}`] = String(s.price); }
+      for (const s of grp.services) { prices[`${grp.name}::${s.name}`] = String(Number(s.price).toFixed(2)); }
     }
     setEditPrices(prices);
     setDirty(false);
@@ -291,7 +291,7 @@ export default function ServiceConfig({ account, serviceGroups, session, showToa
                 <div key={svc.name} className={`sc-cfg-row ${!svc.active ? "sc-cfg-row--inactive" : ""}`}>
                   <div className="sc-cfg-row-left">
                     <span className="sc-cfg-row-name">{svc.name}</span>
-                    <span className="sc-cfg-row-meta">Col {svc.colIndex}{svc.taxFree ? " · Tax-free" : ""}</span>
+                    <span className="sc-cfg-row-meta">{svc.taxFree ? "Tax-free" : ""}</span>
                   </div>
                   <div className="sc-cfg-row-right">
                     <span className="sc-cfg-row-dollar">$</span>
