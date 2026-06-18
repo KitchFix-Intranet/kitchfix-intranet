@@ -88,31 +88,23 @@ async function pickHeroImage() {
 
 // ─── Editing allowlist + validation sets (action=update-document) ───────────
 //
-// Owner-only catalog edits from /playbook/admin (OPD Command). The set
-// reflects the source-of-truth boundary post-PR-C:
+// Overlay-only allowlist. The dashboard only writes fields the projection
+// PRESERVES (status, pinned, access_level) - the operational lifecycle the
+// owner controls without a deploy. MDX-authored fields (title, shelf,
+// doc_class, version, etc.) are NOT in the set: a write to them would land
+// in PG and then be silently overwritten on the next projection apply, so
+// the API hard-rejects them here. The UI enforces the same boundary; this
+// closes the same gap at the API layer.
 //
-//   Overlay fields (dashboard owns, projection preserves):
-//     status, pinned, access_level
-//   MDX-authored fields (projection writes, dashboard edits would be
-//     silent-data-loss traps - but kept writable here for legacy/internal
-//     use; UI no longer edits them):
-//     title, shelf, doc_class, version
-//   Removed (Drive retired):
-//     source_drive_id, source_drive_id_es
-//
-// `id` is NOT in the set - renaming the PK is a multi-table transaction
+// Removed in PR C (Drive retired): source_drive_id, source_drive_id_es.
+// `id` is NOT writable - renaming the PK is a multi-table transaction
 // (see pr-7-5 atomic POST-003 -> POSTER-001), not an in-row UPDATE.
 //
 // Per-field validators mirror the schema CHECK constraints
 // (pr-7-1-opd-schema.sql + pr-7-11 access_level) so we 400 fast instead of
 // round-tripping a Postgres constraint violation.
 const WRITABLE_FIELDS_A = new Set([
-  "title", "shelf", "doc_class", "status", "version", "pinned",
-  "access_level",
-]);
-const VALID_SHELVES_SET = new Set(SHELVES);
-const VALID_CLASSES = new Set([
-  "PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK",
+  "status", "pinned", "access_level",
 ]);
 const VALID_STATUSES = new Set([
   "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",
@@ -121,8 +113,8 @@ const VALID_ACCESS_LEVELS = new Set(["unrestricted", "restricted", "slt"]);
 
 function validatePatch(patch) {
   // Returns { ok: true, clean } on success or { ok: false, error } on failure.
-  // `clean` is the canonicalized patch (whitespace-trimmed strings, etc.) so
-  // the caller can pass it straight to updateDocument without re-massaging.
+  // `clean` is the canonicalized patch so callers can pass it straight to
+  // updateDocument.
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     return { ok: false, error: "patch must be a non-null object" };
   }
@@ -132,47 +124,15 @@ function validatePatch(patch) {
   }
   for (const k of keys) {
     if (!WRITABLE_FIELDS_A.has(k)) {
-      // Hard reject - covers id, source_drive_id*, storage_path*, anything else
-      // not in the Part A allowlist. The reason `id` lands here is structural,
-      // not stylistic: renaming the PK is a multi-table transaction (pr-7-5),
-      // not a single .update().
       return { ok: false, error: `field '${k}' is not writable via this action` };
     }
   }
   const clean = {};
-  if ("title" in patch) {
-    if (typeof patch.title !== "string" || !patch.title.trim()) {
-      return { ok: false, error: "title must be a non-empty string" };
-    }
-    clean.title = patch.title.trim();
-  }
-  if ("shelf" in patch) {
-    if (patch.shelf !== null && !VALID_SHELVES_SET.has(patch.shelf)) {
-      return { ok: false, error: `invalid shelf '${patch.shelf}'` };
-    }
-    clean.shelf = patch.shelf;
-  }
-  if ("doc_class" in patch) {
-    if (!VALID_CLASSES.has(patch.doc_class)) {
-      return { ok: false, error: `invalid doc_class '${patch.doc_class}'` };
-    }
-    clean.doc_class = patch.doc_class;
-  }
   if ("status" in patch) {
     if (!VALID_STATUSES.has(patch.status)) {
       return { ok: false, error: `invalid status '${patch.status}'` };
     }
     clean.status = patch.status;
-  }
-  if ("version" in patch) {
-    if (patch.version === null) {
-      clean.version = null;
-    } else if (typeof patch.version === "string") {
-      const trimmed = patch.version.trim();
-      clean.version = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "version must be a string or null" };
-    }
   }
   if ("pinned" in patch) {
     if (typeof patch.pinned !== "boolean") {
