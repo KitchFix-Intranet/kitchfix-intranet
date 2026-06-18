@@ -130,6 +130,19 @@ export default function ServiceCalendar({ showToast, session }) {
       .catch(() => showToast("Failed to load accounts", "error"));
   }, [showToast]);
 
+  // Clear cached data the instant the account changes. Without this,
+  // switching accounts on the year view briefly rendered the NEW
+  // account's yearData (light fetch, returns first) under the OLD
+  // account's data-billing / data-category attribute (heavier sc-load,
+  // returns second) - so PDC dots would flash through fee-account
+  // CSS overrides for ~200ms before snapping into place. Clearing
+  // both forces the year body's "is everything loaded?" gate to fail
+  // until BOTH responses land for the new account.
+  useEffect(() => {
+    setData(null);
+    setYearData(null);
+  }, [selectedAccount]);
+
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
   useEffect(() => {
     if (!selectedAccount) return;
@@ -776,6 +789,10 @@ export default function ServiceCalendar({ showToast, session }) {
 
         {viewMode === "year" && (
           <div className="sc-year-body sc-fade-in">
+            {(loading || !data || !yearData) ? (
+              <div className="sc-loading"><div className="oh-spinner" /><p>Loading...</p></div>
+            ) : (
+            <>
             {/* At-a-glance stats banner. Per-meal + MiLB share the urgency-
                 aware shape (recorded / needs / overdue); fee accounts use
                 the schedule-only shape (game-days recorded). Meals YTD is
@@ -1002,6 +1019,8 @@ export default function ServiceCalendar({ showToast, session }) {
                 </>
               )}
             </div>
+            </>
+            )}
           </div>
         )}
       </div>
