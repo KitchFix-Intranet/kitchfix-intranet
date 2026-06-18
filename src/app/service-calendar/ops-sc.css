@@ -76,8 +76,12 @@
 .sc-metric-hero { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-metric-hero--green { color: #0F6E56; }
 .sc-metric-hero--red { color: #dc2626; }
+/* Single amber-text token across the SC surface (pace hero, footer warn,
+   any future urgency text). The #EF9F27 / #fbbf24 hexes elsewhere are
+   accent / dot backgrounds, not text. */
+.sc-metric-hero--amber { color: #b45309; }
 .sc-metric-context { font-size: var(--type-caption); color: #9ca3af; }
-.sc-metric-warn { font-size: var(--type-caption); color: #92400e; margin-top: 2px; }
+.sc-metric-warn { font-size: var(--type-caption); color: #b45309; margin-top: 2px; }
 .sc-metric-warn--link { cursor: pointer; text-decoration: underline; text-decoration-style: dashed; text-underline-offset: 2px; transition: color 0.15s; }
 .sc-metric-warn--link:hover { color: #0F6E56; }
 .sc-metric-divider { width: 1px; height: 40px; background: #e5e7eb; flex-shrink: 0; }
@@ -93,7 +97,11 @@
 .sc-dow { text-align: center; font-size: var(--type-caption); color: #6b7280; padding: 0 0 var(--space-2); font-weight: 500; }
 .sc-week-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1); padding: 3px 0; }
 
-.sc-tile { min-height: 80px; border-radius: var(--radius-card); padding: var(--space-2) var(--space-2); }
+/* Desktop densified to 60px + tighter padding per the redesign mockup.
+   The (768-1024px) and (<=768px) and (<=480px) media queries below
+   override min-height for tablet (88px) / mobile (64px) / phone (56px)
+   so the comfortable touch target is preserved on small viewports. */
+.sc-tile { min-height: 60px; border-radius: var(--radius-card); padding: 6px 8px; }
 .sc-tile--empty { }
 .sc-tile--off { opacity: 0.3; }
 .sc-tile--weekend { min-height: 44px; }
@@ -102,20 +110,56 @@
 .sc-tile-off-label { font-size: 10px; color: #9ca3af; margin-top: 2px; }
 .sc-today-pill { font-size: 7px; font-weight: 800; letter-spacing: 0.05em; padding: 1px 5px; border-radius: 3px; background: #E1F5EE; color: #085041; }
 
-.sc-tile--active { border: 1px solid #e5e7eb; border-left: 3px solid #e5e7eb; cursor: pointer; transition: all 0.15s; }
+/* Tile state visual = full-tile background tint + status icon. The
+   left-border accent is gone; bg tint and the .sc-badge icon carry the
+   state signal together so it's never color-alone. */
+.sc-tile--active { border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; background: #fff; }
 .sc-tile--active:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.sc-tile--focused { background: #f0fdf4 !important; border-color: #0F6E56 !important; }
-.sc-tile--today { border: 2px solid #0F6E56 !important; }
+
+/* Per-status bg tints. Every status the dayStatus() callback emits
+   (entered / needs-entry / overdue / future / no-service / prep /
+   off-season) gets a tint - off-season is handled by an early return
+   for fee tiles (between-homestands variant), but the rule below covers
+   any non-fee classify path that emits it. */
+.sc-tile-state--entered      { background: #dcfce7; }
+.sc-tile-state--needs-entry  { background: #fffbeb; }
+.sc-tile-state--overdue      { background: #fef2f2; }
+.sc-tile-state--future       { background: #f0fdf4; }
+.sc-tile-state--no-service   { background: #f9fafb; }
+.sc-tile-state--prep         { background: #d1fae5; }
+.sc-tile-state--off-season   { background: transparent; }
+
+/* Focused (clicked, ready to drill) keeps the green border but rides
+   on top of whatever state bg is below. Today + bulk-selected use box-
+   shadow rings on different layers so they stack independently. */
+.sc-tile--focused { border-color: #0F6E56 !important; box-shadow: 0 0 0 1px #0F6E56 inset; }
+.sc-tile--today { box-shadow: 0 0 0 2px #153968 !important; }
+.sc-tile--today.sc-tile--focused { box-shadow: 0 0 0 2px #153968, 0 0 0 1px #0F6E56 inset !important; }
+/* Today + bulk-selected (user is bulk-picking and today is unentered):
+   layer the navy today ring inside a softer green bulk-selected ring so
+   both signals survive. */
+.sc-tile--today.sc-tile--bulk-selected { box-shadow: 0 0 0 2px #153968, 0 0 0 4px rgba(15,110,86,0.25) !important; }
 
 .sc-tile-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-1); }
 .sc-tile-game { font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
 .sc-tile-meals { font-size: var(--type-caption); color: #6b7280; margin-bottom: 1px; line-height: var(--line-body); }
-.sc-tile-meals--proj { font-style: italic; color: #9ca3af; }
+.sc-tile-meals--proj { color: #9ca3af; }
 .sc-tile-noservice { font-size: 10px; color: #9ca3af; font-style: italic; margin-top: var(--space-1); }
 .sc-tile-rev { font-size: var(--type-body-sm); font-weight: 600; line-height: var(--line-body); }
 .sc-tile-rev--actual { color: #085041; font-weight: 700; }
-.sc-tile-rev--projected { color: #9ca3af; font-style: italic; font-weight: 400; }
-.sc-tile-rev--future { color: #d1d5db; font-style: italic; font-weight: 400; }
+/* "est." / "~" prefixes carry the projection signal; italic is dropped
+   so the dense grid reads as one type-family. */
+.sc-tile-rev--projected { color: #9ca3af; font-weight: 400; }
+.sc-tile-rev--future { color: #9ca3af; font-weight: 400; }
+
+/* MiLB DAY/NIGHT pill - replaces the left-border accent that previously
+   encoded the game-type rhythm. Day = amber dot, Night = navy dot. */
+.sc-mlb-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+.sc-mlb-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.sc-mlb-pill--day .sc-mlb-pill-dot { background: #EF9F27; }
+.sc-mlb-pill--night .sc-mlb-pill-dot { background: #153968; }
+.sc-mlb-pill-dot--legend-day { background: #EF9F27; }
+.sc-mlb-pill-dot--legend-night { background: #153968; }
 
 /* Bulk mode */
 .sc-tile--bulk-selectable { cursor: pointer; }
@@ -137,18 +181,25 @@
 .sc-badge { font-size: 12px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .sc-badge--entered { background: #E1F5EE; color: #085041; }
 .sc-badge--noservice { background: #f3f4f6; color: #9ca3af; font-size: 14px; }
-.sc-badge--needs { background: #fef3c7; color: #92400e; font-size: 10px; }
+.sc-badge--needs { background: #fef3c7; color: #b45309; font-size: 10px; }
 .sc-badge--overdue { background: #fef2f2; color: #dc2626; font-size: 12px; font-weight: 800; }
 .sc-badge--future { background: #f3f4f6; color: #d1d5db; font-size: 10px; }
 
-.sc-week-summary { display: flex; justify-content: flex-end; padding: 2px var(--space-1) var(--space-1); font-size: var(--type-caption); color: #6b7280; gap: var(--space-3); }
+/* Week summary: slim, right-aligned, one line "7/7 entered  $18,720". */
+.sc-week-summary { display: flex; justify-content: flex-end; padding: 4px var(--space-1); font-size: 11px; color: #6b7280; gap: 12px; }
 .sc-week-progress { }
 .sc-week-rev { font-weight: 600; color: #085041; }
 
-.sc-month-footer { margin: var(--space-3) 0 var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-card); display: flex; justify-content: space-between; align-items: center; font-size: var(--type-caption); color: #6b7280; font-weight: 500; background: #f9fafb; }
+/* Inline color legend below the grid - mirrors the year-view legend
+   style. Top border, top-padded. */
+.sc-month-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 0 0; margin-top: 8px; border-top: 1px solid #f3f4f6; }
+
+/* Month footer: tighter type + padding, warn uses the unified amber-text
+   token (#b45309) instead of the legacy mustard #92400e. */
+.sc-month-footer { margin: var(--space-3) 0 var(--space-4); padding: 8px 14px; border-radius: var(--radius-card); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #6b7280; font-weight: 500; background: #f9fafb; }
 .sc-month-footer--done { background: #E1F5EE; color: #085041; }
-.sc-month-footer--warn { background: #fffbeb; color: #92400e; }
-.sc-month-footer-rev { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
+.sc-month-footer--warn { background: #fffbeb; color: #b45309; }
+.sc-month-footer-rev { font-size: 16px; font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-month-footer--done .sc-month-footer-rev { color: #085041; }
 
 /* ══════════════════════════════════════
@@ -477,7 +528,11 @@
 .sc-badge--offseason { background: transparent; color: transparent; }
 
 /* Month-view tile variants for fee accounts */
-.sc-tile--prep { opacity: 0.65; background: #f8fafc; min-height: 60px; }
+/* Prep base rule: only min-height + structural - bg and opacity moved
+   to .sc-tile-state--prep (the unified system tint, pale mint #d1fae5)
+   and the fee-specific [data-billing="flat_fee"] .sc-tile--prep override
+   below. */
+.sc-tile--prep { min-height: 60px; }
 .sc-tile--between-homestands { background: transparent; border: none; opacity: 0.25; min-height: 44px; cursor: default; }
 .sc-tile--between-homestands:hover { transform: none; box-shadow: none; }
 
@@ -635,14 +690,18 @@
 [data-billing="flat_fee"] .sc-legend-dot--off-season { background: #f1f5f9; }
 
 /* ── MONTH-VIEW GAME-DAY TILE: more presence, clearer hierarchy ── */
+/* Fee-account tile shell: slate border + subtle lift on hover. The
+   left-border accent is gone (system-wide drop); bg tint via
+   .sc-tile-state--* carries the state signal. Hover border + shadow
+   shifted from navy to system green to match the unified green-on-
+   schedule palette. */
 [data-billing="flat_fee"] .sc-tile--active {
   border: 1px solid #e2e8f0;
-  border-left-width: 3px;
   box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
 [data-billing="flat_fee"] .sc-tile--active:hover {
-  border-color: #1e40af;
-  box-shadow: 0 4px 12px rgba(30,64,175,0.12);
+  border-color: #0F6E56;
+  box-shadow: 0 4px 12px rgba(15,110,86,0.12);
   transform: translateY(-1px);
 }
 
@@ -675,20 +734,20 @@
   font-weight: 600;
 }
 
-/* ── PREP TILE: periwinkle accent ties it to the year-view prep dot,
-   visually distinct from both navy game days and off-season tiles. ── */
+/* ── PREP TILE: pale mint, matching the year-view fee prep dot
+   (#d1fae5) for cross-view consistency. Bg comes from the base
+   .sc-tile-state--prep rule. Label colors stay slate so the
+   mint wash carries the state, not the type color. ── */
 [data-billing="flat_fee"] .sc-tile--prep {
-  background: #f5f7ff;                                 /* very pale periwinkle wash */
   opacity: 1;
   border: 1px solid #e2e8f0;
-  border-left: 3px solid #a5b4fc !important;           /* periwinkle border-left */
 }
 [data-billing="flat_fee"] .sc-tile--prep .sc-tile-game {
-  color: #4338ca;                                      /* indigo dark - readable PREP label */
+  color: #065f46;                                      /* dark green - readable on mint */
   font-size: 10px;
 }
 [data-billing="flat_fee"] .sc-tile--prep .sc-tile-meals {
-  color: #6366f1;                                      /* indigo mid - HS# */
+  color: #047857;                                      /* mid green - HS# secondary */
   font-size: 10px;
 }
 
@@ -743,10 +802,10 @@
    so the tile body breathes. */
 [data-billing="flat_fee"] .sc-tile-top .sc-badge { display: none; }
 
-/* TODAY indicator: navy schedule border + navy pill instead of green */
-[data-billing="flat_fee"] .sc-tile--today {
-  border-color: #1e3a8a !important;
-}
+/* TODAY indicator: the base .sc-tile--today (navy box-shadow ring,
+   #153968) handles the outline. Per-fee, only the today-pill chip
+   needs the navy slate-blue treatment so it reads against the new
+   light-green game-day wash. */
 [data-billing="flat_fee"] .sc-today-pill {
   background: #eff6ff;
   color: #1e3a8a;

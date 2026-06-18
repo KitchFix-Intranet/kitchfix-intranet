@@ -937,7 +937,7 @@ function ContentStateChip({ hasContent }) {
     <span
       className={`pb-admin-content-chip pb-admin-content-chip--${hasContent ? "ok" : "empty"}`}
     >
-      {hasContent ? "OK" : "Empty"}
+      {hasContent ? "Yes" : "Empty"}
     </span>
   );
 }
@@ -1358,8 +1358,8 @@ function RestoreDialog({ doc, onCancel, onConfirmed }) {
     doc.doc_class === "POST"
       ? "Sous will rebuild the poster stub chunk (~1s)."
       : doc.source_drive_id
-      ? "Sous will re-extract from Drive and re-embed (~3-5s for a typical doc)."
-      : "No Drive link - the doc returns to the catalog with no chunks (no content yet).";
+      ? "Sous will re-embed this doc (~3-5s for a typical doc)."
+      : "The doc returns to the catalog; Sous chunks rebuild on its next ingestion.";
 
   const handleRestore = async () => {
     setSubmitting(true);
