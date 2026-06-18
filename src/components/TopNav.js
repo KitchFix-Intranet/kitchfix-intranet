@@ -79,6 +79,7 @@ const NOTIF_ICONS = {
   new_hire:             <NIcon><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></NIcon>,
   separation:           <NIcon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></NIcon>,
   rate_change:          <NIcon><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></NIcon>,
+  pay_increase:         <NIcon><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></NIcon>,
   title_change:         <NIcon><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></NIcon>,
   add_bonus:            <NIcon><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6" /><path d="M12 2v10" /><rect x="2" y="7" width="20" height="5" rx="1" /><path d="M12 7c-2-3-6-3-6 0" /><path d="M12 7c2-3 6-3 6 0" /></NIcon>,
   add_cell_phone:       <NIcon><rect x="5" y="2" width="14" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></NIcon>,
@@ -222,6 +223,7 @@ function formatNotification(n) {
 const PAF_DESCRIPTIONS = {
   separation:           "Employee offboarding initiated.",
   rate_change:          "Compensation adjustment submitted for approval.",
+  pay_increase:         "Pay increase recommendation submitted for approval.",
   title_change:         "Role title update submitted for approval.",
   add_bonus:            "Bonus payment submitted for processing.",
   add_cell_phone:       "Cell phone reimbursement request submitted.",
