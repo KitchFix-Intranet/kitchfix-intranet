@@ -143,6 +143,59 @@ export async function uploadStampedPDF(accessToken, pdfBuffer, vendor, account, 
   };
 }
 
+// ─────────────────────────────────────────────
+// NEWS IMAGE UPLOAD
+// Uploads an image to NEWS_IMAGES_FOLDER_ID (env), sets anyone-with-link
+// read permission, and returns the direct-view URL suitable for an <img src>.
+// Mirrors uploadInvoiceImage but uses the news folder and the uc?export=view
+// URL form (Drive's "view image inline" link, not the WebView container page).
+// ─────────────────────────────────────────────
+const NEWS_IMAGES_FOLDER_ID = process.env.NEWS_IMAGES_FOLDER_ID;
+
+export async function uploadNewsImage(base64Data, fileName, mimeType) {
+  if (!NEWS_IMAGES_FOLDER_ID) {
+    console.warn("[Drive] NEWS_IMAGES_FOLDER_ID unset - uploading to service account root (unorganized)");
+  }
+  const drive = getServiceAccountDriveClient();
+
+  const rawBase64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+  const buffer = Buffer.from(rawBase64, "base64");
+
+  const { Readable } = await import("stream");
+  const stream = Readable.from(buffer);
+
+  const file = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      ...(NEWS_IMAGES_FOLDER_ID ? { parents: [NEWS_IMAGES_FOLDER_ID] } : {}),
+    },
+    media: {
+      mimeType: mimeType || "application/octet-stream",
+      body: stream,
+    },
+    fields: "id, webViewLink, webContentLink",
+    supportsAllDrives: true,
+  });
+
+  try {
+    await drive.permissions.create({
+      fileId: file.data.id,
+      requestBody: { role: "reader", type: "anyone" },
+      supportsAllDrives: true,
+    });
+  } catch (permErr) {
+    console.log("[Drive] News image permission skipped (likely inherited):", permErr.message?.slice(0, 80));
+  }
+
+  // lh3.googleusercontent.com/d/ is Google's CDN-backed direct-image URL.
+  // The historical uc?export=view form returns 303 + x-frame-options:SAMEORIGIN,
+  // which browsers block when used as an <img src> from other domains.
+  return {
+    fileId: file.data.id,
+    fileUrl: `https://lh3.googleusercontent.com/d/${file.data.id}`,
+  };
+}
+
 // ── Upload: Multiple Pages (fallback if stamped PDF fails) ──
 export async function uploadInvoicePages(accessToken, pages, vendor, account, invoiceDate) {
   const results = [];

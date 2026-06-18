@@ -1,6 +1,9 @@
 import { auth } from "@/lib/auth";
 import { readSheetSA, SHEET_IDS } from "@/lib/sheets";
 import { getNewsInteractions, upsertNewsInteraction, getSubmissions } from "@/lib/dataStore";
+import { createNewsPost, updateNewsPost, deleteNewsPost, readAllNewsPosts, enforceSinglePin } from "@/lib/dataStore/newsPosts";
+import { uploadNewsImage } from "@/lib/drive";
+import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { NextResponse } from "next/server";
 
 export async function GET(request) {
@@ -39,6 +42,7 @@ export async function GET(request) {
           countdownDate:  String(r[9] || ""),
           link:           String(r[10] || ""),
           active:         String(r[11] || ""),
+          imageUrl:       String(r[12] || ""),
         }))
         .sort((a, b) => (b.publishDate || "").localeCompare(a.publishDate || ""));
 
@@ -56,6 +60,23 @@ export async function GET(request) {
     } catch (error) {
       console.error("[Dashboard] News bootstrap error:", error.message);
       return NextResponse.json({ posts: [], interactions: [] });
+    }
+  }
+
+  // ═══════════════════════════════════════
+  // NEWS ADMIN LIST (all posts, including inactive + expired)
+  // ═══════════════════════════════════════
+  if (action === "news-admin-list") {
+    const email = session.user?.email?.toLowerCase().trim();
+    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+    }
+    try {
+      const posts = await readAllNewsPosts();
+      return NextResponse.json({ success: true, posts });
+    } catch (error) {
+      console.error("[Dashboard] News admin list error:", error.message);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
   }
 
@@ -324,8 +345,55 @@ export async function POST(request) {
     const body = await request.json();
     const { action } = body;
 
-    if (!["news-read", "news-save", "news-ack", "news-mark-all-read"].includes(action)) {
+    if (!["news-read", "news-save", "news-ack", "news-mark-all-read", "news-create", "news-update", "news-delete"].includes(action)) {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    }
+
+    // ── Admin write actions ──
+    if (action === "news-create" || action === "news-update" || action === "news-delete") {
+      if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+      }
+
+      if (action === "news-create") {
+        let imageUrl = "";
+        if (body.imageData && body.imageFileName && body.imageMimeType) {
+          try {
+            const upload = await uploadNewsImage(body.imageData, body.imageFileName, body.imageMimeType);
+            imageUrl = upload.fileUrl;
+          } catch (err) {
+            console.error("[News] Image upload failed:", err.message);
+            // continue without image rather than blocking the post
+          }
+        }
+        const post = { ...(body.post || {}), imageUrl };
+        if (post.pinned) await enforceSinglePin(null);
+        const postId = await createNewsPost(post);
+        return NextResponse.json({ success: true, postId });
+      }
+
+      if (action === "news-update") {
+        const patch = { ...(body.patch || {}) };
+        if (body.imageData && body.imageFileName && body.imageMimeType) {
+          try {
+            const upload = await uploadNewsImage(body.imageData, body.imageFileName, body.imageMimeType);
+            patch.imageUrl = upload.fileUrl;
+          } catch (err) {
+            console.error("[News] Image upload failed:", err.message);
+          }
+        }
+        if (body.removeImage) {
+          patch.imageUrl = "";
+        }
+        if (patch.pinned) await enforceSinglePin(body.postId);
+        await updateNewsPost(body.postId, patch);
+        return NextResponse.json({ success: true });
+      }
+
+      if (action === "news-delete") {
+        await deleteNewsPost(body.postId);
+        return NextResponse.json({ success: true });
+      }
     }
 
     const { postId, saved, acknowledged, postIds } = body;
