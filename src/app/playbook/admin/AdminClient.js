@@ -534,7 +534,7 @@ function AdminDashboard({
                 <SortHeader col="status"  label="Status"  {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="access"  label="Access"  {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="version" label="Version" {...{ sortBy, sortDir, onSort: handleSort }} />
-                <SortHeader col="content" label="Content" {...{ sortBy, sortDir, onSort: handleSort }} />
+                <SortHeader col="content" label="Has Content" {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="pinned"  label="Pin"     {...{ sortBy, sortDir, onSort: handleSort }} />
                 <th className="pb-admin-th pb-admin-th--action" scope="col">Archive</th>
               </tr>
@@ -1090,13 +1090,22 @@ function DisplayCell({ children, isSaved, error, onClick, onDismissError }) {
 // Tab nav, Archive view, Archive/Restore dialogs
 // ════════════════════════════════════════════════════════════════════════════
 
-// TabNav: switches between Worklist / Archive views. Archive count is null
-// until the user opens the Archive tab for the first time (we lazy-fetch);
-// the count badge is hidden during that gap so it doesn't show "0"
-// misleadingly.
+// TabNav: switches between Attention / Worklist / Archive views. Attention
+// is the landing tab and carries no count badge (it's a triage view, not a
+// list). Archive count is null until first open (lazy-fetch); the badge is
+// hidden during that gap so it doesn't show "0" misleadingly.
 function TabNav({ activeTab, onTabChange, activeCount, archivedCount }) {
   return (
-    <div className="pb-admin-tabnav" role="tablist" aria-label="Admin views">
+    <div className="pb-admin-tabnav" role="tablist" aria-label="Cockpit views">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "attention"}
+        className={`pb-admin-tab${activeTab === "attention" ? " pb-admin-tab--active" : ""}`}
+        onClick={() => onTabChange("attention")}
+      >
+        Attention
+      </button>
       <button
         type="button"
         role="tab"
