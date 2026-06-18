@@ -199,9 +199,6 @@ function AdminDashboard({
   const [archiveDialogDoc, setArchiveDialogDoc] = useState(null);
   // Doc currently being restored (shows the restore confirmation dialog).
   const [restoreDialogDoc, setRestoreDialogDoc] = useState(null);
-  // Create modal visibility. Decoupled from the doc state because no doc
-  // exists yet at the moment the modal opens.
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const total = docs.length;
 
@@ -360,13 +357,12 @@ function AdminDashboard({
         </p>
       </header>
 
-      {/* Tab nav (CP3) ─ Worklist / Archive + Create entry ─────────────── */}
+      {/* Tab nav ─ Worklist / Archive */}
       <TabNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
         activeCount={total}
         archivedCount={archivedDocs?.length ?? null}
-        onCreateClick={() => setShowCreateModal(true)}
       />
 
       {activeTab === "worklist" && (
@@ -510,22 +506,6 @@ function AdminDashboard({
           docs={archivedDocs}
           onLoaded={setArchivedDocs}
           onRestoreClick={(doc) => setRestoreDialogDoc(doc)}
-        />
-      )}
-
-      {showCreateModal && (
-        <CreateModal
-          shelves={shelves}
-          classes={CLASS_EDIT_OPTIONS}
-          // Retired is a terminal status, not a starting state. A brand-new
-          // doc shouldn't offer it. The server validator still ACCEPTS it
-          // if forged - this is purely a UX filter.
-          statuses={STATUS_EDIT_OPTIONS.filter((s) => s !== "Retired")}
-          onCancel={() => setShowCreateModal(false)}
-          onCreated={(newDoc) => {
-            setDocs((prev) => [newDoc, ...prev]);
-            setShowCreateModal(false);
-          }}
         />
       )}
 
@@ -1138,14 +1118,14 @@ function DisplayCell({ children, isSaved, error, onClick, onDismissError }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CP3 - Tab nav, Archive view, Archive/Restore dialogs, Create modal
+// Tab nav, Archive view, Archive/Restore dialogs
 // ════════════════════════════════════════════════════════════════════════════
 
-// TabNav: switches between Worklist / Archive views, plus the inline
-// + New Document trigger. Archive count is null until the user opens the
-// Archive tab for the first time (we lazy-fetch); the count badge is
-// hidden during that gap so it doesn't show "0" misleadingly.
-function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateClick }) {
+// TabNav: switches between Worklist / Archive views. Archive count is null
+// until the user opens the Archive tab for the first time (we lazy-fetch);
+// the count badge is hidden during that gap so it doesn't show "0"
+// misleadingly.
+function TabNav({ activeTab, onTabChange, activeCount, archivedCount }) {
   return (
     <div className="pb-admin-tabnav" role="tablist" aria-label="Admin views">
       <button
@@ -1169,19 +1149,6 @@ function TabNav({ activeTab, onTabChange, activeCount, archivedCount, onCreateCl
         {archivedCount !== null && (
           <span className="pb-admin-tab-count">{archivedCount}</span>
         )}
-      </button>
-      <div className="pb-admin-tabnav-spacer" />
-      <button
-        type="button"
-        className="pb-admin-new-btn"
-        onClick={onCreateClick}
-        title="Create a new document"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        New Document
       </button>
     </div>
   );
@@ -1469,166 +1436,6 @@ function RestoreDialog({ doc, onCancel, onConfirmed }) {
           {submitting ? "Restoring…" : "Restore"}
         </button>
       </div>
-    </ModalOverlay>
-  );
-}
-
-// CreateModal: form for adding a new doc to the catalog. All real validation
-// lives server-side (validateCreatePayload + uniqueness check); the client
-// regex pattern on the ID input is just an early UX hint - the server is
-// the source of truth.
-function CreateModal({ shelves, classes, statuses, onCancel, onCreated }) {
-  const [id, setId] = useState("");
-  const [title, setTitle] = useState("");
-  const [shelf, setShelf] = useState("");
-  const [docClass, setDocClass] = useState("");
-  const [status, setStatus] = useState("Pending");
-  const [version, setVersion] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-
-    const payload = {
-      id: id.trim().toUpperCase(),
-      title: title.trim(),
-      doc_class: docClass,
-      status: status || "Pending",
-    };
-    if (shelf) payload.shelf = shelf;
-    if (version.trim()) payload.version = version.trim();
-
-    try {
-      const r = await fetch("/api/playbook?action=create-document", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
-      onCreated(data.document);
-    } catch (e) {
-      setError(e.message);
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <ModalOverlay onClose={submitting ? () => {} : onCancel}>
-      <form onSubmit={handleSubmit}>
-        <div className="pb-admin-modal-header">
-          <h2>New Document</h2>
-          <p className="pb-admin-modal-subtitle">Add a row to the catalog. The ID is permanent (it&apos;s the FK target for relationships).</p>
-        </div>
-
-        <div className="pb-admin-modal-body">
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-id">ID</label>
-            <input
-              id="new-id"
-              type="text"
-              value={id}
-              onChange={(e) => setId(e.target.value.toUpperCase())}
-              placeholder="e.g. PB-007, POSTER-002"
-              required
-              autoFocus
-              pattern="^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\d{3}$"
-              title="PREFIX-NNN where PREFIX is one of PB, STD, POL, SOP, TPL, CHK, REF, AGR, FORM, POST, POSTER and NNN is a 3-digit number"
-            />
-            <small className="pb-admin-form-hint">
-              PREFIX-NNN (e.g. PB-007). Prefix must match doc_class (POSTER → POST is the only special case).
-            </small>
-          </div>
-
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-title">Title</label>
-            <input
-              id="new-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Operator-facing title"
-              required
-            />
-          </div>
-
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-class">Class</label>
-            <select
-              id="new-class"
-              value={docClass}
-              onChange={(e) => setDocClass(e.target.value)}
-              required
-            >
-              <option value="" disabled>Select a class…</option>
-              {classes.map((c) => (
-                <option key={c} value={c}>{c} — {CLASS_LABELS[c] || c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-shelf">Shelf (optional)</label>
-            <select
-              id="new-shelf"
-              value={shelf}
-              onChange={(e) => setShelf(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {shelves.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-status">Status</label>
-            <select
-              id="new-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          <div className="pb-admin-form-row">
-            <label htmlFor="new-version">Version (optional)</label>
-            <input
-              id="new-version"
-              type="text"
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="leave blank for an unstarted doc"
-            />
-            <small className="pb-admin-form-hint">
-              A brand-new doc with no content shouldn&apos;t claim a version. Set this once there&apos;s content to version.
-            </small>
-          </div>
-
-          {error && <div className="pb-admin-modal-error">{error}</div>}
-        </div>
-
-        <div className="pb-admin-modal-actions">
-          <button
-            type="button"
-            className="pb-admin-modal-btn"
-            onClick={onCancel}
-            disabled={submitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="pb-admin-modal-btn pb-admin-modal-btn--primary"
-            disabled={submitting}
-          >
-            {submitting ? "Creating…" : "Create Document"}
-          </button>
-        </div>
-      </form>
     </ModalOverlay>
   );
 }

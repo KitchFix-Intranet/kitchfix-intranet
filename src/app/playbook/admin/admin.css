@@ -907,8 +907,6 @@ button.pb-admin-gap-link:focus-visible {
   margin: 4px 0 22px;
   border-bottom: 1px solid var(--kf-line);
 }
-.pb-admin-tabnav-spacer { flex: 1; }
-
 .pb-admin-tab {
   display: inline-flex;
   align-items: center;
@@ -955,30 +953,6 @@ button.pb-admin-gap-link:focus-visible {
 .pb-admin-tab--active .pb-admin-tab-count {
   background: var(--kf-brand-navy);
   color: white;
-}
-
-.pb-admin-new-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 1px solid var(--kf-brand-navy);
-  background: var(--kf-brand-navy);
-  color: white;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-body-sm);
-  font-weight: 700;
-  border-radius: var(--kf-r-input);
-  cursor: pointer;
-  transition: background 150ms ease-out, border-color 150ms ease-out;
-}
-.pb-admin-new-btn:hover {
-  background: #0f2a4e;
-  border-color: #0f2a4e;
-}
-.pb-admin-new-btn:focus-visible {
-  outline: 2px solid var(--kf-ops-amber);
-  outline-offset: 2px;
 }
 
 /* ─── Worklist archive cell ──────────────────────────────────────────────── */
@@ -1297,52 +1271,3 @@ button.pb-admin-gap-link:focus-visible {
   border-color: #991b1b;
 }
 
-/* ─── Create modal form rows ─────────────────────────────────────────────── */
-.pb-admin-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 14px;
-}
-.pb-admin-form-row label {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-caption);
-  font-weight: 700;
-  color: var(--kf-brand-navy);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-.pb-admin-form-row input,
-.pb-admin-form-row select {
-  padding: 8px 10px;
-  border: 1px solid var(--kf-line-strong);
-  border-radius: var(--kf-r-input);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-body);
-  background: var(--kf-surface-1);
-  color: #1e293b;
-  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
-}
-.pb-admin-form-row input:focus,
-.pb-admin-form-row select:focus {
-  outline: none;
-  border-color: var(--kf-ops-amber);
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
-}
-.pb-admin-form-row input::placeholder {
-  color: var(--kf-muted-soft);
-}
-.pb-admin-form-row input:user-invalid {
-  border-color: #fca5a5;
-}
-.pb-admin-form-row input:user-invalid:focus {
-  border-color: var(--kf-danger);
-  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.18);
-}
-.pb-admin-form-hint {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-caption);
-  color: var(--kf-muted);
-  line-height: 1.4;
-  margin-top: 2px;
-}
