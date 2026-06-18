@@ -1,33 +1,30 @@
 "use client";
 
 // ════════════════════════════════════════════════════════════════════════════
-// AdminClient · Project OPD · Build Dashboard (owner editing cockpit)
+// AdminClient · Project OPD · OPD Command (owner cockpit)
 // ════════════════════════════════════════════════════════════════════════════
 //
 // Same bootstrap as /playbook (canViewPlaybook gate on the actual signed-in
 // email, never impersonated); non-owner gets an identical coming-soon stub.
 //
-// Owner sees:
-//   1. Metrics row    - active docs, linked count, Live count, % Linked bar
-//   2. Status rollup  - colored chip row with counts per status
-//   3. Gaps callout   - empty shelves + PB-006 priority flag
-//   4. Worklist table - all active docs, sortable, INLINE EDITABLE
+// Owner sees three tabs:
+//   - Attention (default landing) - triage buckets driven by overlay state
+//     and content presence. Priority, Ready-to-ship, Empty shells, Stale,
+//     Recent activity. Validation + Issues stubbed for PR D.
+//   - Worklist - searchable, status-filterable table. Source-of-truth
+//     boundary is visible at the cell level:
+//       MDX-authored (read-only, edit-in-MDX affordance):
+//         title, shelf, doc_class, version
+//       Overlay (inline-editable, optimistic):
+//         status, access_level, pinned
+//   - Archive - dependency-aware archive/restore.
 //
-// Editing model (Part A):
-//   - LOW-RISK fields (title, shelf, doc_class, status, version, pinned) are
-//     edited inline with OPTIMISTIC writes - UI updates immediately, the
-//     write fires in the background, a quiet 1.5s saved flash confirms, and
-//     any failure reverts the cell + shows an inline error.
-//   - HIGH-RISK fields (source_drive_id, source_drive_id_es) land in Part B
-//     with a confirmed-write path and a render-check, NOT optimistic.
-//   - documents.id is NEVER editable here - it's the FK-bearing primary key.
-//     The ID column is the "open reader" affordance.
+// Inline-edit semantics for overlay cells: optimistic write -> brief
+// "saved" flash -> reconcile with server. Failures revert + show error.
 //
-// Writes go to /api/playbook?action=update-document. That action re-validates
-// the session email server-side via canViewPlaybook on every request and
-// hard-rejects anything outside the WRITABLE_FIELDS_A allowlist. A non-owner
-// hitting the endpoint directly gets 403 with no DB change, even if they
-// forge the client.
+// Writes go to /api/playbook?action=update-document. The server re-checks
+// the owner gate on every request and rejects anything outside
+// WRITABLE_FIELDS_A.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -60,6 +57,16 @@ const STATUS_EDIT_OPTIONS = [
 const CLASS_EDIT_OPTIONS = [
   "PB", "SOP", "STD", "POL", "AGR", "TPL", "FORM", "CHK", "POST", "REF",
 ];
+
+// Access tier options (pr-7-11 hierarchical gate). Ordered widest -> narrowest
+// so a sort ASC on the column groups public docs first and restricted/SLT at
+// the bottom (where they're easier to spot).
+const ACCESS_EDIT_OPTIONS = ["unrestricted", "restricted", "slt"];
+const ACCESS_LABELS = {
+  unrestricted: "Unrestricted",
+  restricted:   "Restricted",
+  slt:          "SLT only",
+};
 
 export default function AdminClient() {
   const [loading, setLoading] = useState(true);
@@ -180,25 +187,23 @@ function AdminDashboard({
   // cell renders an inline error indicator until the user retries or
   // dismisses.
   const [errors, setErrors] = useState({});
-  // ID of the worklist row whose Drive-link panel is currently expanded.
-  // Only one row can be expanded at a time so the panel doesn't visually
-  // race with other expansions; clicking another row's Linked cell collapses
-  // the current and opens the new one.
-  const [expandedRowId, setExpandedRowId] = useState(null);
 
-  // ── Tab state + archive/create state (CP3) ───────────────────────────────
-  // activeTab: 'worklist' (default) | 'archive'. Tab switching is purely
-  // client-side; the worklist data is from bootstrap, archive is lazy-loaded
-  // on first tab click and cached in archivedDocs.
-  const [activeTab, setActiveTab] = useState("worklist");
+  // Tab state. Attention is the landing tab (the cockpit's reason for
+  // existing); Worklist + Archive remain. Switching is purely client-side;
+  // the worklist data is from bootstrap, archive is lazy-loaded on first
+  // tab click and cached in archivedDocs.
+  const [activeTab, setActiveTab] = useState("attention");
   // null = not yet loaded; array (even empty) = loaded. Stays null until the
   // user clicks Archive for the first time so the bootstrap stays lean.
   const [archivedDocs, setArchivedDocs] = useState(null);
-  // Doc currently being archived (shows the confirmation dialog). null when
-  // no dialog is open.
+  // Doc currently being archived/restored (shows confirmation dialog).
   const [archiveDialogDoc, setArchiveDialogDoc] = useState(null);
-  // Doc currently being restored (shows the restore confirmation dialog).
   const [restoreDialogDoc, setRestoreDialogDoc] = useState(null);
+
+  // Worklist filters. Search is substring (case-insensitive) over id + title.
+  // statusFilter is a Set of selected status values - empty means "show all".
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => new Set());
 
   const total = docs.length;
 
@@ -206,20 +211,6 @@ function AdminDashboard({
   const updateField = useCallback(async (doc, field, newValue) => {
     const key = `${doc.id}:${field}`;
     const oldValue = doc[field];
-
-    // Soft warning: status -> Live on a doc with no Drive file. We're
-    // intercepting BEFORE the optimistic update because window.confirm is
-    // synchronous and a "cancel" should leave the doc unchanged. The
-    // worklist row's status select doesn't get visually committed until
-    // this passes.
-    if (field === "status" && newValue === "Live" && !doc.source_drive_id) {
-      const ok = window.confirm(
-        `${doc.id} has no Drive file linked. Operators would see a Ready ` +
-        `card that opens nothing.\n\nSet Live anyway? You can link the ` +
-        `Drive file later from this dashboard.`
-      );
-      if (!ok) return; // The select already snapped back via its own state
-    }
 
     // Optimistic update - the local doc gets the new value immediately.
     setDocs((prev) =>
@@ -291,26 +282,73 @@ function AdminDashboard({
     return c;
   }, [docs]);
 
-  const linkedCount = useMemo(
-    () => docs.filter((d) => d.source_drive_id).length,
+  // Content-health metrics: replace the retired Drive linkage measures with
+  // honest signals. has_content reflects whether document_content has a row
+  // for the doc (decorated server-side in dataStore/opd.js).
+  const readyToShip = useMemo(
+    () => docs.filter((d) => d.status === "In Build" && d.has_content).length,
     [docs]
   );
-  const linkedPct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
+  const emptyShells = useMemo(
+    () => docs.filter((d) => d.status !== "Retired" && !d.has_content).length,
+    [docs]
+  );
 
-  // Gaps & blockers ────────────────────────────────────────────────────────
-  const docsByShelf = useMemo(() => {
-    const map = Object.fromEntries(shelves.map((s) => [s, []]));
-    for (const d of docs) {
-      if (d.shelf && map[d.shelf]) map[d.shelf].push(d);
-    }
-    return map;
-  }, [docs, shelves]);
-  const emptyShelves = shelves.filter((s) => docsByShelf[s].length === 0);
+  // Attention buckets - the cockpit's reason for existing.
+  const attention = useMemo(() => {
+    const STALE_THRESHOLD_MS = 365 * 24 * 60 * 60 * 1000; // 12 months
+    const now = Date.now();
+    const priority = [];
+    const pb006 = docs.find((d) => d.id === "PB-006");
+    if (pb006 && pb006.status !== "Live") priority.push(pb006);
 
-  const pb006 = docs.find((d) => d.id === "PB-006");
-  const pb006Pending = pb006 && pb006.status !== "Live";
+    const ready = docs
+      .filter((d) => d.status === "In Build" && d.has_content)
+      .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100));
 
-  // Worklist sort ──────────────────────────────────────────────────────────
+    const shells = docs
+      .filter(
+        (d) =>
+          d.status !== "Retired" &&
+          (d.status === "Placeholder" || !d.has_content)
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    const stale = docs
+      .filter((d) => {
+        if (d.status !== "Live" || !d.last_reviewed) return false;
+        const t = new Date(d.last_reviewed).getTime();
+        return Number.isFinite(t) && now - t > STALE_THRESHOLD_MS;
+      })
+      .sort((a, b) => {
+        const ta = new Date(a.last_reviewed).getTime();
+        const tb = new Date(b.last_reviewed).getTime();
+        return ta - tb; // oldest first
+      });
+
+    const recent = [...docs]
+      .filter((d) => d.updated_at)
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      )
+      .slice(0, 5);
+
+    return { priority, ready, shells, stale, recent };
+  }, [docs]);
+
+  // Worklist filtered + sorted ─────────────────────────────────────────────
+  const visibleDocs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return docs.filter((d) => {
+      if (statusFilter.size > 0 && !statusFilter.has(d.status)) return false;
+      if (q === "") return true;
+      const id = (d.id || "").toLowerCase();
+      const title = (d.title || "").toLowerCase();
+      return id.includes(q) || title.includes(q);
+    });
+  }, [docs, search, statusFilter]);
+
   const sortedDocs = useMemo(() => {
     const cmp = (a, b) => {
       let av, bv;
@@ -319,11 +357,11 @@ function AdminDashboard({
         case "title":   av = a.title;       bv = b.title; break;
         case "shelf":   av = a.shelf;       bv = b.shelf; break;
         case "class":   av = a.doc_class;   bv = b.doc_class; break;
-        // status sorted by workflow order (Live first, Blocked last,
-        // Retired beyond Blocked).
+        // status sorted by workflow order (Live first, Retired last).
         case "status":  av = STATUS_EDIT_OPTIONS.indexOf(a.status); bv = STATUS_EDIT_OPTIONS.indexOf(b.status); break;
         case "version": av = a.version;     bv = b.version; break;
-        case "linked":  av = !!a.source_drive_id; bv = !!b.source_drive_id; break;
+        case "access":  av = ACCESS_EDIT_OPTIONS.indexOf(a.access_level); bv = ACCESS_EDIT_OPTIONS.indexOf(b.access_level); break;
+        case "content": av = !!a.has_content; bv = !!b.has_content; break;
         case "pinned":  av = !!a.pinned;    bv = !!b.pinned; break;
         default:        av = a.id;          bv = b.id;
       }
@@ -333,12 +371,25 @@ function AdminDashboard({
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return a.id < b.id ? -1 : 1;
     };
-    return [...docs].sort(cmp);
-  }, [docs, sortBy, sortDir]);
+    return [...visibleDocs].sort(cmp);
+  }, [visibleDocs, sortBy, sortDir]);
 
   const handleSort = (col) => {
     if (sortBy === col) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else { setSortBy(col); setSortDir("asc"); }
+  };
+
+  const toggleStatusFilter = (s) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  };
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter(new Set());
   };
 
   return (
@@ -351,13 +402,13 @@ function AdminDashboard({
           </svg>
           Back to catalog
         </Link>
-        <h1 className="pb-admin-title">Build Dashboard</h1>
+        <h1 className="pb-admin-title">OPD Command</h1>
         <p className="pb-admin-sub">
-          Owner editing · Active documents only · {email}
+          Owner cockpit · {email}
         </p>
       </header>
 
-      {/* Tab nav ─ Worklist / Archive */}
+      {/* Tab nav ─ Attention / Worklist / Archive */}
       <TabNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -365,35 +416,25 @@ function AdminDashboard({
         archivedCount={archivedDocs?.length ?? null}
       />
 
-      {activeTab === "worklist" && (
+      {activeTab === "attention" && (
         <>
-      {/* Metrics row ─────────────────────────────────────────────────────── */}
-      <section className="pb-admin-metrics" aria-label="Catalog metrics">
+      {/* Metrics row - content/health, not Drive ─────────────────────────── */}
+      <section className="pb-admin-metrics" aria-label="Corpus metrics">
         <div className="pb-metric">
           <div className="pb-metric-value">{total}</div>
           <div className="pb-metric-label">Active docs</div>
         </div>
         <div className="pb-metric">
-          <div className="pb-metric-value">
-            {linkedCount} <span className="pb-metric-of">/ {total}</span>
-          </div>
-          <div className="pb-metric-label">Linked to Drive</div>
-        </div>
-        <div className="pb-metric">
           <div className="pb-metric-value">{statusCounts.Live}</div>
           <div className="pb-metric-label">Live</div>
         </div>
-        <div className="pb-metric pb-metric--wide">
-          <div className="pb-metric-progress" aria-hidden="true">
-            <div
-              className="pb-metric-progress-bar"
-              style={{ width: `${linkedPct}%` }}
-            />
-          </div>
-          <div className="pb-metric-progress-label">
-            <span className="pb-metric-value-inline">{linkedPct}%</span>
-            <span className="pb-metric-progress-text">Linked to Drive</span>
-          </div>
+        <div className="pb-metric">
+          <div className="pb-metric-value">{readyToShip}</div>
+          <div className="pb-metric-label">Ready to ship</div>
+        </div>
+        <div className="pb-metric">
+          <div className="pb-metric-value">{emptyShells}</div>
+          <div className="pb-metric-label">Empty shells</div>
         </div>
       </section>
 
@@ -413,50 +454,73 @@ function AdminDashboard({
         })}
       </section>
 
-      {/* Gaps & blockers ─────────────────────────────────────────────────── */}
-      <section className="pb-admin-gaps" aria-label="Gaps and blockers">
-        <h2>Gaps &amp; blockers</h2>
-        <ul className="pb-admin-gap-list">
-          {pb006Pending && (
-            <li className="pb-admin-gap pb-admin-gap--priority">
-              <span className="pb-admin-gap-label">Priority</span>
+      <AttentionPanel
+        attention={attention}
+        onOpenReader={setOpenDocId}
+      />
+        </>
+      )}
+
+      {activeTab === "worklist" && (
+        <>
+      {/* Worklist filters ──────────────────────────────────────────────── */}
+      <section className="pb-admin-filters" aria-label="Worklist filters">
+        <div className="pb-admin-search-wrap">
+          <svg className="pb-admin-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="search"
+            className="pb-admin-search-input"
+            placeholder="Search id or title…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search documents"
+          />
+        </div>
+        <div className="pb-admin-filter-chips" role="group" aria-label="Filter by status">
+          {ALL_STATUSES.map((s) => {
+            const sc = STATUS_COLORS[s];
+            const active = statusFilter.has(s);
+            return (
               <button
+                key={s}
                 type="button"
-                className="pb-admin-gap-link"
-                onClick={() => setOpenDocId(pb006.id)}
+                onClick={() => toggleStatusFilter(s)}
+                aria-pressed={active}
+                className={`pb-status-pill pb-admin-filter-chip${active ? " pb-admin-filter-chip--on" : ""}${sc.ghost ? " pb-status-pill--ghost" : ""}`}
+                style={active ? { background: sc.bg, color: sc.color } : undefined}
               >
-                {pb006.id} · {pb006.title}
+                {s} <strong>{statusCounts[s]}</strong>
               </button>
-              <span className="pb-admin-gap-note">
-                gates SLA rebuilds — currently {pb006.status}
-              </span>
-            </li>
+            );
+          })}
+          {(search || statusFilter.size > 0) && (
+            <button
+              type="button"
+              className="pb-admin-filter-clear"
+              onClick={clearFilters}
+            >
+              Clear
+            </button>
           )}
-          {emptyShelves.map((shelf) => (
-            <li key={shelf} className="pb-admin-gap">
-              <span className="pb-admin-gap-label">Empty shelf</span>
-              <span className="pb-admin-gap-link pb-admin-gap-link--plain">
-                {shelf}
-              </span>
-              <span className="pb-admin-gap-note">no documents yet</span>
-            </li>
-          ))}
-          {!pb006Pending && emptyShelves.length === 0 && (
-            <li className="pb-admin-gap pb-admin-gap--ok">
-              No gaps or blockers — every shelf has content and PB-006 is Live.
-            </li>
-          )}
-        </ul>
+        </div>
       </section>
 
       {/* Worklist table ──────────────────────────────────────────────────── */}
       <section className="pb-admin-worklist" aria-label="Worklist">
         <div className="pb-admin-worklist-head">
           <h2>
-            Worklist <span className="pb-admin-worklist-count">{total} active docs</span>
+            Worklist{" "}
+            <span className="pb-admin-worklist-count">
+              {sortedDocs.length === total
+                ? `${total} active docs`
+                : `${sortedDocs.length} of ${total}`}
+            </span>
           </h2>
           <span className="pb-admin-worklist-hint">
-            Click a cell to edit · click the ID to open the reader
+            Status, access, and pin are editable · title / shelf / class / version are MDX-authored (read-only)
           </span>
         </div>
         <div className="pb-admin-table-wrap">
@@ -468,18 +532,24 @@ function AdminDashboard({
                 <SortHeader col="shelf"   label="Shelf"   {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="class"   label="Class"   {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="status"  label="Status"  {...{ sortBy, sortDir, onSort: handleSort }} />
+                <SortHeader col="access"  label="Access"  {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="version" label="Version" {...{ sortBy, sortDir, onSort: handleSort }} />
-                <SortHeader col="linked"  label="Linked"  {...{ sortBy, sortDir, onSort: handleSort }} />
+                <SortHeader col="content" label="Content" {...{ sortBy, sortDir, onSort: handleSort }} />
                 <SortHeader col="pinned"  label="Pin"     {...{ sortBy, sortDir, onSort: handleSort }} />
                 <th className="pb-admin-th pb-admin-th--action" scope="col">Archive</th>
               </tr>
             </thead>
             <tbody>
-              {sortedDocs.map((doc) => (
+              {sortedDocs.length === 0 ? (
+                <tr>
+                  <td className="pb-admin-empty-row" colSpan={10}>
+                    No documents match the current filters.
+                  </td>
+                </tr>
+              ) : sortedDocs.map((doc) => (
                 <WorklistRow
                   key={doc.id}
                   doc={doc}
-                  shelves={shelves}
                   editing={editing}
                   setEditing={setEditing}
                   justSaved={justSaved}
@@ -487,10 +557,6 @@ function AdminDashboard({
                   onUpdate={updateField}
                   onDismissError={dismissError}
                   onOpenReader={setOpenDocId}
-                  isExpanded={expandedRowId === doc.id}
-                  onToggleExpand={() =>
-                    setExpandedRowId((prev) => (prev === doc.id ? null : doc.id))
-                  }
                   onArchiveClick={() => setArchiveDialogDoc(doc)}
                 />
               ))}
@@ -548,21 +614,149 @@ function AdminDashboard({
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// WorklistRow - one editable row in the worklist.
+// AttentionPanel - the cockpit's triage view.
 //
-// Each editable cell stays in display mode (text + cellKey-tagged span) until
-// the user clicks it, at which point a controlled input/select renders in
-// place. Commit semantics:
-//   - Text inputs (title, version): Enter or blur commits, Esc cancels
-//   - Selects (shelf, class, status): change commits immediately (native
-//     change event)
-//   - Pin: toggle button calls onUpdate directly (no input intermediate)
+// Buckets, in order of operational priority:
+//   1. PRIORITY     - explicit flag (PB-006 today; generalizable later).
+//   2. READY TO SHIP - In Build with rendered content (the publish queue).
+//   3. EMPTY SHELLS - Placeholder, or active doc with no content row.
+//   4. STALE        - Live docs past their 12-month review window.
+//   5. RECENT       - top 5 by updated_at.
+//   6. VALIDATION   - stubbed (data lives in projection; PR D wires it).
+//   7. ISSUES       - stubbed (document_issues read path is PR D).
+//
+// Each bucket clicks open into the slide-over reader. Empty states are
+// quiet "nothing here" lines.
+// ════════════════════════════════════════════════════════════════════════════
+function AttentionPanel({ attention, onOpenReader }) {
+  return (
+    <section className="pb-admin-attention" aria-label="Attention">
+      <AttentionBucket
+        tone="priority"
+        title="Priority"
+        docs={attention.priority}
+        emptyText="No priority items flagged."
+        renderNote={(d) => `gates SLA rebuilds - currently ${d.status}`}
+        onOpenReader={onOpenReader}
+      />
+      <AttentionBucket
+        tone="ready"
+        title="Ready to ship"
+        docs={attention.ready}
+        emptyText="No In Build docs with content waiting on a Live flip."
+        renderNote={(d) =>
+          `In Build · content present${d.version ? ` · v${d.version}` : ""}`
+        }
+        onOpenReader={onOpenReader}
+      />
+      <AttentionBucket
+        tone="shells"
+        title="Empty shells"
+        docs={attention.shells}
+        emptyText="No empty shells - every active doc has content."
+        renderNote={(d) =>
+          d.status === "Placeholder"
+            ? "Placeholder · awaiting authoring"
+            : `${d.status} · no document_content row`
+        }
+        onOpenReader={onOpenReader}
+      />
+      <AttentionBucket
+        tone="stale"
+        title="Stale"
+        docs={attention.stale}
+        emptyText="No Live docs past their 12-month review window."
+        renderNote={(d) =>
+          d.last_reviewed
+            ? `last reviewed ${d.last_reviewed}`
+            : "no review on record"
+        }
+        onOpenReader={onOpenReader}
+      />
+      <AttentionBucket
+        tone="recent"
+        title="Recent activity"
+        docs={attention.recent}
+        emptyText="No recent overlay activity."
+        renderNote={(d) =>
+          d.updated_at
+            ? `updated ${new Date(d.updated_at).toLocaleString()}`
+            : ""
+        }
+        onOpenReader={onOpenReader}
+      />
+      <AttentionBucketStub
+        tone="stub"
+        title="Validation"
+        note="Validation surfacing lands in PR D (projection-side errors come into the cockpit)."
+      />
+      <AttentionBucketStub
+        tone="stub"
+        title="Issues"
+        note="Issues triage lands in PR D (document_issues read path + resolve flow)."
+      />
+    </section>
+  );
+}
+
+function AttentionBucket({ tone, title, docs, emptyText, renderNote, onOpenReader }) {
+  return (
+    <div className={`pb-admin-bucket pb-admin-bucket--${tone}`}>
+      <div className="pb-admin-bucket-head">
+        <h3 className="pb-admin-bucket-title">{title}</h3>
+        <span className="pb-admin-bucket-count">{docs.length}</span>
+      </div>
+      {docs.length === 0 ? (
+        <p className="pb-admin-bucket-empty">{emptyText}</p>
+      ) : (
+        <ul className="pb-admin-bucket-list">
+          {docs.map((d) => (
+            <li key={d.id} className="pb-admin-bucket-item">
+              <button
+                type="button"
+                className="pb-admin-bucket-link"
+                onClick={() => onOpenReader(d.id)}
+              >
+                <code className="pb-admin-bucket-id">{d.id}</code>
+                <span className="pb-admin-bucket-doc-title">{d.title}</span>
+              </button>
+              {renderNote && (
+                <span className="pb-admin-bucket-note">{renderNote(d)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AttentionBucketStub({ tone, title, note }) {
+  return (
+    <div className={`pb-admin-bucket pb-admin-bucket--${tone}`}>
+      <div className="pb-admin-bucket-head">
+        <h3 className="pb-admin-bucket-title">{title}</h3>
+        <span className="pb-admin-bucket-count pb-admin-bucket-count--soft">PR D</span>
+      </div>
+      <p className="pb-admin-bucket-empty">{note}</p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// WorklistRow - one row in the cockpit's Worklist.
+//
+// Source-of-truth boundary made visible at the cell level:
+//   - MDX-authored cells (title, shelf, class, version) render as read-only
+//     display with a small MDX badge. Hover-title surfaces the MDX file path.
+//   - Overlay cells (status, access, pin) keep the optimistic click-to-edit
+//     pattern. Status uses the status pill, access uses a tiered shield.
+//
 // The ID cell is a plain button styled as a code chip - opens the reader.
-// The Linked cell is read-only display in Part A (Drive-ID editing is Part B).
+// Content + Archive are read-only / action cells.
 // ════════════════════════════════════════════════════════════════════════════
 function WorklistRow({
   doc,
-  shelves,
   editing,
   setEditing,
   justSaved,
@@ -570,14 +764,10 @@ function WorklistRow({
   onUpdate,
   onDismissError,
   onOpenReader,
-  isExpanded,
-  onToggleExpand,
   onArchiveClick,
 }) {
-  const sc = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
-  const cl = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const cf = CLASS_FAMILY[doc.doc_class] || "ref";
-  const linked = !!doc.source_drive_id;
+  const mdxPath = `content/documents/${doc.id}.mdx`;
 
   const cellState = (field) => ({
     isEditing: editing && editing.rowId === doc.id && editing.field === field,
@@ -588,12 +778,6 @@ function WorklistRow({
   const startEdit = (field) => setEditing({ rowId: doc.id, field });
   const cancelEdit = () => setEditing(null);
 
-  const handleTextCommit = (field, raw) => {
-    const next = raw == null ? "" : String(raw);
-    setEditing(null);
-    if (next === (doc[field] || "")) return; // no-op
-    onUpdate(doc, field, next === "" ? null : next);
-  };
   const handleSelectCommit = (field, value) => {
     setEditing(null);
     if (value === doc[field]) return;
@@ -604,7 +788,6 @@ function WorklistRow({
   };
 
   return (
-    <>
     <tr className="pb-admin-row">
       {/* ID - read-only, opens the reader */}
       <td className="pb-admin-cell pb-admin-cell-id">
@@ -618,51 +801,29 @@ function WorklistRow({
         </button>
       </td>
 
-      {/* Title - text input */}
+      {/* Title - MDX-authored, read-only */}
       <td className="pb-admin-cell pb-admin-cell-title">
-        <EditableTextCell
-          value={doc.title}
-          {...cellState("title")}
-          onStartEdit={() => startEdit("title")}
-          onCommit={(v) => handleTextCommit("title", v)}
-          onCancel={cancelEdit}
-          onDismissError={() => onDismissError(`${doc.id}:title`)}
-        />
+        <MdxCell value={doc.title} mdxPath={mdxPath} />
       </td>
 
-      {/* Shelf - dropdown */}
+      {/* Shelf - MDX-authored, read-only */}
       <td className="pb-admin-cell">
-        <EditableSelectCell
-          value={doc.shelf}
-          options={shelves}
-          renderValue={(v) => v || "—"}
-          {...cellState("shelf")}
-          onStartEdit={() => startEdit("shelf")}
-          onCommit={(v) => handleSelectCommit("shelf", v)}
-          onCancel={cancelEdit}
-          onDismissError={() => onDismissError(`${doc.id}:shelf`)}
-        />
+        <MdxCell value={doc.shelf || "—"} mdxPath={mdxPath} muted={!doc.shelf} />
       </td>
 
-      {/* Class - dropdown */}
+      {/* Class - MDX-authored, read-only (rendered as chip) */}
       <td className="pb-admin-cell">
-        <EditableSelectCell
-          value={doc.doc_class}
-          options={CLASS_EDIT_OPTIONS}
-          renderValue={(v) => (
+        <MdxCell
+          mdxPath={mdxPath}
+          rendered={
             <span className={`pb-class-chip pb-class-chip--${cf}`}>
-              {CLASS_LABELS[v] || v}
+              {CLASS_LABELS[doc.doc_class] || doc.doc_class}
             </span>
-          )}
-          {...cellState("doc_class")}
-          onStartEdit={() => startEdit("doc_class")}
-          onCommit={(v) => handleSelectCommit("doc_class", v)}
-          onCancel={cancelEdit}
-          onDismissError={() => onDismissError(`${doc.id}:doc_class`)}
+          }
         />
       </td>
 
-      {/* Status - dropdown */}
+      {/* Status - overlay-editable */}
       <td className="pb-admin-cell">
         <EditableSelectCell
           value={doc.status}
@@ -686,50 +847,31 @@ function WorklistRow({
         />
       </td>
 
-      {/* Version - text input */}
-      <td className="pb-admin-cell pb-admin-cell-version">
-        <EditableTextCell
-          value={doc.version}
-          placeholder="—"
-          {...cellState("version")}
-          onStartEdit={() => startEdit("version")}
-          onCommit={(v) => handleTextCommit("version", v)}
+      {/* Access tier - overlay-editable, shield affordance */}
+      <td className="pb-admin-cell">
+        <EditableSelectCell
+          value={doc.access_level || "unrestricted"}
+          options={ACCESS_EDIT_OPTIONS}
+          renderValue={(v) => <AccessShield level={v} />}
+          {...cellState("access_level")}
+          onStartEdit={() => startEdit("access_level")}
+          onCommit={(v) => handleSelectCommit("access_level", v)}
           onCancel={cancelEdit}
-          onDismissError={() => onDismissError(`${doc.id}:version`)}
+          onDismissError={() => onDismissError(`${doc.id}:access_level`)}
         />
       </td>
 
-      {/* Linked - clickable, toggles the inline Drive-ID panel below. The
-          ✓/— indicator stays live (re-renders from doc.source_drive_id),
-          so a Drive-ID save flips this cell automatically (Part B4). */}
-      <td className="pb-admin-cell pb-admin-cell-linked">
-        <button
-          type="button"
-          className={`pb-admin-link-btn${linked ? " pb-admin-link-btn--yes" : ""}${isExpanded ? " pb-admin-link-btn--open" : ""}`}
-          onClick={onToggleExpand}
-          aria-expanded={isExpanded}
-          title={isExpanded ? "Close link panel" : (linked ? "View / edit Drive link" : "Add Drive link")}
-        >
-          {linked ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : (
-            <span className="pb-admin-link-btn-dash" aria-hidden="true">—</span>
-          )}
-          <svg
-            className="pb-admin-link-btn-chevron"
-            width="10" height="10" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-          <span className="pb-admin-sr-only">{linked ? "linked" : "not linked"}</span>
-        </button>
+      {/* Version - MDX-authored, read-only */}
+      <td className="pb-admin-cell pb-admin-cell-version">
+        <MdxCell value={doc.version || "—"} mdxPath={mdxPath} muted={!doc.version} />
       </td>
 
-      {/* Pin - toggle */}
+      {/* Content state - read-only (sourced from has_content decoration) */}
+      <td className="pb-admin-cell pb-admin-cell-content">
+        <ContentStateChip hasContent={!!doc.has_content} />
+      </td>
+
+      {/* Pin - overlay-editable */}
       <td className="pb-admin-cell pb-admin-cell-pin">
         <PinToggle
           pinned={doc.pinned}
@@ -757,242 +899,69 @@ function WorklistRow({
         </button>
       </td>
     </tr>
-    {isExpanded && (
-      <tr className="pb-admin-drive-row">
-        <td colSpan={9}>
-          <DriveLinkPanel
-            doc={doc}
-            onUpdate={onUpdate}
-            justSaved={justSaved}
-            errors={errors}
-            onDismissError={onDismissError}
-          />
-        </td>
-      </tr>
-    )}
-  </>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DriveLinkPanel - inline EN/ES Drive-ID editor (Part B).
-//
-// Confirmed-write surface: each field has an explicit Save button (no auto-
-// commit-on-blur). The Save still flows through the same optimistic
-// updateField path the low-risk fields use - the "confirmed" part is UX
-// (deliberate save action), not API semantics. Drive IDs are high-risk
-// because the silent-failure mode (wrong ID or unshared file -> blank
-// iframe) makes them invisible to the operator until someone tries to open
-// the doc; the explicit save + test-render link below makes that failure
-// catchable BEFORE going Live.
-//
-// Test-render approach (B3 decision):
-//   Cross-origin iframe success can't be reliably detected from JS - iframe
-//   .onload fires the same way whether Drive served the document or 302'd
-//   to a login page, and the same-origin policy blocks reading the iframe's
-//   document. The user's explicit floor is "test ↗ link that opens preview
-//   in a new tab"; we adopted that. The owner pastes an ID, clicks test ↗
-//   to verify visually that the doc renders + is shared correctly, THEN
-//   clicks Save. An inline checkmark would be a lie - we don't pretend.
-//
-// Sharing prerequisite is surfaced as a hint at the bottom of the panel
-// since it's the #1 reason a "saved" Drive ID renders blank for operators.
+// AccessShield - tiered visual for the 3-tier access gate.
+//   unrestricted: no shield (text only)
+//   restricted:   navy shield
+//   slt:          gold shield
+// Inline SVG; no new icon dependency.
 // ════════════════════════════════════════════════════════════════════════════
-function DriveLinkPanel({ doc, onUpdate, justSaved, errors, onDismissError }) {
-  const [enInput, setEnInput] = useState(doc.source_drive_id || "");
-  const [esInput, setEsInput] = useState(doc.source_drive_id_es || "");
-
-  // Sync the panel inputs FROM the canonical doc state. Fires after a save
-  // reconciles (the server might trim whitespace etc.), and also if any
-  // other code path updates the row. Doesn't reset the input while the user
-  // is mid-typing because doc.source_drive_id only changes on save.
-  useEffect(() => { setEnInput(doc.source_drive_id || ""); }, [doc.source_drive_id]);
-  useEffect(() => { setEsInput(doc.source_drive_id_es || ""); }, [doc.source_drive_id_es]);
-
-  // Normalize for compare: trimmed empty string == null. So clearing the
-  // input is recognized as a real change (an "unlink") rather than a no-op
-  // when the saved value was null.
-  const enNormalized = enInput.trim() === "" ? null : enInput.trim();
-  const esNormalized = esInput.trim() === "" ? null : esInput.trim();
-  const enDirty = enNormalized !== (doc.source_drive_id || null);
-  const esDirty = esNormalized !== (doc.source_drive_id_es || null);
-
-  const previewUrl = (id) => `https://drive.google.com/file/d/${id}/preview`;
-  const enKey = `${doc.id}:source_drive_id`;
-  const esKey = `${doc.id}:source_drive_id_es`;
-  const enSaved = justSaved.has(enKey);
-  const esSaved = justSaved.has(esKey);
-  const enError = errors[enKey];
-  const esError = errors[esKey];
-
-  const saveEn = () => { onUpdate(doc, "source_drive_id", enNormalized); };
-  const saveEs = () => { onUpdate(doc, "source_drive_id_es", esNormalized); };
-
-  return (
-    <div className="pb-admin-drive-panel">
-      <div className="pb-admin-drive-panel-title">
-        Drive link · <code>{doc.id}</code>
-      </div>
-
-      <div className={`pb-admin-drive-field${enSaved ? " pb-admin-drive-field--saved" : ""}${enError ? " pb-admin-drive-field--error" : ""}`}>
-        <label className="pb-admin-drive-label">EN</label>
-        <input
-          type="text"
-          className="pb-admin-drive-input"
-          value={enInput}
-          onChange={(e) => setEnInput(e.target.value)}
-          placeholder="Paste Drive file ID"
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          className={`pb-admin-drive-save${enSaved ? " pb-admin-drive-save--saved" : ""}`}
-          onClick={saveEn}
-          disabled={!enDirty}
-          title={enSaved ? "Saved" : (enDirty ? "Save the Drive ID" : "No changes to save")}
-        >
-          {enSaved ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Saved
-            </>
-          ) : "Save"}
-        </button>
-        {enNormalized && (
-          <a
-            href={previewUrl(enNormalized)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pb-admin-drive-test"
-            title="Open Drive preview in a new tab to verify the file renders and is shared"
-          >
-            test ↗
-          </a>
-        )}
-        {enError && (
-          <button
-            type="button"
-            className="pb-admin-drive-error-msg"
-            onClick={() => onDismissError(enKey)}
-            title="Click to dismiss"
-          >
-            {enError} <span aria-hidden="true">×</span>
-          </button>
-        )}
-      </div>
-
-      <div className={`pb-admin-drive-field${esSaved ? " pb-admin-drive-field--saved" : ""}${esError ? " pb-admin-drive-field--error" : ""}`}>
-        <label className="pb-admin-drive-label">ES</label>
-        <input
-          type="text"
-          className="pb-admin-drive-input"
-          value={esInput}
-          onChange={(e) => setEsInput(e.target.value)}
-          placeholder="Optional - Spanish-variant Drive file ID"
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          className={`pb-admin-drive-save${esSaved ? " pb-admin-drive-save--saved" : ""}`}
-          onClick={saveEs}
-          disabled={!esDirty}
-          title={esSaved ? "Saved" : (esDirty ? "Save the ES Drive ID" : "No changes to save")}
-        >
-          {esSaved ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Saved
-            </>
-          ) : "Save"}
-        </button>
-        {esNormalized && (
-          <a
-            href={previewUrl(esNormalized)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pb-admin-drive-test"
-            title="Open Drive preview in a new tab to verify the file renders and is shared"
-          >
-            test ↗
-          </a>
-        )}
-        {esError && (
-          <button
-            type="button"
-            className="pb-admin-drive-error-msg"
-            onClick={() => onDismissError(esKey)}
-            title="Click to dismiss"
-          >
-            {esError} <span aria-hidden="true">×</span>
-          </button>
-        )}
-      </div>
-
-      <div className="pb-admin-drive-hint">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </svg>
-        File must be shared <strong>kitchfix.com → Viewer</strong> in Drive to render. Test ↗ opens the preview in a new tab so you can verify both the right file AND the sharing before going Live.
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// EditableTextCell - inline text editor for title and version.
-// ════════════════════════════════════════════════════════════════════════════
-function EditableTextCell({
-  value,
-  placeholder = "—",
-  isEditing,
-  isSaved,
-  error,
-  onStartEdit,
-  onCommit,
-  onCancel,
-  onDismissError,
-}) {
-  if (isEditing) {
-    return (
-      <input
-        type="text"
-        className="pb-admin-edit-input"
-        defaultValue={value || ""}
-        autoFocus
-        onBlur={(e) => onCommit(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onCommit(e.currentTarget.value);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
-      />
-    );
+function AccessShield({ level }) {
+  const tier = level || "unrestricted";
+  const label = ACCESS_LABELS[tier] || tier;
+  if (tier === "unrestricted") {
+    return <span className="pb-admin-access pb-admin-access--unrestricted">{label}</span>;
   }
   return (
-    <DisplayCell
-      isSaved={isSaved}
-      error={error}
-      onClick={onStartEdit}
-      onDismissError={onDismissError}
-    >
-      {value || <span className="pb-admin-cell-empty">{placeholder}</span>}
-    </DisplayCell>
+    <span className={`pb-admin-access pb-admin-access--${tier}`}>
+      <svg
+        width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z" />
+      </svg>
+      {label}
+    </span>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// EditableSelectCell - dropdown editor for shelf, class, status.
-// Changes commit immediately on the native change event so there's no need
-// for an explicit Enter. Blur without change cancels.
+// ContentStateChip - read-only signal for whether document_content has a row
+// for this doc. Sourced from has_content (decorated server-side in opd.js).
+// ════════════════════════════════════════════════════════════════════════════
+function ContentStateChip({ hasContent }) {
+  return (
+    <span
+      className={`pb-admin-content-chip pb-admin-content-chip--${hasContent ? "ok" : "empty"}`}
+    >
+      {hasContent ? "OK" : "Empty"}
+    </span>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MdxCell - read-only display for MDX-authored fields. Hover-title reveals
+// the file path so the owner knows where to edit. Visually muted vs the
+// overlay-editable cells so the boundary is obvious at a glance.
+// ════════════════════════════════════════════════════════════════════════════
+function MdxCell({ value, rendered, mdxPath, muted = false }) {
+  return (
+    <span
+      className={`pb-admin-mdx-cell${muted ? " pb-admin-mdx-cell--muted" : ""}`}
+      title={`MDX-authored · edit in ${mdxPath}`}
+    >
+      {rendered ?? value}
+    </span>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EditableSelectCell - dropdown editor for overlay-editable fields (status,
+// access_level). Changes commit immediately on the native change event so
+// there's no need for an explicit Enter. Blur without change cancels.
 // ════════════════════════════════════════════════════════════════════════════
 function EditableSelectCell({
   value,
