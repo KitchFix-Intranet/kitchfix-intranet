@@ -314,8 +314,11 @@ function computeDiff(corpus, live) {
   for (const d of corpus) {
     if (!d.id) continue;
     const fm = d.frontmatter;
-    const row = mdxToDocRow(fm);
+    // `existing` is threaded into mdxToDocRow so the overlay fields (status,
+    // access_level) preserve their PG value on UPDATE while MDX still seeds
+    // on INSERT - see mdxToDocRow for the per-field logic.
     const existing = pgById[d.id];
+    const row = mdxToDocRow(fm, existing);
     if (!existing) {
       docPlan.insert.push(row);
     } else {
@@ -382,15 +385,26 @@ function computeDiff(corpus, live) {
   return { docPlan, relPlan, surfPlan, corpusById };
 }
 
-function mdxToDocRow(fm) {
+function mdxToDocRow(fm, existing = null) {
   // Mirrors the documents columns. The projection always writes is_historical=false
   // (chk_live_complete enforced strictly). data_provenance is 'batch_rebuild' on
   // projection writes since the projection is by definition a batch process.
+  //
+  // Overlay fields (status, access_level) use conditional include rather than
+  // preserve-by-omission:
+  //   - On INSERT (existing === null): MDX seeds the initial value.
+  //   - On UPDATE (existing !== null): the PG value is the source of truth,
+  //     copied through here so the upsert's ON CONFLICT SET clause resolves
+  //     to a no-op for that column.
+  //   documents.status is NOT NULL with no schema default, so the
+  //   omit-pattern used for pinned/archived/source_drive_id would fail INSERT.
+  //   access_level has a schema default and could technically be omitted on
+  //   update, but the conditional pattern is used for both for symmetry.
   return {
     id: fm.id,
     title: fm.title,
     doc_class: fm.doc_class,
-    status: fm.status,
+    status: existing ? existing.status : fm.status,
     version: fm.version || null,
     shelf: fm.shelf || null,
     card_line: fm.card_line || null,
@@ -416,12 +430,12 @@ function mdxToDocRow(fm) {
     next_review: null,
     is_historical: false,
     data_provenance: "batch_rebuild",
-    // pr-7-11: hierarchical access gate. Absent or null frontmatter ->
-    // 'unrestricted' (the schema NOT NULL DEFAULT also enforces this, but
-    // setting it explicitly here keeps the diff honest about what gets
-    // written and prevents the upsert from leaving it untouched on existing
-    // rows). Validator catches unknown values upstream.
-    access_level: fm.access_level || "unrestricted",
+    // pr-7-11 hierarchical access gate. Overlay-preserved post-A1: on INSERT,
+    // MDX seeds the initial value (defaults to 'unrestricted' when frontmatter
+    // doesn't specify). On UPDATE, the existing PG value rides through
+    // unchanged - the dashboard owns live access tier. Validator catches
+    // unknown values upstream.
+    access_level: existing ? existing.access_level : (fm.access_level || "unrestricted"),
     // source_drive_id / source_drive_id_es preserved separately - projection
     // does NOT clobber them since they are operator/admin choices. The dry-run
     // report includes a NOTE about this.
@@ -432,12 +446,18 @@ function diffRow(existing, planned) {
   // Compare every field the projection authors. source_drive_id*, pinned,
   // archived, archived_at, created_at, updated_at, storage_path are all
   // preserved (not in the planned row, so the existing value stays).
+  //
+  // status + access_level are overlay-preserved (sourced from `existing` in
+  // mdxToDocRow). They never appear as diff changes here because
+  // planned[f] === existing[f] for both. Omitting them from the fields list
+  // keeps the dry-run output honest and documents that they are intentionally
+  // not in the projection's write set.
   const changes = {};
   const fields = [
-    "title", "doc_class", "status", "version", "shelf", "card_line", "summary",
+    "title", "doc_class", "version", "shelf", "card_line", "summary",
     "owner", "approver", "audience", "classification", "print_required", "critical",
     "sort_order", "effective_date", "last_reviewed", "next_review", "is_historical",
-    "data_provenance", "access_level", "approved_date",
+    "data_provenance", "approved_date",
   ];
   for (const f of fields) {
     if (planned[f] !== undefined && !valEq(existing[f], planned[f])) {
