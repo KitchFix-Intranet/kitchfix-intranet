@@ -689,6 +689,190 @@ export async function POST(request) {
       });
     }
 
+    // ── commit-mdx ───────────────────────────────────────────────────────
+    // OPD authoring A2: validate the edited MDX and commit it to main on
+    // GitHub. The PROJECTION STAYS MANUAL - this action only writes the
+    // .mdx file; Kevin runs scripts/content/project-catalog.mjs --apply
+    // afterwards to publish. Auto-projection is Part B, separately gated.
+    //
+    // Safety contract (non-negotiable):
+    //   1. Validate frontmatter against the JSON Schema. Fail -> 422,
+    //      no commit.
+    //   2. Compile-check the body via @mdx-js/mdx. Fail -> 422, no commit.
+    //   3. Round-trip-faithful serialize (serializeMdx) so unchanged saves
+    //      are byte-identical and scalar edits produce one-line diffs.
+    //   4. No-op detection: skip the commit when the serialized content
+    //      equals the current file content.
+    //   5. Stale-sha guard: GitHub PUT requires the sha the editor was
+    //      opened with. A 409 from GitHub means the file moved under us.
+    if (action === "commit-mdx") {
+      const { id, frontmatter, body: mdxBody, sha } = body;
+      if (!id || typeof id !== "string" || !/^[A-Z0-9-]+$/.test(id)) {
+        return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
+      }
+      if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
+        return NextResponse.json({ error: "Missing or invalid frontmatter" }, { status: 400 });
+      }
+      if (typeof mdxBody !== "string") {
+        return NextResponse.json({ error: "Missing or invalid body" }, { status: 400 });
+      }
+      if (!sha || typeof sha !== "string") {
+        return NextResponse.json({ error: "Missing sha (staleness guard)" }, { status: 400 });
+      }
+
+      const token = process.env.GITHUB_OPD_TOKEN;
+      if (!token) {
+        return NextResponse.json(
+          { error: "GitHub token not configured" },
+          { status: 503 }
+        );
+      }
+
+      // 1. Frontmatter validation.
+      const { validateFrontmatter } = await import("@/lib/opd/validateFrontmatter");
+      const fmResult = validateFrontmatter(frontmatter);
+      if (!fmResult.ok) {
+        return NextResponse.json(
+          { error: "validation", details: fmResult.errors },
+          { status: 422 }
+        );
+      }
+
+      // 2. MDX compile check.
+      try {
+        const { compile } = await import("@mdx-js/mdx");
+        await compile(mdxBody, { development: false });
+      } catch (e) {
+        return NextResponse.json(
+          { error: "mdx-compile", message: e.message },
+          { status: 422 }
+        );
+      }
+
+      // 3+4. Fetch the current file (to anchor the round-trip + verify sha
+      // staleness before any write), then serialize surgically and run the
+      // no-op check.
+      const contentsUrl =
+        `https://api.github.com/repos/KitchFix-Intranet/kitchfix-intranet` +
+        `/contents/content/documents/${encodeURIComponent(id)}.mdx`;
+      let currentRes;
+      try {
+        currentRes = await fetch(contentsUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (currentRes.status === 404) {
+        return NextResponse.json(
+          { error: `MDX file not found for ${id}` },
+          { status: 404 }
+        );
+      }
+      if (!currentRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub ${currentRes.status}: ${await currentRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const currentJson = await currentRes.json();
+      if (currentJson.sha !== sha) {
+        return NextResponse.json(
+          {
+            error: "stale",
+            message: "This document changed since you opened it. Reload before saving.",
+          },
+          { status: 409 }
+        );
+      }
+      const currentContent = Buffer.from(currentJson.content, "base64").toString("utf8");
+
+      const { serializeMdx } = await import("@/lib/opd/serializeMdx");
+      let serialized;
+      try {
+        serialized = serializeMdx({
+          original: currentContent,
+          userFm: frontmatter,
+          userBody: mdxBody,
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Serialize failed: ${e.message}` },
+          { status: 500 }
+        );
+      }
+
+      // No-op: data equals original AND body equals original. Skip commit.
+      if (serialized.unchanged) {
+        return NextResponse.json({ unchanged: true, sha });
+      }
+
+      // 5. Commit to main.
+      const commitMessage = `opd: edit ${id} via cockpit`;
+      const commitBody = {
+        message: commitMessage,
+        content: Buffer.from(serialized.content, "utf8").toString("base64"),
+        sha,
+        branch: "main",
+        committer: {
+          name: "OPD Authoring",
+          email: "noreply@kitchfix.com",
+        },
+      };
+      let putRes;
+      try {
+        putRes = await fetch(contentsUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          body: JSON.stringify(commitBody),
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub PUT failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (putRes.status === 409 || putRes.status === 422) {
+        // 409 = sha mismatch (race between our check and the PUT).
+        // 422 from GitHub usually means a different sha-related rejection.
+        return NextResponse.json(
+          {
+            error: "stale",
+            message: "This document changed since you opened it. Reload before saving.",
+          },
+          { status: 409 }
+        );
+      }
+      if (!putRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub PUT ${putRes.status}: ${await putRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const putJson = await putRes.json();
+      return NextResponse.json({
+        ok: true,
+        sha: putJson?.content?.sha || null,
+        commit: putJson?.commit?.sha || null,
+      });
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     console.error("[playbook POST]", e.message);

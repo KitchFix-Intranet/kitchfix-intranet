@@ -1370,3 +1370,57 @@
   padding-top: 8px;
 }
 
+/* Editor save status banner (A2). */
+.pb-admin-editor-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--kf-r-input);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  border: 1px solid var(--kf-line);
+  background: var(--kf-surface-2);
+  color: #1e293b;
+}
+.pb-admin-editor-status--saving {
+  background: var(--kf-surface-3);
+  color: var(--kf-muted);
+}
+.pb-admin-editor-status--ok {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #064e3b;
+}
+.pb-admin-editor-status--unchanged {
+  background: var(--kf-surface-3);
+  color: var(--kf-muted);
+  font-style: italic;
+}
+.pb-admin-editor-status--validation,
+.pb-admin-editor-status--compile {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+.pb-admin-editor-status--stale {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #78350f;
+}
+.pb-admin-editor-status--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+.pb-admin-editor-validation-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: var(--kf-t-caption);
+}
+.pb-admin-editor-validation-list code {
+  background: rgba(127, 29, 29, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+

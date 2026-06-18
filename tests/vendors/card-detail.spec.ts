@@ -9,7 +9,7 @@ test('clicking a vendor card opens detail view', async ({ page }) => {
   await expect(vendorsTab).toBeVisible({ timeout: 15_000 });
   await vendorsTab.click();
 
-  await expect(page.getByRole('heading', { name: 'Vendors' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vendors', exact: true })).toBeVisible();
   await page.locator('.oh-vp-acct-dropdown-trigger').click();
   await page.locator('.oh-vp-acct-dropdown-item').first().click();
 
