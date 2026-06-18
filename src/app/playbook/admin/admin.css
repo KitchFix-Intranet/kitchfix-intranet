@@ -17,6 +17,16 @@
    local --kf-brand-navy for new code; existing var(--kf-navy) usages stay.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* The cockpit is a dense admin surface, not a reading page - it runs wider
+   than the shared .pb-wrap reading width (1024px). Compound selector so only
+   the cockpit widens; the operator catalog (.pb-wrap without .pb-admin) keeps
+   its reading width. */
+.pb-wrap.pb-admin {
+  max-width: 1400px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
 .pb-admin {
   /* Brand - the only two color tokens this surface needs. Everything else
      is functional (state colors, neutrals, surfaces). */
