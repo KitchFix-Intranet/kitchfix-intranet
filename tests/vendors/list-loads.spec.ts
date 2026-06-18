@@ -10,7 +10,7 @@ test('vendor portal list view loads', async ({ page }) => {
   await vendorsTab.click();
 
   // Vendor Portal mounted — its <h2 class="oh-vp-title"> heading.
-  await expect(page.getByRole('heading', { name: 'Vendors' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vendors', exact: true })).toBeVisible();
 
   // The portal shows a landing placeholder until an account is selected.
   // Class selectors needed here: the account dropdown trigger's label is
