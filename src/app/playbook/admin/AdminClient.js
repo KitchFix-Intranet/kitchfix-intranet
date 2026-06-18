@@ -1518,17 +1518,28 @@ const FM_LANGS = ["en", "es"];
 function MdxEditorSlideOver({ docId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sha, setSha] = useState(null); // staleness guard - used by A2
+  const [sha, setSha] = useState(null); // staleness guard - rotates after each save
   const [fm, setFm] = useState(null); // frontmatter state (object)
   const [body, setBody] = useState(""); // body MDX state
 
-  useEffect(() => {
+  // Save flow state.
+  // saveStatus: "idle" | "saving" | "ok" | "unchanged" | "validation" | "compile" | "stale" | "error"
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const [saveMessage, setSaveMessage] = useState(null);
+  const [validationErrors, setValidationErrors] = useState(null);
+
+  const loadDoc = (refreshOnly = false) => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setFm(null);
-    setBody("");
-    setSha(null);
+    if (!refreshOnly) {
+      setFm(null);
+      setBody("");
+      setSha(null);
+    }
+    setSaveStatus("idle");
+    setSaveMessage(null);
+    setValidationErrors(null);
     fetch(`/api/playbook?action=mdx-source&id=${encodeURIComponent(docId)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -1544,7 +1555,62 @@ function MdxEditorSlideOver({ docId, onClose }) {
       .catch((e) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [docId]);
+  };
+
+  useEffect(() => loadDoc(), [docId]);
+
+  const handleSave = async () => {
+    if (!fm || !sha) return;
+    setSaveStatus("saving");
+    setSaveMessage(null);
+    setValidationErrors(null);
+    try {
+      const res = await fetch("/api/playbook?action=commit-mdx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: docId, frontmatter: fm, body, sha }),
+      });
+      const data = await res.json();
+      if (res.status === 422 && data?.error === "validation") {
+        setSaveStatus("validation");
+        setValidationErrors(data.details || []);
+        return;
+      }
+      if (res.status === 422 && data?.error === "mdx-compile") {
+        setSaveStatus("compile");
+        setSaveMessage(data.message || "MDX failed to compile.");
+        return;
+      }
+      if (res.status === 409 || data?.error === "stale") {
+        setSaveStatus("stale");
+        setSaveMessage(
+          data.message ||
+            "This document changed since you opened it. Reload before saving."
+        );
+        return;
+      }
+      if (!res.ok || data.error) {
+        setSaveStatus("error");
+        setSaveMessage(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      if (data.unchanged) {
+        setSaveStatus("unchanged");
+        setSaveMessage("No changes to save.");
+        return;
+      }
+      // Success - rotate sha so a second save off the same editor session
+      // doesn't 409 against itself.
+      if (data.sha) setSha(data.sha);
+      setSaveStatus("ok");
+      setSaveMessage(
+        "Saved to GitHub. Run the projection to publish to the dashboard and reader."
+      );
+    } catch (e) {
+      setSaveStatus("error");
+      setSaveMessage(e.message || "Network error");
+    }
+  };
 
   // ESC closes.
   useEffect(() => {
@@ -1594,8 +1660,55 @@ function MdxEditorSlideOver({ docId, onClose }) {
         ) : fm ? (
           <div className="pb-admin-editor-body">
             <p className="pb-admin-editor-note">
-              In-memory edits only. Saving lands in the next update.
+              Save commits this MDX to main on GitHub. It does NOT publish -
+              run the projection to update the dashboard and reader.
             </p>
+
+            {saveStatus !== "idle" && (
+              <div
+                className={`pb-admin-editor-status pb-admin-editor-status--${saveStatus}`}
+                role="status"
+              >
+                {saveStatus === "saving" && "Saving…"}
+                {saveStatus === "ok" && saveMessage}
+                {saveStatus === "unchanged" && saveMessage}
+                {saveStatus === "compile" && (
+                  <>
+                    <strong>MDX compile error.</strong> {saveMessage}
+                  </>
+                )}
+                {saveStatus === "validation" && (
+                  <>
+                    <strong>Frontmatter validation failed.</strong>
+                    <ul className="pb-admin-editor-validation-list">
+                      {(validationErrors || []).map((err, i) => (
+                        <li key={i}>
+                          <code>{err.path || "/"}</code>: {err.msg}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {saveStatus === "stale" && (
+                  <>
+                    {saveMessage}
+                    <button
+                      type="button"
+                      className="pb-admin-modal-btn"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => loadDoc()}
+                    >
+                      Reload
+                    </button>
+                  </>
+                )}
+                {saveStatus === "error" && (
+                  <>
+                    <strong>Save failed.</strong> {saveMessage}
+                  </>
+                )}
+              </div>
+            )}
 
             <fieldset className="pb-admin-editor-fieldset">
               <legend>Identity</legend>
@@ -1679,16 +1792,17 @@ function MdxEditorSlideOver({ docId, onClose }) {
                 type="button"
                 className="pb-admin-modal-btn"
                 onClick={onClose}
+                disabled={saveStatus === "saving"}
               >
                 Close
               </button>
               <button
                 type="button"
                 className="pb-admin-modal-btn pb-admin-modal-btn--primary"
-                disabled
-                title="Saving lands in the next update (A2)"
+                onClick={handleSave}
+                disabled={saveStatus === "saving" || saveStatus === "stale"}
               >
-                Save (coming in next update)
+                {saveStatus === "saving" ? "Saving…" : "Save to GitHub"}
               </button>
             </div>
           </div>
