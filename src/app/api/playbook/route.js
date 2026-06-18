@@ -88,25 +88,27 @@ async function pickHeroImage() {
 
 // ─── Editing allowlist + validation sets (action=update-document) ───────────
 //
-// The owner edits catalog fields directly from /playbook/admin's worklist:
-//   Part A (auto-commit, optimistic):  title, shelf, doc_class, status, version, pinned
-//   Part B (explicit Save, confirmed): source_drive_id, source_drive_id_es
+// Owner-only catalog edits from /playbook/admin (OPD Command). The set
+// reflects the source-of-truth boundary post-PR-C:
 //
-// The set is HARD - `id` is still explicitly NOT in here so an attempt to
-// write it returns 400 even if the client forges it. ID renames stay a
-// deliberate scripted operation (see pr-7-5 atomic POST-003 -> POSTER-001).
+//   Overlay fields (dashboard owns, projection preserves):
+//     status, pinned, access_level
+//   MDX-authored fields (projection writes, dashboard edits would be
+//     silent-data-loss traps - but kept writable here for legacy/internal
+//     use; UI no longer edits them):
+//     title, shelf, doc_class, version
+//   Removed (Drive retired):
+//     source_drive_id, source_drive_id_es
 //
-// Per-field value validators mirror the schema CHECK constraints + the
-// implicit "Drive ID is a string or null" shape. The schema
-// (pr-7-1-opd-schema.sql + pr-7-4 bilingual columns) is still the source of
-// truth; these sets just cache the same allowed values for fast 400s instead
-// of round-tripping a Postgres constraint violation. Drive IDs have no
-// schema-side format check - any string is a valid catalog value (a wrong
-// or unshared ID is a SEMANTIC failure that the test-render link in the
-// dashboard surfaces, not a DB error).
+// `id` is NOT in the set - renaming the PK is a multi-table transaction
+// (see pr-7-5 atomic POST-003 -> POSTER-001), not an in-row UPDATE.
+//
+// Per-field validators mirror the schema CHECK constraints
+// (pr-7-1-opd-schema.sql + pr-7-11 access_level) so we 400 fast instead of
+// round-tripping a Postgres constraint violation.
 const WRITABLE_FIELDS_A = new Set([
   "title", "shelf", "doc_class", "status", "version", "pinned",
-  "source_drive_id", "source_drive_id_es",
+  "access_level",
 ]);
 const VALID_SHELVES_SET = new Set(SHELVES);
 const VALID_CLASSES = new Set([
@@ -115,6 +117,7 @@ const VALID_CLASSES = new Set([
 const VALID_STATUSES = new Set([
   "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",
 ]);
+const VALID_ACCESS_LEVELS = new Set(["unrestricted", "restricted", "slt"]);
 
 function validatePatch(patch) {
   // Returns { ok: true, clean } on success or { ok: false, error } on failure.
@@ -177,31 +180,11 @@ function validatePatch(patch) {
     }
     clean.pinned = patch.pinned;
   }
-  // Drive ID fields (Part B): nullable strings. Empty / whitespace-only
-  // values get canonicalized to NULL so an "unlink" is the natural result
-  // of clearing the input. No format validation - Drive IDs vary in length
-  // and shape across Drive's URL generations, and the test-render link in
-  // the dashboard catches semantically wrong values much better than any
-  // regex would.
-  if ("source_drive_id" in patch) {
-    if (patch.source_drive_id === null) {
-      clean.source_drive_id = null;
-    } else if (typeof patch.source_drive_id === "string") {
-      const trimmed = patch.source_drive_id.trim();
-      clean.source_drive_id = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "source_drive_id must be a string or null" };
+  if ("access_level" in patch) {
+    if (!VALID_ACCESS_LEVELS.has(patch.access_level)) {
+      return { ok: false, error: `invalid access_level '${patch.access_level}'` };
     }
-  }
-  if ("source_drive_id_es" in patch) {
-    if (patch.source_drive_id_es === null) {
-      clean.source_drive_id_es = null;
-    } else if (typeof patch.source_drive_id_es === "string") {
-      const trimmed = patch.source_drive_id_es.trim();
-      clean.source_drive_id_es = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "source_drive_id_es must be a string or null" };
-    }
+    clean.access_level = patch.access_level;
   }
   return { ok: true, clean };
 }
