@@ -151,7 +151,6 @@ export {
   getSurfaces,
   getDocumentsForSurface,
   listIssues,
-  createDocument,
   updateDocument,
   createIssue,
   setPinned,

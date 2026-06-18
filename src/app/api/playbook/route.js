@@ -26,7 +26,6 @@ import {
   getRelationships,
   getSurfaces,
   createIssue,
-  createDocument,
   updateDocument,
   setPinned,
   clearPinned,
@@ -46,7 +45,6 @@ import {
   restoreDocument,
   SKIP_TEXT_EXTRACTION_CLASSES,
 } from "@/lib/sousai";
-import { validateCreatePayload } from "@/lib/playbookValidation";
 
 // Locked shelf order - operational domains first, references at the end.
 // A6 6-domain taxonomy: Safety (food + workplace consolidated) -> Ops -> People
@@ -632,38 +630,6 @@ export async function POST(request) {
         restore_path: result.restorePath,
         chunks_inserted: result.chunksInserted,
       });
-    }
-
-    // ── create-document ──────────────────────────────────────────────────
-    // Strict validation: ID format regex, prefix↔doc_class consistency,
-    // uniqueness, plus the existing shelf/class/status sets. Defaults:
-    // status=Pending if omitted, version=null (per spec - a brand-new doc
-    // with no content shouldn't claim a version it doesn't have).
-    if (action === "create-document") {
-      const v = validateCreatePayload(body, {
-        validShelves: VALID_SHELVES_SET,
-        validClasses: VALID_CLASSES,
-        validStatuses: VALID_STATUSES,
-      });
-      if (!v.ok) {
-        return NextResponse.json({ error: v.error }, { status: 400 });
-      }
-      // Uniqueness: surface a clear "id already exists: <title>" instead
-      // of the raw PG unique-violation message.
-      const existing = await getDocument(v.clean.id, { module: MODULE });
-      if (existing) {
-        return NextResponse.json(
-          { error: `id '${v.clean.id}' already exists: ${existing.title}` },
-          { status: 400 }
-        );
-      }
-      let created;
-      try {
-        created = await createDocument(v.clean, { module: MODULE });
-      } catch (e) {
-        return NextResponse.json({ error: e.message }, { status: 400 });
-      }
-      return NextResponse.json({ ok: true, document: created });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

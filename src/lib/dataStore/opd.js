@@ -88,7 +88,34 @@ export async function listDocuments(
   const { data, error } = await q;
   if (error) throw new Error(`opd.listDocuments: ${error.message}`);
   const rows = data || [];
-  return decoratePinned(rows, archivedOnly ? "preserve" : "sort");
+  await decoratePinned(rows, archivedOnly ? "preserve" : "sort");
+  await decorateHasContent(rows);
+  return rows;
+}
+
+/**
+ * Attach `has_content` (boolean) to each row, sourced from document_content.
+ * True iff at least one document_content row exists for the doc in any lang
+ * (bilingual docs have one EN + one ES row; either counts). One batched query
+ * for the whole set - no N+1. Mirrors decoratePinned's shape.
+ *
+ * Used by the operator catalog's alive-test (PlaybookClient.js) to decide
+ * whether a Live doc is openable. Replaces the prior Drive-keyed proxy
+ * (`!!source_drive_id`) - Drive is retired as an OPD content source; content
+ * presence in document_content is the real signal.
+ */
+async function decorateHasContent(rows) {
+  if (rows.length === 0) return rows;
+  const sb = getServiceClient();
+  const ids = rows.map((r) => r.id);
+  const { data: content, error } = await sb
+    .from(CONTENT_TABLE)
+    .select("doc_id")
+    .in("doc_id", ids);
+  if (error) throw new Error(`opd.decorateHasContent: ${error.message}`);
+  const contentSet = new Set((content || []).map((c) => c.doc_id));
+  for (const r of rows) r.has_content = contentSet.has(r.id);
+  return rows;
 }
 
 /**
@@ -145,6 +172,15 @@ export async function getDocument(id, opts = {}) {
   if (!data) return data;
   const { data: pin } = await sb.from(PINS_TABLE).select("doc_id").eq("doc_id", id).maybeSingle();
   data.pinned = !!pin;
+  // has_content = at least one document_content row in any lang (bilingual
+  // docs may have EN + ES rows; either counts). Don't use maybeSingle here -
+  // it errors when count > 1. .limit(1) + array-check is safer.
+  const { data: content } = await sb
+    .from(CONTENT_TABLE)
+    .select("doc_id")
+    .eq("doc_id", id)
+    .limit(1);
+  data.has_content = Array.isArray(content) && content.length > 0;
   return data;
 }
 
@@ -236,26 +272,6 @@ export async function listIssues({ status } = {}, opts = {}) {
 }
 
 // ─── Writes ───────────────────────────────────────────────────────────────
-
-/**
- * Insert a new document row. The caller supplies the TEXT primary key
- * (e.g. 'PB-007') — there is no surrogate UUID. Schema defaults fire for
- * data_provenance ('manual_entry'), is_historical (false), created_at,
- * and updated_at when those keys are absent from `data`.
- *
- * Throws on FK / CHECK / chk_live_complete violations — callers should
- * pre-validate or surface the PG error to the operator.
- */
-export async function createDocument(data, opts = {}) {
-  const sb = getServiceClient();
-  const { data: row, error } = await sb
-    .from(DOCUMENTS_TABLE)
-    .insert(data)
-    .select()
-    .single();
-  if (error) throw new Error(`opd.createDocument: ${error.message}`);
-  return row;
-}
 
 /**
  * Partial update. Stamps updated_at = now() at the orchestrator (the schema

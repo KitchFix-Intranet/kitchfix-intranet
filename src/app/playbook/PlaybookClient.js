@@ -429,8 +429,8 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
   // Group by shelf, then re-sort WITHIN each shelf by readiness so openable
   // docs lead. Group order (lower index = earlier on the shelf):
   //
-  //   0. pinned + ready  (Live AND has a Drive file AND pinned)
-  //   1. ready           (Live AND has a Drive file)
+  //   0. pinned + ready  (Live AND has renderable content AND pinned)
+  //   1. ready           (Live AND has renderable content)
   //   2. pinned          (pinned, not yet ready)
   //   3. not-ready       (everything else)
   //
@@ -449,7 +449,11 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
       if (d.shelf && map[d.shelf]) map[d.shelf].push(d);
     }
     const groupKey = (d) => {
-      const ready = !!d.source_drive_id && d.status === "Live";
+      // Drive retired; alive-test now keys off has_content (decorated
+      // server-side from document_content presence) - see opd.js
+      // decorateHasContent + the matching DocumentCard / DocumentListRow
+      // isAlive computations below.
+      const ready = !!d.has_content && d.status === "Live";
       if (ready && d.pinned) return 0;
       if (ready)             return 1;
       if (d.pinned)          return 2;
@@ -936,11 +940,13 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  // ALIVE = has a Drive file AND is Live. That's the operator's "this card is
-  // a door" test. Anything else gets the recessed treatment so the eye can
-  // skip past it - the recessed state replaces the previous combination of
-  // "no file yet" text marker + status pill colors as the openability signal.
-  const isAlive = !!doc.source_drive_id && doc.status === "Live";
+  // ALIVE = has renderable content (document_content row present) AND is Live.
+  // That's the operator's "this card is a door" test. Anything else gets the
+  // recessed treatment so the eye can skip past it - the recessed state
+  // replaces the previous combination of "no file yet" text marker + status
+  // pill colors as the openability signal. has_content is decorated
+  // server-side in opd.js listDocuments; Drive linkage no longer participates.
+  const isAlive = !!doc.has_content && doc.status === "Live";
   return (
     <button
       className={`pb-card pb-card--${isAlive ? "alive" : "recessed"}`}
@@ -995,7 +1001,7 @@ function DocumentListRow({ doc, onOpen, idx = 0 }) {
   const status = STATUS_COLORS[doc.status] || STATUS_COLORS.Pending;
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
-  const isAlive = !!doc.source_drive_id && doc.status === "Live";
+  const isAlive = !!doc.has_content && doc.status === "Live";
   return (
     <button
       className={`pb-list-row pb-list-row--${isAlive ? "alive" : "recessed"}`}
