@@ -381,8 +381,29 @@
 
 .sc-year-body { padding: var(--space-5) var(--space-6); }
 
-/* Color legend */
-.sc-year-legend { display: flex; align-items: center; gap: 14px; padding: 0 0 14px; margin-bottom: 4px; border-bottom: 1px solid #f3f4f6; }
+/* At-a-glance stats banner above the year grid. Subtle card feel
+   (light background, no heavy borders) so it sits as context, not
+   chrome. Inline pipe separators between stat items - same shape
+   as a status bar. Per-meal and MiLB share the urgency-aware shape;
+   fee accounts get a shorter schedule-only version. */
+.sc-year-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #475569;
+}
+.sc-year-banner-item { font-weight: 500; }
+.sc-year-banner-item:first-child { color: #111827; font-weight: 600; }
+.sc-year-banner-sep { color: #cbd5e1; }
+
+/* Color legend - moved below the grid in the JSX (reference key, not
+   header). Visual treatment unchanged; just top-border instead of
+   bottom-border now that it sits after the grid. */
+.sc-year-legend { display: flex; align-items: center; gap: 14px; padding: 14px 0 0; margin-top: 12px; border-top: 1px solid #f3f4f6; }
 .sc-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7280; }
 .sc-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .sc-legend-dot--entered { background: #0F6E56; }
@@ -407,13 +428,17 @@
 
 /* Card header */
 .sc-year-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-1); }
-.sc-year-card-name { font-size: var(--type-body); font-weight: 700; color: #111827; line-height: var(--line-heading); }
+/* Month name reads as the card title - bumped to 14px / 800 so the
+   header carries weight against the heatmap dots below. Was using
+   --type-body (14-16px responsive) at 700; fixed 14/800 makes it
+   feel deliberate regardless of viewport. */
+.sc-year-card-name { font-size: 14px; font-weight: 800; color: #111827; line-height: var(--line-heading); letter-spacing: -0.005em; }
 .sc-year-card-cue { font-size: var(--type-caption); color: transparent; transition: color 0.15s; font-weight: 500; }
 .sc-year-card:hover .sc-year-card-cue { color: #0F6E56; }
 
-/* DOW headers */
+/* DOW headers - readable but still secondary chrome */
 .sc-heatmap-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 2px; }
-.sc-heatmap-dow { text-align: center; font-size: 8px; font-weight: 600; color: #d1d5db; text-transform: uppercase; }
+.sc-heatmap-dow { text-align: center; font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; }
 
 /* Heatmap dot grid */
 .sc-heatmap { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; flex: 1; }
@@ -464,14 +489,14 @@
 
 /* Year heatmap dot colors */
 [data-billing="flat_fee"] .sc-dot--future {
-  background: #1e3a8a;                  /* navy - clean schedule */
+  background: #bbf7d0;                  /* light green - scheduled, not yet entered */
   opacity: 1;
 }
 [data-billing="flat_fee"] .sc-dot--entered {
-  background: #0F6E56;                  /* green - operator logged */
+  background: #0F6E56;                  /* dark green - operator logged */
 }
 [data-billing="flat_fee"] .sc-dot--prep {
-  background: #a5b4fc;                  /* periwinkle - sibling to navy, clearly distinct */
+  background: #d1fae5;                  /* pale mint - sibling to scheduled light green */
 }
 [data-billing="flat_fee"] .sc-dot--off-season {
   background: #f1f5f9;                  /* light grey - non-game / non-prep, visible */
@@ -483,7 +508,7 @@
 [data-billing="flat_fee"] .sc-dot--needs-entry,
 [data-billing="flat_fee"] .sc-dot--overdue,
 [data-billing="flat_fee"] .sc-dot--no-service {
-  background: #1e3a8a;                  /* coerce to navy schedule */
+  background: #bbf7d0;                  /* coerce to scheduled light green */
 }
 
 /* MLB game-type rings (home/away) are noise on fee accounts - the
@@ -517,9 +542,9 @@
   position: relative;
 }
 [data-billing="flat_fee"] .sc-dot--future {
-  background: #1e40af;                                              /* slight saturation bump */
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12),                 /* top highlight */
-              0 1px 1px rgba(30,64,175,0.18);                       /* tiny lift */
+  background: #bbf7d0;                                              /* light green scheduled */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18),                 /* top highlight */
+              0 1px 1px rgba(15,110,86,0.10);                       /* tiny green lift */
 }
 [data-billing="flat_fee"] .sc-dot--entered {
   background: #0F6E56;
@@ -527,10 +552,10 @@
               0 1px 1px rgba(15,110,86,0.22);
 }
 [data-billing="flat_fee"] .sc-dot--prep {
-  background: #a5b4fc;                                              /* periwinkle - sibling to navy */
+  background: #d1fae5;                                              /* pale mint - sibling to scheduled */
   opacity: 1;
 }
-[data-billing="flat_fee"] .sc-legend-dot--prep { background: #a5b4fc; }
+[data-billing="flat_fee"] .sc-legend-dot--prep { background: #d1fae5; }
 
 /* ── YEAR CARD STATS: match the PDC/MiLB stat-row typography pattern.
    "X/Y game days" reads in caption grey on the left, "N HS" reads in
@@ -542,13 +567,13 @@
   font-weight: 700;
 }
 
-/* ── YEAR PROGRESS BAR: gradient toward homestand-complete ── */
+/* ── YEAR PROGRESS BAR: same amber-in-progress / green-complete logic
+   as per-meal so the visual signal for "month finished" reads the same
+   across all three modes. Track is slightly taller for fee accounts to
+   keep the homestand cards from feeling thin. */
 [data-billing="flat_fee"] .sc-year-bar {
-  height: 4px;                                                       /* slight bump */
+  height: 4px;
   background: #f1f5f9;
-}
-[data-billing="flat_fee"] .sc-year-bar-fill {
-  background: linear-gradient(90deg, #1e40af 0%, #0F6E56 100%);     /* navy -> green */
 }
 
 /* ── EMPTY MONTH CARDS: shared "Off-season" treatment ──
@@ -582,12 +607,16 @@
   border-color: #0F6E56;
 }
 
-/* ── LEGEND polish: cleaner spacing + slightly taller blocks ── */
+/* ── LEGEND polish: cleaner spacing + slightly taller blocks. Legend
+   now lives below the grid (see base rule) so border is on the top
+   edge, not bottom. */
 [data-billing="flat_fee"] .sc-year-legend {
   gap: 18px;
-  padding: 4px 0 12px;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: none;
+  margin-top: 8px;
+  margin-bottom: 0;
 }
 [data-billing="flat_fee"] .sc-legend-item {
   font-size: 11px;
@@ -600,7 +629,10 @@
   height: 12px;
   border-radius: 3px;
 }
-[data-billing="flat_fee"] .sc-legend-dot--future { background: #1e40af; }
+[data-billing="flat_fee"] .sc-legend-dot--future { background: #bbf7d0; }
+/* Matches the in-month away/off dot color set by
+   [data-billing="flat_fee"] .sc-dot--off-season above. */
+[data-billing="flat_fee"] .sc-legend-dot--off-season { background: #f1f5f9; }
 
 /* ── MONTH-VIEW GAME-DAY TILE: more presence, clearer hierarchy ── */
 [data-billing="flat_fee"] .sc-tile--active {
@@ -785,16 +817,16 @@
 [data-category="MiLB"] .sc-dot--away,
 [data-category="MiLB"] .sc-dot--day-off { box-shadow: none; }
 
-/* MiLB scheduled game day. Same navy as the MLB fee "game day
-   scheduled" so the cross-account-type vocabulary uses one blue
-   for the same concept. (Class name kept as upcoming-game for the
-   diff stay small; semantically it's now "scheduled game day".) */
+/* MiLB scheduled game day. Light green - same swatch the PDC
+   "upcoming service" uses, so the "scheduled but not yet entered"
+   semantic reads identically across all three modes. (Class name
+   kept as upcoming-game; semantically it's "scheduled game day".) */
 .sc-dot--upcoming-game {
-  background: #1e3a8a;
+  background: #bbf7d0;
   opacity: 1;
 }
 .sc-legend-dot--upcoming-game {
-  background: #1e3a8a;
+  background: #bbf7d0;
 }
 
 /* PDC / per-meal accounts: future days with projection data render as a
@@ -850,7 +882,13 @@
 .sc-year-card-rev--actual { color: #085041; }
 .sc-year-card-noservice { font-size: 12px; color: #9ca3af; font-style: italic; padding: 4px 0; }
 .sc-year-bar { height: 3px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
-.sc-year-bar-fill { height: 100%; background: #0F6E56; border-radius: 2px; transition: width 0.3s; }
+/* Progress fill state classes used by both per-meal + fee year cards.
+   Amber while the month is in progress (1-99% recorded), green when
+   the month is 100% complete. Unified logic across all account modes
+   - was a flat green per-meal fill + a navy->green gradient on fee. */
+.sc-year-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+.sc-year-bar-fill--progress { background: #f59e0b; }
+.sc-year-bar-fill--complete { background: #0F6E56; }
 
 /* ══════════════════════════════════════
    COMING SOON
