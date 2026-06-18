@@ -470,7 +470,7 @@
   color: #1e293b;
   font-family: 'Inter', sans-serif;
   font-size: var(--kf-t-body-sm);
-  cursor: help;
+  cursor: default;
   border-bottom: 1px dashed transparent;
   transition: border-color 150ms ease-out, color 150ms ease-out;
 }
