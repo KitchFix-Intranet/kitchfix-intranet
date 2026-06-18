@@ -367,6 +367,12 @@
 /* Gear button */
 .sc-cfg-gear { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
 .sc-cfg-gear:hover { border-color: #0F6E56; color: #0F6E56; background: #f0fdf4; }
+/* Corporate-only Admin link next to the gear. Brand navy family
+   (#153968 + #f0f4f8) matching the SC today ring + the kf-bg page
+   wash, not generic Tailwind blue. Rendered conditionally by
+   ServiceCalendar.js when isScAdmin(session email) is true. */
+.sc-admin-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #153968; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: var(--radius-input); padding: 4px 9px; text-decoration: none; transition: background 0.15s, border-color 0.15s; margin-left: 4px; }
+.sc-admin-link:hover { background: #e2e8f0; border-color: #cbd5e1; }
 
 /* ══════════════════════════════════════
    SERVICE CONFIG EDITOR
