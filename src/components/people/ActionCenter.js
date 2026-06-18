@@ -64,7 +64,8 @@ const NH_SECTIONS = [
 // ── PAF: fields relevant to each action type ──
 const PAF_DISPLAY_FIELDS = {
   separation: ["effectiveDate", "lastDayWorked", "employeeName", "actionGroup", "separationReason", "rehireEligible", "explanation"],
-  rate_change: ["effectiveDate", "employeeName", "oldRate", "newRate", "explanation"],
+  rate_change: ["effectiveDate", "employeeName", "oldRate", "newRate", "explanation"], // historical only
+  pay_increase: ["increaseType", "employeeLevel", "role", "effectiveDate", "employeeName", "oldRate", "newRate", "dollarIncrease", "pctIncrease", "explanation"],
   title_change: ["effectiveDate", "employeeName", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],
   status_change: ["effectiveDate", "employeeName", "statusChangeDirection"],
   reclassification: ["effectiveDate", "employeeName", "reclassFrom", "reclassTo", "reclassTitleChange", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],

@@ -891,6 +891,10 @@ body:has(.pp-app) {
   outline-offset: 2px;
 }
 
+.pp-pill-option--dashed {
+  border-style: dashed;
+}
+
 /* â”€â”€ Yes/No Toggle â”€â”€ */
 .pp-yn-toggle {
   display: flex;
