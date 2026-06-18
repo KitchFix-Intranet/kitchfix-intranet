@@ -659,12 +659,13 @@ export async function GET(request) {
 
   try {
 if (action === "bootstrap") {
-       const [accountsRaw, periodsRaw, heroRaw, inventoryRaw, budgetsRaw] = await Promise.all([
+       const [accountsRaw, periodsRaw, heroRaw, inventoryRaw, budgetsRaw, contactsRaw] = await Promise.all([
                 safeRead(SHEET_IDS.HUB, "accounts"),
         safeRead(SHEET_IDS.HUB, "period_data"),
         safeRead(SHEET_IDS.HUB, "hero_images"),
         safeRead(SHEET_IDS.COLLECTION, "inventory_submissions"),
         safeRead(SHEET_IDS.HUB, "labor_budgets"),
+        safeRead(SHEET_IDS.HUB, "contacts"),
       ]);
 
       // Build active period map from budget data
@@ -742,11 +743,37 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
         notes: String(r[12] || ""),
       }));
 
+      // STL - FL is labeled MLB in the accounts sheet but operationally PDC;
+      // treat it as PDC for category resolution so Season Tracker stays hidden.
+      const CATEGORY_OVERRIDES = { "STL - FL": "PDC" };
+      let userCategory = null;
+      try {
+        const userTeamKeys = contactsRaw.rows
+          .filter((r) => String(r[3] || "").toLowerCase().trim() === email)
+          .map((r) => String(r[0] || "").trim())
+          .filter(Boolean);
+        if (OPS_LEADERSHIP_EMAILS.includes(email)) {
+          userCategory = "CORP";
+        } else if (userTeamKeys.some((k) => k.toUpperCase() === "CORP")) {
+          userCategory = "CORP";
+        } else {
+          const userLevels = userTeamKeys
+            .map((tk) => CATEGORY_OVERRIDES[tk] || accounts.find((a) => a.key === tk)?.level)
+            .filter(Boolean);
+          if (userLevels.includes("MLB")) userCategory = "MLB";
+          else userCategory = userLevels[0] || null;
+        }
+      } catch (err) {
+        console.error("[bootstrap] userCategory resolution failed:", err?.message);
+        userCategory = null;
+      }
+
       return NextResponse.json({
         success: true,
         email,
         firstName: session.user?.name?.split(" ")[0] || "Chef",
         isAdmin: OPS_LEADERSHIP_EMAILS.includes(email),
+        userCategory,
         accounts, periods, currentPeriod, heroImage, inventoryLog,
       });
     }
@@ -770,8 +797,13 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
           total: parseNum(r[11]),
           notes: String(r[12] || ""),
         }))
-        .slice(-25)
-        .reverse();
+        .sort((a, b) => {
+          const pA = parseInt((a.period || "P0").slice(1));
+          const pB = parseInt((b.period || "P0").slice(1));
+          if (pB !== pA) return pB - pA;
+          return new Date(b.date || 0) - new Date(a.date || 0);
+        })
+        .slice(0, 25);
       return NextResponse.json({ success: true, history });
     }
 

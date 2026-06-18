@@ -21,8 +21,9 @@ const BoxIcon = () => (
   </svg>
 );
 
-export default function OpsHome({ config, onNavigate, userEmail = "" }) {
+export default function OpsHome({ config, onNavigate, userEmail = "", userCategory = null }) {
   const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
+  const canUseSeasonTracker = userCategory === "MLB" || userCategory === "CORP";
   const cp     = config?.currentPeriod;
   const ap     = cp?.name || "P1";
   const days   = F.daysUntil(cp?.due);
@@ -98,6 +99,7 @@ export default function OpsHome({ config, onNavigate, userEmail = "" }) {
         </div>
 
         {/* ── Season Tracker Card → LaborTool (Season Planner) ── */}
+        {canUseSeasonTracker && (
         <div
           className="oh-card oh-card--interactive"
           onClick={() => onNavigate("labor")}
@@ -130,6 +132,7 @@ export default function OpsHome({ config, onNavigate, userEmail = "" }) {
             <ArrowRight />
           </button>
         </div>
+        )}
 
         {/* ── Invoice Capture Card ── */}
         <div
@@ -209,45 +212,6 @@ export default function OpsHome({ config, onNavigate, userEmail = "" }) {
             </div>
           </div>
         </Link>
-
-        {/* ── Current Period Info Card ── */}
-        
-        <div className="oh-card">
-          <div className="oh-card-header-row">
-            <div className="oh-icon-box oh-icon-navy">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8"  y1="2" x2="8"  y2="6" />
-                <line x1="3"  y1="10" x2="21" y2="10" />
-              </svg>
-            </div>
-          </div>
-          <h3 className="oh-card-title">Current Period</h3>
-          <p className="oh-card-desc">{ap} cycle details.</p>
-          <div className="oh-period-details">
-            {cp?.start && (
-              <div className="oh-period-row">
-                <span className="oh-period-label">Range</span>
-                <span className="oh-period-val">
-                  {F.dateShort(cp.start)} — {F.dateShort(cp.end)}
-                </span>
-              </div>
-            )}
-            {cp?.due && (
-              <div className="oh-period-row">
-                <span className="oh-period-label">Due</span>
-                <span className="oh-period-val">{F.date(cp.due)}</span>
-              </div>
-            )}
-            <div className="oh-period-row">
-              <span className="oh-period-label">Status</span>
-              <span className={`oh-urgency-badge oh-urgency-${F.daysUrgency(days)}`}>
-                {F.daysLabel(days)}
-              </span>
-            </div>
-          </div>
-        </div>
 
         {/* ── Locked Q3 Cards ── */}
         {[

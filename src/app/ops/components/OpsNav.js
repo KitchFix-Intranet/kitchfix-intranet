@@ -2,15 +2,16 @@
 
 const INV_MANAGER_DEV_USERS = ["k.fietek@kitchfix.com", "joe@kitchfix.com"];
 
-export default function OpsNav({ view, onNavigate, userEmail = "" }) {
+export default function OpsNav({ view, onNavigate, userEmail = "", userCategory = null }) {
   const isInvManagerEnabled = INV_MANAGER_DEV_USERS.includes(userEmail);
+  const canUseSeasonTracker = userCategory === "MLB" || userCategory === "CORP";
 
   const tabs = [
     { key: "home",     label: "Home" },
     { key: "inventory", label: "Inventory" },
     ...(isInvManagerEnabled ? [{ key: "inv-manager", label: "Inv Manager" }] : []),
     { key: "invoices", label: "Invoices" },
-    { key: "labor",    label: "Season Tracker" },
+    ...(canUseSeasonTracker ? [{ key: "labor", label: "Season Tracker" }] : []),
     { key: "vendors",  label: "Vendors" },
   ];
 

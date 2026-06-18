@@ -62,12 +62,12 @@ people: (
 };
 
 const navLinks = [
-  { href: '/',            label: 'Dashboard', icon: icons.home      },
-  { href: '/directory',   label: 'Directory', icon: icons.directory },
-  { href: '/ops',         label: 'Ops Hub',   icon: icons.ops       },
-  { href: '/service-calendar', label: 'Service Calendar', icon: icons.calendar },
-  { href: '/people',      label: 'People',    icon: icons.people    },
-  { href: '/playbook',    label: 'The Playbook', icon: icons.playbook },
+  { href: '/',                 label: 'Dashboard', icon: icons.home      },
+  { href: '/people',           label: 'People',    icon: icons.people    },
+  { href: '/ops',              label: 'Ops Hub',   icon: icons.ops       },
+  { href: '/service-calendar', label: 'Service',   icon: icons.calendar  },
+  { href: '/playbook',         label: 'Playbook',  icon: icons.playbook  },
+  { href: '/directory',        label: 'Directory', icon: icons.directory },
 ];
 
 /* ── Notification SVG Icons ── */
