@@ -146,11 +146,39 @@
 }
 
 /* ─── Attention - the triage cockpit ────────────────────────────────────── */
-.pb-admin-attention {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
+/* Two-zone layout: Needs action / Queue & activity, plus a slim PR D strip.
+   align-items: start on the grids is the key fix - buckets size to their own
+   content instead of stretching to the tallest in the row. */
+.pb-admin-attention-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
   margin-bottom: 28px;
+}
+.pb-admin-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pb-admin-zone-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-muted);
+  margin: 0;
+}
+.pb-admin-zone-grid {
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+.pb-admin-zone-grid--alerts {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.pb-admin-zone-grid--queue {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 .pb-admin-bucket {
   background: var(--kf-surface-1);
@@ -159,12 +187,12 @@
   border-radius: var(--kf-r-card);
   padding: 14px 18px 16px;
 }
-.pb-admin-bucket--priority { border-left-color: var(--kf-danger); }
-.pb-admin-bucket--ready    { border-left-color: var(--kf-brand-navy); }
-.pb-admin-bucket--shells   { border-left-color: var(--kf-ops-amber); }
-.pb-admin-bucket--stale    { border-left-color: var(--kf-mustard); }
-.pb-admin-bucket--recent   { border-left-color: var(--kf-line-strong); }
-.pb-admin-bucket--stub     { border-left-color: var(--kf-line); opacity: 0.78; }
+.pb-admin-bucket--priority    { border-left-color: var(--kf-danger); }
+.pb-admin-bucket--ready       { border-left-color: var(--kf-brand-navy); }
+.pb-admin-bucket--shells      { border-left-color: var(--kf-ops-amber); }
+.pb-admin-bucket--stale       { border-left-color: var(--kf-mustard); }
+.pb-admin-bucket--recent      { border-left-color: var(--kf-line-strong); }
+.pb-admin-bucket--placeholder { border-left-color: var(--kf-line-strong); }
 
 .pb-admin-bucket-head {
   display: flex;
@@ -194,11 +222,6 @@
   font-family: 'Inter', sans-serif;
   font-size: var(--kf-t-caption);
   font-weight: 800;
-}
-.pb-admin-bucket-count--soft {
-  background: transparent;
-  color: var(--kf-muted-soft);
-  font-weight: 700;
 }
 .pb-admin-bucket-empty {
   font-size: var(--kf-t-body-sm);
@@ -256,6 +279,64 @@
   font-size: 12px;
   color: var(--kf-muted);
   margin-left: 4px;
+}
+
+/* Drill footer - turns a capped queue bucket into "5 shown + View all N in
+   Worklist" with a subtle hairline to separate it from the list. */
+.pb-admin-bucket-drill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 8px 0 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--kf-line);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+  transition: color 150ms ease-out;
+}
+.pb-admin-bucket-drill:hover {
+  color: var(--kf-ops-amber-dim);
+}
+.pb-admin-bucket-drill:focus-visible {
+  outline: 2px solid var(--kf-ops-amber);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Coming-in-PR-D strip - quiet, no bucket chrome. Placeholders for the
+   Validation + Issues buckets that PR D will activate. */
+.pb-admin-zone--prd {
+  opacity: 0.85;
+}
+.pb-admin-prd-strip {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pb-admin-prd-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--kf-t-body-sm);
+}
+.pb-admin-prd-name {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: var(--kf-muted);
+}
+.pb-admin-prd-note {
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted-soft);
 }
 
 /* ─── Worklist filters (search + status chips) ──────────────────────────── */

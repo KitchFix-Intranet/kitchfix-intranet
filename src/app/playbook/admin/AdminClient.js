@@ -307,11 +307,11 @@ function AdminDashboard({
       .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100));
 
     const shells = docs
-      .filter(
-        (d) =>
-          d.status !== "Retired" &&
-          (d.status === "Placeholder" || !d.has_content)
-      )
+      .filter((d) => d.status !== "Retired" && !d.has_content)
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    const placeholders = docs
+      .filter((d) => d.status === "Placeholder")
       .sort((a, b) => a.id.localeCompare(b.id));
 
     const stale = docs
@@ -334,7 +334,7 @@ function AdminDashboard({
       )
       .slice(0, 5);
 
-    return { priority, ready, shells, stale, recent };
+    return { priority, ready, shells, placeholders, stale, recent };
   }, [docs]);
 
   // Worklist filtered + sorted ─────────────────────────────────────────────
@@ -440,7 +440,7 @@ function AdminDashboard({
 
       {/* Status rollup chips ─────────────────────────────────────────────── */}
       <section className="pb-admin-status-row" aria-label="Status rollup">
-        {ALL_STATUSES.map((s) => {
+        {ALL_STATUSES.filter((s) => statusCounts[s] > 0).map((s) => {
           const sc = STATUS_COLORS[s];
           return (
             <span
@@ -457,6 +457,12 @@ function AdminDashboard({
       <AttentionPanel
         attention={attention}
         onOpenReader={setOpenDocId}
+        onDrillToWorklist={(statuses) => {
+          setStatusFilter(new Set(statuses));
+          setSearch("");
+          setActiveTab("worklist");
+          if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+        }}
       />
         </>
       )}
@@ -614,92 +620,117 @@ function AdminDashboard({
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// AttentionPanel - the cockpit's triage view.
+// AttentionPanel - the cockpit's triage view, structured in two zones plus
+// an understated PR D strip:
 //
-// Buckets, in order of operational priority:
-//   1. PRIORITY     - explicit flag (PB-006 today; generalizable later).
-//   2. READY TO SHIP - In Build with rendered content (the publish queue).
-//   3. EMPTY SHELLS - Placeholder, or active doc with no content row.
-//   4. STALE        - Live docs past their 12-month review window.
-//   5. RECENT       - top 5 by updated_at.
-//   6. VALIDATION   - stubbed (data lives in projection; PR D wires it).
-//   7. ISSUES       - stubbed (document_issues read path is PR D).
+//   NEEDS ACTION (alerts; short full lists, always visible)
+//     Priority · Empty shells (true-empty only) · Stale
 //
-// Each bucket clicks open into the slide-over reader. Empty states are
-// quiet "nothing here" lines.
+//   QUEUE & ACTIVITY (capped queue + tracked work + recent activity)
+//     Ready to ship (cap 5 + drill to Worklist) · Placeholders · Recent
+//
+//   COMING IN PR D (slim, no bucket chrome)
+//     Validation · Issues
+//
+// Each bucket clicks open into the slide-over reader. The drill on Ready
+// to ship switches to the Worklist with the status filter pre-applied.
 // ════════════════════════════════════════════════════════════════════════════
-function AttentionPanel({ attention, onOpenReader }) {
+function AttentionPanel({ attention, onOpenReader, onDrillToWorklist }) {
   return (
-    <section className="pb-admin-attention" aria-label="Attention">
-      <AttentionBucket
-        tone="priority"
-        title="Priority"
-        docs={attention.priority}
-        emptyText="No priority items flagged."
-        renderNote={(d) => `gates SLA rebuilds - currently ${d.status}`}
-        onOpenReader={onOpenReader}
-      />
-      <AttentionBucket
-        tone="ready"
-        title="Ready to ship"
-        docs={attention.ready}
-        emptyText="No In Build docs with content waiting on a Live flip."
-        renderNote={(d) =>
-          `In Build · content present${d.version ? ` · v${d.version}` : ""}`
-        }
-        onOpenReader={onOpenReader}
-      />
-      <AttentionBucket
-        tone="shells"
-        title="Empty shells"
-        docs={attention.shells}
-        emptyText="No empty shells - every active doc has content."
-        renderNote={(d) =>
-          d.status === "Placeholder"
-            ? "Placeholder · awaiting authoring"
-            : `${d.status} · no document_content row`
-        }
-        onOpenReader={onOpenReader}
-      />
-      <AttentionBucket
-        tone="stale"
-        title="Stale"
-        docs={attention.stale}
-        emptyText="No Live docs past their 12-month review window."
-        renderNote={(d) =>
-          d.last_reviewed
-            ? `last reviewed ${d.last_reviewed}`
-            : "no review on record"
-        }
-        onOpenReader={onOpenReader}
-      />
-      <AttentionBucket
-        tone="recent"
-        title="Recent activity"
-        docs={attention.recent}
-        emptyText="No recent overlay activity."
-        renderNote={(d) =>
-          d.updated_at
-            ? `updated ${new Date(d.updated_at).toLocaleString()}`
-            : ""
-        }
-        onOpenReader={onOpenReader}
-      />
-      <AttentionBucketStub
-        tone="stub"
-        title="Validation"
-        note="Validation surfacing lands in PR D (projection-side errors come into the cockpit)."
-      />
-      <AttentionBucketStub
-        tone="stub"
-        title="Issues"
-        note="Issues triage lands in PR D (document_issues read path + resolve flow)."
-      />
-    </section>
+    <div className="pb-admin-attention-zones">
+      <section className="pb-admin-zone" aria-label="Needs action">
+        <h2 className="pb-admin-zone-label">Needs action</h2>
+        <div className="pb-admin-zone-grid pb-admin-zone-grid--alerts">
+          <AttentionBucket
+            tone="priority"
+            title="Priority"
+            docs={attention.priority}
+            emptyText="No priority items flagged."
+            renderNote={(d) => `gates SLA rebuilds - currently ${d.status}`}
+            onOpenReader={onOpenReader}
+          />
+          <AttentionBucket
+            tone="shells"
+            title="Empty shells"
+            docs={attention.shells}
+            emptyText="All clear - every active doc has content."
+            renderNote={(d) => `${d.status} - no content row`}
+            onOpenReader={onOpenReader}
+          />
+          <AttentionBucket
+            tone="stale"
+            title="Stale"
+            docs={attention.stale}
+            emptyText="All clear - no Live doc past its 12-month review window."
+            renderNote={(d) =>
+              d.last_reviewed ? `last reviewed ${d.last_reviewed}` : "no review on record"
+            }
+            onOpenReader={onOpenReader}
+          />
+        </div>
+      </section>
+
+      <section className="pb-admin-zone" aria-label="Queue and activity">
+        <h2 className="pb-admin-zone-label">Queue &amp; activity</h2>
+        <div className="pb-admin-zone-grid pb-admin-zone-grid--queue">
+          <AttentionBucket
+            tone="ready"
+            title="Ready to ship"
+            docs={attention.ready}
+            cap={5}
+            onDrill={() => onDrillToWorklist(["In Build"])}
+            emptyText="No In Build docs with content waiting on a Live flip."
+            renderNote={(d) => (d.version ? `v${d.version}` : null)}
+            onOpenReader={onOpenReader}
+          />
+          <AttentionBucket
+            tone="placeholder"
+            title="Placeholders"
+            docs={attention.placeholders}
+            emptyText="No placeholders - nothing awaiting authoring."
+            renderNote={() => "awaiting authoring"}
+            onOpenReader={onOpenReader}
+          />
+          <AttentionBucket
+            tone="recent"
+            title="Recent activity"
+            docs={attention.recent}
+            emptyText="No recent overlay activity."
+            renderNote={(d) =>
+              d.updated_at
+                ? `updated ${new Date(d.updated_at).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}`
+                : ""
+            }
+            onOpenReader={onOpenReader}
+          />
+        </div>
+      </section>
+
+      <section className="pb-admin-zone pb-admin-zone--prd" aria-label="Coming in PR D">
+        <h2 className="pb-admin-zone-label">Coming in PR D</h2>
+        <ul className="pb-admin-prd-strip">
+          <li className="pb-admin-prd-item">
+            <span className="pb-admin-prd-name">Validation</span>
+            <span className="pb-admin-prd-note">projection errors surface in the cockpit</span>
+          </li>
+          <li className="pb-admin-prd-item">
+            <span className="pb-admin-prd-name">Issues</span>
+            <span className="pb-admin-prd-note">reported-issue triage and resolve flow</span>
+          </li>
+        </ul>
+      </section>
+    </div>
   );
 }
 
-function AttentionBucket({ tone, title, docs, emptyText, renderNote, onOpenReader }) {
+function AttentionBucket({ tone, title, docs, emptyText, renderNote, onOpenReader, cap, onDrill, drillLabel }) {
+  const shown = cap && docs.length > cap ? docs.slice(0, cap) : docs;
+  const hiddenCount = cap && docs.length > cap ? docs.length - cap : 0;
   return (
     <div className={`pb-admin-bucket pb-admin-bucket--${tone}`}>
       <div className="pb-admin-bucket-head">
@@ -709,36 +740,32 @@ function AttentionBucket({ tone, title, docs, emptyText, renderNote, onOpenReade
       {docs.length === 0 ? (
         <p className="pb-admin-bucket-empty">{emptyText}</p>
       ) : (
-        <ul className="pb-admin-bucket-list">
-          {docs.map((d) => (
-            <li key={d.id} className="pb-admin-bucket-item">
-              <button
-                type="button"
-                className="pb-admin-bucket-link"
-                onClick={() => onOpenReader(d.id)}
-              >
-                <code className="pb-admin-bucket-id">{d.id}</code>
-                <span className="pb-admin-bucket-doc-title">{d.title}</span>
-              </button>
-              {renderNote && (
-                <span className="pb-admin-bucket-note">{renderNote(d)}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="pb-admin-bucket-list">
+            {shown.map((d) => (
+              <li key={d.id} className="pb-admin-bucket-item">
+                <button
+                  type="button"
+                  className="pb-admin-bucket-link"
+                  onClick={() => onOpenReader(d.id)}
+                >
+                  <code className="pb-admin-bucket-id">{d.id}</code>
+                  <span className="pb-admin-bucket-doc-title">{d.title}</span>
+                </button>
+                {renderNote && (
+                  <span className="pb-admin-bucket-note">{renderNote(d)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && onDrill && (
+            <button type="button" className="pb-admin-bucket-drill" onClick={onDrill}>
+              {drillLabel ?? `View all ${docs.length} in Worklist`}
+              <span aria-hidden="true"> &rarr;</span>
+            </button>
+          )}
+        </>
       )}
-    </div>
-  );
-}
-
-function AttentionBucketStub({ tone, title, note }) {
-  return (
-    <div className={`pb-admin-bucket pb-admin-bucket--${tone}`}>
-      <div className="pb-admin-bucket-head">
-        <h3 className="pb-admin-bucket-title">{title}</h3>
-        <span className="pb-admin-bucket-count pb-admin-bucket-count--soft">PR D</span>
-      </div>
-      <p className="pb-admin-bucket-empty">{note}</p>
     </div>
   );
 }
