@@ -282,18 +282,6 @@ function AdminDashboard({
     return c;
   }, [docs]);
 
-  // Content-health metrics: replace the retired Drive linkage measures with
-  // honest signals. has_content reflects whether document_content has a row
-  // for the doc (decorated server-side in dataStore/opd.js).
-  const readyToShip = useMemo(
-    () => docs.filter((d) => d.status === "In Build" && d.has_content).length,
-    [docs]
-  );
-  const emptyShells = useMemo(
-    () => docs.filter((d) => d.status !== "Retired" && !d.has_content).length,
-    [docs]
-  );
-
   // Attention buckets - the cockpit's reason for existing.
   const attention = useMemo(() => {
     const STALE_THRESHOLD_MS = 365 * 24 * 60 * 60 * 1000; // 12 months
@@ -394,7 +382,7 @@ function AdminDashboard({
 
   return (
     <div className="pb-wrap pb-admin">
-      {/* Header ──────────────────────────────────────────────────────────── */}
+      {/* Header with persistent corpus vitals (visible on every tab) ────── */}
       <header className="pb-admin-head">
         <Link href="/playbook" className="pb-admin-back" prefetch={false}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -402,7 +390,24 @@ function AdminDashboard({
           </svg>
           Back to catalog
         </Link>
-        <h1 className="pb-admin-title">OPD Command</h1>
+        <div className="pb-admin-head-row">
+          <h1 className="pb-admin-title">OPD Command</h1>
+          <div className="pb-admin-vitals" aria-label="Corpus vitals">
+            <span className="pb-admin-vitals-count">{total} active</span>
+            {ALL_STATUSES.filter((s) => statusCounts[s] > 0).map((s) => {
+              const sc = STATUS_COLORS[s];
+              return (
+                <span
+                  key={s}
+                  className="pb-admin-vitals-chip"
+                  style={{ background: sc.bg, color: sc.color }}
+                >
+                  {s} <strong>{statusCounts[s]}</strong>
+                </span>
+              );
+            })}
+          </div>
+        </div>
         <p className="pb-admin-sub">
           Owner cockpit · {email}
         </p>
@@ -417,54 +422,16 @@ function AdminDashboard({
       />
 
       {activeTab === "attention" && (
-        <>
-      {/* Metrics row - content/health, not Drive ─────────────────────────── */}
-      <section className="pb-admin-metrics" aria-label="Corpus metrics">
-        <div className="pb-metric">
-          <div className="pb-metric-value">{total}</div>
-          <div className="pb-metric-label">Active docs</div>
-        </div>
-        <div className="pb-metric">
-          <div className="pb-metric-value">{statusCounts.Live}</div>
-          <div className="pb-metric-label">Live</div>
-        </div>
-        <div className="pb-metric">
-          <div className="pb-metric-value">{readyToShip}</div>
-          <div className="pb-metric-label">Ready to ship</div>
-        </div>
-        <div className="pb-metric">
-          <div className="pb-metric-value">{emptyShells}</div>
-          <div className="pb-metric-label">Empty shells</div>
-        </div>
-      </section>
-
-      {/* Status rollup chips ─────────────────────────────────────────────── */}
-      <section className="pb-admin-status-row" aria-label="Status rollup">
-        {ALL_STATUSES.filter((s) => statusCounts[s] > 0).map((s) => {
-          const sc = STATUS_COLORS[s];
-          return (
-            <span
-              key={s}
-              className={`pb-status-pill pb-admin-status-chip${sc.ghost ? " pb-status-pill--ghost" : ""}`}
-              style={{ background: sc.bg, color: sc.color }}
-            >
-              {s} <strong>{statusCounts[s]}</strong>
-            </span>
-          );
-        })}
-      </section>
-
-      <AttentionPanel
-        attention={attention}
-        onOpenReader={setOpenDocId}
-        onDrillToWorklist={(statuses) => {
-          setStatusFilter(new Set(statuses));
-          setSearch("");
-          setActiveTab("worklist");
-          if (typeof window !== "undefined") window.scrollTo({ top: 0 });
-        }}
-      />
-        </>
+        <AttentionPanel
+          attention={attention}
+          onOpenReader={setOpenDocId}
+          onDrillToWorklist={(statuses) => {
+            setStatusFilter(new Set(statuses));
+            setSearch("");
+            setActiveTab("worklist");
+            if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+          }}
+        />
       )}
 
       {activeTab === "worklist" && (

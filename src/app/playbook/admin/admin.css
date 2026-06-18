@@ -67,7 +67,7 @@
   padding-top: 14px;
 }
 
-/* ─── Header ─────────────────────────────────────────────────────────────── */
+/* ─── Header (with persistent corpus vitals) ─────────────────────────────── */
 .pb-admin-head {
   margin-bottom: 20px;
 }
@@ -89,6 +89,15 @@
   outline-offset: 2px;
   border-radius: 3px;
 }
+/* Title + vitals share one row on desktop (space-between); vitals wrap below
+   the title at narrow widths. */
+.pb-admin-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
 .pb-admin-title {
   font-family: 'Inter', sans-serif;
   font-size: var(--kf-t-h1);
@@ -106,51 +115,32 @@
 }
 .pb-admin-sub strong { color: var(--kf-brand-navy); font-weight: 700; }
 
-/* ─── Metrics row ────────────────────────────────────────────────────────── */
-.pb-admin-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.pb-metric {
-  background: var(--kf-surface-1);
-  border: 1px solid var(--kf-line);
-  border-radius: var(--kf-r-card);
-  padding: 12px 16px;
-  transition: border-color 150ms ease-out;
-}
-.pb-metric:hover { border-color: var(--kf-line-strong); }
-.pb-metric-value {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-h2);
-  font-weight: 800;
-  color: var(--kf-brand-navy);
-  line-height: var(--kf-lh-head);
-  margin-bottom: 4px;
-  letter-spacing: -0.2px;
-}
-.pb-metric-label {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--kf-t-caption);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--kf-muted);
-}
-
-/* ─── Status rollup chips ────────────────────────────────────────────────── */
-.pb-admin-status-row {
+/* Vitals cluster: persistent corpus health summary shown on every tab. The
+   chips are DISPLAY-only - smaller, no hover, no border-button styling - so
+   they read as info, not as the Worklist's interactive filter chips. */
+.pb-admin-vitals {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 22px;
+  align-items: center;
+  gap: 8px;
 }
-.pb-admin-status-chip {
+.pb-admin-vitals-count {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+  margin-right: 4px;
+}
+.pb-admin-vitals-chip {
+  font-family: 'Inter', sans-serif;
   font-size: var(--kf-t-caption);
-  padding: 4px 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
-.pb-admin-status-chip strong {
+.pb-admin-vitals-chip strong {
   margin-left: 4px;
   font-weight: 800;
 }
