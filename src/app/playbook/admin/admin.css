@@ -22,7 +22,7 @@
    the cockpit widens; the operator catalog (.pb-wrap without .pb-admin) keeps
    its reading width. */
 .pb-wrap.pb-admin {
-  max-width: 1320px;
+  max-width: 1400px;
   padding-left: 24px;
   padding-right: 24px;
 }
