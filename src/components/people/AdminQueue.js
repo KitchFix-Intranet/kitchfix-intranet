@@ -48,6 +48,16 @@ lastDayWorked: "Last Day Worked",
   businessPurpose: "Business Purpose",
   amount: "Amount",
   actionGroup: "Type",
+  increaseType: "Increase Type",
+  employeeLevel: "Employee Level",
+  role: "Role",
+  customRole: "Custom Role",
+  dollarIncrease: "Dollar Increase",
+  pctIncrease: "Percent Increase",
+  eligSeasonComplete: "Season/Review Complete",
+  eligNoDiscipline: "No Active Discipline",
+  eligCertsCurrent: "Certifications Current",
+  eligManagerApproved: "Manager Approved",
 };
 
 // ── New hire: grouped display sections ──
@@ -72,7 +82,8 @@ const NH_SECTIONS = [
 // ── PAF: fields relevant to each action type ──
 const PAF_DISPLAY_FIELDS = {
 separation: ["effectiveDate", "lastDayWorked", "actionGroup", "separationReason", "rehireEligible", "explanation"],
-  rate_change: ["effectiveDate", "oldRate", "newRate", "explanation"],
+  rate_change: ["effectiveDate", "oldRate", "newRate", "explanation"], // historical only
+  pay_increase: ["increaseType", "employeeLevel", "role", "customRole", "effectiveDate", "oldRate", "newRate", "dollarIncrease", "pctIncrease", "eligSeasonComplete", "eligNoDiscipline", "eligCertsCurrent", "eligManagerApproved", "explanation"],
   title_change: ["effectiveDate", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],
   status_change: ["effectiveDate", "statusChangeDirection"],
   reclassification: ["effectiveDate", "reclassFrom", "reclassTo", "reclassTitleChange", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],
