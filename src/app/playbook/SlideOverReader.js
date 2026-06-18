@@ -23,7 +23,7 @@ import {
   RELATIONSHIP_LABELS_IN,
 } from "./_shared";
 
-export default function SlideOverReader({ docId, onClose, isOwner = false }) {
+export default function SlideOverReader({ docId, onClose, isOwner = false, onEdit }) {
   // Nav stack supports relationship click-through: clicking a related doc
   // pushes its id onto the stack; back pops. The fetch effect keys off the
   // top of the stack so the panel swaps docs in place. Stack initialized
@@ -118,6 +118,7 @@ export default function SlideOverReader({ docId, onClose, isOwner = false }) {
             setReportOpen={setReportOpen}
             navigateTo={navigateTo}
             isOwner={isOwner}
+            onEdit={onEdit}
           />
         ) : null}
       </aside>
@@ -125,7 +126,7 @@ export default function SlideOverReader({ docId, onClose, isOwner = false }) {
   );
 }
 
-function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner }) {
+function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner, onEdit }) {
   const {
     document: doc,
     relationships,
@@ -341,6 +342,15 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         >
           Report issue
         </button>
+        {isOwner && typeof onEdit === "function" && (
+          <button
+            className="pb-action pb-action--ghost"
+            onClick={() => onEdit(doc.id)}
+            title="Edit this doc's MDX source"
+          >
+            Edit MDX
+          </button>
+        )}
       </div>
 
       {/* SousAI doc-scoped affordance — UI placeholder, NOT wired yet.

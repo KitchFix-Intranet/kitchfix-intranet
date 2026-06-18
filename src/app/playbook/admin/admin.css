@@ -1221,3 +1221,152 @@
   border-color: #991b1b;
 }
 
+/* ─── OPD Authoring A1 - MDX editor slide-over ─────────────────────────── */
+.pb-admin-editor {
+  /* Editor needs more breathing room than the reader; reader sets pb-slide
+     to ~640px wide. Override locally so the structured frontmatter form +
+     body textarea read comfortably. */
+  max-width: 880px;
+}
+.pb-admin-editor-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pb-admin-editor-eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-muted);
+}
+.pb-admin-editor-docid {
+  font-family: 'Inter', monospace;
+  font-size: var(--kf-t-emp);
+  font-weight: 800;
+  color: var(--kf-brand-navy);
+  letter-spacing: -0.2px;
+}
+.pb-admin-editor-body {
+  padding: 16px 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pb-admin-editor-note {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border-radius: var(--kf-r-input);
+  background: var(--kf-surface-2);
+  color: var(--kf-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 600;
+  font-style: italic;
+}
+.pb-admin-editor-fieldset {
+  border: 1px solid var(--kf-line);
+  border-radius: var(--kf-r-card);
+  padding: 12px 14px 14px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pb-admin-editor-fieldset legend {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--kf-brand-navy);
+  padding: 0 6px;
+}
+.pb-admin-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pb-admin-editor-field--inline {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.pb-admin-editor-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 700;
+  color: var(--kf-muted);
+}
+.pb-admin-editor-required {
+  color: var(--kf-danger);
+  font-weight: 800;
+}
+.pb-admin-editor-input {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  padding: 6px 8px;
+  border: 1px solid var(--kf-line-strong);
+  border-radius: var(--kf-r-input);
+  background: var(--kf-surface-1);
+  color: #1e293b;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.pb-admin-editor-input:focus {
+  outline: none;
+  border-color: var(--kf-ops-amber);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+.pb-admin-editor-input:disabled {
+  background: var(--kf-surface-2);
+  color: var(--kf-muted);
+  cursor: not-allowed;
+}
+.pb-admin-editor-input--textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: 'Inter', sans-serif;
+}
+.pb-admin-editor-body-textarea {
+  width: 100%;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border: 1px solid var(--kf-line-strong);
+  border-radius: var(--kf-r-input);
+  background: #f8fafc;
+  color: #0f172a;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+}
+.pb-admin-editor-body-textarea:focus {
+  outline: none;
+  border-color: var(--kf-ops-amber);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+.pb-admin-editor-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--kf-brand-navy);
+}
+.pb-admin-editor-hint {
+  margin: 6px 0 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+  font-style: italic;
+}
+.pb-admin-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+

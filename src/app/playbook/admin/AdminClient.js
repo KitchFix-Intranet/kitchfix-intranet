@@ -73,6 +73,7 @@ export default function AdminClient() {
   const [error, setError]     = useState(null);
   const [boot, setBoot]       = useState(null);
   const [openDocId, setOpenDocId] = useState(null);
+  const [openEditorDocId, setOpenEditorDocId] = useState(null);
   // Default sort: by status so the most-actionable items (Live/In Build at
   // top with asc) cluster together. Re-click a header to flip direction.
   const [sortBy, setSortBy]   = useState("status");
@@ -103,6 +104,8 @@ export default function AdminClient() {
       boot={boot}
       openDocId={openDocId}
       setOpenDocId={setOpenDocId}
+      openEditorDocId={openEditorDocId}
+      setOpenEditorDocId={setOpenEditorDocId}
       sortBy={sortBy}
       setSortBy={setSortBy}
       sortDir={sortDir}
@@ -166,6 +169,8 @@ function AdminDashboard({
   boot,
   openDocId,
   setOpenDocId,
+  openEditorDocId,
+  setOpenEditorDocId,
   sortBy,
   setSortBy,
   sortDir,
@@ -580,7 +585,22 @@ function AdminDashboard({
       )}
 
       {openDocId && (
-        <SlideOverReader docId={openDocId} onClose={() => setOpenDocId(null)} isOwner={true} />
+        <SlideOverReader
+          docId={openDocId}
+          onClose={() => setOpenDocId(null)}
+          isOwner={true}
+          onEdit={(id) => {
+            setOpenDocId(null);
+            setOpenEditorDocId(id);
+          }}
+        />
+      )}
+
+      {openEditorDocId && (
+        <MdxEditorSlideOver
+          docId={openEditorDocId}
+          onClose={() => setOpenEditorDocId(null)}
+        />
       )}
     </div>
   );
@@ -1462,5 +1482,316 @@ function SortHeader({ col, label, sortBy, sortDir, onSort }) {
         {active ? (sortDir === "asc" ? "↑" : "↓") : ""}
       </span>
     </th>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// OPD Authoring A1 - MDX editor surface
+//
+// Loads a doc's raw MDX from GitHub via /api/playbook?action=mdx-source and
+// surfaces frontmatter (as a scalar-field form) + body (as a plain textarea)
+// for in-memory editing. NO save in A1 - the Save button is rendered
+// disabled with explanatory copy. A2 wires the commit path.
+//
+// `sha` is kept in component state even though A1 does not use it; A2 needs
+// it as the staleness guard on commit.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Schema-driven enums (mirror content/schema/frontmatter.schema.json). Kept
+// here so the form does not need a runtime schema fetch. If the schema
+// changes, mirror it here.
+const FM_DOC_CLASSES = ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"];
+const FM_STATUSES = ["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"];
+const FM_SHELVES = [
+  "Safety, Health & Incident",
+  "Operations & Leadership",
+  "Service Delivery & Client Accounts",
+  "People & Conduct",
+  "Culinary & Kitchen Operations",
+  "Brand & Documentation Standards",
+];
+const FM_SUBSHELVES = ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F"];
+const FM_AUDIENCES = ["operator", "corporate", "internal"];
+const FM_ACCESS_LEVELS = ["unrestricted", "restricted", "slt"];
+const FM_LANGS = ["en", "es"];
+
+function MdxEditorSlideOver({ docId, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [sha, setSha] = useState(null); // staleness guard - used by A2
+  const [fm, setFm] = useState(null); // frontmatter state (object)
+  const [body, setBody] = useState(""); // body MDX state
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setFm(null);
+    setBody("");
+    setSha(null);
+    fetch(`/api/playbook?action=mdx-source&id=${encodeURIComponent(docId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.error) {
+          setError(d.error);
+        } else {
+          setSha(d.sha);
+          setFm(d.frontmatter || {});
+          setBody(d.body || "");
+        }
+      })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [docId]);
+
+  // ESC closes.
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Body scroll lock.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const setField = (key, value) =>
+    setFm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  const setApprovalField = (key, value) =>
+    setFm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      next.approval = { ...(prev.approval || {}), [key]: value };
+      return next;
+    });
+
+  return (
+    <>
+      <div className="pb-slide-backdrop" onClick={onClose} />
+      <aside
+        className="pb-slide pb-admin-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit document source"
+      >
+        <div className="pb-slide-head">
+          <div className="pb-admin-editor-head-text">
+            <div className="pb-admin-editor-eyebrow">Edit MDX source</div>
+            <div className="pb-admin-editor-docid">{docId}</div>
+          </div>
+          <button className="pb-slide-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {loading ? (
+          <div className="pb-slide-loading">Loading MDX source…</div>
+        ) : error ? (
+          <div className="pb-slide-error">Error: {error}</div>
+        ) : fm ? (
+          <div className="pb-admin-editor-body">
+            <p className="pb-admin-editor-note">
+              In-memory edits only. Saving lands in the next update.
+            </p>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Identity</legend>
+              <EditorTextField label="id" value={fm.id ?? ""} onChange={(v) => setField("id", v)} disabled />
+              <EditorTextField label="title" required value={fm.title ?? ""} onChange={(v) => setField("title", v)} />
+              <EditorSelectField label="doc_class" required value={fm.doc_class ?? ""} options={FM_DOC_CLASSES} onChange={(v) => setField("doc_class", v)} />
+              <EditorTextField label="version" value={fm.version ?? ""} onChange={(v) => setField("version", v || null)} />
+              <EditorSelectField label="lang" value={fm.lang ?? "en"} options={FM_LANGS} onChange={(v) => setField("lang", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Status &amp; access</legend>
+              <EditorSelectField label="status" required value={fm.status ?? ""} options={FM_STATUSES} onChange={(v) => setField("status", v)} />
+              <EditorSelectField label="access_level" value={fm.access_level ?? "unrestricted"} options={FM_ACCESS_LEVELS} onChange={(v) => setField("access_level", v)} />
+              <EditorSelectField label="audience" value={fm.audience ?? ""} options={FM_AUDIENCES} allowEmpty onChange={(v) => setField("audience", v || null)} />
+              <EditorTextField label="classification" value={fm.classification ?? ""} onChange={(v) => setField("classification", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Catalog placement</legend>
+              <EditorSelectField label="shelf" value={fm.shelf ?? ""} options={FM_SHELVES} allowEmpty onChange={(v) => setField("shelf", v || null)} />
+              <EditorSelectField label="subshelf" value={fm.subshelf ?? ""} options={FM_SUBSHELVES} allowEmpty onChange={(v) => setField("subshelf", v || null)} />
+              <EditorNumberField label="sort_order" value={fm.sort_order ?? 100} onChange={(v) => setField("sort_order", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Display</legend>
+              <EditorTextField label="card_line" value={fm.card_line ?? ""} onChange={(v) => setField("card_line", v || null)} />
+              <EditorTextareaField label="summary" rows={3} value={fm.summary ?? ""} onChange={(v) => setField("summary", v || null)} />
+              <EditorTextField label="keywords (comma-separated)" value={Array.isArray(fm.keywords) ? fm.keywords.join(", ") : ""} onChange={(v) => setField("keywords", v.split(",").map((s) => s.trim()).filter(Boolean))} />
+              <EditorTextField label="surfaces (comma-separated)" value={Array.isArray(fm.surfaces) ? fm.surfaces.join(", ") : ""} onChange={(v) => setField("surfaces", v.split(",").map((s) => s.trim()).filter(Boolean))} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Ownership</legend>
+              <EditorTextField label="owner" value={fm.owner ?? ""} onChange={(v) => setField("owner", v || null)} />
+              <EditorTextField label="approver" value={fm.approver ?? ""} onChange={(v) => setField("approver", v || null)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Flags</legend>
+              <EditorBoolField label="print_required" value={!!fm.print_required} onChange={(v) => setField("print_required", v)} />
+              <EditorBoolField label="critical" value={!!fm.critical} onChange={(v) => setField("critical", v)} />
+              <EditorBoolField label="pinned" value={!!fm.pinned} onChange={(v) => setField("pinned", v)} />
+              <EditorBoolField label="in_corpus" value={fm.in_corpus !== false} onChange={(v) => setField("in_corpus", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Dates</legend>
+              <EditorDateField label="last_reviewed" value={fm.last_reviewed ?? ""} onChange={(v) => setField("last_reviewed", v || null)} />
+              <EditorDateField label="effective_date" value={fm.effective_date ?? ""} onChange={(v) => setField("effective_date", v || null)} />
+              <EditorNumberField label="review_interval_months" value={fm.review_interval_months ?? 12} onChange={(v) => setField("review_interval_months", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Approval</legend>
+              <EditorTextField label="approved_version" value={fm.approval?.approved_version ?? ""} onChange={(v) => setApprovalField("approved_version", v)} />
+              <EditorTextField label="approved_by" value={fm.approval?.approved_by ?? ""} onChange={(v) => setApprovalField("approved_by", v)} />
+              <EditorDateField label="approved_date" value={fm.approval?.approved_date ?? ""} onChange={(v) => setApprovalField("approved_date", v)} />
+              <EditorSelectField label="method" value={fm.approval?.method ?? ""} options={["recorded sign-off", "counsel-cleared", "SLT-approved", "owner-acknowledged"]} allowEmpty onChange={(v) => setApprovalField("method", v)} />
+            </fieldset>
+
+            <fieldset className="pb-admin-editor-fieldset">
+              <legend>Body MDX</legend>
+              <textarea
+                className="pb-admin-editor-body-textarea"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                spellCheck={false}
+                rows={24}
+              />
+              <p className="pb-admin-editor-hint">
+                Relationships, obligations, and applies_to scopes live in MDX
+                frontmatter (above the body); for A1 they are not surfaced in
+                the form. Edit them in the body via a future structured panel.
+              </p>
+            </fieldset>
+
+            <div className="pb-admin-editor-actions">
+              <button
+                type="button"
+                className="pb-admin-modal-btn"
+                onClick={onClose}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="pb-admin-modal-btn pb-admin-modal-btn--primary"
+                disabled
+                title="Saving lands in the next update (A2)"
+              >
+                Save (coming in next update)
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </aside>
+    </>
+  );
+}
+
+function EditorTextField({ label, value, onChange, required, disabled }) {
+  return (
+    <label className="pb-admin-editor-field">
+      <span className="pb-admin-editor-label">
+        {label}
+        {required && <span className="pb-admin-editor-required" aria-hidden="true"> *</span>}
+      </span>
+      <input
+        type="text"
+        className="pb-admin-editor-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
+function EditorTextareaField({ label, value, onChange, rows = 2 }) {
+  return (
+    <label className="pb-admin-editor-field">
+      <span className="pb-admin-editor-label">{label}</span>
+      <textarea
+        className="pb-admin-editor-input pb-admin-editor-input--textarea"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+      />
+    </label>
+  );
+}
+
+function EditorSelectField({ label, value, options, onChange, required, allowEmpty }) {
+  return (
+    <label className="pb-admin-editor-field">
+      <span className="pb-admin-editor-label">
+        {label}
+        {required && <span className="pb-admin-editor-required" aria-hidden="true"> *</span>}
+      </span>
+      <select
+        className="pb-admin-editor-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {(allowEmpty || !value) && <option value="">—</option>}
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function EditorNumberField({ label, value, onChange }) {
+  return (
+    <label className="pb-admin-editor-field">
+      <span className="pb-admin-editor-label">{label}</span>
+      <input
+        type="number"
+        className="pb-admin-editor-input"
+        value={value}
+        onChange={(e) => {
+          const n = e.target.value === "" ? null : Number(e.target.value);
+          onChange(Number.isFinite(n) ? n : null);
+        }}
+      />
+    </label>
+  );
+}
+
+function EditorDateField({ label, value, onChange }) {
+  return (
+    <label className="pb-admin-editor-field">
+      <span className="pb-admin-editor-label">{label}</span>
+      <input
+        type="date"
+        className="pb-admin-editor-input"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function EditorBoolField({ label, value, onChange }) {
+  return (
+    <label className="pb-admin-editor-field pb-admin-editor-field--inline">
+      <input
+        type="checkbox"
+        className="pb-admin-editor-checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="pb-admin-editor-label">{label}</span>
+    </label>
   );
 }
