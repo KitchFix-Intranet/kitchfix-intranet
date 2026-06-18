@@ -169,22 +169,37 @@ export default function ServiceCalendar({ showToast, session }) {
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
 
   const metrics = useMemo(() => {
-    if (!data?.days?.length) return { projMeals: 0, actMeals: 0, projRev: 0, actRev: 0, complete: 0, needsEntry: 0, overdue: 0, total: 0 };
-    let projMeals = 0, actMeals = 0, projRev = 0, actRev = 0, complete = 0, needsEntry = 0, overdue = 0;
+    if (!data?.days?.length) return { projMeals: 0, actMeals: 0, projRev: 0, actRev: 0, enteredProjRev: 0, complete: 0, needsEntry: 0, overdue: 0, total: 0 };
+    let projMeals = 0, actMeals = 0, projRev = 0, actRev = 0, enteredProjRev = 0, complete = 0, needsEntry = 0, overdue = 0;
     for (const day of data.days) {
       if (day.hasActuals) complete++;
       else if (day.isPast && day.isLocked) overdue++;
       else if (day.isPast) needsEntry++;
       for (const ci of Object.keys(day.projected)) {
         const price = priceLookup[ci] || 0; const pv = day.projected[ci];
-        if (pv != null) { projMeals += pv; projRev += pv * price; }
+        if (pv != null) {
+          projMeals += pv;
+          projRev += pv * price;
+          // Pace denominator: sum projected revenue ONLY for days where
+          // actuals exist. Lets the strip compare "what got billed" to
+          // "what was forecasted for the days we've actually closed",
+          // instead of comparing partial actuals to the full-month
+          // forecast (the old "variance" that always looked alarming
+          // mid-month).
+          if (day.hasActuals) enteredProjRev += pv * price;
+        }
         if (day.hasActuals && day.actual[ci] != null) { actMeals += day.actual[ci]; actRev += day.actual[ci] * price; }
       }
     }
-    return { projMeals, actMeals, projRev, actRev, complete, needsEntry, overdue, total: data.days.length };
+    return { projMeals, actMeals, projRev, actRev, enteredProjRev, complete, needsEntry, overdue, total: data.days.length };
   }, [data, priceLookup]);
 
-  const variance = metrics.actRev - metrics.projRev;
+  // Pace = actuals vs projection ONLY for the days that have been entered.
+  // pacePct is the % delta against the same denominator. Both zero out
+  // cleanly when no days are entered (handled at the render site with a
+  // placeholder).
+  const pace = metrics.actRev - metrics.enteredProjRev;
+  const pacePct = metrics.enteredProjRev > 0 ? Math.round(pace / metrics.enteredProjRev * 100) : 0;
   const completionPct = metrics.total > 0 ? Math.round(metrics.complete / metrics.total * 100) : 0;
 
   // Fee-account fork: triggers only for flat_fee accounts that HAVE
@@ -213,7 +228,7 @@ export default function ServiceCalendar({ showToast, session }) {
   // ignored for per-meal display.
   const feeMetrics = useMemo(() => {
     if (!isFeeAccount || !data?.days?.length) {
-      return { gameDays: 0, gameDaysEntered: 0, currentHomestand: null, currentHomestandRange: null, currentHomestandGameDays: 0, currentHomestandGameDaysEntered: 0 };
+      return { gameDays: 0, gameDaysEntered: 0, homestandCount: 0, currentHomestand: null, currentHomestandRange: null, currentHomestandGameDays: 0, currentHomestandGameDaysEntered: 0 };
     }
     let gameDays = 0, gameDaysEntered = 0;
     for (const d of data.days) {
@@ -261,6 +276,7 @@ export default function ServiceCalendar({ showToast, session }) {
     return {
       gameDays,
       gameDaysEntered,
+      homestandCount: Object.keys(byHs).length,
       currentHomestand,
       currentHomestandRange,
       currentHomestandGameDays: cur?.gameDays || 0,
@@ -527,25 +543,12 @@ export default function ServiceCalendar({ showToast, session }) {
             {data && !loading && (
               <>
                 {isFeeAccount ? (
-                  // Fee-account metrics: 3 blocks (Meals / Game Days /
-                  // Homestand). Revenue + variance + days-complete are
-                  // dropped - $0 prices make them noise, and the homestand
-                  // axis is the operator's mental model for these accounts.
+                  // Fee-account metrics: schedule-forward. Lead with the
+                  // current homestand (operational anchor), then game-day
+                  // completion this month, then meals as supporting context.
+                  // No deficit framing on meals - this is a tracking
+                  // metric, not billed volume.
                   <div className="sc-metrics">
-                    <div className="sc-metric-block">
-                      <div className="sc-metric-label">Meals</div>
-                      <div className="sc-metric-row"><span className="sc-metric-hero">{metrics.actMeals.toLocaleString()}</span><span className="sc-metric-context">delivered this month</span></div>
-                    </div>
-                    <div className="sc-metric-divider" />
-                    <div className="sc-metric-block">
-                      <div className="sc-metric-label">Game days</div>
-                      <div className="sc-metric-row">
-                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
-                        <span className="sc-metric-context">/ {feeMetrics.gameDays} this month</span>
-                      </div>
-                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN }} /></div>
-                    </div>
-                    <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
                       <div className="sc-metric-label">Homestand</div>
                       {feeMetrics.currentHomestand ? (
@@ -557,6 +560,21 @@ export default function ServiceCalendar({ showToast, session }) {
                         <div className="sc-metric-hero" style={{ fontSize: 14, color: "#9ca3af" }}>Between homestands</div>
                       )}
                     </div>
+                    <div className="sc-metric-divider" />
+                    <div className="sc-metric-block">
+                      <div className="sc-metric-label">Game days</div>
+                      <div className="sc-metric-row">
+                        <span className="sc-metric-hero" style={{ color: feeMetrics.gameDays === 0 ? "#9ca3af" : (feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN) }}>{feeMetrics.gameDaysEntered}</span>
+                        <span className="sc-metric-context">/ {feeMetrics.gameDays} this month</span>
+                      </div>
+                      <div className="sc-progress-bar"><div className="sc-progress-fill" style={{ width: (feeMetrics.gameDays > 0 ? Math.round(feeMetrics.gameDaysEntered / feeMetrics.gameDays * 100) : 0) + "%", background: feeMetrics.gameDaysEntered < feeMetrics.gameDays ? "#1e3a8a" : GREEN }} /></div>
+                      {feeMetrics.homestandCount > 0 && <div className="sc-metric-context" style={{ fontSize: 11, marginTop: 4 }}>across {feeMetrics.homestandCount} {feeMetrics.homestandCount === 1 ? "homestand" : "homestands"}</div>}
+                    </div>
+                    <div className="sc-metric-divider" />
+                    <div className="sc-metric-block">
+                      <div className="sc-metric-label">Meals</div>
+                      <div className="sc-metric-row"><span className="sc-metric-hero">{metrics.actMeals.toLocaleString()}</span><span className="sc-metric-context">delivered this month</span></div>
+                    </div>
                   </div>
                 ) : (
                   <div className="sc-metrics">
@@ -567,12 +585,22 @@ export default function ServiceCalendar({ showToast, session }) {
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
                       <div className="sc-metric-label">Revenue</div>
-                      <div className="sc-metric-row"><span className="sc-metric-hero sc-metric-hero--green">{fmt$(metrics.actRev)}</span><span className="sc-metric-context">of {fmt$(metrics.projRev)}</span></div>
+                      <div className="sc-metric-row"><span className="sc-metric-hero sc-metric-hero--green">{fmt$(metrics.actRev)}</span><span className="sc-metric-context">billed to date</span></div>
                     </div>
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
-                      <div className="sc-metric-label">Variance</div>
-                      <div className={`sc-metric-hero ${variance >= 0 ? "sc-metric-hero--green" : "sc-metric-hero--red"}`}>{variance >= 0 ? "+" : ""}{fmt$(variance)}</div>
+                      <div className="sc-metric-label">Pace</div>
+                      {metrics.enteredProjRev > 0 ? (
+                        <>
+                          <div className={`sc-metric-hero ${pace >= 0 ? "sc-metric-hero--green" : "sc-metric-hero--amber"}`}>{pace >= 0 ? "+" : ""}{fmt$(pace)}</div>
+                          <div className="sc-metric-context">{Math.abs(pacePct)}% {pace < 0 ? "under" : "over"} forecast (entered days)</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="sc-metric-hero" style={{ color: "#9ca3af" }}>—</div>
+                          <div className="sc-metric-context">no entries yet</div>
+                        </>
+                      )}
                     </div>
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
@@ -640,35 +668,18 @@ export default function ServiceCalendar({ showToast, session }) {
                           const { meals, revenue } = daySummary(dd);
                           const st = STATUS[status] || STATUS["future"];
                           const hs = isFeeAccount ? homestandMap[dk] : null;
-
-                          // Fee accounts: navy schedule with green when
-                          // entered. No urgency colors - the schedule view
-                          // shows "here's your season at a glance", not
-                          // "here's everything you're behind on". Per-meal
-                          // keeps the original entered/overdue/needs logic.
                           const gameType = dd.meta?.gameType || "";
+                          const gt = (gameType || "").toLowerCase();
 
-                          let borderColor;
-                          if (isFeeAccount) {
-                            if (status === "off-season") borderColor = "transparent";
-                            else if (status === "prep") borderColor = "#cbd5e1";   // very muted prep
-                            else if (status === "entered") borderColor = GREEN;     // operator logged
-                            else borderColor = "#1e3a8a";                            // navy game day schedule
-                          } else if (isMilb) {
-                            // MiLB hybrid: border-left encodes the schedule
-                            // rhythm (DAY game = warm amber, NIGHT game = navy,
-                            // OFF day = receded grey). Urgency still surfaces
-                            // through the tile bg + status badge so operators
-                            // see what needs entering.
-                            const gt = (gameType || "").toLowerCase();
-                            if (status === "no-service") borderColor = "#e5e7eb";    // off day, recede
-                            else if (gt.includes("day")) borderColor = "#fbbf24";    // amber - day game
-                            else if (gt.includes("night")) borderColor = "#1e3a8a";  // navy - night game
-                            else borderColor = "#94a3b8";                            // unknown / unscheduled
-                          } else {
-                            borderColor = status === "entered" || status === "no-service" ? GREEN : status === "overdue" ? RED : status === "needs-entry" ? AMBER : "#e5e7eb";
+                          // MiLB DAY/NIGHT pill - replaces the left-border
+                          // amber/navy accent. Renders inline in the tile
+                          // body for genuine game days; OFF days fall to
+                          // the off-day class.
+                          let milbPill = null;
+                          if (isMilb) {
+                            if (gt.includes("day")) milbPill = "day";
+                            else if (gt.includes("night")) milbPill = "night";
                           }
-                          const bg = isBulkSelected ? "#E1F5EE" : status === "overdue" ? "#fef2f2" : status === "needs-entry" ? "#fffbeb" : isFocused ? "#f0fdf4" : "#fff";
 
                           // Fee account: off-season days render as
                           // unclickable off tiles (no homestand activity).
@@ -685,10 +696,16 @@ export default function ServiceCalendar({ showToast, session }) {
                             else setFocusDay(isFocused ? null : dk);
                           };
 
+                          // State signal: bg tint via sc-tile-state--${status}
+                          // (CSS owns the per-status colors and the fee/MiLB
+                          // overrides via data-billing / data-category).
+                          // Icon stays via .sc-badge so the signal is never
+                          // color-alone. Today / focused / bulk-selected
+                          // stack via separate visual channels (box-shadow
+                          // ring / border / outer ring respectively).
                           return (
                             <div key={di}
-                              className={`sc-tile sc-tile--active ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""} ${(gameType || "").toUpperCase() === "OFF" ? "sc-tile--off-day" : ""}`}
-                              style={{ borderLeftColor: borderColor, background: bg }}
+                              className={`sc-tile sc-tile--active sc-tile-state--${status} ${isFocused ? "sc-tile--focused" : ""} ${isToday ? "sc-tile--today" : ""} ${isBulkSelected ? "sc-tile--bulk-selected" : ""} ${bulkMode && !dd.hasActuals ? "sc-tile--bulk-selectable" : ""} ${isFeeAccount && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""} ${(gameType || "").toUpperCase() === "OFF" ? "sc-tile--off-day" : ""}`}
                               onClick={handleTileClick}>
                               <div className="sc-tile-top">
                                 <span className={`sc-tile-date ${isToday ? "sc-tile-date--today" : ""}`}>
@@ -718,14 +735,23 @@ export default function ServiceCalendar({ showToast, session }) {
                                 )
                               ) : (
                                 <>
-                                  {gameType && <div className="sc-tile-game">{gameType}</div>}
+                                  {gameType && (
+                                    <div className="sc-tile-game">
+                                      {milbPill ? (
+                                        <span className={`sc-mlb-pill sc-mlb-pill--${milbPill}`}>
+                                          <span className="sc-mlb-pill-dot" />
+                                          {milbPill === "day" ? "Day" : "Night"}
+                                        </span>
+                                      ) : gameType}
+                                    </div>
+                                  )}
                                   {status === "no-service" ? (
                                     <div className="sc-tile-noservice">No service</div>
                                   ) : (
                                     <>
                                       <div className={`sc-tile-meals ${dd.hasActuals ? "" : "sc-tile-meals--proj"}`}>{meals.toLocaleString()} meals</div>
                                       <div className={`sc-tile-rev ${dd.hasActuals ? "sc-tile-rev--actual" : status === "future" ? "sc-tile-rev--future" : "sc-tile-rev--projected"}`}>
-                                        {!dd.hasActuals && status !== "future" ? "est. " : ""}{status === "future" ? "~" : ""}{fmtK(revenue)}
+                                        {!dd.hasActuals && status !== "future" ? "est. " : ""}{status === "future" ? "~" : ""}{fmt$(revenue)}
                                       </div>
                                     </>
                                   )}
@@ -759,6 +785,35 @@ export default function ServiceCalendar({ showToast, session }) {
                     </div>
                   );
                 })}
+
+                {/* Inline color legend below the grid. Mode-aware shape;
+                    swatches reuse the year-view dot classes so the month
+                    and year share one color vocabulary. */}
+                <div className="sc-month-legend">
+                  {isFeeAccount ? (
+                    <>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future" />Game day</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--prep" />Prep / open / close</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-season" />Off</span>
+                    </>
+                  ) : isMilb ? (
+                    <>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--upcoming-game" />Upcoming</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />Off</span>
+                      <span className="sc-legend-item"><span className="sc-mlb-pill-dot sc-mlb-pill-dot--legend-day" />Day game</span>
+                      <span className="sc-legend-item"><span className="sc-mlb-pill-dot sc-mlb-pill-dot--legend-night" />Night game</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--entered" />Entered</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--needs" />Needs entry</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--future-service" />Upcoming</span>
+                      <span className="sc-legend-item"><span className="sc-legend-dot sc-legend-dot--off-day" />No service</span>
+                    </>
+                  )}
+                </div>
 
                 {/* Bulk entry panel */}
 
