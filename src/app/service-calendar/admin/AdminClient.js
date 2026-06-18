@@ -1,15 +1,25 @@
 "use client";
-// Stage 1 placeholder shell. Future stages drop the section nav, price
-// editor, fee schedule, services archive, fun money, and change log into
-// this layout. The shell uses sc- CSS prefix + comfortable density to
-// match the broader SC visual system. Brand navy + green only; no
-// generic Tailwind blues.
+// SC admin Stage 2 - shell with two states:
+//   view === "overview"  -> AccountsOverview (the landing)
+//   view === "account"   -> AccountEditor   (the per-account drill-in)
+// No section nav until later stages add fee / fun / log surfaces.
 
 import Link from "next/link";
+import { useCallback, useState } from "react";
+import AccountsOverview from "./AccountsOverview";
+import AccountEditor from "./AccountEditor";
 import "../ops-sc.css";
 import "./ops-sc-admin.css";
 
 export default function AdminClient({ email }) {
+  const [view, setView] = useState({ mode: "overview" });
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
   return (
     <div className="sc-admin-root" data-density="comfortable">
       <div className="sc-admin-card">
@@ -24,16 +34,25 @@ export default function AdminClient({ email }) {
               Corporate only
             </span>
           </div>
-          <p className="sc-admin-subtitle">
-            Control panel for pricing, fees, and services. Editing tools arrive in later stages.
-          </p>
+          {view.mode === "overview" ? (
+            <p className="sc-admin-subtitle">
+              Pricing control. All-account overview; drill in to edit.
+            </p>
+          ) : null}
         </div>
 
-        <div className="sc-admin-scaffold">
-          <p className="sc-admin-scaffold-line">
-            This is a scaffold. The price overview, fee schedule, services archive,
-            fun-money config, and change log will land in their own staged PRs.
-          </p>
+        {view.mode === "overview" && (
+          <AccountsOverview onSelect={(key) => setView({ mode: "account", key })} />
+        )}
+        {view.mode === "account" && (
+          <AccountEditor
+            accountKey={view.key}
+            onBack={() => setView({ mode: "overview" })}
+            showToast={showToast}
+          />
+        )}
+
+        {view.mode === "overview" && (
           <Link href="/service-calendar" className="sc-admin-back" prefetch={false}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="19" y1="12" x2="5" y2="12" />
@@ -41,8 +60,14 @@ export default function AdminClient({ email }) {
             </svg>
             Back to Service Calendar
           </Link>
-        </div>
+        )}
       </div>
+
+      {toast && (
+        <div className="sc-admin-toast-container">
+          <div className={`sc-admin-toast sc-admin-toast--${toast.type}`}>{toast.msg}</div>
+        </div>
+      )}
     </div>
   );
 }

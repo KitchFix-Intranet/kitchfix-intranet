@@ -63,6 +63,7 @@ const SC_TABLES = {
   projections: "sc_daily_projections",
   actuals:     "sc_daily_actuals",
   metadata:    "sc_day_metadata",
+  changelog:   "sc_config_changelog",
 };
 
 // Days older than LOCK_DAYS render as locked in the UI. The orchestrator
@@ -83,6 +84,16 @@ function isoDay(d) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// Money rounding helper. All price-display surfaces compare and render
+// 2-decimal numbers; the DB stores NUMERIC(12,5) so legacy seed rows
+// can carry contract-derived precision (e.g. 18.42147). Applying
+// roundCents at the orchestrator boundary keeps the entire display/
+// compare layer at the canonical money form without touching storage.
+// Use this on every price coming OUT of the orchestrator.
+function roundCents(n) {
+  return Math.round(Number(n) * 100) / 100;
 }
 
 function monthBounds(year, month) {
@@ -203,12 +214,28 @@ async function loadAccountConfigPostgres(accountKey) {
   const groupNameById = new Map(groups.map((g) => [g.id, g.groupName]));
   const groupSortById = new Map(groups.map((g) => [g.id, g.sortOrder]));
 
-  // Latest-effective price per service via a per-service LATERAL-style
-  // pull. supabase-js does not expose LATERAL, so we fetch all prices
-  // for these service_ids and reduce to latest in JS. At ~100 prices
-  // per account this is well within the single-call budget.
+  // Current + upcoming price per service.
+  //   current  = latest sc_service_prices row with effective_date <= today
+  //   upcoming = earliest row with effective_date > today (if any)
+  //
+  // Split in JS rather than two queries; supabase-js doesn't expose
+  // LATERAL, and at ~159 total price rows across all accounts the single
+  // .in() query stays under PostgREST's 1000-row default page.
+  //
+  // Pre-this-fix the lookup picked the latest row OVERALL (no <= today
+  // filter). That returned tomorrow's price as "current" today once the
+  // admin editor started writing scheduled future changes. The split
+  // here is the structural fix: the editor's "Current" display always
+  // reads today, the "Scheduled" hint reads the next future-dated row.
+  //
+  // roundCents normalizes the 5-decimal NUMERIC storage to 2-decimal
+  // display so the editor's change-detection compare is honest. The
+  // legacy gear had a false-positive change counter for the 95 of 159
+  // rows with > 2 decimal places.
+  const today = isoDay(new Date());
   const serviceIds = (servicesRes.data || []).map((s) => s.id);
-  let priceByServiceId = new Map();
+  const priceByServiceId = new Map();   // service_id -> { price, sinceDate }
+  const upcomingByServiceId = new Map(); // service_id -> { price, effectiveDate }
   if (serviceIds.length > 0) {
     const { data: priceRows, error: priceErr } = await supa
       .from(SC_TABLES.prices)
@@ -216,27 +243,50 @@ async function loadAccountConfigPostgres(accountKey) {
       .in("service_id", serviceIds)
       .order("effective_date", { ascending: false });
     throwOnError(priceErr, "loadAccountConfig.prices");
+    // Walk rows DESC by effective_date. For each service_id, the first
+    // row with effective_date <= today is the current price. Future-
+    // dated rows seen before that are upcoming; track only the EARLIEST
+    // one (so the editor surfaces the next scheduled change).
     for (const r of priceRows || []) {
-      if (!priceByServiceId.has(r.service_id)) {
-        // First row wins because we sorted desc; that's the latest price.
-        priceByServiceId.set(r.service_id, Number(r.price));
+      const sid = r.service_id;
+      if (r.effective_date > today) {
+        // Walking DESC means we overwrite repeatedly; the LAST write
+        // wins, which is the earliest of the future-dated rows.
+        upcomingByServiceId.set(sid, {
+          price:         roundCents(r.price),
+          effectiveDate: r.effective_date,
+        });
+        continue;
+      }
+      if (!priceByServiceId.has(sid)) {
+        priceByServiceId.set(sid, {
+          price:     roundCents(r.price),
+          sinceDate: r.effective_date,
+        });
       }
     }
   }
 
   const services = (servicesRes.data || [])
-    .map((s) => ({
-      id:           s.id,
-      groupId:      s.group_id,
-      groupName:    groupNameById.get(s.group_id) || "",
-      serviceName:  s.service_name,
-      price:        priceByServiceId.get(s.id) ?? 0,
-      isFlatFee:    !!s.is_flat_fee,
-      isTaxFree:    !!s.is_tax_free,
-      isNonRevenue: !!s.is_non_revenue,
-      sortOrder:    s.sort_order,
-      active:       s.active,
-    }))
+    .map((s) => {
+      const cur = priceByServiceId.get(s.id);
+      const up  = upcomingByServiceId.get(s.id);
+      return {
+        id:              s.id,
+        groupId:         s.group_id,
+        groupName:       groupNameById.get(s.group_id) || "",
+        serviceName:     s.service_name,
+        price:           cur?.price ?? 0,
+        priceSinceDate:  cur?.sinceDate ?? null,
+        upcomingPrice:   up?.price ?? null,
+        upcomingEffectiveDate: up?.effectiveDate ?? null,
+        isFlatFee:       !!s.is_flat_fee,
+        isTaxFree:       !!s.is_tax_free,
+        isNonRevenue:    !!s.is_non_revenue,
+        sortOrder:       s.sort_order,
+        active:          s.active,
+      };
+    })
     .sort((a, b) => {
       const ga = groupSortById.get(a.groupId) ?? 0;
       const gb = groupSortById.get(b.groupId) ?? 0;
@@ -253,6 +303,183 @@ async function loadAccountConfigPostgres(accountKey) {
  */
 export async function loadAccountConfig(accountKey) {
   return loadAccountConfigPostgres(accountKey);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// loadAllAccountsConfig
+// ═══════════════════════════════════════════════════════════════
+//
+// Single-shot read for the admin dashboard overview. Returns ALL
+// active non-CORP accounts with their groups, services, and current
+// (as-of-today) price. The structure mirrors loadAccountConfig per
+// account, plus a top-level lastUpdatedAt per account derived from
+// the changelog (preferred) or from sc_service_prices.effective_date
+// (fallback). lastUpdatedAt is CAPPED AT today so a scheduled future
+// price never makes an account read as "updated YYYY-MM-DD" in the
+// future tense.
+//
+// Four queries total:
+//   1. accounts (active, not CORP)
+//   2. sc_service_groups (not deleted) - all accounts
+//   3. sc_services (not deleted) - all accounts
+//   4. sc_service_prices - bulk lookup, split current vs upcoming
+//
+// Plus one for the changelog:
+//   5. sc_config_changelog max(changed_at) per account
+//
+// Total payload bounded by ~270 rows; well under PostgREST's 1000-row
+// default. No pagination required.
+
+async function loadAllAccountsConfigPostgres() {
+  const supa = getServiceClient();
+  const today = isoDay(new Date());
+
+  const [accountsRes, groupsRes, servicesRes, logRes] = await Promise.all([
+    supa
+      .from("accounts")
+      .select("team_key, name, level, billing_model")
+      .eq("active", true)
+      .neq("team_key", "CORP")
+      .order("team_key", { ascending: true }),
+    supa
+      .from(SC_TABLES.groups)
+      .select("id, account_key, group_name, sort_order, active")
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true }),
+    supa
+      .from(SC_TABLES.services)
+      .select(
+        "id, account_key, group_id, service_name, is_flat_fee, " +
+        "is_tax_free, is_non_revenue, sort_order, active"
+      )
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true }),
+    supa
+      .from(SC_TABLES.changelog)
+      .select("account_key, changed_at")
+      .order("changed_at", { ascending: false }),
+  ]);
+  throwOnError(accountsRes.error,  "loadAllAccountsConfig.accounts");
+  throwOnError(groupsRes.error,    "loadAllAccountsConfig.groups");
+  throwOnError(servicesRes.error,  "loadAllAccountsConfig.services");
+  throwOnError(logRes.error,       "loadAllAccountsConfig.changelog");
+
+  // Bulk price lookup for every service in scope. Same split as
+  // loadAccountConfigPostgres: current = latest <= today, upcoming =
+  // earliest > today.
+  const serviceIds = (servicesRes.data || []).map((s) => s.id);
+  const priceByServiceId = new Map();
+  const upcomingByServiceId = new Map();
+  // Per-account "last priced" date - the max(effective_date) <= today
+  // for any service in the account. Used as the fallback for
+  // lastUpdatedAt when the changelog has no rows for the account.
+  const lastPricedByAccount = new Map();
+  if (serviceIds.length > 0) {
+    const { data: priceRows, error: priceErr } = await supa
+      .from(SC_TABLES.prices)
+      .select("service_id, price, effective_date")
+      .in("service_id", serviceIds)
+      .order("effective_date", { ascending: false });
+    throwOnError(priceErr, "loadAllAccountsConfig.prices");
+    const svcToAccount = new Map(
+      (servicesRes.data || []).map((s) => [s.id, s.account_key])
+    );
+    for (const r of priceRows || []) {
+      const sid = r.service_id;
+      const acc = svcToAccount.get(sid);
+      if (r.effective_date > today) {
+        upcomingByServiceId.set(sid, {
+          price:         roundCents(r.price),
+          effectiveDate: r.effective_date,
+        });
+        continue;
+      }
+      if (!priceByServiceId.has(sid)) {
+        priceByServiceId.set(sid, {
+          price:     roundCents(r.price),
+          sinceDate: r.effective_date,
+        });
+      }
+      if (acc) {
+        const prev = lastPricedByAccount.get(acc);
+        if (!prev || r.effective_date > prev) {
+          lastPricedByAccount.set(acc, r.effective_date);
+        }
+      }
+    }
+  }
+
+  // Per-account latest changelog timestamp (sorted DESC above, so the
+  // first row seen per account is its latest). Captured as an ISO date
+  // string for the UI; the timestamp itself is preserved as well.
+  const lastChangelogByAccount = new Map();
+  for (const r of logRes.data || []) {
+    if (!lastChangelogByAccount.has(r.account_key)) {
+      lastChangelogByAccount.set(r.account_key, r.changed_at);
+    }
+  }
+
+  // Build per-account payloads. Group services under their groups by
+  // group_id. Each account's lastUpdatedAt prefers the changelog when
+  // present, falls back to the effective_date floor, and is capped at
+  // today so a scheduled future change never shows as "already
+  // updated".
+  const groupsByAccount = new Map();
+  for (const g of groupsRes.data || []) {
+    if (!groupsByAccount.has(g.account_key)) groupsByAccount.set(g.account_key, []);
+    groupsByAccount.get(g.account_key).push({
+      id:        g.id,
+      groupName: g.group_name,
+      sortOrder: g.sort_order,
+      active:    g.active,
+    });
+  }
+  const servicesByAccount = new Map();
+  for (const s of servicesRes.data || []) {
+    const cur = priceByServiceId.get(s.id);
+    const up  = upcomingByServiceId.get(s.id);
+    if (!servicesByAccount.has(s.account_key)) servicesByAccount.set(s.account_key, []);
+    servicesByAccount.get(s.account_key).push({
+      id:                    s.id,
+      groupId:               s.group_id,
+      serviceName:           s.service_name,
+      price:                 cur?.price ?? 0,
+      priceSinceDate:        cur?.sinceDate ?? null,
+      upcomingPrice:         up?.price ?? null,
+      upcomingEffectiveDate: up?.effectiveDate ?? null,
+      isFlatFee:             !!s.is_flat_fee,
+      isTaxFree:             !!s.is_tax_free,
+      isNonRevenue:          !!s.is_non_revenue,
+      sortOrder:             s.sort_order,
+      active:                s.active,
+    });
+  }
+
+  const accounts = (accountsRes.data || []).map((a) => {
+    // lastUpdatedAt: prefer changelog timestamp, else fall back to the
+    // floor of (latest effective_date <= today) for the account. Either
+    // way, capped at today.
+    const cl = lastChangelogByAccount.get(a.team_key) || null;
+    const lp = lastPricedByAccount.get(a.team_key) || null;
+    let lastUpdatedAt = cl || lp;
+    if (lastUpdatedAt && lastUpdatedAt.slice(0, 10) > today) lastUpdatedAt = null;
+    return {
+      key:           a.team_key,
+      name:          a.name || a.team_key,
+      level:         a.level || null,
+      billingModel:  a.billing_model || null,
+      groups:        groupsByAccount.get(a.team_key) || [],
+      services:     (servicesByAccount.get(a.team_key) || []).sort((x, y) => x.sortOrder - y.sortOrder),
+      lastUpdatedAt,
+    };
+  });
+
+  return { generatedAt: today, accounts };
+}
+
+export async function loadAllAccountsConfig() {
+  return loadAllAccountsConfigPostgres();
 }
 
 
@@ -929,21 +1156,63 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
 
   for (const ch of changes) {
     if (ch.type === "price") {
-      // Upsert (not insert) so a same-day re-correction updates the
-      // existing row instead of failing on uq_sc_service_prices_service_date.
-      // Admins routinely tweak a price more than once during config
-      // setup; before this, the second tweak threw 23505 from PG.
+      // Step 1: read the prior as-of-today price for old_value in the
+      // changelog. A miss (no prior row) means this is the first-ever
+      // price for the service; the changelog records this as
+      // change_type='create' so audit trails distinguish initial
+      // pricing from a subsequent update.
+      const effDate = ch.effectiveDate || today;
+      const { data: priorRows, error: priorErr } = await supa
+        .from(SC_TABLES.prices)
+        .select("price, effective_date")
+        .eq("service_id", ch.serviceId)
+        .lte("effective_date", today)
+        .order("effective_date", { ascending: false })
+        .limit(1);
+      throwOnError(priorErr, `updateServiceConfig.price.prior[${applied}]`);
+      const priorPrice = priorRows && priorRows.length
+        ? roundCents(priorRows[0].price)
+        : null;
+
+      // Step 2: upsert the price row. Upsert (not insert) so a same-
+      // date re-correction updates the existing row instead of failing
+      // on uq_sc_service_prices_service_date. Same-date overwrites are
+      // captured in the changelog write below, so the audit trail is
+      // preserved even when the price-row history is not.
+      const newPriceRounded = roundCents(ch.newPrice);
       const { error } = await supa.from(SC_TABLES.prices).upsert(
         {
           service_id:     ch.serviceId,
           price:          Number(ch.newPrice),
-          effective_date: ch.effectiveDate || today,
+          effective_date: effDate,
           created_by:     email,
           notes:          ch.notes || null,
         },
         { onConflict: "service_id,effective_date" }
       );
       throwOnError(error, `updateServiceConfig.price[${applied}]`);
+
+      // Step 3: write one row to the audit log. Fails the whole
+      // operation if the changelog insert errors - we never want a
+      // price write without its audit row. The GRANT on
+      // sc_config_changelog only allows INSERT + SELECT (sc-4
+      // migration), so there's no UPDATE/DELETE bypass to worry about.
+      // reason is required at the route layer; the schema CHECK is
+      // defense in depth.
+      const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+        account_key:    accountKey,
+        entity_type:    "price",
+        entity_id:      ch.serviceId,
+        entity_label:   ch.entityLabel || null,
+        change_type:    priorPrice === null ? "create" : "update",
+        old_value:      priorPrice === null ? null : { price: priorPrice },
+        new_value:      { price: newPriceRounded },
+        effective_date: effDate,
+        reason:         ch.notes,
+        requested_by:   ch.requestedBy || null,
+        changed_by:     email,
+      });
+      throwOnError(logErr, `updateServiceConfig.changelog[${applied}]`);
       applied++;
     } else if (ch.type === "deactivate") {
       const { error } = await supa

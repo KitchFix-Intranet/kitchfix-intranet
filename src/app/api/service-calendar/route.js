@@ -1,9 +1,10 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
-import { SC_ADMINS } from "@/lib/admin";
+import { SC_ADMINS, isScAdmin } from "@/lib/admin";
 import {
   loadAccountConfig,
+  loadAllAccountsConfig,
   loadMonthData,
   loadYearSummary,
   loadHomestandContext,
@@ -367,6 +368,40 @@ export async function GET(request) {
       });
     }
 
+    // ── sc-admin-all-config: per-account groups + services + as-of-today
+    //    price + lastUpdatedAt, for the admin overview landing. ──
+    if (action === "sc-admin-all-config") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const payload = await loadAllAccountsConfig();
+      return NextResponse.json({ success: true, ...payload });
+    }
+
+    // ── sc-admin-account-config: groups + services + current price for
+    //    one account, for the admin per-account editor. Cleaner than
+    //    sc-load (which also pulls the calendar's full month data). ──
+    if (action === "sc-admin-account-config") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const accountKey = searchParams.get("account");
+      if (!accountKey) {
+        return NextResponse.json(
+          { success: false, error: "Missing account param" },
+          { status: 400 }
+        );
+      }
+      const config = await loadAccountConfig(accountKey);
+      return NextResponse.json({ success: true, accountKey, ...config });
+    }
+
     return NextResponse.json(
       { success: false, error: "Unknown action" },
       { status: 400 }
@@ -436,7 +471,11 @@ export async function POST(request) {
 
     // ── sc-config-update: change prices, deactivate services (ADMIN) ──
     if (action === "sc-config-update") {
-      if (!SC_ADMINS.includes(email)) {
+      // Gate is the corporate-write set (SC_ADMIN_EMAILS via isScAdmin),
+      // not the dev-view SC_ADMINS allowlist. Stage 1 opened the admin
+      // page to 8 corporate users; without this swap, 6 of those 8 would
+      // 403 on save.
+      if (!isScAdmin(email)) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -450,10 +489,67 @@ export async function POST(request) {
         );
       }
 
-      // UI sends changes as { type, groupName, serviceName, from?, to? }.
-      // The orchestrator wants { type, serviceId, newPrice? }. Resolve
-      // each (groupName, serviceName) to its serviceId via a single
-      // config read so the route does not query per-change.
+      // Per-change validation for price entries. Stage 2 = today + future
+      // only; backdate is out of scope and rejected. effectiveDate is
+      // REQUIRED on every price change so the orchestrator's "today" fallback
+      // (which is UTC-today on Vercel) never silently fires when a Central
+      // or Eastern operator hits "Today" in the evening. The UI always
+      // supplies the operator's local YYYY-MM-DD wall-clock today.
+      //
+      // The server-side >= floor accepts (server-today-UTC minus 1 day)
+      // intentionally: a CT/ET operator picking "Today" at 8pm sends their
+      // local date, which is yesterday's date in UTC. The 1-day grace is
+      // SAFE - yesterday is never a closed/invoiced day at this stage of
+      // operations, and the UI is the real backstop (it only offers Today
+      // or Future, no backdate). Treat this floor as a coarse sanity check,
+      // not the primary control.
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = (() => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      for (const c of changes) {
+        if (c.type !== "price") continue;
+        if (!c.effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(c.effectiveDate)) {
+          return NextResponse.json(
+            { success: false, error: "effectiveDate required on price changes (YYYY-MM-DD)" },
+            { status: 400 }
+          );
+        }
+        if (c.effectiveDate < yesterday) {
+          return NextResponse.json(
+            { success: false, error: "effectiveDate must be today or future (backdate is not supported in this stage)" },
+            { status: 400 }
+          );
+        }
+        if (!c.reason || typeof c.reason !== "string" || c.reason.trim().length === 0) {
+          return NextResponse.json(
+            { success: false, error: "reason required on price changes" },
+            { status: 400 }
+          );
+        }
+        if (c.reason.length > 280) {
+          return NextResponse.json(
+            { success: false, error: "reason must be 280 characters or fewer" },
+            { status: 400 }
+          );
+        }
+        if (c.requestedBy && (typeof c.requestedBy !== "string" || c.requestedBy.length > 280)) {
+          return NextResponse.json(
+            { success: false, error: "requestedBy must be 280 characters or fewer" },
+            { status: 400 }
+          );
+        }
+      }
+
+      // UI sends changes as { type, groupName, serviceName, from?, to?,
+      // effectiveDate, reason, requestedBy }. The orchestrator wants
+      // { type, serviceId, newPrice, effectiveDate, notes, requestedBy,
+      // entityLabel }. Resolve (groupName, serviceName) -> serviceId via
+      // a single config read so the route does not query per-change.
+      // Pass entityLabel through too so the orchestrator's changelog
+      // insert doesn't need a second DB round-trip.
       const config = await loadAccountConfig(accountKey);
       const translated = changes.map((c) => {
         const svc = config.services.find(
@@ -465,7 +561,15 @@ export async function POST(request) {
           );
         }
         if (c.type === "price") {
-          return { type: "price", serviceId: svc.id, newPrice: Number(c.to) };
+          return {
+            type:          "price",
+            serviceId:     svc.id,
+            newPrice:      Number(c.to),
+            effectiveDate: c.effectiveDate,
+            notes:         c.reason.trim(),
+            requestedBy:   c.requestedBy ? c.requestedBy.trim() : null,
+            entityLabel:   `${c.groupName} - ${c.serviceName}`,
+          };
         }
         if (c.type === "deactivate") {
           return { type: "deactivate", serviceId: svc.id };

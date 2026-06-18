@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import DayDetail from "./DayDetail";
-import ServiceConfig from "./ServiceConfig";
 import { isScAdmin } from "@/lib/admin";
 
 const GREEN = "#0F6E56";
@@ -95,7 +94,6 @@ export default function ServiceCalendar({ showToast, session }) {
   const [focusDay, setFocusDay] = useState(null);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [showConfig, setShowConfig] = useState(false);
 
   // Bulk mode
   const [bulkMode, setBulkMode] = useState(false);
@@ -515,9 +513,6 @@ export default function ServiceCalendar({ showToast, session }) {
           <div className="sc-header-account">
             <AccountDropdown accounts={accounts} value={selectedAccount} onChange={setSelectedAccount} />
             {category && <span className={`sc-cat sc-cat--${category.toLowerCase()}`}>{category}</span>}
-            <button className="sc-cfg-gear" onClick={() => setShowConfig(true)} title="Service config">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-            </button>
             {isScAdmin(session?.user?.email) && (
               <Link href="/service-calendar/admin" className="sc-admin-link" prefetch={false} title="Service Calendar admin (corporate only)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1158,21 +1153,6 @@ export default function ServiceCalendar({ showToast, session }) {
         </div>
       )}
 
-      {/* Service config overlay */}
-      {showConfig && data?.serviceGroups && (
-        <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowConfig(false); }}>
-          <div className="sc-overlay-card" data-density="comfortable">
-            <ServiceConfig
-              account={data.account}
-              serviceGroups={data.serviceGroups}
-              session={session}
-              showToast={showToast}
-              onClose={() => setShowConfig(false)}
-              onConfigChanged={() => { setShowConfig(false); setReloadKey(k => k + 1); }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
