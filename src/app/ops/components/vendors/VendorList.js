@@ -345,7 +345,7 @@ export default function VendorList({
             </div>
           )}
 
-          {vendors.map((v) => (
+          {vendors.filter((v) => v.name && String(v.name).trim()).map((v) => (
             <button
               key={v.vendorId}
               className={`oh-vp-row${selectedVendor?.vendorId === v.vendorId ? " oh-vp-row--selected" : ""}${!v.active ? " oh-vp-row--inactive" : ""}`}
@@ -358,6 +358,9 @@ export default function VendorList({
               <div className="oh-vp-row-meta">
                 <span className="oh-vp-cat-dot" style={{ background: categoryColor(v.category) }} />
                 <span className="oh-vp-row-cat">{v.category || "—"}</span>
+                {v.salesRepName && (
+                  <span className="oh-vp-row-rep">{v.salesRepName}</span>
+                )}
                 {/* FIX #7 — normalize comma-separated days to "Mon, Wed, Fri" */}
                 {v.deliveryDays && (
                   <span className="oh-vp-row-delivery">{formatDeliveryDays(v.deliveryDays)}</span>
