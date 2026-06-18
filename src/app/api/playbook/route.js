@@ -19,6 +19,7 @@
 
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import matter from "gray-matter";
 import {
   listDocuments,
   getDocument,
@@ -84,6 +85,22 @@ async function pickHeroImage() {
   } catch {
     return null;
   }
+}
+
+// ─── Frontmatter date normalization ─────────────────────────────────────────
+// YAML auto-types unquoted ISO dates to Date objects, but the schema declares
+// these fields as YYYY-MM-DD strings (the form needs that shape for
+// <input type="date">). Mirrors scripts/content/lib/frontmatter.mjs.
+function normalizeDates(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj.toISOString().slice(0, 10);
+  if (Array.isArray(obj)) return obj.map(normalizeDates);
+  if (typeof obj === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = normalizeDates(v);
+    return out;
+  }
+  return obj;
 }
 
 // ─── Editing allowlist + validation sets (action=update-document) ───────────
@@ -359,6 +376,103 @@ export async function GET(request) {
         title: doc.title,
         incoming_relationships,
         chunks_count: chunks_count || 0,
+      });
+    }
+
+    // ── mdx-source ───────────────────────────────────────────────────────
+    // OPD authoring A1: load the raw MDX for a doc from GitHub so the
+    // cockpit's editor surface can show frontmatter + body. The save path
+    // lands in A2; this action is read-only. The returned `sha` is the
+    // staleness guard A2 will pass back on commit.
+    //
+    // Requires GITHUB_OPD_TOKEN (fine-grained PAT with contents read+write
+    // on this repo). Degrades gracefully when the token is unset so this
+    // ships before the env var lands.
+    if (action === "mdx-source") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const id = searchParams.get("id");
+      if (!id) {
+        return NextResponse.json({ error: "Missing id" }, { status: 400 });
+      }
+      if (!/^[A-Z0-9-]+$/.test(id)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+      }
+      const token = process.env.GITHUB_OPD_TOKEN;
+      if (!token) {
+        return NextResponse.json(
+          { error: "GitHub token not configured" },
+          { status: 503 }
+        );
+      }
+      const url =
+        `https://api.github.com/repos/KitchFix-Intranet/kitchfix-intranet` +
+        `/contents/content/documents/${encodeURIComponent(id)}.mdx`;
+      let ghRes;
+      try {
+        ghRes = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (ghRes.status === 404) {
+        return NextResponse.json(
+          { error: `MDX file not found for ${id}` },
+          { status: 404 }
+        );
+      }
+      if (!ghRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub ${ghRes.status}: ${await ghRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const gh = await ghRes.json();
+      if (!gh.content || !gh.sha) {
+        return NextResponse.json(
+          { error: "GitHub response missing content or sha" },
+          { status: 502 }
+        );
+      }
+      let source;
+      try {
+        source = Buffer.from(gh.content, "base64").toString("utf8");
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Decode failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      // Same parser the projection uses (gray-matter via lib/frontmatter.mjs).
+      // Inlined here because the projection script lives outside the Next
+      // bundle; we use gray-matter directly and apply the same date
+      // normalization (YAML auto-types ISO dates to Date objects; the schema
+      // declares them as YYYY-MM-DD strings).
+      let parsed;
+      try {
+        parsed = matter(source.replace(/\r\n/g, "\n"));
+      } catch (e) {
+        return NextResponse.json(
+          { error: `MDX parse failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        id,
+        sha: gh.sha,
+        frontmatter: normalizeDates(parsed.data || {}),
+        body: parsed.content || "",
       });
     }
 
