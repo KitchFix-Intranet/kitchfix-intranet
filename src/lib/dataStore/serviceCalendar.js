@@ -565,6 +565,7 @@ async function loadYearSummaryPostgres(accountKey, year) {
         hasProj: false,
         anyNonZeroProj: false,
         gameType: r.game_type || "",
+        actualMeals: 0,
       };
       dayState.set(r.service_date, st);
     }
@@ -572,6 +573,11 @@ async function loadYearSummaryPostgres(accountKey, year) {
     if (r.has_projection) st.hasProj = true;
     const av = r.actual_count;
     if (av != null && Number(av) > 0) st.anyNonZeroAct = true;
+    // Sum actual_count across services for the date so the year-view
+    // tooltip can show "Mon Jun 23 - 240 meals" without a second
+    // round trip. Includes non-revenue services (water, snack) - if
+    // a service was logged, it counts toward the day total.
+    if (av != null) st.actualMeals += Number(av);
     const pv = r.projected_count;
     if (pv != null && Number(pv) > 0) st.anyNonZeroProj = true;
     if (!st.gameType && r.game_type) st.gameType = r.game_type;
@@ -661,9 +667,10 @@ async function loadYearSummaryPostgres(accountKey, year) {
     const monthKey = s.date.slice(0, 7);
     if (!daysByMonth.has(monthKey)) daysByMonth.set(monthKey, []);
     const dayEntry = {
-      date:     s.date,
-      status:   classify(s),
-      gameType: s.gameType || "",
+      date:        s.date,
+      status:      classify(s),
+      gameType:    s.gameType || "",
+      actualMeals: s.actualMeals || 0,
     };
     const hs = homestandMap[s.date];
     if (hs) {
