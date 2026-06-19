@@ -1,23 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // scripts/sousai-embed-doc.mjs
-// SousAI · Layer 3 CLI · embed PB-002 end-to-end + Checkpoint 3 verification
+// SousAI · Layer 3 CLI · embed one doc end-to-end + Checkpoint 3 verification
 //
 // Run:
-//   node --env-file=.env.local scripts/sousai-embed-doc.mjs
+//   node --env-file=.env.local scripts/sousai-embed-doc.mjs            (defaults to PB-002)
+//   node --env-file=.env.local scripts/sousai-embed-doc.mjs PB-002     (explicit id)
+//   SOUSAI_DOC_ID=AGR-001 node --env-file=.env.local scripts/sousai-embed-doc.mjs
+//
+// Doc id resolution order: argv[2] > env SOUSAI_DOC_ID > "PB-002" default.
+// The default preserves the original demo behavior. The argv form is what
+// the B2 GitHub Action uses to embed each changed content file.
 //
 // Output:
-//   1. Runs the embedDocument(...) orchestrator for PB-002 (extract -> chunk
-//      -> embed -> store) end-to-end.
+//   1. Runs the embedDocument(...) orchestrator (extract -> chunk -> embed
+//      -> store) end-to-end for the chosen doc.
 //   2. Reports the orchestrator's summary (chunks deleted + inserted).
 //   3. Verifies post-state by querying document_chunks back:
-//        - row count for PB-002
+//        - row count for the doc
 //        - every row has a non-null 1536-dim embedding
 //        - token-count distribution
 //        - sample row dump (metadata + content, NO raw vector)
 //
-// The sample row dumped is chunk_index 28 (Section 06 > Step 4) because that's
-// the load-bearing case from L2 - confirms the ancestry chain made it through
-// to storage.
+// The sample row dumped is chunk_index 28 (Section 06 > Step 4 in PB-002)
+// because that's the load-bearing case from L2 - confirms the ancestry chain
+// made it through to storage. For other docs it may or may not exist; the
+// PASS/FAIL gate is doc-independent (all chunks have valid 1536-dim vectors).
 //
 // Auth/billing failures surface immediately - OPENAI_API_KEY missing or
 // invalid is the most likely first-run issue; the script catches and
@@ -27,8 +34,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { embedDocument } from "../src/lib/sousai/index.js";
 
-const DOC_ID = "PB-002";
-const SAMPLE_CHUNK_INDEX = 28; // Section 06 > 6.1 Six Steps > Step 4
+const DOC_ID = process.argv[2] || process.env.SOUSAI_DOC_ID || "PB-002";
+const SAMPLE_CHUNK_INDEX = 28; // Section 06 > 6.1 Six Steps > Step 4 (PB-002 reference)
 
 function looksLikeOpenAiAuthError(err) {
   const msg = String(err?.message || "");
