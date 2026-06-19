@@ -1,0 +1,137 @@
+════════════════════════════════════════════════════════════════════════════════
+CORPUS CLASSIFICATION REPORT
+generated: 2026-06-09T19:09:57.529Z
+folder: /Users/kevinfietek/Documents/Claude /2026
+total files scanned: 737
+classified ok: 736
+classification errors: 1
+════════════════════════════════════════════════════════════════════════════════
+
+FAMILY BREAKDOWN
+  F1         325    44.2%
+  F2          17     2.3%
+  F3          50     6.8%
+  F4          36     4.9%
+  F5         189    25.7%
+  F6          13     1.8%
+  SKIP-A      53     7.2%
+  SKIP-B      53     7.2%
+  UNKNOWN      0     0.0%
+
+PER-FAMILY EXTRACTION-SANITY (does qty*unit ≈ amount on the family's rules?)
+  F1       n= 325   OK= 284 ( 87.4%)   FAIL=  40   N/A=   1
+  F2       n=  17   OK=  17 (100.0%)   FAIL=   0   N/A=   0
+  F3       n=  50   OK=  31 ( 62.0%)   FAIL=  19   N/A=   0
+  F4       n=  36   OK=  21 ( 58.3%)   FAIL=  15   N/A=   0
+  F5       n= 189   OK= 133 ( 70.4%)   FAIL=  45   N/A=  11
+  F6       n=  13   OK=   9 ( 69.2%)   FAIL=   4   N/A=   0
+
+UNKNOWN / NEW STRUCTURES (0)
+These are invoices that don't fit any catalogued family — surface 7th+ structures.
+
+OBSERVED VENDOR → FAMILY MAPPING (top vendors by count)
+   128  What Chefs Want                       F1=119  SKIP-A=9
+    82  Sysco                                 F5=75  SKIP-A=6  SKIP-B=1
+    71  Shamrock Foods                        F5=55  SKIP-A=16
+    69  Peddler's Son                         F1=62  SKIP-A=7
+    50  Ben E Keith                           F3=50
+    37  Kuna Foodservice                      F5=37
+    37  SUNFRESH PRODUCE                      F1=37
+    36  Fortune Fish & Gourmet                F1=36
+    36  Cheney Brothers                       F4=36
+    34  Fresh Point                           F1=33  SKIP-A=1
+    22  Shamrock Foods Company PHX            F5=22
+    21  Alsco Uniforms                        SKIP-B=21
+    17  Cozzini Bros                          SKIP-B=17
+    15  City Seafood                          F2=15
+    10  Gordon Food Service                   F1=9  SKIP-A=1
+    10  Rolling Lawns Farm LLC                F1=10
+    10  Shamrock Foods Company                SKIP-A=10
+     7  Vio Brands USA                        F1=6  SKIP-B=1
+     6  Grey Eagle Distributors               F6=6
+     6  Cintas                                SKIP-B=6
+     5  Sodexo Operations, LLC dba InReach    SKIP-A=3  SKIP-B=2
+     4  Truly Good Foods                      F1=4
+     4  St. Armands Baking Company            F1=3  SKIP-B=1
+     3  Swire Coca-Cola                       F6=3
+     2  Tropical Nut & Fruit DBA Truly Good Foods  F1=2
+     2  Lohr Distribution                     F6=2
+     2  Vestis                                SKIP-B=2
+     1  Evamor Products, LLC                  F1=1
+     1  Freshpoint                            F1=1
+     1  Katz Coffee                           F1=1
+     1  1st Phorm International, LLC          F1=1
+     1  Cozzini Brothers                      SKIP-B=1
+     1  PepsiCo Beverages Company             F6=1
+     1  Pepsi Beverage Company                F6=1
+     1  Samuels Seafood Co. - South Coast     F2=1
+     1  Ferrell Gas                           SKIP-B=1
+     1  Samuels Seafood Co                    F2=1
+
+NON-FOOD VENDORS DETECTED (SKIP-B count > 0)
+Add these to the vendor-level skip list when the hybrid hits production.
+  Sysco    (SKIP-B count: 1)
+  Alsco Uniforms    (SKIP-B count: 21)
+  Cozzini Bros    (SKIP-B count: 17)
+  Vio Brands USA    (SKIP-B count: 1)
+  Cintas    (SKIP-B count: 6)
+  Sodexo Operations, LLC dba InReach    (SKIP-B count: 2)
+  St. Armands Baking Company    (SKIP-B count: 1)
+  Vestis    (SKIP-B count: 2)
+  Cozzini Brothers    (SKIP-B count: 1)
+  Ferrell Gas    (SKIP-B count: 1)
+
+FILENAME vs MODEL VENDOR MISMATCHES (144)
+Cases where the parsed-from-filename vendor token doesn't agree with what the model read off the invoice.
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002434388_20260420.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002435759_20260422.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002436342_20260423.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002436627_20260424.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002437166_20260425.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=SKIP-A   file=Peddler_s_Son_C00290773_20260423.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=SKIP-A   file=Peddler_s_Son_C00291107_20260425.pdf
+  filename="Swire Coca Cola"   model="Swire Coca-Cola"   family=F6   file=Swire_Coca_Cola_52075313020_20260427.pdf
+  filename="Cozzini C20627894"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20627894_20260311.pdf
+  filename="Cozzini C20726631"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20726631_20260325.pdf
+  filename="Cozzini C20916352"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20916352_20260422.pdf
+  filename="Cozzini c20821603"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_c20821603_20260408.pdf
+  filename="Evamor S12009587"   model="Evamor Products, LLC"   family=F1   file=Evamor_S12009587_20260319.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_349566-26-06_20260323(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_349566-26-06_20260323.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_350118-26-06_20260325(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_350118-26-06_20260325.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354312-26-06_20260409(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354312-26-06_20260409.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354862-26-06_20260411.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_355194-26-06_20260413.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_355769-26-06_20260415.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358095-26-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358096-20-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358109-26-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_359988-26-06_20260430.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_359989-26-06_20260430.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129308_20260409.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129357_20260413.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129522_20260423.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129157_20260330.pdf
+  filename="Cozzini C20908036"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20908036_20260427.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438574_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002439604_20260430.pdf
+  filename="Cozzini C21052385"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C21052385_20260512.pdf
+  filename="Cozzini C21144796"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C21144796_20260526.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002437670_20260427.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438382_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438462_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438914_20260429.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002439841_20260501.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002440358_20260502.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002440799_20260504.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002441613_20260505.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002442171_20260506.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002443154_20260508.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002443246_20260508.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002444111_20260511.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002445005_20260513.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002445964_20260515.pdf
+  (+94 more)
+
