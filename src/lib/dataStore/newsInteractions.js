@@ -133,7 +133,7 @@ async function readNewsInteractionsPostgres({ userEmail }) {
   const target = normalizeEmail(userEmail);
   const { data, error } = await supabase
     .from("news_interactions")
-    .select("post_id, user_email, read, read_at, saved, acknowledged")
+    .select("post_id, user_email, read, read_at, saved, acknowledged, liked, fired, thumbs_up, hearted")
     .eq("user_email", target);
   if (error) {
     throw new Error(`[dataStore.pg] readNewsInteractions: ${error.message}`);
@@ -145,6 +145,11 @@ async function readNewsInteractionsPostgres({ userEmail }) {
     readAt: pgTimestampToCanonical(row.read_at),
     saved: !!row.saved,
     acknowledged: !!row.acknowledged,
+    // Reactions (PG-only - not in Sheets schema)
+    liked: !!row.liked,
+    fired: !!row.fired,
+    thumbsUp: !!row.thumbs_up,
+    hearted: !!row.hearted,
   }));
 }
 
@@ -162,6 +167,11 @@ async function upsertNewsInteractionPostgres({ postId, userEmail }, partial) {
   if ("readAt" in partial) payload.read_at = canonicalTimestampToPg(partial.readAt);
   if ("saved" in partial) payload.saved = !!partial.saved;
   if ("acknowledged" in partial) payload.acknowledged = !!partial.acknowledged;
+  // Reactions (PG-only - silently ignored on the Sheets path)
+  if ("liked" in partial) payload.liked = !!partial.liked;
+  if ("fired" in partial) payload.fired = !!partial.fired;
+  if ("thumbsUp" in partial) payload.thumbs_up = !!partial.thumbsUp;
+  if ("hearted" in partial) payload.hearted = !!partial.hearted;
 
   const { error } = await supabase
     .from("news_interactions")
