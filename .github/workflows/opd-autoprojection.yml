@@ -1,0 +1,137 @@
+name: opd autoprojection
+
+# Auto-fires the MDX -> Postgres projection (and re-embeds changed docs for
+# SousAI) when a commit on main touches any MDX file under content/documents/.
+#
+# Why a separate workflow from e2e: e2e runs against PRs and burns Playwright
+# minutes; this one runs against main pushes and burns the projection's apply
+# path. Different triggers, different concurrency groups, different secrets.
+#
+# Trigger surface:
+#   push to main, paths-filtered to content/documents/** so projection-script
+#   changes do NOT fire this workflow. workflow_dispatch lets us run it by
+#   hand to test (projection-only by default; pass doc_id to also embed).
+#
+# Concurrency: serialize on a single named group so multiple push events queue
+# rather than race the projection's transactional swap on document_relationships
+# and document_surfaces.
+#
+# Ordering: projection runs FIRST, then per-doc embeds. embedDocument reads
+# the documents row from Postgres for the canonical title + doc_class guard,
+# so the projection must have run for a brand-new doc id before embed can
+# resolve it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/documents/**'
+  workflow_dispatch:
+    inputs:
+      doc_id:
+        description: 'Optional doc id to embed (manual test). Projection always runs.'
+        required: false
+
+concurrency:
+  group: opd-autoprojection
+  cancel-in-progress: false
+
+jobs:
+  project-and-embed:
+    name: project + embed
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        # fetch-depth: 0 so we can diff github.event.before..github.event.after
+        # to compute the set of changed content files for the embed step.
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+        run: npm ci
+
+      - name: Project catalog (MDX -> Postgres)
+        # The projection's --apply is the atomic, failure-safe path landed in
+        # B1 (TRUNCATE-based replace RPCs + runtime count guard). A no-change
+        # run is a 0/0/0 pass-through; a real change writes documents,
+        # document_relationships, document_surfaces, document_content.
+        run: node scripts/content/project-catalog.mjs --apply
+
+      - name: Compute changed doc ids + embed
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INPUT_DOC_ID: ${{ github.event.inputs.doc_id }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          # POST-* doc class is a visual reference (poster). embedDocument
+          # throws for it via SKIP_TEXT_EXTRACTION_CLASSES. Skip in the
+          # workflow so a poster commit doesn't fail-loud on a known case.
+          embed_one() {
+            local id="$1"
+            case "$id" in
+              POST-*)
+                echo "skipping $id (poster class - no text extraction)"
+                return 0
+                ;;
+            esac
+            echo "embedding $id"
+            node scripts/sousai-embed-doc.mjs "$id"
+          }
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -n "${INPUT_DOC_ID:-}" ]; then
+              embed_one "$INPUT_DOC_ID"
+            else
+              echo "workflow_dispatch: no doc_id provided; projection-only run, skipping embed"
+            fi
+            exit 0
+          fi
+
+          # push event: diff PUSH_BEFORE..PUSH_AFTER for changed content MDX.
+          # PUSH_BEFORE is all-zeroes on the first push to a branch / when the
+          # base SHA isn't available. Skip embed gracefully in that case; the
+          # projection already ran and will catch up any new doc rows.
+          if [ -z "${PUSH_BEFORE:-}" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "push: empty before-SHA (first push or unavailable); skipping embed; projection already ran"
+            exit 0
+          fi
+
+          # ACMR: Added, Copied, Modified, Renamed. D (Deleted) is excluded -
+          # the projection's archive step handles chunk removal for retired
+          # docs. For R (rename) git --name-only outputs the destination path,
+          # which is what we want (the new doc id).
+          changed=$(git diff --name-only --diff-filter=ACMR "$PUSH_BEFORE" "$PUSH_AFTER" -- 'content/documents/*.mdx' || true)
+          if [ -z "$changed" ]; then
+            echo "push: no content/documents/*.mdx changed in this push range; skipping embed"
+            exit 0
+          fi
+
+          echo "changed content files:"
+          echo "$changed"
+          echo ""
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            # content/documents/AGR-001.mdx -> AGR-001
+            id=$(basename "$f" .mdx)
+            embed_one "$id"
+          done <<< "$changed"
