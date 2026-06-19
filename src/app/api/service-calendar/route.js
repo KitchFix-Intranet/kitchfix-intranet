@@ -160,9 +160,21 @@ function transformDays(orchDays) {
   return orchDays.map((d) => {
     const projected = {};
     const actual = {};
+    // View-sourced per-service revenue maps. These come from
+    // sc_daily_revenue via loadMonthDataPostgres - priced by each
+    // service-date's effective_date (LATERAL pick), so they reflect
+    // mid-period price changes correctly. The count maps above stay
+    // for now; a follow-up PR drops them once nothing JS-recomputes
+    // from them.
+    const projectedRevenue = {};
+    const actualRevenue    = {};
+    const priceAtDate      = {};
     for (const s of d.services) {
-      projected[s.serviceId] = s.projectedCount;
-      actual[s.serviceId]    = s.actualCount;
+      projected[s.serviceId]        = s.projectedCount;
+      actual[s.serviceId]           = s.actualCount;
+      projectedRevenue[s.serviceId] = s.projectedRevenue;
+      actualRevenue[s.serviceId]    = s.actualRevenue;
+      priceAtDate[s.serviceId]      = s.priceAtDate;
     }
     return {
       // sheetRow is legacy Sheets context; null on PG.
@@ -179,6 +191,19 @@ function transformDays(orchDays) {
       },
       projected,
       actual,
+      // Day-level revenue totals from the view (excludes is_non_revenue
+      // services per sc_month_summary semantics). Guaranteed present
+      // for every day - constructed unconditionally at
+      // loadMonthDataPostgres:608 ({ projectedCount, actualCount,
+      // projectedRevenue, actualRevenue }). No runtime guard needed
+      // on the client side.
+      totals: {
+        projectedRevenue: d.totals.projectedRevenue,
+        actualRevenue:    d.totals.actualRevenue,
+      },
+      projectedRevenue,
+      actualRevenue,
+      priceAtDate,
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,
