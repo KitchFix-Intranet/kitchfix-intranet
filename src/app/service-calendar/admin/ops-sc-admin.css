@@ -264,6 +264,22 @@
 .sc-admin-eff-caption { display: block; color: #9ca3af; font-size: 12px; margin-top: 2px; font-weight: 400; }
 .sc-admin-eff-caption--inline { display: inline; margin-left: 0; margin-top: 0; }
 .sc-admin-eff-future-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* Backdate warning - shown only when Backdate radio is chosen + a valid past
+   date is selected. Amber on cream so it reads as deliberate and consequential
+   but not destructive. */
+.sc-admin-eff-warning {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-card);
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.sc-admin-eff-warning strong { color: #78350f; font-weight: 700; }
+
 .sc-admin-eff-date {
   font-family: inherit;
   font-size: 13px;

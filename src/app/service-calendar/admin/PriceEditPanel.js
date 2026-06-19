@@ -1,6 +1,6 @@
 "use client";
 // Inline edit panel under a service row. Captures: new price, effective
-// date (Today or Future), required reason, optional requested-by.
+// date (Today, Future, or Backdate), required reason, optional requested-by.
 //
 // CRITICAL MECHANICS:
 // 1. effectiveDate is computed CLIENT-SIDE from the browser's LOCAL clock
@@ -10,11 +10,16 @@
 //    operator's local today is what they mean by "Today".
 // 2. roundCents on both display and compare so 5-decimal storage rows
 //    (95 of 159 in production) never show as false-positive changes.
-// 3. Future radio's date picker is constrained min={tomorrow}. Today's
-//    job is the Today radio; the Future option is only for genuinely
-//    later dates.
+// 3. Future radio's date picker is constrained min={tomorrow}.
+// 4. Backdate (Stage 3) is fenced: the operator must deliberately pick it,
+//    a past-date picker (max={yesterday}, min=2024-01-01) appears, and a
+//    warning is shown naming the calendar-day span and explaining what
+//    recomputes. The Save payload includes allowBackdate: true so the
+//    server's today-or-future floor is skipped only for this path.
 
 import { useEffect, useMemo, useState } from "react";
+
+const BACKDATE_FLOOR = "2024-01-01";
 
 function roundCents(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -37,6 +42,26 @@ function localTomorrow() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function localYesterday() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Inclusive calendar-day count between two YYYY-MM-DD strings (both ends
+// counted). Used for the backdate warning's span text. Pure date math
+// against T00:00:00 so DST transitions cannot drift the count by an hour.
+function daysBetweenInclusive(fromDate, toDate) {
+  if (!fromDate || !toDate) return 0;
+  const a = new Date(fromDate + "T00:00:00");
+  const b = new Date(toDate + "T00:00:00");
+  const MS = 24 * 60 * 60 * 1000;
+  return Math.round((b - a) / MS) + 1;
+}
+
 function fmtPrice(n) {
   return "$" + Number(n).toFixed(2);
 }
@@ -52,14 +77,16 @@ function fmtDateHuman(iso) {
 export default function PriceEditPanel({ accountKey, groupName, service, onCancel, onSaved, showToast }) {
   const currentPrice = roundCents(service.price);
   const [newPrice, setNewPrice] = useState(currentPrice.toFixed(2));
-  const [effMode, setEffMode] = useState("today");   // "today" | "future"
+  const [effMode, setEffMode] = useState("today");   // "today" | "future" | "backdate"
   const [futureDate, setFutureDate] = useState("");
+  const [backdateDate, setBackdateDate] = useState("");
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [saving, setSaving] = useState(false);
 
   const today = useMemo(() => localToday(), []);
   const tomorrow = useMemo(() => localTomorrow(), []);
+  const yesterday = useMemo(() => localYesterday(), []);
 
   // If the user leaves the panel open through midnight, recompute "today"
   // on next render so the Today radio's date stays honest. Cheap re-mem.
@@ -75,31 +102,41 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
   const newPriceNum = Number(newPrice);
   const newPriceRounded = isNaN(newPriceNum) ? null : roundCents(newPriceNum);
   const priceChanged = newPriceRounded !== null && newPriceRounded !== currentPrice;
-  const effDate = effMode === "today" ? today : futureDate;
-  const effReady = effMode === "today" || (effMode === "future" && /^\d{4}-\d{2}-\d{2}$/.test(futureDate) && futureDate >= tomorrow);
+  const effDate = effMode === "today" ? today : effMode === "future" ? futureDate : backdateDate;
+  const isBackdate = effMode === "backdate";
+  const effReady =
+    effMode === "today" ||
+    (effMode === "future" && /^\d{4}-\d{2}-\d{2}$/.test(futureDate) && futureDate >= tomorrow) ||
+    (effMode === "backdate" && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const canSave = !saving && priceChanged && newPriceRounded > 0 && effReady && reasonReady;
+
+  const backdateSpanDays = isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate)
+    ? daysBetweenInclusive(backdateDate, today)
+    : 0;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
+      const change = {
+        type: "price",
+        groupName,
+        serviceName: service.serviceName,
+        from: currentPrice,
+        to: newPriceRounded,
+        effectiveDate: effDate,
+        reason: reason.trim(),
+        requestedBy: requestedBy.trim() || undefined,
+      };
+      if (isBackdate) change.allowBackdate = true;
       const res = await fetch("/api/service-calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "sc-config-update",
           accountKey,
-          changes: [{
-            type: "price",
-            groupName,
-            serviceName: service.serviceName,
-            from: currentPrice,
-            to: newPriceRounded,
-            effectiveDate: effDate,
-            reason: reason.trim(),
-            requestedBy: requestedBy.trim() || undefined,
-          }],
+          changes: [change],
         }),
       });
       const result = await res.json();
@@ -175,7 +212,33 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
               <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Switches over on that date automatically.</span>
             </span>
           </label>
+          <label className="sc-admin-eff-option">
+            <input
+              type="radio"
+              name={`eff-${service.id}`}
+              checked={effMode === "backdate"}
+              onChange={() => setEffMode("backdate")}
+            />
+            <span className="sc-admin-eff-future-row">
+              <strong>Backdate</strong>
+              <input
+                type="date"
+                className="sc-admin-eff-date"
+                value={backdateDate}
+                min={BACKDATE_FLOOR}
+                max={yesterday}
+                onChange={(e) => { setBackdateDate(e.target.value); setEffMode("backdate"); }}
+                disabled={effMode !== "backdate"}
+              />
+              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Sets the price as if it had been in effect since that past date.</span>
+            </span>
+          </label>
         </div>
+        {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
+          <div className="sc-admin-eff-warning" role="alert">
+            <strong>Backdate warning.</strong> Backdating recomputes recorded revenue for the calendar span {fmtDateHuman(backdateDate)} through {fmtDateHuman(today)} ({backdateSpanDays} calendar days). Days in that span that had service will have their recorded revenue change. This system has no record of which days have been invoiced - verify against your billing before saving.
+          </div>
+        )}
       </div>
 
       <div className="sc-admin-field">

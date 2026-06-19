@@ -1,7 +1,7 @@
 "use client";
 // Inline edit panel for one fee account's annual fee. Mirrors PriceEditPanel
-// (Today / Future effective date radios, required reason, optional requested
-// by) - the contract-revenue layer's editor twin.
+// (Today / Future / Backdate effective-date radios, required reason, optional
+// requested-by) - the contract-revenue layer's editor twin.
 //
 // SAME MECHANICS AS PriceEditPanel:
 // 1. effectiveDate is computed CLIENT-SIDE from the browser's LOCAL clock.
@@ -10,8 +10,14 @@
 // 2. roundCents on both display and compare so a no-op same-amount save
 //    cannot accidentally fire.
 // 3. Future radio's date picker is min={tomorrow}.
+// 4. Backdate (Stage 3) is fenced behind a third radio; max={yesterday},
+//    min=2024-01-01. Warning copy differs from the price panel because fees
+//    do NOT flow through the Service Calendar's revenue. Save payload sets
+//    allowBackdate: true.
 
 import { useEffect, useMemo, useState } from "react";
+
+const BACKDATE_FLOOR = "2024-01-01";
 
 function roundCents(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -34,6 +40,15 @@ function localTomorrow() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function localYesterday() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function fmtAmount(n) {
   return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
@@ -49,14 +64,16 @@ function fmtDateHuman(iso) {
 export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, showToast }) {
   const currentAmount = roundCents(current?.amount ?? 0);
   const [newAmount, setNewAmount] = useState(currentAmount.toFixed(2));
-  const [effMode, setEffMode] = useState("today");
+  const [effMode, setEffMode] = useState("today");   // "today" | "future" | "backdate"
   const [futureDate, setFutureDate] = useState("");
+  const [backdateDate, setBackdateDate] = useState("");
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [saving, setSaving] = useState(false);
 
   const today = useMemo(() => localToday(), []);
   const tomorrow = useMemo(() => localTomorrow(), []);
+  const yesterday = useMemo(() => localYesterday(), []);
 
   useEffect(() => {
     const interval = setInterval(() => {}, 60_000);
@@ -66,8 +83,12 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
   const newAmountNum = Number(newAmount);
   const newAmountRounded = isNaN(newAmountNum) ? null : roundCents(newAmountNum);
   const amountChanged = newAmountRounded !== null && newAmountRounded !== currentAmount;
-  const effDate = effMode === "today" ? today : futureDate;
-  const effReady = effMode === "today" || (effMode === "future" && /^\d{4}-\d{2}-\d{2}$/.test(futureDate) && futureDate >= tomorrow);
+  const effDate = effMode === "today" ? today : effMode === "future" ? futureDate : backdateDate;
+  const isBackdate = effMode === "backdate";
+  const effReady =
+    effMode === "today" ||
+    (effMode === "future" && /^\d{4}-\d{2}-\d{2}$/.test(futureDate) && futureDate >= tomorrow) ||
+    (effMode === "backdate" && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const canSave = !saving && amountChanged && newAmountRounded >= 0 && effReady && reasonReady;
 
@@ -75,17 +96,19 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
     if (!canSave) return;
     setSaving(true);
     try {
+      const payload = {
+        action: "sc-admin-fee-set",
+        accountKey,
+        amount: newAmountRounded,
+        effectiveDate: effDate,
+        reason: reason.trim(),
+        requestedBy: requestedBy.trim() || undefined,
+      };
+      if (isBackdate) payload.allowBackdate = true;
       const res = await fetch("/api/service-calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "sc-admin-fee-set",
-          accountKey,
-          amount: newAmountRounded,
-          effectiveDate: effDate,
-          reason: reason.trim(),
-          requestedBy: requestedBy.trim() || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const result = await res.json();
       if (result.success) {
@@ -160,7 +183,33 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
               <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Becomes the active fee on that date automatically.</span>
             </span>
           </label>
+          <label className="sc-admin-eff-option">
+            <input
+              type="radio"
+              name={`fee-eff-${accountKey}`}
+              checked={effMode === "backdate"}
+              onChange={() => setEffMode("backdate")}
+            />
+            <span className="sc-admin-eff-future-row">
+              <strong>Backdate</strong>
+              <input
+                type="date"
+                className="sc-admin-eff-date"
+                value={backdateDate}
+                min={BACKDATE_FLOOR}
+                max={yesterday}
+                onChange={(e) => { setBackdateDate(e.target.value); setEffMode("backdate"); }}
+                disabled={effMode !== "backdate"}
+              />
+              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Sets the fee as if it had been in effect since that past date.</span>
+            </span>
+          </label>
         </div>
+        {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
+          <div className="sc-admin-eff-warning" role="alert">
+            <strong>Backdate warning.</strong> Backdating changes the contract-revenue history starting {fmtDateHuman(backdateDate)}. This becomes the fee of record for those past dates in the contract-revenue history. The Service Calendar is not affected - fees do not flow through calendar revenue. Verify the date is correct before saving.
+          </div>
+        )}
       </div>
 
       <div className="sc-admin-field">
