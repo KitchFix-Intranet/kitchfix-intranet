@@ -121,6 +121,17 @@ The migration project closed 2026-06-12. The dispositions below replace the prio
 
 ### Incidents — LEAVE ON SHEETS, build Supabase-native when prioritized
 
+## Scheduled audits
+
+Operational follow-ups on shipped work. Not engineering items - calendar checkpoints.
+
+### Post-fix audit — invoice-capture-to-PG (week of June 19)
+
+One week after the Module 6 dual-write fix (pr-9-1 + PR #138 + PR #139, shipped 2026-06-12), audit a week of live invoice uploads for zero failures/gaps. Confirm `pg_failed` holds at zero on normal traffic and new uploads land complete (line items + Stage A fields populated in PG). If clean -> invoice-capture-to-PG confirmed done. If a new failure cause appeared, `ai_scan_error` captured it -> fix, then done.
+
+Quick check command: `node --env-file=.env.local scripts/_probe_dual_write_gap_full_history.mjs` (gap probe) + count of `ai_scan_status='pg_failed'` rows over the prior week.
+
+## Remaining work — sized roadmap
 - **Disposition:** keep the Sheets code running; rebuild on PG when the feature gets product attention
 - **Why:** 0 rows ever submitted. Full submission code path IS built (Drive folder tree + Calendar event + Slack post + email + PDF generation + escalation deadlines per [`src/lib/incidentActions.js`](../src/lib/incidentActions.js)) but never used. No data to migrate, no coverage gap. The external side-effect entanglement is real and needs design before any rebuild.
 - **Standing concern:** when the feature returns, design the side-effect coordination first - per CLAUDE.md's Phase-3 note, the dual-write window for incidents would need special handling so side effects don't fire twice. Skip the dual-write window entirely by building Supabase-native from scratch.
