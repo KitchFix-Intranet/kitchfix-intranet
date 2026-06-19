@@ -872,20 +872,35 @@ export async function POST(request) {
           { status: 502 }
         );
       }
-      if (putRes.status === 409 || putRes.status === 422) {
-        // 409 = sha mismatch (race between our check and the PUT).
-        // 422 from GitHub usually means a different sha-related rejection.
+      if (!putRes.ok) {
+        // Surface GitHub's actual error instead of mislabeling everything
+        // as "stale". The prior code mapped 409/422 to a bare-body stale
+        // 409 on the theory that a PUT failure had to be a sha race;
+        // the 2026-06-19 audit found that repo ruleset 16364953's
+        // pull_request rule on main was rejecting direct contents-API
+        // PUTs (status 422 "Changes must be made through a pull request"),
+        // and the old mapping made it look like an editor-side staleness
+        // bug. Reflect the real GitHub response code + message so future
+        // failures are debuggable from one Network-tab response.
+        const rawText = await putRes.text();
+        let githubMessage = rawText;
+        try {
+          const parsed = JSON.parse(rawText);
+          if (parsed && typeof parsed.message === "string") {
+            githubMessage = parsed.message;
+          }
+        } catch {
+          // not JSON; keep raw text
+        }
+        if (githubMessage.length > 300) {
+          githubMessage = githubMessage.slice(0, 300) + "...";
+        }
         return NextResponse.json(
           {
-            error: "stale",
-            message: "This document changed since you opened it. Reload before saving.",
+            error: "github_write_failed",
+            github_status: putRes.status,
+            github_message: githubMessage,
           },
-          { status: 409 }
-        );
-      }
-      if (!putRes.ok) {
-        return NextResponse.json(
-          { error: `GitHub PUT ${putRes.status}: ${await putRes.text()}` },
           { status: 502 }
         );
       }
