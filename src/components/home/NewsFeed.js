@@ -80,6 +80,72 @@ const BookmarkIcon = ({ filled }) => (
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
   </svg>
 );
+
+// ── Reaction icons (16px, strokeWidth 1.8, amber when active) ──
+const reactionStroke = (active) => active ? "#d97706" : "#94a3b8";
+const reactionFill   = (active) => active ? "#d97706" : "none";
+
+const ThumbsUpIcon = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth="1.8" stroke={reactionStroke(active)} fill={reactionFill(active)}>
+    <path d="M7 10v12" />
+    <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.95 2.43l-1.92 8.5A2 2 0 0 1 17.91 22H7V10l5.21-7.83a1 1 0 0 1 1.6.06l.61.95a2 2 0 0 1 .58 1.6Z" fill={active ? "#d97706" : "none"} />
+  </svg>
+);
+const FlameIcon = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth="1.8" stroke={reactionStroke(active)} fill={reactionFill(active)}>
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  </svg>
+);
+const ClapIcon = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth="1.8" stroke={reactionStroke(active)} fill={reactionFill(active)}>
+    <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
+  </svg>
+);
+const HeartIcon = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" strokeWidth="1.8" stroke={reactionStroke(active)} fill={reactionFill(active)}>
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" />
+  </svg>
+);
+
+// Fixed reaction set. Order = display order on cards.
+const REACTIONS = [
+  { key: "liked",    label: "Like",     Icon: ThumbsUpIcon },
+  { key: "fired",    label: "Fire",     Icon: FlameIcon },
+  { key: "thumbsUp", label: "Sparkle",  Icon: ClapIcon },
+  { key: "hearted",  label: "Heart",    Icon: HeartIcon },
+];
+
+// ── Reaction strip - shared between card + reader ──
+function ReactionStrip({ postId, ix, counts, names, onToggle, size = "sm" }) {
+  return (
+    <div className={`nf-reactions${size === "lg" ? " nf-reactions--lg" : ""}`}>
+      {REACTIONS.map(({ key, label, Icon }) => {
+        const active = !!ix[key];
+        const count = counts?.[key] || 0;
+        const reactorList = names?.[key] || [];
+        return (
+          <button
+            key={key}
+            type="button"
+            className={`nf-reaction-btn${active ? " nf-reaction-btn--active" : ""}`}
+            onClick={(e) => onToggle(e, postId, key)}
+            aria-label={`${label}${count > 0 ? ` (${count})` : ""}`}
+            title={label}
+          >
+            <Icon active={active} />
+            {count > 0 && <span className="nf-reaction-count">{count}</span>}
+            {count > 0 && reactorList.length > 0 && (
+              <span className="nf-reaction-tooltip" role="tooltip">
+                {reactorList.slice(0, 5).join(", ")}
+                {reactorList.length > 5 ? `, +${reactorList.length - 5} more` : ""}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 const SettingsIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
 );
@@ -94,6 +160,8 @@ export default function NewsFeed({ session, refreshKey }) {
   const [activeFilter, setActiveFilter] = useState("all");
   const [showAdmin, setShowAdmin] = useState(false);
   const [readingPost, setReadingPost] = useState(null);
+  const [reactionCounts, setReactionCounts] = useState({});
+  const [reactorNames, setReactorNames]     = useState({});
   const localEditsRef = useRef({});
 
   const userEmail = session?.user?.email || "";
@@ -106,6 +174,8 @@ export default function NewsFeed({ session, refreshKey }) {
       if (!res.ok) throw new Error("Failed to load news");
       const data = await res.json();
       setPosts(data.posts || []);
+      setReactionCounts(data.reactionCounts || {});
+      setReactorNames(data.reactorNames || {});
 
       const serverIx = {};
       (data.interactions || []).forEach((ix) => { serverIx[ix.postId] = ix; });
@@ -189,6 +259,33 @@ export default function NewsFeed({ session, refreshKey }) {
     const ix = getIx(postId);
     updateIx(postId, { saved: !ix.saved });
     postAction("news-save", { postId, saved: !ix.saved });
+  };
+
+  // Reaction toggle: optimistic flip of user's interaction + count + names list.
+  // Reacting also marks the post as read (matches server-side news-react).
+  const toggleReaction = (e, postId, reaction) => {
+    e.stopPropagation();
+    const ix = getIx(postId);
+    const willBeActive = !ix[reaction];
+    const now = new Date().toISOString();
+    updateIx(postId, { [reaction]: willBeActive, read: true, readAt: now });
+
+    const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "You";
+    setReactionCounts((prev) => {
+      const cur = prev[postId] || { liked: 0, fired: 0, thumbsUp: 0, hearted: 0 };
+      const nextCount = Math.max(0, (cur[reaction] || 0) + (willBeActive ? 1 : -1));
+      return { ...prev, [postId]: { ...cur, [reaction]: nextCount } };
+    });
+    setReactorNames((prev) => {
+      const cur = prev[postId] || { liked: [], fired: [], thumbsUp: [], hearted: [] };
+      const curList = cur[reaction] || [];
+      const nextList = willBeActive
+        ? [...curList.filter((n) => n !== displayName), displayName]
+        : curList.filter((n) => n !== displayName);
+      return { ...prev, [postId]: { ...cur, [reaction]: nextList } };
+    });
+
+    postAction("news-react", { postId, reaction, value: willBeActive });
   };
 
   // ── Reader overlay ──
@@ -329,6 +426,14 @@ export default function NewsFeed({ session, refreshKey }) {
                   <h3 className="nf-card-title">{post.title}</h3>
                   <p className="nf-card-excerpt">{post.body}</p>
 
+                  <ReactionStrip
+                    postId={post.postId}
+                    ix={ix}
+                    counts={reactionCounts[post.postId]}
+                    names={reactorNames[post.postId]}
+                    onToggle={toggleReaction}
+                  />
+
                   <div className="nf-card-footer">
                     <span className="nf-card-author">{post.author}</span>
                     <span>·</span>
@@ -404,6 +509,14 @@ export default function NewsFeed({ session, refreshKey }) {
               </div>
               <div className="nf-reader-footer">
                 <button className="nf-reader-close" onClick={closeReader}>Close</button>
+                <ReactionStrip
+                  postId={readingPost.postId}
+                  ix={ix}
+                  counts={reactionCounts[readingPost.postId]}
+                  names={reactorNames[readingPost.postId]}
+                  onToggle={toggleReaction}
+                  size="lg"
+                />
                 <button
                   className={`nf-reader-action${ix.saved ? " nf-reader-action--saved" : ""}`}
                   onClick={(e) => toggleSave(e, readingPost.postId)}

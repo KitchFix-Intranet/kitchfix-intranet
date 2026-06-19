@@ -429,7 +429,25 @@ async function processAccount(sb, accountKey, payload) {
     serviceIds[s._key] = data.id;
   }
 
-  // Step C: upsert prices
+  // Step C: insert initial prices ONLY when missing.
+  //
+  // ignoreDuplicates: true so the (service_id, effective_date='2026-01-01')
+  // row is INSERTed on first import and left untouched on every re-run.
+  // Manual price corrections - whether they UPDATE the 2026-01-01 row or
+  // INSERT a new row at a later effective_date - are preserved across
+  // re-imports.
+  //
+  // Why: 2026-06-16 incident. Operators corrected CIN - AZ billing prices
+  // via SQL to the cost-basis values ($20.31 / $12.90). A subsequent
+  // re-import (for CIN - KY corrections) silently overwrote those prices
+  // back to the projection-tab full rates ($29.01 / $18.42) because the
+  // upsert was using ON CONFLICT DO UPDATE on (service_id, effective_date).
+  // The UI then showed wrong billing rates until detected.
+  //
+  // Services and groups above keep ON CONFLICT DO UPDATE (re-importing
+  // updated names from the sheet is the intended behavior). Projections,
+  // actuals, and metadata below also keep DO UPDATE for the same reason -
+  // meal counts come from the xlsx, not from operators editing PG.
   let priceCount = 0;
   for (const s of canon.services) {
     const serviceId = serviceIds[s._key];
@@ -443,7 +461,7 @@ async function processAccount(sb, accountKey, payload) {
           effective_date: EFFECTIVE_DATE,
           created_by: CREATED_BY,
         },
-        { onConflict: "service_id,effective_date" }
+        { onConflict: "service_id,effective_date", ignoreDuplicates: true }
       );
     if (error) {
       console.error(`Offending price row:`, { service: s.service_name, price });

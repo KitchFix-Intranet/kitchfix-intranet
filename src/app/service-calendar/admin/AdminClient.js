@@ -1,13 +1,14 @@
 "use client";
-// SC admin Stage 2 - shell with two states:
-//   view === "overview"  -> AccountsOverview (the landing)
-//   view === "account"   -> AccountEditor   (the per-account drill-in)
-// No section nav until later stages add fee / fun / log surfaces.
+// SC admin Stage 2 - shell with three states:
+//   view === "overview"    -> AccountsOverview (the landing)
+//   view === "account"     -> AccountEditor   (per-meal drill-in)
+//   view === "feeAccount"  -> FeeAccountEditor (flat-fee drill-in)
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import AccountsOverview from "./AccountsOverview";
 import AccountEditor from "./AccountEditor";
+import FeeAccountEditor from "./FeeAccountEditor";
 import "../ops-sc.css";
 import "./ops-sc-admin.css";
 
@@ -36,16 +37,26 @@ export default function AdminClient({ email }) {
           </div>
           {view.mode === "overview" ? (
             <p className="sc-admin-subtitle">
-              Pricing control. All-account overview; drill in to edit.
+              Pricing + fee control. All-account overview; drill in to edit.
             </p>
           ) : null}
         </div>
 
         {view.mode === "overview" && (
-          <AccountsOverview onSelect={(key) => setView({ mode: "account", key })} />
+          <AccountsOverview
+            onSelectPerMeal={(key) => setView({ mode: "account", key })}
+            onSelectFee={(key) => setView({ mode: "feeAccount", key })}
+          />
         )}
         {view.mode === "account" && (
           <AccountEditor
+            accountKey={view.key}
+            onBack={() => setView({ mode: "overview" })}
+            showToast={showToast}
+          />
+        )}
+        {view.mode === "feeAccount" && (
+          <FeeAccountEditor
             accountKey={view.key}
             onBack={() => setView({ mode: "overview" })}
             showToast={showToast}

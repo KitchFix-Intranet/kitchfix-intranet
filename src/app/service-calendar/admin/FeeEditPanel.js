@@ -1,21 +1,19 @@
 "use client";
-// Inline edit panel under a service row. Captures: new price, effective
-// date (Today, Future, or Backdate), required reason, optional requested-by.
+// Inline edit panel for one fee account's annual fee. Mirrors PriceEditPanel
+// (Today / Future / Backdate effective-date radios, required reason, optional
+// requested-by) - the contract-revenue layer's editor twin.
 //
-// CRITICAL MECHANICS:
-// 1. effectiveDate is computed CLIENT-SIDE from the browser's LOCAL clock
-//    (new Date().getFullYear/getMonth/getDate). NEVER trust server time -
-//    Vercel runs in UTC and "Today" picked in a US-evening session would
-//    silently roll to tomorrow's date if we let the server decide. The
-//    operator's local today is what they mean by "Today".
-// 2. roundCents on both display and compare so 5-decimal storage rows
-//    (95 of 159 in production) never show as false-positive changes.
-// 3. Future radio's date picker is constrained min={tomorrow}.
-// 4. Backdate (Stage 3) is fenced: the operator must deliberately pick it,
-//    a past-date picker (max={yesterday}, min=2024-01-01) appears, and a
-//    warning is shown naming the calendar-day span and explaining what
-//    recomputes. The Save payload includes allowBackdate: true so the
-//    server's today-or-future floor is skipped only for this path.
+// SAME MECHANICS AS PriceEditPanel:
+// 1. effectiveDate is computed CLIENT-SIDE from the browser's LOCAL clock.
+//    Vercel runs in UTC; "Today" picked in a US-evening session would roll
+//    to tomorrow if the server decided. The operator's local today wins.
+// 2. roundCents on both display and compare so a no-op same-amount save
+//    cannot accidentally fire.
+// 3. Future radio's date picker is min={tomorrow}.
+// 4. Backdate (Stage 3) is fenced behind a third radio; max={yesterday},
+//    min=2024-01-01. Warning copy differs from the price panel because fees
+//    do NOT flow through the Service Calendar's revenue. Save payload sets
+//    allowBackdate: true.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -51,19 +49,8 @@ function localYesterday() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Inclusive calendar-day count between two YYYY-MM-DD strings (both ends
-// counted). Used for the backdate warning's span text. Pure date math
-// against T00:00:00 so DST transitions cannot drift the count by an hour.
-function daysBetweenInclusive(fromDate, toDate) {
-  if (!fromDate || !toDate) return 0;
-  const a = new Date(fromDate + "T00:00:00");
-  const b = new Date(toDate + "T00:00:00");
-  const MS = 24 * 60 * 60 * 1000;
-  return Math.round((b - a) / MS) + 1;
-}
-
-function fmtPrice(n) {
-  return "$" + Number(n).toFixed(2);
+function fmtAmount(n) {
+  return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function fmtDateHuman(iso) {
@@ -74,9 +61,9 @@ function fmtDateHuman(iso) {
   return `${months[Number(m) - 1]} ${Number(day)}, ${y}`;
 }
 
-export default function PriceEditPanel({ accountKey, groupName, service, onCancel, onSaved, showToast }) {
-  const currentPrice = roundCents(service.price);
-  const [newPrice, setNewPrice] = useState(currentPrice.toFixed(2));
+export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, showToast }) {
+  const currentAmount = roundCents(current?.amount ?? 0);
+  const [newAmount, setNewAmount] = useState(currentAmount.toFixed(2));
   const [effMode, setEffMode] = useState("today");   // "today" | "future" | "backdate"
   const [futureDate, setFutureDate] = useState("");
   const [backdateDate, setBackdateDate] = useState("");
@@ -88,20 +75,14 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
   const tomorrow = useMemo(() => localTomorrow(), []);
   const yesterday = useMemo(() => localYesterday(), []);
 
-  // If the user leaves the panel open through midnight, recompute "today"
-  // on next render so the Today radio's date stays honest. Cheap re-mem.
   useEffect(() => {
-    const interval = setInterval(() => {
-      // forces a re-render of the today label if needed; the useMemo
-      // above doesn't auto-update, so we keep this simple and let the
-      // panel be closed/reopened to refresh. Skipping the rAF dance.
-    }, 60_000);
+    const interval = setInterval(() => {}, 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  const newPriceNum = Number(newPrice);
-  const newPriceRounded = isNaN(newPriceNum) ? null : roundCents(newPriceNum);
-  const priceChanged = newPriceRounded !== null && newPriceRounded !== currentPrice;
+  const newAmountNum = Number(newAmount);
+  const newAmountRounded = isNaN(newAmountNum) ? null : roundCents(newAmountNum);
+  const amountChanged = newAmountRounded !== null && newAmountRounded !== currentAmount;
   const effDate = effMode === "today" ? today : effMode === "future" ? futureDate : backdateDate;
   const isBackdate = effMode === "backdate";
   const effReady =
@@ -109,35 +90,25 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
     (effMode === "future" && /^\d{4}-\d{2}-\d{2}$/.test(futureDate) && futureDate >= tomorrow) ||
     (effMode === "backdate" && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
-  const canSave = !saving && priceChanged && newPriceRounded > 0 && effReady && reasonReady;
-
-  const backdateSpanDays = isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate)
-    ? daysBetweenInclusive(backdateDate, today)
-    : 0;
+  const canSave = !saving && amountChanged && newAmountRounded >= 0 && effReady && reasonReady;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
-      const change = {
-        type: "price",
-        groupName,
-        serviceName: service.serviceName,
-        from: currentPrice,
-        to: newPriceRounded,
+      const payload = {
+        action: "sc-admin-fee-set",
+        accountKey,
+        amount: newAmountRounded,
         effectiveDate: effDate,
         reason: reason.trim(),
         requestedBy: requestedBy.trim() || undefined,
       };
-      if (isBackdate) change.allowBackdate = true;
+      if (isBackdate) payload.allowBackdate = true;
       const res = await fetch("/api/service-calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "sc-config-update",
-          accountKey,
-          changes: [change],
-        }),
+        body: JSON.stringify(payload),
       });
       const result = await res.json();
       if (result.success) {
@@ -155,23 +126,23 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
   return (
     <div className="sc-admin-panel">
       <div className="sc-admin-panel-current">
-        Current price: <strong>{fmtPrice(currentPrice)}</strong>
-        {service.priceSinceDate && (
-          <span className="sc-admin-panel-since"> (since {fmtDateHuman(service.priceSinceDate)})</span>
+        Current fee: <strong>{fmtAmount(currentAmount)} annual</strong>
+        {current?.effectiveDate && (
+          <span className="sc-admin-panel-since"> (since {fmtDateHuman(current.effectiveDate)})</span>
         )}
       </div>
 
       <div className="sc-admin-field">
-        <label className="sc-admin-field-label" htmlFor={`new-price-${service.id}`}>New price</label>
-        <div className="sc-admin-price-input-wrap">
+        <label className="sc-admin-field-label" htmlFor={`new-fee-${accountKey}`}>New annual fee</label>
+        <div className="sc-admin-price-input-wrap sc-admin-fee-input-wrap">
           <span className="sc-admin-price-input-dollar">$</span>
           <input
-            id={`new-price-${service.id}`}
+            id={`new-fee-${accountKey}`}
             type="text"
             inputMode="decimal"
             className="sc-admin-price-input"
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value.replace(/[^0-9.]/g, ""))}
+            value={newAmount}
+            onChange={(e) => setNewAmount(e.target.value.replace(/[^0-9.]/g, ""))}
             placeholder="0.00"
           />
         </div>
@@ -183,19 +154,19 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
           <label className="sc-admin-eff-option">
             <input
               type="radio"
-              name={`eff-${service.id}`}
+              name={`fee-eff-${accountKey}`}
               checked={effMode === "today"}
               onChange={() => setEffMode("today")}
             />
             <span>
               <strong>Today</strong> ({fmtDateHuman(today)})
-              <span className="sc-admin-eff-caption">Applies from today forward; closed months untouched.</span>
+              <span className="sc-admin-eff-caption">Applies from today forward; history rows untouched.</span>
             </span>
           </label>
           <label className="sc-admin-eff-option">
             <input
               type="radio"
-              name={`eff-${service.id}`}
+              name={`fee-eff-${accountKey}`}
               checked={effMode === "future"}
               onChange={() => setEffMode("future")}
             />
@@ -209,13 +180,13 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
                 onChange={(e) => { setFutureDate(e.target.value); setEffMode("future"); }}
                 disabled={effMode !== "future"}
               />
-              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Switches over on that date automatically.</span>
+              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Becomes the active fee on that date automatically.</span>
             </span>
           </label>
           <label className="sc-admin-eff-option">
             <input
               type="radio"
-              name={`eff-${service.id}`}
+              name={`fee-eff-${accountKey}`}
               checked={effMode === "backdate"}
               onChange={() => setEffMode("backdate")}
             />
@@ -230,27 +201,27 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
                 onChange={(e) => { setBackdateDate(e.target.value); setEffMode("backdate"); }}
                 disabled={effMode !== "backdate"}
               />
-              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Sets the price as if it had been in effect since that past date.</span>
+              <span className="sc-admin-eff-caption sc-admin-eff-caption--inline">Sets the fee as if it had been in effect since that past date.</span>
             </span>
           </label>
         </div>
         {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
           <div className="sc-admin-eff-warning" role="alert">
-            <strong>Backdate warning.</strong> Backdating recomputes recorded revenue for the calendar span {fmtDateHuman(backdateDate)} through {fmtDateHuman(today)} ({backdateSpanDays} calendar days). Days in that span that had service will have their recorded revenue change. This system has no record of which days have been invoiced - verify against your billing before saving.
+            <strong>Backdate warning.</strong> Backdating changes the contract-revenue history starting {fmtDateHuman(backdateDate)}. This becomes the fee of record for those past dates in the contract-revenue history. The Service Calendar is not affected - fees do not flow through calendar revenue. Verify the date is correct before saving.
           </div>
         )}
       </div>
 
       <div className="sc-admin-field">
-        <label className="sc-admin-field-label" htmlFor={`reason-${service.id}`}>
+        <label className="sc-admin-field-label" htmlFor={`fee-reason-${accountKey}`}>
           Reason <span className="sc-admin-field-required">required</span>
         </label>
         <textarea
-          id={`reason-${service.id}`}
+          id={`fee-reason-${accountKey}`}
           className="sc-admin-textarea"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Why is this price changing?"
+          placeholder="Why is this fee changing? (CPI escalator, renegotiation, correction, etc.)"
           maxLength={280}
           rows={2}
         />
@@ -258,11 +229,11 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
       </div>
 
       <div className="sc-admin-field">
-        <label className="sc-admin-field-label" htmlFor={`reqby-${service.id}`}>
+        <label className="sc-admin-field-label" htmlFor={`fee-reqby-${accountKey}`}>
           Requested by <span className="sc-admin-field-optional">optional</span>
         </label>
         <input
-          id={`reqby-${service.id}`}
+          id={`fee-reqby-${accountKey}`}
           type="text"
           className="sc-admin-text-input"
           value={requestedBy}

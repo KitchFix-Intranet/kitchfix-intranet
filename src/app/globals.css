@@ -1133,6 +1133,64 @@ body {
 .nf-reader-action:hover { color: #d97706; border-color: #fcd34d; }
 .nf-reader-action--saved { color: #d97706; border-color: #fcd34d; background: #fffbeb; }
 
+/* Reactions strip (cards + reader footer) */
+.nf-reactions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.nf-reaction-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: #f8fafc;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 50px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  font-family: inherit;
+}
+.nf-reaction-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: #153968; }
+.nf-reaction-btn--active {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #d97706;
+}
+.nf-reaction-btn--active:hover { background: #fef3c7; border-color: #fbbf24; color: #92400e; }
+.nf-reaction-count { font-variant-numeric: tabular-nums; }
+
+/* Tooltip (CSS-only, shown on button hover; bookmarked names) */
+.nf-reaction-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+  z-index: 10;
+}
+.nf-reaction-btn:hover .nf-reaction-tooltip { opacity: 1; }
+
+/* Reader-footer variant: bigger tap targets */
+.nf-reactions--lg .nf-reaction-btn { padding: 6px 12px; font-size: 13px; }
+.nf-reactions--lg .nf-reaction-btn svg { width: 17px; height: 17px; }
+
 /* Mobile overlay */
 @media (max-width: 640px) {
   .nf-overlay { padding: 0; align-items: stretch; }
