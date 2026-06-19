@@ -1,0 +1,532 @@
+====================================================================================================
+FAILURE TEXTURE — selected records from classifications.jsonl
+generated: 2026-06-09T19:15:08.907Z
+====================================================================================================
+
+====================================================================================================
+SLICE 1: WHAT CHEFS WANT — foots=FAIL
+====================================================================================================
+count: 22
+
+  FILE:     What_Chefs_Want_12460724_20260325.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Classic F1 structure with printed quantity column (Ord Qty), unit price column, and extended price column. Catch-weight items show sub-lines with case weights and totals.
+  FOOTS RATIONALE: First two lines check out, but beef hanger steak shows catch-weight pricing where 24.75 total weight × $21.55/lb = $533.36, not 2 × $21.55
+  SAMPLE LINES:
+    - desc="SEABASS CHIL RF FIL S/ON" qty=8 unit=35.49 amount=259.72
+    - desc="BRUSSELS SPROUTS - WHOLE" qty=2 unit=25.9 amount=51.8
+    - desc="BEEF - HANGER STEAK CHOICE" qty=2 unit=21.55 amount=533.36
+
+  FILE:     What_Chefs_Want_12480028_20260331.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with quantity column (1.00), unit price column (15.15), and amount column (209.83). Catch-weight shows as sub-line 'Case weights: 13.85, TOTAL: 13.85' which is typical F1 structure.
+  FOOTS RATIONALE: 1.00 × 15.15 = 15.15, but amount shows 209.83. This is catch-weight where actual weight (13.85 lbs) × unit price determines final amount.
+  SAMPLE LINES:
+    - desc="BEEF - OXTAIL SLICED E/E" qty=1 unit=15.15 amount=209.83
+
+  FILE:     What_Chefs_Want_12569594_20260422.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with ordered/shipped quantity columns, unit price column, and extended price column. Catch-weight items show case weights in sub-lines like 'Case weights: 12.75, 11.55, TOTAL: 24.30'.
+  FOOTS RATIONALE: Catch-weight items use total weight for pricing calculation rather than simple qty × unit price (e.g., beef flank steak uses 24.30 lbs × $10.60/lb)
+  SAMPLE LINES:
+    - desc="MICRO - ARUGULA" qty=1 unit=25.5 amount=25.5
+    - desc="BEEF - FLANK STEAK" qty=2 unit=10.6 amount=257.58
+    - desc="LAMB - LOLLY POP CHOP FZ EACH" qty=100 unit=31 amount=368.9
+
+  FILE:     What_Chefs_Want_12585541_20260425.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with separate Ord Qty/Ship Qty columns, clear Unit Price and Ext. Price columns. Catch-weight items show case weights in sub-lines like 'Case weights: 12.70, 12.25, TOTAL: 24.95'.
+  FOOTS RATIONALE: First two lines match qty × unitPrice = amount, but beef line shows catch-weight pricing where 24.95 lbs × $21.70/lb ≈ $541.42, not 2 × $21.70
+  SAMPLE LINES:
+    - desc="RASPBERRIES - SELECT" qty=4 unit=5.1 amount=20.4
+    - desc="GRAPES - GREEN SEEDLESS" qty=1 unit=9.4 amount=9.4
+    - desc="BEEF - HANGER STEAK CHOICE" qty=2 unit=21.7 amount=541.42
+
+  FILE:     What_Chefs_Want_12466965_20260326.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with distinct quantity, unit price, and extended price columns. Catch-weight item shows weight in a 'Case weights:' sub-line format typical of What Chefs Want.
+  FOOTS RATIONALE: The sausage line shows 6 × 7.85 = 47.10 but amount is 94.20, suggesting catch-weight pricing where actual weight differs from case count
+  SAMPLE LINES:
+    - desc="SAUSAGE - SUMMER SOFT" qty=6 unit=7.85 amount=94.2
+    - desc="JUICE - ORANGE FLORIDA" qty=4 unit=32.7 amount=130.8
+
+  FILE:     What_Chefs_Want_12467188_20200326.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with clear Ord Qty/Ship Qty columns, Unit Price column, and Ext. Price column. Standard F1 structure with ordered quantity, shipped quantity, unit pricing, and extended amounts.
+  FOOTS RATIONALE: First line checks out (1 × 23.35 = 23.35), but second line shows 3 × 9.65 = 28.95, not 19.30 as shown
+  SAMPLE LINES:
+    - desc="CHEESE - BRIE WHEEL" qty=1 unit=23.35 amount=23.35
+    - desc="CHIA SEEDS BLACK ORGANIC" qty=3 unit=9.65 amount=19.3
+
+  FILE:     What_Chefs_Want_12575717_20260423.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with quantity in first column, unit price column, and amount column. Standard F1 structure matching What Chefs Want (non-credit) pattern.
+  FOOTS RATIONALE: First line shows qty 2 × unit price 76.70 should = 153.40, but amount shows 76.70, suggesting qty may be cases or unit interpretation differs
+  SAMPLE LINES:
+    - desc="TRUFFLE - WHOLE" qty=2 unit=76.7 amount=76.7
+    - desc="RICE - WILD" qty=2 unit=20.55 amount=41.1
+    - desc="BANANAS" qty=1 unit=16.7 amount=16.7
+    - desc="WIDE MOUTH SQUEEZE BOTTLE" qty=1 unit=21.15 amount=21.15
+
+  FILE:     What_Chefs_Want_12581009_20260424.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with distinct Ord/Shp quantity columns, Unit Price column, and Ext. Price (amount) column. Typical What Chefs Want non-credit structure.
+  FOOTS RATIONALE: First two lines check out (5×3.07≈15.90, 3×5.45≈16.35), but third line shows qty 1 × unit price 0.95 ≠ amount 14.25, suggesting multi-unit ordering
+  SAMPLE LINES:
+    - desc="SQUASH - ZUCCHINI" qty=5 unit=3.07 amount=15.9
+    - desc="PEAS - SUGAR SNAP PEAS" qty=3 unit=5.45 amount=16.35
+    - desc="HERB - CILANTRO FRESH" qty=1 unit=0.95 amount=14.25
+
+  FILE:     What_Chefs_Want_12585709_20260425.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with quantity in column, per-unit price column, and amount column. Catch-weight item shows 'Case weights: 75.89, TOTAL: 75.89' sub-line structure typical of What Chefs Want non-credit invoices.
+  FOOTS RATIONALE: First line shows qty 1.00 × $19.25 = $19.25 but amount is $1460.88, indicating catch-weight pricing where actual weight (75.89 lbs) is used in calculation
+  SAMPLE LINES:
+    - desc="BEEF - RIBEYE LIPON PRIME" qty=1 unit=19.25 amount=1460.88
+    - desc="JUICE - STRAW/ LEMONAD NATALIE" qty=3 unit=16.15 amount=48.45
+
+  FILE:     What_Chefs_Want_12604734_20260430.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with distinct quantity column (Ord Qty/Shp Qty), unit price column, and extended price column. Catch-weight shown in sub-line format 'Case weights: 19.08, TOTAL: 19.08'.
+  FOOTS RATIONALE: 1 × 7.32 ≠ 139.67, indicating catch-weight pricing where actual weight (19.08 lbs) × unit price = amount
+  SAMPLE LINES:
+    - desc="CHICKEN - BREAST 5OZ SNGL LOBE" qty=1 unit=7.32 amount=139.67
+
+  FILE:     What_Chefs_Want_12641791_20260509.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with distinct Ord Qty/Shp Qty columns, Unit Price column, and Ext Price column. Catch-weight items show case weights sub-lines like 'Case weights: 7.80, 7.60, 7.70, 7.80, 7.65, TOTAL 38.55'.
+  FOOTS RATIONALE: First line foots correctly (2.00 × 25.90 = 51.80), but catch-weight items like beef show case quantity vs actual weight pricing discrepancy, which is expected for catch-weight structure
+  SAMPLE LINES:
+    - desc="TOMATO - ROMA" qty=2 unit=25.9 amount=51.8
+    - desc="BEEF - TENDERLOIN CHOICE 5UP" qty=5 unit=20.4 amount=786.42
+    - desc="CHICKEN - BREAST RANDOM BNL/SK" qty=1 unit=87.75 amount=87.75
+
+  FILE:     What_Chefs_Want_12646671_20260511(1).pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed columns with Ord Qty, Shp Qty, Unit, Code, Description, Unit Price, and Ext Price. Catch-weight items show case weights in sub-lines like 'Case weights: 9.60, 9.70, 10.70, TOTAL 30.00'.
+  FOOTS RATIONALE: First line: 12 × 30.24 = 362.88 but amount shows 371.9; indicates catch-weight pricing where displayed qty is cases but pricing is by actual weight
+  SAMPLE LINES:
+    - desc="GROUPER BLACK FIL SOFF" qty=12 unit=30.24 amount=371.9
+    - desc="TOMATO - ROMA" qty=1 unit=25.55 amount=25.5
+    - desc="BEEF - OUTSIDE SKIRT" qty=30 unit=14 amount=420
+
+  FILE:     What_Chefs_Want_12646671_20260511.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with distinct Ord Qty, Shp Qty, Unit Price, and Ext Price columns. Catch-weight items show sub-lines with case weights and totals.
+  FOOTS RATIONALE: First sample: 12 × 30.24 = 362.88 but shows 371.9; suggests catch-weight pricing where displayed qty/price don't directly multiply
+  SAMPLE LINES:
+    - desc="GROUPER BLACK FIL SOFF" qty=12 unit=30.24 amount=371.9
+    - desc="SQUASH - YELLOW" qty=1 unit=16.4 amount=16.4
+    - desc="EGGS - CITRIC LIQUID WHOLE" qty=1 unit=55.15 amount=55.15
+
+  FILE:     What_Chefs_Want_12680179_20260520.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with distinct Ord Qty/Ship Qty columns, Unit Price column, and Ext. Price column. Catch-weight items show case weights and totals in sub-lines (e.g., 'Case weights: 11.75, 12.35, 11.85, 11.60, TOTAL: 47.55').
+  FOOTS RATIONALE: First line shows 5.00 × 1.00 = 5.00 but amount is 6.32; third line shows 4.00 × 21.70 = 86.80 but amount is 1031.84. This suggests catch-weight pricing where displayed qty/price don't reflect actual weight-based calculations.
+  SAMPLE LINES:
+    - desc="CABBAGE - GREEN" qty=5 unit=1 amount=6.32
+    - desc="CELERY" qty=3 unit=3.5 amount=10.5
+    - desc="BEEF - HANGER STEAK CHOICE FZ" qty=4 unit=21.7 amount=1031.84
+
+  FILE:     What_Chefs_Want_12589552_20260501.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with quantity (3), unit price (11.20), and amount (342.72) in distinct columns. Catch-weight shown in sub-line format with case weights listed.
+  FOOTS RATIONALE: 3 × 11.20 = 33.60, but amount shows 342.72 - significant discrepancy suggests catch-weight pricing structure
+  SAMPLE LINES:
+    - desc="VENISON - OSSO BUCCO 3" F/S" qty=3 unit=11.2 amount=342.72
+
+  FILE:     What_Chefs_Want_12609856_20260501.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed columns with quantity, unit price, and amount clearly displayed in tabular format. This matches the F1 family structure for What Chefs Want non-credit invoices.
+  FOOTS RATIONALE: First line shows 5 × 9.10 ≠ 9.16, second line shows 2 × 6.35 = 12.70 (OK), third line shows 1 × 102.15 = 102.15 (OK). Mixed results suggest potential unit/pricing display issue.
+  SAMPLE LINES:
+    - desc="COLESLAW - SHREDDED" qty=5 unit=9.1 amount=9.16
+    - desc="SUGAR - GRANULATED FINE 4 LB" qty=2 unit=6.35 amount=12.7
+    - desc="MILK - COCONUT" qty=1 unit=102.15 amount=102.15
+
+  FILE:     What_Chefs_Want_12620041_20260504.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with distinct quantity, unit price, and extended price columns. This matches the F1 pattern for What Chefs Want non-credit invoices.
+  FOOTS RATIONALE: The math doesn't foot - appears to be catch-weight items where displayed quantity differs from actual weight used for pricing
+  SAMPLE LINES:
+    - desc="SQUASH - ACORN" qty=1 unit=2.1 amount=6.55
+    - desc="PLANTAIN" qty=3 unit=2.6 amount=8.01
+    - desc="CAULIFLOWER - FLORETS" qty=1 unit=8.45 amount=25.35
+
+  FILE:     What_Chefs_Want_12624433_20260505.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with clear quantity column, unit price column, and extended price column layout typical of What Chefs Want non-credit invoices.
+  FOOTS RATIONALE: First line: 5 × 7.30 = 36.50 but shows 37.23; other lines match correctly
+  SAMPLE LINES:
+    - desc="ENDIVE - BELGIAN" qty=5 unit=7.3 amount=37.23
+    - desc="COTTAGE CHEESE" qty=1 unit=13.85 amount=13.85
+    - desc="SOUR CREAM" qty=1 unit=15.75 amount=15.75
+
+  FILE:     What_Chefs_Want_12651658_20150515.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed layout with quantity in Ord Qty column, unit price column, and extended price column. Catch-weight item shows case weight in a sub-line format ('Case weights: 12.55, TOTAL: 12.55').
+  FOOTS RATIONALE: First line shows 1.00 × 12.90 = 12.90 but amount is 161.90, indicating catch-weight pricing where actual weight (12.55 lbs) × unit price = amount
+  SAMPLE LINES:
+    - desc="BEEF - PASTRAMI BLACK HAWK" qty=1 unit=12.9 amount=161.9
+    - desc="MUSHROOMS - SHIITAKE CAPS" qty=1 unit=31.5 amount=31.5
+
+  FILE:     What_Chefs_Want_12659589_20260514.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed structure with Ord Qty and Ship Qty columns, clear Unit Price and Ext. Price columns, typical What Chefs Want layout mentioned in F1 examples.
+  FOOTS RATIONALE: First sample shows qty 1 × $3.30 ≠ $20.16, suggesting case weights or pack pricing structure not captured in simple qty calculation
+  SAMPLE LINES:
+    - desc="CHEESE - MUENSTER" qty=1 unit=3.3 amount=20.16
+    - desc="POTATO - FINGERLING WHITE" qty=2 unit=14.9 amount=29.8
+    - desc="PEPPERS - JALAPENO" qty=2 unit=4.2 amount=8.4
+
+  FILE:     What_Chefs_Want_12665906_20260515.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clean printed invoice with distinct quantity, unit price, and extended price columns. This matches the F1 family description for What Chefs Want (non-credit).
+  FOOTS RATIONALE: Some lines don't foot exactly - likely case pricing where qty represents cases but unit price may be per individual unit
+  SAMPLE LINES:
+    - desc="FENNEL BULB - ANISE PREM" qty=2 unit=3.4 amount=6.8
+    - desc="GARLIC - PEELED IMPORTED" qty=1 unit=9.15 amount=18.3
+    - desc="YOGURT - GREEK CHOBANI STRAWBE" qty=2 unit=28.95 amount=57.9
+
+  FILE:     What_Chefs_Want_12724853_20260601.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   What Chefs Want
+  RATIONALE:       Clear printed columns for quantity, unit price, and extended price. Catch-weight items show weight in 'Case weights: X.XX, TOTAL X.XX' sub-lines typical of What Chefs Want format.
+  FOOTS RATIONALE: First sample shows catch-weight pricing (1.41 lbs × $22.45 = $31.65), but asparagus and grapes multiply correctly by case count
+  SAMPLE LINES:
+    - desc="SALAME - BIG RED INDIANA" qty=1 unit=22.45 amount=31.65
+    - desc="ASPARAGUS - JUMBO" qty=6 unit=6 amount=36
+    - desc="GRAPES - RED SEEDLESS" qty=2 unit=8.1 amount=16.2
+
+====================================================================================================
+SLICE 2: FRESH POINT — foots=FAIL
+====================================================================================================
+count: 9
+
+  FILE:     Fresh_Point_107610825_20260401.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed layout with quantity column, unit price column, and extended price column. Fresh Point is a typical F1 vendor with standard columnar structure.
+  FOOTS RATIONALE: First sample shows qty 0 but has amount 48.20, suggesting quantity shipped differs from quantity ordered in this delivery structure
+  SAMPLE LINES:
+    - desc="PINEAPPLE GOLD 5-6CT" qty=0 unit=24.1 amount=48.2
+    - desc="MELONS WATERMELON RNDLS SEEDLESS 4-6CT" qty=1 unit=48.9 amount=48.9
+    - desc="MELONS CANTALOUPE 9-12CT" qty=1 unit=33.27 amount=33.27
+
+  FILE:     Freshpoint_1076096055_20260320.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Freshpoint
+  RATIONALE:       Clean printed invoice with distinct quantity, unit price, and amount columns. Freshpoint is a typical F1 vendor with standard columnar layout.
+  FOOTS RATIONALE: The unit prices and amounts don't match directly - appears to show both original and discounted pricing columns
+  SAMPLE LINES:
+    - desc="BANANAS 40CT (ORGANIC)" qty=1 unit=22 amount=19.36
+    - desc="LETTUCE ROMAINE 24CT" qty=1 unit=48 amount=42.24
+    - desc="ASPARAGUS 11LB AVG 11/8" qty=1 unit=16.56 amount=30.49
+
+  FILE:     Fresh_Point_2778450185_20260519.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed invoice with standard quantity, unit price, and amount columns in tabular format. Fresh Point is explicitly mentioned as a typical F1 vendor.
+  FOOTS RATIONALE: The math doesn't work - qty 3 × $2.64 should equal $7.92, not $2.64. There appears to be catch-weight pricing or the quantity column may represent cases while pricing is per pound.
+  SAMPLE LINES:
+    - desc="BLUEBERRY GREEN SEEDLESS" qty=3 unit=2.64 amount=2.64
+    - desc="FRUIT MIXED PEELED" qty=3 unit=3.78 amount=3.78
+    - desc="BANANA ORGANIC" qty=1 unit=143.2 amount=143.2
+
+  FILE:     Fresh_Point_2778465370_20260528.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed columns with quantity ordered/shipped, item description, unit weights, extended weights, unit price, and amount columns. Classic Fresh Point layout matching F1 structure.
+  FOOTS RATIONALE: Math doesn't align - appears to be catch-weight pricing where extended weight and unit price determine amount, not simple qty × unitPrice
+  SAMPLE LINES:
+    - desc="AVOCADO HASS PREMIUM GRNWL 40/48CT" qty=1 unit=61.7 amount=61.7
+    - desc="BEAN GREEN SNIPPED 2/5 LB" qty=2 unit=22 amount=49.1
+    - desc="BERRY STRAWBERRY PREMIUM" qty=4 unit=40.5 amount=36.95
+
+  FILE:     Fresh_Point_569072211_20260508.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Classic F1 structure with clean printed columns for quantity, unit price, and amount. Catch-weight items show actual weights in qty column (e.g., 21.56 lbs for Beef Tenderloin).
+  FOOTS RATIONALE: Math doesn't match - appears to be per-pound pricing where displayed unit price needs multiplication factor
+  SAMPLE LINES:
+    - desc="Beef Ribeye Choice Lip On Up" qty=17.13 unit=5.15 amount=149.84
+    - desc="Beef Strip Loin 0x1 Choice XI" qty=15.56 unit=1.3 amount=643.87
+    - desc="Beef Tenderloin Psmo Ch Up" qty=21.56 unit=6.5 amount=2067.6
+
+  FILE:     Fresh_Point_56912832_20260508.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed structure with quantity column, per-unit price column, and amount column. Fresh Point is explicitly listed as a typical F1 vendor.
+  FOOTS RATIONALE: The math doesn't align - appears to be cases × case price structure rather than simple qty × unit price
+  SAMPLE LINES:
+    - desc="Bacon Slab Sliced Thick 10/14" qty=1 unit=1.3 amount=157.3
+    - desc="Carrot Baby Peeled Tn Color" qty=2 unit=15.16 amount=29.66
+    - desc="Cucumber Large English 12 Ct" qty=1 unit=1.12 amount=28.67
+
+  FILE:     Fresh_Point_56926931_20260511.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed layout with distinct Qty, Unit Price, and Amount columns. Items show standard quantity counts (mostly 1s) with per-unit pricing, typical of Fresh Point's structure.
+  FOOTS RATIONALE: The unit prices appear to be codes rather than actual prices - qty × unitPrice does not equal amount for any sample lines
+  SAMPLE LINES:
+    - desc="Apple Granny Smith" qty=1 unit=112 amount=15.17
+    - desc="Banana Green Tip Single" qty=2 unit=110 amount=14.53
+    - desc="Cabbage Red Shred" qty=1 unit=415 amount=7.18
+
+  FILE:     Fresh_Point_56939943_20260512.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed layout with distinct quantity column, per-unit price column, and amount column. Catch-weight items show weights in qty column format typical of Fresh Point invoices.
+  FOOTS RATIONALE: First sample shows 1 × 7.76 ≠ 309.47, indicating catch-weight pricing where displayed qty/price don't directly multiply to amount
+  SAMPLE LINES:
+    - desc="Beef Ground Brisket Blend" qty=1 unit=7.76 amount=309.47
+    - desc="Blackberry" qty=2 unit=53.88 amount=107.76
+    - desc="Couscous Traditional" qty=1 unit=39.08 amount=39.08
+
+  FILE:     Fresh_Point_57125392_20260530.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Fresh Point
+  RATIONALE:       Clean printed invoice with distinct quantity, unit price, and amount columns. Catch-weight items show weight in the quantity column (like '15.60' for beef ribeye). Classic Fresh Point layout matching F1 family perfectly.
+  FOOTS RATIONALE: Math doesn't align perfectly - appears to be catch-weight pricing where displayed unit price may not reflect actual per-pound rates used in calculation
+  SAMPLE LINES:
+    - desc="Asparagus Jumbo #1" qty=1 unit=111 amount=114
+    - desc="Beef Ribeye Lip On Dbl Choice" qty=15.6 unit=1 amount=843.66
+    - desc="Spinach Baby" qty=1 unit=2 amount=17.1
+
+====================================================================================================
+SLICE 3: GORDON FOOD SERVICE — all records
+====================================================================================================
+count: 10
+
+  FILE:     Gordon_Food_Service_9035176695_20260504.pdf
+  FAMILY:   F1   confidence=0.9   foots=FAIL
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct Qty Ord/Qty Ship columns, Unit Price column, and Extended Price column. Catch-weight items show weight details in sub-lines with CASE/WEIGHT information.
+  FOOTS RATIONALE: The beef flank line shows catch-weight pricing where 2 cases × 9.60 ≠ 745.92, indicating per-pound pricing on actual weight rather than simple case multiplication
+  SAMPLE LINES:
+    - desc="BEEF FLANK STK BNLS 1.84AVG" qty=2 unit=9.6 amount=745.92
+    - desc="CHIX CVP BRST DBL JMBO RNDM" qty=5 unit=63.99 amount=319.95
+    - desc="BUTTER PRINT SLTD GRD AA" qty=1 unit=102.44 amount=102.44
+
+  FILE:     Gordon_Food_Service_9035380699_20260508.pdf
+  FAMILY:   F1   confidence=0.9   foots=FAIL
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct Qty Ord/Qty Ship columns, Unit Price column, and Extended Price column. Catch-weight items show case counts in quantity columns with weight information in sub-lines.
+  FOOTS RATIONALE: The beef flank item shows catch-weight pricing where 2 cases × 9.60 ≠ 762.24, indicating per-pound pricing on actual weight rather than case count
+  SAMPLE LINES:
+    - desc="ARUGULA WILD" qty=1 unit=19.78 amount=19.78
+    - desc="BEEF FLANK STK BNLS 1.8#AVG" qty=2 unit=9.6 amount=762.24
+    - desc="BLUEBERRY IQF" qty=4 unit=76.2 amount=162.4
+
+  FILE:     Gordon_Food_Service_9035458166_20260511.pdf
+  FAMILY:   F1   confidence=0.9   foots=OK
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed layout with clear quantity column (Qty Ord/Qty Ship), per-unit price column, and extended price column. Catch-weight items show case quantities with weight details in sub-lines.
+  FOOTS RATIONALE: All sample calculations match: 2×44.47=88.94, 1×32.37=32.37, 4×37.04=148.16
+  SAMPLE LINES:
+    - desc="CHEESE CHED SHRP SLCD" qty=2 unit=44.47 amount=88.94
+    - desc="GREENS COLLARD CHPPD" qty=1 unit=32.37 amount=32.37
+    - desc="JUICE ORNG NO PULP" qty=4 unit=37.04 amount=148.16
+
+  FILE:     Gordon_Food_Service_9035539302_20260513.pdf
+  FAMILY:   F1   confidence=0.9   foots=FAIL
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct quantity, unit price, and extended price columns. Items show ordered/shipped quantities, pack sizes, and clear per-unit pricing with calculated amounts.
+  FOOTS RATIONALE: First line checks out (3 × 36.03 = 108.09), but second line shows qty 1 × 5.28 ≠ 429.26, suggesting catch-weight pricing where the unit price may be per pound and actual weight differs from case count
+  SAMPLE LINES:
+    - desc="CHEESE PROV NAT SLCD 75Z" qty=3 unit=36.03 amount=108.09
+    - desc="BEEF GRND 90/10 FINE F2F" qty=1 unit=5.28 amount=429.26
+    - desc="DRINK GLACIER CHRY ZERO" qty=1 unit=33.71 amount=33.71
+
+  FILE:     Gordon_Food_Service_9035539302_20260514.pdf
+  FAMILY:   SKIP-A   confidence=0.95   foots=OK
+  VENDOR:   Gordon Food Service
+  RATIONALE:       This is clearly a credit memo as indicated by the '***CREDIT MEMO***' header and negative total amount of -$5.14
+  FOOTS RATIONALE: 0.167 × -30.78 ≈ -5.14, math checks out for the credit memo calculation
+  SAMPLE LINES:
+    - desc="SAUCE FISH" qty=0.167 unit=-30.78 amount=-5.14
+
+  FILE:     Gordon_Food_Service_9035723303_20260518.pdf
+  FAMILY:   F1   confidence=0.95   foots=FAIL
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct Qty Ord/Qty Ship columns, Unit Price column, and Extended Price column. Catch-weight items show weight in sub-lines (e.g., 'CASE: 9031852435 WEIGHT: 35.600').
+  FOOTS RATIONALE: The meat items appear to be catch-weight priced where actual weight differs from case count, explaining the math discrepancy
+  SAMPLE LINES:
+    - desc="BEEF FLANK STK BNLS 1.84AVG" qty=1 unit=9.6 amount=341.76
+    - desc="BEEF GRND 90/10 FINE" qty=1 unit=6.53 amount=503.46
+    - desc="JUICE ORNG" qty=6 unit=59.61 amount=357.66
+
+  FILE:     Gordon_Food_Service_9035800543_20260520.pdf
+  FAMILY:   F1   confidence=0.95   foots=OK
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct quantity columns (Qty Ord/Qty Ship), per-unit price column, and amount column. Some catch-weight items show weight in sub-lines like 'TOTAL WEIGHT: 51.520'.
+  FOOTS RATIONALE: All sample calculations match: 2×47.30=94.60, 3×25.02=75.06, 1×93.35=93.35
+  SAMPLE LINES:
+    - desc="CHEESE CHED YEL SHRP SLCD" qty=2 unit=47.3 amount=94.6
+    - desc="MILK CHOC 1%" qty=3 unit=25.02 amount=75.06
+    - desc="BAR PROTEIN VAR" qty=1 unit=93.35 amount=93.35
+
+  FILE:     Gordon_Food_Service_860155792_20260602.pdf
+  FAMILY:   F1   confidence=0.9   foots=OK
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed layout with quantity in printed column (2), unit price ($8.71), and amount ($117.42) in clearly defined columns typical of F1 structure.
+  FOOTS RATIONALE: 2 × $58.71 = $117.42 matches exactly
+  SAMPLE LINES:
+    - desc="CASE MIX MUFF BASIC W/GRAN 6x5 LB" qty=2 unit=58.71 amount=117.42
+
+  FILE:     Gordon_Food_Service_9036194498_20260530.pdf
+  FAMILY:   F1   confidence=0.95   foots=OK
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with distinct quantity (Qty Ord/Qty Ship), unit price, and extended price columns in a standard tabular format.
+  FOOTS RATIONALE: 2 × 79.90 = 159.80, math checks out perfectly
+  SAMPLE LINES:
+    - desc="MIX PANCK COMP WGRAIN" qty=2 unit=79.9 amount=159.8
+
+  FILE:     Gordon_Food_Service_9036225940_20260601.pdf
+  FAMILY:   F1   confidence=0.92   foots=FAIL
+  VENDOR:   Gordon Food Service
+  RATIONALE:       Clean printed invoice with separate Qty Ord/Qty Ship columns, Unit Price column, and Extended Price column. Catch-weight items show weight in sub-lines like 'TOTAL WEIGHT: 35.500'.
+  FOOTS RATIONALE: The catch-weight items are priced by total weight (35.5 lbs × $9.55 = $339.03), not by case quantity shown in qty column
+  SAMPLE LINES:
+    - desc="BEEF FLANK STK BNLS 1.84AVG" qty=1 unit=9.55 amount=339.03
+    - desc="BEEF GRND 90/10 FINE" qty=1 unit=6.53 amount=502.16
+    - desc="CHEESE CHED SHRP SLCD" qty=1 unit=44.47 amount=44.47
+
+====================================================================================================
+SLICE 4: KUNA — foots=N/A
+====================================================================================================
+count: 7
+
+  FILE:     Kuna_Foodservice_215530-00_20260409.pdf
+  FAMILY:   F5   confidence=0.95   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a rotated/sideways dense grid layout with cramped columns. The invoice shows the typical Kuna Foodservice structure with quantity, price, and amount columns in a compressed format consistent with F5 family characteristics.
+  FOOTS RATIONALE: Document quality makes precise extraction difficult, but structure matches Kuna's typical F5 dense grid format
+  SAMPLE LINES:
+    - desc="*** M-541 LUNCHMEAT ***" qty=1 unit=null amount=null
+    - desc="CS 9.71 LB HILL SHEE" qty=1 unit=4.74 amount=46.02
+
+  FILE:     Kuna_Foodservice_218721-00_20260414.pdf
+  FAMILY:   F5   confidence=0.9   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a Kuna Foodservice invoice with a rotated/sideways orientation and dense grid layout typical of F5. The structure shows ordered/shipped columns in a cramped format with catch-weight handling via dense cell arrangements.
+  FOOTS RATIONALE: Document is rotated and text is too faint/blurry to reliably extract numerical values for mathematical verification
+  SAMPLE LINES:
+    - desc="BACON 8/1 FRTCK SKY LO CE" qty=1 unit=null amount=null
+    - desc="SMOKED HAM" qty=1 unit=null amount=null
+
+  FILE:     Kuna_Foodservice_230540-00_20260505.pdf
+  FAMILY:   F5   confidence=0.9   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a Kuna Foodservice invoice with a rotated/sideways layout and dense grid structure typical of F5 family invoices.
+  FOOTS RATIONALE: Invoice image is rotated and text is too blurry/faint to reliably extract individual line item details for math verification
+
+  FILE:     Kuna_Foodservice_231275-00_20260506.pdf
+  FAMILY:   F5   confidence=0.9   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a Kuna Foodservice invoice with a rotated/sideways layout and dense grid structure, which matches the F5 family description for rotated/dense layouts typical of Kuna.
+  FOOTS RATIONALE: The invoice image is rotated and the text is too difficult to read clearly for reliable line item extraction
+
+  FILE:     Kuna_Foodservice_236866-00_20260519.pdf
+  FAMILY:   F5   confidence=0.9   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a dense, rotated/sideways layout with cramped columns typical of Kuna Foodservice invoices. The structure shows ordered/shipped quantity columns, unit prices, and amounts in a compressed format with catch-weight items.
+  FOOTS RATIONALE: The visible line items appear to be summary/total lines rather than individual product lines with clear qty × unitPrice calculations
+  SAMPLE LINES:
+    - desc="GROUND TOTAL" qty=3 unit=0 amount=361.5
+    - desc="SPLITS" qty=1 unit=0 amount=51.48
+
+  FILE:     Kuna_Foodservice_244833-00_20260530.pdf
+  FAMILY:   F5   confidence=0.9   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       This is a Kuna Foodservice invoice with rotated/sideways layout and dense cramped structure typical of F5 family. The invoice appears to be rotated 90 degrees making it difficult to read clearly.
+  FOOTS RATIONALE: Unable to clearly extract qty and unit prices due to rotated layout and image quality
+  SAMPLE LINES:
+    - desc="MAJOR CHICKEN THIGH" qty=2 unit=null amount=null
+    - desc="GROUND TOTAL" qty=null unit=null amount=122.35
+
+  FILE:     Kuna_Foodservice_248318-00_20260605.pdf
+  FAMILY:   F5   confidence=0.95   foots=N/A
+  VENDOR:   Kuna Foodservice
+  RATIONALE:       Dense grid layout with cramped cells in a rotated/sideways format, typical of Kuna Foodservice structure with quantity, unit price, and amount columns present but densely packed.
+  FOOTS RATIONALE: Document image quality is too poor to read individual line item details for mathematical verification
+
+====================================================================================================
+SLICE 5: SKIP-B EDGE CASES
+====================================================================================================
+
+--- St. Armands Baking Company (SKIP-B reads — mixed with F1) ---
+  FILE:     St_Armands_INV879231_20260521.pdf
+  FAMILY:   F1   confidence=0.95   foots=OK
+  VENDOR:   St. Armands Baking Company
+  RATIONALE:       Clean printed layout with distinct quantity, rate, and amount columns in a standard tabular format typical of bakery/bread distributors.
+  FOOTS RATIONALE: 6 × 2.89 = 17.34 and 6 × 3.77 = 22.62, math checks out perfectly
+  SAMPLE LINES:
+    - desc="SAB Pullman WHITE" qty=6 unit=2.89 amount=17.34
+    - desc="Bagels Whole Wheat 6pk" qty=6 unit=3.77 amount=22.62
+
+  FILE:     St_Armands_inv875171_20260507.pdf
+  FAMILY:   SKIP-B   confidence=0.95   foots=OK
+  VENDOR:   St. Armands Baking Company
+  RATIONALE:       This is a bakery/bread supplier invoice with all quantities showing as 0, indicating a standing order or route delivery service for bread products rather than actual inventory sold.
+  FOOTS RATIONALE: Math checks out for the non-zero quantity items, but most items show 0 quantity suggesting this is a route delivery service contract
+  SAMPLE LINES:
+    - desc="SAB Pullman Wheat 28 Slices" qty=6 unit=3.11 amount=18.66
+    - desc="Bagels Whole Wheat 6pk" qty=6 unit=3.77 amount=22.62
+    - desc="GA Wheat Hamburger Reg 12ct" qty=6 unit=4.16 amount=24.96
+
+  FILE:     St_Armands_INV882928_20260604.pdf
+  FAMILY:   F1   confidence=0.95   foots=OK
+  VENDOR:   St. Armands Baking Company
+  RATIONALE:       Clean printed invoice with distinct quantity, rate, and amount columns in a standard tabular format typical of F1 structure.
+  FOOTS RATIONALE: 24 × 4.16 = 99.84 and 6 × 3.11 = 18.66, math checks out correctly
+  SAMPLE LINES:
+    - desc="GA Wheat Hamburger Reg 12ct" qty=24 unit=4.16 amount=99.84
+    - desc="SAB Pullman Wheat 28 Slices" qty=6 unit=3.11 amount=18.66
+
+  FILE:     St_Armands_INV884677_20260611.pdf
+  FAMILY:   F1   confidence=0.9   foots=OK
+  VENDOR:   St. Armands Baking Company
+  RATIONALE:       Clean printed invoice with distinct quantity, rate, and amount columns in standard tabular format typical of F1 structure.
+  FOOTS RATIONALE: All sampled lines show qty × unitPrice = amount exactly (6×2.89=17.34, 8×3.11=24.88, 12×4.16=49.92)
+  SAMPLE LINES:
+    - desc="SAB Pullman WHITE" qty=6 unit=2.89 amount=17.34
+    - desc="SAB Pullman Wheat 28 Slices" qty=8 unit=3.11 amount=24.88
+    - desc="GA Wheat Hamburger Reg 12ct" qty=12 unit=4.16 amount=49.92
+
+--- Vio Brands USA (SKIP-B read — mixed with F1) ---
+  FILE:     Vio_Brand_15463_20260312.pdf
+  FAMILY:   SKIP-B   confidence=0.95   foots=OK
+  VENDOR:   Vio Brands USA
+  RATIONALE:       This is a beverage vendor invoice but lacks the multi-section structure typical of F6 beverage distributors; appears to be a specialty beverage supplier rather than a full-service distributor with deposits/returns
+  FOOTS RATIONALE: 80 × 23.50 = 1880.00 matches exactly
+  SAMPLE LINES:
+    - desc="Chobani Yogurt Drink Variety 8/10 oz - Special Order" qty=80 unit=23.5 amount=1880
+
+--- Sysco (the 1 SKIP-B classification) ---
+  FILE:     Sysco_737907869_20260528.pdf
+  FAMILY:   SKIP-B   confidence=0.95   foots=N/A
+  VENDOR:   Sysco
+  RATIONALE:       This is a GL coding summary document, not an actual invoice with line items, quantities, or prices - it's an accounting document showing how costs were allocated to different GL codes
+  FOOTS RATIONALE: No line items present - this is a GL coding summary document, not a detailed invoice

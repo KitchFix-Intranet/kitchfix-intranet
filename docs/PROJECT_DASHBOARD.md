@@ -64,3 +64,5 @@ KitchFix intranet is live on Vercel; the multi-project Sheets→Postgres migrati
 - [HOW_WE_WORK.md](HOW_WE_WORK.md) - orientation primer for new sessions
 - [MIGRATION_STATUS.md](MIGRATION_STATUS.md) - canonical current-state of the Sheets→PG migration
 - [BUSINESS_NOTES.md](BUSINESS_NOTES.md) - living reference for domain rules + account-specific quirks
+
+  x

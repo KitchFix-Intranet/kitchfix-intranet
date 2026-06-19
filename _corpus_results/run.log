@@ -1,0 +1,842 @@
+────────────────────────────────────────────────────────────────────────────────
+[probe] folder: /Users/kevinfietek/Documents/Claude /2026
+[probe] out-dir: ./_corpus_results
+[probe] mode: CLASSIFY (--classify)
+────────────────────────────────────────────────────────────────────────────────
+
+[probe] candidate invoice files: 737  (after filtering 74 FIXED/RESUBMITTED + 711 RAW/non-RAW pair duplicates)
+
+EXTENSION BREAKDOWN
+  .pdf       737
+
+VENDOR HISTOGRAM PARSED FROM FILENAMES (top 30)
+    128  what chefs want
+    103  shamrock foods
+     79  sysco
+     69  peddler s son
+     50  ben e keith
+     38  kuna foodservice
+     37  sunfresh produce englewood
+     36  fortune fish gourmet
+     34  fresh point
+     19  cheney brothers 06
+     10  rolling lawn farms
+     10  gordon food service
+      8  cheney brothers 20
+      8  cheney brothers
+      7  vio brand
+      6  truly good foods
+      6  grey eagle
+      6  cintas
+      3  swire coca cola
+      2  lohr distribution
+      2  pepsi
+      2  vestis
+      1  alsco uniforms lhpo275171
+      1  alsco uniforms lpho2177010
+      1  cozzini bros c20954913
+      1  cozzini c20627894
+      1  cozzini c20726631
+      1  cozzini c20916352
+      1  cozzini c20821603
+      1  sysco 119a3284m
+  (+66 more vendor tokens)
+
+unparseable filenames: 0
+total distinct filename-vendor tokens: 96
+
+FIXED/RESUBMITTED RE-UPLOADS FILTERED: 74
+  (these are excluded from both the inventory count and the classify queue)
+  e.g. FIXED_RESUBMITTED_20260430_Shamrock_Foods_36431217_20260428.pdf
+  e.g. FIXED_RESUBMITTED_RAW_20260430_Shamrock_Foods_36431217_20260428.pdf
+  e.g. FIXED_RESUBMITTED_20260421_Freshpoint_1076096055_20260320.pdf
+  e.g. FIXED_RESUBMITTED_RAW_20260421_Freshpoint_1076096055_20260320.pdf
+  e.g. FIXED_RESUBMITTED_20260504_Peddler_s_Son_2438382_20260428.pdf
+  (+69 more)
+
+RAW / NON-RAW PAIR DUPLICATES DROPPED: 711  (non-RAW preferred — see dedupPairs)
+  e.g. dropped RAW_Alsco_Uniforms_LHPO275171_20260422.pdf
+  e.g. dropped RAW_Alsco_Uniforms_LPHO2177010_20260429.pdf
+  e.g. dropped RAW_Cozzini_Bros_C20954913_20260428.pdf
+  e.g. dropped RAW_Peddler_s_Son_002434388_20260420.pdf
+  e.g. dropped RAW_Peddler_s_Son_002435759_20260422.pdf
+  (+706 more)
+
+[probe] loaded 189 prior classifications from _corpus_results/classifications.jsonl
+[probe] queued for classification: 631 file(s)
+
+[   1/631] Rolling_Lawn_Farms_129308_20260409.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[   2/631] Rolling_Lawn_Farms_129357_20260413.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[   3/631] Rolling_Lawn_Farms_129522_20260423.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[   4/631] What_Chefs_Want_01463215_20260408.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[   5/631] What_Chefs_Want_01468043_20260422.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[   6/631] What_Chefs_Want_01468228_20260422.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[   7/631] What_Chefs_Want_12455383_20260323.pdf                        ... F1      What Chefs Want                foots=OK
+[   8/631] What_Chefs_Want_12455384_20260324.pdf                        ... F1      What Chefs Want                foots=OK
+[   9/631] What_Chefs_Want_12455579_20260323.pdf                        ... F1      What Chefs Want                foots=OK
+[  10/631] What_Chefs_Want_12458014_20260324.pdf                        ... F1      What Chefs Want                foots=OK
+[  11/631] What_Chefs_Want_12459246_20260324.pdf                        ... F1      What Chefs Want                foots=OK
+[  12/631] What_Chefs_Want_1246136_20200325.pdf                         ... F1      What Chefs Want                foots=OK
+[  13/631] What_Chefs_Want_12463151_20260325.pdf                        ... F1      What Chefs Want                foots=OK
+[  14/631] What_Chefs_Want_12466965_20260326.pdf                        ... F1      What Chefs Want                foots=FAIL
+[  15/631] What_Chefs_Want_12467188_20200326.pdf                        ... F1      What Chefs Want                foots=FAIL
+[  16/631] What_Chefs_Want_12471754_20260327.pdf                        ... F1      What Chefs Want                foots=OK
+[  17/631] What_Chefs_Want_12480143_20260330(1).pdf                     ... F1      What Chefs Want                foots=OK
+[  18/631] What_Chefs_Want_12480143_20260330.pdf                        ... F1      What Chefs Want                foots=OK
+[  19/631] What_Chefs_Want_12485195_20260331.pdf                        ... F1      What Chefs Want                foots=OK
+[  20/631] What_Chefs_Want_12489128_20260401.pdf                        ... F1      What Chefs Want                foots=OK
+[  21/631] What_Chefs_Want_12514072_20260409(1).pdf                     ... F1      What Chefs Want                foots=OK
+[  22/631] What_Chefs_Want_12514072_20260409.pdf                        ... F1      What Chefs Want                foots=OK
+[  23/631] What_Chefs_Want_12518374_20260409.pdf                        ... F1      What Chefs Want                foots=OK
+[  24/631] What_Chefs_Want_12534477_20260413.pdf                        ... F1      What Chefs Want                foots=OK
+[  25/631] What_Chefs_Want_12538734_20260414.pdf                        ... F1      What Chefs Want                foots=OK
+[  26/631] What_Chefs_Want_12538735_20260424.pdf                        ... F1      What Chefs Want                foots=OK
+[  27/631] What_Chefs_Want_12542830_20260415.pdf                        ... F1      What Chefs Want                foots=OK
+[  28/631] What_Chefs_Want_12568818_20260422.pdf                        ... F1      What Chefs Want                foots=OK
+[  29/631] What_Chefs_Want_12573052_20230423.pdf                        ... F1      What Chefs Want                foots=OK
+[  30/631] What_Chefs_Want_12575717_20260423.pdf                        ... F1      What Chefs Want                foots=FAIL
+[  31/631] What_Chefs_Want_12581009_20260424.pdf                        ... F1      What Chefs Want                foots=FAIL
+[  32/631] What_Chefs_Want_12585709_20260425.pdf                        ... F1      What Chefs Want                foots=FAIL
+[  33/631] What_Chefs_Want_12602663_20260430.pdf                        ... F1      What Chefs Want                foots=OK
+[  34/631] What_Chefs_Want_12604496_20260430.pdf                        ... F1      What Chefs Want                foots=OK
+[  35/631] What_Chefs_Want_924465120_20260408.pdf                       ... F1      What Chefs Want                foots=OK
+[  36/631] What_Chefs_Want_926166523_20260409.pdf                       ... F1      What Chefs Want                foots=OK
+[  37/631] What_Chefs_Want_928127343_20260409.pdf                       ... F1      What Chefs Want                foots=OK
+[  38/631] What_Chefs_Want_930609369_20260411.pdf                       ... F1      What Chefs Want                foots=OK
+[  39/631] Rolling_Lawn_Farms_129157_20260330.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[  40/631] Cozzini_C20908036_20260427.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[  41/631] Peddler_s_Son_002438574_20260428.pdf                         ... F1      Peddler's Son                  foots=OK
+[  42/631] Peddler_s_Son_002439604_20260430.pdf                         ... F1      Peddler's Son                  foots=OK
+[  43/631] Shamrock_Foods_10556362_20260110.pdf                         ... SKIP-A  Shamrock Foods Company         foots=N/A
+[  44/631] Shamrock_Foods_10570982_20260204.pdf                         ... SKIP-A  Shamrock Foods                 foots=FAIL
+[  45/631] Shamrock_Foods_10676165_20260220.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[  46/631] Shamrock_Foods_10678305_20260215.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[  47/631] Shamrock_Foods_10679918_20260218.pdf                         ... SKIP-A  Shamrock Foods                 foots=OK
+[  48/631] Shamrock_Foods_10681647_20260220.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[  49/631] Shamrock_Foods_10685374_20260226.pdf                         ... F5      Shamrock Foods                 foots=OK
+[  50/631] Shamrock_Foods_10685624_20260305.pdf                         ... F5      Shamrock Foods                 foots=OK
+[  51/631] Shamrock_Foods_10688119_20260303.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[  52/631] Shamrock_Foods_10692253_20260310.pdf                         ... SKIP-A  Shamrock Foods Company         foots=FAIL
+[  53/631] Shamrock_Foods_10693052_20260311.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[  54/631] Shamrock_Foods_10693764_20260313.pdf                         ... SKIP-A  Shamrock Foods                 foots=OK
+[  55/631] Shamrock_Foods_10705476_20260331.pdf                         ... SKIP-A  Shamrock Foods                 foots=OK
+[  56/631] Shamrock_Foods_10718612_20260424.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[  57/631] Shamrock_Foods_10722371_20260425.pdf                         ... SKIP-A  Shamrock Foods                 foots=FAIL
+[  58/631] Shamrock_Foods_36003371_20260311.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[  59/631] Shamrock_Foods_36396419_20260415.pdf                         ... F5      Shamrock Foods                 foots=OK
+[  60/631] Shamrock_Foods_36415068_20260421.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[  61/631] Shamrock_Foods_36431217_20260427.pdf                         ... F5      Shamrock Foods                 foots=OK
+[  62/631] Shamrock_Foods_36437870_20260430.pdf                         ... F5      Shamrock Foods                 foots=OK
+[  63/631] Alsco_Uniforms_LDFW1956316_20260316.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[  64/631] Alsco_Uniforms_LDFW1974039_20260420.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[  65/631] Alsco_Uniforms_ldfw1959865_20260323.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[  66/631] Ben_E_Keith_56277461_20260319.pdf                            ... F3      Ben E Keith                    foots=OK
+[  67/631] Ben_E_Keith_56398741_20260321.pdf                            ... F3      Ben E Keith                    foots=OK
+[  68/631] Ben_E_Keith_56412530_20260323(1).pdf                         ... F3      Ben E Keith                    foots=FAIL
+[  69/631] Ben_E_Keith_56412530_20260323.pdf                            ... F3      Ben E Keith                    foots=OK
+[  70/631] Ben_E_Keith_56512239_20260401.pdf                            ... F3      Ben E Keith                    foots=OK
+[  71/631] Ben_E_Keith_56525497_20260402.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  72/631] Ben_E_Keith_56538583_20240403.pdf                            ... F3      Ben E Keith                    foots=OK
+[  73/631] Ben_E_Keith_56538585_20260403.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  74/631] Ben_E_Keith_56546543_20240105.pdf                            ... F3      Ben E Keith                    foots=OK
+[  75/631] Ben_E_Keith_56546543_20260404.pdf                            ... F3      Ben E Keith                    foots=OK
+[  76/631] Ben_E_Keith_56558789_20260406.pdf                            ... F3      Ben E Keith                    foots=OK
+[  77/631] Ben_E_Keith_56558790_20260406.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  78/631] Ben_E_Keith_56571945_20260407.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  79/631] Ben_E_Keith_56571946_20260407.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  80/631] Ben_E_Keith_56584167_20260408.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[  81/631] Ben_E_Keith_56685103_20260417.pdf                            ... F3      Ben E Keith                    foots=OK
+[  82/631] Ben_E_Keith_56718862_20260420.pdf                            ... F3      Ben E Keith                    foots=OK
+[  83/631] Ben_E_Keith_56731909_20260422.pdf                            ... F3      Ben E Keith                    foots=OK
+[  84/631] Ben_E_Keith_56760135_20260424.pdf                            ... F3      Ben E Keith                    foots=OK
+[  85/631] Ben_E_Keith_56767217_20260425.pdf                            ... F3      Ben E Keith                    foots=OK
+[  86/631] Ben_E_Keith_5679127_20260427.pdf                             ... F3      Ben E Keith                    foots=OK
+[  87/631] Ben_E_Keith_56793357_20260428.pdf                            ... F3      Ben E Keith                    foots=OK
+[  88/631] Fresh_Point_107609827_20260323.pdf                           ... F1      Fresh Point                    foots=OK
+[  89/631] Fresh_Point_107610825_20260401.pdf                           ... F1      Fresh Point                    foots=FAIL
+[  90/631] Fresh_Point_1076114162_20260406.pdf                          ... F1      Fresh Point                    foots=OK
+[  91/631] Fresh_Point_1076114163_20260406(1).pdf                       ... F1      Fresh Point                    foots=OK
+[  92/631] Fresh_Point_1076114163_20260406.pdf                          ... F1      Fresh Point                    foots=OK
+[  93/631] Fresh_Point_1076115369_20260407.pdf                          ... F1      Fresh Point                    foots=OK
+[  94/631] Fresh_Point_107612609_20260404.pdf                           ... F1      Fresh Point                    foots=OK
+[  95/631] Fresh_Point_1076130363_20260420.pdf                          ... F1      Fresh Point                    foots=OK
+[  96/631] Fresh_Point_1076130364_20260420.pdf                          ... F1      Fresh Point                    foots=OK
+[  97/631] Fresh_Point_1077109226_20260402.pdf                          ... SKIP-A  Fresh Point                    foots=OK
+[  98/631] Freshpoint_1076096055_20260320.pdf                           ... F1      Freshpoint                     foots=FAIL
+[  99/631] Katz_Coffee_746268_20260323.pdf                              ... F1      Katz Coffee                    foots=OK
+[ 100/631] Alsco_Uniforms_LPH02178864_20260506.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 101/631] Alsco_Uniforms_LPH02180706_20260513.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 102/631] Alsco_Uniforms_LPH02182531_20260520.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 103/631] Alsco_Uniforms_LPHO2184364_20260527.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 104/631] Cozzini_C21052385_20260512.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 105/631] Cozzini_C21144796_20260526.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 106/631] Peddler_s_Son_002437670_20260427.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 107/631] Peddler_s_Son_002438382_20260428.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 108/631] Peddler_s_Son_002438462_20260428.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 109/631] Peddler_s_Son_002438914_20260429.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 110/631] Peddler_s_Son_002439841_20260501.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 111/631] Peddler_s_Son_002440358_20260502.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 112/631] Peddler_s_Son_002440799_20260504.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 113/631] Peddler_s_Son_002441613_20260505.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 114/631] Peddler_s_Son_002442171_20260506.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 115/631] Peddler_s_Son_002443154_20260508.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 116/631] Peddler_s_Son_002443246_20260508.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 117/631] Peddler_s_Son_002444111_20260511.pdf                         ... F1      Peddler's Son                  foots=FAIL
+[ 118/631] Peddler_s_Son_002445005_20260513.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 119/631] Peddler_s_Son_002445964_20260515.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 120/631] Peddler_s_Son_002445993_20260515.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 121/631] Peddler_s_Son_002446796_20260518.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 122/631] Peddler_s_Son_002447958_20260520.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 123/631] Peddler_s_Son_002448231_20260521.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 124/631] Peddler_s_Son_002449165_20260523.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 125/631] Peddler_s_Son_002449280_20260523.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 126/631] Peddler_s_Son_002449579_20260526.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 127/631] Peddler_s_Son_002450492_20260527.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 128/631] Peddler_s_Son_002451219`_20260529.pdf                        ... F1      Peddler's Son                  foots=OK
+[ 129/631] Peddler_s_Son_02439353_20260430.pdf                          ... F1      Peddler's Son                  foots=OK
+[ 130/631] Peddler_s_Son_C00291714_20260430.pdf                         ... SKIP-A  Peddler's Son                  foots=OK
+[ 131/631] Peddler_s_Son_C00294541_20260527.pdf                         ... SKIP-A  Peddler's Son                  foots=OK
+[ 132/631] Peddler_s_Son_c00295091_20260529.pdf                         ... SKIP-A  Peddler's Son                  foots=OK
+[ 133/631] Shamrock_Foods_10726375_20260501.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[ 134/631] Shamrock_Foods_10726376_20260501.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[ 135/631] Shamrock_Foods_10726785_20260502.pdf                         ... SKIP-A  Shamrock Foods                 foots=N/A
+[ 136/631] Shamrock_Foods_36437745_20260430.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 137/631] Shamrock_Foods_36437746_20260430.pdf                         ... F5      Shamrock Foods                 foots=N/A
+[ 138/631] Shamrock_Foods_36543879_20260502.pdf                         ... F5      Shamrock Foods Company PHX     foots=FAIL
+[ 139/631] Shamrock_Foods_36543880_02060502.pdf                         ... F5      Shamrock Foods                 foots=N/A
+[ 140/631] Shamrock_Foods_36547280_20260504(1).pdf                      ... F5      Shamrock Foods Company PHX     foots=OK
+[ 141/631] Shamrock_Foods_36547280_20260504(2).pdf                      ... F5      Shamrock Foods Company PHX     foots=OK
+[ 142/631] Shamrock_Foods_36547280_20260504(3).pdf                      ... F5      Shamrock Foods Company PHX     foots=OK
+[ 143/631] Shamrock_Foods_36547280_20260504(4).pdf                      ... F5      Shamrock Foods Company PHX     foots=OK
+[ 144/631] Shamrock_Foods_36547280_20260504(5).pdf                      ... F5      Shamrock Foods Company PHX     foots=OK
+[ 145/631] Shamrock_Foods_36547280_20260504(6).pdf                      ... F5      Shamrock Foods                 foots=OK
+[ 146/631] Shamrock_Foods_36547280_20260504.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 147/631] Shamrock_Foods_36553242_20260506.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 148/631] Shamrock_Foods_36562395_20260509.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 149/631] Shamrock_Foods_36565532_20260511.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 150/631] Shamrock_Foods_36565533_20260511.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 151/631] Shamrock_Foods_36565534_20260511.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 152/631] Shamrock_Foods_36568297_20260512.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 153/631] Shamrock_Foods_36570471_20260513.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 154/631] Shamrock_Foods_36573757_20260514.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 155/631] Shamrock_Foods_36579160_20260516.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 156/631] Shamrock_Foods_36579161_20260516.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 157/631] Shamrock_Foods_36582711_20260518.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 158/631] Shamrock_Foods_36587636_20260520.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 159/631] Shamrock_Foods_36594275_20260522.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 160/631] Shamrock_Foods_36598788_20260525(1).pdf                      ... F5      Shamrock Foods Company PHX     foots=FAIL
+[ 161/631] Shamrock_Foods_36598788_20260525.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[ 162/631] Shamrock_Foods_36604265_20260526.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 163/631] Shamrock_Foods_36609685_20260529.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 164/631] Swire_Coca_Cola_52289270020_20260511.pdf                     ... F6      Swire Coca-Cola                foots=OK
+[ 165/631] Swire_Coca_Cola_52528479022_20260526.pdf                     ... F6      Swire Coca-Cola                foots=OK
+[ 166/631] inreach_I687829_20260425.pdf                                 ... SKIP-A  Sodexo Operations, LLC dba InR foots=OK
+[ 167/631] inreach_I687835_20260426.pdf                                 ... SKIP-A  Sodexo Operations, LLC dba InR foots=OK
+[ 168/631] inreach_I688289_20260429.pdf                                 ... SKIP-B  Sodexo Operations, LLC dba InR foots=OK
+[ 169/631] inreach_I688713_20260427.pdf                                 ... SKIP-A  Sodexo Operations, LLC dba InR foots=OK
+[ 170/631] Cozzini_C21011190_20260506.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 171/631] Cozzini_C21104028_20260520.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 172/631] Sysco_519239063_20260428.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 173/631] Sysco_519240374_20260429.pdf                                 ... F5      Sysco                          foots=OK
+[ 174/631] Sysco_519253392_20260506.pdf                                 ... F5      Sysco                          foots=OK
+[ 175/631] Sysco_519278965_20260511.pdf                                 ... F5      Sysco                          foots=OK
+[ 176/631] Sysco_51929670_20260520.pdf                                  ... F5      Sysco                          foots=OK
+[ 177/631] Sysco_519305769_20260528.pdf                                 ... F5      Sysco                          foots=OK
+[ 178/631] Truly_Good_Foods_25086653_20260519.pdf                       ... F1      Truly Good Foods               foots=OK
+[ 179/631] What_Chefs_Want_12504092_20260428.pdf                        ... F1      What Chefs Want                foots=OK
+[ 180/631] What_Chefs_Want_12569408_20260424.pdf                        ... F1      What Chefs Want                foots=OK
+[ 181/631] What_Chefs_Want_12579972_20260424.pdf                        ... F1      What Chefs Want                foots=OK
+[ 182/631] What_Chefs_Want_12600569_20260429.pdf                        ... F1      What Chefs Want                foots=OK
+[ 183/631] What_Chefs_Want_12604312_20260430.pdf                        ... F1      What Chefs Want                foots=OK
+[ 184/631] What_Chefs_Want_12604734_20260430.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 185/631] What_Chefs_Want_12625878_20260506.pdf                        ... F1      What Chefs Want                foots=OK
+[ 186/631] What_Chefs_Want_12632817_20260507(1).pdf                     ... F1      What Chefs Want                foots=OK
+[ 187/631] What_Chefs_Want_12632817_20260507.pdf                        ... F1      What Chefs Want                foots=OK
+[ 188/631] What_Chefs_Want_12637294_20200508.pdf                        ... F1      What Chefs Want                foots=OK
+[ 189/631] What_Chefs_Want_12637304_20260508.pdf                        ... F1      What Chefs Want                foots=OK
+[ 190/631] What_Chefs_Want_12641791_20260509.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 191/631] What_Chefs_Want_12646671_20260511(1).pdf                     ... F1      What Chefs Want                foots=FAIL
+[ 192/631] What_Chefs_Want_12646671_20260511(2).pdf                     ... F1      What Chefs Want                foots=OK
+[ 193/631] What_Chefs_Want_12646671_20260511.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 194/631] What_Chefs_Want_12647104_20260511.pdf                        ... F1      What Chefs Want                foots=OK
+[ 195/631] What_Chefs_Want_12651894_20260512.pdf                        ... F1      What Chefs Want                foots=OK
+[ 196/631] What_Chefs_Want_12656864_20260513.pdf                        ... F1      What Chefs Want                foots=OK
+[ 197/631] What_Chefs_Want_12680179_20260520.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 198/631] What_Chefs_Want_12690073_20260522.pdf                        ... F1      What Chefs Want                foots=OK
+[ 199/631] What_Chefs_Want_12690251_20260522.pdf                        ... F1      What Chefs Want                foots=OK
+[ 200/631] What_Chefs_Want_12693817_20260523.pdf                        ... F1      What Chefs Want                foots=OK
+[ 201/631] What_Chefs_Want_12708253_20260528.pdf                        ... F1      What Chefs Want                foots=OK
+[ 202/631] 1st_Phorm_2987782_20260319.pdf                               ... F1      1st Phorm International, LLC   foots=OK
+[ 203/631] Cheney_Brothers_20-910520201_20260524.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 204/631] Cheney_Brothers_20-910672157_20260519.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 205/631] Cheney_Brothers_20-910695222_20260522.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 206/631] Cheney_Brothers_20-910712761_20260526.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 207/631] Cheney_Brothers_20-910735530_20260529.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 208/631] Cozzini_Brothers_C21103569_20260520.pdf                      ... SKIP-B  Cozzini Brothers               foots=OK
+[ 209/631] Fresh_Point_2778450185_20260519.pdf                          ... F1      Fresh Point                    foots=FAIL
+[ 210/631] Fresh_Point_2778457812_20260523.pdf                          ... F1      Fresh Point                    foots=OK
+[ 211/631] Fresh_Point_2778459741_20260525.pdf                          ... F1      Fresh Point                    foots=OK
+[ 212/631] Fresh_Point_2778459743_20260525.pdf                          ... F1      Fresh Point                    foots=N/A
+[ 213/631] Fresh_Point_2778461479_20260526.pdf                          ... F1      Fresh Point                    foots=OK
+[ 214/631] Fresh_Point_27784633509_20260527.pdf                         ... F1      Fresh Point                    foots=OK
+[ 215/631] Fresh_Point_2778463510_20260527.pdf                          ... F1      Fresh Point                    foots=OK
+[ 216/631] Fresh_Point_2778465370_20260528.pdf                          ... F1      Fresh Point                    foots=FAIL
+[ 217/631] Pepsi_86311001_20260518.pdf                                  ... F6      PepsiCo Beverages Company      foots=OK
+[ 218/631] Pepsi_88683505_20260525.pdf                                  ... F6      Pepsi Beverage Company         foots=FAIL
+[ 219/631] Samuels_Seafoos_439043_20260527.pdf                          ... F2      Samuels Seafood Co. - South Co foots=OK
+[ 220/631] Sysco_132A3528M_20260505.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 221/631] Sysco_132A3554M_20260508.pdf                                 ... F5      Sysco                          foots=OK
+[ 222/631] Sysco_532351814_20260502.pdf                                 ... F5      Sysco                          foots=OK
+[ 223/631] Sysco_532352054_20260504.pdf                                 ... F5      Sysco                          foots=OK
+[ 224/631] Sysco_532360911_20260509.pdf                                 ... SKIP-A  Sysco                          foots=N/A
+[ 225/631] Sysco_532363403_20260512.pdf                                 ... SKIP-A  Sysco                          foots=OK
+[ 226/631] Sysco_532371174_20260518.pdf                                 ... F5      Sysco                          foots=OK
+[ 227/631] Sysco_532372011_20260519.pdf                                 ... F5      Sysco                          foots=N/A
+[ 228/631] Sysco_532374861_20260521.pdf                                 ... F5      Sysco                          foots=OK
+[ 229/631] Sysco_532378985_20260523.pdf                                 ... F5      Sysco                          foots=OK
+[ 230/631] Sysco_532380884_20260526.pdf                                 ... F5      Sysco                          foots=OK
+[ 231/631] Sysco_532383040_20260528.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 232/631] Sysco_532387997_20260530.pdf                                 ... F5      Sysco                          foots=OK
+[ 233/631] Vestis_5610693877_20260525.pdf                               ... SKIP-B  Vestis                         foots=OK
+[ 234/631] City_Seafood_INV24346_20260501.pdf                           ... F2      City Seafood                   foots=OK
+[ 235/631] City_Seafood_INV24440_20260504.pdf                           ... F2      City Seafood                   foots=OK
+[ 236/631] City_Seafood_INV24892_20260515.pdf                           ... F2      City Seafood                   foots=OK
+[ 237/631] City_Seafood_INV24975_20260516.pdf                           ... F2      City Seafood                   foots=OK
+[ 238/631] City_Seafood_INV25019_20260519.pdf                           ... F2      City Seafood                   foots=OK
+[ 239/631] Fortune_Fish_Gourmet_361359-26-06_20260505.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 240/631] Fortune_Fish_Gourmet_363907-26-06_20260514.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 241/631] Fortune_Fish_Gourmet_363908-26-06_20260514.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 242/631] Fortune_Fish_Gourmet_364341-26-06_20260515.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 243/631] Fortune_Fish_Gourmet_364345-26-06_20260515.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 244/631] Fortune_Fish_Gourmet_365242-26-06_20260519.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 245/631] Fortune_Fish_Gourmet_365254-26-06_20260519.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 246/631] Fortune_Fish_Gourmet_365537-26-06_20260520.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 247/631] Fortune_Fish_Gourmet_365538-26-06_20260520.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 248/631] Fortune_Fish_Gourmet_365975-26-06_20260521.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 249/631] Fortune_Fish_Gourmet_367709-26-06_20260528.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 250/631] Fortune_Fish_Gourmet_367710-26-06_20260528.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 251/631] Fortune_Fish_Gourmet_367713-26-06_20260528.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 252/631] Fortune_Fish_Gourmet_368172-26-06_20260529.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 253/631] Grey_Eagle_627154_20260504.pdf                               ... F6      Grey Eagle Distributors        foots=FAIL
+[ 254/631] Grey_Eagle_645991_20260527.pdf                               ... F6      Grey Eagle Distributors        foots=FAIL
+[ 255/631] Kuna_Foodservice_227715-00_20260501.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 256/631] Kuna_Foodservice_229175-00_20260504.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 257/631] Kuna_Foodservice_229838-00_20260505.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 258/631] Kuna_Foodservice_230540-00_20260505.pdf                      ... F5      Kuna Foodservice               foots=N/A
+[ 259/631] Kuna_Foodservice_231275-00_20260506.pdf                      ... F5      Kuna Foodservice               foots=N/A
+[ 260/631] Kuna_Foodservice_233659-00_20260514.pdf                      ... F5      Kuna Foodservice               foots=FAIL
+[ 261/631] Kuna_Foodservice_235953-00_20260514.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 262/631] Kuna_Foodservice_236069-00_20260514.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 263/631] Kuna_Foodservice_236201-00_20260514.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 264/631] Kuna_Foodservice_236748-00_20260515.pdf                      ... F5      Kuna Foodservice               foots=FAIL
+[ 265/631] Kuna_Foodservice_236866-00_20260519.pdf                      ... F5      Kuna Foodservice               foots=N/A
+[ 266/631] Kuna_Foodservice_236964-00_20260515.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 267/631] Kuna_Foodservice_237201_20260516.pdf                         ... F5      Kuna Foodservice               foots=OK
+[ 268/631] Kuna_Foodservice_238653-00_20260519.pdf                      ... F5      Kuna Foodservice               foots=FAIL
+[ 269/631] Kuna_Foodservice_238683_20260519.pdf                         ... F5      Kuna Foodservice               foots=OK
+[ 270/631] Kuna_Foodservice_238727-00_20260519.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 271/631] Kuna_Foodservice_242561-00_20260528.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 272/631] Kuna_Foodservice_243661-00_20260528.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 273/631] Kuna_Foodservice_244299-00_20260529.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 274/631] Kuna_Foodservice_244307-00_20260529.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 275/631] Lohr_Distribution_2834299_20260528.pdf                       ... F6      Lohr Distribution              foots=OK
+[ 276/631] Rolling_Lawn_Farms_129658_20260501.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 277/631] Rolling_Lawn_Farms_129722_20260505.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 278/631] Rolling_Lawn_Farms_129847_20260514.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 279/631] Rolling_Lawn_Farms_129924_20260519.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 280/631] Rolling_Lawn_Farms_130060_20260528.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 281/631] Truly_Good_Foods_25086205_20260511.pdf                       ... F1      Truly Good Foods               foots=OK
+[ 282/631] Truly_Good_Foods_25091695_20260527.pdf                       ... F1      Tropical Nut & Fruit DBA Truly foots=OK
+[ 283/631] What_Chefs_Want_01470969_20260501(1).pdf                     ... SKIP-A  What Chefs Want                foots=N/A
+[ 284/631] What_Chefs_Want_01470969_20260501(2).pdf                     ... SKIP-A  What Chefs Want                foots=N/A
+[ 285/631] What_Chefs_Want_01470969_20260501.pdf                        ... SKIP-A  What Chefs Want                foots=OK
+[ 286/631] What_Chefs_Want_01471113_20260430.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[ 287/631] What_Chefs_Want_01479661_20260529.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[ 288/631] What_Chefs_Want_01479818_20260528.pdf                        ... SKIP-A  What Chefs Want                foots=N/A
+[ 289/631] What_Chefs_Want_12589552_20260501.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 290/631] What_Chefs_Want_12604497_20260501.pdf                        ... F1      What Chefs Want                foots=OK
+[ 291/631] What_Chefs_Want_12607747 _20260501.pdf                       ... F1      What Chefs Want                foots=OK
+[ 292/631] What_Chefs_Want_12609856_20260501.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 293/631] What_Chefs_Want_12614395_20260502.pdf                        ... F1      What Chefs Want                foots=OK
+[ 294/631] What_Chefs_Want_12620041_20260504.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 295/631] What_Chefs_Want_12624433_20260505.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 296/631] What_Chefs_Want_12651658_20150515.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 297/631] What_Chefs_Want_12659589_20260514.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 298/631] What_Chefs_Want_12665906_20260515.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 299/631] What_Chefs_Want_12669842_20260516.pdf                        ... F1      What Chefs Want                foots=OK
+[ 300/631] What_Chefs_Want_12679163_20260519.pdf                        ... F1      What Chefs Want                foots=OK
+[ 301/631] What_Chefs_Want_12679164_20260520.pdf                        ... F1      What Chefs Want                foots=OK
+[ 302/631] What_Chefs_Want_12683229_20260520.pdf                        ... F1      What Chefs Want                foots=OK
+[ 303/631] What_Chefs_Want_12687166_20260521.pdf                        ... F1      What Chefs Want                foots=OK
+[ 304/631] What_Chefs_Want_12707079_20260527.pdf                        ... F1      What Chefs Want                foots=OK
+[ 305/631] What_Chefs_Want_12710245_20260529.pdf                        ... F1      What Chefs Want                foots=OK
+[ 306/631] What_Chefs_Want_12710246_20260528.pdf                        ... F1      What Chefs Want                foots=OK
+[ 307/631] What_Chefs_Want_12715251_20260529.pdf                        ... F1      What Chefs Want                foots=OK
+[ 308/631] What_Chefs_Want_12715275_20260529.pdf                        ... F1      What Chefs Want                foots=OK
+[ 309/631] Cheney_Brothers_06-910574064_20260504.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 310/631] Cheney_Brothers_06-910591558_20260506.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 311/631] Cheney_Brothers_06-910625164_20260512.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 312/631] Cheney_Brothers_06910642370_20260514.pdf                     ... F4      Cheney Brothers                foots=FAIL
+[ 313/631] Cheney_Brothers_06910668610_20260519.pdf                     ... F4      Cheney Brothers                foots=FAIL
+[ 314/631] Cheney_Brothers_06910669498_20260519.pdf                     ... F4      Cheney Brothers                foots=OK
+[ 315/631] Cheney_Brothers_06910669587_20260519.pdf                     ... F4      Cheney Brothers                foots=OK
+[ 316/631] Cheney_Brothers_06910684435_20260521.pdf                     ... F4      Cheney Brothers                foots=FAIL
+[ 317/631] Cintas_4267980028_20260504.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 318/631] Cintas_4268766737_20260511.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 319/631] Cintas_4269479877_20200518.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 320/631] Cozzini_Bros_c21003895_20260507.pdf                          ... SKIP-B  Cozzini Bros                   foots=OK
+[ 321/631] Gordon_Food_Service_9035539302_20260514.pdf                  ... SKIP-A  Gordon Food Service            foots=OK
+[ 322/631] Gordon_Food_Service_9035723303_20260518.pdf                  ... F1      Gordon Food Service            foots=FAIL
+[ 323/631] Gordon_Food_Service_9035800543_20260520.pdf                  ... F1      Gordon Food Service            foots=OK
+[ 324/631] St_Armands_INV879231_20260521.pdf                            ... F1      St. Armands Baking Company     foots=OK
+[ 325/631] St_Armands_inv875171_20260507.pdf                            ... SKIP-B  St. Armands Baking Company     foots=OK
+[ 326/631] Sysco_103292483_20260420.pdf                                 ... F5      Sysco                          foots=OK
+[ 327/631] Sysco_103312009_20260504.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 328/631] Sysco_103313169_20260505.pdf                                 ... F5      Sysco                          foots=OK
+[ 329/631] Sysco_103315472_20260506.pdf                                 ... F5      Sysco                          foots=OK
+[ 330/631] Sysco_103316828_20260507.pdf                                 ... F5      Sysco                          foots=OK
+[ 331/631] Sysco_103317642_20260508.pdf                                 ... F5      Sysco                          foots=OK
+[ 332/631] Sysco_103321594_20260511.pdf                                 ... SKIP-A  Sysco                          foots=N/A
+[ 333/631] Sysco_103321928_20260511.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 334/631] Sysco_103323306_20260512.pdf                                 ... F5      Sysco                          foots=OK
+[ 335/631] Sysco_103324672_20260513.pdf                                 ... F5      Sysco                          foots=OK
+[ 336/631] Sysco_103325869_20260514.pdf                                 ... F5      Sysco                          foots=OK
+[ 337/631] Sysco_103327510_20260515.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 338/631] Sysco_103331491_20160518.pdf                                 ... F5      Sysco                          foots=OK
+[ 339/631] Sysco_103333078_20160519.pdf                                 ... F5      Sysco                          foots=OK
+[ 340/631] Sysco_103334216_20260520.pdf                                 ... F5      Sysco                          foots=OK
+[ 341/631] Sysco_103335419_20260521.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 342/631] Sysco_103336844_20160522.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 343/631] Sysco_103344967_20260529.pdf                                 ... F5      Sysco                          foots=OK
+[ 344/631] Sysco_103346226_20260530.pdf                                 ... SKIP-A  Sysco                          foots=N/A
+[ 345/631] Vio_Brand_10402_20260528.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 346/631] Vio_Brand_15275_20260220.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 347/631] Vio_Brand_15309_20260302.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 348/631] Vio_Brand_15463_20260312.pdf                                 ... SKIP-B  Vio Brands USA                 foots=OK
+[ 349/631] Vio_Brand_15465_20260312.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 350/631] Vio_Brand_16306_20260514.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 351/631] Vio_Brand_16454_20260528.pdf                                 ... F1      Vio Brands USA                 foots=OK
+[ 352/631] Alsco_Uniforms_LSAR1725984_20200505.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 353/631] Alsco_Uniforms_LSAR1727813_20260512.pdf                      ... SKIP-B  Alsco Uniforms                 foots=OK
+[ 354/631] Alsco_Uniforms_LSAR1729618_20200519.pdf                      ... SKIP-B  Alsco Uniforms                 foots=OK
+[ 355/631] Cheney_Brothers_06-700617747_20260511.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 356/631] Cheney_Brothers_06-910575355_20260504.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 357/631] Cheney_Brothers_06-910607148_20260508.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 358/631] Cheney_Brothers_06-910636823_20260513.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 359/631] Cheney_Brothers_06-910650797_20240515.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 360/631] Cheney_Brothers_06-910659116_20260518.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 361/631] Cheney_Brothers_06-910661629_20260518.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 362/631] Cheney_Brothers_06-910677393_20260520.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 363/631] Cheney_Brothers_06-910691703_20240522.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 364/631] Cheney_Brothers_60-910592206_20260506.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 365/631] Cozzini_C21026240_20260512.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 366/631] Ferrell_Gas_1133846965_20260513.pdf                          ... SKIP-B  Ferrell Gas                    foots=OK
+[ 367/631] Sunfresh_Produce_Englewood_00048070_20260511.pdf             ... F1      SUNFRESH PRODUCE               foots=FAIL
+[ 368/631] Sunfresh_Produce_Englewood_000487395_20260505.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 369/631] Sunfresh_Produce_Englewood_000487523_20260505.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 370/631] Sunfresh_Produce_Englewood_00048759_20260504.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 371/631] Sunfresh_Produce_Englewood_00048774_20260508.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 372/631] Sunfresh_Produce_Englewood_000488044_20260511.pdf            ... F1      SUNFRESH PRODUCE               foots=OK
+[ 373/631] Sunfresh_Produce_Englewood_000488356_20260513.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 374/631] Sunfresh_Produce_Englewood_000488502_20260514.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 375/631] Sunfresh_Produce_Englewood_00048852_20260518.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 376/631] Sunfresh_Produce_Englewood_000488557_20260515.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 377/631] Sunfresh_Produce_Englewood_000488704_20260516.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 378/631] Sunfresh_Produce_Englewood_000489229_20260521.pdf            ... F1      SUNFRESH PRODUCE               foots=OK
+[ 379/631] Sunfresh_Produce_Englewood_000489326_20260522.pdf            ... F1      SUNFRESH PRODUCE               foots=OK
+[ 380/631] Sunfresh_Produce_Englewood_000489506_20260523.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 381/631] Sunfresh_Produce_Englewood_00487651_20260507.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 382/631] Sunfresh_Produce_Englewood_00487652_20260507.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 383/631] Sunfresh_Produce_Englewood_00487775_20260508.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 384/631] Sunfresh_Produce_Englewood_00487932_20260509.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 385/631] Sunfresh_Produce_Englewood_00488991_20260519.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 386/631] Sunfresh_Produce_Englewood_00489019_20260519.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 387/631] Sunfresh_Produce_Englewood_00489059_20260520(1).pdf          ... F1      SUNFRESH PRODUCE               foots=OK
+[ 388/631] Sunfresh_Produce_Englewood_00489059_20260520.pdf             ... F1      SUNFRESH PRODUCE               foots=OK
+[ 389/631] Sunfresh_Produce_Englewood_00489113_20260520.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 390/631] Sunfresh_Produce_Englewood_00489442_20260522.pdf             ... F1      SUNFRESH PRODUCE               foots=OK
+[ 391/631] Sunfresh_Produce_Englewood_00489443_20260523.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 392/631] Sysco_737871625_20260506.pdf                                 ... F5      Sysco                          foots=OK
+[ 393/631] Sysco_737874750_20260508.pdf                                 ... F5      Sysco                          foots=OK
+[ 394/631] Sysco_737880136_20260511.pdf                                 ... F5      Sysco                          foots=OK
+[ 395/631] Sysco_737883740_20260513.pdf                                 ... F5      Sysco                          foots=OK
+[ 396/631] Sysco_737887055_20260515.pdf                                 ... F5      Sysco                          foots=OK
+[ 397/631] Sysco_737892110_20260518.pdf                                 ... F5      Sysco                          foots=OK
+[ 398/631] Sysco_737895696 _20260520.pdf                                ... F5      Sysco                          foots=OK
+[ 399/631] Sysco_737898712_20260522.pdf                                 ... F5      Sysco                          foots=OK
+[ 400/631] Alsco_Uniforms_LPHO2177388_20260430.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 401/631] Alsco_Uniforms_LPHO2179240_20260507.pdf                      ... SKIP-B  Alsco Uniforms                 foots=OK
+[ 402/631] Alsco_Uniforms_LPHO2181083_20260514.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 403/631] Alsco_Uniforms_LPHO2182908_20260521.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 404/631] Alsco_Uniforms_LPHO2184742_20260530.pdf                      ... SKIP-B  Alsco Uniforms                 foots=OK
+[ 405/631] Cozzini_C21005129_20260511.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 406/631] Cozzini_C21098266_20260525.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 407/631] Peddler_s_Son_002440188_20260501.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 408/631] Peddler_s_Son_002440189_20260501.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 409/631] Peddler_s_Son_002440420_20260502.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 410/631] Peddler_s_Son_002441701_20260505(1).pdf                      ... F1      Peddler's Son                  foots=OK
+[ 411/631] Peddler_s_Son_002441701_20260505(2).pdf                      ... F1      Peddler's Son                  foots=OK
+[ 412/631] Peddler_s_Son_002441701_20260505(3).pdf                      ... F1      Peddler's Son                  foots=OK
+[ 413/631] Peddler_s_Son_002441701_20260505.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 414/631] Peddler_s_Son_002442597_20260507.pdf                         ... F1      Peddler's Son                  foots=FAIL
+[ 415/631] Peddler_s_Son_002443678_20260509.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 416/631] Peddler_s_Son_002444404_20260512.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 417/631] Peddler_s_Son_002446101_20260515.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 418/631] Peddler_s_Son_002446165_20260515.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 419/631] Peddler_s_Son_002447005_20260518.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 420/631] Peddler_s_Son_002447634_20260519.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 421/631] Peddler_s_Son_002447971_20260520.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 422/631] Peddler_s_Son_002448456_20260521.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 423/631] Peddler_s_Son_002449062_20260523.pdf                         ... F1      Peddler's Son                  foots=FAIL
+[ 424/631] Peddler_s_Son_002449261_20260523.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 425/631] Peddler_s_Son_002450098_20260526.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 426/631] Peddler_s_Son_002450532_20260527.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 427/631] Peddler_s_Son_002450981_20260528.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 428/631] Peddler_s_Son_002451938_20260530.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 429/631] Peddler_s_Son_C00293726_20260518.pdf                         ... SKIP-A  Peddler's Son                  foots=OK
+[ 430/631] Shamrock_Foods_0149552_20260512.pdf                          ... SKIP-A  Shamrock Foods                 foots=OK
+[ 431/631] Shamrock_Foods_10726755_20260502.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[ 432/631] Shamrock_Foods_10740385_20260526.pdf                         ... SKIP-A  Shamrock Foods                 foots=OK
+[ 433/631] Shamrock_Foods_10740810_20260526.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[ 434/631] Shamrock_Foods_36543786_20260502(1).pdf                      ... F5      Shamrock Foods                 foots=OK
+[ 435/631] Shamrock_Foods_36543786_20260502.pdf                         ... SKIP-A  Shamrock Foods Company         foots=OK
+[ 436/631] Shamrock_Foods_36550315_20260505.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 437/631] Shamrock_Foods_36555950_20260507.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 438/631] Shamrock_Foods_36562037_20260509.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 439/631] Shamrock_Foods_36568022_20260512.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 440/631] Shamrock_Foods_36570922_20260513.pdf                         ... F5      Shamrock Foods Company PHX     foots=FAIL
+[ 441/631] Shamrock_Foods_36577492_20260515.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 442/631] Shamrock_Foods_36577493_20260515.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 443/631] Shamrock_Foods_36582593_20260518.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 444/631] Shamrock_Foods_36582594_20260518.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 445/631] Shamrock_Foods_36585296_20260519.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 446/631] Shamrock_Foods_36587948_20260520.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 447/631] Shamrock_Foods_36587949_20260520.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 448/631] Shamrock_Foods_36590252_20260521.pdf                         ... F5      Shamrock Foods Company PHX     foots=FAIL
+[ 449/631] Shamrock_Foods_36595381_20260523.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 450/631] Shamrock_Foods_36595382_20260523.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 451/631] Shamrock_Foods_36598911_20260525.pdf                         ... F5      Shamrock Foods Company PHX     foots=FAIL
+[ 452/631] Shamrock_Foods_36601450_20260526.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 453/631] Shamrock_Foods_36604184_20260527.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 454/631] Shamrock_Foods_36606775_20260528.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 455/631] Shamrock_Foods_36611724_20260530.pdf                         ... F5      Shamrock Foods Company PHX     foots=OK
+[ 456/631] inreach_I692612_20260511.pdf                                 ... SKIP-B  Sodexo Operations, LLC dba InR foots=OK
+[ 457/631] Ben_E_Keith_56718863_20260421.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 458/631] Ben_E_Keith_56731911_20260422.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 459/631] Ben_E_Keith_56744745_20260423.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 460/631] Ben_E_Keith_56767218_20260425.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 461/631] Ben_E_Keith_56779130_20260427.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 462/631] Ben_E_Keith_56793359_20260428.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 463/631] Ben_E_Keith_56889088_20260507.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 464/631] Ben_E_Keith_56907201_20260508.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 465/631] Ben_E_Keith_56912835_20260508.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 466/631] Ben_E_Keith_56926928_20260511.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 467/631] Ben_E_Keith_56939942_20260512.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 468/631] Ben_E_Keith_57023092_20260520.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 469/631] Ben_E_Keith_57034316_20260521.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 470/631] Ben_E_Keith_57069299_20260525.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 471/631] Ben_E_Keith_57081804_20260526.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 472/631] Ben_E_Keith_57103166_20260528.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 473/631] Ben_E_Keith_57119624_20260529.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 474/631] Ben_E_Keith_57125389_20260530.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 475/631] Fresh_Point_1076154418_20260511.pdf                          ... F1      Fresh Point                    foots=OK
+[ 476/631] Fresh_Point_56878034_20260506.pdf                            ... F1      Fresh Point                    foots=OK
+[ 477/631] Fresh_Point_569072211_20260508.pdf                           ... F1      Fresh Point                    foots=FAIL
+[ 478/631] Fresh_Point_56912832_20260508.pdf                            ... F1      Fresh Point                    foots=FAIL
+[ 479/631] Fresh_Point_56926931_20260511.pdf                            ... F1      Fresh Point                    foots=FAIL
+[ 480/631] Fresh_Point_56939943_20260512.pdf                            ... F1      Fresh Point                    foots=FAIL
+[ 481/631] Alsco_Uniforms_LPH02186189_20260603.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 482/631] Peddler_s_Son_00243986_20260605.pdf                          ... F1      Peddler's Son                  foots=OK
+[ 483/631] Peddler_s_Son_002452064_20260601.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 484/631] Peddler_s_Son_002452100_20260601.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 485/631] Peddler_s_Son_002452687_20260602.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 486/631] Peddler_s_Son_C00295727_20260603.pdf                         ... SKIP-A  Peddler's Son                  foots=OK
+[ 487/631] Shamrock_Foods_36615009_20260601.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 488/631] Shamrock_Foods_36615010_20260601.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 489/631] Shamrock_Foods_36619604_20260603.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 490/631] Shamrock_Foods_36625932_20260605.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 491/631] Shamrock_Foods_36625933_20260605.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 492/631] Sysco_519310734_20260601.pdf                                 ... F5      Sysco                          foots=OK
+[ 493/631] What_Chefs_Want_12708254_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 494/631] What_Chefs_Want_12713817_20260529.pdf                        ... F1      What Chefs Want                foots=OK
+[ 495/631] What_Chefs_Want_12719881_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 496/631] What_Chefs_Want_12723357_20260601.pdf                        ... F1      What Chefs Want                foots=OK
+[ 497/631] What_Chefs_Want_12728462_20260603.pdf                        ... F1      What Chefs Want                foots=OK
+[ 498/631] Cheney_Brothers_20-910762150_20260603.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 499/631] Cheney_Brothers_20-910762161_20260603.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 500/631] Cheney_Brothers_20-910777475_20260605.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 501/631] Cozzini_C21197299_20260603.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 502/631] Fresh_Point_2778473735_20260602.pdf                          ... F1      Fresh Point                    foots=OK
+[ 503/631] Fresh_Point_2778473736_20260602.pdf                          ... F1      Fresh Point                    foots=OK
+[ 504/631] Fresh_Point_2778475396_20260603.pdf                          ... F1      Fresh Point                    foots=OK
+[ 505/631] Fresh_Point_2778477398_20260604.pdf                          ... F1      Fresh Point                    foots=OK
+[ 506/631] Fresh_Point_2778477399_20260604.pdf                          ... F1      Fresh Point                    foots=OK
+[ 507/631] Fresh_Point_2778479286_20260505.pdf                          ... F1      Fresh Point                    foots=OK
+[ 508/631] Fresh_Point_27788479285_20260605.pdf                         ... F1      Fresh Point                    foots=OK
+[ 509/631] Samuels_Seafood_Co_506710_20260603.pdf                       ... F2      Samuels Seafood Co             foots=OK
+[ 510/631] Sysco_532093915_20260603.pdf                                 ... F5      Sysco                          foots=OK
+[ 511/631] Sysco_532389156_20260601.pdf                                 ... F5      Sysco                          foots=OK
+[ 512/631] Sysco_532396224_20260605.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 513/631] Vestis_5610696920_20260604.pdf                               ... SKIP-B  Vestis                         foots=OK
+[ 514/631] City_Seafood_INV25406_20260529.pdf                           ... F2      City Seafood                   foots=OK
+[ 515/631] City_Seafood_INV25507_20260126.pdf                           ... F2      City Seafood                   foots=OK
+[ 516/631] City_Seafood_INV25525_20260126.pdf                           ... F2      City Seafood                   foots=OK
+[ 517/631] City_Seafood_INV25582_20260603.pdf                           ... F2      City Seafood                   foots=OK
+[ 518/631] City_Seafood_INV25729_20260626.pdf                           ... F2      City Seafood                   foots=OK
+[ 519/631] Fortune_Fish_Gourmet_368173-26-06_20260529.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 520/631] Fortune_Fish_Gourmet_369006-26-06_20260602.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 521/631] Fortune_Fish_Gourmet_369007-26-06_20260602.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 522/631] Fortune_Fish_Gourmet_369260-26-06_20260603.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 523/631] Fortune_Fish_Gourmet_369261-26-06_20260603.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 524/631] Fortune_Fish_Gourmet_369684-26-06_20260604.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 525/631] Fortune_Fish_Gourmet_370303-26-06_20260606.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 526/631] Fortune_Fish_Gourmet_370314-26-06_20260606.pdf               ... F1      Fortune Fish & Gourmet         foots=OK
+[ 527/631] Kuna_Foodservice_244833-00_20260530.pdf                      ... F5      Kuna Foodservice               foots=N/A
+[ 528/631] Kuna_Foodservice_245417-00_20260603.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 529/631] Kuna_Foodservice_246384-00_20260602.pdf                      ... F5      Kuna Foodservice               foots=FAIL
+[ 530/631] Kuna_Foodservice_247385-00_20260604.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 531/631] Kuna_Foodservice_248318-00_20260605.pdf                      ... F5      Kuna Foodservice               foots=N/A
+[ 532/631] Kuna_Foodservice_248328-00_20260605.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 533/631] Kuna_Foodservice_248669-00_20260606.pdf                      ... F5      Kuna Foodservice               foots=OK
+[ 534/631] Rolling_Lawn_Farms_130153_20260603.pdf                       ... F1      Rolling Lawns Farm LLC         foots=OK
+[ 535/631] What_Chefs_Want_12274973_20260606.pdf                        ... F1      What Chefs Want                foots=OK
+[ 536/631] What_Chefs_Want_12710247_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 537/631] What_Chefs_Want_12719288_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 538/631] What_Chefs_Want_12719299_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 539/631] What_Chefs_Want_12719344_20260530.pdf                        ... F1      What Chefs Want                foots=OK
+[ 540/631] What_Chefs_Want_12724853_20260601.pdf                        ... F1      What Chefs Want                foots=FAIL
+[ 541/631] What_Chefs_Want_12728505_20260602.pdf                        ... F1      What Chefs Want                foots=OK
+[ 542/631] What_Chefs_Want_12732231_20260603.pdf                        ... F1      What Chefs Want                foots=OK
+[ 543/631] What_Chefs_Want_12732236_20260603.pdf                        ... F1      What Chefs Want                foots=OK
+[ 544/631] What_Chefs_Want_12740945_20200605.pdf                        ... F1      What Chefs Want                foots=OK
+[ 545/631] What_Chefs_Want_12744973_20200606.pdf                        ... F1      What Chefs Want                foots=OK
+[ 546/631] What_Chefs_Want_12744977_20260606.pdf                        ... F1      What Chefs Want                foots=OK
+[ 547/631] What_Chefs_Want_12744982_20260606.pdf                        ... F1      What Chefs Want                foots=OK
+[ 548/631] Cheney_Brothers_06-910724388_20260528.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 549/631] Cheney_Brothers_06910750245_20260402.pdf                     ... F4      Cheney Brothers                foots=FAIL
+[ 550/631] Cheney_Brothers_06910758890_20260603.pdf                     ... F4      Cheney Brothers                foots=OK
+[ 551/631] Cheney_Brothers_06910771693_20260605.pdf                     ... F4      Cheney Brothers                foots=OK
+[ 552/631] Cintas_4269479877_20200418.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 553/631] Cintas_4271043036_20200106.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 554/631] Cintas_4271043036_20260601.pdf                               ... SKIP-B  Cintas                         foots=OK
+[ 555/631] Gordon_Food_Service_860155792_20260602.pdf                   ... F1      Gordon Food Service            foots=OK
+[ 556/631] Gordon_Food_Service_9036194498_20260530.pdf                  ... F1      Gordon Food Service            foots=OK
+[ 557/631] Gordon_Food_Service_9036225940_20260601.pdf                  ... F1      Gordon Food Service            foots=FAIL
+[ 558/631] St_Armands_INV882928_20260604.pdf                            ... F1      St. Armands Baking Company     foots=OK
+[ 559/631] St_Armands_INV884677_20260611.pdf                            ... F1      St. Armands Baking Company     foots=OK
+[ 560/631] Sysco_101353037_20260602.pdf                                 ... F5      Sysco                          foots=OK
+[ 561/631] Sysco_103340675_20260525.pdf                                 ... F5      Sysco                          foots=OK
+[ 562/631] Sysco_103341694_20260526.pdf                                 ... F5      Sysco                          foots=OK
+[ 563/631] Sysco_103343421_20260527.pdf                                 ... F5      Sysco                          foots=OK
+[ 564/631] Sysco_103344226_20260530.pdf                                 ... SKIP-A  Sysco                          foots=FAIL
+[ 565/631] Sysco_103344427_20260528.pdf                                 ... F5      Sysco                          foots=OK
+[ 566/631] Sysco_103345776_20260529.pdf                                 ... F5      Sysco                          foots=OK
+[ 567/631] Sysco_103348645_20260530.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 568/631] Sysco_103349834_20260601.pdf                                 ... F5      Sysco                          foots=OK
+[ 569/631] Sysco_103353513_20260602.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 570/631] Sysco_103354213_20260602.pdf                                 ... SKIP-A  Sysco                          foots=OK
+[ 571/631] Sysco_103355033_20260603.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 572/631] Sysco_103356438_20260604.pdf                                 ... F5      Sysco                          foots=OK
+[ 573/631] Sysco_103357793_20260605.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 574/631] Sysco_103360615_20260606.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 575/631] Alsco_Uniforms_LSAR1731394_20260526.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 576/631] Alsco_Uniforms_LSAR1733233_20260602.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 577/631] Cheney_Brothers_06-910704768_20260525.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 578/631] Cheney_Brothers_06-910725356_20260528.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 579/631] Cheney_Brothers_06-910732860_20260529.pdf                    ... F4      Cheney Brothers                foots=OK
+[ 580/631] Cheney_Brothers_06-910740329_20260603.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 581/631] Cheney_Brothers_06-910745090_20260601.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 582/631] Cheney_Brothers_06-910774168_20260605.pdf                    ... F4      Cheney Brothers                foots=FAIL
+[ 583/631] Cozzini_C21119277_20260526.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 584/631] Sunfresh_Produce_Englewood_000489637_20260525.pdf            ... F1      SUNFRESH PRODUCE               foots=OK
+[ 585/631] Sunfresh_Produce_Englewood_000489891_20260528.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 586/631] Sunfresh_Produce_Englewood_000490097_20260529.pdf            ... F1      SUNFRESH PRODUCE               foots=OK
+[ 587/631] Sunfresh_Produce_Englewood_000490253_20260530.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 588/631] Sunfresh_Produce_Englewood_000490440_20260601.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 589/631] Sunfresh_Produce_Englewood_000490554_20260603.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 590/631] Sunfresh_Produce_Englewood_000490862_20260605.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 591/631] Sunfresh_Produce_Englewood_000490887_20260605.pdf            ... F1      Sunfresh Produce               foots=OK
+[ 592/631] Sunfresh_Produce_Englewood_00489754_20260525.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 593/631] Sunfresh_Produce_Englewood_00489940_20260527.pdf             ... F1      Sunfresh Produce               foots=OK
+[ 594/631] Sunfresh_Produce_Englewood_00490555_20260602.pdf             ... F1      SUNFRESH PRODUCE               foots=OK
+[ 595/631] Sunfresh_Produce_Englewood_00490618_20260603.pdf             ... F1      SUNFRESH PRODUCE               foots=OK
+[ 596/631] Sysco_737903507_20260525.pdf                                 ... F5      Sysco                          foots=OK
+[ 597/631] Sysco_737904907_20260526.pdf                                 ... F5      Sysco                          foots=OK
+[ 598/631] Sysco_737907869_20260528.pdf                                 ... SKIP-B  Sysco                          foots=N/A
+[ 599/631] Sysco_737908768_20260528.pdf                                 ... F5      Sysco                          foots=OK
+[ 600/631] Sysco_737909736_20260529.pdf                                 ... F5      Sysco                          foots=FAIL
+[ 601/631] Sysco_737914681_20260601.pdf                                 ... F5      Sysco                          foots=OK
+[ 602/631] Sysco_737920771_20260603.pdf                                 ... F5      Sysco                          foots=OK
+[ 603/631] Sysco_737923544_20260605.pdf                                 ... F5      Sysco                          foots=OK
+[ 604/631] Alsco_Uniforms_LPHO2186558_20260604.pdf                      ... SKIP-B  Alsco Uniforms                 foots=N/A
+[ 605/631] Cozzini_C21191649_20260608.pdf                               ... SKIP-B  Cozzini Bros                   foots=OK
+[ 606/631] Peddler_s_Son_002452882_20260602.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 607/631] Peddler_s_Son_002453526_20260604.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 608/631] Peddler_s_Son_002453662_20260604.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 609/631] Peddler_s_Son_002454459_20260606.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 610/631] Peddler_s_Son_002454542_20260608.pdf                         ... F1      Peddler's Son                  foots=OK
+[ 611/631] Shamrock_Foods_10744446_20260602.pdf                         ... SKIP-A  Shamrock Foods Company         foots=FAIL
+[ 612/631] Shamrock_Foods_36617364_20260602.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 613/631] Shamrock_Foods_36620407_20260603.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 614/631] Shamrock_Foods_36622942_20260604.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 615/631] Shamrock_Foods_36622943_20260604.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 616/631] Shamrock_Foods_36622944_20260604.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 617/631] Shamrock_Foods_36627366_20260606.pdf                         ... F5      Shamrock Foods                 foots=OK
+[ 618/631] Shamrock_Foods_36630906_20260608.pdf                         ... F5      Shamrock Foods                 foots=FAIL
+[ 619/631] Ben_E_Keith_57069301_20260525.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 620/631] Ben_E_Keith_57081805_20260526.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 621/631] Ben_E_Keith_57092311_20260527.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 622/631] Ben_E_Keith_57103164_20260528.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 623/631] Ben_E_Keith_57119625_20260529.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 624/631] Ben_E_Keith_57161634_20260603.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 625/631] Ben_E_Keith_57172821_20260604.pdf                            ... F3      Ben E Keith                    foots=FAIL
+[ 626/631] Ben_E_Keith_57189438_20260605.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 627/631] Ben_E_Keith_57189446_20260605.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 628/631] Ben_E_Keith_57194586_20260606.pdf                            ... F3      Ben E Keith                    foots=OK
+[ 629/631] Fresh_Point_1076169626_20260525.pdf                          ... F1      Fresh Point                    foots=OK
+[ 630/631] Fresh_Point_1076174734_20260529.pdf                          ... F1      Fresh Point                    foots=OK
+[ 631/631] Fresh_Point_57125392_20260530.pdf                            ... F1      Fresh Point                    foots=FAIL
+
+[probe] classification pass complete: 631 ok, 0 error, in 4881s
+
+[probe] note: 83 prior classification(s) in JSONL belong to RAW twins now dropped by dedup — excluded from this report.
+
+════════════════════════════════════════════════════════════════════════════════
+CORPUS CLASSIFICATION REPORT
+generated: 2026-06-09T19:09:57.529Z
+folder: /Users/kevinfietek/Documents/Claude /2026
+total files scanned: 737
+classified ok: 736
+classification errors: 1
+════════════════════════════════════════════════════════════════════════════════
+
+FAMILY BREAKDOWN
+  F1         325    44.2%
+  F2          17     2.3%
+  F3          50     6.8%
+  F4          36     4.9%
+  F5         189    25.7%
+  F6          13     1.8%
+  SKIP-A      53     7.2%
+  SKIP-B      53     7.2%
+  UNKNOWN      0     0.0%
+
+PER-FAMILY EXTRACTION-SANITY (does qty*unit ≈ amount on the family's rules?)
+  F1       n= 325   OK= 284 ( 87.4%)   FAIL=  40   N/A=   1
+  F2       n=  17   OK=  17 (100.0%)   FAIL=   0   N/A=   0
+  F3       n=  50   OK=  31 ( 62.0%)   FAIL=  19   N/A=   0
+  F4       n=  36   OK=  21 ( 58.3%)   FAIL=  15   N/A=   0
+  F5       n= 189   OK= 133 ( 70.4%)   FAIL=  45   N/A=  11
+  F6       n=  13   OK=   9 ( 69.2%)   FAIL=   4   N/A=   0
+
+UNKNOWN / NEW STRUCTURES (0)
+These are invoices that don't fit any catalogued family — surface 7th+ structures.
+
+OBSERVED VENDOR → FAMILY MAPPING (top vendors by count)
+   128  What Chefs Want                       F1=119  SKIP-A=9
+    82  Sysco                                 F5=75  SKIP-A=6  SKIP-B=1
+    71  Shamrock Foods                        F5=55  SKIP-A=16
+    69  Peddler's Son                         F1=62  SKIP-A=7
+    50  Ben E Keith                           F3=50
+    37  Kuna Foodservice                      F5=37
+    37  SUNFRESH PRODUCE                      F1=37
+    36  Fortune Fish & Gourmet                F1=36
+    36  Cheney Brothers                       F4=36
+    34  Fresh Point                           F1=33  SKIP-A=1
+    22  Shamrock Foods Company PHX            F5=22
+    21  Alsco Uniforms                        SKIP-B=21
+    17  Cozzini Bros                          SKIP-B=17
+    15  City Seafood                          F2=15
+    10  Gordon Food Service                   F1=9  SKIP-A=1
+    10  Rolling Lawns Farm LLC                F1=10
+    10  Shamrock Foods Company                SKIP-A=10
+     7  Vio Brands USA                        F1=6  SKIP-B=1
+     6  Grey Eagle Distributors               F6=6
+     6  Cintas                                SKIP-B=6
+     5  Sodexo Operations, LLC dba InReach    SKIP-A=3  SKIP-B=2
+     4  Truly Good Foods                      F1=4
+     4  St. Armands Baking Company            F1=3  SKIP-B=1
+     3  Swire Coca-Cola                       F6=3
+     2  Tropical Nut & Fruit DBA Truly Good Foods  F1=2
+     2  Lohr Distribution                     F6=2
+     2  Vestis                                SKIP-B=2
+     1  Evamor Products, LLC                  F1=1
+     1  Freshpoint                            F1=1
+     1  Katz Coffee                           F1=1
+     1  1st Phorm International, LLC          F1=1
+     1  Cozzini Brothers                      SKIP-B=1
+     1  PepsiCo Beverages Company             F6=1
+     1  Pepsi Beverage Company                F6=1
+     1  Samuels Seafood Co. - South Coast     F2=1
+     1  Ferrell Gas                           SKIP-B=1
+     1  Samuels Seafood Co                    F2=1
+
+NON-FOOD VENDORS DETECTED (SKIP-B count > 0)
+Add these to the vendor-level skip list when the hybrid hits production.
+  Sysco    (SKIP-B count: 1)
+  Alsco Uniforms    (SKIP-B count: 21)
+  Cozzini Bros    (SKIP-B count: 17)
+  Vio Brands USA    (SKIP-B count: 1)
+  Cintas    (SKIP-B count: 6)
+  Sodexo Operations, LLC dba InReach    (SKIP-B count: 2)
+  St. Armands Baking Company    (SKIP-B count: 1)
+  Vestis    (SKIP-B count: 2)
+  Cozzini Brothers    (SKIP-B count: 1)
+  Ferrell Gas    (SKIP-B count: 1)
+
+FILENAME vs MODEL VENDOR MISMATCHES (144)
+Cases where the parsed-from-filename vendor token doesn't agree with what the model read off the invoice.
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002434388_20260420.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002435759_20260422.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002436342_20260423.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002436627_20260424.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002437166_20260425.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=SKIP-A   file=Peddler_s_Son_C00290773_20260423.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=SKIP-A   file=Peddler_s_Son_C00291107_20260425.pdf
+  filename="Swire Coca Cola"   model="Swire Coca-Cola"   family=F6   file=Swire_Coca_Cola_52075313020_20260427.pdf
+  filename="Cozzini C20627894"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20627894_20260311.pdf
+  filename="Cozzini C20726631"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20726631_20260325.pdf
+  filename="Cozzini C20916352"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20916352_20260422.pdf
+  filename="Cozzini c20821603"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_c20821603_20260408.pdf
+  filename="Evamor S12009587"   model="Evamor Products, LLC"   family=F1   file=Evamor_S12009587_20260319.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_349566-26-06_20260323(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_349566-26-06_20260323.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_350118-26-06_20260325(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_350118-26-06_20260325.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354312-26-06_20260409(1).pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354312-26-06_20260409.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_354862-26-06_20260411.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_355194-26-06_20260413.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_355769-26-06_20260415.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358095-26-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358096-20-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_358109-26-06_20260423.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_359988-26-06_20260430.pdf
+  filename="Fortune Fish Gourmet"   model="Fortune Fish & Gourmet"   family=F1   file=Fortune_Fish_Gourmet_359989-26-06_20260430.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129308_20260409.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129357_20260413.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129522_20260423.pdf
+  filename="Rolling Lawn Farms"   model="Rolling Lawns Farm LLC"   family=F1   file=Rolling_Lawn_Farms_129157_20260330.pdf
+  filename="Cozzini C20908036"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C20908036_20260427.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438574_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002439604_20260430.pdf
+  filename="Cozzini C21052385"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C21052385_20260512.pdf
+  filename="Cozzini C21144796"   model="Cozzini Bros"   family=SKIP-B   file=Cozzini_C21144796_20260526.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002437670_20260427.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438382_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438462_20260428.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002438914_20260429.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002439841_20260501.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002440358_20260502.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002440799_20260504.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002441613_20260505.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002442171_20260506.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002443154_20260508.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002443246_20260508.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002444111_20260511.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002445005_20260513.pdf
+  filename="Peddler s Son"   model="Peddler's Son"   family=F1   file=Peddler_s_Son_002445964_20260515.pdf
+  (+94 more)
+
+[probe] full report written to: _corpus_results/report.txt
+[probe] raw per-file results in JSONL: _corpus_results/classifications.jsonl
