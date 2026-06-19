@@ -115,22 +115,30 @@ export default function VendorPortal({ config, showToast, openConfirm }) {
         <VendorAdminView isAdmin={isAdmin} showToast={showToast} openConfirm={openConfirm} />
       ) : !selectedAccount ? (
         <div className="oh-vp-landing">
-          <div className="oh-vp-landing-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
+          <div className="oh-vp-landing-head">
+            <h3 className="oh-vp-landing-title">Pick an account to view its vendors</h3>
+            <p className="oh-vp-landing-sub">
+              Contact info, delivery schedules, ordering portals, and site notes - organized by account.
+            </p>
           </div>
-          <h3 className="oh-vp-landing-title">Vendor Directory</h3>
-          <p className="oh-vp-landing-desc">
-            Contact info, delivery schedules, ordering portals, and site notes — organized by account.
-          </p>
-          <p className="oh-vp-landing-nudge">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15"/></svg>
-            Select an account above to get started
-          </p>
+          {accounts.length === 0 ? (
+            <div className="oh-vp-landing-empty">No accounts available.</div>
+          ) : (
+            <div className="oh-vp-acct-grid">
+              {accounts.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  className="oh-vp-acct-card"
+                  onClick={() => { setSelectedAccount(a.key); setSubView("directory"); }}
+                >
+                  <span className="oh-vp-acct-card-key">{a.key}</span>
+                  <span className="oh-vp-acct-card-name">{a.name || ""}</span>
+                  {a.level && <span className="oh-vp-acct-card-level">{a.level}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <VendorList
