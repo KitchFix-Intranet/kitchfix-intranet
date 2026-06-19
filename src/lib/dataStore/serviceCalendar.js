@@ -57,13 +57,14 @@ import { isDualWrite } from "@/lib/cutover";
 //   tracked separately in the calendar component PR.
 
 const SC_TABLES = {
-  groups:      "sc_service_groups",
-  services:    "sc_services",
-  prices:      "sc_service_prices",
-  projections: "sc_daily_projections",
-  actuals:     "sc_daily_actuals",
-  metadata:    "sc_day_metadata",
-  changelog:   "sc_config_changelog",
+  groups:       "sc_service_groups",
+  services:     "sc_services",
+  prices:       "sc_service_prices",
+  projections:  "sc_daily_projections",
+  actuals:      "sc_daily_actuals",
+  metadata:     "sc_day_metadata",
+  changelog:    "sc_config_changelog",
+  feeSchedule:  "sc_fee_schedule",
 };
 
 // Days older than LOCK_DAYS render as locked in the UI. The orchestrator
@@ -1452,4 +1453,249 @@ async function submitConfigRequestPostgres(accountKey, request, email) {
  */
 export async function submitConfigRequest(accountKey, request, email) {
   return submitConfigRequestPostgres(accountKey, request, email);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// Fee schedule (Bundle 1 Stage 2 - sc-5 migration)
+// ═══════════════════════════════════════════════════════════════
+//
+// The contract-revenue layer. Service Calendar does NOT consume this
+// data; the admin owns it and the future KPI dashboard reads it.
+//
+// READ MODEL (matches sc-5 migration header):
+//   - current = the latest sc_fee_schedule row for an account with
+//     effective_date <= today, broken by created_at DESC (so a same-
+//     day correction wins).
+//   - upcoming = the EARLIEST future row, broken by created_at DESC
+//     within the same effective_date.
+//
+// WRITE MODEL: insert-only. A change is a new dated row. NO upsert -
+// the sc-5 GRANT denies UPDATE/DELETE, and the table has NO UNIQUE on
+// (account_key, effective_date) so same-day corrections succeed as a
+// fresh row.
+//
+// AUDIT: each write also inserts a sc_config_changelog row with
+// entity_type='fee'. The two inserts are sequential; failure of the
+// changelog insert aborts the operation just like the price path.
+
+async function loadFeeSchedulePostgres() {
+  const supa = getServiceClient();
+  const today = isoDay(new Date());
+
+  const accountsRes = await supa
+    .from("accounts")
+    .select("team_key, name, level, billing_model")
+    .eq("billing_model", "flat_fee")
+    .eq("active", true)
+    .order("team_key", { ascending: true });
+  throwOnError(accountsRes.error, "loadFeeSchedule.accounts");
+
+  const accountKeys = (accountsRes.data || []).map((a) => a.team_key);
+  let feeRows = [];
+  if (accountKeys.length > 0) {
+    const feesRes = await supa
+      .from(SC_TABLES.feeSchedule)
+      .select(
+        "id, account_key, amount, effective_date, period_type, " +
+        "payment_cadence, covered_by_account_key, reason, requested_by, " +
+        "changed_by, created_at"
+      )
+      .in("account_key", accountKeys)
+      .order("effective_date", { ascending: false })
+      .order("created_at", { ascending: false });
+    throwOnError(feesRes.error, "loadFeeSchedule.fees");
+    feeRows = feesRes.data || [];
+  }
+
+  // Walking the result DESC by (effective_date, created_at). For each
+  // account, the first row with effective_date <= today is the current
+  // pick (latest eff, latest correction within ties). For upcoming, we
+  // want the EARLIEST future effective_date with latest created_at
+  // tiebreak - tracked explicitly because DESC traversal sees later
+  // future dates first.
+  const currentByKey = new Map();
+  const upcomingByKey = new Map();
+  for (const r of feeRows) {
+    if (r.effective_date <= today) {
+      if (!currentByKey.has(r.account_key)) {
+        currentByKey.set(r.account_key, r);
+      }
+      continue;
+    }
+    const prev = upcomingByKey.get(r.account_key);
+    if (!prev) {
+      upcomingByKey.set(r.account_key, r);
+    } else if (r.effective_date < prev.effective_date) {
+      upcomingByKey.set(r.account_key, r);
+    } else if (r.effective_date === prev.effective_date && r.created_at > prev.created_at) {
+      upcomingByKey.set(r.account_key, r);
+    }
+  }
+
+  const shape = (r) => r ? ({
+    id:                   r.id,
+    amount:               Number(r.amount),
+    effectiveDate:        r.effective_date,
+    periodType:           r.period_type,
+    paymentCadence:       r.payment_cadence,
+    coveredByAccountKey:  r.covered_by_account_key,
+    reason:               r.reason,
+    requestedBy:          r.requested_by,
+    changedBy:            r.changed_by,
+    createdAt:            r.created_at,
+  }) : null;
+
+  const fees = (accountsRes.data || []).map((a) => ({
+    accountKey:  a.team_key,
+    name:        a.name || a.team_key,
+    level:       a.level || null,
+    current:     shape(currentByKey.get(a.team_key)),
+    upcoming:    shape(upcomingByKey.get(a.team_key)),
+  }));
+
+  return { generatedAt: today, fees };
+}
+
+/**
+ * Read the fee schedule for all flat_fee accounts: current as-of-today
+ * row + next upcoming change per account. Powers the admin Fee
+ * schedule surface.
+ */
+export async function loadFeeSchedule() {
+  return loadFeeSchedulePostgres();
+}
+
+
+async function loadFeeAccountHistoryPostgres(accountKey) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from(SC_TABLES.feeSchedule)
+    .select(
+      "id, amount, effective_date, period_type, payment_cadence, " +
+      "covered_by_account_key, reason, requested_by, changed_by, created_at"
+    )
+    .eq("account_key", accountKey)
+    .order("effective_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  throwOnError(error, "loadFeeAccountHistory");
+  return (data || []).map((r) => ({
+    id:                   r.id,
+    amount:               Number(r.amount),
+    effectiveDate:        r.effective_date,
+    periodType:           r.period_type,
+    paymentCadence:       r.payment_cadence,
+    coveredByAccountKey:  r.covered_by_account_key,
+    reason:               r.reason,
+    requestedBy:          r.requested_by,
+    changedBy:            r.changed_by,
+    createdAt:            r.created_at,
+  }));
+}
+
+/**
+ * Read every sc_fee_schedule row for one account, newest first.
+ * Used by the admin fee history surface.
+ */
+export async function loadFeeAccountHistory(accountKey) {
+  return loadFeeAccountHistoryPostgres(accountKey);
+}
+
+
+async function updateFeeSchedulePostgres(accountKey, change, email) {
+  const supa = getServiceClient();
+  const today = isoDay(new Date());
+
+  // Read prior current row for changelog old_value + to carry forward
+  // covered_by_account_key + period_type when the caller does not
+  // override them (Bundle 1 Stage 2 only edits amount + optional
+  // payment_cadence; bundled markers persist across rows).
+  const { data: priorRows, error: priorErr } = await supa
+    .from(SC_TABLES.feeSchedule)
+    .select("amount, effective_date, period_type, payment_cadence, covered_by_account_key")
+    .eq("account_key", accountKey)
+    .lte("effective_date", today)
+    .order("effective_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  throwOnError(priorErr, "updateFeeSchedule.prior");
+  const prior = priorRows && priorRows.length ? priorRows[0] : null;
+  const priorValue = prior ? {
+    amount:               Number(prior.amount),
+    effectiveDate:        prior.effective_date,
+    periodType:           prior.period_type,
+    paymentCadence:       prior.payment_cadence,
+    coveredByAccountKey:  prior.covered_by_account_key,
+  } : null;
+
+  // Carry forward bundle marker + period unless explicitly overridden.
+  const periodType = change.periodType || prior?.period_type || "annual";
+  const paymentCadence = change.paymentCadence !== undefined
+    ? change.paymentCadence
+    : (prior?.payment_cadence ?? null);
+  const coveredBy = change.coveredByAccountKey !== undefined
+    ? change.coveredByAccountKey
+    : (prior?.covered_by_account_key ?? null);
+
+  const newRow = {
+    account_key:            accountKey,
+    amount:                 Number(change.amount),
+    effective_date:         change.effectiveDate,
+    period_type:            periodType,
+    payment_cadence:        paymentCadence,
+    covered_by_account_key: coveredBy,
+    reason:                 change.reason.trim(),
+    requested_by:           change.requestedBy ? change.requestedBy.trim() : null,
+    changed_by:             email,
+  };
+
+  const insRes = await supa
+    .from(SC_TABLES.feeSchedule)
+    .insert(newRow)
+    .select("id, created_at")
+    .single();
+  throwOnError(insRes.error, "updateFeeSchedule.insert");
+
+  const newValue = {
+    amount:               Number(change.amount),
+    periodType,
+    paymentCadence,
+    coveredByAccountKey:  coveredBy,
+  };
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "fee",
+    entity_id:      null,
+    entity_label:   accountKey,
+    change_type:    priorValue === null ? "create" : "update",
+    old_value:      priorValue,
+    new_value:      newValue,
+    effective_date: change.effectiveDate,
+    reason:         change.reason.trim(),
+    requested_by:   change.requestedBy ? change.requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "updateFeeSchedule.changelog");
+
+  return {
+    success:   true,
+    id:        insRes.data.id,
+    createdAt: insRes.data.created_at,
+  };
+}
+
+/**
+ * Apply one fee-schedule change for an account. Inserts a new
+ * sc_fee_schedule row + a paired sc_config_changelog row. NEVER updates
+ * or deletes existing fee rows - the audit trail is the history.
+ *
+ *   accountKey - canonical spaced form
+ *   change     - { amount, effectiveDate, reason, requestedBy?,
+ *                  periodType?, paymentCadence?, coveredByAccountKey? }
+ *   email      - actor email (-> changed_by)
+ *
+ * Returns { success, id, createdAt }.
+ */
+export async function updateFeeSchedule(accountKey, change, email) {
+  return updateFeeSchedulePostgres(accountKey, change, email);
 }

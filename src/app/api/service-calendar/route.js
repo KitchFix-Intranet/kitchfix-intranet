@@ -13,6 +13,9 @@ import {
   updateServiceConfig,
   addService,
   submitConfigRequest,
+  loadFeeSchedule,
+  loadFeeAccountHistory,
+  updateFeeSchedule,
 } from "@/lib/dataStore/serviceCalendar";
 
 // SHEETS REMOVED - PG orchestrator now handles all reads/writes.
@@ -427,6 +430,39 @@ export async function GET(request) {
       return NextResponse.json({ success: true, accountKey, ...config });
     }
 
+    // ── sc-admin-fee-list: all flat_fee accounts with current as-of-today
+    //    fee + next upcoming change. The contract-revenue surface. ──
+    if (action === "sc-admin-fee-list") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const payload = await loadFeeSchedule();
+      return NextResponse.json({ success: true, ...payload });
+    }
+
+    // ── sc-admin-fee-history: full sc_fee_schedule history for one
+    //    account. Used by the per-account fee editor's history panel. ──
+    if (action === "sc-admin-fee-history") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const accountKey = searchParams.get("account");
+      if (!accountKey) {
+        return NextResponse.json(
+          { success: false, error: "Missing account param" },
+          { status: 400 }
+        );
+      }
+      const history = await loadFeeAccountHistory(accountKey);
+      return NextResponse.json({ success: true, accountKey, history });
+    }
+
     return NextResponse.json(
       { success: false, error: "Unknown action" },
       { status: 400 }
@@ -607,6 +643,95 @@ export async function POST(request) {
 
       const result = await updateServiceConfig(accountKey, translated, email);
       return NextResponse.json({ success: true, updated: result.applied });
+    }
+
+    // ── sc-admin-fee-set: write one fee-schedule change (ADMIN) ──
+    // Mirrors sc-config-update's validation pattern: reason required,
+    // effectiveDate required (today-or-future, 1-day UTC grace for CT/ET
+    // operators). Bundle 1 Stage 2 is today + future only; backdate is
+    // Stage 3.
+    if (action === "sc-admin-fee-set") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const { accountKey, amount, effectiveDate, reason, requestedBy, paymentCadence } = body;
+      if (!accountKey) {
+        return NextResponse.json(
+          { success: false, error: "Missing accountKey" },
+          { status: 400 }
+        );
+      }
+      if (amount === undefined || amount === null || isNaN(Number(amount))) {
+        return NextResponse.json(
+          { success: false, error: "amount required and must be numeric" },
+          { status: 400 }
+        );
+      }
+      if (Number(amount) < 0) {
+        return NextResponse.json(
+          { success: false, error: "amount must be >= 0" },
+          { status: 400 }
+        );
+      }
+      if (!effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
+        return NextResponse.json(
+          { success: false, error: "effectiveDate required (YYYY-MM-DD)" },
+          { status: 400 }
+        );
+      }
+      const yesterday = (() => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      if (effectiveDate < yesterday) {
+        return NextResponse.json(
+          { success: false, error: "effectiveDate must be today or future (backdate is not supported in this stage)" },
+          { status: 400 }
+        );
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: "reason required" },
+          { status: 400 }
+        );
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (requestedBy && (typeof requestedBy !== "string" || requestedBy.length > 280)) {
+        return NextResponse.json(
+          { success: false, error: "requestedBy must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (paymentCadence !== undefined && paymentCadence !== null) {
+        const allowed = ["monthly-6", "monthly-7", "quarterly", "annual"];
+        if (typeof paymentCadence !== "string" || !allowed.includes(paymentCadence)) {
+          return NextResponse.json(
+            { success: false, error: `paymentCadence must be one of ${allowed.join(", ")}` },
+            { status: 400 }
+          );
+        }
+      }
+      const result = await updateFeeSchedule(
+        accountKey,
+        {
+          amount:         Number(amount),
+          effectiveDate,
+          reason:         reason.trim(),
+          requestedBy:    requestedBy ? requestedBy.trim() : null,
+          paymentCadence: paymentCadence ?? undefined,
+        },
+        email
+      );
+      return NextResponse.json(result);
     }
 
     // ── sc-config-add: add a new service to an account (ADMIN) ──
