@@ -24,6 +24,7 @@ import {
   mergeVendors,
   getInvoiceSubmissions,
   getInvoiceSubmissionByUuid,
+  getLatestRejectionsForSubmissions,
   findDuplicateSubmission,
   getGLCodes,
   upsertInvoiceSubmission,
@@ -79,6 +80,36 @@ function toLegacySubmission(c) {
     correctedFromUuid: c.correctedFromUuid,
     dupeOverride:      c.dupeOverride,
   };
+}
+
+// Mutates `submissions` in place: for any submission with status='returned',
+// hydrate rejectionReason/Note/By/At from the PG invoice_rejections child
+// table (or from the Sheets submission row's R-U if reading from Sheets).
+// canonicalFromPgRow leaves these fields empty since rejections are
+// normalized into a separate PG table; this post-query enrichment fills
+// them so the operator history banner has data to render.
+// One batch query for the whole list; no-op when no returned rows present.
+// Non-blocking: catches and logs errors so a rejection-fetch failure
+// doesn't break the whole history view.
+async function hydrateRejectionData(submissions) {
+  const returnedUuids = submissions
+    .filter((s) => s.status === "returned")
+    .map((s) => s.uuid);
+  if (returnedUuids.length === 0) return;
+  try {
+    const rejections = await getLatestRejectionsForSubmissions(returnedUuids, { module: "ops" });
+    for (const sub of submissions) {
+      const rej = rejections[sub.uuid];
+      if (rej) {
+        sub.rejectionReason = rej.rejectionReason;
+        sub.rejectionNote   = rej.rejectionNote;
+        sub.rejectedBy      = rej.rejectedBy;
+        sub.rejectedAt      = rej.rejectedAt;
+      }
+    }
+  } catch (err) {
+    console.warn("[Invoice] Rejection hydration failed (non-blocking):", err.message);
+  }
 }
 
 // PR 6.2 (C5 + S1): GL codes are stored flat in the dataStore. The
@@ -179,14 +210,15 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       const { rows } = await getInvoiceSubmissions({
         accountKey: accountParam || undefined,
         page: 1,
-        pageSize: 200,
+        pageSize: 5000,
         scope: "all",
         module: "ops",
       });
       // PR 6.2 C10: invoice-delete-dupe is now a soft delete (status='deleted').
       // Pre-PR-6.2 hard deletes were invisible to history; preserve that UX
       // by filtering soft-deleted rows at the handler boundary.
-      recentSubmissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+      recentSubmissions = rows.filter((r) => r.status !== "deleted" && r.status !== "archived").map(toLegacySubmission);
+      await hydrateRejectionData(recentSubmissions);
     } catch (e) {
       console.warn("[Invoice] History load failed:", e.message);
     }
@@ -207,11 +239,13 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
     const { rows } = await getInvoiceSubmissions({
       accountKey: accountParam || undefined,
       page: 1,
-      pageSize: 200,
+      pageSize: 5000,
       scope: "all",
       module: "ops",
     });
-    return { success: true, history: rows.filter((r) => r.status !== "deleted").map(toLegacySubmission) };
+    const history = rows.filter((r) => r.status !== "deleted" && r.status !== "archived").map(toLegacySubmission);
+    await hydrateRejectionData(history);
+    return { success: true, history };
   }
 
   // ── Admin: All Submissions ──
@@ -227,7 +261,9 @@ export async function handleInvoiceGet(action, searchParams, token, email) {
       scope: "all",
       module: "ops",
     });
-    return { success: true, submissions: rows.filter((r) => r.status !== "deleted").map(toLegacySubmission) };
+    const submissions = rows.filter((r) => r.status !== "deleted").map(toLegacySubmission);
+    await hydrateRejectionData(submissions);
+    return { success: true, submissions };
   }
 
   return null;
@@ -348,7 +384,7 @@ A mostly-blank page with only a URL, page number, or footer text at the bottom i
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -442,7 +478,7 @@ A mostly-blank page with only a URL, page number, or footer text at the bottom i
 
 const prompt = `You are an invoice data extraction engine for KitchFix, a food service company. Analyze this invoice image.
 
-STEP 1 — IMAGE QUALITY CHECK:
+STEP 1 - IMAGE QUALITY CHECK:
 If the image is too blurry, too dark, severely cropped, upside down, not an invoice, or otherwise unreadable, respond ONLY with:
 {
   "readable": false,
@@ -455,7 +491,7 @@ IMPORTANT: A mostly-blank page with only a URL or footer text is a normal traili
 Reason examples: "Document is too blurry to read", "Document is too dark to read", "Invoice is cut off - key details are missing", "This doesn't appear to be an invoice"
 Suggestion examples: "Please re-export the PDF or try a different file", "Try downloading the invoice again from the vendor portal", "Upload the full invoice including all pages", "Please upload an invoice document"
 
-STEP 2 — If readable, extract fields and respond with:
+STEP 2 - If readable, extract fields and respond with:
 {
   "readable": true,
   "confidence": "high" | "medium" | "low",
@@ -468,7 +504,8 @@ STEP 2 — If readable, extract fields and respond with:
 Rules:
 - Return ONLY valid JSON. No markdown, no explanation, no backticks.
 - For dates, always convert to YYYY-MM-DD.
-- For amounts, return a plain number (no $, no commas). Use the INVOICE TOTAL / grand total from the summary section — this is the final amount due at the bottom of the last page. NEVER use subtotals, group totals, or per-category totals.
+- For amounts, return a plain number (no $, no commas). Use the INVOICE TOTAL / grand total from the summary section - this is the final amount due, usually at the bottom of the last page. NEVER use subtotals, group totals, or per-category totals.
+- The grand total is typically the LARGEST dollar amount on the invoice and is usually labeled "Invoice Total", "Grand Total", "Total Due", "Amount Due", "Balance Due", or "TOTAL". If multiple total-like amounts are visible, choose the largest one. Do not use subtotals, group totals, or per-category totals when a grand total is also visible.
 
 VENDOR NAME RULES:
 - vendorName = the company that ISSUED the invoice, NOT the ordering platform.
@@ -476,6 +513,8 @@ VENDOR NAME RULES:
 - IGNORE browser chrome, page headers/footers, and platform names like "Cut+Dry", "cutanddry.com", "BlueCart", "Orderve", "ChefSheet". These are ordering platforms, not vendors.
 - Look for a "Vendor:" label, company logo, or letterhead INSIDE the document body.
 - Common KitchFix vendors: Ben E. Keith, What Chefs Want, Fresh Point, Sysco, US Foods, Fortune Fish & Gourmet, Samuels Seafood, Performance Foodservice, Kuna Foodservice, Rolling Lawn Farms, City Seafood, Lohr Distribution, Truly Good Foods.
+- Fresh Point (a Sysco subsidiary) invoices may be printed on Ben E. Keith distribution letterhead. If the document shows BOTH "Fresh Point" and "Ben E. Keith" anywhere on the page (including small print or footers), return "Fresh Point" as the vendor.
+- "Fresh Point" and "FreshPoint" are the same vendor. Always return "Fresh Point" (with the space).
 
 INVOICE NUMBER RULES:
 - Look first for a field explicitly labeled "Invoice #" or "Invoice Number".
@@ -484,9 +523,25 @@ INVOICE NUMBER RULES:
 - EXCEPTION: For "What Chefs Want" invoices (from Cut+Dry / cutanddry.com), ALWAYS use the "Reference #" as the invoice number, NOT the "Order #". The Reference # is typically a shorter number (e.g. 12524109) compared to the longer Order # (e.g. 928127343).
 - NEVER use "Customer ID" as the invoice number.
 - Return only the number value, not the label (e.g. "906637520" not "Order #: 906637520").
+- NEVER use these as invoice number, even if no "Invoice #" field exists: Customer ID, Customer #, Account #, Account Number, Bill of Lading (BOL) #, Delivery Ticket #, Document #, Manifest #, Route #, Stop #, Truck #, Driver #, PO # (the customer's purchase order is theirs, not the vendor's invoice ID).
+- For Cheney Brothers invoices: use the number labeled "Invoice #" in the header (typically format like "06-910xxxxxx" or "20-910xxxxxx"). Do NOT use the "Order #" or "Account #" fields.
+- For Sysco invoices: use the number labeled "Invoice Number" in the header box (e.g. "532093915", "103349834"). Do NOT use "Order #", "Customer #", or any "Item Number" from the line item table.
+- For Fresh Point invoices: use the number labeled "Invoice #" or "Invoice Number". Do NOT use "Order #" or "PO #".
+- Preserve the full invoice number EXACTLY as printed, including any leading zeros (e.g. "00243986" not "243986"), prefixes (e.g. "INV25729"), and embedded dashes/hyphens.
+- If the number wraps to a second line on the document, concatenate both parts in printed order.
+- If you must choose between two candidate numbers, prefer the one closest to a label containing the word "Invoice" or "INV".
+
+INVOICE DATE RULES:
+- invoiceDate = the date the INVOICE was issued by the vendor, not the delivery date, due date, order date, posting date, or service date.
+- Look first for a field labeled "Invoice Date", "Inv. Date", "Date Issued", or just "Date" adjacent to the invoice number.
+- IGNORE "Due Date", "Delivery Date", "Service Date", "Ship Date", "Order Date", "PO Date", "Posting Date". These are NOT the invoice date.
+- If two dates are visible and one is labeled "Invoice Date" and the other "Due Date", use the Invoice Date. They are different dates.
+- Read the year EXACTLY as printed adjacent to the invoice date label. Do NOT infer or assume the current year. Some invoices are from prior years (e.g. 2020) and were submitted late - the year must be preserved as printed.
+- For Kuna Foodservice invoices: the date is in the top-right header labeled "INVOICE DATE" in format MM/DD/YY (e.g. "06/05/26" = June 5, 2026). The page is often rotated landscape - read the date in its printed orientation. Interpret a 2-digit year of "26" as 2026, "25" as 2025, "24" as 2024 (NOT 1926 or 2125). Do NOT confuse with the "TERMS" line (e.g. "14 DAYS") which describes payment terms, not a date.
+- For Cintas and Alsco Uniforms invoices: invoices may legitimately be from prior years (e.g. 2020). Read the year exactly as printed; do not default to the current year.
 
 - confidence: "high" = all 4 fields clearly extracted, "medium" = 2-3 fields extracted, "low" = only 1 field or uncertain.
-- If a field cannot be determined, use null — never guess.`;
+- If a field cannot be determined, use null - never guess.`;
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -496,7 +551,7 @@ INVOICE NUMBER RULES:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 500,
           messages: [{
             role: "user",
@@ -634,7 +689,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -1168,6 +1223,75 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
     return { success: true, deleted: true };
   }
 
+  // ───────────────────────────────────────────────────────────────
+  // invoice-archive / invoice-unarchive
+  //
+  // *** REQUIRED MIGRATION (run in Supabase SQL editor BEFORE deploy) ***
+  //     ALTER TABLE invoice_submissions DROP CONSTRAINT IF EXISTS invoice_submissions_status_check;
+  //     ALTER TABLE invoice_submissions ADD CONSTRAINT invoice_submissions_status_check
+  //       CHECK (status IN ('sent', 'returned', 'corrected', 'deleted', 'archived'));
+  // Without this migration, updateInvoiceFields will fail on the PG path
+  // with a CHECK constraint violation when archiving. Sheets writes do
+  // not have this constraint.
+  // ───────────────────────────────────────────────────────────────
+  if (action === "invoice-archive") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const orig = await getInvoiceSubmissionByUuid(uuid, { module: "ops" });
+    if (!orig) return { success: false, error: "Submission not found" };
+
+    try {
+      await updateInvoiceFields(uuid, {
+        status: "archived",
+        statusUpdatedAt: new Date().toISOString(),
+      }, { module: "ops" });
+    } catch (e) {
+      console.error(`[Invoice] Archive failed for ${uuid}:`, e.message);
+      return { success: false, error: "Failed to archive" };
+    }
+
+    console.log(`[Invoice] Archived: ${orig.vendorName} #${orig.invoiceNumber} uuid=${uuid} by ${email}`);
+
+    if (process.env.SLACK_INVOICE_WEBHOOK) {
+      const totalFmt = `$${Number(orig.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🗄️ Invoice archived: ${orig.vendorName || "?"} ${totalFmt}`,
+          blocks: [{
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*🗄️ Invoice Archived*\n*Vendor:* ${orig.vendorName || "Unknown"}\n*Account:* ${orig.accountKey || "N/A"}\n*Invoice #:* ${orig.invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Archived by:* ${email}`,
+            },
+          }],
+        }),
+      }).catch(() => {});
+    }
+
+    return { success: true };
+  }
+
+  if (action === "invoice-unarchive") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    try {
+      await updateInvoiceFields(uuid, {
+        status: "sent",
+        statusUpdatedAt: new Date().toISOString(),
+      }, { module: "ops" });
+    } catch (e) {
+      console.error(`[Invoice] Unarchive failed for ${uuid}:`, e.message);
+      return { success: false, error: "Failed to unarchive" };
+    }
+
+    console.log(`[Invoice] Unarchived: uuid=${uuid} by ${email}`);
+    return { success: true };
+  }
+
   return null;
 }
 
@@ -1296,65 +1420,36 @@ export async function extractAndStoreLineItems(invoiceUuid, pages, metadata) {
       return dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
     };
 
-const imageBlocks = pages.slice(0, 6).map((page) => {
-        const data = getPageData(page);
+    const imageBlocks = pages.slice(0, 6).map((page) => {
+      const data = getPageData(page);
       const base64 = resizeForScan(data);
       const mediaType = data.startsWith("data:image/png") ? "image/png" : "image/jpeg";
       return { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
     });
 
-    const prompt = EXTRACTION_PROMPT;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
-        messages: [{ role: "user", content: [...imageBlocks, { type: "text", text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[AI Scan] API error:", res.status, errText);
-      await markScanStatus(invoiceUuid, "failed");
+    // Retry-wrapped Claude call. Audits over the 2026-06-12 fix-bundle window
+    // (last 30 days) showed transient one-shot failures were the dominant
+    // pass-rate hit: invoices marked 'failed' that re-extracted cleanly on
+    // the very next call. Retry covers API errors (429/5xx/network), JSON
+    // parse failures, and 0-item returns. accountKey check + outer catch are
+    // NOT retried (input validation / unexpected error).
+    const extraction = await extractWithRetry(invoiceUuid, apiKey, imageBlocks);
+    if (!extraction.ok) {
+      console.error(`[AI Scan] ${invoiceUuid}: extraction failed: ${extraction.cause}`);
+      await markScanStatus(invoiceUuid, "failed", extraction.cause);
       return;
     }
-
-    const result = await res.json();
-    const text = result.content?.[0]?.text || "";
-
-    let parsed;
-    try {
-      const cleanJson = text.replace(/```json\s*|```/g, "").trim();
-      parsed = JSON.parse(cleanJson);
-    } catch (parseErr) {
-      console.error("[AI Scan] JSON parse failed:", parseErr.message);
-      await markScanStatus(invoiceUuid, "failed");
-      return;
-    }
-
-    // Invariant: ai_scan_status = 'complete' iff insertAILineItems was
-    // called and succeeded. Every earlier failure mode (empty extraction,
-    // missing account on metadata, swallowed insert error) used to fall
-    // through to markScanStatus('complete') below, producing "silent
-    // gaps": invoices marked complete with zero ai_line_items. See the
-    // 2026-06-08 investigation of the 12 stranded invoices.
-    const items = parsed.lineItems || [];
-    if (items.length === 0) {
-      console.warn(`[AI Scan] ${invoiceUuid}: Claude returned 0 line items; marking failed`);
-      await markScanStatus(invoiceUuid, "failed");
-      return;
-    }
+    const parsed = extraction.parsed;
+    const items = extraction.items;
 
     const accountKey = metadata.account;
     if (!accountKey) {
       // PR 6.2 (L1) dropped the "Invoice Uploads" junk-drawer fallback;
       // the Sheets orchestrator throws when accountKey is missing. Mark
       // failed (was silently complete-with-zero-rows pre-fix).
-      console.warn(`[AI Scan] ${invoiceUuid}: missing account on metadata; cannot write line items; marking failed`);
-      await markScanStatus(invoiceUuid, "failed");
+      const cause = "metadata.account missing - cannot route to per-account Sheets tab";
+      console.warn(`[AI Scan] ${invoiceUuid}: ${cause}`);
+      await markScanStatus(invoiceUuid, "failed", cause);
       return;
     }
 
@@ -1406,15 +1501,18 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
     try {
       await insertAILineItems(invoiceUuid, lineItems, { accountKey, module: "ops" });
     } catch (insErr) {
-      // Distinguish dual-write PG failures from Sheets / OCR failures so the
-      // silent gap (Sheets has rows, PG empty, status looked like a normal
-      // OCR fail) becomes visible. PG adapter errors are prefixed
-      // "[dataStore.invoice.pg]"; everything else is treated as a Sheets-path
-      // failure and keeps the existing 'failed' status.
+      // Distinguish dual-write PG failures from Sheets-side failures so each
+      // silent-gap shape becomes visible:
+      //   "[dataStore.invoice.pg]"     -> status='pg_failed' (Sheets has rows, PG empty)
+      //   "[dataStore.invoice.sheets]" -> status='failed'    (both stores empty - Sheets-first ordering)
+      //   anything else                -> status='failed'    (unexpected; capture cause)
+      // ai_scan_error captures insErr.message UNCONDITIONALLY (was: only on
+      // pg_failed). The 2026-06-17 inverse drift incident showed Sheets
+      // failures need the same loud-cause visibility pg_failed already has.
       const isPgFailure = insErr.message.includes("[dataStore.invoice.pg]");
       const status = isPgFailure ? "pg_failed" : "failed";
       console.error(`[AI Scan] ${invoiceUuid}: line item insert ${status}:`, insErr.message);
-      await markScanStatus(invoiceUuid, status, isPgFailure ? insErr.message : null);
+      await markScanStatus(invoiceUuid, status, insErr.message);
       return;
     }
 
@@ -1422,9 +1520,130 @@ const imageBlocks = pages.slice(0, 6).map((page) => {
     console.log(`[AI Scan] ${invoiceUuid}: Extracted ${lineItems.length} line items`);
 
   } catch (error) {
-    console.error("[AI Scan] Error:", error.message);
-    await markScanStatus(invoiceUuid, "failed");
+    const cause = `unexpected error in extractAndStoreLineItems: ${error.message}`;
+    console.error(`[AI Scan] ${invoiceUuid}: ${cause}`);
+    await markScanStatus(invoiceUuid, "failed", cause);
   }
+}
+
+// ── Claude extraction with retry on transient failures ──────────────────────
+//
+// Wraps the Claude OCR call in a bounded retry loop. Audits over the
+// 2026-06-12 fix-bundle window showed that the dominant pass-rate hit was
+// transient one-shot failures - invoices marked 'failed' that re-extracted
+// cleanly on the very next call. None of the 6 sampled "failed" Cheney /
+// Peddler's / Shamrock invoices required a different model or layout
+// handling; both production and the candidate newer model succeeded on the
+// same input the second time.
+//
+// What's retried:
+//   - Network errors (fetch threw - DNS / connection refused / etc.)
+//   - HTTP 429 (rate limit)
+//   - HTTP 5xx (server-side)
+//   - JSON parse failures on Claude's response text
+//   - 0-item returns (Claude's output is non-deterministic; same image
+//     can yield N items once and 0 the next call)
+//
+// What's NOT retried:
+//   - HTTP 4xx other than 429 (auth / malformed request - retry won't help)
+//   - missing accountKey on metadata (input validation, handled in caller)
+//   - outer-catch unexpected errors (handled in caller)
+//
+// 0-item AFTER retries: distinct cause string ("possible non-invoice or
+// unreadable layout") so we can diagnose them separately from one-shot
+// transients.
+async function extractWithRetry(invoiceUuid, apiKey, imageBlocks) {
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [1000, 3000]; // before attempts 2 and 3
+
+  let lastResult = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      const wait = BACKOFF_MS[attempt - 2];
+      console.log(`[AI Scan] ${invoiceUuid}: retry ${attempt}/${MAX_ATTEMPTS} after ${wait}ms (last: ${(lastResult?.cause || "").slice(0, 80)})`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    lastResult = await callClaudeOnce(apiKey, imageBlocks);
+    if (lastResult.ok) {
+      if (attempt > 1) {
+        console.log(`[AI Scan] ${invoiceUuid}: extraction succeeded on attempt ${attempt}/${MAX_ATTEMPTS}`);
+      }
+      return { ok: true, parsed: lastResult.parsed, items: lastResult.items, attempts: attempt };
+    }
+    if (!lastResult.retryable) {
+      return { ok: false, cause: lastResult.cause, attempts: attempt };
+    }
+  }
+
+  // Exhausted retries. If the final attempt was a 0-item return, surface a
+  // distinct cause - those are diagnostically different from API/parse fails
+  // (likely a non-invoice photo, blank page, or genuinely unextractable layout).
+  const cause = lastResult.zeroItems
+    ? `Claude returned 0 line items after ${MAX_ATTEMPTS} attempts - possible non-invoice or unreadable layout`
+    : `${lastResult.cause} (after ${MAX_ATTEMPTS} attempts)`;
+  return { ok: false, cause, attempts: MAX_ATTEMPTS };
+}
+
+// ── One attempt at the Claude extraction call ────────────────────────────
+// Returns a unified result object:
+//   success:  { ok: true, parsed, items }
+//   failure:  { ok: false, retryable: bool, cause: string, zeroItems?: true }
+async function callClaudeOnce(apiKey, imageBlocks) {
+  let res;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        // Raised from 8192 -> 16384 after the 2026-06-12 sweep audit found
+        // two persistent failures (5a447c0a What Chefs Want, 29c8ff9f Truly
+        // Good Foods) whose JSON output truncated at the old cap. Verified
+        // against this model via scripts/_probe_max_tokens_16384_verification.mjs:
+        //   - API accepts 16384 cleanly
+        //   - Both failed invoices now produce complete valid JSON
+        //     (48 items / 8203 out_t, 52 items / 9296 out_t - just over 8192)
+        //   - 3 normal invoices (1/16/34 items) extract identically; small
+        //     invoices use modest token counts (267/2649/5866) so the higher
+        //     ceiling has no cost impact on the typical case
+        // 16384 leaves ~7000 tokens of headroom over the largest observed
+        // response, comfortably handling invoices with 100+ line items.
+        // Cost: only used when actually generated. max_tokens is a ceiling,
+        // not a target - normal invoices won't pay more.
+        max_tokens: 16384,
+        messages: [{ role: "user", content: [...imageBlocks, { type: "text", text: EXTRACTION_PROMPT }] }],
+      }),
+    });
+  } catch (fetchErr) {
+    // Network-level failure (DNS, connection refused, timeout) - retryable
+    return { ok: false, retryable: true, cause: `Claude API network error: ${fetchErr.message}` };
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    // 429 (rate limit) and 5xx (server-side) are retryable.
+    // Other 4xx (401/403/400/etc.) are auth/request errors - retry won't help.
+    const retryable = res.status === 429 || (res.status >= 500 && res.status < 600);
+    return { ok: false, retryable, cause: `Claude API ${res.status}: ${errText.slice(0, 200)}` };
+  }
+
+  const result = await res.json();
+  const text = result.content?.[0]?.text || "";
+
+  let parsed;
+  try {
+    const cleanJson = text.replace(/```json\s*|```/g, "").trim();
+    parsed = JSON.parse(cleanJson);
+  } catch (parseErr) {
+    return { ok: false, retryable: true, cause: `Claude output JSON parse failed: ${parseErr.message}` };
+  }
+
+  const items = parsed.lineItems || [];
+  if (items.length === 0) {
+    return { ok: false, retryable: true, cause: "Claude returned 0 line items", zeroItems: true };
+  }
+
+  return { ok: true, parsed, items };
 }
 
 async function markScanStatus(uuid, status, errorMessage = null) {

@@ -76,8 +76,12 @@
 .sc-metric-hero { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-metric-hero--green { color: #0F6E56; }
 .sc-metric-hero--red { color: #dc2626; }
+/* Single amber-text token across the SC surface (pace hero, footer warn,
+   any future urgency text). The #EF9F27 / #fbbf24 hexes elsewhere are
+   accent / dot backgrounds, not text. */
+.sc-metric-hero--amber { color: #b45309; }
 .sc-metric-context { font-size: var(--type-caption); color: #9ca3af; }
-.sc-metric-warn { font-size: var(--type-caption); color: #92400e; margin-top: 2px; }
+.sc-metric-warn { font-size: var(--type-caption); color: #b45309; margin-top: 2px; }
 .sc-metric-warn--link { cursor: pointer; text-decoration: underline; text-decoration-style: dashed; text-underline-offset: 2px; transition: color 0.15s; }
 .sc-metric-warn--link:hover { color: #0F6E56; }
 .sc-metric-divider { width: 1px; height: 40px; background: #e5e7eb; flex-shrink: 0; }
@@ -93,7 +97,11 @@
 .sc-dow { text-align: center; font-size: var(--type-caption); color: #6b7280; padding: 0 0 var(--space-2); font-weight: 500; }
 .sc-week-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1); padding: 3px 0; }
 
-.sc-tile { min-height: 80px; border-radius: var(--radius-card); padding: var(--space-2) var(--space-2); }
+/* Desktop densified to 60px + tighter padding per the redesign mockup.
+   The (768-1024px) and (<=768px) and (<=480px) media queries below
+   override min-height for tablet (88px) / mobile (64px) / phone (56px)
+   so the comfortable touch target is preserved on small viewports. */
+.sc-tile { min-height: 60px; border-radius: var(--radius-card); padding: 6px 8px; }
 .sc-tile--empty { }
 .sc-tile--off { opacity: 0.3; }
 .sc-tile--weekend { min-height: 44px; }
@@ -102,20 +110,56 @@
 .sc-tile-off-label { font-size: 10px; color: #9ca3af; margin-top: 2px; }
 .sc-today-pill { font-size: 7px; font-weight: 800; letter-spacing: 0.05em; padding: 1px 5px; border-radius: 3px; background: #E1F5EE; color: #085041; }
 
-.sc-tile--active { border: 1px solid #e5e7eb; border-left: 3px solid #e5e7eb; cursor: pointer; transition: all 0.15s; }
+/* Tile state visual = full-tile background tint + status icon. The
+   left-border accent is gone; bg tint and the .sc-badge icon carry the
+   state signal together so it's never color-alone. */
+.sc-tile--active { border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; background: #fff; }
 .sc-tile--active:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.sc-tile--focused { background: #f0fdf4 !important; border-color: #0F6E56 !important; }
-.sc-tile--today { border: 2px solid #0F6E56 !important; }
+
+/* Per-status bg tints. Every status the dayStatus() callback emits
+   (entered / needs-entry / overdue / future / no-service / prep /
+   off-season) gets a tint - off-season is handled by an early return
+   for fee tiles (between-homestands variant), but the rule below covers
+   any non-fee classify path that emits it. */
+.sc-tile-state--entered      { background: #dcfce7; }
+.sc-tile-state--needs-entry  { background: #fffbeb; }
+.sc-tile-state--overdue      { background: #fef2f2; }
+.sc-tile-state--future       { background: #f0fdf4; }
+.sc-tile-state--no-service   { background: #f9fafb; }
+.sc-tile-state--prep         { background: #d1fae5; }
+.sc-tile-state--off-season   { background: transparent; }
+
+/* Focused (clicked, ready to drill) keeps the green border but rides
+   on top of whatever state bg is below. Today + bulk-selected use box-
+   shadow rings on different layers so they stack independently. */
+.sc-tile--focused { border-color: #0F6E56 !important; box-shadow: 0 0 0 1px #0F6E56 inset; }
+.sc-tile--today { box-shadow: 0 0 0 2px #153968 !important; }
+.sc-tile--today.sc-tile--focused { box-shadow: 0 0 0 2px #153968, 0 0 0 1px #0F6E56 inset !important; }
+/* Today + bulk-selected (user is bulk-picking and today is unentered):
+   layer the navy today ring inside a softer green bulk-selected ring so
+   both signals survive. */
+.sc-tile--today.sc-tile--bulk-selected { box-shadow: 0 0 0 2px #153968, 0 0 0 4px rgba(15,110,86,0.25) !important; }
 
 .sc-tile-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-1); }
 .sc-tile-game { font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
 .sc-tile-meals { font-size: var(--type-caption); color: #6b7280; margin-bottom: 1px; line-height: var(--line-body); }
-.sc-tile-meals--proj { font-style: italic; color: #9ca3af; }
+.sc-tile-meals--proj { color: #9ca3af; }
 .sc-tile-noservice { font-size: 10px; color: #9ca3af; font-style: italic; margin-top: var(--space-1); }
 .sc-tile-rev { font-size: var(--type-body-sm); font-weight: 600; line-height: var(--line-body); }
 .sc-tile-rev--actual { color: #085041; font-weight: 700; }
-.sc-tile-rev--projected { color: #9ca3af; font-style: italic; font-weight: 400; }
-.sc-tile-rev--future { color: #d1d5db; font-style: italic; font-weight: 400; }
+/* "est." / "~" prefixes carry the projection signal; italic is dropped
+   so the dense grid reads as one type-family. */
+.sc-tile-rev--projected { color: #9ca3af; font-weight: 400; }
+.sc-tile-rev--future { color: #9ca3af; font-weight: 400; }
+
+/* MiLB DAY/NIGHT pill - replaces the left-border accent that previously
+   encoded the game-type rhythm. Day = amber dot, Night = navy dot. */
+.sc-mlb-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+.sc-mlb-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.sc-mlb-pill--day .sc-mlb-pill-dot { background: #EF9F27; }
+.sc-mlb-pill--night .sc-mlb-pill-dot { background: #153968; }
+.sc-mlb-pill-dot--legend-day { background: #EF9F27; }
+.sc-mlb-pill-dot--legend-night { background: #153968; }
 
 /* Bulk mode */
 .sc-tile--bulk-selectable { cursor: pointer; }
@@ -137,18 +181,25 @@
 .sc-badge { font-size: 12px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .sc-badge--entered { background: #E1F5EE; color: #085041; }
 .sc-badge--noservice { background: #f3f4f6; color: #9ca3af; font-size: 14px; }
-.sc-badge--needs { background: #fef3c7; color: #92400e; font-size: 10px; }
+.sc-badge--needs { background: #fef3c7; color: #b45309; font-size: 10px; }
 .sc-badge--overdue { background: #fef2f2; color: #dc2626; font-size: 12px; font-weight: 800; }
 .sc-badge--future { background: #f3f4f6; color: #d1d5db; font-size: 10px; }
 
-.sc-week-summary { display: flex; justify-content: flex-end; padding: 2px var(--space-1) var(--space-1); font-size: var(--type-caption); color: #6b7280; gap: var(--space-3); }
+/* Week summary: slim, right-aligned, one line "7/7 entered  $18,720". */
+.sc-week-summary { display: flex; justify-content: flex-end; padding: 4px var(--space-1); font-size: 11px; color: #6b7280; gap: 12px; }
 .sc-week-progress { }
 .sc-week-rev { font-weight: 600; color: #085041; }
 
-.sc-month-footer { margin: var(--space-3) 0 var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-card); display: flex; justify-content: space-between; align-items: center; font-size: var(--type-caption); color: #6b7280; font-weight: 500; background: #f9fafb; }
+/* Inline color legend below the grid - mirrors the year-view legend
+   style. Top border, top-padded. */
+.sc-month-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 0 0; margin-top: 8px; border-top: 1px solid #f3f4f6; }
+
+/* Month footer: tighter type + padding, warn uses the unified amber-text
+   token (#b45309) instead of the legacy mustard #92400e. */
+.sc-month-footer { margin: var(--space-3) 0 var(--space-4); padding: 8px 14px; border-radius: var(--radius-card); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #6b7280; font-weight: 500; background: #f9fafb; }
 .sc-month-footer--done { background: #E1F5EE; color: #085041; }
-.sc-month-footer--warn { background: #fffbeb; color: #92400e; }
-.sc-month-footer-rev { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
+.sc-month-footer--warn { background: #fffbeb; color: #b45309; }
+.sc-month-footer-rev { font-size: 16px; font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-month-footer--done .sc-month-footer-rev { color: #085041; }
 
 /* ══════════════════════════════════════
@@ -313,43 +364,12 @@
 .sc-btn--outline { background: #fff; color: #0F6E56; border: 1px solid #0F6E56; }
 .sc-btn--outline:hover:not(:disabled) { background: #E1F5EE; }
 
-/* Gear button */
-.sc-cfg-gear { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-.sc-cfg-gear:hover { border-color: #0F6E56; color: #0F6E56; background: #f0fdf4; }
-
-/* ══════════════════════════════════════
-   SERVICE CONFIG EDITOR
-   ══════════════════════════════════════ */
-.sc-cfg-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid #f0f0f0; }
-.sc-cfg-row:last-of-type { border-bottom: none; }
-.sc-cfg-row--inactive { opacity: 0.4; }
-.sc-cfg-row-left { display: flex; flex-direction: column; }
-.sc-cfg-row-name { font-size: 14px; color: #111827; }
-.sc-cfg-row-meta { font-size: 11px; color: #9ca3af; }
-.sc-cfg-row-right { display: flex; align-items: center; gap: 8px; }
-.sc-cfg-row-dollar { font-size: 14px; color: #6b7280; }
-.sc-cfg-price { width: 72px; padding: var(--space-1) var(--space-2); border: 1.5px solid #e5e7eb; border-radius: var(--radius-input); font-size: 14px; font-weight: 600; color: #111827; text-align: center; background: #fff; font-family: inherit; transition: all 0.15s; }
-.sc-cfg-price:focus { outline: none; border-color: #0F6E56; }
-.sc-cfg-price--changed { border-color: #0F6E56; color: #085041; background: #f0fdf4; }
-.sc-cfg-active-btn { padding: var(--space-1) var(--space-2); border-radius: var(--radius-input); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid; transition: all 0.15s; }
-.sc-cfg-active-btn--on { background: #E1F5EE; color: #085041; border-color: #9FE1CB; }
-.sc-cfg-active-btn--on:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
-.sc-cfg-active-btn--off { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
-.sc-cfg-active-btn--off:hover { background: #E1F5EE; color: #085041; border-color: #9FE1CB; }
-.sc-cfg-add-btn { display: block; width: 100%; padding: var(--space-2); margin: var(--space-2) 0; border: 1px dashed #e5e7eb; border-radius: var(--radius-input); background: #fff; color: #6b7280; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; text-align: center; transition: all 0.15s; }
-.sc-cfg-add-btn:hover { border-color: #0F6E56; color: #085041; background: #f0fdf4; }
-.sc-cfg-add-btn--group { border-color: #0F6E56; color: #085041; background: #E1F5EE; font-weight: 600; }
-.sc-cfg-add-form { padding: var(--space-4); background: #f9fafb; border: 1px solid #e5e7eb; border-radius: var(--radius-card); margin: 12px 0; }
-.sc-cfg-add-form-header { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 12px; }
-.sc-cfg-field { margin-bottom: 12px; }
-.sc-cfg-label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
-.sc-cfg-input { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); font-size: 14px; font-family: inherit; color: #111827; transition: border-color 0.15s; }
-.sc-cfg-input:focus { outline: none; border-color: #0F6E56; }
-.sc-cfg-select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); font-size: 14px; font-family: inherit; color: #111827; background: #fff; cursor: pointer; }
-.sc-cfg-select:focus { outline: none; border-color: #0F6E56; }
-.sc-cfg-toggle-group { display: flex; gap: 4px; }
-.sc-cfg-toggle { padding: var(--space-1) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer; font-family: inherit; transition: all 0.15s; }
-.sc-cfg-toggle--active { background: #0F6E56; color: #fff; border-color: #0F6E56; }
+/* Corporate-only Admin link in the SC header. Brand navy family
+   (#153968 + #f0f4f8) matching the SC today ring + the kf-bg page
+   wash, not generic Tailwind blue. Rendered conditionally by
+   ServiceCalendar.js when isScAdmin(session email) is true. */
+.sc-admin-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #153968; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: var(--radius-input); padding: 4px 9px; text-decoration: none; transition: background 0.15s, border-color 0.15s; margin-left: 4px; }
+.sc-admin-link:hover { background: #e2e8f0; border-color: #cbd5e1; }
 
 /* Keep old sc-focus classes for bulk panel */
 .sc-focus { padding: 24px 12px 28px; border-top: 2px solid #0F6E56; background: #fff; }
@@ -381,8 +401,29 @@
 
 .sc-year-body { padding: var(--space-5) var(--space-6); }
 
-/* Color legend */
-.sc-year-legend { display: flex; align-items: center; gap: 14px; padding: 0 0 14px; margin-bottom: 4px; border-bottom: 1px solid #f3f4f6; }
+/* At-a-glance stats banner above the year grid. Subtle card feel
+   (light background, no heavy borders) so it sits as context, not
+   chrome. Inline pipe separators between stat items - same shape
+   as a status bar. Per-meal and MiLB share the urgency-aware shape;
+   fee accounts get a shorter schedule-only version. */
+.sc-year-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #475569;
+}
+.sc-year-banner-item { font-weight: 500; }
+.sc-year-banner-item:first-child { color: #111827; font-weight: 600; }
+.sc-year-banner-sep { color: #cbd5e1; }
+
+/* Color legend - moved below the grid in the JSX (reference key, not
+   header). Visual treatment unchanged; just top-border instead of
+   bottom-border now that it sits after the grid. */
+.sc-year-legend { display: flex; align-items: center; gap: 14px; padding: 14px 0 0; margin-top: 12px; border-top: 1px solid #f3f4f6; }
 .sc-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7280; }
 .sc-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .sc-legend-dot--entered { background: #0F6E56; }
@@ -407,13 +448,17 @@
 
 /* Card header */
 .sc-year-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-1); }
-.sc-year-card-name { font-size: var(--type-body); font-weight: 700; color: #111827; line-height: var(--line-heading); }
+/* Month name reads as the card title - bumped to 14px / 800 so the
+   header carries weight against the heatmap dots below. Was using
+   --type-body (14-16px responsive) at 700; fixed 14/800 makes it
+   feel deliberate regardless of viewport. */
+.sc-year-card-name { font-size: 14px; font-weight: 800; color: #111827; line-height: var(--line-heading); letter-spacing: -0.005em; }
 .sc-year-card-cue { font-size: var(--type-caption); color: transparent; transition: color 0.15s; font-weight: 500; }
 .sc-year-card:hover .sc-year-card-cue { color: #0F6E56; }
 
-/* DOW headers */
+/* DOW headers - readable but still secondary chrome */
 .sc-heatmap-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 2px; }
-.sc-heatmap-dow { text-align: center; font-size: 8px; font-weight: 600; color: #d1d5db; text-transform: uppercase; }
+.sc-heatmap-dow { text-align: center; font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; }
 
 /* Heatmap dot grid */
 .sc-heatmap { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; flex: 1; }
@@ -432,13 +477,446 @@
 .sc-dot--away { box-shadow: inset 0 0 0 1.5px #7c3aed; }
 .sc-dot--day-off { box-shadow: inset 0 0 0 1.5px #9ca3af; }
 
+/* ════════════════════════════════════════════════════════════════
+   FEE-ACCOUNT FORK — homestand-driven display for the 4 MLB fee
+   accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V). STL-FL stays on
+   per-meal display (Kevin's decision); the fork is gated on
+   data-billing="flat_fee" on sc-root AND data.homestandMap being
+   present from the route, so STL-FL never trips this CSS.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Heatmap defaults (per-meal). Fee accounts override below. */
+.sc-dot--prep { background: #e2e8f0; }                    /* very muted - barely visible */
+.sc-dot--off-season { background: transparent; }           /* invisible between homestands */
+
+/* Legend dot for prep */
+.sc-legend-dot--prep { background: #cbd5e1; }
+
+/* Badge for prep status on month tiles */
+.sc-badge--prep { background: #f1f5f9; color: #475569; font-size: 12px; }
+.sc-badge--offseason { background: transparent; color: transparent; }
+
+/* Month-view tile variants for fee accounts */
+/* Prep base rule: only min-height + structural - bg and opacity moved
+   to .sc-tile-state--prep (the unified system tint, pale mint #d1fae5)
+   and the fee-specific [data-billing="flat_fee"] .sc-tile--prep override
+   below. */
+.sc-tile--prep { min-height: 60px; }
+.sc-tile--between-homestands { background: transparent; border: none; opacity: 0.25; min-height: 44px; cursor: default; }
+.sc-tile--between-homestands:hover { transform: none; box-shadow: none; }
+
+/* ────────────────────────────────────────────────────────────────
+   FEE-ACCOUNT HEATMAP: schedule view, not urgency tracker.
+   Navy = scheduled game day, green = entered, muted = prep, none = off.
+   No red, no amber - fee accounts have no billing urgency.
+   ──────────────────────────────────────────────────────────────── */
+
+/* Year heatmap dot colors */
+[data-billing="flat_fee"] .sc-dot--future {
+  background: #bbf7d0;                  /* light green - scheduled, not yet entered */
+  opacity: 1;
+}
+[data-billing="flat_fee"] .sc-dot--entered {
+  background: #0F6E56;                  /* dark green - operator logged */
+}
+[data-billing="flat_fee"] .sc-dot--prep {
+  background: #d1fae5;                  /* pale mint - sibling to scheduled light green */
+}
+[data-billing="flat_fee"] .sc-dot--off-season {
+  background: #f1f5f9;                  /* light grey - non-game / non-prep, visible */
+}
+
+/* Defensive: if classify ever returns urgency statuses for a fee
+   account (cache lag, race, future bug), neutralize the colors so
+   the heatmap stays calm. */
+[data-billing="flat_fee"] .sc-dot--needs-entry,
+[data-billing="flat_fee"] .sc-dot--overdue,
+[data-billing="flat_fee"] .sc-dot--no-service {
+  background: #bbf7d0;                  /* coerce to scheduled light green */
+}
+
+/* MLB game-type rings (home/away) are noise on fee accounts - the
+   homestand structure is already shown via dot color + tile layout.
+   Suppress the inset box-shadow rings entirely. */
+[data-billing="flat_fee"] .sc-dot--home,
+[data-billing="flat_fee"] .sc-dot--away,
+[data-billing="flat_fee"] .sc-dot--day-off { box-shadow: none; }
+
+/* Fee-account month tile: suppress the per-meal needs-entry/overdue
+   badges. Status-driven inline backgrounds for those statuses won't
+   fire from classify after the schedule-view fix, but the badge map
+   STATUS["needs-entry"] still has an icon. Hide them defensively. */
+[data-billing="flat_fee"] .sc-badge--needs,
+[data-billing="flat_fee"] .sc-badge--overdue { display: none; }
+
+/* Hide projected/future revenue spans on fee tiles (prices are $0). */
+[data-billing="flat_fee"] .sc-tile-rev--projected,
+[data-billing="flat_fee"] .sc-tile-rev--future { display: none; }
+
+/* ════════════════════════════════════════════════════════════════
+   FEE-ACCOUNT REFINEMENT PASS — depth, hierarchy, polish.
+   Targets the "sparse / flat / cavernous" feel that hit on the
+   first deploy. Same color logic (navy schedule, green entered,
+   muted prep) but with intentional depth + typography.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── YEAR HEATMAP DOTS: add depth without changing the palette ── */
+[data-billing="flat_fee"] .sc-dot {
+  border-radius: 3px;
+  position: relative;
+}
+[data-billing="flat_fee"] .sc-dot--future {
+  background: #bbf7d0;                                              /* light green scheduled */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18),                 /* top highlight */
+              0 1px 1px rgba(15,110,86,0.10);                       /* tiny green lift */
+}
+[data-billing="flat_fee"] .sc-dot--entered {
+  background: #0F6E56;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15),
+              0 1px 1px rgba(15,110,86,0.22);
+}
+[data-billing="flat_fee"] .sc-dot--prep {
+  background: #d1fae5;                                              /* pale mint - sibling to scheduled */
+  opacity: 1;
+}
+[data-billing="flat_fee"] .sc-legend-dot--prep { background: #d1fae5; }
+
+/* ── YEAR CARD STATS: match the PDC/MiLB stat-row typography pattern.
+   "X/Y game days" reads in caption grey on the left, "N HS" reads in
+   bold navy on the right - same shape as PDC's "X/Y entered" + "$XXk".
+   The previous pill-style HS badge looked like a different control;
+   typography-only treatment lets the three modes scan as one system. */
+[data-billing="flat_fee"] .sc-year-card-rev {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+/* ── YEAR PROGRESS BAR: same amber-in-progress / green-complete logic
+   as per-meal so the visual signal for "month finished" reads the same
+   across all three modes. Track is slightly taller for fee accounts to
+   keep the homestand cards from feeling thin. */
+[data-billing="flat_fee"] .sc-year-bar {
+  height: 4px;
+  background: #f1f5f9;
+}
+
+/* ── EMPTY MONTH CARDS: shared "Off-season" treatment ──
+   The fee account override previously made this uppercase-letterspaced
+   for an executive-summary feel. Unified to the base italic-grey-mixed-
+   case style so PDC / MLB / MiLB all read the same "Off-season" caption
+   in identical typography. Keeps the centered vertical layout from the
+   fee variant (looked cavernous left-aligned). */
+[data-billing="flat_fee"] .sc-year-card-noservice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0 8px;
+}
+
+/* Year cards get a consistent min-height so empty months sit at the
+   same physical size as data-rich ones - removes the "broken" feel. */
+[data-billing="flat_fee"] .sc-year-card { min-height: 220px; }
+
+/* Slight border + hover refinement so cards feel like real surfaces. */
+[data-billing="flat_fee"] .sc-year-card {
+  border-color: #e2e8f0;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.2s;
+}
+[data-billing="flat_fee"] .sc-year-card:hover {
+  border-color: #1e40af;
+  box-shadow: 0 8px 24px rgba(30,64,175,0.10);
+}
+[data-billing="flat_fee"] .sc-year-card--current {
+  border-color: #0F6E56;
+}
+
+/* ── LEGEND polish: cleaner spacing + slightly taller blocks. Legend
+   now lives below the grid (see base rule) so border is on the top
+   edge, not bottom. */
+[data-billing="flat_fee"] .sc-year-legend {
+  gap: 18px;
+  padding: 12px 0 4px;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: none;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+[data-billing="flat_fee"] .sc-legend-item {
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  gap: 7px;
+}
+[data-billing="flat_fee"] .sc-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+[data-billing="flat_fee"] .sc-legend-dot--future { background: #bbf7d0; }
+/* Matches the in-month away/off dot color set by
+   [data-billing="flat_fee"] .sc-dot--off-season above. */
+[data-billing="flat_fee"] .sc-legend-dot--off-season { background: #f1f5f9; }
+
+/* ── MONTH-VIEW GAME-DAY TILE: more presence, clearer hierarchy ── */
+/* Fee-account tile shell: slate border + subtle lift on hover. The
+   left-border accent is gone (system-wide drop); bg tint via
+   .sc-tile-state--* carries the state signal. Hover border + shadow
+   shifted from navy to system green to match the unified green-on-
+   schedule palette. */
+[data-billing="flat_fee"] .sc-tile--active {
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+}
+[data-billing="flat_fee"] .sc-tile--active:hover {
+  border-color: #0F6E56;
+  box-shadow: 0 4px 12px rgba(15,110,86,0.12);
+  transform: translateY(-1px);
+}
+
+/* "vs OPP" line - darkened to near-black for headline weight. */
+[data-billing="flat_fee"] .sc-tile-game {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;                                  /* darkest - VS OPP is the headline */
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  font-style: normal;
+}
+
+/* "HS3" line - darkened too, still secondary to VS OPP. */
+[data-billing="flat_fee"] .sc-tile-meals {
+  font-size: 10px;
+  font-weight: 600;
+  color: #334155;                                  /* darker slate - HS# the support */
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-style: normal;
+}
+
+/* All fee-account tile date numbers (game day, prep, between-homestand)
+   share the same readable dark slate so the calendar reads as a uniform
+   grid, not a stencil of activated days. */
+[data-billing="flat_fee"] .sc-tile-date {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* ── PREP TILE: pale mint, matching the year-view fee prep dot
+   (#d1fae5) for cross-view consistency. Bg comes from the base
+   .sc-tile-state--prep rule. Label colors stay slate so the
+   mint wash carries the state, not the type color. ── */
+[data-billing="flat_fee"] .sc-tile--prep {
+  opacity: 1;
+  border: 1px solid #e2e8f0;
+}
+[data-billing="flat_fee"] .sc-tile--prep .sc-tile-game {
+  color: #065f46;                                      /* dark green - readable on mint */
+  font-size: 10px;
+}
+[data-billing="flat_fee"] .sc-tile--prep .sc-tile-meals {
+  color: #047857;                                      /* mid green - HS# secondary */
+  font-size: 10px;
+}
+
+/* ── BETWEEN-HOMESTAND TILES: every day gets a real bordered card,
+   matching the rhythm of game-day tiles instead of vanishing into
+   the background. Date numbers read at the same darkness as game
+   day numbers so the calendar feels like a single grid. ── */
+[data-billing="flat_fee"] .sc-tile--between-homestands {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  opacity: 1;
+  min-height: 60px;
+  cursor: default;
+}
+[data-billing="flat_fee"] .sc-tile--between-homestands:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: #e2e8f0;
+}
+[data-billing="flat_fee"] .sc-tile--between-homestands .sc-tile-date {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+/* ── MONTH METRICS STRIP: tighter typography on the 3-block layout ── */
+[data-billing="flat_fee"] .sc-metric-label {
+  color: #475569;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+[data-billing="flat_fee"] .sc-metric-hero {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+/* Month footer: navy accent instead of revenue green */
+[data-billing="flat_fee"] .sc-month-footer-rev {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   POLISH BATCH: remove last urgency signals on fee-account month
+   view. Status badges hidden (no urgency states fire), TODAY
+   indicator switched from green to navy schedule theme, footer
+   warn-amber swapped for navy-slate (game-day completion isn't
+   an alarm for these accounts).
+   ──────────────────────────────────────────────────────────────── */
+
+/* Tile status badges (top-right circles ✓/○/·) don't convey anything
+   for fee accounts - opponent + HS# is the real signal. Hide them
+   so the tile body breathes. */
+[data-billing="flat_fee"] .sc-tile-top .sc-badge { display: none; }
+
+/* TODAY indicator: the base .sc-tile--today (navy box-shadow ring,
+   #153968) handles the outline. Per-fee, only the today-pill chip
+   needs the navy slate-blue treatment so it reads against the new
+   light-green game-day wash. */
+[data-billing="flat_fee"] .sc-today-pill {
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+/* Footer: replace warn-amber background with navy-slate. The "X of Y
+   entered" line stays informative without implying urgency. */
+[data-billing="flat_fee"] .sc-month-footer--warn {
+  background: #f1f5f9;
+  color: #475569;
+}
+[data-billing="flat_fee"] .sc-month-footer--warn .sc-month-footer-rev {
+  color: #1e3a8a;
+}
+[data-billing="flat_fee"] .sc-month-footer--done {
+  background: #E1F5EE;
+  color: #085041;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MiLB HYBRID MODE — per-meal mechanics (revenue, urgency, actuals
+   required) with schedule rhythm overlay (DAY/NIGHT border accent
+   set inline; OFF days recess visually so game days pop). Triggered
+   by data-category="MiLB" on sc-root (AAA + MILB level accounts).
+   Per-meal mechanics inherited unchanged from the default cascade;
+   these rules only add the schedule-aware polish.
+   ════════════════════════════════════════════════════════════════ */
+
+/* OFF days recede via background only - height stays default 80px so
+   the calendar grid reads as a uniform week-row rhythm (was 56px,
+   which created squished rows where every weekday was OFF). The OFF
+   label in .sc-tile-game already telegraphs the state; drop the
+   "No service" text and "—" em-dash badge. */
+[data-category="MiLB"] .sc-tile--no-service { background: #f9fafb; }
+[data-category="MiLB"] .sc-tile--no-service .sc-tile-noservice { display: none; }
+[data-category="MiLB"] .sc-tile--no-service .sc-badge { display: none; }
+[data-category="MiLB"] .sc-tile--no-service .sc-tile-game {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* OFF tiles (gameType === "OFF" regardless of status) hide the
+   "0 meals / ~$0" projection block - it's noise on a planned off day.
+   Covers FUTURE OFF days which have status="future" and would
+   otherwise render the meals + revenue lines. */
+[data-category="MiLB"] .sc-tile--off-day {
+  background: #f9fafb;
+}
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-meals,
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-rev,
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-noservice,
+[data-category="MiLB"] .sc-tile--off-day .sc-badge { display: none; }
+[data-category="MiLB"] .sc-tile--off-day .sc-tile-game {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Year heatmap polish:
+   - MLB game-type rings (home/away/day-off inset box-shadows) are
+     irrelevant for MiLB - gameType values are DAY/NIGHT/OFF, and
+     the "off" match was putting an unwanted grey ring on every
+     OFF dot. Suppress.
+   - Future days with a scheduled game (DAY/NIGHT) get a sky-blue
+     "upcoming game day" color via the resolvedStatus override in
+     ServiceCalendar.js; future OFF days stay plain grey.
+*/
+[data-category="MiLB"] .sc-dot--home,
+[data-category="MiLB"] .sc-dot--away,
+[data-category="MiLB"] .sc-dot--day-off { box-shadow: none; }
+
+/* MiLB scheduled game day. Light green - same swatch the PDC
+   "upcoming service" uses, so the "scheduled but not yet entered"
+   semantic reads identically across all three modes. (Class name
+   kept as upcoming-game; semantically it's "scheduled game day".) */
+.sc-dot--upcoming-game {
+  background: #bbf7d0;
+  opacity: 1;
+}
+.sc-legend-dot--upcoming-game {
+  background: #bbf7d0;
+}
+
+/* PDC / per-meal accounts: future days with projection data render as a
+   light-green "upcoming service" instead of plain grey, so the schedule
+   reads as visible-but-not-billed. Off days (no projection / no actual)
+   stay grey via .sc-dot--off-day. */
+.sc-dot--future-service {
+  background: #bbf7d0;
+  opacity: 1;
+}
+.sc-legend-dot--future-service {
+  background: #bbf7d0;
+}
+
+/* TODAY indicator: KitchFix brand navy ring on every account mode's
+   year heatmap. Drawn as an outset box-shadow so it stacks on top of
+   inset gameType rings (sc-dot--home etc) without being overridden by
+   background. Navy (was amber) - removes the false-urgency overlap
+   with the PDC "needs entry" amber meaning. */
+.sc-dot--today {
+  box-shadow: 0 0 0 2px #153968 !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Game-day tiles: meals count and revenue typography bumped so the
+   active homestand week reads as the main event. Status urgency
+   (overdue/needs-entry bg + badge) inherited from per-meal cascade. */
+[data-category="MiLB"] .sc-tile--active:not(.sc-tile--no-service) .sc-tile-meals {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+[data-category="MiLB"] .sc-tile-rev--actual {
+  color: #064e3b;                       /* darker green - billing actual */
+  font-weight: 700;
+}
+[data-category="MiLB"] .sc-tile-rev--projected {
+  color: #475569;                       /* readable dark grey - estimate */
+}
+
+/* DAY/NIGHT game-type label gets a small visual lift: heavier weight
+   + slight letterspacing, color hint that pairs with the border. */
+[data-category="MiLB"] .sc-tile--active:not(.sc-tile--no-service) .sc-tile-game {
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.06em;
+}
+
 /* Card stats */
 .sc-year-card-stats { display: flex; justify-content: space-between; font-size: var(--type-caption); color: #6b7280; margin-bottom: var(--space-1); }
 .sc-year-card-rev { font-weight: 600; color: #9ca3af; }
 .sc-year-card-rev--actual { color: #085041; }
 .sc-year-card-noservice { font-size: 12px; color: #9ca3af; font-style: italic; padding: 4px 0; }
 .sc-year-bar { height: 3px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
-.sc-year-bar-fill { height: 100%; background: #0F6E56; border-radius: 2px; transition: width 0.3s; }
+/* Progress fill state classes used by both per-meal + fee year cards.
+   Amber while the month is in progress (1-99% recorded), green when
+   the month is 100% complete. Unified logic across all account modes
+   - was a flat green per-meal fill + a navy->green gradient on fee. */
+.sc-year-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+.sc-year-bar-fill--progress { background: #f59e0b; }
+.sc-year-bar-fill--complete { background: #0F6E56; }
 
 /* ══════════════════════════════════════
    COMING SOON

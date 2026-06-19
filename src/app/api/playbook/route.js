@@ -19,20 +19,25 @@
 
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import matter from "gray-matter";
 import {
   listDocuments,
   getDocument,
+  getDocumentContent,
   getRelationships,
   getSurfaces,
   createIssue,
-  createDocument,
   updateDocument,
+  setPinned,
+  clearPinned,
 } from "@/lib/dataStore";
 import {
   canViewPlaybook,
   isCorporateEmail,
   visibleStatuses,
   filterDocuments,
+  viewerTier,
+  canSeeDoc,
 } from "@/lib/opdAcl";
 import { getServiceClient } from "@/lib/supabase";
 import {
@@ -41,57 +46,92 @@ import {
   restoreDocument,
   SKIP_TEXT_EXTRACTION_CLASSES,
 } from "@/lib/sousai";
-import { validateCreatePayload } from "@/lib/playbookValidation";
 
-// Locked shelf order - Safety first, Site & Client last. Brand & Standards
-// + Finance sit together as the internal/meta pair before Site & Client;
-// Finance still renders empty/short.
+// Locked shelf order - operational domains first, references at the end.
+// A6 6-domain taxonomy: Safety (food + workplace consolidated) -> Ops -> People
+// -> Culinary -> Service Delivery -> Brand standards. Finance dissolved into
+// Operations (PB-009 moved). HR sub-sections inside People & Conduct are
+// carried per-doc on a `subshelf` frontmatter field; the rail expansion that
+// consumes that field lands in a follow-up PR.
 const SHELVES = [
-  "Safety",
-  "Operations",
-  "HR & People",
-  "Culinary",
-  "Brand & Standards",
-  "Finance",
-  "Site & Client",
+  "Safety, Health & Incident",
+  "Operations & Leadership",
+  "People & Conduct",
+  "Culinary & Kitchen Operations",
+  "Service Delivery & Client Accounts",
+  "Brand & Documentation Standards",
 ];
 
 const MODULE = "playbook";
 
+// ─── Hero image · global pool (team_key IS NULL) ────────────────────────────
+// Mirrors the pattern used by sibling pages (home, Directory, Service Calendar,
+// Financial). Query the hero_images PG table for global-pool rows, pick one
+// at random on each bootstrap load. Returns null when the table is empty or
+// the lookup fails - the client renders the flat navy hero in that case.
+async function pickHeroImage() {
+  try {
+    const supa = getServiceClient();
+    const { data, error } = await supa
+      .from("hero_images")
+      .select("url")
+      .is("team_key", null);
+    if (error) return null;
+    const urls = (data || [])
+      .map((r) => r.url)
+      .filter((u) => u && String(u).includes("http"));
+    if (urls.length === 0) return null;
+    return urls[Math.floor(Math.random() * urls.length)];
+  } catch {
+    return null;
+  }
+}
+
+// ─── Frontmatter date normalization ─────────────────────────────────────────
+// YAML auto-types unquoted ISO dates to Date objects, but the schema declares
+// these fields as YYYY-MM-DD strings (the form needs that shape for
+// <input type="date">). Mirrors scripts/content/lib/frontmatter.mjs.
+function normalizeDates(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj.toISOString().slice(0, 10);
+  if (Array.isArray(obj)) return obj.map(normalizeDates);
+  if (typeof obj === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = normalizeDates(v);
+    return out;
+  }
+  return obj;
+}
+
 // ─── Editing allowlist + validation sets (action=update-document) ───────────
 //
-// The owner edits catalog fields directly from /playbook/admin's worklist:
-//   Part A (auto-commit, optimistic):  title, shelf, doc_class, status, version, pinned
-//   Part B (explicit Save, confirmed): source_drive_id, source_drive_id_es
+// Overlay-only allowlist. The dashboard only writes fields the projection
+// PRESERVES (status, pinned, access_level) - the operational lifecycle the
+// owner controls without a deploy. MDX-authored fields (title, shelf,
+// doc_class, version, etc.) are NOT in the set: a write to them would land
+// in PG and then be silently overwritten on the next projection apply, so
+// the API hard-rejects them here. The UI enforces the same boundary; this
+// closes the same gap at the API layer.
 //
-// The set is HARD - `id` is still explicitly NOT in here so an attempt to
-// write it returns 400 even if the client forges it. ID renames stay a
-// deliberate scripted operation (see pr-7-5 atomic POST-003 -> POSTER-001).
+// Removed in PR C (Drive retired): source_drive_id, source_drive_id_es.
+// `id` is NOT writable - renaming the PK is a multi-table transaction
+// (see pr-7-5 atomic POST-003 -> POSTER-001), not an in-row UPDATE.
 //
-// Per-field value validators mirror the schema CHECK constraints + the
-// implicit "Drive ID is a string or null" shape. The schema
-// (pr-7-1-opd-schema.sql + pr-7-4 bilingual columns) is still the source of
-// truth; these sets just cache the same allowed values for fast 400s instead
-// of round-tripping a Postgres constraint violation. Drive IDs have no
-// schema-side format check - any string is a valid catalog value (a wrong
-// or unshared ID is a SEMANTIC failure that the test-render link in the
-// dashboard surfaces, not a DB error).
+// Per-field validators mirror the schema CHECK constraints
+// (pr-7-1-opd-schema.sql + pr-7-11 access_level) so we 400 fast instead of
+// round-tripping a Postgres constraint violation.
 const WRITABLE_FIELDS_A = new Set([
-  "title", "shelf", "doc_class", "status", "version", "pinned",
-  "source_drive_id", "source_drive_id_es",
-]);
-const VALID_SHELVES_SET = new Set(SHELVES);
-const VALID_CLASSES = new Set([
-  "PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK",
+  "status", "pinned", "access_level",
 ]);
 const VALID_STATUSES = new Set([
   "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",
 ]);
+const VALID_ACCESS_LEVELS = new Set(["unrestricted", "restricted", "slt"]);
 
 function validatePatch(patch) {
   // Returns { ok: true, clean } on success or { ok: false, error } on failure.
-  // `clean` is the canonicalized patch (whitespace-trimmed strings, etc.) so
-  // the caller can pass it straight to updateDocument without re-massaging.
+  // `clean` is the canonicalized patch so callers can pass it straight to
+  // updateDocument.
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     return { ok: false, error: "patch must be a non-null object" };
   }
@@ -101,47 +141,15 @@ function validatePatch(patch) {
   }
   for (const k of keys) {
     if (!WRITABLE_FIELDS_A.has(k)) {
-      // Hard reject - covers id, source_drive_id*, storage_path*, anything else
-      // not in the Part A allowlist. The reason `id` lands here is structural,
-      // not stylistic: renaming the PK is a multi-table transaction (pr-7-5),
-      // not a single .update().
       return { ok: false, error: `field '${k}' is not writable via this action` };
     }
   }
   const clean = {};
-  if ("title" in patch) {
-    if (typeof patch.title !== "string" || !patch.title.trim()) {
-      return { ok: false, error: "title must be a non-empty string" };
-    }
-    clean.title = patch.title.trim();
-  }
-  if ("shelf" in patch) {
-    if (patch.shelf !== null && !VALID_SHELVES_SET.has(patch.shelf)) {
-      return { ok: false, error: `invalid shelf '${patch.shelf}'` };
-    }
-    clean.shelf = patch.shelf;
-  }
-  if ("doc_class" in patch) {
-    if (!VALID_CLASSES.has(patch.doc_class)) {
-      return { ok: false, error: `invalid doc_class '${patch.doc_class}'` };
-    }
-    clean.doc_class = patch.doc_class;
-  }
   if ("status" in patch) {
     if (!VALID_STATUSES.has(patch.status)) {
       return { ok: false, error: `invalid status '${patch.status}'` };
     }
     clean.status = patch.status;
-  }
-  if ("version" in patch) {
-    if (patch.version === null) {
-      clean.version = null;
-    } else if (typeof patch.version === "string") {
-      const trimmed = patch.version.trim();
-      clean.version = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "version must be a string or null" };
-    }
   }
   if ("pinned" in patch) {
     if (typeof patch.pinned !== "boolean") {
@@ -149,31 +157,11 @@ function validatePatch(patch) {
     }
     clean.pinned = patch.pinned;
   }
-  // Drive ID fields (Part B): nullable strings. Empty / whitespace-only
-  // values get canonicalized to NULL so an "unlink" is the natural result
-  // of clearing the input. No format validation - Drive IDs vary in length
-  // and shape across Drive's URL generations, and the test-render link in
-  // the dashboard catches semantically wrong values much better than any
-  // regex would.
-  if ("source_drive_id" in patch) {
-    if (patch.source_drive_id === null) {
-      clean.source_drive_id = null;
-    } else if (typeof patch.source_drive_id === "string") {
-      const trimmed = patch.source_drive_id.trim();
-      clean.source_drive_id = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "source_drive_id must be a string or null" };
+  if ("access_level" in patch) {
+    if (!VALID_ACCESS_LEVELS.has(patch.access_level)) {
+      return { ok: false, error: `invalid access_level '${patch.access_level}'` };
     }
-  }
-  if ("source_drive_id_es" in patch) {
-    if (patch.source_drive_id_es === null) {
-      clean.source_drive_id_es = null;
-    } else if (typeof patch.source_drive_id_es === "string") {
-      const trimmed = patch.source_drive_id_es.trim();
-      clean.source_drive_id_es = trimmed.length === 0 ? null : trimmed;
-    } else {
-      return { ok: false, error: "source_drive_id_es must be a string or null" };
-    }
+    clean.access_level = patch.access_level;
   }
   return { ok: true, clean };
 }
@@ -202,18 +190,36 @@ export async function GET(request) {
         });
       }
 
-      // Owner: full visible-doc set with audience filter applied server-side.
+      // Owner: full visible-doc set with status + access_level filters applied
+      // server-side. The access_level filter (pr-7-11) drops docs the viewer's
+      // tier can't see; restricted / slt cards never reach an unrestricted
+      // viewer's bootstrap response.
+      //
+      // A6 admin/operator split: by default Retired is excluded for everyone
+      // (operator reader). The admin dashboard passes include_retired=true so
+      // the owner can see + manage retired docs from the worklist. Non-owners
+      // were already rejected above; the param is a no-op for them.
       const isCorp = await isCorporateEmail(actualEmail);
-      const allDocs = await listDocuments(
-        { statuses: visibleStatuses(isCorp) },
-        { module: MODULE }
-      );
-      const visible = filterDocuments(allDocs, isCorp);
+      const includeRetired = searchParams.get("include_retired") === "true";
+      const baseStatuses = visibleStatuses(isCorp);
+      const statuses = includeRetired ? [...baseStatuses, "Retired"] : baseStatuses;
+      const [allDocs, heroImage] = await Promise.all([
+        listDocuments({ statuses }, { module: MODULE }),
+        pickHeroImage(),
+      ]);
+      // If admin requested retired, skip the unconditional Retired-strip in
+      // filterDocuments and just trust the status list we pulled.
+      const statusVisible = includeRetired
+        ? allDocs.filter((d) => statuses.includes(d.status))
+        : filterDocuments(allDocs, isCorp);
+      const tier = viewerTier(actualEmail);
+      const visible = statusVisible.filter((d) => canSeeDoc(tier, d.access_level));
       return NextResponse.json({
         email: actualEmail,
         isOwner: true,
         shelves: SHELVES,
         documents: visible,
+        heroImage,
       });
     }
 
@@ -226,12 +232,27 @@ export async function GET(request) {
       if (!id) {
         return NextResponse.json({ error: "Missing id" }, { status: 400 });
       }
-      const [doc, rels, surfs] = await Promise.all([
+      // Phase A3: pull rendered HTML from document_content alongside the
+      // legacy Drive URLs. Both en + es rows are best-effort - null when
+      // unpopulated; the reader falls back to the Drive iframe per-language
+      // when content_html is missing. Populated by the A4 projection apply.
+      const [doc, rels, surfs, contentEn, contentEs] = await Promise.all([
         getDocument(id, { module: MODULE }),
         getRelationships(id, { module: MODULE }),
         getSurfaces(id, { module: MODULE }),
+        getDocumentContent(id, "en", { module: MODULE }),
+        getDocumentContent(id, "es", { module: MODULE }),
       ]);
       if (!doc) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      // pr-7-11 access-tier gate. The owner-only check above protects /playbook
+      // as a whole; this per-doc check closes the direct-ID bypass at the
+      // detail handler. We return 404 (not 403) so a viewer without the right
+      // tier cannot probe for which IDs exist - the doc looks indistinguishable
+      // from a non-existent one.
+      const tier = viewerTier(actualEmail);
+      if (!canSeeDoc(tier, doc.access_level)) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
@@ -282,6 +303,11 @@ export async function GET(request) {
         document: doc,
         relationships: enriched,
         surfaces: surfs,
+        // Phase A3 dual-path: content_html when present, else the reader
+        // falls back to the Drive iframe via drive_preview_url. A7 retires
+        // the Drive fallback once every Live doc has a content row.
+        content_html: contentEn?.html || null,
+        content_html_es: contentEs?.html || null,
         drive_view_url: driveViewUrl,
         drive_preview_url: drivePreviewUrl,
         drive_view_url_es: driveViewUrlEs,
@@ -350,6 +376,103 @@ export async function GET(request) {
         title: doc.title,
         incoming_relationships,
         chunks_count: chunks_count || 0,
+      });
+    }
+
+    // ── mdx-source ───────────────────────────────────────────────────────
+    // OPD authoring A1: load the raw MDX for a doc from GitHub so the
+    // cockpit's editor surface can show frontmatter + body. The save path
+    // lands in A2; this action is read-only. The returned `sha` is the
+    // staleness guard A2 will pass back on commit.
+    //
+    // Requires GITHUB_OPD_TOKEN (fine-grained PAT with contents read+write
+    // on this repo). Degrades gracefully when the token is unset so this
+    // ships before the env var lands.
+    if (action === "mdx-source") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const id = searchParams.get("id");
+      if (!id) {
+        return NextResponse.json({ error: "Missing id" }, { status: 400 });
+      }
+      if (!/^[A-Z0-9-]+$/.test(id)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+      }
+      const token = process.env.GITHUB_OPD_TOKEN;
+      if (!token) {
+        return NextResponse.json(
+          { error: "GitHub token not configured" },
+          { status: 503 }
+        );
+      }
+      const url =
+        `https://api.github.com/repos/KitchFix-Intranet/kitchfix-intranet` +
+        `/contents/content/documents/${encodeURIComponent(id)}.mdx`;
+      let ghRes;
+      try {
+        ghRes = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (ghRes.status === 404) {
+        return NextResponse.json(
+          { error: `MDX file not found for ${id}` },
+          { status: 404 }
+        );
+      }
+      if (!ghRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub ${ghRes.status}: ${await ghRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const gh = await ghRes.json();
+      if (!gh.content || !gh.sha) {
+        return NextResponse.json(
+          { error: "GitHub response missing content or sha" },
+          { status: 502 }
+        );
+      }
+      let source;
+      try {
+        source = Buffer.from(gh.content, "base64").toString("utf8");
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Decode failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      // Same parser the projection uses (gray-matter via lib/frontmatter.mjs).
+      // Inlined here because the projection script lives outside the Next
+      // bundle; we use gray-matter directly and apply the same date
+      // normalization (YAML auto-types ISO dates to Date objects; the schema
+      // declares them as YYYY-MM-DD strings).
+      let parsed;
+      try {
+        parsed = matter(source.replace(/\r\n/g, "\n"));
+      } catch (e) {
+        return NextResponse.json(
+          { error: `MDX parse failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        id,
+        sha: gh.sha,
+        frontmatter: normalizeDates(parsed.data || {}),
+        body: parsed.content || "",
       });
     }
 
@@ -448,13 +571,37 @@ export async function POST(request) {
       if (!v.ok) {
         return NextResponse.json({ error: v.error }, { status: 400 });
       }
-      // updateDocument throws on PG errors (FK / CHECK / row-not-found surfaces
-      // an error.message that bubbles up). It also stamps updated_at and runs
-      // .select().single() so the returned row reflects the actual post-write
-      // state - that's our read-validate.
-      let updated;
+      // pr-7-9: pin moves to the document_pins overlay. Intercept pinned
+      // from the validated patch, route it to setPinned / clearPinned, and
+      // remove it from the catalog patch before updateDocument runs. If the
+      // patch is pinned-only, we still need to return the post-write row
+      // shape so the client sees the canonical pinned value.
+      const pinChange = ("pinned" in v.clean) ? v.clean.pinned : undefined;
+      const catalogPatch = { ...v.clean };
+      delete catalogPatch.pinned;
+
       try {
-        updated = await updateDocument(id, v.clean, { module: MODULE });
+        if (pinChange === true) {
+          await setPinned(id, actualEmail, { module: MODULE });
+        } else if (pinChange === false) {
+          await clearPinned(id, { module: MODULE });
+        }
+      } catch (e) {
+        return NextResponse.json({ error: e?.message || "pin write failed" }, { status: 400 });
+      }
+
+      // If the catalog patch is empty (pin-only change), re-fetch the row so
+      // the response carries the overlay-derived pinned value.
+      let updated;
+      if (Object.keys(catalogPatch).length === 0) {
+        updated = await getDocument(id, { module: MODULE });
+        if (!updated) {
+          return NextResponse.json({ error: `Document ${id} not found` }, { status: 404 });
+        }
+        return NextResponse.json({ ok: true, document: updated });
+      }
+      try {
+        updated = await updateDocument(id, catalogPatch, { module: MODULE });
       } catch (e) {
         // Distinguish "row missing" from generic write errors so the client
         // can react sensibly (e.g. dropdown still showed a stale id).
@@ -542,36 +689,188 @@ export async function POST(request) {
       });
     }
 
-    // ── create-document ──────────────────────────────────────────────────
-    // Strict validation: ID format regex, prefix↔doc_class consistency,
-    // uniqueness, plus the existing shelf/class/status sets. Defaults:
-    // status=Pending if omitted, version=null (per spec - a brand-new doc
-    // with no content shouldn't claim a version it doesn't have).
-    if (action === "create-document") {
-      const v = validateCreatePayload(body, {
-        validShelves: VALID_SHELVES_SET,
-        validClasses: VALID_CLASSES,
-        validStatuses: VALID_STATUSES,
-      });
-      if (!v.ok) {
-        return NextResponse.json({ error: v.error }, { status: 400 });
+    // ── commit-mdx ───────────────────────────────────────────────────────
+    // OPD authoring A2: validate the edited MDX and commit it to main on
+    // GitHub. The PROJECTION STAYS MANUAL - this action only writes the
+    // .mdx file; Kevin runs scripts/content/project-catalog.mjs --apply
+    // afterwards to publish. Auto-projection is Part B, separately gated.
+    //
+    // Safety contract (non-negotiable):
+    //   1. Validate frontmatter against the JSON Schema. Fail -> 422,
+    //      no commit.
+    //   2. Compile-check the body via @mdx-js/mdx. Fail -> 422, no commit.
+    //   3. Round-trip-faithful serialize (serializeMdx) so unchanged saves
+    //      are byte-identical and scalar edits produce one-line diffs.
+    //   4. No-op detection: skip the commit when the serialized content
+    //      equals the current file content.
+    //   5. Stale-sha guard: GitHub PUT requires the sha the editor was
+    //      opened with. A 409 from GitHub means the file moved under us.
+    if (action === "commit-mdx") {
+      const { id, frontmatter, body: mdxBody, sha } = body;
+      if (!id || typeof id !== "string" || !/^[A-Z0-9-]+$/.test(id)) {
+        return NextResponse.json({ error: "Missing or invalid id" }, { status: 400 });
       }
-      // Uniqueness: surface a clear "id already exists: <title>" instead
-      // of the raw PG unique-violation message.
-      const existing = await getDocument(v.clean.id, { module: MODULE });
-      if (existing) {
+      if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
+        return NextResponse.json({ error: "Missing or invalid frontmatter" }, { status: 400 });
+      }
+      if (typeof mdxBody !== "string") {
+        return NextResponse.json({ error: "Missing or invalid body" }, { status: 400 });
+      }
+      if (!sha || typeof sha !== "string") {
+        return NextResponse.json({ error: "Missing sha (staleness guard)" }, { status: 400 });
+      }
+
+      const token = process.env.GITHUB_OPD_TOKEN;
+      if (!token) {
         return NextResponse.json(
-          { error: `id '${v.clean.id}' already exists: ${existing.title}` },
-          { status: 400 }
+          { error: "GitHub token not configured" },
+          { status: 503 }
         );
       }
-      let created;
-      try {
-        created = await createDocument(v.clean, { module: MODULE });
-      } catch (e) {
-        return NextResponse.json({ error: e.message }, { status: 400 });
+
+      // 1. Frontmatter validation.
+      const { validateFrontmatter } = await import("@/lib/opd/validateFrontmatter");
+      const fmResult = validateFrontmatter(frontmatter);
+      if (!fmResult.ok) {
+        return NextResponse.json(
+          { error: "validation", details: fmResult.errors },
+          { status: 422 }
+        );
       }
-      return NextResponse.json({ ok: true, document: created });
+
+      // 2. MDX compile check.
+      try {
+        const { compile } = await import("@mdx-js/mdx");
+        await compile(mdxBody, { development: false });
+      } catch (e) {
+        return NextResponse.json(
+          { error: "mdx-compile", message: e.message },
+          { status: 422 }
+        );
+      }
+
+      // 3+4. Fetch the current file (to anchor the round-trip + verify sha
+      // staleness before any write), then serialize surgically and run the
+      // no-op check.
+      const contentsUrl =
+        `https://api.github.com/repos/KitchFix-Intranet/kitchfix-intranet` +
+        `/contents/content/documents/${encodeURIComponent(id)}.mdx`;
+      let currentRes;
+      try {
+        currentRes = await fetch(contentsUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (currentRes.status === 404) {
+        return NextResponse.json(
+          { error: `MDX file not found for ${id}` },
+          { status: 404 }
+        );
+      }
+      if (!currentRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub ${currentRes.status}: ${await currentRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const currentJson = await currentRes.json();
+      if (currentJson.sha !== sha) {
+        return NextResponse.json(
+          {
+            error: "stale",
+            message: "This document changed since you opened it. Reload before saving.",
+          },
+          { status: 409 }
+        );
+      }
+      const currentContent = Buffer.from(currentJson.content, "base64").toString("utf8");
+
+      const { serializeMdx } = await import("@/lib/opd/serializeMdx");
+      let serialized;
+      try {
+        serialized = serializeMdx({
+          original: currentContent,
+          userFm: frontmatter,
+          userBody: mdxBody,
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Serialize failed: ${e.message}` },
+          { status: 500 }
+        );
+      }
+
+      // No-op: data equals original AND body equals original. Skip commit.
+      if (serialized.unchanged) {
+        return NextResponse.json({ unchanged: true, sha });
+      }
+
+      // 5. Commit to main.
+      const commitMessage = `opd: edit ${id} via cockpit`;
+      const commitBody = {
+        message: commitMessage,
+        content: Buffer.from(serialized.content, "utf8").toString("base64"),
+        sha,
+        branch: "main",
+        committer: {
+          name: "OPD Authoring",
+          email: "noreply@kitchfix.com",
+        },
+      };
+      let putRes;
+      try {
+        putRes = await fetch(contentsUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+            "User-Agent": "kitchfix-opd-authoring",
+          },
+          body: JSON.stringify(commitBody),
+          cache: "no-store",
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub PUT failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (putRes.status === 409 || putRes.status === 422) {
+        // 409 = sha mismatch (race between our check and the PUT).
+        // 422 from GitHub usually means a different sha-related rejection.
+        return NextResponse.json(
+          {
+            error: "stale",
+            message: "This document changed since you opened it. Reload before saving.",
+          },
+          { status: 409 }
+        );
+      }
+      if (!putRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub PUT ${putRes.status}: ${await putRes.text()}` },
+          { status: 502 }
+        );
+      }
+      const putJson = await putRes.json();
+      return NextResponse.json({
+        ok: true,
+        sha: putJson?.content?.sha || null,
+        commit: putJson?.commit?.sha || null,
+      });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -1,0 +1,359 @@
+---
+id: STD-001
+title: Documentation Format Standard
+doc_class: STD
+shelf: "Brand & Documentation Standards"
+status: Live
+version: "1.2"
+card_line: "The format every internal KitchFix document follows. Typography, color, callouts, tables, page architecture."
+summary: "The Standard that defines format for every KitchFix internal document, across both screen and print/PDF renderings of one MDX source. Covers classification, page architecture (print + screen), typography (Oswald display + Inter body), locked color palette, four callouts (Promise/Anchor/Critical/Note), tables, cross-references, naming/versioning/lifecycle, approval chains, and per-class anatomy. Word/DOCX retired. STD-001 governs format - content is governed by each doc's approval chain."
+keywords:
+  - STD-001
+  - format
+  - typography
+  - callout
+  - anchor
+  - critical
+  - note
+  - promise
+  - color palette
+  - brand
+  - Oswald
+  - Inter
+  - navy
+  - template
+  - print
+  - PDF
+  - screen
+owner: "Senior Director of Operations"
+approver: "SLT"
+audience: corporate
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+approval:
+  approved_version: "1.2"
+  approved_by: "SLT"
+  approved_date: 2026-06-17
+  method: SLT-approved
+last_reviewed: 2026-06-17
+review_interval_months: 12
+effective_date: 2026-06-17
+sort_order: 10
+relationships:
+  - { to: STD-002, type: references, from_section: "section 13 sub-standard" }
+  - { to: STD-003, type: references, from_section: "section 13 sub-standard pending" }
+  - { to: STD-004, type: references, from_section: "section 13 sub-standard" }
+---
+
+# Purpose and Scope
+
+This Standard defines the format for every KitchFix internal document. Operations, HR, culinary, finance, leadership - same rules, same look, same behavior.
+
+If a document is produced for internal use and lives in a KitchFix repository, it follows this Standard. The Standard governs format, not content. Content is governed by the document's own approval chain.
+
+> ANCHOR: Trust is what we sell. Every document we produce is either earning that trust or eroding it. The Standard exists so that every leader, on every account, in every season, can recognize a KitchFix document at a glance and trust the format to mean the same thing every time.
+
+## [CHANGED v1.2] One source, two renderings
+
+Every document is authored once as an MDX file. That single source produces two renderings, both governed by this Standard:
+
+- **Screen** - the on-screen reader in The Playbook (the full-page reading view).
+- **Print / PDF** - the printed page or saved PDF, produced through the browser's print-to-PDF.
+
+The two renderings are **siblings**: same type system, same hierarchy, same brand, same callouts. They differ only where the medium demands it (a printed page has a cover, running footers, and page numbers; a screen has none of those and instead scrolls). A reader must recognize the same document across both.
+
+**Word / DOCX is retired.** It is no longer a rendering target. Print-to-PDF replaces it - the same way Google Drive hosting was retired in favor of MDX-rendered content.
+
+## In Scope
+
+- Long-form playbooks (PB)
+- Standards (STD)
+- Policies (POL)
+- Standard Operating Procedures (SOP)
+- Templates (TPL)
+- Checklists (CHK)
+- Reference cards (REF)
+- Signed agreements (AGR)
+
+## Out of Scope
+
+Three registers fall outside this Standard. Each will be governed by a sub-standard:
+
+- Posters and infographics - different visual register; STD-002 Visual Communication Standard.
+- Memos, emails, Slack-formatted communications - STD-003 Internal Communication Standard pending.
+- External-facing materials - client decks, sales, marketing - governed by external brand standards.
+
+# Document Classification System
+
+*(Unchanged from v1.1.)*
+
+Every document has a class. The class determines required elements, approval chain, and review cadence. The class prefix is the first part of every document ID.
+
+| Code | Class | Description |
+|---|---|---|
+| PB | Playbook | Long-form reference doc, system-level. Read for orientation and as standing reference. |
+| STD | Standard | Defines what gets enforced. Sets the rules other docs must follow. |
+| POL | Policy | HR/legal-grade rules. Governs employment relationship. |
+| SOP | Standard Operating Procedure | Process-driven, repeatable. Describes the steps to perform a task. |
+| TPL | Template | Reusable form. Filled in by an operator each cycle. |
+| CHK | Checklist | Sequential checks for a defined operation. |
+| REF | Reference card | Quick-reference one-pager. Visual-heavy, minimal text. |
+| AGR | Signed Agreement | Acknowledgement-required. The artifact is the signature. |
+
+## Document IDs
+
+Format: [CODE]-[NUMBER]. Numbers are assigned sequentially within each class by the document owner. Numbers are never reused.
+
+# Page Architecture
+
+*(Print rendering. Screen architecture in 3.2.)*
+
+## 3.1 Print page architecture
+
+- Page size - US Letter 8.5 by 11 inches.
+- Margins - 1.0 inch all sides.
+- Orientation - Portrait. Landscape only for tables/diagrams that demand width.
+- Page break - Required before every section opener (H1). Each section begins on a new page.
+- Header - Document ID + version (left), document title (right). Faint sky-blue rule beneath.
+- Footer - KITCHFIX wordmark (left, text), classification (center), Page X of Y (right).
+- Cover page - No header. No footer. (Full spec in Section 12.)
+
+## 3.2 [CHANGED v1.2] Screen architecture
+
+The screen reader renders the same document as a single continuous reading column, no pagination:
+
+- A document header block at the top (title, the metadata, the lede) - the screen equivalent of the cover.
+- Continuous scroll - no page breaks; sections flow with clear spacing and the section eyebrow pattern (Section 4).
+- No running header/footer (those are print-only wayfinding).
+- Comfortable reading column width, centered.
+
+The screen and print share **everything below the page-architecture layer** - type, color, callouts, tables, hierarchy are identical. Page architecture is the one layer that legitimately differs by medium.
+
+# Typography Hierarchy
+
+> **[CHANGED v1.2] This is the core change in v1.2.** The type system is now **Oswald (display) + Inter (body)**, applied identically across screen and print. v1.1 specified Mulish for body; the screen reader never used Mulish (it used Inter), so the Standard and the live screen diverged from day one. v1.2 resolves the divergence by making **Inter the body face for both renderings** - so screen and print are one consistent system - while keeping **Oswald as the display face** for cover titles and section headings, which carries the brand character that a generic body face alone would not.
+
+## 4.1 [CHANGED v1.2] Font Families
+
+- **Display - Oswald Medium.** Document titles (cover), section opener titles (H1-equivalents), the section eyebrow label. Oswald is condensed and confident - it carries brand character.
+- **Body - Inter (Regular / SemiBold / Bold).** All other text: sub-headings, body, bullets, callout text, tables, captions.
+- **Fallback** - Oswald falls to a condensed sans, then Arial; Inter falls to system sans, then Arial.
+- One type system, both renderings. A document's type looks identical on screen and in print.
+
+## 4.2 Type Scale
+
+*(Sizes shown are the print reference; the screen uses the same relative hierarchy scaled to the reading column. Colors and weights are identical across both.)*
+
+| Style | Size (print ref) | Weight | Color | Use |
+|---|---|---|---|---|
+| Cover Title | 44pt | Oswald Bold | Navy | Title on cover page |
+| Cover Subtitle | 14pt italic | Inter | Navy | Subtitle on cover page |
+| Section Label (eyebrow) | 9pt CAPS | Oswald SemiBold | Navy | "SECTION 04" above each H1 |
+| H1 Section Title | 24pt | Oswald Bold | Navy | Section opener title |
+| H2 Sub-section | 14pt | Inter Bold | Navy | Sub-sections (4.1, 4.2) |
+| H3 Sub-sub | 11pt | Inter Bold | Navy | Lower headings |
+| SubHead | 10.5pt | Inter Bold | Navy | Workhorse device. No rule. |
+| Lede | 11pt italic | Inter | Gray | Italic intro after H1/H2 |
+| Body | 10.5pt | Inter | Black | All body text and bullets |
+| Body Bold | 10.5pt | Inter Bold | Navy | Inline emphasis |
+| Caption | 9pt italic | Inter | Dark Gray | Image captions, signature labels |
+
+## 4.3 The SubHead Device
+
+*(Unchanged.)* The missing rung between H3 and body - the workhorse that makes dense operational content scannable. Bold navy, no rule.
+
+- **Flavor A - Sentence + prose**: SubHead is a full sentence ending in a period. One or two short prose paragraphs follow.
+- **Flavor B - Noun phrase + bullets**: SubHead is a short noun phrase, no period. Two to five bullets follow.
+
+## 4.4 Content Density Rules
+
+*(Unchanged.)*
+
+- Three or more parallel actions go to SubHead + Bullets.
+- Principle or values content goes to SubHead Flavor A + prose.
+- Single concept with aspects goes to BulletLabeled.
+- Reference data goes to Table.
+- Standalone statement of doctrine goes to Promise Callout or Anchor Banner.
+
+> ANCHOR: Operator-first. A leader should be able to scan any section of any KitchFix document and know what to do without reading every word. If the format does not support that, the format is wrong - not the leader.
+
+## 4.5 Bullet Patterns
+
+*(Unchanged.)*
+
+- **Bullet** - Plain bullet. No lead-in label.
+- **BulletLabeled** - Bold navy lead-in label, em-dash, body text.
+- **PLabeled** - Same pattern as a paragraph, not a bullet.
+
+## 4.6 Heading Rule Weights
+
+*(Unchanged - sky-blue rules beneath H1/H2/H3, none under SubHead.)*
+
+| Heading | Rule | Purpose |
+|---|---|---|
+| H1 | 1.5pt heavy sky-blue rule beneath | Section opener - strongest anchor |
+| H2 | 0.75pt medium sky-blue rule beneath | Sub-section |
+| H3 | 0.5pt faint sky-blue rule beneath | Theme |
+| SubHead | No rule | Color and weight do the work |
+
+# Color Palette and Usage Rules
+
+*(Unchanged from v1.1. The palette is locked - PFS brand colors only.)*
+
+| Color | Hex | Use |
+|---|---|---|
+| Navy | #153968 | All headings, primary banners, accent borders, table header fills, SubHead text, bullet labels |
+| Navy Dark | #0E2647 | Callout body text, cover metadata |
+| Sky Blue | #7DB9D5 | Heading rules, cover accent rule, eyebrow numbers |
+| Anchor Tint | #C4E3E8 | Anchor Banner fill |
+| Navy Tint | #E3EDF7 | Promise Callout fill |
+| Note Gray | #EEF6F8 | Note Callout fill, zebra rows |
+| Red Tint | #FCE4E4 | Critical Banner fill |
+| Red Dark | #8B1F1F | Critical Banner text |
+| Mid Gray | #6B7785 | Lede text, em-dash separators, footer chrome |
+| Dark Gray | #303030 | Captions, header chrome |
+| Black | #000000 | Body text |
+| White | #FFFFFF | Reverse text on Navy fills |
+| Table Border | #CCCCCC | All table cell borders |
+| Cover Hairline | #D0D7E2 | Cover metadata row rules |
+| Link | #153968 | Hyperlink text - navy, underlined |
+
+# Logos and Brand Marks
+
+*(Unchanged. [CONFIRMED v1.2] Cover uses the **Vertical** Navy mark.)*
+
+The PFS Primary Logo system: three orientations (Vertical, Horizontal, Circle), two variants (Navy, White). Six approved files. No additions, substitutions, or recreations.
+
+The document **cover** uses the **Vertical Navy** mark.
+
+> ANCHOR: The logo is the brand mark. Operators inside our facilities, clients receiving our documents, players walking through our dining rooms - all recognize the brand at a glance through the logo.
+
+# Banners and Callouts
+
+*(Unchanged from v1.1. Four emphasis devices, each a different rule weight. Use sparingly. They render identically on screen and print - colored fills must print, not just borders.)*
+
+- **7.1 Promise Callout** - Navy-tinted (#E3EDF7), text #0E2647 italic. Mission/Vision/Promise statements. Max three per document. Constitutional statements only.
+- **7.2 Anchor Banner** - Sky-tinted (#C4E3E8), label "ANCHOR" Oswald SemiBold 9pt CAPS Navy. The key principle of a section. Max one per H2 section.
+- **7.3 Critical Banner** - Red-tinted (#FCE4E4), label + text Red Dark (#8B1F1F) bold. Absolute prohibitions only - where breach means termination, legal action, or both.
+- **7.4 Note Callout** - Gray-tinted (#EEF6F8), label "NOTE" Dark Gray. Operational notes, definitions, context. No limit.
+- **7.5 Page-break behavior (print)** - callouts never split across a page break; they stay whole.
+
+# Tables
+
+*(Unchanged in intent; Word-specific "DXA widths" language retired.)*
+
+Three standard formats: Reference Table (comparison data), SOP Process Table (sequential steps), RACI Table (accountability mapping). All use 1pt #CCCCCC borders and a Navy header-row fill with white text. Long tables may use Note-Gray zebra rows.
+
+# Cross-References and Linking
+
+*(Unchanged in intent. [CHANGED v1.2] Related Documents now renders from frontmatter.)*
+
+Every cross-reference uses the Document ID, not "this link" or "the document we discussed." Files move; IDs are stable. Format: "see SOP-014 section 3.2" or "per AGR-001 The Big Rules."
+
+**[CHANGED v1.2]** Every document ends with a **Related Documents** block. It is **rendered automatically from the document's frontmatter `relationships`** (ID, title, and relationship type), not authored by hand - so it stays accurate as relationships change.
+
+# Naming, Versioning and Lifecycle
+
+## [CHANGED v1.2] Source and output
+
+- The source of every document is its **MDX file** in the repository (not a `.docx`).
+- The published artifact is the **PDF** produced via print-to-PDF from the screen reader's print rendering. There is no Word file.
+
+## Version format
+
+*(Unchanged.)*
+
+- Major bump (1.0 to 2.0) - structural change, signature reset (AGR), new approval cycle.
+- Minor bump (1.0 to 1.1) - correction, clarification, formatting fix. No resignature.
+
+## [CHANGED v1.2] Cover metadata block - read from frontmatter
+
+The cover metadata block is **read directly from the document's MDX frontmatter** - no field is typed onto the cover by hand. Required fields:
+
+- Document ID (`id`)
+- Title (`title`)
+- Version + effective date (`version`, `effective_date`)
+- Owner (`owner` - role title, not a personal name)
+- Approved By (`approver`, with approval date) - expected at v1.0 and above
+- Next Review (`last_reviewed` + `review_interval_months`)
+- Classification (`classification`)
+
+**When a field is blank in the frontmatter, the cover renders an em-dash ("—") in its place.** Documents still in build will show dashes for unfilled fields; the real values appear automatically as the frontmatter is completed (typically as a document goes Live). The cover is never blocked on backfill.
+
+## Default review cadence
+
+*(Unchanged.)* Annual (most), Quarterly (high-change), Per-event (AGR).
+
+# Approval and Review Chain
+
+*(Unchanged from v1.1.)*
+
+| Class | Approver | Required Reviewers |
+|---|---|---|
+| PB | SLT | Theme owner |
+| STD | SLT | Theme owner |
+| POL | SLT + counsel | People Ops |
+| AGR | SLT + counsel | People Ops |
+| SOP | Senior Director of Operations | Theme owner + end-user pilot |
+| TPL | Senior Director of Operations | Theme owner |
+| CHK | Senior Director of Operations | Theme owner + end-user pilot |
+| REF | Senior Director of Operations | Theme owner |
+
+# Document Anatomy by Class
+
+*(Unchanged from v1.1. Universal skeleton + class-specific add-ons. These are the minimal per-class differences.)*
+
+## Universal - Every Class
+
+- Cover (print) / header block (screen) - logo, title, subtitle, accent rule, metadata block
+- Header + footer on body pages (print only)
+- Body content
+- Related Documents block (rendered from frontmatter)
+
+## Class-Specific Add-ons
+
+| Class | Required Add-ons |
+|---|---|
+| PB | TOC (always, over 10 pages), "How to Use This Playbook" section |
+| STD | TOC if over 10 pages, Approval block at end, worked examples |
+| POL | TOC if over 10 pages, counsel review notation, Approval block |
+| AGR | Acknowledgement and Agreement signature page (full page; no running footer on the signature page) |
+| SOP | Purpose and Scope at start, SOP Process Table for steps, end-user pilot notation |
+| TPL | Instructions block at top, sample/example row in tables |
+| CHK | One-page typical, checkbox formatting, signature line at bottom, no TOC |
+| REF | One-page, visual-heavy, minimal body text, no TOC |
+
+## [CHANGED v1.2] Table of Contents (print)
+
+The TOC is **generated automatically** from the document's H1 section titles (H1 only - not sub-sections), with page numbers. It appears on documents over 10 pages and where the class requires it (above). On screen, an optional in-page section list may stand in for the TOC.
+
+# Out of Scope - Sub-Standards
+
+*(Unchanged.)*
+
+- **STD-002 Visual Communication Standard** - posters, infographics, signage. In review.
+- **STD-003 Internal Communication Standard** - memos, emails, Slack. Pending.
+- **STD-004 Documentation Repository Standard** - frontmatter schema and repo structure. In review.
+
+# Approval
+
+This Standard is itself an STD-class document. Its approval chain follows Section 11.
+
+## Changes in v1.2
+
+- **[Type system] Body face changed from Mulish to Inter; display face stays Oswald** (Section 4). The screen reader always used Inter; v1.1's Mulish body mandate diverged from the live screen immediately. v1.2 makes Inter the body face for **both** screen and print so the two renderings are one consistent system, while keeping Oswald for cover titles and section heads to carry brand character.
+- **[One source, two renderings]** The Standard now explicitly governs two renderings - screen and print/PDF - of one MDX source (Section 1, 3.2). They are siblings: identical type, color, callouts, hierarchy; they differ only in page architecture (cover, footers, pagination are print-only).
+- **[Word retired]** DOCX is no longer a rendering target (Section 1, 10). Print-to-PDF replaces it.
+- **[Cover reads from frontmatter]** The cover metadata block is read directly from MDX frontmatter; blank fields render an em-dash and fill in automatically as frontmatter is completed (Section 10). No manual cover authoring, no backfill gate.
+- **[Related Documents auto-rendered]** The end-of-document Related Documents block renders from frontmatter `relationships`, not hand-authored (Section 9).
+- **[TOC auto-generated, H1-only]** The print TOC is generated from H1 section titles with page numbers (Section 12).
+- **[Cover logo]** Confirmed as the Vertical Navy mark (Section 6).
+
+## Changes in v1.1 (retained for history)
+
+- Brand fonts made the build standard (Section 4).
+- Palette pinned - exact hex locked (Section 5).
+- Cover: navy logo and clean first page standardized.
+- Version drift corrected.

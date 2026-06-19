@@ -1,0 +1,88 @@
+---
+id: POST-001
+title: Incident Reporting Posting
+doc_class: POST
+shelf: "Safety, Health & Incident"
+status: Live
+version: "1.2"
+card_line: "Wall posting of incident severity tiers and the response sequence. Available in English and Spanish."
+summary: "The wall posting of SOP-002 Safety and Incident Management section 04 Severity Tiers and section 06 Notification Matrix, plus the six-step response and the phone-tree contact list. Distilled to floor-readable language for posted display in kitchens and offices. Both English and Spanish printed versions exist as PDF assets. POST class takes the SousAI stub path - this MDX summary is the corpus-side content."
+keywords:
+  - incident
+  - severity
+  - S1
+  - S2
+  - S3
+  - S4
+  - notification
+  - response
+  - phone tree
+  - posting
+  - bilingual
+  - POST-001
+surfaces:
+  - incident-reporting
+owner: "Director of People Operations"
+approver: "Senior Director of Operations"
+audience: operator
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+approval:
+  approved_version: "1.2"
+  approved_by: "Senior Director of Operations"
+  approved_date: 2026-05-04
+  method: recorded sign-off
+last_reviewed: 2026-05-04
+review_interval_months: 12
+effective_date: 2026-05-04
+print_required: true
+critical: true
+sort_order: 5
+relationships:
+  - { to: SOP-002, type: derived_from, from_section: "SOP-002 section 04 + section 06" }
+---
+
+<SourceGoverns doc="SOP-002" section="sections 04 + 06" />
+
+# Incident Reporting - Posted Summary
+
+A wall-mounted reference for every kitchen and office. The binding text is SOP-002 Safety and Incident Management. This posting is the at-a-glance reference for severity tiers, notification windows, and the six-step response.
+
+## When something happens
+
+> CRITICAL: If life-safety risk exists, call 911 first. Documentation comes after.
+
+## The four severity tiers
+
+- **S1 Life-Safety / Regulatory** - immediate threat to life or regulatory exposure. Anaphylaxis, loss of consciousness, seizure, severe bleeding, vehicle accident with injury, suspected foodborne illness in 2+ individuals.
+- **S2 Medical / Significant** - medical attention beyond first aid; lost-time potential. Cut requiring stitches, burn requiring clinic, sprain or fracture, vehicle damage with no injury.
+- **S3 First Aid / Minor** - resolved on-site; no lost time. Minor cut or burn, slip with no injury, cross-contact caught before service.
+- **S4 Near-Miss / Hazard** - no harm occurred; conditions or near-event noted.
+
+## When to call who
+
+| Tier | Within | How |
+|---|---|---|
+| S1 | <Fact id="incident_S1_window" /> | Phone to HR, then Slack + email to corporate + regional |
+| S2 | <Fact id="incident_S2_window" /> | Slack + email |
+| S3 | <Fact id="incident_S3_window" /> | Email summary |
+| S4 | weekly digest | Auto-aggregated email |
+
+## The six-step response
+
+1. **Respond** - immediate safety; call 911 if life-threatening.
+2. **Stabilize** - remove hazard; pull contaminated food and utensils.
+3. **Notify** - per the matrix above.
+4. **Document** - People Portal Incident Center within the SLA.
+5. **Investigate** - within 48 hours, Manager of Record plus HR.
+6. **Close** - corrective action in 7 days; 30-day check-in on injuries.
+
+## Phone tree
+
+Phone numbers live in the company directory (Rippling, Slack profile). If you can't reach the primary contact in 10 minutes for an S1, Slack the ops-urgent channel and contact someone from corporate.
+
+## Where to find the binding policy
+
+The full incident system - 9 incident types, type-specific procedures, confidential reporting, workers compensation, training and review cadence - lives in SOP-002 Safety and Incident Management.

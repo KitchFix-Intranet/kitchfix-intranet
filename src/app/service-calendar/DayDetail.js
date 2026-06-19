@@ -14,7 +14,7 @@ function formatDate(dateStr) {
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, onPrev, onNext, onClose }) {
+export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, onPrev, onNext, onClose, isFeeAccount, homestandContext }) {
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
@@ -73,15 +73,25 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     setTouched(newTouched);
   }, [editValues, touched, day.projected]);
 
-  // Categorize groups
+  // Categorize groups. A group is "active" if EITHER a projection OR an
+  // actual on any of its services is non-zero. The actual check matters
+  // for days like a PDC Battery Camp Sunday where projections are all
+  // zero but the operator served flat-fee items (Coffee Service, Pre-Game
+  // Snack). Without it the popup would label such groups "off today"
+  // while the green banner says "Actuals recorded" - the contradiction
+  // that surfaced this bug.
   const { activeGroups, inactiveGroups } = useMemo(() => {
     const active = [], inactive = [];
     for (const g of serviceGroups) {
-      if (g.services.some(s => (day.projected[s.colIndex] ?? 0) > 0)) active.push(g);
+      const hasAnyValue = g.services.some(s =>
+        (day.projected[s.colIndex] ?? 0) > 0 ||
+        (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0)
+      );
+      if (hasAnyValue) active.push(g);
       else inactive.push(g);
     }
     return { activeGroups: active, inactiveGroups: inactive };
-  }, [serviceGroups, day.projected]);
+  }, [serviceGroups, day.projected, day.actual, day.hasActuals]);
 
   // Get effective value: if touched use editValues, else 0 (empty = 0 on save)
   const getVal = useCallback((colIndex) => {
@@ -106,37 +116,80 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   const hasTouchedAny = touched.size > 0;
 
-  const executeSave = useCallback(() => {
+  const executeSave = useCallback(async () => {
+    // P0-1: ONLY send touched services. Untouched services are preserved
+    // by the orchestrator (no row written = existing PG row left alone).
+    // Saving with no touched fields is a no-op; the Save button is already
+    // disabled in that case via hasTouchedAny.
     const entries = [];
     for (const g of serviceGroups) {
-      for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: getVal(s.colIndex) }); }
+      for (const s of g.services) {
+        if (touched.has(s.colIndex)) {
+          entries.push({ colIndex: s.colIndex, value: getVal(s.colIndex) });
+        }
+      }
     }
-    onSave(day, entries);
-    setShowReview(null);
-    setJustSaved(true);
-  }, [serviceGroups, getVal, day, onSave]);
+    if (entries.length === 0) {
+      setShowReview(null);
+      return;
+    }
+    // P0-2: await the save before showing the success screen. If the
+    // request fails (toast shown by handleSave), keep the review modal
+    // open so the chef can retry without losing what they typed.
+    const result = await onSave(day, entries);
+    if (result?.success) {
+      setShowReview(null);
+      setJustSaved(true);
+    }
+  }, [serviceGroups, touched, getVal, day, onSave]);
 
-  const executeConfirmAll = useCallback(() => {
-    // Fill all with projections then save
+  const executeConfirmAll = useCallback(async () => {
+    // User explicitly chose "All match projections" - intent is to apply
+    // the projection value to every service. Send every service, including
+    // those with projection=0 (records "no service occurred" intentionally).
     const entries = [];
     for (const g of serviceGroups) {
-      for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); }
+      for (const s of g.services) {
+        entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
+      }
     }
-    onSave(day, entries);
-    setShowReview(null);
-    setJustSaved(true);
+    // P0-2: same await + success-gate as executeSave.
+    const result = await onSave(day, entries);
+    if (result?.success) {
+      setShowReview(null);
+      setJustSaved(true);
+    }
   }, [serviceGroups, day, onSave]);
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
   const revPct = monthRevenue > 0 ? Math.round(summary.revenue / monthRevenue * 100) : 0;
 
-  const coaching = {
-    "needs-entry": { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Enter actual meal counts. Projections shown for reference." },
-    "overdue": { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due — enter actual counts as soon as possible." },
-    "upcoming": { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter actual meal counts. Projections shown for reference." },
-    "entered": { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Actuals recorded. Edit and re-save if needed." },
-  }[status];
+  // Coaching banner: fee accounts reframe around delivery + homestand
+  // context. Game days vs prep days get different language; revenue
+  // urgency is dropped (billing isn't per-meal for these accounts).
+  const isPrepDay = isFeeAccount && homestandContext && homestandContext.dayType !== "GAME";
+  const isGameDay = isFeeAccount && homestandContext?.dayType === "GAME";
+  const coaching = isFeeAccount
+    ? (
+        isPrepDay
+          ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: `${homestandContext.dayType} day — enter counts if meals were served.` }
+          : isGameDay && status === "entered"
+            ? { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Delivery logged. Edit and re-save if needed." }
+            : isGameDay && status === "needs-entry"
+              ? { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Game day — enter meal counts." }
+              : isGameDay && status === "overdue"
+                ? { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due game day — enter meal counts now." }
+                : isGameDay
+                  ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Upcoming game day. Projections shown for reference." }
+                  : { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter meal counts if any were served." }
+      )
+    : {
+        "needs-entry": { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Enter actual meal counts. Projections shown for reference." },
+        "overdue": { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due — enter actual counts as soon as possible." },
+        "upcoming": { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter actual meal counts. Projections shown for reference." },
+        "entered": { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Actuals recorded. Edit and re-save if needed." },
+      }[status];
 
   function renderServiceRow(svc) {
     const projVal = day.projected[svc.colIndex] ?? 0;
@@ -149,7 +202,8 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
       <div key={svc.colIndex} className="sc-day-row">
 <div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
-<span className="sc-day-row-proj-label">Proj: {projVal} · {fmtPrice(svc.price)}</span>
+          {/* Fee accounts: drop the $X/plate label - svc.price is $0 here. */}
+<span className="sc-day-row-proj-label">Proj: {projVal}{isFeeAccount ? "" : ` · ${fmtPrice(svc.price)}`}</span>
         </div>
         <div className="sc-day-row-right">
           <input type="text" inputMode="numeric" pattern="[0-9]*"
@@ -180,29 +234,33 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           </div>
           <div className="sc-day-review-body">
             {serviceGroups.map(group => {
+              // P0-1 review surface: regular save shows ONLY services the
+              // chef touched (intentional 0 included). Confirm-all keeps the
+              // "services with projections > 0" filter since that's the
+              // intent of that flow.
               const svcs = group.services.filter(s => {
                 if (isConfirmAll) return (day.projected[s.colIndex] ?? 0) > 0;
-                return getVal(s.colIndex) > 0;
+                return touched.has(s.colIndex);
               });
               if (svcs.length === 0) return null;
               const gs = isConfirmAll
                 ? { meals: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0), 0), revenue: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0) * sv.price, 0) }
-                : groupSummary(group);
+                : { meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0), revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0) };
               return (
                 <div key={group.name} className="sc-day-review-group">
-                  <div className="sc-day-review-group-name">{group.name} · {fmtPrice(group.services[0]?.price || 0)}/plate</div>
+                  <div className="sc-day-review-group-name">{group.name}{!isFeeAccount && ` · ${fmtPrice(group.services[0]?.price || 0)}/plate`}</div>
                   {svcs.map(s => {
                     const val = isConfirmAll ? (day.projected[s.colIndex] ?? 0) : getVal(s.colIndex);
                     return <div key={s.colIndex} className="sc-day-review-row"><span>{s.name}</span><span className="sc-day-review-val">{val}</span></div>;
                   })}
-                  <div className="sc-day-review-subtotal">{gs.meals} meals · {fmt$(gs.revenue)}</div>
+                  <div className="sc-day-review-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
                 </div>
               );
             })}
           </div>
           <div className="sc-day-review-summary">
             <span className="sc-day-review-total-meals">{isConfirmAll ? serviceGroups.reduce((s, g) => s + g.services.reduce((ss, sv) => ss + (day.projected[sv.colIndex] ?? 0), 0), 0).toLocaleString() : summary.meals.toLocaleString()} meals</span>
-            <span className="sc-day-review-total-rev">{isConfirmAll ? fmt$(serviceGroups.reduce((s, g) => s + g.services.reduce((ss, sv) => ss + (day.projected[sv.colIndex] ?? 0) * sv.price, 0), 0)) : fmt$(summary.revenue)}</span>
+            {!isFeeAccount && <span className="sc-day-review-total-rev">{isConfirmAll ? fmt$(serviceGroups.reduce((s, g) => s + g.services.reduce((ss, sv) => ss + (day.projected[sv.colIndex] ?? 0) * sv.price, 0), 0)) : fmt$(summary.revenue)}</span>}
           </div>
           <div className="sc-day-review-actions">
             <button className="sc-btn sc-btn--outline" onClick={() => setShowReview(null)}>Go back</button>
@@ -222,7 +280,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
         <div className="sc-day-success-inner">
           <div className="sc-day-success-check">✓</div>
           <h3 className="sc-day-success-title">Saved!</h3>
-          <p className="sc-day-success-detail">{formatDate(day.date)} · {summary.meals.toLocaleString()} meals · {fmt$(summary.revenue)}</p>
+          <p className="sc-day-success-detail">{formatDate(day.date)} · {summary.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(summary.revenue)}`}</p>
           <div className="sc-day-success-actions">
             {onNext && <button className="sc-btn sc-btn--primary" onClick={onNext}>Next day →</button>}
             <button className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
@@ -254,8 +312,17 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
       <div className="sc-day-body">
         {activeGroups.map(group => {
-          const activeSvcs = group.services.filter(s => (day.projected[s.colIndex] ?? 0) > 0);
-          const inactiveSvcs = group.services.filter(s => (day.projected[s.colIndex] ?? 0) === 0);
+          // Per-service active/inactive split must consider actuals, not just
+          // projections - same actuals-first-class rule applied to the group
+          // categorization above. Without this, days like Jan 4 Battery Camp
+          // (Pre-Game Snack/Coffee/Fountain Bev actuals with zero projection)
+          // collapse the served-services behind the "+ N more services"
+          // expander, leaving the active group header rendering empty.
+          const hasValue = (s) =>
+            (day.projected[s.colIndex] ?? 0) > 0 ||
+            (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0);
+          const activeSvcs = group.services.filter(hasValue);
+          const inactiveSvcs = group.services.filter((s) => !hasValue(s));
           const gs = groupSummary(group);
           const extrasOpen = expandedExtras.has(group.name);
           const groupTouched = group.services.some(s => touched.has(s.colIndex));
@@ -264,7 +331,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
             <div key={group.name} className="sc-day-group">
               <div className="sc-day-group-header">
                 <span className="sc-day-group-name">{group.name}</span>
-<span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}</span>
+                {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}</span>}
               </div>
 
               {activeSvcs.map(svc => renderServiceRow(svc))}
@@ -285,7 +352,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               {extrasOpen && inactiveSvcs.map(svc => renderServiceRow(svc))}
               {extrasOpen && <button className="sc-day-extras-hide" onClick={() => toggleExtras(group.name)}>Hide extras</button>}
 
-              {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals · {fmt$(gs.revenue)}</div>}
+              {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
             </div>
           );
         })}
@@ -303,10 +370,10 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 <div className="sc-day-group sc-day-group--expanded">
                   <div className="sc-day-group-header">
                     <span className="sc-day-group-name">{group.name}</span>
-                    <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}/plate</span>
+                    {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}/plate</span>}
                   </div>
                   {group.services.map(svc => renderServiceRow(svc))}
-                  {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals · {fmt$(gs.revenue)}</div>}
+                  {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
                 </div>
               )}
             </div>
@@ -323,9 +390,9 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
         <div className="sc-day-totals">
           <div>
             <span className="sc-day-total-meals">{summary.meals.toLocaleString()} meals</span>
-            {revPct > 0 && <span className="sc-day-total-pct"> · {revPct}% of month</span>}
+            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct"> · {revPct}% of month</span>}
           </div>
-          <span className="sc-day-total-rev">{fmt$(summary.revenue)}</span>
+          {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(summary.revenue)}</span>}
         </div>
 <div className="sc-day-actions">
           {!day.hasActuals && (

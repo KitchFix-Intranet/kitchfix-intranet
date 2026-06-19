@@ -1,680 +1,694 @@
 import { auth } from "@/lib/auth";
-import { readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, SHEET_IDS } from "@/lib/sheets";
 import { NextResponse } from "next/server";
+import { getServiceClient } from "@/lib/supabase";
+import { SC_ADMINS, isScAdmin } from "@/lib/admin";
+import {
+  loadAccountConfig,
+  loadAllAccountsConfig,
+  loadMonthData,
+  loadYearSummary,
+  loadHomestandContext,
+  saveActuals,
+  saveBulkActuals,
+  updateServiceConfig,
+  addService,
+  submitConfigRequest,
+} from "@/lib/dataStore/serviceCalendar";
 
-// ═══════════════════════════════════════
-// SERVICE CALENDAR API
-// Drive-direct architecture: reads/writes to per-account Google Sheets
-// Config source: service_config tab in HUB
-// Audit trail: service_audit_log_26 in COLLECTION
-// Overrides: service_day_overrides_26 in COLLECTION
-// ═══════════════════════════════════════
+// SHEETS REMOVED - PG orchestrator now handles all reads/writes.
+// Imports preserved (commented) so a rollback during shadow validation
+// is a one-uncomment, route-revert operation.
+// import { readSheetSA, appendRowSA, appendRowsSA, updateRangeSA, SHEET_IDS } from "@/lib/sheets";
 
-const TABS = {
-  PROJECTIONS: "Projections - 2026",
-  ACTUALS: "Actuals - 2026",
-  CLICKERS: "Clicker Counts - 2026",
-  CONFIG: "service_config",
-  AUDIT: "service_audit_log_26",
-  OVERRIDES: "service_day_overrides_26",
-};
+// ═══════════════════════════════════════════════════════════════════
+// SERVICE CALENDAR API (PG-backed)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Reads: getServiceClient (Postgres) via the serviceCalendar dataStore.
+// Writes: the orchestrator's upsert paths into sc_* tables. PG is the
+// canonical source from import day; there is no Sheets fallback.
+//
+// JSON SHAPES are preserved verbatim from the prior Sheets-based route
+// so the UI (ServiceCalendar.js, DayDetail.js, ServiceConfig.js) reads
+// the same field names. The mapping happens at this layer.
+//
+// colIndex CONVENTION
+//   The legacy route used Sheets column numbers for `colIndex` as the
+//   per-service key in projected/actual maps and POST payloads. The
+//   PG-backed route puts the service UUID in that slot. The UI uses
+//   colIndex as an opaque string key (object lookups, equality only) -
+//   no numeric ops - so the swap is transparent.
+//
+// P0-3 (admin gate on config writes)
+//   sc-config-update and sc-config-add now check SC_ADMINS server-side
+//   before touching the orchestrator. The client-side ServiceConfig
+//   gate stays; this is defense in depth.
+//
+// P0-1 (untouched-fields-zeroing) STATUS
+//   The orchestrator's saveActuals upserts ONLY the entries it is
+//   given. The legacy UI (DayDetail.js executeSave) currently sends
+//   ALL services including value=0 for untouched, which would still
+//   zero out untouched cells. The full P0-1 fix requires a UI PR that
+//   sends only touched entries; this PR ships the data-layer half so
+//   the moment the UI PR lands, the bug is fully resolved.
 
-// Billing lock: days older than this many days cannot be edited
-const LOCK_DAYS = 7;
-
-const parseNum = (v) => {
-  const n = Number(String(v || "").replace(/[$,]/g, ""));
-  return isNaN(n) ? null : n;
-};
-
-// Convert 0-based column index to A1 letter (0=A, 5=F, 25=Z, 26=AA)
-function colLetter(idx) {
-  let letter = "";
-  let n = idx;
-  while (n >= 0) {
-    letter = String.fromCharCode(65 + (n % 26)) + letter;
-    n = Math.floor(n / 26) - 1;
-  }
-  return letter;
-}
-
-// Parse date string from sheet (handles "2026-04-01", "4/1/2026", "April 1, 2026")
-function parseSheetDate(val) {
-  if (!val) return null;
-  const s = String(val).trim();
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return null;
-  // Return YYYY-MM-DD in local time
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-// Day-of-week label
 const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 function dayOfWeek(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   return DOW[d.getDay()] || "";
 }
 
-// ─── Load and parse service_config from HUB ───
-async function loadServiceConfig() {
-  const { headers, rows } = await readSheetSA(SHEET_IDS.HUB, TABS.CONFIG);
-  if (!rows.length) return [];
+// accounts.level -> UI category (preserves the legacy 3-bucket model).
+function levelToCategory(level) {
+  if (!level) return "Other";
+  const L = String(level).toUpperCase();
+  if (L === "MLB") return "MLB";
+  if (L === "AAA" || L === "AA" || L === "MILB") return "MiLB";
+  if (L === "PDC") return "PDC";
+  if (L === "CORP") return "CORP";
+  return level;
+}
 
-  // Map by header name for resilience
-  const h = {};
-  headers.forEach((name, i) => { h[String(name).trim()] = i; });
+// metaColCount kept for legacy response parity. The current UI does
+// not read it. PDC accounts use camp; MLB/AAA use gameType+gameTime.
+function categoryToMetaColCount(category) {
+  return category === "PDC" || category === "CORP" ? 5 : 6;
+}
 
-  return rows
-    .filter((r) => r[h["AccountKey"]] && String(r[h["Active"]] || "TRUE").toUpperCase() !== "FALSE")
-    .map((r) => ({
-      accountKey:    String(r[h["AccountKey"]] || "").trim(),
-      category:      String(r[h["Category"]] || "").trim(),
-      spreadsheetId: String(r[h["SpreadsheetId"]] || "").trim(),
-      groupName:     String(r[h["GroupName"]] || "").trim(),
-      serviceName:   String(r[h["ServiceName"]] || "").trim(),
-      pricePerPlate: parseNum(r[h["PricePerPlate"]]) || 0,
-      serviceColIndex: parseInt(r[h["ServiceColIndex"]], 10) || 0,
-      metaColCount:  parseInt(r[h["MetaColCount"]], 10) || 5,
-      taxFree:       String(r[h["TaxFree"]] || "").toUpperCase() === "TRUE",
-      sortOrder:     parseInt(r[h["SortOrder"]], 10) || 0,
+// Read every active account that has at least one service configured
+// (i.e. has been imported). Returns the shape the legacy sc-accounts
+// + sc-load actions both used.
+async function loadAccountList() {
+  const supa = getServiceClient();
+  const [accountsRes, svcsRes] = await Promise.all([
+    supa
+      .from("accounts")
+      .select("team_key, name, level, billing_model")
+      .eq("active", true)
+      .order("team_key", { ascending: true }),
+    supa
+      .from("sc_services")
+      .select("account_key")
+      .is("deleted_at", null),
+  ]);
+  if (accountsRes.error) throw new Error("[sc.route] loadAccountList accounts: " + accountsRes.error.message);
+  if (svcsRes.error) throw new Error("[sc.route] loadAccountList services: " + svcsRes.error.message);
+
+  // billing_model surfaced so the UI can fork its rendering for fee
+  // accounts (flat_fee = homestand-driven display) vs per-meal accounts
+  // (revenue-driven display). See ServiceCalendar.js isFeeAccount.
+  const accountsWithServices = new Set((svcsRes.data || []).map((r) => r.account_key));
+  return (accountsRes.data || [])
+    .filter((a) => accountsWithServices.has(a.team_key))
+    .map((a) => ({
+      key:          a.team_key,
+      category:     levelToCategory(a.level),
+      name:         a.name || a.team_key,
+      billingModel: a.billing_model || null,
     }));
 }
 
-// ─── Group services by GroupName for an account ───
-function buildServiceGroups(configRows, accountKey) {
-  const acctRows = configRows.filter((r) => r.accountKey === accountKey);
-  if (!acctRows.length) return { groups: [], meta: null };
-
-  const { spreadsheetId, category, metaColCount } = acctRows[0];
-
-  // Group by groupName, sorted by sortOrder
-  const groupMap = {};
-  for (const r of acctRows) {
-    if (!groupMap[r.groupName]) groupMap[r.groupName] = [];
-    groupMap[r.groupName].push({
-      name: r.serviceName,
-      price: r.pricePerPlate,
-      colIndex: r.serviceColIndex,
-      taxFree: r.taxFree,
-      sortOrder: r.sortOrder,
-    });
-  }
-
-  const groups = Object.entries(groupMap).map(([name, services]) => ({
-    name,
-    services: services.sort((a, b) => a.sortOrder - b.sortOrder),
-  }));
-
-  // Sort groups by lowest sortOrder of their first service
-  groups.sort((a, b) => (a.services[0]?.sortOrder || 0) - (b.services[0]?.sortOrder || 0));
-
-  return {
-    groups,
-    meta: { spreadsheetId, category, metaColCount },
-  };
+async function loadAccountInfo(accountKey) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("accounts")
+    .select("name, level, billing_model")
+    .eq("team_key", accountKey)
+    .maybeSingle();
+  if (error) throw new Error("[sc.route] loadAccountInfo: " + error.message);
+  return data;
 }
 
-// ─── Parse a Drive sheet tab into structured day data ───
-function parseDriveTab(rawRows, metaColCount, serviceColIndices) {
-  // rawRows: full tab data including header rows
-  // Data starts at row index 4 (row 5 in sheet, 1-indexed)
-  if (rawRows.length < 5) return [];
+// Transform orchestrator config shape -> legacy serviceGroups shape.
+//   { groups, services } (flat per-account list)
+//    -> [{ name, services: [{ name, price, colIndex, taxFree, ... }, ...] }]
+//
+// colIndex = service UUID (see "colIndex CONVENTION" note above).
+function transformServiceGroups(config) {
+  const groupMap = new Map();
+  for (const g of config.groups) {
+    groupMap.set(g.id, {
+      name:      g.groupName,
+      sortOrder: g.sortOrder,
+      services:  [],
+    });
+  }
+  for (const s of config.services) {
+    const g = groupMap.get(s.groupId);
+    if (!g) continue;
+    g.services.push({
+      name:       s.serviceName,
+      price:      s.price,
+      colIndex:   s.id,
+      taxFree:    s.isTaxFree,
+      flatFee:    s.isFlatFee,
+      nonRevenue: s.isNonRevenue,
+      sortOrder:  s.sortOrder,
+    });
+  }
+  return [...groupMap.values()]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((g) => ({
+      name:     g.name,
+      services: g.services.sort((a, b) => a.sortOrder - b.sortOrder),
+    }));
+}
 
-  const days = [];
-  for (let i = 4; i < rawRows.length; i++) {
-    const row = rawRows[i] || [];
-    const dateVal = parseSheetDate(row[1]); // Date is always col B (index 1)
-    if (!dateVal) continue;
-
-    const meta = {
-      day: String(row[0] || "").trim(),
-      period: String(row[2] || "").trim(),
-      week: String(row[3] || "").trim(),
+// Transform orchestrator days -> legacy days shape (projected/actual
+// keyed by colIndex = serviceId UUID).
+function transformDays(orchDays) {
+  return orchDays.map((d) => {
+    const projected = {};
+    const actual = {};
+    // View-sourced per-service revenue maps. These come from
+    // sc_daily_revenue via loadMonthDataPostgres - priced by each
+    // service-date's effective_date (LATERAL pick), so they reflect
+    // mid-period price changes correctly. The count maps above stay
+    // for now; a follow-up PR drops them once nothing JS-recomputes
+    // from them.
+    const projectedRevenue = {};
+    const actualRevenue    = {};
+    const priceAtDate      = {};
+    for (const s of d.services) {
+      projected[s.serviceId]        = s.projectedCount;
+      actual[s.serviceId]           = s.actualCount;
+      projectedRevenue[s.serviceId] = s.projectedRevenue;
+      actualRevenue[s.serviceId]    = s.actualRevenue;
+      priceAtDate[s.serviceId]      = s.priceAtDate;
+    }
+    return {
+      // sheetRow is legacy Sheets context; null on PG.
+      sheetRow:  null,
+      date:      d.date,
+      dayOfWeek: dayOfWeek(d.date),
+      meta: {
+        day:      dayOfWeek(d.date),
+        period:   d.period     || "",
+        week:     d.weekLabel  || "",
+        camp:     d.eventLabel || "",
+        gameType: d.gameType   || "",
+        gameTime: d.gameTime   || "",
+      },
+      projected,
+      actual,
+      // Day-level revenue totals from the view (excludes is_non_revenue
+      // services per sc_month_summary semantics). Guaranteed present
+      // for every day - constructed unconditionally at
+      // loadMonthDataPostgres:608 ({ projectedCount, actualCount,
+      // projectedRevenue, actualRevenue }). No runtime guard needed
+      // on the client side.
+      totals: {
+        projectedRevenue: d.totals.projectedRevenue,
+        actualRevenue:    d.totals.actualRevenue,
+      },
+      projectedRevenue,
+      actualRevenue,
+      priceAtDate,
+      hasActuals: d.hasAnyActuals,
+      isPast:     d.isPast,
+      isLocked:   d.isLocked,
     };
-
-    // Extra meta cols (col 4+ before services start)
-    if (metaColCount === 5) {
-      meta.camp = String(row[4] || "").trim();
-    } else if (metaColCount === 6) {
-      meta.gameType = String(row[4] || "").trim();
-      meta.gameTime = String(row[5] || "").trim();
-    }
-
-    // Service values keyed by column index
-    const values = {};
-    for (const ci of serviceColIndices) {
-      const raw = row[ci];
-      values[ci] = (raw !== undefined && raw !== "") ? parseNum(raw) : null;
-    }
-
-    days.push({
-      sheetRow: i + 1, // 1-indexed sheet row number (for writes)
-      date: dateVal,
-      dayOfWeek: dayOfWeek(dateVal),
-      meta,
-      values,
-    });
-  }
-
-  return days;
+  });
 }
 
 
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET HANDLER
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 export async function GET(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const token = session.accessToken;
   const email = session.user?.email?.toLowerCase().trim();
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
 
   try {
-    // ── sc-hero: return a random hero image ──
+    // ── sc-hero: random hero image (global pool) ──
     if (action === "sc-hero") {
-      const heroRaw = await readSheetSA(SHEET_IDS.HUB, "hero_images");
-      const heroUrls = heroRaw.rows.flat().filter((u) => u && String(u).includes("http"));
-      const heroImage = heroUrls.length ? heroUrls[Math.floor(Math.random() * heroUrls.length)] : "";
+      const supa = getServiceClient();
+      const { data, error } = await supa
+        .from("hero_images")
+        .select("url")
+        .is("team_key", null);
+      if (error) throw new Error("hero_images: " + error.message);
+      const urls = (data || [])
+        .map((r) => r.url)
+        .filter((u) => u && String(u).includes("http"));
+      const heroImage = urls.length
+        ? urls[Math.floor(Math.random() * urls.length)]
+        : "";
       return NextResponse.json({ success: true, heroImage });
     }
 
-    // ── sc-accounts: list all accounts from service_config ──
+    // ── sc-accounts: list every imported account ──
+    //
+    // Also returns defaultAccount: the account_key the requesting user is
+    // mapped to in user_accounts (seeded from the contacts table via
+    // docs/migrations/sc-3-user-accounts-seed.sql). The frontend uses this
+    // to auto-select the user's account on mount with fallback to CIN-AZ.
     if (action === "sc-accounts") {
-      const [configRows, accountsRaw] = await Promise.all([
-        loadServiceConfig(),
-        readSheetSA(SHEET_IDS.HUB, "accounts"),
-      ]);
-      // Map accounts tab keys → service_config keys (different naming conventions)
-      const keyAliases = {
-        "CIN-OH": "CIN-MLB",
-        "STL-MO": "STL-MLB",
-        "TXR-TX-H": "TXR-HOME",
-        "TXR-TX-V": "TXR-VISIT",
-        "TBJ-NY": "TBJ-BUF",
-      };
-      const nameLookup = { "TBR-BG": "Rays Boys & Girls Club" };
-      for (const r of accountsRaw.rows) {
-        const key = String(r[0] || "").trim();
-        const normalized = key.replace(/\s*-\s*/g, "-");
-        const mapped = keyAliases[normalized] || normalized;
-        const name = String(r[1] || "").trim();
-        if (mapped && name) nameLookup[mapped] = name;
-      }
-      const seen = new Map();
-      for (const r of configRows) {
-        if (!seen.has(r.accountKey)) {
-          seen.set(r.accountKey, { key: r.accountKey, category: r.category, name: nameLookup[r.accountKey] || r.accountKey });
+      const accounts = await loadAccountList();
+      let defaultAccount = null;
+      if (email) {
+        try {
+          const supa = getServiceClient();
+          const { data, error } = await supa
+            .from("user_accounts")
+            .select("account")
+            .ilike("email", email)
+            .limit(1);
+          if (!error && data?.[0]?.account) defaultAccount = data[0].account;
+        } catch {
+          // user_accounts missing or query failed - swallow, frontend
+          // falls back to CIN-AZ -> first account.
         }
       }
-      return NextResponse.json({
-        success: true,
-        accounts: Array.from(seen.values()),
-      });
+      return NextResponse.json({ success: true, accounts, defaultAccount });
     }
 
-    // ── sc-load: load full month data for one account ──
+    // ── sc-load: full month data for one account ──
     if (action === "sc-load") {
       const accountKey = searchParams.get("account");
-      const month = searchParams.get("month"); // "2026-04" format
+      const monthStr = searchParams.get("month"); // "2026-04"
       if (!accountKey) {
-        return NextResponse.json({ success: false, error: "Missing account param" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Missing account param" },
+          { status: 400 }
+        );
       }
 
-      const configRows = await loadServiceConfig();
-      const { groups, meta } = buildServiceGroups(configRows, accountKey);
-      if (!meta) {
-        return NextResponse.json({ success: false, error: `No config found for ${accountKey}` }, { status: 404 });
+      let year, month;
+      if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+        const parts = monthStr.split("-").map(Number);
+        year = parts[0];
+        month = parts[1];
+      } else {
+        const now = new Date();
+        year = now.getFullYear();
+        month = now.getMonth() + 1;
       }
 
-      const { spreadsheetId, category, metaColCount } = meta;
-      const serviceColIndices = groups.flatMap((g) => g.services.map((s) => s.colIndex));
-
-      // Read projections + actuals + overrides in parallel
-      const [projRaw, actRaw, overridesRaw] = await Promise.all([
-        readSheetSA(spreadsheetId, TABS.PROJECTIONS),
-        readSheetSA(spreadsheetId, TABS.ACTUALS),
-        readSheetSA(SHEET_IDS.COLLECTION, TABS.OVERRIDES),
+      const [config, monthData, accountInfo, accounts] = await Promise.all([
+        loadAccountConfig(accountKey),
+        loadMonthData(accountKey, year, month),
+        loadAccountInfo(accountKey),
+        loadAccountList(),
       ]);
 
-      // Parse both tabs — pass full raw data including header rows
-      const projAllRows = [projRaw.headers, ...projRaw.rows];
-      const actAllRows = [actRaw.headers, ...actRaw.rows];
-
-      const projDays = parseDriveTab(projAllRows, metaColCount, serviceColIndices);
-      const actDays = parseDriveTab(actAllRows, metaColCount, serviceColIndices);
-
-      // Build actuals lookup by date
-      const actualsMap = {};
-      for (const d of actDays) {
-        actualsMap[d.date] = d;
+      if (!accountInfo) {
+        return NextResponse.json(
+          { success: false, error: `Account not found: ${accountKey}` },
+          { status: 404 }
+        );
       }
 
-      // Filter to requested month (if provided)
-      let filteredDays = projDays;
-      if (month) {
-        filteredDays = projDays.filter((d) => d.date.startsWith(month));
+      const category = levelToCategory(accountInfo.level);
+      const serviceGroups = transformServiceGroups(config);
+      const days = transformDays(monthData.days);
+      const billingModel = accountInfo.billing_model || null;
+
+      // Homestand context: only fetched + included for flat_fee accounts.
+      // STL-FL is flat_fee but has zero homestand rows; the resulting
+      // empty {} signals "no homestand data" to the UI, which falls
+      // back to per-meal display for that account. The 4 MLB fee
+      // accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) return a populated
+      // map keyed by YYYY-MM-DD.
+      let homestandMap = null;
+      if (billingModel === "flat_fee") {
+        // Month-range bounds match the loadMonthData month exactly.
+        const first = `${String(year)}-${String(month).padStart(2, "0")}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const last = `${String(year)}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        const map = await loadHomestandContext(accountKey, first, last);
+        // Only include in response when there IS data, so the UI's
+        // !!data.homestandMap gate works for STL-FL too.
+        if (Object.keys(map).length > 0) homestandMap = map;
       }
 
-      // Merge projected + actual into combined day objects
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const lockCutoff = new Date(now);
-      lockCutoff.setDate(lockCutoff.getDate() - LOCK_DAYS);
-
-      const days = filteredDays.map((proj) => {
-        const act = actualsMap[proj.date] || null;
-        const dateObj = new Date(proj.date + "T12:00:00");
-        const isPast = dateObj < now;
-        const isLocked = dateObj < lockCutoff;
-
-        // Calculate revenue per service
-        const projected = {};
-        const actual = {};
-        for (const g of groups) {
-          for (const s of g.services) {
-            projected[s.colIndex] = proj.values[s.colIndex];
-            actual[s.colIndex] = act ? act.values[s.colIndex] : null;
-          }
-        }
-
-        return {
-          sheetRow: proj.sheetRow,
-          date: proj.date,
-          dayOfWeek: proj.dayOfWeek,
-          meta: proj.meta,
-          projected,
-          actual,
-          hasActuals: act ? Object.values(act.values).some((v) => v !== null) : false,
-          isPast,
-          isLocked,
-        };
-      });
-
-      // Parse overrides for this account
-      const overrides = overridesRaw.rows
-        .filter((r) => String(r[0] || "").trim() === accountKey)
-        .map((r) => ({
-          accountKey: String(r[0] || "").trim(),
-          date: String(r[1] || "").trim(),
-          action: String(r[2] || "").trim(),       // "add_service" or "mark_closed"
-          serviceName: String(r[3] || "").trim(),
-          groupName: String(r[4] || "").trim(),
-          note: String(r[5] || "").trim(),
-          createdBy: String(r[6] || "").trim(),
-          createdAt: String(r[7] || "").trim(),
-        }));
-
-      // All unique accounts for the selector
-      const seen = new Map();
-      for (const r of configRows) {
-        if (!seen.has(r.accountKey)) {
-          seen.set(r.accountKey, { key: r.accountKey, category: r.category });
-        }
-      }
-
-      return NextResponse.json({
+      const responsePayload = {
         success: true,
-        account: { key: accountKey, category, spreadsheetId },
-        metaColCount,
-        serviceGroups: groups,
+        account: {
+          key: accountKey,
+          category,
+          name: accountInfo.name || accountKey,
+          billingModel,
+          // spreadsheetId kept on the response shape for legacy parity;
+          // the UI still echoes it back in the POST body but the
+          // PG route ignores it.
+          spreadsheetId: "",
+        },
+        metaColCount: categoryToMetaColCount(category),
+        serviceGroups,
         days,
-        overrides,
-        accounts: Array.from(seen.values()),
-      });
+        // Overrides (sc_day_overrides) not migrated; the calendar
+        // tolerates an empty array.
+        overrides: [],
+        accounts,
+      };
+      if (homestandMap) responsePayload.homestandMap = homestandMap;
+      return NextResponse.json(responsePayload);
     }
 
-    // ── sc-year-summary: aggregate months for year heatmap ──
+    // ── sc-year-summary: 12-month rollup for heatmap ──
     if (action === "sc-year-summary") {
       const accountKey = searchParams.get("account");
       if (!accountKey) {
-        return NextResponse.json({ success: false, error: "Missing account param" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Missing account param" },
+          { status: 400 }
+        );
       }
+      const yearParam = searchParams.get("year");
+      const year = yearParam && /^\d{4}$/.test(yearParam)
+        ? Number(yearParam)
+        : new Date().getFullYear();
 
-      const configRows = await loadServiceConfig();
-      const { groups, meta } = buildServiceGroups(configRows, accountKey);
-      if (!meta) {
-        return NextResponse.json({ success: false, error: `No config for ${accountKey}` }, { status: 404 });
-      }
-
-      const { spreadsheetId, metaColCount } = meta;
-      const serviceColIndices = groups.flatMap((g) => g.services.map((s) => s.colIndex));
-
-      const [projRaw, actRaw] = await Promise.all([
-        readSheetSA(spreadsheetId, TABS.PROJECTIONS),
-        readSheetSA(spreadsheetId, TABS.ACTUALS),
-      ]);
-
-      const projAllRows = [projRaw.headers, ...projRaw.rows];
-      const actAllRows = [actRaw.headers, ...actRaw.rows];
-
-      const projDays = parseDriveTab(projAllRows, metaColCount, serviceColIndices);
-      const actDays = parseDriveTab(actAllRows, metaColCount, serviceColIndices);
-
-      const actualsMap = {};
-      for (const d of actDays) actualsMap[d.date] = d;
-
-      // Build price lookup
-      const priceLookup = {};
-      for (const g of groups) {
-        for (const s of g.services) {
-          priceLookup[s.colIndex] = s.price;
-        }
-      }
-
-      // Aggregate by month
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const lockCutoff = new Date(now);
-      lockCutoff.setDate(lockCutoff.getDate() - 7);
-
-      const months = {};
-      for (const proj of projDays) {
-        const monthKey = proj.date.slice(0, 7);
-        if (!months[monthKey]) {
-          months[monthKey] = {
-            month: monthKey,
-            period: proj.meta.period || "",
-            camp: proj.meta.camp || proj.meta.gameType || "",
-            totalDays: 0,
-            daysWithActuals: 0,
-            projectedRevenue: 0,
-            actualRevenue: 0,
-            projectedCovers: 0,
-            actualCovers: 0,
-            days: [],
-          };
-        }
-        const m = months[monthKey];
-        m.totalDays++;
-
-        const act = actualsMap[proj.date];
-        const hasAct = act && Object.values(act.values).some((v) => v !== null);
-        const allZeroProj = Object.values(proj.values).every((v) => v === null || v === 0);
-        const dateObj = new Date(proj.date + "T12:00:00");
-        const isPast = dateObj < now;
-        const isOverdue = dateObj < lockCutoff;
-
-        // Day status for heatmap
-        let dayStatus = "future";
-        if (hasAct && allZeroProj) dayStatus = "no-service";
-        else if (hasAct) dayStatus = "entered";
-        else if (isPast && isOverdue) dayStatus = "overdue";
-        else if (isPast) dayStatus = "needs-entry";
-
-        m.days.push({ date: proj.date, status: dayStatus, gameType: proj.meta.gameType || "" });
-
-        for (const ci of serviceColIndices) {
-          const price = priceLookup[ci] || 0;
-          const pv = proj.values[ci];
-          const av = act ? act.values[ci] : null;
-
-          if (pv !== null) {
-            m.projectedRevenue += pv * price;
-            m.projectedCovers += pv;
-          }
-          if (av !== null) {
-            m.actualRevenue += av * price;
-            m.actualCovers += av;
-          }
-        }
-
-        if (hasAct) {
-          m.daysWithActuals++;
-        }
-      }
+      const summary = await loadYearSummary(accountKey, year);
 
       return NextResponse.json({
         success: true,
         accountKey,
-        months: Object.values(months).sort((a, b) => a.month.localeCompare(b.month)),
+        months: summary.months.map((m) => {
+          const monthOut = {
+            month:             m.month,
+            // period + camp at the month level were Sheets-era display
+            // labels. Empty strings keep the UI happy.
+            period:            "",
+            camp:              "",
+            totalDays:         m.totalServiceDays,
+            daysWithActuals:   m.daysWithActuals,
+            projectedRevenue:  m.totalProjectedRevenue,
+            actualRevenue:     m.totalActualRevenue,
+            projectedCovers:   m.totalProjectedMeals,
+            actualCovers:      m.totalActualMeals,
+            days:              m.days,
+          };
+          // Fee accounts: pre-aggregated homestand counts for the year
+          // card (game days entered / total, homestand IDs in month).
+          // Omitted on per-meal accounts.
+          if (m.homestandSummary) monthOut.homestandSummary = m.homestandSummary;
+          return monthOut;
+        }),
       });
     }
 
-    return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
+    // ── sc-admin-all-config: per-account groups + services + as-of-today
+    //    price + lastUpdatedAt, for the admin overview landing. ──
+    if (action === "sc-admin-all-config") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const payload = await loadAllAccountsConfig();
+      return NextResponse.json({ success: true, ...payload });
+    }
+
+    // ── sc-admin-account-config: groups + services + current price for
+    //    one account, for the admin per-account editor. Cleaner than
+    //    sc-load (which also pulls the calendar's full month data). ──
+    if (action === "sc-admin-account-config") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const accountKey = searchParams.get("account");
+      if (!accountKey) {
+        return NextResponse.json(
+          { success: false, error: "Missing account param" },
+          { status: 400 }
+        );
+      }
+      const config = await loadAccountConfig(accountKey);
+      return NextResponse.json({ success: true, accountKey, ...config });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Unknown action" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("[ServiceCalendar GET]", error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
 
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // POST HANDLER
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 export async function POST(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const token = session.accessToken;
   const email = session.user?.email?.toLowerCase().trim();
-  const userName = session.user?.name || "Team Member";
   const body = await request.json();
   const { action } = body;
 
   try {
-    // ── sc-submit-day: write actuals to Drive sheet ──
+    // ── sc-submit-day: save actuals for one day ──
     if (action === "sc-submit-day") {
-      const { accountKey, spreadsheetId, date, sheetRow, entries } = body;
-      // entries: [{ colIndex, value }]
-
-      if (!accountKey || !spreadsheetId || !date || !sheetRow || !entries?.length) {
-        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      const { accountKey, date, entries } = body;
+      if (!accountKey || !date || !entries?.length) {
+        return NextResponse.json(
+          { success: false, error: "Missing required fields" },
+          { status: 400 }
+        );
       }
-
-      // No billing lock — managers can edit any past day
-      // The frontend shows overdue warnings but does not block writes
-
-      // Write each entry to the correct cell in the Actuals tab
-      // Build batch: group contiguous columns into ranges for efficiency
-      const sorted = [...entries].sort((a, b) => a.colIndex - b.colIndex);
-
-      // Write entries one range at a time (most days have a contiguous block)
-      const writePromises = [];
-      let rangeStart = sorted[0].colIndex;
-      let rangeValues = [sorted[0].value];
-
-      for (let i = 1; i <= sorted.length; i++) {
-        const isContiguous = i < sorted.length && sorted[i].colIndex === sorted[i - 1].colIndex + 1;
-        if (isContiguous) {
-          rangeValues.push(sorted[i].value);
-        } else {
-          // Flush this range
-          const startCol = colLetter(rangeStart);
-          const endCol = colLetter(rangeStart + rangeValues.length - 1);
-          const range = `'${TABS.ACTUALS}'!${startCol}${sheetRow}:${endCol}${sheetRow}`;
-          writePromises.push(updateRangeSA(spreadsheetId, range, [rangeValues]));
-
-          // Start next range
-          if (i < sorted.length) {
-            rangeStart = sorted[i].colIndex;
-            rangeValues = [sorted[i].value];
-          }
-        }
-      }
-
-      const results = await Promise.all(writePromises);
-      const anyFailed = results.some((r) => !r.success);
-
-      // Append audit log
-      const auditRow = [
-        new Date().toISOString(),  // timestamp
-        email,                     // who
-        userName,                  // display name
-        accountKey,                // account
-        date,                      // service date
-        "submit_actuals",          // action type
-        JSON.stringify(entries),    // payload
-        anyFailed ? "partial" : "success",
-      ];
-      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
-
-      return NextResponse.json({
-        success: !anyFailed,
-        error: anyFailed ? "Some writes failed — check the sheet" : undefined,
-      });
-    }
-
-    // ── sc-day-override: add_service or mark_closed ──
-    if (action === "sc-day-override") {
-      const { accountKey, date, overrideAction, serviceName, groupName, note } = body;
-      // overrideAction: "add_service" | "mark_closed"
-
-      if (!accountKey || !date || !overrideAction) {
-        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
-      }
-
-      const row = [
-        accountKey,
-        date,
-        overrideAction,
-        serviceName || "",
-        groupName || "",
-        note || "",
-        email,
-        new Date().toISOString(),
-      ];
-
-      const result = await appendRowSA(SHEET_IDS.COLLECTION, TABS.OVERRIDES, row);
-
+      // entries: [{ colIndex: '<service-uuid>', value: number }]
+      // Translate to the orchestrator's shape.
+      // P0-1 NOTE: future UI PR should filter to touched-only entries
+      // before this call; the orchestrator already preserves untouched
+      // services that are absent from the array.
+      const touched = entries.map((e) => ({
+        serviceId:   e.colIndex,
+        actualCount: Number(e.value) || 0,
+      }));
+      const result = await saveActuals(accountKey, date, touched, email);
       return NextResponse.json(result);
     }
 
-    // ── sc-submit-clickers: write clicker counts to Drive sheet ──
-    if (action === "sc-submit-clickers") {
-      const { accountKey, spreadsheetId, date, sheetRow, entries } = body;
-
-      if (!accountKey || !spreadsheetId || !date || !sheetRow || !entries?.length) {
-        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+    // ── sc-bulk-submit: save actuals for multiple days ──
+    if (action === "sc-bulk-submit") {
+      const { accountKey, entries } = body;
+      if (!accountKey || !entries?.length) {
+        return NextResponse.json(
+          { success: false, error: "Missing required fields" },
+          { status: 400 }
+        );
       }
-
-      // Same write pattern as actuals but to Clicker Counts tab
-      const sorted = [...entries].sort((a, b) => a.colIndex - b.colIndex);
-      const writePromises = [];
-      let rangeStart = sorted[0].colIndex;
-      let rangeValues = [sorted[0].value];
-
-      for (let i = 1; i <= sorted.length; i++) {
-        const isContiguous = i < sorted.length && sorted[i].colIndex === sorted[i - 1].colIndex + 1;
-        if (isContiguous) {
-          rangeValues.push(sorted[i].value);
-        } else {
-          const startCol = colLetter(rangeStart);
-          const endCol = colLetter(rangeStart + rangeValues.length - 1);
-          const range = `'${TABS.CLICKERS}'!${startCol}${sheetRow}:${endCol}${sheetRow}`;
-          writePromises.push(updateRangeSA(spreadsheetId, range, [rangeValues]));
-
-          if (i < sorted.length) {
-            rangeStart = sorted[i].colIndex;
-            rangeValues = [sorted[i].value];
-          }
-        }
-      }
-
-      const results = await Promise.all(writePromises);
-      const anyFailed = results.some((r) => !r.success);
-
-      // Audit log
-      const auditRow = [
-        new Date().toISOString(), email, userName, accountKey, date,
-        "submit_clickers", JSON.stringify(entries),
-        anyFailed ? "partial" : "success",
-      ];
-      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
-
-      return NextResponse.json({
-        success: !anyFailed,
-        error: anyFailed ? "Some writes failed" : undefined,
-      });
+      // entries: [{ colIndex: '<service-uuid>', date: 'YYYY-MM-DD', value: number }]
+      const touched = entries.map((e) => ({
+        serviceId:   e.colIndex,
+        serviceDate: e.date,
+        actualCount: Number(e.value) || 0,
+      }));
+      const result = await saveBulkActuals(accountKey, touched, email);
+      return NextResponse.json(result);
     }
 
-    // ── sc-config-update: update prices and deactivate services ──
+    // ── sc-config-update: change prices, deactivate services (ADMIN) ──
     if (action === "sc-config-update") {
+      // Gate is the corporate-write set (SC_ADMIN_EMAILS via isScAdmin),
+      // not the dev-view SC_ADMINS allowlist. Stage 1 opened the admin
+      // page to 8 corporate users; without this swap, 6 of those 8 would
+      // 403 on save.
+      if (!isScAdmin(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
       const { accountKey, changes } = body;
       if (!accountKey || !changes?.length) {
-        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
-      }
-
-      const { headers, rows } = await readSheetSA(SHEET_IDS.HUB, TABS.CONFIG);
-      const h = {};
-      headers.forEach((name, i) => { h[String(name).trim()] = i; });
-
-      let updated = 0;
-      for (const change of changes) {
-        const rowIdx = rows.findIndex(r =>
-          String(r[h["AccountKey"]] || "").trim() === accountKey &&
-          String(r[h["GroupName"]] || "").trim() === change.groupName &&
-          String(r[h["ServiceName"]] || "").trim() === change.serviceName
+        return NextResponse.json(
+          { success: false, error: "Missing fields" },
+          { status: 400 }
         );
-        if (rowIdx === -1) continue;
-        const sheetRow = rowIdx + 2;
+      }
 
-        if (change.type === "price") {
-          const priceCol = colLetter(h["PricePerPlate"]);
-          await updateRangeSA(SHEET_IDS.HUB, `'${TABS.CONFIG}'!${priceCol}${sheetRow}`, [[change.to]]);
-          updated++;
+      // Per-change validation for price entries. Stage 2 = today + future
+      // only; backdate is out of scope and rejected. effectiveDate is
+      // REQUIRED on every price change so the orchestrator's "today" fallback
+      // (which is UTC-today on Vercel) never silently fires when a Central
+      // or Eastern operator hits "Today" in the evening. The UI always
+      // supplies the operator's local YYYY-MM-DD wall-clock today.
+      //
+      // The server-side >= floor accepts (server-today-UTC minus 1 day)
+      // intentionally: a CT/ET operator picking "Today" at 8pm sends their
+      // local date, which is yesterday's date in UTC. The 1-day grace is
+      // SAFE - yesterday is never a closed/invoiced day at this stage of
+      // operations, and the UI is the real backstop (it only offers Today
+      // or Future, no backdate). Treat this floor as a coarse sanity check,
+      // not the primary control.
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = (() => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      for (const c of changes) {
+        if (c.type !== "price") continue;
+        if (!c.effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(c.effectiveDate)) {
+          return NextResponse.json(
+            { success: false, error: "effectiveDate required on price changes (YYYY-MM-DD)" },
+            { status: 400 }
+          );
         }
-        if (change.type === "deactivate") {
-          const activeCol = colLetter(h["Active"]);
-          await updateRangeSA(SHEET_IDS.HUB, `'${TABS.CONFIG}'!${activeCol}${sheetRow}`, [["FALSE"]]);
-          updated++;
+        if (c.effectiveDate < yesterday) {
+          return NextResponse.json(
+            { success: false, error: "effectiveDate must be today or future (backdate is not supported in this stage)" },
+            { status: 400 }
+          );
+        }
+        if (!c.reason || typeof c.reason !== "string" || c.reason.trim().length === 0) {
+          return NextResponse.json(
+            { success: false, error: "reason required on price changes" },
+            { status: 400 }
+          );
+        }
+        if (c.reason.length > 280) {
+          return NextResponse.json(
+            { success: false, error: "reason must be 280 characters or fewer" },
+            { status: 400 }
+          );
+        }
+        if (c.requestedBy && (typeof c.requestedBy !== "string" || c.requestedBy.length > 280)) {
+          return NextResponse.json(
+            { success: false, error: "requestedBy must be 280 characters or fewer" },
+            { status: 400 }
+          );
         }
       }
 
-      const auditRow = [new Date().toISOString(), email, userName, accountKey, "config_update", JSON.stringify(changes), "success"];
-      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
+      // UI sends changes as { type, groupName, serviceName, from?, to?,
+      // effectiveDate, reason, requestedBy }. The orchestrator wants
+      // { type, serviceId, newPrice, effectiveDate, notes, requestedBy,
+      // entityLabel }. Resolve (groupName, serviceName) -> serviceId via
+      // a single config read so the route does not query per-change.
+      // Pass entityLabel through too so the orchestrator's changelog
+      // insert doesn't need a second DB round-trip.
+      const config = await loadAccountConfig(accountKey);
+      const translated = changes.map((c) => {
+        const svc = config.services.find(
+          (s) => s.groupName === c.groupName && s.serviceName === c.serviceName
+        );
+        if (!svc) {
+          throw new Error(
+            `Service not found in config: ${c.groupName} / ${c.serviceName}`
+          );
+        }
+        if (c.type === "price") {
+          return {
+            type:          "price",
+            serviceId:     svc.id,
+            newPrice:      Number(c.to),
+            effectiveDate: c.effectiveDate,
+            notes:         c.reason.trim(),
+            requestedBy:   c.requestedBy ? c.requestedBy.trim() : null,
+            entityLabel:   `${c.groupName} - ${c.serviceName}`,
+          };
+        }
+        if (c.type === "deactivate") {
+          return { type: "deactivate", serviceId: svc.id };
+        }
+        if (c.type === "reactivate") {
+          return { type: "reactivate", serviceId: svc.id };
+        }
+        throw new Error(`Unknown change type: ${c.type}`);
+      });
 
-      return NextResponse.json({ success: true, updated });
+      const result = await updateServiceConfig(accountKey, translated, email);
+      return NextResponse.json({ success: true, updated: result.applied });
     }
 
-    // ── sc-config-add: add a new service to an account ──
+    // ── sc-config-add: add a new service to an account (ADMIN) ──
     if (action === "sc-config-add") {
-      const { accountKey, groupName, serviceName, price, taxFree } = body;
+      if (!SC_ADMINS.includes(email)) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+      const { accountKey, groupName, serviceName, price, taxFree, flatFee, nonRevenue } = body;
       if (!accountKey || !groupName || !serviceName) {
-        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Missing fields" },
+          { status: 400 }
+        );
       }
-
-      const configRows = await loadServiceConfig();
-      const acctRows = configRows.filter(r => r.accountKey === accountKey);
-      if (!acctRows.length) {
-        return NextResponse.json({ success: false, error: "Account not found" }, { status: 404 });
-      }
-
-      const { spreadsheetId, category, metaColCount } = acctRows[0];
-      const maxColIndex = Math.max(...acctRows.map(r => r.serviceColIndex));
-      const nextColIndex = maxColIndex + 1;
-      const maxSortOrder = Math.max(...acctRows.map(r => r.sortOrder), 0);
-
-      const newRow = [accountKey, category, spreadsheetId, groupName, serviceName, price || 0, nextColIndex, metaColCount, taxFree ? "TRUE" : "FALSE", maxSortOrder + 10, "TRUE"];
-      await appendRowSA(SHEET_IDS.HUB, TABS.CONFIG, newRow);
-
-      const auditRow = [new Date().toISOString(), email, userName, accountKey, "config_add", `${groupName}/${serviceName}@${price}`, "success"];
-      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, auditRow);
-
-      return NextResponse.json({ success: true, colIndex: nextColIndex });
+      const result = await addService(
+        accountKey,
+        groupName,
+        serviceName,
+        Number(price) || 0,
+        {
+          isFlatFee:    !!flatFee,
+          isTaxFree:    !!taxFree,
+          isNonRevenue: !!nonRevenue,
+        },
+        email
+      );
+      // Legacy response field `colIndex` carried the Sheets column
+      // number; the PG version returns the new service UUID so the UI
+      // can index into the freshly-reloaded calendar shape.
+      return NextResponse.json({ success: true, colIndex: result.serviceId });
     }
 
-    // ── sc-config-request: site lead submits change request ──
+    // ── sc-config-request: site lead submits a config change request ──
     if (action === "sc-config-request") {
       const { accountKey, requestType, groupName, serviceName, newPrice, notes } = body;
       if (!accountKey || !requestType) {
-        return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Missing fields" },
+          { status: 400 }
+        );
       }
-
-      const requestRow = [new Date().toISOString(), email, userName, accountKey, "config_request", `${requestType}: ${groupName || ""}/${serviceName || ""} ${newPrice ? "@" + newPrice : ""} ${notes || ""}`, "pending"];
-      await appendRowSA(SHEET_IDS.COLLECTION, TABS.AUDIT, requestRow);
-
-      return NextResponse.json({ success: true });
+      const result = await submitConfigRequest(
+        accountKey,
+        { requestType, groupName, serviceName, newPrice, notes },
+        email
+      );
+      return NextResponse.json(result);
     }
 
-    return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
+    // ── Deferred actions (Sheets-only features not yet on PG) ──
+    if (action === "sc-day-override") {
+      // sc_day_overrides has no PG analogue today. The legacy table
+      // stored "add a service today" / "mark day closed" decisions in
+      // the COLLECTION sheet. If this feature comes back, design the
+      // PG table first.
+      return NextResponse.json({
+        success: false,
+        error: "Day overrides not available in PG yet",
+      }, { status: 501 });
+    }
+
+    if (action === "sc-submit-clickers") {
+      // Clicker count data was intentionally excluded from the seed
+      // (mapping doc Issue #10). Stays out until use case is revisited.
+      return NextResponse.json({
+        success: false,
+        error: "Clicker counts not available in PG",
+      }, { status: 501 });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Unknown action" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("[ServiceCalendar POST]", error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }

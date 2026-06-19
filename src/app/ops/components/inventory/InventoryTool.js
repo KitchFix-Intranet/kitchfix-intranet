@@ -700,7 +700,7 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
                   ) : (
                     <div className="oh-history-timeline">
                       {filtered.map((h, i) => (
-                        <HistoryEntry key={i} h={h} showAccount={!account}
+                        <HistoryEntry key={h.id || i} h={h} showAccount={!account}
                           prevTotal={i < filtered.length - 1 ? filtered[i + 1]?.total : null} isFirst={i === 0} />
                       ))}
                     </div>

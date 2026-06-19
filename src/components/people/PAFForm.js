@@ -8,6 +8,80 @@ function getLocalISODate() {
   return new Date(now.getTime() - offset).toISOString().split("T")[0];
 }
 
+// REF-006 + REF-007 pay bands (DRAFT, pending Finance validation).
+// Hourly bands keyed by state; leadership bands national.
+const PAY_BANDS = {
+  hourly: {
+    AZ: {
+      Dishwasher:      { min: 15.50, mid: 17.50, max: 20.00 },
+      Cook:            { min: 18.00, mid: 21.00, max: 25.00 },
+      "FOH Attendant": { min: 16.00, mid: 18.50, max: 22.00 },
+      Driver:          { min: 18.00, mid: 21.00, max: 25.00 },
+    },
+    FL: {
+      Dishwasher:      { min: 15.00, mid: 17.00, max: 19.50 },
+      Cook:            { min: 17.50, mid: 20.50, max: 24.00 },
+      "FOH Attendant": { min: 15.50, mid: 18.00, max: 21.00 },
+      Driver:          { min: 17.50, mid: 20.50, max: 24.00 },
+    },
+    TX: {
+      Dishwasher:      { min: 15.00, mid: 17.00, max: 19.50 },
+      Cook:            { min: 18.00, mid: 21.00, max: 25.00 },
+      "FOH Attendant": { min: 15.50, mid: 18.00, max: 21.00 },
+      Driver:          { min: 18.00, mid: 21.00, max: 25.00 },
+    },
+    NY: {
+      Dishwasher:      { min: 16.00, mid: 18.00, max: 20.00 },
+      Cook:            { min: 18.00, mid: 21.00, max: 25.00 },
+      "FOH Attendant": { min: 16.50, mid: 19.00, max: 22.00 },
+      Driver:          { min: 18.00, mid: 21.00, max: 25.00 },
+    },
+    MO: {
+      Dishwasher:      { min: 15.00, mid: 17.00, max: 19.00 },
+      Cook:            { min: 17.00, mid: 20.00, max: 23.50 },
+      "FOH Attendant": { min: 15.50, mid: 18.00, max: 21.00 },
+      Driver:          { min: 17.00, mid: 20.00, max: 23.50 },
+    },
+    OH: {
+      Dishwasher:      { min: 14.50, mid: 16.00, max: 18.00 },
+      Cook:            { min: 16.50, mid: 19.50, max: 23.00 },
+      "FOH Attendant": { min: 14.50, mid: 17.00, max: 20.00 },
+      Driver:          { min: 16.50, mid: 19.50, max: 23.00 },
+    },
+    KY: {
+      Dishwasher:      { min: 14.00, mid: 15.50, max: 17.50 },
+      Cook:            { min: 16.00, mid: 18.50, max: 22.00 },
+      "FOH Attendant": { min: 14.00, mid: 16.50, max: 19.50 },
+      Driver:          { min: 16.00, mid: 18.50, max: 22.00 },
+    },
+  },
+  leadership: {
+    "Sous Chef":           { min: 52000, mid: 60000, max: 72000 },
+    "Hospitality Manager": { min: 55000, mid: 66000, max: 82000 },
+    "Executive Chef":      { min: 80000, mid: 95000, max: 120000 },
+    "General Manager":     { min: 80000, mid: 95000, max: 120000 },
+  },
+};
+
+const STATE_ALIAS = { BUF: "NY" };
+
+function parseStateFromLocation(locationKey) {
+  if (!locationKey) return null;
+  const segments = locationKey.split(" - ");
+  const key = segments[0]?.trim();
+  if (key === "CORP") return null;
+  const raw = segments[1]?.trim();
+  if (!raw) return null;
+  return STATE_ALIAS[raw] || raw;
+}
+
+function getBand(employeeLevel, role, state) {
+  if (!role || role === "Other") return null;
+  if (employeeLevel === "leadership") return PAY_BANDS.leadership[role] || null;
+  if (!state || !PAY_BANDS.hourly[state]) return null;
+  return PAY_BANDS.hourly[state][role] || null;
+}
+
 function getDefaults() {
   return {
     effectiveDate: getLocalISODate(), locationKey: "", locationName: "", employeeName: "",
@@ -23,6 +97,10 @@ actionType: "", actionGroup: "Voluntary", separationReason: "", rehireEligible: 
     perDiem_dinnerProvided: "0", perDiem_bkfstLunch: "0", perDiem_bkfstDinner: "0",
     perDiem_lunchDinner: "0", perDiem_allMeals: "0",
     explanation: "", uploadData: null, uploadFileName: "",
+    // pay_increase fields
+    increaseType: "", employeeLevel: "", role: "", customRole: "",
+    dollarIncrease: "", pctIncrease: "",
+    eligSeasonComplete: false, eligNoDiscipline: false, eligCertsCurrent: false, eligManagerApproved: false,
   };
 }
 
@@ -30,6 +108,7 @@ actionType: "", actionGroup: "Voluntary", separationReason: "", rehireEligible: 
 const ACTION_SPECIFIC_FIELDS = {
 separation: ["actionGroup", "separationReason", "rehireEligible", "lastDayWorked"],
   rate_change: ["oldRate", "newRate"],
+  pay_increase: ["increaseType", "employeeLevel", "role", "customRole", "oldRate", "newRate", "dollarIncrease", "pctIncrease", "eligSeasonComplete", "eligNoDiscipline", "eligCertsCurrent", "eligManagerApproved"],
   title_change: ["oldTitle", "newTitle", "reclassChangeRate"],
   status_change: ["statusChangeDirection"],
   reclassification: ["reclassFrom", "reclassTo", "reclassChangeRate", "reclassTitleChange", "oldTitle", "newTitle"],
@@ -106,32 +185,218 @@ function ActionDetails({ form, update, errors, Formatter, bootstrapData, showTra
     );
   }
 
-  if (type === "rate_change") {
-    const oldNum = parseFloat(form.oldRate) || 0;
-    const newNum = parseFloat(form.newRate) || 0;
+  if (type === "pay_increase") {
+    const state = parseStateFromLocation(form.locationKey);
+    const isLeadership = form.employeeLevel === "leadership";
+    const band = getBand(form.employeeLevel, form.role, state);
+    const oldNum = parseFloat(String(form.oldRate || "").replace(/[^0-9.]/g, ""));
+    const newNum = parseFloat(String(form.newRate || "").replace(/[^0-9.]/g, ""));
     const hasBoth = oldNum > 0 && newNum > 0;
-    const diff = newNum - oldNum;
-    const pct = oldNum > 0 ? ((diff / oldNum) * 100).toFixed(1) : 0;
-    const isRaise = diff > 0;
+    const diff = hasBoth ? newNum - oldNum : 0;
+    const pct = hasBoth && oldNum > 0 ? ((diff / oldNum) * 100).toFixed(1) : "0.0";
+    const isUp = diff > 0;
+
+    // Persist computed values into form state for payload (email/Slack consume these)
+    useEffect(() => {
+      if (!hasBoth) return;
+      const dStr = isLeadership
+        ? `$${Math.abs(diff).toLocaleString("en-US", { minimumFractionDigits: 0 })}`
+        : `$${Math.abs(diff).toFixed(2)}`;
+      const pStr = `${diff >= 0 ? "+" : "-"}${Math.abs(pct)}%`;
+      if (form.dollarIncrease !== dStr) update("dollarIncrease", dStr);
+      if (form.pctIncrease !== pStr) update("pctIncrease", pStr);
+    }, [hasBoth, diff, pct, isLeadership, form.dollarIncrease, form.pctIncrease, update]);
+
+    const hourlyRoles = ["Dishwasher", "Cook", "FOH Attendant", "Driver", "Other"];
+    const leadershipRoles = ["Sous Chef", "Hospitality Manager", "Executive Chef", "General Manager", "Other"];
+
+    // Mid-season detection: effective date between April 1 and September 30
+    const eff = form.effectiveDate ? new Date(form.effectiveDate + "T00:00:00") : null;
+    const effMonth = eff ? eff.getMonth() : -1;
+    const isMidSeason = effMonth >= 3 && effMonth <= 8;
 
     return (
       <>
-        <label className="pp-label">What are they making now?</label>
-        <CurrencyInput value={form.oldRate} onChange={(v) => update("oldRate", v)} error={errors.oldRate} />
-        <label className="pp-label">What will the new rate be?</label>
-        <CurrencyInput value={form.newRate} onChange={(v) => update("newRate", v)} error={errors.newRate} />
+        {/* Increase type */}
+        <label className="pp-label">Increase type</label>
+        <div className="pp-pill-group" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+          {["Merit", "Market / structural", "Promotion", "Equity", "Retention"].map((t) => (
+            <button key={t} type="button"
+              className={`pp-pill-option${form.increaseType === t ? " pp-pill-option--active" : ""}`}
+              onClick={() => update("increaseType", t)}>{t}</button>
+          ))}
+        </div>
 
-        {hasBoth && diff !== 0 && (
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700,
-            background: isRaise ? "#ecfdf5" : "#fef2f2",
-            color: isRaise ? "#059669" : "#dc2626",
-            marginTop: 4,
-          }}>
-            {isRaise ? "↑" : "↓"} {isRaise ? "+" : ""}{Formatter.toMoney(diff)} ({isRaise ? "+" : ""}{pct}%)
+        {/* Employee level */}
+        <label className="pp-label">Employee level</label>
+        <div className="pp-pill-group" style={{ marginBottom: 16 }}>
+          {[["hourly", "Hourly"], ["leadership", "Leadership"]].map(([val, label]) => (
+            <button key={val} type="button"
+              className={`pp-pill-option${form.employeeLevel === val ? " pp-pill-option--active" : ""}`}
+              onClick={() => { update("employeeLevel", val); update("role", ""); update("customRole", ""); }}>{label}</button>
+          ))}
+        </div>
+
+        {/* Role */}
+        {form.employeeLevel && (
+          <>
+            <label className="pp-label">Role</label>
+            <div className="pp-pill-group" style={{ marginBottom: form.role === "Other" ? 8 : 16, flexWrap: "wrap", gap: 6 }}>
+              {(form.employeeLevel === "hourly" ? hourlyRoles : leadershipRoles).map((r) => (
+                <button key={r} type="button"
+                  className={`pp-pill-option${form.role === r ? " pp-pill-option--active" : ""}${r === "Other" ? " pp-pill-option--dashed" : ""}`}
+                  style={{ padding: "8px 12px", fontSize: 13 }}
+                  onClick={() => { update("role", r); if (r !== "Other") update("customRole", ""); }}>{r}</button>
+              ))}
+            </div>
+            {form.role === "Other" && (
+              <div style={{ marginBottom: 16 }}>
+                <label className="pp-label" style={{ textTransform: "none" }}>Please specify</label>
+                <input className={`pp-input${errors.customRole ? " pp-input-error" : ""}`}
+                  value={form.customRole} onChange={(e) => update("customRole", e.target.value)}
+                  placeholder="Enter role title..." />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Rate */}
+        <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label className="pp-label">{isLeadership ? "Current salary" : "Current rate"}</label>
+              <CurrencyInput value={form.oldRate} onChange={(v) => update("oldRate", v)} error={errors.oldRate} />
+            </div>
+            <div>
+              <label className="pp-label">{isLeadership ? "Proposed salary" : "Proposed rate"}</label>
+              <CurrencyInput value={form.newRate} onChange={(v) => update("newRate", v)} error={errors.newRate} />
+            </div>
+          </div>
+
+          {hasBoth && diff !== 0 && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px", background: isUp ? "#ecfdf5" : "#fef2f2", borderRadius: 8, marginTop: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isUp ? "#10b981" : "#ef4444"} strokeWidth="2.5">
+                {isUp
+                  ? (<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></>)
+                  : (<><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></>)}
+              </svg>
+              <span style={{ fontWeight: 600, color: isUp ? "#065f46" : "#991b1b" }}>
+                {isUp ? "+" : "-"}{isLeadership ? `$${Math.abs(diff).toLocaleString("en-US")}` : `$${Math.abs(diff).toFixed(2)}`}
+              </span>
+              <span style={{ fontSize: 13, color: isUp ? "#065f46" : "#991b1b" }}>({pct}%)</span>
+            </div>
+          )}
+        </div>
+
+        {/* Band position - hourly only, known roles only */}
+        {form.employeeLevel === "hourly" && band && (
+          <div style={{ marginTop: 20, padding: 16, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+              {[["Minimum", band.min], ["Midpoint", band.mid], ["Maximum", band.max]].map(([label, val]) => (
+                <div key={label} style={{ textAlign: "center", padding: "6px 0" }}>
+                  <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.3px" }}>{label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>${val.toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>
+              {state} {form.role} band - planning baseline, pending Finance validation.
+            </div>
+
+            {newNum > 0 && (() => {
+              const bandPct = Math.round(((newNum - band.min) / (band.max - band.min)) * 100);
+              const clampedPct = Math.min(Math.max(bandPct, 0), 100);
+              const labelStyle = {
+                position: "absolute", top: -24, fontSize: 11, fontWeight: 600, color: "#153968", whiteSpace: "nowrap",
+                ...(clampedPct < 15 ? { left: 0, transform: "none" }
+                  : clampedPct > 85 ? { right: 0, transform: "none", left: "auto" }
+                  : { left: "50%", transform: "translateX(-50%)" }),
+              };
+              const bandMessage = bandPct === 0 ? "at band minimum"
+                : bandPct >= 100 && newNum <= band.max ? "at band maximum"
+                : `within band - ${bandPct}% of range`;
+              return (
+                <>
+                  <div style={{ position: "relative", height: 10, borderRadius: 5, background: "linear-gradient(90deg, #f1f5f9 0%, #dbeafe 50%, #f1f5f9 100%)", marginTop: 20 }}>
+                    <div style={{
+                      position: "absolute", top: -6, width: 3, height: 22, background: "#153968", borderRadius: 2, zIndex: 2,
+                      left: `${clampedPct}%`,
+                      transform: "translateX(-50%)",
+                    }}>
+                      <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", width: 8, height: 8, borderRadius: "50%", background: "#153968" }} />
+                      <div style={labelStyle}>
+                        ${isLeadership ? newNum.toLocaleString("en-US") : newNum.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "#94a3b8" }}>
+                    <span>${band.min.toFixed(2)}</span>
+                    <span>${band.max.toFixed(2)}</span>
+                  </div>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 8, marginTop: 10,
+                    background: newNum > band.max ? "#fffbeb" : "#eff6ff",
+                  }}>
+                    {newNum > band.max ? (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                        <span style={{ fontSize: 13, color: "#92400e" }}>Exceeds band maximum - requires VP Ops + People Ops sign-off</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                        <span style={{ fontSize: 13, color: "#1e40af" }}>
+                          ${newNum.toFixed(2)} is {bandMessage}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
+
+        {/* Eligibility assessment */}
+        <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+          <label className="pp-label" style={{ textTransform: "none" }}>Eligibility assessment</label>
+          {[
+            { key: "eligSeasonComplete", label: "Completed at least one full season or review period", sub: null },
+            { key: "eligNoDiscipline", label: "Not on active disciplinary track", sub: "No Level 3, final written warning, or PIP under SOP-004" },
+            { key: "eligCertsCurrent", label: "Required certifications current", sub: "ServSafe Food Handler + ServSafe Allergen" },
+            { key: "eligManagerApproved", label: "Discussed and approved by your manager", sub: null },
+          ].map((item) => (
+            <label key={item.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form[item.key]} onChange={(e) => update(item.key, e.target.checked)}
+                style={{ width: 18, height: 18, minWidth: 18, marginTop: 1, accentColor: "#153968" }} />
+              <div>
+                <div style={{ fontSize: 13, lineHeight: 1.4 }}>{item.label}</div>
+                {item.sub && <div style={{ fontSize: 11, color: "#94a3b8" }}>{item.sub}</div>}
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {/* Mid-season warning */}
+        {isMidSeason && (
+          <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", background: "#fffbeb", borderRadius: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.4 }}>
+              <strong>Mid-season change detected.</strong> Mid-season rate changes require VP Ops + RDO + People Ops approval. Only genuine promotions qualify.
+            </div>
+          </div>
+        )}
+
+        {/* Rationale */}
+        <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+          <label className="pp-label" style={{ textTransform: "none" }}>Why does this person deserve a raise?</label>
+          <textarea className={`pp-textarea${errors.explanation ? " pp-input-error" : ""}`}
+            value={form.explanation} onChange={(e) => update("explanation", e.target.value)}
+            placeholder="What have they done? What's changed? Be specific."
+            rows={4} />
+        </div>
       </>
     );
   }
@@ -515,6 +780,14 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
     Drafts.save("paf", form);
   }, [form, Drafts]);
 
+  // Migrate stale rate_change drafts to pay_increase (rate_change is historical only).
+  useEffect(() => {
+    if (form.actionType === "rate_change") {
+      setForm((prev) => ({ ...prev, actionType: "pay_increase" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const update = useCallback((key, val) => {
     setForm((prev) => {
       const next = { ...prev, [key]: val };
@@ -545,7 +818,17 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
       if (!form.actionType) errs.actionType = true;
     } else if (step === 2) {
       if (form.actionType === "separation" && !form.separationReason) errs.separationReason = true;
+      // historical only - rate_change drafts auto-map to pay_increase, but keep validation as safety net
       if (form.actionType === "rate_change") {
+        if (!form.oldRate) errs.oldRate = true;
+        if (!form.newRate) errs.newRate = true;
+        if (!form.explanation.trim()) errs.explanation = true;
+      }
+      if (form.actionType === "pay_increase") {
+        if (!form.increaseType) errs.increaseType = true;
+        if (!form.employeeLevel) errs.employeeLevel = true;
+        if (!form.role) errs.role = true;
+        if (form.role === "Other" && !form.customRole) errs.customRole = true;
         if (!form.oldRate) errs.oldRate = true;
         if (!form.newRate) errs.newRate = true;
         if (!form.explanation.trim()) errs.explanation = true;
@@ -726,12 +1009,13 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                  form.actionType === "status_change" ? "Status update for" :
                  form.actionType === "reclassification" ? "Transferring" :
                  form.actionType === "rate_change" ? "Pay adjustment for" :
+                 form.actionType === "pay_increase" ? `Pay increase recommendation for` :
                  actionLabel + " for"} {form.employeeName}
               </p>
               <ActionDetails form={form} update={update} errors={errors} Formatter={Formatter} bootstrapData={bootstrapData} showTravelHelp={showTravelHelp} setShowTravelHelp={setShowTravelHelp} />
 
-              {/* Hide generic notes for separation & status_change (reclass uses the shared one) */}
-              {!["separation", "status_change"].includes(form.actionType) && (
+              {/* Hide generic notes for separation, status_change, and pay_increase (pay_increase renders its own labeled rationale) */}
+              {!["separation", "status_change", "pay_increase"].includes(form.actionType) && (
                 <>
                   <label className="pp-label" style={{ marginTop: 24 }}>
                     {["title_change", "rate_change"].includes(form.actionType) ? "Reason for Change" :
@@ -824,9 +1108,17 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                   form.actionType === "title_change" && form.newTitle && ["New Title", form.newTitle, 2],
                   form.actionType === "title_change" && form.reclassChangeRate === "Yes" && form.newRate && ["New Rate", Formatter.toMoney(form.newRate), 2],
 
-                  // Rate Change
+                  // Rate Change (historical only)
                   form.actionType === "rate_change" && form.oldRate && ["Old Rate", Formatter.toMoney(form.oldRate), 2],
                   form.actionType === "rate_change" && form.newRate && ["New Rate", Formatter.toMoney(form.newRate), 2],
+
+                  // Pay Increase Recommendation
+                  form.actionType === "pay_increase" && form.increaseType && ["Increase Type", form.increaseType, 2],
+                  form.actionType === "pay_increase" && form.employeeLevel && ["Employee Level", form.employeeLevel === "leadership" ? "Leadership" : "Hourly", 2],
+                  form.actionType === "pay_increase" && form.role && ["Role", form.role + (form.customRole ? ` (${form.customRole})` : ""), 2],
+                  form.actionType === "pay_increase" && form.oldRate && ["Current " + (form.employeeLevel === "leadership" ? "Salary" : "Rate"), Formatter.toMoney(form.oldRate), 2],
+                  form.actionType === "pay_increase" && form.newRate && ["Proposed " + (form.employeeLevel === "leadership" ? "Salary" : "Rate"), Formatter.toMoney(form.newRate), 2],
+                  form.actionType === "pay_increase" && form.dollarIncrease && ["Increase", `${form.dollarIncrease} (${form.pctIncrease})`, 2],
 
                   // Amount-based
                   ["add_bonus", "add_deduction", "add_gratuity", "other_reimbursement"].includes(form.actionType) && form.amount && ["Amount", Formatter.toMoney(form.amount), 2],

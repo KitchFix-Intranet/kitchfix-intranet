@@ -45,23 +45,27 @@ export const CLASS_FAMILY = {
 // Status palette - Pending is the ghost (transparent fill, faint border) so
 // it recedes in build-out where it's the default state. The other statuses
 // get slightly more saturated tints so they pop against the Pending wallpaper.
-// Placeholder uses soft lavender - calm, distinct from Draft (amber) and
-// Pending (ghost), quieter than alarm-leaning Blocked (red).
+// Placeholder uses soft lavender - calm, distinct from Pending (ghost),
+// quieter than alarm-leaning Blocked (red).
+//
+// pr-7-8 dropped 'Draft' from the schema; the Draft palette entry is
+// retired here too. Any stray UI reference would silently fall back to the
+// Pending ghost via the STATUS_COLORS[s] || STATUS_COLORS.Pending pattern
+// in the consumers.
 export const STATUS_COLORS = {
   "Live":        { bg: "#a7f3d0", color: "#065f46", ghost: false },
   "In Build":    { bg: "#bfdbfe", color: "#1e3a8a", ghost: false },
-  "Draft":       { bg: "#fde68a", color: "#92400e", ghost: false },
   "Pending":     { bg: "transparent", color: "#94a3b8", ghost: true },
   "Placeholder": { bg: "#e9e3f5", color: "#6b46c1", ghost: false },
   "Blocked":     { bg: "#fecaca", color: "#991b1b", ghost: false },
 };
 
 // Ordered list used by the admin metrics rollup (and any other UI that
-// needs a stable status order).
+// needs a stable status order). Retired is intentionally excluded (it never
+// appears in operator views; the admin worklist retires by row removal).
 export const ALL_STATUSES = [
   "Live",
   "In Build",
-  "Draft",
   "Pending",
   "Placeholder",
   "Blocked",

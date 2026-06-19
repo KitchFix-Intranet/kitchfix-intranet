@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { CATEGORIES, DELIVERY_METHODS, PAYMENT_TERMS as PAYMENT_TERMS_OPTIONS } from "@/lib/vendorEnums";
+import { CATEGORIES, CATEGORY_COLORS, DELIVERY_METHODS, PAYMENT_TERMS as PAYMENT_TERMS_OPTIONS } from "@/lib/vendorEnums";
 
 const DELIVERY_DAY_OPTIONS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -542,22 +542,22 @@ export default function VendorEditModal({
                     />
                   </Field>
 <Field label="Category">
-                    <div className="oh-vp-day-row">
+                    <div className="oh-inv-vs-day-chips">
                       {CATEGORIES.map(c => {
-                        const selected = (master.category || "").split(", ").filter(Boolean).includes(c);
+                        // Single-select; first category from any legacy comma-separated
+                        // value is treated as the current selection.
+                        const current = (master.category || "").split(",")[0].trim();
+                        const active = current === c;
                         return (
-                          <label key={c} className="oh-vp-day-toggle">
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => {
-                                const current = (master.category || "").split(", ").filter(Boolean);
-                                const updated = selected ? current.filter(x => x !== c) : [...current, c];
-                                setMaster("category", updated.join(", "));
-                              }}
-                            />
-                            <span>{c}</span>
-                          </label>
+                          <button
+                            key={c}
+                            type="button"
+                            className={`oh-inv-vs-day-chip${active ? " oh-inv-vs-day-chip--active" : ""}`}
+                            style={active ? { background: (CATEGORY_COLORS[c] || "#64748b") + "20", borderColor: CATEGORY_COLORS[c] || "#64748b", color: CATEGORY_COLORS[c] || "#64748b" } : {}}
+                            onClick={() => setMaster("category", c)}
+                          >
+                            {c}
+                          </button>
                         );
                       })}
                     </div>

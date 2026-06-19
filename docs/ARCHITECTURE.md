@@ -2,7 +2,9 @@
 
 > **Purpose:** The 30,000-ft view of how this system is wired. Read this before touching anything new.
 >
-> **Last verified:** 2026-05-05
+> **Last verified:** 2026-06-12 (close-out alignment)
+>
+> **Live per-module state lives in [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md).** This doc is the spatial mental model; that one is the source of truth for which modules sit on PG vs Sheets.
 > **Verified against:** `src/lib/sheets.js`, `src/lib/auth.js`, `src/middleware.js`, `vercel.json`, `package.json`
 
 ---
@@ -14,32 +16,83 @@
 | Framework | Next.js 16 (App Router) |
 | UI | React 19 |
 | Auth | NextAuth v5 + Google OAuth |
-| Database | Google Sheets (five spreadsheets - see below) |
+| Database | **Sheets + Supabase Postgres (dual layer; six modules cut over)** - see "Data layer" below |
 | File storage | Google Drive |
 | Email | Gmail API |
-| AI | Anthropic Claude API (Invoice OCR, vendor auto-detect, inventory matching) |
+| AI | Anthropic Claude API (Invoice OCR, vendor auto-detect, document chunk embeddings) |
 | Hosting | Vercel Pro |
-| Background jobs | Vercel cron (4 jobs) + Railway cron (1 job, inventory matching) |
-| Notifications | Slack webhooks (8 channels) |
+| Background jobs | Vercel cron (3 jobs - daily notifications, incident reminders, sheets backup) + Railway cron (1 job - inventory catalog matching, parked with Smart Inventory) |
+| Notifications | Slack webhooks |
 | PDF generation | `pdf-lib` (invoice stamping), WeasyPrint (Pre-Service Materials, separate pipeline) |
 | Styling | Vanilla CSS with module-prefixed classes; Tailwind v4 imported as utility backstop |
 
 ---
 
-## The data layer: Five-Pillar Sheet Architecture
+## The data layer: Sheets + PG dual layer
 
-The system uses **five Google Sheets**, each with a defined role. The header comment in `src/lib/sheets.js` calls this "Three-Pillar Architecture" but lists five - the comment is out of date. The five pillars are the real model.
+After the 2026-04-through-06 migration project (now CLOSED), the system runs on a **dual data layer**: Sheets and Supabase Postgres. Six modules cut over to PG with dual-write to Sheets as rollback net. Six surfaces remain on Sheets pending per-item dispositions (most "leave; rebuild later"). See [`MIGRATION_STATUS.md`](MIGRATION_STATUS.md) for per-module state and [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) for the dispositions.
 
-| Pillar | Constant | Role | Access pattern |
+### Postgres (Supabase) - source of truth for cut-over modules
+
+The six cut-over modules read from PG by default. Schema lives in `docs/migrations/*.sql` (applied manually in Studio - not auto-applied on deploy). Tables include:
+
+| Module | Tables |
+|---|---|
+| News | `news_interactions` |
+| Directory | `accounts`, `contacts`, `hero_images`, `work_locations` |
+| People-submissions | `submissions` (PAFs, incidents structure, etc.) |
+| Vendor | `vendors`, `vendor_aliases`, `vendor_accounts` |
+| Invoice | `invoice_submissions`, `invoice_rejections`, `ai_line_items`, `gl_codes` |
+| Playbook/OPD | `documents`, `document_chunks`, `document_relationships`, `document_surfaces`, `document_issues` |
+| Smart Inventory (parked) | `inventory_items`, `item_aliases`, `price_history`, `review_queue`, `merge_history`, `merge_history_items`, `count_sessions`, `count_items`, `storage_locations` |
+
+Writes to cut-over modules go to **both** Sheets and PG (dual-write); reads come from PG.
+
+### Sheets - the original substrate, now the rollback net + still-on-Sheets surfaces
+
+The original five-spreadsheet model. Still load-bearing for unmigrated modules + still receiving every write from cut-over modules as the rollback net.
+
+| Pillar | Constant | Role | Notes |
 |---|---|---|---|
-| 1. Master Hub | `SHEET_IDS.HUB` | Source of truth - config, accounts, periods, contacts, admins, hero images, notifications, library manifests | Read-only from app |
-| 2. Data Collection | `SHEET_IDS.COLLECTION` | Transaction logs - submissions, drafts, notification log, incidents | Write-heavy |
-| 3. Game Engine | `SHEET_IDS.GAME` | Gamification logic | Write |
-| 4. GL Codes | `SHEET_IDS.GL_CODES` | Chart of accounts for invoice coding | Read-only |
-| 5. AI Line Items | `SHEET_IDS.AI_LINE_ITEMS` | Invoice line items extracted by Claude OCR | Write |
-| (separate) | `SHEET_IDS.INVENTORY` | Inventory schema (8-tab) - items, locations, counts, vendor mapping | Read/write, env-configured |
+| 1. Master Hub | `SHEET_IDS.HUB` | Source of truth - config, accounts, periods, contacts, admins, hero images, notifications, library manifests | Cut-over modules now read PG for accounts/contacts/etc.; HUB writes continue for backup |
+| 2. Data Collection | `SHEET_IDS.COLLECTION` | Transaction logs - submissions, drafts, notification log, incidents, audit | Cut-over modules dual-write here; still-on-Sheets modules write here exclusively |
+| 3. Game Engine | `SHEET_IDS.GAME` | Gamification logic | Sheets-only (no migration target) |
+| 4. GL Codes | `SHEET_IDS.GL_CODES` | Chart of accounts for invoice coding | PG-mirrored as part of Invoice cutover; gl_codes table is the canonical now |
+| 5. AI Line Items | `SHEET_IDS.AI_LINE_ITEMS` | Invoice line items extracted by Claude OCR (per-account tabs) | PG-mirrored; PG is canonical, Sheets is dual-write rollback |
+| (separate) | `SHEET_IDS.INVENTORY` | Inventory schema (8-tab) - items, locations, counts, vendor mapping | Smart Inventory tables exist in PG; both stores write (cron + intranet); Sheets remains canonical for prototype-1 data preservation per the 2026-06-12 no-wipe decision |
 
-When designing a new feature, decide which pillar(s) it touches before writing code. A feature that mixes config (Pillar 1) and transactions (Pillar 2) is normal. A feature that writes to Pillar 1 from the app is wrong - Pillar 1 is configured in Sheets directly.
+**When designing a new feature, build Supabase-native** using the `dataStore` orchestrator pattern (see "Module map" below). The Sheets-only pattern persists in legacy modules but is not the model for new work. See [`MIGRATION_PROJECT_CLOSEOUT.md`](MIGRATION_PROJECT_CLOSEOUT.md) §H for the pattern contrast.
+
+### OPD: MDX is the source of truth, Postgres holds the overlay
+
+The Playbook / OPD module is the one place in the stack where the source of truth is **not** Postgres. After the doc-format arc, repo-canonical MDX (`content/documents/*.mdx`) holds document content + identity + structure. The projection script (`scripts/content/project-catalog.mjs --apply`) derives the Postgres `documents` row from MDX on every run. Postgres holds an **overlay** of operational-lifecycle fields that the projection PRESERVES (never overwrites) so the dashboard can own them as instant, no-deploy edits.
+
+The boundary:
+
+| Lives in | Fields | Edit path |
+|---|---|---|
+| **MDX (`content/documents/*.mdx`)** - the document | id, title, doc_class, version, shelf, sort_order, card_line, summary, keywords, owner, approver, audience, classification, print_required, critical, effective_date, last_reviewed, approved_date, content body, relationships, surfaces | Edit the MDX file -> run projection -> changes land in Postgres on next apply |
+| **Postgres overlay** - operational lifecycle | status, access_level, pinned (in `document_pins`), archived / archived_at, source_drive_id* (dead, retiring), storage_path (reserved) | Edit via the Build Dashboard (becoming "OPD Command") - instant, persists across projection applies |
+
+**The rule:** editing an MDX-authored field anywhere except the MDX file is a silent-data-loss trap. The dashboard can show a value and accept an edit, but the next `--apply` overwrites it. The dashboard rebuild (OPD Command) makes this boundary visible at the cell level - overlay fields are editable; MDX-authored fields are read-only with an "edit in MDX" affordance.
+
+**Projection preserves overlay by omission:** fields the projection doesn't include in `mdxToDocRow` aren't written. PostgREST `.upsert(rows, { onConflict: "id" })` only updates columns present in the INSERT list, so omitted columns ride through ON CONFLICT untouched. Status is the exception (NOT NULL with no default) and uses conditional include - see `GOTCHAS.md` "`documents.status` is NOT NULL with no default."
+
+**Drive is retired as an OPD content source.** The doc-format arc replaced Drive-hosted PDFs with in-app MDX rendering (cover, TOC, print/PDF, the works). `documents.source_drive_id` / `_es` columns and a reader iframe fallback still exist but are scheduled for deletion once the operator-catalog alive-test in `PlaybookClient.js` is unwired from Drive.
+
+### Cutover control plane
+
+`src/lib/cutover.js` parses two env-var-derived flag sets at module load:
+
+```js
+DUAL_WRITE_TABLES=table_a,table_b,...        // mirror to PG on writes
+READ_FROM_POSTGRES=table_a,table_b,...       // read from PG (instead of Sheets)
+READ_FROM_POSTGRES_<MODULE>=table_a,...      // per-module read flag override
+```
+
+Each `dataStore/<module>.js` orchestrator dispatches based on `isDualWrite(tab)` and `isReadFromPostgres(tab, module)` checks. Sheets writes are **unconditional** in every orchestrator; PG writes are conditional on the dual-write flag.
+
+**Structural gap:** there is no flag to stop Sheets writes once a module is cut over. Removing a table from `DUAL_WRITE_TABLES` stops PG writes (a misconfiguration that produces silent PG-stale), not Sheets writes. Sheets retirement requires either inverted semantics or a third `FREEZE_SHEETS_TABLES` flag - neither is built. Not urgent.
 
 ---
 
@@ -128,18 +181,22 @@ API routes use the **action-dispatch pattern** (one route file, many action hand
 
 | File | Role |
 |---|---|
-| `sheets.js` | All Sheets API calls (read/write, both auth paths). The data layer. |
+| `sheets.js` | All Sheets API calls (read/write via service account). The Sheets-side data layer. |
+| `supabase.js` | Supabase client + `getServiceClient()`. The PG-side data layer entry point. |
+| `cutover.js` | Migration control plane - parses `DUAL_WRITE_TABLES` / `READ_FROM_POSTGRES` flags. Every orchestrator gates on this. |
+| `dataStore/` | Per-module orchestrators that dispatch Sheets/PG via flag checks. One file per module: `invoice.js`, `vendor.js`, `directory.js`, `submissions.js`, `inventory.js`, `newsInteractions.js`, `opd.js`, plus `index.js` (re-export hub) and `shared.js` (common helpers). **This is the pattern for new feature work.** |
 | `auth.js` | NextAuth config, token refresh logic |
 | `drive.js` | Drive uploads (invoice images, stamped PDFs, multi-page invoices) |
 | `gmail.js` | Outbound email (invoice notifications, rejections) |
-| `analytics.js` | Stub - no-op `logEventSA` only (kept while `auth.js` and `incident-reminders` still import it; full removal pending). See PR #34. |
+| `analytics.js` | Stub - no-op `logEventSA` only (kept while `auth.js` and `incident-reminders` still import it; full removal pending). |
 | `opsUtils.js` | Shared helpers - `parseNum`, `formatCurrency`, `generateId`, `cachedRead`, account/period config, vendor lookup, Slack posting |
-| `incidentActions.js` | Incident Center business logic - ID generation, Drive folders, escalation |
+| `incidentActions.js` | Incident Center business logic (direct Sheets pattern - module not migrated; rebuild Supabase-native when prioritized) |
 | `incidentSchema.js` | Incident column definitions, types, statuses, regional director mapping |
-| `inventoryActions.js` | Inventory Manager business logic |
-| `invoiceActions.js` | Invoice Capture business logic |
+| `inventoryActions.js` | Inventory Manager business logic (writes through `dataStore.inventory`; Smart Inventory currently parked) |
+| `invoiceActions.js` | Invoice Capture business logic (writes through `dataStore.invoice`) |
 | `peopleReport.js` | Weekly/monthly People Portal email reports |
 | `stampInvoice.js` | PDF stamping pipeline (`pdf-lib`) |
+| `performanceChain.js`, `wowPlanActions.js`, `performanceAcl.js`, `performanceActions.js` | Leadership Dugout helpers (direct Sheets pattern - module not migrated; defer per close-out §D) |
 
 ### Components
 
@@ -164,7 +221,9 @@ All cron routes require `Authorization: Bearer ${CRON_SECRET}` header. Vercel se
 
 ### Railway cron (separate repo: `KitchFix-Intranet/kitchfix-inventory-cron`)
 
-Runs nightly. Calls Anthropic Claude in 50-item batches to AI-match invoice line items against the inventory catalog. Writes results back to the inventory sheet.
+Runs nightly. Calls Anthropic Claude in 50-item batches to match invoice line items against the inventory catalog. Writes results back to both stores (Sheets + PG).
+
+**Status:** parked 2026-06-12 alongside Smart Inventory. Cron keeps running (data accumulates as input for the v2 design). Cron's role likely goes away entirely in Smart Inventory v2's queries-over-facts model - no catalog to match against. Decision rides with SI un-parking. See [`modules/INVENTORY_MODULE.md`](modules/INVENTORY_MODULE.md) for the v2 reasoning.
 
 ---
 

@@ -14,6 +14,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   CLASS_LABELS,
   CLASS_FAMILY,
@@ -22,7 +23,7 @@ import {
   RELATIONSHIP_LABELS_IN,
 } from "./_shared";
 
-export default function SlideOverReader({ docId, onClose, isOwner = false }) {
+export default function SlideOverReader({ docId, onClose, isOwner = false, onEdit }) {
   // Nav stack supports relationship click-through: clicking a related doc
   // pushes its id onto the stack; back pops. The fetch effect keys off the
   // top of the stack so the panel swaps docs in place. Stack initialized
@@ -117,6 +118,7 @@ export default function SlideOverReader({ docId, onClose, isOwner = false }) {
             setReportOpen={setReportOpen}
             navigateTo={navigateTo}
             isOwner={isOwner}
+            onEdit={onEdit}
           />
         ) : null}
       </aside>
@@ -124,11 +126,13 @@ export default function SlideOverReader({ docId, onClose, isOwner = false }) {
   );
 }
 
-function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner }) {
+function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner, onEdit }) {
   const {
     document: doc,
     relationships,
     surfaces,
+    content_html,
+    content_html_es,
     drive_view_url,
     drive_preview_url,
     drive_view_url_es,
@@ -138,24 +142,36 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
   const classLabel = CLASS_LABELS[doc.doc_class] || doc.doc_class;
   const classFamily = CLASS_FAMILY[doc.doc_class] || "ref";
 
-  // EN/ES language selection - only meaningful when BOTH URLs are present.
-  // Default is "en"; reset back to "en" whenever the reader navigates to a
-  // different doc (the back/forward via relationship clicks rebinds doc.id,
-  // and we don't want a previous doc's language preference to leak forward).
+  // EN/ES language selection - only meaningful when SOMETHING (html OR drive)
+  // exists for both languages. Default is "en"; reset back to "en" whenever
+  // the reader navigates to a different doc (the back/forward via relationship
+  // clicks rebinds doc.id, and we don't want a previous doc's language
+  // preference to leak forward).
   const [lang, setLang] = useState("en");
   useEffect(() => { setLang("en"); }, [doc.id]);
 
-  const hasEn = !!drive_preview_url;
-  const hasEs = !!drive_preview_url_es;
+  // Phase A3: per-language source resolution. Prefer rendered HTML from
+  // document_content (populated by the A4 projection); fall back to the
+  // Drive iframe per-language when content_html is missing. The fallback
+  // is throwaway code, removed in A7 once every Live doc has a content row.
+  const hasEn = !!content_html || !!drive_preview_url;
+  const hasEs = !!content_html_es || !!drive_preview_url_es;
   const showLangToggle = hasEn && hasEs;
-  // Active language. If only one of the two is present, the toggle is hidden
-  // and we just render whichever exists; we never show an empty iframe.
   const activeLang = showLangToggle
     ? lang
     : (hasEn ? "en" : (hasEs ? "es" : "en"));
+  const activeHtml       = activeLang === "es" ? content_html_es      : content_html;
   const activeViewUrl    = activeLang === "es" ? drive_view_url_es    : drive_view_url;
   const activePreviewUrl = activeLang === "es" ? drive_preview_url_es : drive_preview_url;
+  const hasContent = !!activeHtml;
   const hasFile = !!activePreviewUrl;
+  const hasAny = hasContent || hasFile;
+
+  // A6: the in-place "fullView" expand was a placeholder. The slide-over now
+  // hands off to a dedicated full-page route /playbook/d/[docId] for the
+  // real reading surface (wider column, full hierarchy, Print/Save PDF).
+  // The Drive iframe fallback path keeps "Open in Drive" as its escape
+  // hatch; the html-rendered path gets the full-page link.
 
   return (
     <div className="pb-slide-body">
@@ -174,7 +190,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             {doc.status}
           </span>
           {doc.critical && <span className="pb-critical-chip">⚠ Critical</span>}
-          {!hasFile && <span className="pb-nofile-chip">No file yet</span>}
+          {!hasAny && <span className="pb-nofile-chip">No file yet</span>}
         </div>
         <h2 className="pb-slide-title">{doc.title}</h2>
         {doc.card_line && <p className="pb-slide-cardline">{doc.card_line}</p>}
@@ -216,20 +232,24 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         </div>
       )}
 
-      {/* Reader frame
-          - Keyed on `${doc.id}-${activeLang}` so EN/ES language swaps trigger
-            a CSS opacity dip on the wrapper (the existing iframe-reload was
-            a hard cut otherwise; the brief fade signals "different file").
-          - Skeleton (pb-iframe-skeleton) shows until iframe onLoad fires;
-            covers Drive's own loading state with a quiet shimmer.
-          - Pop-out button (top-right corner of frame) is the visible "open
-            full-size in Drive" escape hatch that doesn't require finding the
-            actions row. */}
+      {/* Reader frame - Phase A3 dual-path:
+            - If content_html is present (A4-populated): render the HTML body
+              directly. dangerouslySetInnerHTML is OK here because the HTML is
+              owner-authored output from our own projection pipeline
+              (scripts/content/project-catalog.mjs + lib/md_to_html.mjs), not
+              user input. The renderer also escapes user-content at HTML emit
+              time. NOT to be used with externally-sourced HTML.
+            - Else if drive_preview_url is present: render the Drive iframe
+              fallback as before. This branch is removed in A7 once every
+              Live doc has a content row.
+            - Else: the "No file attached yet" empty state.
+          - Keyed on `${doc.id}-${activeLang}-${hasContent}` so swaps between
+            html-render and iframe-render also trigger the swap animation. */}
       <div
         className="pb-reader-frame"
-        key={`${doc.id}-${activeLang}`}
+        key={`${doc.id}-${activeLang}-${hasContent ? "html" : "drive"}`}
       >
-        {hasFile && (
+        {hasFile && !hasContent && (
           <a
             className="pb-reader-popout"
             href={activeViewUrl}
@@ -245,7 +265,12 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             </svg>
           </a>
         )}
-        {hasFile ? (
+        {hasContent ? (
+          <div
+            className="pb-reader-html"
+            dangerouslySetInnerHTML={{ __html: activeHtml }}
+          />
+        ) : hasFile ? (
           <>
             <div className="pb-iframe-skeleton" aria-hidden="true" />
             <iframe
@@ -270,27 +295,62 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         )}
       </div>
 
-      {/* Actions - single primary "Open in Drive" + Report issue. The
-          previous Print button just opened the same Drive URL, so it was
-          redundant chrome. Pop-out icon on the iframe (above) covers the
-          discoverability case. */}
+      {/* Actions - A6:
+            - html-rendered path: primary action is "Open full page" - hands
+              off to /playbook/d/[docId] for the real reading surface (wider
+              column, full hierarchy, Print/Save PDF).
+            - Drive iframe path: primary action stays "Open in Drive" pointing
+              at the Drive view URL (same as pre-A6).
+            - No-file path: disabled "Open in Drive" placeholder. */}
       <div className="pb-slide-actions">
-        <a
-          className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
-          href={activeViewUrl || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!hasFile}
-          onClick={(e) => { if (!hasFile) e.preventDefault(); }}
-        >
-          Open in Drive
-        </a>
+        {hasContent ? (
+          // A6 polish-2 #7: open in a new tab so the operator keeps the
+          // catalog open while reading (matches the external-link icon's
+          // promise, and gives a sane "back to where I was" without losing
+          // the slide-over's nav stack). target=_blank + rel=noopener for
+          // basic safety.
+          <Link
+            href={`/playbook/d/${encodeURIComponent(doc.id)}${activeLang === "es" ? "?lang=es" : ""}`}
+            className="pb-action pb-action--primary"
+            aria-label={`Read full document: ${doc.title} (opens in a new tab)`}
+            target="_blank"
+            rel="noopener noreferrer"
+            prefetch={false}
+          >
+            Read full document
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginLeft: 6 }}>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </Link>
+        ) : (
+          <a
+            className={`pb-action pb-action--primary${hasFile ? "" : " pb-action--disabled"}`}
+            href={activeViewUrl || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!hasFile}
+            onClick={(e) => { if (!hasFile) e.preventDefault(); }}
+          >
+            Open in Drive
+          </a>
+        )}
         <button
           className="pb-action pb-action--ghost"
           onClick={() => setReportOpen((r) => !r)}
         >
-          🚩 Report issue
+          Report issue
         </button>
+        {isOwner && typeof onEdit === "function" && (
+          <button
+            className="pb-action pb-action--ghost"
+            onClick={() => onEdit(doc.id)}
+            title="Edit this doc's MDX source"
+          >
+            Edit MDX
+          </button>
+        )}
       </div>
 
       {/* SousAI doc-scoped affordance — UI placeholder, NOT wired yet.
@@ -303,7 +363,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         role="button"
         aria-disabled="true"
         tabIndex={-1}
-        title="SousAI is coming soon — this doc-scoped chat isn't wired yet"
+        title="SousAI is coming soon - this doc-scoped chat isn't wired yet"
       >
         <span className="pb-sousai-icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -322,36 +382,41 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         />
       )}
 
-      {/* Summary */}
+      {/* Summary - kept ALWAYS open. The reader opens to content first;
+          summary is the closest thing to the body when the iframe / HTML
+          renderer has loaded. The collapsible metadata below it is the
+          on-demand context. */}
       {doc.summary && (
-        <div className="pb-slide-section">
+        <div className="pb-slide-section pb-slide-section--summary">
           <h3 className="pb-slide-section-title">Summary</h3>
           <p className="pb-slide-text">{doc.summary}</p>
         </div>
       )}
 
+      {/* Metadata sections - collapsed by default via native <details>.
+          Keyboard-accessible without JS. Operators reading the doc do not
+          need the metadata wall; the curator/director who wants it opens it. */}
+
       {/* Keywords */}
       {Array.isArray(doc.keywords) && doc.keywords.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Keywords</h3>
+        <details className="pb-slide-section pb-slide-section--collapsible">
+          <summary className="pb-slide-section-title pb-slide-section-summary">
+            Keywords <span className="pb-slide-section-count">{doc.keywords.length}</span>
+          </summary>
           <div className="pb-tag-row">
             {doc.keywords.map((kw) => (
               <span key={kw} className="pb-tag">{kw}</span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
-      {/* Surfaces — owner-only build/ops intel. Operators don't see this
-          section at all (it's curator vocabulary for a feature nothing
-          consumes yet; an onboarding page will use surfaces to auto-pull
-          tagged docs later). Same gate as /playbook/admin: bootstrap.isOwner
-          (server-computed from the actual signed-in email, never client-
-          supplied). The document_surfaces table + data stay intact - this
-          is presentation-only suppression, not a data model change. */}
+      {/* Surfaces - owner-only build/ops intel. Same gate as /playbook/admin. */}
       {isOwner && Array.isArray(surfaces) && surfaces.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Surfaces</h3>
+        <details className="pb-slide-section pb-slide-section--collapsible">
+          <summary className="pb-slide-section-title pb-slide-section-summary">
+            Surfaces <span className="pb-slide-section-count">{surfaces.length}</span>
+          </summary>
           <div className="pb-tag-row">
             {surfaces.map((s) => (
               <span key={s} className="pb-tag pb-tag--surface">
@@ -364,18 +429,17 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
               </span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
-      {/* Relationships — each row is a button that swaps the reader to the
-          related doc in place (navigateTo pushes onto the reader's nav stack
-          and the parent's fetch effect re-runs). The other doc may have no
-          source_drive_id; the reader's "No file attached yet" state handles
-          that gracefully, so click-through never produces an error or blank
-          iframe even on stub docs. */}
+      {/* Relationships - clicking a row swaps the reader to the related doc
+          via navigateTo. The other doc may have no content; the "No file
+          attached" state handles that gracefully. */}
       {Array.isArray(relationships) && relationships.length > 0 && (
-        <div className="pb-slide-section">
-          <h3 className="pb-slide-section-title">Relationships</h3>
+        <details className="pb-slide-section pb-slide-section--collapsible">
+          <summary className="pb-slide-section-title pb-slide-section-summary">
+            Relationships <span className="pb-slide-section-count">{relationships.length}</span>
+          </summary>
           <ul className="pb-rel-list">
             {relationships.map((r, i) => {
               const label =
@@ -405,12 +469,11 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
               );
             })}
           </ul>
-        </div>
+        </details>
       )}
 
-      {/* Catalog details — fields with no value are hidden entirely (no wall
-          of em-dashes). If every field is empty the whole section is omitted.
-          Real values appear automatically as docs get filled in. */}
+      {/* Catalog details - fields with no value are hidden entirely. If every
+          field is empty the whole section is omitted. */}
       {(() => {
         const details = [
           { label: "Owner",          value: doc.owner },
@@ -423,15 +486,17 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         ].filter((d) => d.value);
         if (details.length === 0) return null;
         return (
-          <div className="pb-slide-section">
-            <h3 className="pb-slide-section-title">Catalog details</h3>
+          <details className="pb-slide-section pb-slide-section--collapsible">
+            <summary className="pb-slide-section-title pb-slide-section-summary">
+              Catalog details <span className="pb-slide-section-count">{details.length}</span>
+            </summary>
             {details.map((d) => (
               <div key={d.label} className="pb-footer-meta-row">
                 <span>{d.label}</span>
                 <strong>{d.value}</strong>
               </div>
             ))}
-          </div>
+          </details>
         );
       })()}
     </div>

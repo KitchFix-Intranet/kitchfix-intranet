@@ -225,9 +225,17 @@ const EmailTemplates = {
       ${this.row("Employee", data.employeeName)}
       ${this.row("Effective", data.effectiveDate)}`;
 
+    // historical only - new submissions use pay_increase
     if (actionKey === "rate_change") {
       body += this.row("Old Rate", this.money(data.oldRate));
       body += this.row("New Rate", this.money(data.newRate));
+    } else if (actionKey === "pay_increase") {
+      const level = data.employeeLevel === "leadership" ? "Leadership" : "Hourly";
+      body += this.row("Role", `${data.role || "-"}${data.customRole ? ` (${data.customRole})` : ""} (${level})`);
+      body += this.row("Increase Type", data.increaseType || "-");
+      body += this.row("Current " + (data.employeeLevel === "leadership" ? "Salary" : "Rate"), "$" + (data.oldRate || "-"));
+      body += this.row("Proposed " + (data.employeeLevel === "leadership" ? "Salary" : "Rate"), "$" + (data.newRate || "-"));
+      if (data.dollarIncrease) body += this.row("Increase", `${data.dollarIncrease} (${data.pctIncrease})`);
 } else if (actionKey === "separation") {
       body += this.row("Type", data.actionGroup);
       body += this.row("Reason", data.separationReason);
@@ -443,7 +451,7 @@ if (action === "bootstrap") {
           { key: "title_change", label: "Change in Title", category: "HR Actions" },
           { key: "status_change", label: "Change Part-Time/Full-Time", category: "HR Actions" },
           { key: "reclassification", label: "Reclassification (Dept Change)", category: "HR Actions" },
-          { key: "rate_change", label: "Change in Rate of Pay", category: "Payroll" },
+          { key: "pay_increase", label: "Pay Increase Recommendation", category: "Payroll" },
           { key: "add_bonus", label: "Add One-Time Bonus", category: "Payroll" },
           { key: "add_deduction", label: "Add One-Time Deduction", category: "Payroll" },
           { key: "add_gratuity", label: "Add Gratuity", category: "Payroll" },
@@ -994,9 +1002,17 @@ if (result.success) {
           const prefix = isEdit ? "Resubmitted" : "New Submission";
           let details = `*PAF - ${prefix}*\n*Type:* ${actionLabel}\n*Employee:* ${f.employeeName || "Unknown"}\n*Location:* ${f.locationName || f.locationKey || "TBD"}\n*Effective:* ${f.effectiveDate || "TBD"}`;
 
+// historical only - new submissions use pay_increase
 if (f.actionType === "rate_change") {
           details += `\n*Old Rate:* $${f.oldRate || "0"}\n*New Rate:* $${f.newRate || "0"}`;
           if (f.explanation) details += `\n*Reason:* ${f.explanation}`;
+} else if (f.actionType === "pay_increase") {
+          const pct = f.pctIncrease ? ` (${f.pctIncrease})` : "";
+          const level = f.employeeLevel === "leadership" ? "Leadership" : "Hourly";
+          details += `\n*Role:* ${f.role || "-"}${f.customRole ? ` (${f.customRole})` : ""} (${level})`;
+          details += `\n*Increase Type:* ${f.increaseType || "-"}`;
+          details += `\n*Current:* $${f.oldRate || "0"}\n*Proposed:* $${f.newRate || "0"}${pct}`;
+          if (f.explanation) details += `\n*Why:* ${f.explanation}`;
 } else if (f.actionType === "separation") {
           details += `\n*Type:* ${f.actionGroup || "N/A"}\n*Reason:* ${f.separationReason || "N/A"}`;
           if (f.lastDayWorked) details += `\n*Last Day Worked:* ${f.lastDayWorked}`;

@@ -1,0 +1,151 @@
+---
+id: TPL-018
+title: Daily Food Safety Log
+doc_class: TPL
+shelf: "Safety, Health & Incident"
+status: In Build
+version: "1.1"
+card_line: "The consolidated daily record a kitchen fills in to prove food-safety compliance. Field structure locked to SOP-008."
+summary: "The consolidated daily log every site keeps to satisfy SOP-008 monitoring. Captures equipment temperatures (AM and PM), receiving, cooking temps, cooling, hot/cold holding checks, TPHC (used by at least one site), reheating, thermometer calibration, warewashing and sanitizer checks, daily corrective-action summary, and PIC + Executive Chef sign-off. Every threshold derives from SOP-008 - this log does not introduce new requirements; it captures what SOP-008 already governs. Where SOP-008 changes, this log follows. v1.1 (F5 2026-06-15) clears the F5-review flags per Kevin's CK-C answer: TPHC stays; no site-specific rows to add."
+keywords:
+  - food safety log
+  - daily log
+  - equipment temperatures
+  - receiving
+  - cooking temp
+  - cooling
+  - hot hold
+  - cold hold
+  - TPHC
+  - reheating
+  - thermometer calibration
+  - warewashing
+  - quat sanitizer
+  - PIC
+  - corrective action
+  - TPL-018
+owner: "Director of Culinary"
+approver: "Senior Director of Operations"
+audience: operator
+classification: "KitchFix Internal"
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+sort_order: 50
+non_canonical_blocks:
+  - "Sample / example rows wrapped inline in <NonCanonical> (no filled-in operator data lives in the source MDX)"
+relationships:
+  - { to: SOP-008, type: implements, from_section: "sections 04, 06, 07, 10, 13" }
+  - { to: SOP-014, type: references, from_section: "SOP-014 monitoring routes here" }
+  - { to: SOP-015, type: references, from_section: "SOP-015 emergency disposition uses this log" }
+  - { to: CHK-003, type: related, from_section: "CHK-003 references this log during inspections" }
+  - { to: TPL-019, type: related, from_section: "TPL-019 cleaning verification references this log's hygiene section" }
+---
+
+<SourceGoverns doc="SOP-008" />
+
+# Purpose
+
+The consolidated daily log every KitchFix kitchen fills in to satisfy SOP-008 Food Safety Management. One log per site per day. Every threshold below derives from SOP-008; nothing here is invented. The PIC owns the log during the day; the Executive Chef verifies at end of day.
+
+> ANCHOR: One log, one day, one site. The blank log structure is the canonical record; filled-in readings are operator data and live on the printed/used copy, not in this source.
+
+# How to use
+
+- Complete the header at the start of shift.
+- Record AM temperatures on equipment before opening.
+- Log each receiving, cooking, cooling, holding, reheating event as it happens (do not batch at end of day).
+- Calibrate thermometers at start of day or when dropped.
+- Run sanitizer checks per the warewashing schedule.
+- PIC signs at end of day; Executive Chef verifies.
+- Any out-of-range reading triggers a corrective-action entry in section 10.
+
+# Header (top of every daily sheet)
+
+- Account / site
+- Date
+- Person in Charge (PIC) on duty
+- Executive Chef (verifying)
+- Shift / day-part (if the site runs multiple)
+
+# Equipment temperatures (record AM and PM)
+
+| Unit | Target | AM temp | AM time | PM temp | PM time | Corrective action |
+|---|---|---|---|---|---|---|
+| Walk-in cooler | <Fact id="cold_hold_temp" /> | | | | | |
+| Reach-in cooler(s) | <Fact id="cold_hold_temp" /> | | | | | |
+| Freezer(s) | <Fact id="frozen_temp" /> | | | | | |
+| Hot-holding unit(s) | <Fact id="hot_hold_temp" /> | | | | | |
+
+Targets per SOP-008 (cold <Fact id="cold_hold_temp" />, frozen <Fact id="frozen_temp" />, hot hold <Fact id="hot_hold_temp" />). Any out-of-range reading requires a corrective-action note.
+
+# Receiving log (each delivery)
+
+| Time | Vendor | Product | Temp at receipt | Cold <Fact id="cold_hold_temp" /> / Hot <Fact id="hot_hold_temp" /> / Frozen solid | Accept / Reject | Corrective action |
+|---|---|---|---|---|---|---|
+
+Per SOP-008 section 04 (approved sources and receiving).
+
+# Cooking temperatures (each cooked item / batch)
+
+| Item | Final internal temp | Target | Pass / Corrective |
+|---|---|---|---|
+
+Targets per SOP-008: 165F poultry/reheated, 155F ground, 145F whole muscle/fish, 135F plant/RTE held hot.
+
+# Cooling log (any cooked item being cooled)
+
+| Item | Start time / temp | 2-hr check (≤ 70F) | 4-hr check (<Fact id="cold_hold_temp" />) | Corrective action |
+|---|---|---|---|---|
+
+Per SOP-008: 135F to 70F within 2 hours, 70F to 41F within the next 4 hours (6 hours total). Failing either gate equals discard.
+
+# Hot / cold holding checks (spot checks through service)
+
+| Item | Temp | Time | Hot <Fact id="hot_hold_temp" /> / Cold <Fact id="cold_hold_temp" /> | Corrective action |
+|---|---|---|---|---|
+
+# Time as Public Health Control (TPHC) log
+
+Used only if the site uses TPHC. TPHC is a documented monitored exception, not the default - the default is temperature control.
+
+| Item | Time removed from temp control | 4-hr discard time | Disposition (served / discarded) |
+|---|---|---|---|
+
+Per SOP-008 TPHC <Fact id="tphc_clock" /> clock.
+
+# Reheating log (for hot holding)
+
+| Item | Temp reached | Target 165F within 2 hr | Corrective action |
+|---|---|---|---|
+
+# Thermometer calibration (start of day, or when dropped)
+
+| Thermometer | Method | Reading | Adjusted? |
+|---|---|---|---|
+
+Per SOP-008: ice-point method (32F) or boiling-point (212F, altitude-adjusted).
+
+# Warewashing and sanitizer checks
+
+| Check | Target | Reading | Corrective action |
+|---|---|---|---|
+| 3-compartment sink wash temp | <Fact id="threecomp_wash_temp" /> | | |
+| Quat sanitizer concentration | <Fact id="quat_ppm" /> | | |
+| Dish machine final rinse | ~<Fact id="warewash_rinse" /> | | |
+
+Per SOP-008 section 10.
+
+# Daily corrective-action summary
+
+Free-text block: any out-of-range reading from sections 1-9, what was done, and who was notified.
+
+# Sign-off
+
+- PIC signature + time
+- Executive Chef verification signature + time
+
+# Field-list lock
+
+This log mirrors SOP-008 section 13 verbatim. The two cannot drift without a coordinated revision: any change to SOP-008's monitoring requirements is followed by a matching update here on the same version cut.

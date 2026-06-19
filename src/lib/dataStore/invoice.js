@@ -429,6 +429,34 @@ async function readInvoiceRejectionsForSubmissionSheets(uuid) {
   }];
 }
 
+async function readLatestRejectionsForSubmissionsSheets(uuids) {
+  // Sheets path: rejection metadata is embedded in cols R-U of each
+  // submission row. One sheet read for the whole batch (avoids N+1).
+  // Returns a map { uuid: { rejectionReason, rejectionNote, rejectedBy,
+  // rejectedAt } } matching the PG-path shape. Submissions without any
+  // rejection data are omitted from the map.
+  if (!uuids || uuids.length === 0) return {};
+  const wanted = new Set(uuids.map(String));
+  const { rows } = await safeRead(SHEET_IDS.COLLECTION, INVOICE_SUBMISSIONS_TAB);
+  const out = {};
+  for (const r of rows) {
+    const u = String(r[SUB_IDX.uuid] || "").trim();
+    if (!wanted.has(u)) continue;
+    const reason = String(r[SUB_IDX.rejectionReason] || "").trim();
+    const note   = String(r[SUB_IDX.rejectionNote]   || "").trim();
+    const by     = String(r[SUB_IDX.rejectedBy]      || "").trim();
+    const at     = String(r[SUB_IDX.rejectedAt]      || "").trim();
+    if (!reason && !note && !by && !at) continue;
+    out[u] = {
+      rejectionReason: reason,
+      rejectionNote:   note,
+      rejectedBy:      by,
+      rejectedAt:      at,
+    };
+  }
+  return out;
+}
+
 async function readAILineItemsForInvoiceSheets(invoiceUuid, accountKey) {
   // Sheets adapter requires the accountKey to locate the per-account tab.
   // PG adapter does not (account_key column is in row).
@@ -670,7 +698,16 @@ async function insertAILineItemsSheets(invoiceUuid, lineItems, opts = {}) {
     item.catchWeightMarker || "",                                                       // W (22)
     item.rawColumns != null ? JSON.stringify(item.rawColumns) : "",                     // X (23)
   ]);
-  await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
+  // appendRowsSA catches Sheets API errors and returns {success:false, error}
+  // instead of throwing. The pre-2026-06-17 code path didn't check the return,
+  // so a Sheets-API failure silently no-op'd while the caller proceeded to
+  // write PG -- the inverse silent-gap shape of the 2026-06-12 pg_failed bug.
+  // Surface failures here so insertAILineItems' Sheets-first ordering leaves
+  // a clean both-stores-empty state when Sheets errors.
+  const r = await appendRowsSA(SHEET_IDS.AI_LINE_ITEMS, accountKey, rows);
+  if (!r || r.success !== true) {
+    throw new Error(`[dataStore.invoice.sheets] insertAILineItems: ${r?.error || "unknown Sheets append failure"}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -766,6 +803,101 @@ async function readInvoiceRejectionsForSubmissionPostgres(submissionUuid) {
     unrejectedAt: pgTimestampToCanonical(r.unrejected_at),
     unrejectedBy: r.unrejected_by || "",
   }));
+}
+
+async function readLatestRejectionsForSubmissionsPostgres(uuids) {
+  // Batch fetcher used by operator history hydration. Two round-trips:
+  // (1) client_uuid -> id mapping (invoice_rejections.submission_id FKs the
+  //     integer id, not the client_uuid)
+  // (2) active rejections for those ids
+  // Returns { client_uuid: { rejectionReason, rejectionNote, rejectedBy,
+  // rejectedAt } }. "Active" = unrejected_at IS NULL. If a submission has
+  // multiple active rows (defensive; should be 0 or 1), the most recent
+  // by rejected_at wins.
+  if (!uuids || uuids.length === 0) return {};
+  const supabase = getServiceClient();
+  const { data: subs, error: subErr } = await supabase
+    .from("invoice_submissions")
+    .select("id, client_uuid")
+    .in("client_uuid", uuids);
+  if (subErr) throw new Error(`[dataStore.invoice.pg] getLatestRejections submission lookup: ${subErr.message}`);
+  if (!subs || subs.length === 0) return {};
+  const idToUuid = new Map();
+  const ids = [];
+  for (const s of subs) {
+    idToUuid.set(s.id, s.client_uuid);
+    ids.push(s.id);
+  }
+  const { data: rejs, error: rejErr } = await supabase
+    .from("invoice_rejections")
+    .select("submission_id, rejected_at, rejected_by, reason, note")
+    .in("submission_id", ids)
+    .is("unrejected_at", null)
+    .order("rejected_at", { ascending: false });
+  if (rejErr) throw new Error(`[dataStore.invoice.pg] getLatestRejections: ${rejErr.message}`);
+  const out = {};
+  for (const r of rejs || []) {
+    const uuid = idToUuid.get(r.submission_id);
+    if (!uuid) continue;
+    if (out[uuid]) continue; // first occurrence = most recent (ordered DESC)
+    out[uuid] = {
+      rejectionReason: r.reason || "",
+      rejectionNote:   r.note || "",
+      rejectedBy:      r.rejected_by || "",
+      rejectedAt:      pgTimestampToCanonical(r.rejected_at),
+    };
+  }
+  return out;
+}
+
+async function readUnfixedReturnedInvoicesPostgres() {
+  // Used by the daily cron to email/notify operators whose invoices were
+  // returned by AP but not yet corrected after 3 days. Two round-trips:
+  // (1) all submissions with status='returned' AND status_updated_at
+  //     older than 3 days
+  // (2) any submissions that point back at those via corrected_from_uuid
+  //     (operator did re-submit, but the new row may not have flipped the
+  //     original to 'corrected' yet - belt-and-suspenders check)
+  // Returns only the still-unfixed submissions.
+  const supabase = getServiceClient();
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+  const { data: returned, error: retErr } = await supabase
+    .from("invoice_submissions")
+    .select("client_uuid, submitter_email, vendor_name, invoice_number, account_key, total_amount, status_updated_at")
+    .eq("status", "returned")
+    .lt("status_updated_at", threeDaysAgo);
+  if (retErr) throw new Error(`[dataStore.invoice.pg] getUnfixedReturnedInvoices returned lookup: ${retErr.message}`);
+  if (!returned || returned.length === 0) return [];
+
+  const uuids = returned.map((r) => r.client_uuid);
+  const { data: corrections, error: corrErr } = await supabase
+    .from("invoice_submissions")
+    .select("corrected_from_uuid")
+    .in("corrected_from_uuid", uuids);
+  if (corrErr) throw new Error(`[dataStore.invoice.pg] getUnfixedReturnedInvoices corrections lookup: ${corrErr.message}`);
+  const correctedSet = new Set((corrections || []).map((c) => c.corrected_from_uuid).filter(Boolean));
+
+  return returned
+    .filter((r) => !correctedSet.has(r.client_uuid))
+    .map((r) => ({
+      uuid:            r.client_uuid,
+      submitterEmail:  r.submitter_email || "",
+      vendorName:      r.vendor_name || "",
+      invoiceNumber:   r.invoice_number || "",
+      accountKey:      r.account_key || "",
+      totalAmount:     r.total_amount != null ? Number(r.total_amount) : 0,
+      statusUpdatedAt: pgTimestampToCanonical(r.status_updated_at),
+    }));
+}
+
+async function readUnfixedReturnedInvoicesSheets() {
+  // No Sheets implementation: the daily-cron 3-day reminder is a PG-era
+  // capability that depends on status_updated_at semantics + the
+  // corrected_from_uuid back-reference query. If the cutover is rolled
+  // back, the cron should not fire (silent no-op + console warning) rather
+  // than try to scan the whole sheet for stale returned rows.
+  console.warn("[dataStore.invoice] getUnfixedReturnedInvoices: Sheets path is a no-op; cron 3-day reminder requires PG read.");
+  return [];
 }
 
 async function readAILineItemsForInvoicePostgres(invoiceUuid) {
@@ -1147,6 +1279,50 @@ export async function getInvoiceRejectionsForSubmission(submissionUuid, opts = {
     return readInvoiceRejectionsForSubmissionPostgres(submissionUuid);
   }
   return readInvoiceRejectionsForSubmissionSheets(submissionUuid);
+}
+
+/**
+ * Batch fetch the most recent ACTIVE rejection per submission UUID.
+ * Used by operator history to hydrate rejection reason / note / by / at
+ * after the main submissions read. The PG submissions read path leaves
+ * these fields empty (rejections live in a separate child table); this
+ * function fills them via a post-query enrichment.
+ *
+ * Returns a map { uuid: { rejectionReason, rejectionNote, rejectedBy,
+ * rejectedAt } } that callers merge into their submission objects.
+ * Submissions with no active rejection are absent from the map.
+ *
+ * Empty input -> empty map (no network call).
+ *
+ *   opts: { module? }
+ */
+export async function getLatestRejectionsForSubmissions(uuids, opts = {}) {
+  if (!uuids || uuids.length === 0) return {};
+  if (isReadFromPostgres(INVOICE_REJECTIONS_TAB, opts.module)) {
+    return readLatestRejectionsForSubmissionsPostgres(uuids);
+  }
+  return readLatestRejectionsForSubmissionsSheets(uuids);
+}
+
+/**
+ * Submissions that were returned by AP more than 3 days ago AND have NOT
+ * yet been corrected (no other submission carries their uuid as
+ * corrected_from_uuid). Used by the daily cron for the 3-day reminder
+ * email + bell. Returns an array of plain summary objects:
+ *   { uuid, submitterEmail, vendorName, invoiceNumber, accountKey,
+ *     totalAmount, statusUpdatedAt }
+ * Empty when nothing is overdue.
+ *
+ *   opts: { module? }
+ *
+ * NOTE: Sheets path is intentionally a no-op (returns []) - the 3-day
+ * reminder is a PG-era capability. See readUnfixedReturnedInvoicesSheets.
+ */
+export async function getUnfixedReturnedInvoices(opts = {}) {
+  if (isReadFromPostgres(INVOICE_SUBMISSIONS_FLAG, opts.module)) {
+    return readUnfixedReturnedInvoicesPostgres();
+  }
+  return readUnfixedReturnedInvoicesSheets();
 }
 
 /**

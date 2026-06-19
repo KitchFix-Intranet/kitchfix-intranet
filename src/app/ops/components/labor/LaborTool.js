@@ -15,10 +15,20 @@ const ADMIN_EMAILS = [
   "s.castro@kitchfix.com",
 ];
 
+// ── Helpers for landing-card display ──
+function nextLabelFor(nh) {
+  if (!nh) return { text: "Season complete", tone: "neutral" };
+  if (nh.status === "in_progress") return { text: "Active now", tone: "active" };
+  if (nh.status === "actuals_due") return { text: "Actuals due", tone: "alert" };
+  if (nh.status === "upcoming") return { text: `Next: ${nh.dates}`, tone: "upcoming" };
+  return { text: `Next: ${nh.dates || nh.id || ""}`, tone: "upcoming" };
+}
+
 export default function LaborTool({ config, showToast, openConfirm, onNavigate }) {
   const { data: session } = useSession();
   const [account, setAccount]               = useState("");
   const [mlbAccounts, setMlbAccounts]       = useState([]);
+  const [crossAccount, setCrossAccount]      = useState([]);
   const [loading, setLoading]               = useState(true);
   const [plannerData, setPlannerData]        = useState(null);
   const [plannerLoading, setPlannerLoading]  = useState(false);
@@ -37,7 +47,12 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
     setLoading(true);
     fetch("/api/ops?action=labor-bootstrap")
       .then((r) => r.json())
-      .then((d) => { if (d.success) setMlbAccounts(d.mlbAccounts || []); })
+      .then((d) => {
+        if (d.success) {
+          setMlbAccounts(d.mlbAccounts || []);
+          setCrossAccount(d.crossAccount || []);
+        }
+      })
       .catch(() => showToast?.("Failed to load accounts", "error"))
       .finally(() => setLoading(false));
   }, []);
@@ -180,20 +195,61 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
         <div className="oh-tool-body">
           {adminView ? (
             <SeasonAdmin mlbAccounts={mlbAccounts} showToast={showToast} onSelectAccount={handleSelectFromAdmin} />
-          ) : !account ? (
-            <div className="oh-tool-empty">
-              <div className="oh-tool-empty-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5">
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
+          ) : !account ? (() => {
+            // Landing: grid of MLB accounts with live summary from crossAccount.
+            // Falls back to a minimal empty state if crossAccount is unavailable.
+            const mlbCards = (crossAccount || []).filter((a) => a.level === "MLB");
+            if (mlbCards.length === 0) {
+              return (
+                <div className="oh-tool-empty">
+                  <h3 className="oh-tool-empty-title">No MLB accounts</h3>
+                  <p className="oh-tool-empty-desc">Nothing to track this season.</p>
+                </div>
+              );
+            }
+            return (
+              <div className="oh-st-landing">
+                <div className="oh-st-landing-head">
+                  <h3 className="oh-st-landing-title">Pick an account to open its season</h3>
+                  <p className="oh-st-landing-sub">Homestand budgets, labor spend, and actuals - organized by account.</p>
+                </div>
+                <div className="oh-st-landing-grid">
+                  {mlbCards.map((a) => {
+                    const variance = Number(a.cumulativeVariance || 0);
+                    const isHealthy = a.completed > 0 && variance >= 0;
+                    const isOver = a.completed > 0 && variance < 0;
+                    const isAlert = (a.nextHomestand && a.nextHomestand.status === "actuals_due");
+                    const accent = isAlert ? "alert" : isHealthy ? "healthy" : isOver ? "over" : "neutral";
+                    const next = nextLabelFor(a.nextHomestand);
+                    const footText = a.completed > 0
+                      ? `${a.completed} of ${a.total} homestands`
+                      : `${a.total} homestands planned`;
+                    return (
+                      <button
+                        key={a.key}
+                        type="button"
+                        className={`oh-st-acct-card oh-st-acct-card--${accent}`}
+                        onClick={() => setAccount(a.key)}
+                      >
+                        <div className="oh-st-acct-card-head">
+                          <span className="oh-st-acct-card-key">{a.key}</span>
+                          <span className="oh-st-acct-card-name">{a.name || ""}</span>
+                        </div>
+
+                        <div className={`oh-st-acct-card-next oh-st-acct-card-next--${next.tone}`}>
+                          {next.text}
+                        </div>
+
+                        <div className="oh-st-acct-card-foot">
+                          {footText}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <h3 className="oh-tool-empty-title">Select an MLB account</h3>
-              <p className="oh-tool-empty-desc">Choose your account to see homestand budgets and track labor spend.</p>
-            </div>
-          ) : showPlannerLoading ? (
+            );
+          })() : showPlannerLoading ? (
             <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>
           ) : showPlanner ? (
             <SeasonPlanner
