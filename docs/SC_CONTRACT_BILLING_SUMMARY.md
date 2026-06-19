@@ -1,4 +1,132 @@
 # Service Calendar - Contract Billing Summary
+<!-- ═══════════════════════════════════════════════════════════════════
+     RESOLVED BILLING DECISIONS - CONTRACT BIBLE
+     Authoritative decision record. Locked 2026-06-18 (Kevin + Chat-Claude,
+     from executed contracts). This section is the source of truth; the
+     per-account contract extraction below it is the supporting detail.
+     When a decision here conflicts with older notes in this doc or in
+     SC_BILLING_MODEL_AUDIT.md, THIS SECTION WINS.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+# Resolved billing decisions (contract bible)
+
+Locked 2026-06-18 from executed contracts. These supersede any earlier
+contradiction in this document, in SC_BILLING_MODEL_AUDIT.md, or in prior chat
+notes.
+
+## The architecture: two kinds of revenue, one control surface
+
+KitchFix revenue splits into two kinds, and they live in two different places:
+
+- **Per-meal / operational revenue** = meals served x per-meal price. This is
+  the Service Calendar's job. The calendar's revenue numbers come from the
+  canonical `sc_daily_revenue` view (effective-dated price x actual count).
+- **Contract revenue** = flat fees, service fees, and postseason per-game
+  billing. This is the contract-revenue layer. It is managed in the admin
+  page and feeds the future KPI dashboard. It is NOT in the Service Calendar.
+
+The admin page is the single control surface. You manage everything there -
+per-meal prices AND contract revenue. The Service Calendar and the future KPI
+dashboard are two different read-only windows onto that data:
+
+- Service Calendar reads per-meal prices (operational revenue).
+- KPI dashboard (future) reads the fee schedule + service fees + postseason
+  (contract revenue).
+
+**The Service Calendar does NOT consume fee data.** Fee accounts show
+operational meal tracking only - no dollar figure on the calendar. Their money
+lives in the contract-revenue layer.
+
+This is the "dashboard owns the data; surfaces consume it" principle: one place
+to edit, multiple places to read, clean separation between operational and
+contract revenue.
+
+## Passthrough is never revenue
+
+Several contracts include a food/packaging/supplies budget reimbursed at cost.
+These are net-zero margin - billed and collected, but paid straight through to
+suppliers. **They are excluded from all revenue figures**, everywhere. Counting
+them inflates topline. Excluding them is also what collapses every fee account
+to a single clean annual number.
+
+Passthrough lines (excluded):
+- CIN - OH: food and disposable supplies budget (at cost, Net 30)
+- STL - MO: $225,000 food/packaging/supplies budget
+- STL - FL: $900,000 food/packaging/supplies budget
+
+## Fee schedule - the contract-revenue layer (Bundle 1)
+
+These are the flat-fee accounts. Revenue = the service/fee portion only,
+passthrough excluded. Effective-dated (a CPI bump or renegotiation is a new
+dated row, never an overwrite). Managed in the admin; feeds the future KPI
+dashboard; the calendar does not show these dollars.
+
+| Account | Category | 2026 revenue (fee) | Structure | Escalator | Notes |
+|---|---|---|---|---|---|
+| **CIN - OH** | MLB | **$362,500** | 6 monthly installments (Mar-Aug) | CPI-U Food Away from Home, Aug-to-Aug, floor 1% / cap 4% | Food/supplies passthrough excluded. Postseason add-ons deferred. |
+| **STL - MO** | MLB | **$473,000** | $423,000 meal services (6 monthly from Mar 1) + $50,000 road food (annual Mar 1) | CPI-U Food Away from Home (CUUR0000SEFV), Aug-to-Aug, no floor/cap | $225K passthrough excluded. The old "$489,431" figure was a CPI-escalated version of this $473K service portion. The "$698K" is the contract gross including passthrough - store $473K. Postseason deferred. |
+| **TXR - TX - H** | MLB | **$604,032** | 6 monthly installments (Apr-Sep), ~$100,672 pre-tax each | None (direct 10% YoY; prior year was $549,120) | Single-year 2026 contract. Postseason pro-rata per game, deferred. |
+| **TXR - TX - V** | MLB | **$0** (covered by H) | Bundled into TXR - TX - H's $604,032 | n/a | Do NOT bill separately - it would double-count H. Marker: "covered by TXR-TX-H contract." Real visiting-team direct-sales revenue is tracked in Season Tracker (sold revenue x 19.23% labor model), out of scope for the fee schedule. |
+| **STL - FL** | PDC (promoted to fee) | **$1,400,000** | Florida Services fee, quarterly installments (Nov 1 / Feb 1 / May 1 / Aug 1) | None stated (co-terminous with STL-MO base) | $900K food passthrough excluded. Upkeep budgets ($15K equipment + $4K storage pod + $11K ST cooler) are KitchFix-borne expense/budget lines, not revenue - excluded. KitchFix is responsible for labor and expenses per the Amendment. 2027 work-stoppage standby fees ($350K full / $175K half) are conditional/date-bounded, track in notes only. |
+
+**STL - FL is promoted to a true fee account.** Its per-meal prices are no
+longer tied to the Service Calendar's revenue. It remains a PDC operationally
+(operators still enter actuals for ordering/labor/waste - that is an internal
+operational matter, not a billing input). For revenue, STL-FL is the $1.4M fee.
+
+## Service fees - contract-revenue layer, LATER stage (not Bundle 1)
+
+These accounts bill a flat service fee ON TOP OF per-meal. The per-meal side is
+already in the Service Calendar. The service-fee side needs to be tracked in the
+contract-revenue layer alongside the fee schedule - but in a LATER stage, not
+Bundle 1. Until then, these accounts' total revenue is understated by the
+service-fee amount. Accepted.
+
+| Account | Service fee (annual) | Escalator | Per-meal relationship |
+|---|---|---|---|
+| **CIN - AZ** | $402,016 (2023 base, = 30% of budget estimate) | CPI-U Food Away from Home, Oct base, floor 2% / cap 5% | **The 30% service fee is why per-meal is billed at the 70% cost basis.** $29.01 MLB x 0.70 = $20.31; $18.42 MiLB x 0.70 = $12.90. The "$29.01 vs $20.31 gap" is NOT a missing amendment - it is this mechanic. (Confirm no separate amendment exists; conversion-to-flat-fee conversation ongoing per ABR 2025, not executed.) |
+| **TBJ - FL** | $452,812/yr | CPI Food Away from Home, one increase per year, Provider notice by Jan 31 | Service fee does NOT discount per-meal - both revenue streams run at full rate in parallel. **MFN/favored-pricing clause** (see open items). |
+| **TBR - FL (MiLB)** | $382,448 (2024 one-time front-load: $200K on signing + $182,448 by Feb 1 2024) | 75% of CPI Food Away from Home, Nov-to-Nov | MiLB per-meal rates carry a 25% discount "during the Term" to amortize the fee. **Renewal status for 2026 unconfirmed** (see open items). |
+
+## Postseason - deferred to a later stage
+
+If a team makes the playoffs, service continues and KitchFix bills per game at
+the contracted rate. Real contract revenue, but conditional and months out -
+deferred, not in Bundle 1.
+
+| Account | Postseason game | Postseason workout | Other |
+|---|---|---|---|
+| CIN - OH | $4,413.58 (1/81 of Services Fee) | $2,206.79 (50% of game) | + CPI |
+| STL - MO | $5,222.22 | $2,777.78 | Road Food $600 |
+| TXR - TX - H | pro-rata Services Fee per game (~$7,457.93) | - | - |
+
+## Per-meal accounts (Service Calendar, unchanged)
+
+These bill meals x price; the Service Calendar is the billing-relevant surface.
+No fee-schedule entry.
+
+- **CIN - KY** (Louisville Bats, AAA): pure per-meal, $25.95 meals / $8.64 snack. Single-season 2026. Note: the $24K prepayment from the DRAFT was REMOVED in the executed contract.
+- **TBJ - NY** (Buffalo Bisons, AAA): per-meal assumed, $27.34. **No contract on file** (see open items). Snack/Shake deactivated.
+- **TXR - AZ** (Rangers Surprise, PDC): per-meal with a 20% deposit discount (deposit triggers 20% off every per-meal rate). Stored prices are the 80% post-deposit rates. Fixed 2.5%/yr escalation.
+- **CIN - AZ, TBJ - FL, TBR - FL**: per-meal in the calendar (their service fees are tracked separately per above).
+
+## Open items (flagged, not blocking Bundle 1)
+
+1. **TBJ - NY (Buffalo Bisons)** - no contract in the package. Per-meal projection ($27.34) is assumption-only. Need a contract or written confirmation of the operating model.
+2. **CIN - AZ operative 2026 pricing** - the $20.31/$12.90 stored prices are the 70%-of-budget cost basis under the 30% service-fee mechanic. Confirm no separate 2026 amendment exists beyond the 2023 contract + that mechanic.
+3. **MFN / favored-pricing clause (TBJ - FL)** - any per-meal discount given to another account for equivalent-or-lower volume could entitle TBJ-FL to that lower rate. The admin pricing editor has NO awareness of this today. A cross-account MFN warning is a future enhancement, not Bundle 1.
+4. **TXR - AZ 2026 SOW** - missing from the package. 2026 deposit amount and new services (Continental Breakfast, MLB Dinner, Extra Protein) are not contractually sourced.
+5. **TBR - FL MiLB service-fee renewal** - the $382,448 was a 2024 one-time front-load; whether it recurs in 2026 is unconfirmed.
+6. **TBR - FL "B&G" (Boys & Girls Club)** - $6.50/lunch, no written agreement in the package.
+7. **TXR - TX - V scope mismatch** - contract scope is Grab & Go + snacks + coffee only; the Service Calendar models full buffet. Mirroring TXR-TX-H is the agreed stopgap; do not treat the SC service list as contractually authorized.
+8. **CIN - AZ Exhibit B volume threshold** - reads as MiLB rates DROPPING to $16.22 after 72,890 meals, which is HIGHER than the $11.35 base. Likely a typo or pricing-tier construct in the 2023 doc.
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     END RESOLVED DECISIONS. The original per-account contract extraction
+     follows below as supporting detail.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+---
 
 Cross-account billing analysis from the 11-account Service Calendar portfolio,
 built from executed contracts at `/Users/kevinfietek/Documents/Claude /Service Calendars/drive-download-20260615T205813Z-3-001/`
