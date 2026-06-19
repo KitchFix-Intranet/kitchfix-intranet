@@ -147,7 +147,7 @@
 .sc-admin-row-count { font-size: 12px; color: #6b7280; }
 .sc-admin-row-updated { font-size: 12px; color: #9ca3af; font-style: italic; }
 .sc-admin-row-chev { color: #cbd5e1; font-size: 18px; font-weight: 400; line-height: 1; }
-.sc-admin-row-fee-note { font-size: 12px; color: #9ca3af; font-style: italic; }
+.sc-admin-row-fee-amount { font-size: 13px; color: #111827; font-variant-numeric: tabular-nums; font-weight: 600; justify-self: end; }
 
 /* Per-account editor */
 .sc-admin-editor { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -336,6 +336,70 @@
 }
 .sc-admin-toast--error { background: #991b1b; }
 
+/* Fee schedule editor (Bundle 1 Stage 2) */
+.sc-admin-fee-current-card {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-3);
+}
+.sc-admin-fee-active { display: flex; flex-direction: column; gap: 6px; }
+.sc-admin-fee-active-label {
+  font-size: 11px; font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sc-admin-fee-active-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sc-admin-fee-active-meta { font-size: 12px; color: #6b7280; display: flex; gap: 4px; flex-wrap: wrap; }
+.sc-admin-fee-active-actions { margin-top: 8px; }
+
+.sc-admin-fee-bundled { display: flex; flex-direction: column; gap: 4px; }
+.sc-admin-fee-bundled-label {
+  font-size: 11px; font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sc-admin-fee-bundled-text { font-size: 16px; color: #111827; }
+.sc-admin-fee-bundled-text strong { color: #153968; }
+.sc-admin-fee-bundled-note { font-size: 12px; color: #6b7280; font-style: italic; }
+
+/* Wider input for fees - $1,400,000.00 doesn't fit the 140px price box. */
+.sc-admin-fee-input-wrap { max-width: 220px; }
+
+.sc-admin-fee-history { display: flex; flex-direction: column; gap: 8px; margin-top: var(--space-3); }
+.sc-admin-fee-history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sc-admin-fee-history-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: var(--radius-input);
+  font-size: 12px;
+}
+.sc-admin-fee-history-amount { font-weight: 700; color: #111827; font-variant-numeric: tabular-nums; }
+.sc-admin-fee-history-eff { color: #475569; }
+.sc-admin-fee-history-by { color: #6b7280; font-style: italic; }
+.sc-admin-fee-history-when { color: #9ca3af; justify-self: end; }
+.sc-admin-fee-history-reason {
+  grid-column: 1 / -1;
+  color: #6b7280;
+  font-style: italic;
+  font-size: 12px;
+  border-top: 1px dashed #f3f4f6;
+  padding-top: 6px;
+}
+
 /* Mobile */
 @media (max-width: 640px) {
   .sc-admin-row {
@@ -352,7 +416,7 @@
   .sc-admin-row-updated { grid-area: updated; justify-self: end; }
   .sc-admin-row-count { grid-area: count; }
   .sc-admin-row-chev { grid-area: chev; justify-self: end; }
-  .sc-admin-row-fee-note { grid-area: updated; justify-self: end; }
+  .sc-admin-row-fee-amount { grid-area: updated; justify-self: end; }
   .sc-admin-svc-row {
     grid-template-columns: 1fr auto;
     grid-template-areas:
@@ -364,4 +428,11 @@
   .sc-admin-svc-price { grid-area: price; }
   .sc-admin-svc-upcoming { grid-area: up; }
   .sc-admin-svc-edit { grid-area: edit; }
+  .sc-admin-fee-history-row {
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+  }
+  .sc-admin-fee-history-when { grid-column: 2; }
+  .sc-admin-fee-history-by { grid-column: 1; }
+  .sc-admin-fee-history-reason { grid-column: 1 / -1; }
 }

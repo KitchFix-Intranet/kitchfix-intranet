@@ -1,23 +1,27 @@
 "use client";
 // The admin landing. Lists all active non-CORP accounts:
-//   - Per-meal accounts (PDC + STL-FL hybrid + MiLB) are clickable rows
-//     that open the price editor for that account.
-//   - Fee accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) are non-clickable
-//     placeholders with "Fee schedule coming soon" copy; their per-meal
-//     prices are operationally $0 and editing them would mislead.
+//   - Per-meal accounts (PDC + MiLB) are clickable rows that open the per-
+//     service price editor for that account.
+//   - Fee accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V, STL-FL) are clickable
+//     rows that open the fee schedule editor. TXR-TX-V displays "covered by
+//     TXR - TX - H" in place of the dollar amount.
 //
-// Uses GET /api/service-calendar?action=sc-admin-all-config.
+// Two fetches in parallel: sc-admin-all-config (for both sections' base data
+// + per-meal counts) and sc-admin-fee-list (for the current fee amounts).
 // AbortController guards against stale responses if the user clicks fast.
 
 import { useEffect, useState } from "react";
 
 function fmtDate(iso) {
   if (!iso) return "Never";
-  // iso may be a date "YYYY-MM-DD" or a timestamptz; slice the date part.
   const d = iso.slice(0, 10);
   const [y, m, day] = d.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${months[Number(m) - 1]} ${Number(day)}, ${y}`;
+}
+
+function fmtAmount(n) {
+  return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function categoryLabel(level) {
@@ -29,24 +33,27 @@ function categoryLabel(level) {
   return level;
 }
 
-export default function AccountsOverview({ onSelect }) {
+export default function AccountsOverview({ onSelectPerMeal, onSelectFee }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [feesByKey, setFeesByKey] = useState({});
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetch("/api/service-calendar?action=sc-admin-all-config", { signal: controller.signal })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.success) {
-          setError(d.error || "Failed to load");
-          setData(null);
-        } else {
-          setData(d);
-        }
+    Promise.all([
+      fetch("/api/service-calendar?action=sc-admin-all-config", { signal: controller.signal }).then((r) => r.json()),
+      fetch("/api/service-calendar?action=sc-admin-fee-list", { signal: controller.signal }).then((r) => r.json()),
+    ])
+      .then(([cfgRes, feeRes]) => {
+        if (!cfgRes.success) { setError(cfgRes.error || "Failed to load"); setData(null); return; }
+        if (!feeRes.success) { setError(feeRes.error || "Failed to load fees"); setData(null); return; }
+        setData(cfgRes);
+        const idx = {};
+        for (const f of feeRes.fees || []) idx[f.accountKey] = f;
+        setFeesByKey(idx);
       })
       .catch((e) => { if (e.name !== "AbortError") setError("Network error"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -68,12 +75,9 @@ export default function AccountsOverview({ onSelect }) {
     return <div className="sc-admin-empty">No accounts available.</div>;
   }
 
-  // Fee accounts = MLB-level flat_fee. The 4 MLB fee accounts (CIN-OH,
-  // STL-MO, TXR-TX-H, TXR-TX-V) use the fee schedule for billing; their
-  // per-meal prices in sc_service_prices are operationally $0. STL-FL
-  // is flat_fee but PDC-level - the calendar treats it as per-meal
-  // (homestand schedule is empty) and so does the admin editor.
-  const isFee = (a) => a.billingModel === "flat_fee" && String(a.level || "").toUpperCase() === "MLB";
+  // Fee accounts = billing_model = flat_fee (all 5: 4 MLB + STL-FL the
+  // promoted PDC). Per-meal = everything else.
+  const isFee = (a) => a.billingModel === "flat_fee";
   const perMeal = data.accounts.filter((a) => !isFee(a));
   const fee = data.accounts.filter(isFee);
 
@@ -88,7 +92,7 @@ export default function AccountsOverview({ onSelect }) {
                 <button
                   type="button"
                   className="sc-admin-row sc-admin-row--clickable"
-                  onClick={() => onSelect(a.key)}
+                  onClick={() => onSelectPerMeal(a.key)}
                 >
                   <span className="sc-admin-row-key">{a.key}</span>
                   <span className="sc-admin-row-name">{a.name}</span>
@@ -107,16 +111,30 @@ export default function AccountsOverview({ onSelect }) {
         <section className="sc-admin-section">
           <h2 className="sc-admin-section-title">Fee accounts</h2>
           <ul className="sc-admin-list">
-            {fee.map((a) => (
-              <li key={a.key}>
-                <div className="sc-admin-row sc-admin-row--disabled" aria-disabled="true">
-                  <span className="sc-admin-row-key">{a.key}</span>
-                  <span className="sc-admin-row-name">{a.name}</span>
-                  <span className={`sc-cat sc-cat--${(categoryLabel(a.level) || "").toLowerCase()}`}>{categoryLabel(a.level)}</span>
-                  <span className="sc-admin-row-fee-note">Fee schedule coming soon</span>
-                </div>
-              </li>
-            ))}
+            {fee.map((a) => {
+              const feeEntry = feesByKey[a.key];
+              const isBundled = !!feeEntry?.current?.coveredByAccountKey;
+              const amountDisplay = !feeEntry?.current
+                ? "no fee on file"
+                : isBundled
+                  ? `covered by ${feeEntry.current.coveredByAccountKey}`
+                  : `${fmtAmount(feeEntry.current.amount)} annual`;
+              return (
+                <li key={a.key}>
+                  <button
+                    type="button"
+                    className="sc-admin-row sc-admin-row--clickable"
+                    onClick={() => onSelectFee(a.key)}
+                  >
+                    <span className="sc-admin-row-key">{a.key}</span>
+                    <span className="sc-admin-row-name">{a.name}</span>
+                    <span className={`sc-cat sc-cat--${(categoryLabel(a.level) || "").toLowerCase()}`}>{categoryLabel(a.level)}</span>
+                    <span className="sc-admin-row-fee-amount">{amountDisplay}</span>
+                    <span className="sc-admin-row-chev" aria-hidden="true">›</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
