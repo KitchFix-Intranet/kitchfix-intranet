@@ -4,7 +4,12 @@ import { getNewsInteractions, upsertNewsInteraction, getSubmissions } from "@/li
 import { createNewsPost, updateNewsPost, deleteNewsPost, readAllNewsPosts, enforceSinglePin } from "@/lib/dataStore/newsPosts";
 import { uploadNewsImage } from "@/lib/drive";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
+
+// Reaction set is fixed (PG cols liked/fired/thumbs_up/hearted). The
+// dataStore upsert maps camelCase -> snake_case internally.
+const VALID_REACTIONS = ["liked", "fired", "thumbsUp", "hearted"];
 
 export async function GET(request) {
   const session = await auth();
@@ -46,20 +51,73 @@ export async function GET(request) {
         }))
         .sort((a, b) => (b.publishDate || "").localeCompare(a.publishDate || ""));
 
-      // Read interactions for the current user via dataStore (Sheets-only with flags off).
-      // dataStore returns 6-field records; strip userEmail to preserve the existing
-      // 5-field client API shape (postId, read, readAt, saved, acknowledged).
+      // Read interactions for the current user via dataStore.
+      // Now includes the 4 reaction booleans (liked, fired, thumbsUp, hearted)
+      // when reading from PG; the Sheets path returns them as undefined which
+      // the client treats as false.
       const allInteractions = await getNewsInteractions({ userEmail: email });
       const interactions = allInteractions.map(
-        ({ postId, read, readAt, saved, acknowledged }) => ({
+        ({ postId, read, readAt, saved, acknowledged, liked, fired, thumbsUp, hearted }) => ({
           postId, read, readAt, saved, acknowledged,
+          liked: !!liked, fired: !!fired, thumbsUp: !!thumbsUp, hearted: !!hearted,
         })
       );
 
-      return NextResponse.json({ posts, interactions });
+      // Reaction aggregates: counts + reactor name lists per post.
+      // PG-only - if any branch fails we surface empty maps rather than 500.
+      let reactionCounts = {};
+      let reactorNames = {};
+      try {
+        const supabase = getServiceClient();
+        // Pull every row where ANY reaction is true. Small dataset (~tens of
+        // reactions across the active news feed); no pagination needed.
+        const { data: rxRows, error: rxErr } = await supabase
+          .from("news_interactions")
+          .select("post_id, user_email, liked, fired, thumbs_up, hearted")
+          .or("liked.eq.true,fired.eq.true,thumbs_up.eq.true,hearted.eq.true");
+        if (rxErr) throw rxErr;
+
+        // Build email -> display name from HUB contacts (col D email, col C name).
+        // Falls back to "K. Fietek" style derivation when no contact match.
+        const contactsRaw = await readSheetSA(SHEET_IDS.HUB, "contacts").catch(() => ({ rows: [] }));
+        const nameByEmail = {};
+        for (const row of contactsRaw.rows || []) {
+          const e = String(row[3] || "").toLowerCase().trim();
+          const n = String(row[2] || "").trim();
+          if (e && n) nameByEmail[e] = n;
+        }
+        function emailToName(e) {
+          if (!e) return "";
+          const looked = nameByEmail[e.toLowerCase()];
+          if (looked) return looked;
+          const local = String(e).split("@")[0] || "";
+          return local
+            .split(/[._]/)
+            .filter(Boolean)
+            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+            .join(" ");
+        }
+
+        for (const r of rxRows || []) {
+          const pid = r.post_id;
+          if (!reactionCounts[pid]) {
+            reactionCounts[pid] = { liked: 0, fired: 0, thumbsUp: 0, hearted: 0 };
+            reactorNames[pid] = { liked: [], fired: [], thumbsUp: [], hearted: [] };
+          }
+          const displayName = emailToName(r.user_email);
+          if (r.liked)      { reactionCounts[pid].liked++;      reactorNames[pid].liked.push(displayName); }
+          if (r.fired)      { reactionCounts[pid].fired++;      reactorNames[pid].fired.push(displayName); }
+          if (r.thumbs_up)  { reactionCounts[pid].thumbsUp++;   reactorNames[pid].thumbsUp.push(displayName); }
+          if (r.hearted)    { reactionCounts[pid].hearted++;    reactorNames[pid].hearted.push(displayName); }
+        }
+      } catch (err) {
+        console.warn("[Dashboard] reaction aggregation failed:", err?.message);
+      }
+
+      return NextResponse.json({ posts, interactions, reactionCounts, reactorNames });
     } catch (error) {
       console.error("[Dashboard] News bootstrap error:", error.message);
-      return NextResponse.json({ posts: [], interactions: [] });
+      return NextResponse.json({ posts: [], interactions: [], reactionCounts: {}, reactorNames: {} });
     }
   }
 
@@ -345,7 +403,7 @@ export async function POST(request) {
     const body = await request.json();
     const { action } = body;
 
-    if (!["news-read", "news-save", "news-ack", "news-mark-all-read", "news-create", "news-update", "news-delete"].includes(action)) {
+    if (!["news-read", "news-save", "news-ack", "news-mark-all-read", "news-create", "news-update", "news-delete", "news-react"].includes(action)) {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
 
@@ -426,6 +484,17 @@ export async function POST(request) {
       await upsertNewsInteraction(key, { saved });
     } else if (action === "news-ack") {
       await upsertNewsInteraction(key, { read: true, readAt: now, acknowledged });
+    } else if (action === "news-react") {
+      // Single reaction toggle. Reacting also marks the post as read.
+      // VALID_REACTIONS guards against arbitrary column injection.
+      if (!VALID_REACTIONS.includes(body.reaction)) {
+        return NextResponse.json({ error: "Invalid reaction" }, { status: 400 });
+      }
+      await upsertNewsInteraction(key, {
+        [body.reaction]: !!body.value,
+        read: true,
+        readAt: now,
+      });
     }
 
     return NextResponse.json({ ok: true });
