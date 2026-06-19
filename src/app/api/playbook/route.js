@@ -47,6 +47,15 @@ import {
   SKIP_TEXT_EXTRACTION_CLASSES,
 } from "@/lib/sousai";
 
+// Owner-gated, live-data API route: every action either reads the live
+// catalog or talks to GitHub. None of it is cacheable. Force-dynamic is a
+// safety belt against Next's static-cache analysis ever marking a GET as
+// cacheable; the mdx-source 409 stale-sha incident (commit-mdx returning
+// 409 on every save because the editor's GET response was being served
+// from a cached entry) is the reason this is explicit rather than
+// implicit. Pair with Cache-Control: no-store on the mdx-source response.
+export const dynamic = "force-dynamic";
+
 // Locked shelf order - operational domains first, references at the end.
 // A6 6-domain taxonomy: Safety (food + workplace consolidated) -> Ops -> People
 // -> Culinary -> Service Delivery -> Brand standards. Finance dissolved into
@@ -468,12 +477,25 @@ export async function GET(request) {
           { status: 502 }
         );
       }
-      return NextResponse.json({
-        id,
-        sha: gh.sha,
-        frontmatter: normalizeDates(parsed.data || {}),
-        body: parsed.content || "",
-      });
+      // Cache-Control: no-store, private is the load-bearing header here.
+      // The commit-mdx staleness guard compares the sha returned here against
+      // the sha GitHub returns at save time; if anything caches this response
+      // (browser disk cache, Vercel edge), the editor saves with an old sha
+      // and 409s forever. The 2026-06-19 incident is the reason this is
+      // explicit. force-dynamic at the top is the route-level companion.
+      return NextResponse.json(
+        {
+          id,
+          sha: gh.sha,
+          frontmatter: normalizeDates(parsed.data || {}),
+          body: parsed.content || "",
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, private, max-age=0, must-revalidate",
+          },
+        }
+      );
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
@@ -790,6 +812,8 @@ export async function POST(request) {
           {
             error: "stale",
             message: "This document changed since you opened it. Reload before saving.",
+            expected_sha: sha,
+            live_sha: currentJson.sha,
           },
           { status: 409 }
         );
