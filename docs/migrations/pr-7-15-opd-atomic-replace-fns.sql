@@ -70,7 +70,13 @@ AS $$
 DECLARE
   v_inserted INT := 0;
 BEGIN
-  DELETE FROM document_relationships;
+  -- TRUNCATE instead of DELETE: Supabase's REST gateway rejects naked
+  -- DELETE-without-WHERE even inside RPC function bodies ("DELETE requires
+  -- a WHERE clause"). TRUNCATE is not subject to that guard, is fully
+  -- transactional inside a function body (rollback semantics identical),
+  -- and faster for full-table swaps. service_role's GRANT in pr-7-1 already
+  -- includes TRUNCATE.
+  TRUNCATE TABLE document_relationships;
 
   IF p_rows IS NULL OR jsonb_array_length(p_rows) = 0 THEN
     RETURN 0;
@@ -94,7 +100,8 @@ AS $$
 DECLARE
   v_inserted INT := 0;
 BEGIN
-  DELETE FROM document_surfaces;
+  -- See replace_document_relationships above for the TRUNCATE rationale.
+  TRUNCATE TABLE document_surfaces;
 
   IF p_rows IS NULL OR jsonb_array_length(p_rows) = 0 THEN
     RETURN 0;
