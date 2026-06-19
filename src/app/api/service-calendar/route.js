@@ -550,26 +550,32 @@ export async function POST(request) {
         );
       }
 
-      // Per-change validation for price entries. Stage 2 = today + future
-      // only; backdate is out of scope and rejected. effectiveDate is
-      // REQUIRED on every price change so the orchestrator's "today" fallback
-      // (which is UTC-today on Vercel) never silently fires when a Central
-      // or Eastern operator hits "Today" in the evening. The UI always
-      // supplies the operator's local YYYY-MM-DD wall-clock today.
+      // Per-change validation for price entries. effectiveDate is REQUIRED
+      // so the orchestrator's "today" fallback (UTC-today on Vercel) never
+      // silently fires when a Central or Eastern operator hits "Today" in
+      // the evening. The UI always supplies the operator's local YYYY-MM-DD
+      // wall-clock today.
       //
-      // The server-side >= floor accepts (server-today-UTC minus 1 day)
-      // intentionally: a CT/ET operator picking "Today" at 8pm sends their
-      // local date, which is yesterday's date in UTC. The 1-day grace is
-      // SAFE - yesterday is never a closed/invoiced day at this stage of
-      // operations, and the UI is the real backstop (it only offers Today
-      // or Future, no backdate). Treat this floor as a coarse sanity check,
-      // not the primary control.
+      // BACKDATE (Bundle 1 Stage 3): a per-change `allowBackdate: true` flag
+      // opts out of the today-or-future floor. The UI's Backdate radio is
+      // the only path that sets the flag; Today and Future never do. When
+      // allowBackdate is set we still require the date be a valid
+      // YYYY-MM-DD AND >= 2024-01-01 (SC data + contracts are 2024-onward;
+      // anything older is a fat-finger typo).
+      //
+      // The server-side today-or-future floor accepts (server-today-UTC
+      // minus 1 day) intentionally: a CT/ET operator picking "Today" at
+      // 8pm sends their local date, which is yesterday's date in UTC. The
+      // 1-day grace is SAFE - yesterday is never a closed/invoiced day at
+      // this stage of operations. Treat as a coarse sanity check, not the
+      // primary control.
       const today = new Date().toISOString().slice(0, 10);
       const yesterday = (() => {
         const d = new Date();
         d.setUTCDate(d.getUTCDate() - 1);
         return d.toISOString().slice(0, 10);
       })();
+      const BACKDATE_FLOOR = "2024-01-01";
       for (const c of changes) {
         if (c.type !== "price") continue;
         if (!c.effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(c.effectiveDate)) {
@@ -578,9 +584,22 @@ export async function POST(request) {
             { status: 400 }
           );
         }
-        if (c.effectiveDate < yesterday) {
+        if (c.allowBackdate === true) {
+          if (c.effectiveDate < BACKDATE_FLOOR) {
+            return NextResponse.json(
+              { success: false, error: `effectiveDate must be on or after ${BACKDATE_FLOOR} (older dates rejected as likely typos)` },
+              { status: 400 }
+            );
+          }
+          if (c.effectiveDate > today) {
+            return NextResponse.json(
+              { success: false, error: "backdate mode requires a past effectiveDate; use Future mode for forward-dated changes" },
+              { status: 400 }
+            );
+          }
+        } else if (c.effectiveDate < yesterday) {
           return NextResponse.json(
-            { success: false, error: "effectiveDate must be today or future (backdate is not supported in this stage)" },
+            { success: false, error: "effectiveDate must be today or future; choose Backdate to set a past date" },
             { status: 400 }
           );
         }
@@ -648,8 +667,9 @@ export async function POST(request) {
     // ── sc-admin-fee-set: write one fee-schedule change (ADMIN) ──
     // Mirrors sc-config-update's validation pattern: reason required,
     // effectiveDate required (today-or-future, 1-day UTC grace for CT/ET
-    // operators). Bundle 1 Stage 2 is today + future only; backdate is
-    // Stage 3.
+    // operators). A top-level `allowBackdate: true` flag (Stage 3) opts
+    // out of the today-or-future floor; still validates YYYY-MM-DD AND
+    // >= 2024-01-01 lower floor for typo protection.
     if (action === "sc-admin-fee-set") {
       if (!isScAdmin(email)) {
         return NextResponse.json(
@@ -657,7 +677,7 @@ export async function POST(request) {
           { status: 403 }
         );
       }
-      const { accountKey, amount, effectiveDate, reason, requestedBy, paymentCadence } = body;
+      const { accountKey, amount, effectiveDate, reason, requestedBy, paymentCadence, allowBackdate } = body;
       if (!accountKey) {
         return NextResponse.json(
           { success: false, error: "Missing accountKey" },
@@ -682,14 +702,29 @@ export async function POST(request) {
           { status: 400 }
         );
       }
+      const todayFee = new Date().toISOString().slice(0, 10);
       const yesterday = (() => {
         const d = new Date();
         d.setUTCDate(d.getUTCDate() - 1);
         return d.toISOString().slice(0, 10);
       })();
-      if (effectiveDate < yesterday) {
+      const FEE_BACKDATE_FLOOR = "2024-01-01";
+      if (allowBackdate === true) {
+        if (effectiveDate < FEE_BACKDATE_FLOOR) {
+          return NextResponse.json(
+            { success: false, error: `effectiveDate must be on or after ${FEE_BACKDATE_FLOOR} (older dates rejected as likely typos)` },
+            { status: 400 }
+          );
+        }
+        if (effectiveDate > todayFee) {
+          return NextResponse.json(
+            { success: false, error: "backdate mode requires a past effectiveDate; use Future mode for forward-dated changes" },
+            { status: 400 }
+          );
+        }
+      } else if (effectiveDate < yesterday) {
         return NextResponse.json(
-          { success: false, error: "effectiveDate must be today or future (backdate is not supported in this stage)" },
+          { success: false, error: "effectiveDate must be today or future; choose Backdate to set a past date" },
           { status: 400 }
         );
       }
