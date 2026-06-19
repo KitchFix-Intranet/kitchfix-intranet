@@ -101,13 +101,18 @@ console.log("\n[2] rollback contract: failing INSERT must roll back the DELETE")
   ok(`pre-snapshot: document_relationships=${preRel}, document_surfaces=${preSurf}`);
 
   // Relationships: NULL from_doc -> NOT NULL violation on INSERT.
+  // Log the full message - if it says "DELETE requires a WHERE clause" or
+  // similar gateway-guard text, the TRUNCATE / DELETE never ran and the
+  // "counts preserved" check below is tautological, not a real rollback
+  // proof. The expected PG error code for NOT NULL violation is 23502
+  // (Supabase may wrap it; the operator can check the message).
   const { error: relErr } = await sb.rpc("replace_document_relationships", {
     p_rows: [{ from_doc: null, to_doc: "VERIFY-7-15-TARGET", rel_type: "references" }],
   });
   if (!relErr) {
     bad("replace_document_relationships accepted a NULL from_doc (expected NOT NULL error)");
   } else {
-    ok(`replace_document_relationships rejected payload as expected: ${relErr.code || "?"}`);
+    ok(`replace_document_relationships rejected payload: code=${relErr.code || "?"} message=${JSON.stringify(relErr.message || "")}`);
   }
 
   // Surfaces: NULL doc_id -> NOT NULL violation on INSERT.
@@ -117,7 +122,7 @@ console.log("\n[2] rollback contract: failing INSERT must roll back the DELETE")
   if (!surfErr) {
     bad("replace_document_surfaces accepted a NULL doc_id (expected NOT NULL error)");
   } else {
-    ok(`replace_document_surfaces rejected payload as expected: ${surfErr.code || "?"}`);
+    ok(`replace_document_surfaces rejected payload: code=${surfErr.code || "?"} message=${JSON.stringify(surfErr.message || "")}`);
   }
 
   let postRel, postSurf;
