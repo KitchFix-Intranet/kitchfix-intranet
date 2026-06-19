@@ -1540,7 +1540,14 @@ function MdxEditorSlideOver({ docId, onClose }) {
     setSaveStatus("idle");
     setSaveMessage(null);
     setValidationErrors(null);
-    fetch(`/api/playbook?action=mdx-source&id=${encodeURIComponent(docId)}`)
+    // cache: "no-store" is the client-side companion to the route's
+    // Cache-Control: no-store + force-dynamic. The 2026-06-19 stale-sha
+    // incident proved the editor must never read this from any HTTP cache:
+    // mdx-source returns the live GitHub blob sha, commit-mdx compares it
+    // live, and any cached entry produces a 409 on every save.
+    fetch(`/api/playbook?action=mdx-source&id=${encodeURIComponent(docId)}`, {
+      cache: "no-store",
+    })
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
