@@ -9,6 +9,11 @@ import { useCallback, useState } from "react";
 import AccountsOverview from "./AccountsOverview";
 import AccountEditor from "./AccountEditor";
 import FeeAccountEditor from "./FeeAccountEditor";
+// ops-shared.css supplies the .oh-hero / .oh-hero-overlay / .oh-hero-content
+// / .oh-hero-title / .oh-hero-subtitle classes. Same import as the operator
+// page (src/app/service-calendar/page.js) so the admin reads as the same
+// product when you cross from calendar to admin.
+import "@/app/ops/css/ops-shared.css";
 import "../ops-sc.css";
 import "./ops-sc-admin.css";
 
@@ -23,11 +28,22 @@ export default function AdminClient({ email }) {
 
   return (
     <div className="sc-admin-root" data-density="comfortable">
-      <div className="sc-admin-card">
-        <div className="sc-admin-header">
-          <div className="sc-admin-title-row">
-            <h1 className="sc-admin-title">Service Calendar admin</h1>
-            <span className="sc-admin-corp-chip" title="Visible to corporate only">
+      {/* Hero band - reuses .oh-hero so the admin reads as the same product
+          as the operator calendar. Height dialed down via .sc-admin-hero
+          modifier; no food photo (workspace, not landing). */}
+      <div className="oh-hero sc-admin-hero">
+        <div className="oh-hero-overlay" />
+        <div className="oh-hero-content sc-admin-hero-content">
+          <Link href="/service-calendar" className="sc-admin-hero-back" prefetch={false}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            Back to Service Calendar
+          </Link>
+          <div className="sc-admin-hero-row">
+            <h1 className="oh-hero-title">Service Calendar admin</h1>
+            <span className="sc-admin-corp-chip sc-admin-corp-chip--hero" title="Visible to corporate only">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="4" y="11" width="16" height="10" rx="2" />
                 <path d="M8 11V7a4 4 0 0 1 8 0v4" />
@@ -35,13 +51,11 @@ export default function AdminClient({ email }) {
               Corporate only
             </span>
           </div>
-          {view.mode === "overview" ? (
-            <p className="sc-admin-subtitle">
-              Pricing + fee control. All-account overview; drill in to edit.
-            </p>
-          ) : null}
+          <p className="oh-hero-subtitle">Pricing and fee control - corporate only</p>
         </div>
+      </div>
 
+      <div className="sc-admin-card">
         {view.mode === "overview" && (
           <AccountsOverview
             onSelectPerMeal={(key) => setView({ mode: "account", key })}

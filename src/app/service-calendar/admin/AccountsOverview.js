@@ -80,9 +80,21 @@ export default function AccountsOverview({ onSelectPerMeal, onSelectFee }) {
   const isFee = (a) => a.billingModel === "flat_fee";
   const perMeal = data.accounts.filter((a) => !isFee(a));
   const fee = data.accounts.filter(isFee);
+  const totalCount = data.accounts.length;
 
   return (
     <div className="sc-admin-overview">
+      {/* At-a-glance summary strip. Echoes the operator calendar's stat
+          banner pattern. Counts derived from the already-loaded accounts
+          payload; no new fetch, no new orchestrator call. */}
+      <div className="sc-admin-summary">
+        <span className="sc-admin-summary-item"><strong>{totalCount}</strong> account{totalCount === 1 ? "" : "s"}</span>
+        <span className="sc-admin-summary-sep" aria-hidden="true">·</span>
+        <span className="sc-admin-summary-item"><strong>{perMeal.length}</strong> per-meal</span>
+        <span className="sc-admin-summary-sep" aria-hidden="true">·</span>
+        <span className="sc-admin-summary-item"><strong>{fee.length}</strong> fee</span>
+      </div>
+
       {perMeal.length > 0 && (
         <section className="sc-admin-section">
           <h2 className="sc-admin-section-title">Per-meal accounts</h2>
