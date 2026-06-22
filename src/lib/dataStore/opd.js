@@ -343,3 +343,41 @@ export async function createIssue(
   if (error) throw new Error(`opd.createIssue: ${error.message}`);
   return data;
 }
+
+// Issue status workflow (matches the document_issues CHECK constraint in
+// pr-7-1-opd-schema.sql). Centralized so the route's validator + this
+// orchestrator + future surfaces all read from the same source.
+export const ISSUE_STATUSES = ["open", "triaged", "in_progress", "closed"];
+
+/**
+ * Triage update for an issue row. Only `status` is allowed through; the
+ * status string is validated against ISSUE_STATUSES (defense in depth -
+ * the route validates too) and updated_at is stamped at the orchestrator
+ * because the schema default only fires on INSERT (mirrors updateDocument).
+ */
+export async function updateIssue(id, patch, opts = {}) {
+  if (!id) throw new Error("opd.updateIssue: missing id");
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error("opd.updateIssue: patch must be an object");
+  }
+  const clean = {};
+  if ("status" in patch) {
+    if (!ISSUE_STATUSES.includes(patch.status)) {
+      throw new Error(`opd.updateIssue: invalid status "${patch.status}"`);
+    }
+    clean.status = patch.status;
+  }
+  if (Object.keys(clean).length === 0) {
+    throw new Error("opd.updateIssue: no allowed fields in patch");
+  }
+  clean.updated_at = new Date().toISOString();
+  const sb = getServiceClient();
+  const { data, error } = await sb
+    .from(ISSUES_TABLE)
+    .update(clean)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(`opd.updateIssue: ${error.message}`);
+  return data;
+}

@@ -28,6 +28,9 @@ import {
   getSurfaces,
   createIssue,
   updateDocument,
+  updateIssue,
+  ISSUE_STATUSES,
+  listIssues,
   setPinned,
   clearPinned,
 } from "@/lib/dataStore";
@@ -559,6 +562,56 @@ export async function GET(request) {
       );
     }
 
+    // ── issues (PR D) ─────────────────────────────────────────────────────
+    // The cockpit's reported-issue triage queue. listIssues already orders
+    // by created_at DESC; we decorate each row with doc_title via one batch
+    // documents read so the panel does not N+1 the catalog. Optional ?status
+    // filter passes through; without it the full queue (all statuses)
+    // returns and the client decides which to surface.
+    if (action === "issues") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const statusFilter = searchParams.get("status") || undefined;
+      if (statusFilter && !ISSUE_STATUSES.includes(statusFilter)) {
+        return NextResponse.json(
+          { error: `Invalid status filter: ${statusFilter}` },
+          { status: 400 }
+        );
+      }
+      let rows;
+      try {
+        rows = await listIssues({ status: statusFilter }, { module: MODULE });
+      } catch (e) {
+        return NextResponse.json({ error: e?.message || "issues read failed" }, { status: 500 });
+      }
+      // Batch-decorate with doc_title. Use the service client directly with
+      // a minimal projection - getDocument is heavier than needed (decorates
+      // pinned + has_content per call). Falls back to doc_id when the doc
+      // row is missing (e.g. an old issue on a since-deleted doc).
+      let titleByDocId = {};
+      if (rows.length > 0) {
+        const ids = Array.from(new Set(rows.map((r) => r.doc_id).filter(Boolean)));
+        if (ids.length > 0) {
+          const { data: docs, error: docsErr } = await getServiceClient()
+            .from("documents")
+            .select("id, title")
+            .in("id", ids);
+          if (!docsErr && Array.isArray(docs)) {
+            titleByDocId = Object.fromEntries(docs.map((d) => [d.id, d.title]));
+          }
+        }
+      }
+      const issues = rows.map((r) => ({
+        ...r,
+        doc_title: titleByDocId[r.doc_id] || r.doc_id,
+      }));
+      return NextResponse.json(
+        { issues },
+        { headers: { "Cache-Control": "no-store, private, max-age=0, must-revalidate" } }
+      );
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     console.error("[playbook GET]", e.message);
@@ -695,6 +748,37 @@ export async function POST(request) {
         return NextResponse.json({ error: msg }, { status: 400 });
       }
       return NextResponse.json({ ok: true, document: updated });
+    }
+
+    // ── update-issue (PR D) ──────────────────────────────────────────────
+    // Triage status update for document_issues rows. Owner-only. Status
+    // must be one of the CHECK-constrained values; the orchestrator stamps
+    // updated_at since the schema default only fires on INSERT.
+    if (action === "update-issue") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const { issue_id, status } = body;
+      if (!issue_id || typeof issue_id !== "string") {
+        return NextResponse.json({ error: "Missing or invalid issue_id" }, { status: 400 });
+      }
+      if (!status || !ISSUE_STATUSES.includes(status)) {
+        return NextResponse.json(
+          { error: `Invalid status: ${status}. Expected one of ${ISSUE_STATUSES.join(", ")}.` },
+          { status: 400 }
+        );
+      }
+      let updated;
+      try {
+        updated = await updateIssue(issue_id, { status }, { module: MODULE });
+      } catch (e) {
+        const msg = e?.message || "update failed";
+        if (/no rows|0 rows|PGRST116/i.test(msg)) {
+          return NextResponse.json({ error: `Issue ${issue_id} not found` }, { status: 404 });
+        }
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, issue: updated });
     }
 
     // ── archive ──────────────────────────────────────────────────────────

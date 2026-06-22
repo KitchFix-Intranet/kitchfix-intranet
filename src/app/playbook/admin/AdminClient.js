@@ -212,6 +212,24 @@ function AdminDashboard({
     refreshPendingEdits();
   }, [refreshPendingEdits]);
 
+  // Reported issues queue (PR D). The full list is fetched once and the
+  // panel filters client-side (Active vs All). After any status change we
+  // refetch so the panel reflects the new state without optimistic mutation.
+  const [issues, setIssues] = useState([]);
+  const refreshIssues = useCallback(() => {
+    fetch("/api/playbook?action=issues", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.issues)) setIssues(d.issues);
+      })
+      .catch(() => {
+        // Non-fatal: the panel keeps its prior state.
+      });
+  }, []);
+  useEffect(() => {
+    refreshIssues();
+  }, [refreshIssues]);
+
   // Tab state. Attention is the landing tab (the cockpit's reason for
   // existing); Worklist + Archive remain. Switching is purely client-side;
   // the worklist data is from bootstrap, archive is lazy-loaded on first
@@ -480,6 +498,8 @@ function AdminDashboard({
             setActiveTab("worklist");
             if (typeof window !== "undefined") window.scrollTo({ top: 0 });
           }}
+          issues={issues}
+          onIssuesRefresh={refreshIssues}
         />
       )}
 
@@ -652,8 +672,8 @@ function AdminDashboard({
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// AttentionPanel - the cockpit's triage view, structured in two zones plus
-// an understated PR D strip:
+// AttentionPanel - the cockpit's triage view, structured in three zones
+// plus a slim "coming next" strip:
 //
 //   NEEDS ACTION (alerts; short full lists, always visible)
 //     Priority · Empty shells (true-empty only) · Stale
@@ -661,13 +681,18 @@ function AdminDashboard({
 //   QUEUE & ACTIVITY (capped queue + tracked work + recent activity)
 //     Ready to ship (cap 5 + drill to Worklist) · Placeholders · Recent
 //
-//   COMING IN PR D (slim, no bucket chrome)
-//     Validation · Issues
+//   REPORTED ISSUES (PR D - LIVE)
+//     IssuesPanel - the triage queue for document_issues rows. Each row
+//     has a status control (open / triaged / in_progress / closed) and
+//     a clickable doc-title link that opens the reader.
+//
+//   COMING NEXT (slim, no bucket chrome)
+//     Validation - projection errors surface in the cockpit (next PR)
 //
 // Each bucket clicks open into the slide-over reader. The drill on Ready
 // to ship switches to the Worklist with the status filter pre-applied.
 // ════════════════════════════════════════════════════════════════════════════
-function AttentionPanel({ attention, onOpenReader, onDrillToWorklist }) {
+function AttentionPanel({ attention, onOpenReader, onDrillToWorklist, issues, onIssuesRefresh }) {
   return (
     <div className="pb-admin-attention-zones">
       <section className="pb-admin-zone" aria-label="Needs action">
@@ -743,19 +768,174 @@ function AttentionPanel({ attention, onOpenReader, onDrillToWorklist }) {
         </div>
       </section>
 
-      <section className="pb-admin-zone pb-admin-zone--prd" aria-label="Coming in PR D">
-        <h2 className="pb-admin-zone-label">Coming in PR D</h2>
+      <section className="pb-admin-zone" aria-label="Reported issues">
+        <h2 className="pb-admin-zone-label">Reported issues</h2>
+        <IssuesPanel
+          issues={issues || []}
+          onOpenReader={onOpenReader}
+          onRefresh={onIssuesRefresh}
+        />
+      </section>
+
+      <section className="pb-admin-zone pb-admin-zone--prd" aria-label="Coming next">
+        <h2 className="pb-admin-zone-label">Coming next</h2>
         <ul className="pb-admin-prd-strip">
           <li className="pb-admin-prd-item">
             <span className="pb-admin-prd-name">Validation</span>
             <span className="pb-admin-prd-note">projection errors surface in the cockpit</span>
           </li>
-          <li className="pb-admin-prd-item">
-            <span className="pb-admin-prd-name">Issues</span>
-            <span className="pb-admin-prd-note">reported-issue triage and resolve flow</span>
-          </li>
         </ul>
       </section>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// IssuesPanel - PR D - the reported-issues triage queue.
+//
+// Source: document_issues table, fetched via GET /api/playbook?action=issues.
+// Each issue carries doc_id, doc_title (decorated server-side), reporter_email,
+// issue_text, status, created_at. The panel lets the owner walk an issue
+// through the four-state workflow (open -> triaged -> in_progress -> closed)
+// and reopen if needed.
+//
+// View filter: "Active" (default, hides closed) vs "All". The full issues
+// array is fetched once; filtering is client-side.
+// ════════════════════════════════════════════════════════════════════════════
+const ISSUE_STATUS_VALUES = ["open", "triaged", "in_progress", "closed"];
+const ISSUE_STATUS_LABEL = {
+  open: "Open",
+  triaged: "Triaged",
+  in_progress: "In progress",
+  closed: "Closed",
+};
+
+function IssuesPanel({ issues, onOpenReader, onRefresh }) {
+  const [filter, setFilter] = useState("active"); // "active" | "all"
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  const activeCount = issues.filter((i) => i.status !== "closed").length;
+  const shown = filter === "active"
+    ? issues.filter((i) => i.status !== "closed")
+    : issues;
+
+  const setIssueStatus = async (issueId, nextStatus) => {
+    setBusyId(issueId);
+    setError(null);
+    try {
+      const res = await fetch("/api/playbook?action=update-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issue_id: issueId, status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || `HTTP ${res.status}`);
+      } else if (typeof onRefresh === "function") {
+        onRefresh();
+      }
+    } catch (e) {
+      setError(e.message || "Network error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="pb-admin-issues">
+      <div className="pb-admin-issues-head">
+        <span className="pb-admin-issues-count">
+          {activeCount} active{activeCount === issues.length ? "" : ` of ${issues.length}`}
+        </span>
+        <div className="pb-admin-issues-filter" role="group" aria-label="Filter issues">
+          <button
+            type="button"
+            onClick={() => setFilter("active")}
+            aria-pressed={filter === "active"}
+            className={`pb-admin-issues-chip${filter === "active" ? " pb-admin-issues-chip--on" : ""}`}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            aria-pressed={filter === "all"}
+            className={`pb-admin-issues-chip${filter === "all" ? " pb-admin-issues-chip--on" : ""}`}
+          >
+            All
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="pb-admin-issues-error" role="status">
+          Update failed: {error}
+        </div>
+      )}
+
+      {shown.length === 0 ? (
+        <p className="pb-admin-issues-empty">
+          {filter === "active"
+            ? "No active issues. Closed issues remain visible in All."
+            : "No issues reported."}
+        </p>
+      ) : (
+        <ul className="pb-admin-issues-list">
+          {shown.map((it) => (
+            <li
+              key={it.id}
+              className={`pb-admin-issues-item pb-admin-issues-item--${it.status}`}
+            >
+              <div className="pb-admin-issues-item-head">
+                <button
+                  type="button"
+                  className="pb-admin-issues-doclink"
+                  onClick={() => onOpenReader && onOpenReader(it.doc_id)}
+                  title={`Open ${it.doc_id}`}
+                >
+                  <code className="pb-admin-issues-docid">{it.doc_id}</code>
+                  <span className="pb-admin-issues-doctitle">{it.doc_title}</span>
+                </button>
+                <span className="pb-admin-issues-meta">
+                  <span className="pb-admin-issues-reporter">{it.reporter_email}</span>
+                  <span className="pb-admin-issues-date">
+                    {it.created_at
+                      ? new Date(it.created_at).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : ""}
+                  </span>
+                </span>
+              </div>
+              <p className="pb-admin-issues-text">{it.issue_text}</p>
+              <div className="pb-admin-issues-controls">
+                <label className="pb-admin-issues-status-label">
+                  Status
+                  <select
+                    className="pb-admin-issues-status-select"
+                    value={it.status}
+                    disabled={busyId === it.id}
+                    onChange={(e) => setIssueStatus(it.id, e.target.value)}
+                  >
+                    {ISSUE_STATUS_VALUES.map((s) => (
+                      <option key={s} value={s}>
+                        {ISSUE_STATUS_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {busyId === it.id && (
+                  <span className="pb-admin-issues-busy">Updating…</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

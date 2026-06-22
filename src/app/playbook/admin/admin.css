@@ -1467,3 +1467,162 @@
   font-size: 11.5px;
 }
 
+/* ─── Issues (PR D) ─────────────────────────────────────────────────────── */
+/* The reported-issues triage panel inside the Attention tab. Inherits the
+   pb-admin-zone container; head row with count + Active/All filter chips,
+   then a vertical list of issue cards with status select. */
+.pb-admin-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pb-admin-issues-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pb-admin-issues-count {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  font-weight: 700;
+  color: var(--kf-brand-navy);
+}
+.pb-admin-issues-filter {
+  display: inline-flex;
+  gap: 4px;
+}
+.pb-admin-issues-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--kf-line);
+  background: var(--kf-surface-2);
+  color: var(--kf-muted);
+  cursor: pointer;
+}
+.pb-admin-issues-chip--on {
+  background: var(--kf-brand-navy);
+  color: #fff;
+  border-color: var(--kf-brand-navy);
+}
+.pb-admin-issues-empty {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  color: var(--kf-muted);
+  font-style: italic;
+}
+.pb-admin-issues-error {
+  padding: 8px 10px;
+  border-radius: var(--kf-r-input);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+}
+.pb-admin-issues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pb-admin-issues-item {
+  border: 1px solid var(--kf-line);
+  border-left-width: 3px;
+  border-radius: var(--kf-r-input);
+  background: var(--kf-surface-2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pb-admin-issues-item--open        { border-left-color: #dc2626; }
+.pb-admin-issues-item--triaged     { border-left-color: #d97706; }
+.pb-admin-issues-item--in_progress { border-left-color: #0ea5e9; }
+.pb-admin-issues-item--closed {
+  border-left-color: #94a3b8;
+  opacity: 0.65;
+}
+.pb-admin-issues-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pb-admin-issues-doclink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--kf-brand-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  text-align: left;
+}
+.pb-admin-issues-doclink:hover .pb-admin-issues-doctitle {
+  text-decoration: underline;
+}
+.pb-admin-issues-docid {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: rgba(15, 48, 87, 0.08);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--kf-brand-navy);
+}
+.pb-admin-issues-doctitle {
+  font-weight: 600;
+}
+.pb-admin-issues-meta {
+  display: inline-flex;
+  gap: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+}
+.pb-admin-issues-text {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+.pb-admin-issues-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pb-admin-issues-status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+}
+.pb-admin-issues-status-select {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-body-sm);
+  padding: 3px 6px;
+  border: 1px solid var(--kf-line);
+  border-radius: var(--kf-r-input);
+  background: #fff;
+}
+.pb-admin-issues-busy {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: var(--kf-muted);
+  font-style: italic;
+}
+
