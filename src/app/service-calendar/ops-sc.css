@@ -284,6 +284,25 @@
 .sc-day-row-delta--pos { color: #0F6E56; font-weight: 600; }
 .sc-day-row-delta--neg { color: #dc2626; font-weight: 600; }
 
+/* Bundle 2 archived-day chip: a service archived as of day.date renders
+   this read-only chip in place of the editable input. Same visible-but-
+   marked discipline as the admin side. Same visual weight as the non-rev
+   tag - operator sees why entry is gone without the row being hidden. */
+.sc-day-row--archived .sc-day-row-name { color: #9ca3af; }
+.sc-day-row--archived .sc-day-row-proj-label { color: #d1d5db; }
+.sc-day-row-archived-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 /* Per-group match button */
 .sc-day-match-btn { 
   display: block; width: 100%; padding: 8px; margin: 8px 0 4px;

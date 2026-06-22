@@ -44,8 +44,11 @@ import { isDualWrite } from "@/lib/cutover";
 //     -> upserts a flat list of (serviceDate, serviceId, count) tuples
 //   updateServiceConfig(accountKey, changes, email)
 //     -> price changes append to the ledger; deactivate flips active=false
-//   addService(accountKey, groupName, serviceName, price, flags, email)
-//     -> creates group on-demand if missing, then service + price
+//   addServiceWithAudit + addServiceGroup (Bundle 2 sc-6c)
+//     -> the audited catalog-add paths. The earlier unaudited
+//        addService function was removed during the post-Bundle-2
+//        audit cleanup; all admin add-paths now pair an
+//        sc_config_changelog row.
 //   submitConfigRequest(accountKey, request, email)
 //     -> logs the request via the submissions table (module='service_calendar')
 //
@@ -111,8 +114,19 @@ function yearBounds(year) {
 }
 
 // Returns the day's relationship to "today" + lock cutoff.
-// Computed UTC midnight to avoid client-side TZ drift; the calendar
-// UI is the source of truth for tz-aware display.
+//
+// "today" is computed via SERVER-LOCAL midnight (UTC on Vercel), not
+// the operator's local clock. For a CT operator at 8pm Friday the
+// server already sees Saturday UTC and may flip Friday's tile to
+// isPast=true a few hours early. This is ADVISORY-ONLY UI coloring -
+// the isPast/isLocked flags drive tile styling; no invoice cutoff or
+// write enforcement reads them. Accepted as a known coloring quirk
+// to keep loadMonthData's output shape stable.
+//
+// If evening tile-coloring ever matters operationally, the fix is to
+// stop emitting isPast/isLocked from the orchestrator and have the
+// calendar recompute them client-side per render. That is a separate
+// future PR; do not bake it in here.
 function dayContext(serviceDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1134,7 +1148,7 @@ export async function saveBulkActuals(accountKey, entries, email) {
 // updateServiceConfig
 // ═══════════════════════════════════════════════════════════════
 //
-// Applies admin changes to the service catalog. Two change types:
+// Applies admin price changes to the service catalog. One change type:
 //
 //   { type: "price", serviceId, newPrice, effectiveDate? }
 //     -> upserts a sc_service_prices row keyed by (service_id, effective_date).
@@ -1145,12 +1159,12 @@ export async function saveBulkActuals(accountKey, entries, email) {
 //        prior-day prices are never touched, and sc_daily_revenue
 //        resolves price-at-date via LATERAL against the full history.
 //
-//   { type: "deactivate", serviceId }
-//     -> sets sc_services.active = false. Existing projections/
-//        actuals/prices are not deleted; the LEFT JOIN on the view
-//        filters via the sc_services.deleted_at IS NULL clause.
-//        Reactivation is "update active = true" - undo path stays
-//        cheap.
+// Archive / reactivate is NOT here. Bundle 2 (sc-6c) added dedicated
+// archiveService / reactivateService orchestrator functions that write
+// sc_services.active_until (the billing-relevant archive field the
+// views filter on). The earlier Stage 2 deactivate/reactivate branches
+// that flipped the `active` BOOLEAN were unaudited and unreachable
+// from any UI; removed as part of the post-Bundle-2 audit cleanup.
 //
 // Changes are applied sequentially so a partial failure stops on the
 // first bad change rather than producing a silently-half-applied
@@ -1224,22 +1238,6 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
       });
       throwOnError(logErr, `updateServiceConfig.changelog[${applied}]`);
       applied++;
-    } else if (ch.type === "deactivate") {
-      const { error } = await supa
-        .from(SC_TABLES.services)
-        .update({ active: false, updated_at: new Date().toISOString() })
-        .eq("id", ch.serviceId)
-        .eq("account_key", accountKey);
-      throwOnError(error, `updateServiceConfig.deactivate[${applied}]`);
-      applied++;
-    } else if (ch.type === "reactivate") {
-      const { error } = await supa
-        .from(SC_TABLES.services)
-        .update({ active: true, updated_at: new Date().toISOString() })
-        .eq("id", ch.serviceId)
-        .eq("account_key", accountKey);
-      throwOnError(error, `updateServiceConfig.reactivate[${applied}]`);
-      applied++;
     } else {
       throw new Error(
         `[dataStore.sc] updateServiceConfig: unknown change type '${ch.type}'`
@@ -1251,18 +1249,17 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
 }
 
 /**
- * Apply admin config changes to an account's services.
+ * Apply admin price changes to an account's services.
  *
  *   accountKey - canonical spaced form
  *   changes    - array of { type, serviceId, ... }
- *                type = "price" | "deactivate" | "reactivate"
+ *                type = "price"   (archive/reactivate live in
+ *                                  archiveService / reactivateService)
  *   email      - actor email
  *
  * Returns { success, applied }. Throws on the first error so the
- * caller can surface a partial-write count for retry.
- *
- * Price changes are ledger appends (sc_service_prices). Deactivation
- * is a soft toggle on sc_services.active.
+ * caller can surface a partial-write count for retry. Price changes
+ * are ledger appends (sc_service_prices).
  */
 export async function updateServiceConfig(accountKey, changes, email) {
   const result = await updateServiceConfigPostgres(accountKey, changes, email);
@@ -1272,143 +1269,6 @@ export async function updateServiceConfig(accountKey, changes, email) {
   ) {
     // TODO: shadow validation may need to mirror price changes to the
     // legacy service_config tab. Not implemented; see header note.
-  }
-  return result;
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// addService
-// ═══════════════════════════════════════════════════════════════
-//
-// Admin path to add a new service to an account. Creates the group
-// on-demand if it does not exist (matching the legacy route's
-// implicit create-group-by-name behavior).
-//
-//   flags: { isFlatFee?, isTaxFree?, isNonRevenue? } (all default false)
-//
-// Returns the new service_id + group_id so the UI can immediately
-// place the service in the calendar without a full reload.
-
-async function addServicePostgres(
-  accountKey, groupName, serviceName, price, flags, email
-) {
-  const supa = getServiceClient();
-
-  // Resolve or create the group.
-  let groupId;
-  {
-    const { data: existing, error } = await supa
-      .from(SC_TABLES.groups)
-      .select("id, sort_order")
-      .eq("account_key", accountKey)
-      .eq("group_name", groupName)
-      .is("deleted_at", null)
-      .maybeSingle();
-    throwOnError(error, "addService.findGroup");
-
-    if (existing) {
-      groupId = existing.id;
-    } else {
-      // Find next sort_order: max(existing) + 1, or 0 if none.
-      const { data: maxRows, error: maxErr } = await supa
-        .from(SC_TABLES.groups)
-        .select("sort_order")
-        .eq("account_key", accountKey)
-        .order("sort_order", { ascending: false })
-        .limit(1);
-      throwOnError(maxErr, "addService.maxGroupSort");
-      const nextSort = (maxRows?.[0]?.sort_order ?? -1) + 1;
-
-      const ins = await supa
-        .from(SC_TABLES.groups)
-        .insert({
-          account_key: accountKey,
-          group_name:  groupName,
-          sort_order:  nextSort,
-          created_by:  email,
-        })
-        .select("id")
-        .single();
-      throwOnError(ins.error, "addService.insertGroup");
-      groupId = ins.data.id;
-    }
-  }
-
-  // Resolve next service sort_order within the group.
-  const { data: maxSvcRows, error: maxSvcErr } = await supa
-    .from(SC_TABLES.services)
-    .select("sort_order")
-    .eq("group_id", groupId)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  throwOnError(maxSvcErr, "addService.maxServiceSort");
-  const nextServiceSort = (maxSvcRows?.[0]?.sort_order ?? -1) + 1;
-
-  // Insert the service.
-  const svcIns = await supa
-    .from(SC_TABLES.services)
-    .insert({
-      account_key:    accountKey,
-      group_id:       groupId,
-      service_name:   serviceName,
-      is_flat_fee:    !!(flags?.isFlatFee),
-      is_tax_free:    !!(flags?.isTaxFree),
-      is_non_revenue: !!(flags?.isNonRevenue),
-      sort_order:     nextServiceSort,
-      created_by:     email,
-    })
-    .select("id")
-    .single();
-  throwOnError(svcIns.error, "addService.insertService");
-  const serviceId = svcIns.data.id;
-
-  // Insert the initial price (effective today).
-  const today = isoDay(new Date());
-  const priceIns = await supa
-    .from(SC_TABLES.prices)
-    .insert({
-      service_id:     serviceId,
-      price:          Number(price) || 0,
-      effective_date: today,
-      created_by:     email,
-    });
-  throwOnError(priceIns.error, "addService.insertPrice");
-
-  return {
-    success:    true,
-    serviceId,
-    groupId,
-    sortOrder:  nextServiceSort,
-  };
-}
-
-/**
- * Add a new service under an account, creating its group if missing.
- *
- *   accountKey  - canonical spaced form
- *   groupName   - target group display name
- *   serviceName - the new service name
- *   price       - initial price (numeric)
- *   flags       - { isFlatFee?, isTaxFree?, isNonRevenue? }
- *   email       - actor email
- *
- * Returns { success, serviceId, groupId, sortOrder }.
- */
-export async function addService(
-  accountKey, groupName, serviceName, price, flags, email
-) {
-  const result = await addServicePostgres(
-    accountKey, groupName, serviceName, price, flags, email
-  );
-  if (
-    isDualWrite(SC_TABLES.services) ||
-    isDualWrite(SC_TABLES.groups) ||
-    isDualWrite(SC_TABLES.prices)
-  ) {
-    // TODO: Sheets mirror - the legacy route adds rows to the
-    // service_config HUB tab; carry that path here when shadow
-    // validation requires it.
   }
   return result;
 }
