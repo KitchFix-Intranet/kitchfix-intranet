@@ -122,16 +122,32 @@
   max-width: 60ch;
 }
 
+/* Quiet secondary back-button. Same treatment as .sc-admin-overview-back
+   in ops-sc.css so the two back-affordances (editor "All accounts" + in-
+   hero "Overview") read as the same control. White on neutral border,
+   navy text, subtle shadow. */
 .sc-admin-back {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--type-body-sm);
-  font-weight: 600;
-  color: #0F6E56;
+  font-weight: 500;
+  color: #153968;
   text-decoration: none;
-  padding: 6px 0;
-  transition: color 0.15s;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  box-shadow: 0 1px 2px rgba(21, 57, 104, 0.06);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.sc-admin-back:hover { color: #085041; }
+.sc-admin-back:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
+}
+.sc-admin-back:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
 
 @media (max-width: 640px) {
   .sc-admin-root { padding: var(--space-3) var(--space-3) 40px; }
@@ -189,15 +205,38 @@
 .sc-admin-summary-item strong { color: #111827; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sc-admin-summary-sep { color: #d1d5db; font-weight: 400; }
 
-.sc-admin-section { display: flex; flex-direction: column; gap: 8px; }
-/* Bumped one step (12px -> 13px, #6b7280 -> #475569) for legibility.
-   Uppercase tracking pattern preserved. */
+/* Overview sections - contained units matching the editor's group
+   cards. Section header band (light fill, hairline rule via ::after on
+   the title) sits above the rows; rows render as today on white. */
+.sc-admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
+}
+/* Section label + hairline rule. The ::after rule fills the remaining
+   width so the label reads as a true section divider rather than a
+   floating tag. Pure CSS (no markup change). Bumped one step (12px ->
+   13px, #6b7280 -> #475569) for legibility. */
 .sc-admin-section-title {
   font-size: 13px; font-weight: 700;
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sc-admin-section-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
 }
 
 /* Row list tightened toward Density. ~25% lighter vertical padding + tighter
@@ -237,9 +276,10 @@
 
 /* Per-account editor */
 .sc-admin-editor { display: flex; flex-direction: column; gap: var(--space-3); }
+/* Editor "All accounts" back-button. Inherits the .sc-admin-back base
+   treatment (white pill, navy text, subtle shadow). Adds cursor +
+   font-family for the <button> variant + self-align. */
 .sc-admin-back--inline {
-  background: none;
-  border: none;
   cursor: pointer;
   font-family: inherit;
   align-self: flex-start;
@@ -249,24 +289,59 @@
 .sc-admin-editor-title { font-size: var(--type-h2); font-weight: 700; color: #153968; margin: 0; line-height: var(--line-heading); }
 .sc-admin-editor-name { font-size: var(--type-body); color: #6b7280; font-weight: 500; }
 /* Editor section label - matches sc-admin-section-title bump for
-   legibility consistency. */
+   legibility consistency, plus the same hairline rule via ::after so
+   the editor and the overview read with the same section dividers. */
 .sc-admin-editor-section {
   font-size: 13px; font-weight: 700;
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sc-admin-editor-section::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
 }
 
-.sc-admin-group { display: flex; flex-direction: column; gap: 6px; }
-/* Group titles read as the primary chunks when scanning (Miller's Law).
-   Bumped 14px/700/#111827 -> 16px/700/#153968 (brand navy) so groups
-   register above their service rows. */
+/* Group becomes a contained card. White body sits below a header band
+   (light fill + navy left-accent, group title + archive action) and a
+   footer band (light fill, Add service). Subtle elevation lifts the
+   card off the editor body. PR #245's click-to-expand rows render
+   unchanged inside the card body. */
+.sc-admin-group {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
+  margin-bottom: 14px;
+}
+.sc-admin-group-header-band {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: 3px solid #153968;
+  padding: 10px 14px;
+}
+.sc-admin-group-footer {
+  background: #fcfdfe;
+  border-top: 1px solid #f4f6f8;
+  padding: 8px 14px;
+}
+/* Calmer group title weight inside the band (was 16px/700, now 15px/600
+   so the band itself provides the visual chunk and the title sits as
+   a label rather than a heading shout). Navy preserved. */
 .sc-admin-group-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: #153968;
-  margin: 12px 0 0;
+  margin: 0;
   letter-spacing: -0.01em;
 }
 .sc-admin-svc-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
@@ -621,7 +696,8 @@
 
 /* ─── Catalog lifecycle (Bundle 2 Step 3 - sc-6c) ─────────────────── */
 
-/* Group title row with archive/reactivate action */
+/* Group title row with archive/reactivate action - sits inside the
+   header band of the group card. */
 .sc-admin-group-head {
   display: flex;
   align-items: center;
@@ -631,12 +707,19 @@
 }
 .sc-admin-group-actions { display: inline-flex; gap: 8px; }
 
+/* Archived group: dim the whole card (desaturated), drop the navy left-
+   accent (the navy is a "this is live" cue), strike the title. The
+   svc-list inside still renders rows clickable for the Reactivate
+   affordance. */
+.sc-admin-group--archived {
+  opacity: 0.65;
+}
+.sc-admin-group--archived .sc-admin-group-header-band {
+  border-left-color: #cbd5e1;
+}
 .sc-admin-group--archived .sc-admin-group-title {
   color: #9ca3af;
   text-decoration: line-through;
-}
-.sc-admin-group--archived .sc-admin-svc-list {
-  opacity: 0.65;
 }
 
 /* Archived service rows: greyed but visible + marked */
@@ -702,15 +785,16 @@
 }
 .sc-admin-eff-warning--strong strong { color: #7c2d12; }
 
-/* Add link (at bottom of group / account) */
+/* Add link row. Inside a .sc-admin-group-footer (group card footer
+   band) this is flush; the --account variant adds standalone spacing
+   for the "+ Add group" link at the bottom of the editor. */
 .sc-admin-add-row {
-  margin-top: 8px;
-  padding: 4px 6px;
+  padding: 2px 0;
 }
 .sc-admin-add-row--account {
   margin-top: var(--space-3);
-  border-top: 1px solid #f3f4f6;
-  padding-top: var(--space-3);
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid #e2e8f0;
 }
 .sc-admin-add-link {
   font-family: inherit;

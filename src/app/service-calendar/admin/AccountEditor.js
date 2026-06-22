@@ -269,64 +269,69 @@ export default function AccountEditor({ accountKey, onBack, showToast }) {
           const activeServiceCount = svcs.filter((s) => archiveStatus(s.activeUntil, today).state !== "archived").length;
           return (
             <section key={g.id} className={`sc-admin-group${grpArchived ? " sc-admin-group--archived" : ""}`}>
-              <div className="sc-admin-group-head">
-                <h3 className="sc-admin-group-title">
-                  {g.groupName}
-                  {grpArchived && (
-                    <span className="sc-admin-archived-badge" title={`Archived since ${fmtDate(grpStatus.since)}`}>
-                      Archived {fmtDate(grpStatus.since)}
-                    </span>
-                  )}
-                  {!grpArchived && grpStatus.scheduled && (
-                    <span className="sc-admin-svc-upcoming" title={`Scheduled archive ${fmtDate(grpStatus.scheduled)}`}>
-                      will archive {fmtDate(grpStatus.scheduled)}
-                    </span>
-                  )}
-                </h3>
-                <div className="sc-admin-group-actions">
-                  {grpArchived ? (
-                    <button
-                      type="button"
-                      className="sc-admin-svc-edit"
-                      onClick={() => toggleOpen("reactivateGroup", g.id)}
-                    >
-                      {isOpen("reactivateGroup", g.id) ? "Close" : "Reactivate"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="sc-admin-svc-edit sc-admin-svc-edit--danger"
-                      onClick={() => toggleOpen("archiveGroup", g.id)}
-                      disabled={activeServiceCount === 0}
-                      title={activeServiceCount === 0 ? "No active services to archive" : ""}
-                    >
-                      {isOpen("archiveGroup", g.id) ? "Close" : "Archive group"}
-                    </button>
-                  )}
+              {/* Header band: light fill, navy left-accent, group title +
+                  group-level archive/reactivate action. */}
+              <div className="sc-admin-group-header-band">
+                <div className="sc-admin-group-head">
+                  <h3 className="sc-admin-group-title">
+                    {g.groupName}
+                    {grpArchived && (
+                      <span className="sc-admin-archived-badge" title={`Archived since ${fmtDate(grpStatus.since)}`}>
+                        Archived {fmtDate(grpStatus.since)}
+                      </span>
+                    )}
+                    {!grpArchived && grpStatus.scheduled && (
+                      <span className="sc-admin-svc-upcoming" title={`Scheduled archive ${fmtDate(grpStatus.scheduled)}`}>
+                        will archive {fmtDate(grpStatus.scheduled)}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="sc-admin-group-actions">
+                    {grpArchived ? (
+                      <button
+                        type="button"
+                        className="sc-admin-svc-edit"
+                        onClick={() => toggleOpen("reactivateGroup", g.id)}
+                      >
+                        {isOpen("reactivateGroup", g.id) ? "Close" : "Reactivate"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="sc-admin-svc-edit sc-admin-svc-edit--danger"
+                        onClick={() => toggleOpen("archiveGroup", g.id)}
+                        disabled={activeServiceCount === 0}
+                        title={activeServiceCount === 0 ? "No active services to archive" : ""}
+                      >
+                        {isOpen("archiveGroup", g.id) ? "Close" : "Archive group"}
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {isOpen("archiveGroup", g.id) && (
+                  <ArchiveGroupPanel
+                    accountKey={accountKey}
+                    group={g}
+                    activeServiceCount={activeServiceCount}
+                    onCancel={closePanel}
+                    onSaved={onArchiveSaved}
+                    showToast={showToast}
+                  />
+                )}
+                {isOpen("reactivateGroup", g.id) && (
+                  <ReactivatePanel
+                    accountKey={accountKey}
+                    entity={g}
+                    entityType="group"
+                    onCancel={closePanel}
+                    onSaved={onReactivateSaved}
+                    showToast={showToast}
+                  />
+                )}
               </div>
 
-              {isOpen("archiveGroup", g.id) && (
-                <ArchiveGroupPanel
-                  accountKey={accountKey}
-                  group={g}
-                  activeServiceCount={activeServiceCount}
-                  onCancel={closePanel}
-                  onSaved={onArchiveSaved}
-                  showToast={showToast}
-                />
-              )}
-              {isOpen("reactivateGroup", g.id) && (
-                <ReactivatePanel
-                  accountKey={accountKey}
-                  entity={g}
-                  entityType="group"
-                  onCancel={closePanel}
-                  onSaved={onReactivateSaved}
-                  showToast={showToast}
-                />
-              )}
-
+              {/* Body: white svc-list of click-to-expand rows (PR #245). */}
               <ul className="sc-admin-svc-list">
                 {svcs.map((s) => {
                   const svcStatus = archiveStatus(s.activeUntil, today);
@@ -472,25 +477,29 @@ export default function AccountEditor({ accountKey, onBack, showToast }) {
                 })}
               </ul>
 
+              {/* Footer band: light fill, Add service link + (when open)
+                  the AddServicePanel form. */}
               {!grpArchived && (
-                <div className="sc-admin-add-row">
-                  <button
-                    type="button"
-                    className="sc-admin-add-link"
-                    onClick={() => toggleOpen("addService", g.id)}
-                  >
-                    {isOpen("addService", g.id) ? "Close" : "+ Add service"}
-                  </button>
+                <div className="sc-admin-group-footer">
+                  <div className="sc-admin-add-row">
+                    <button
+                      type="button"
+                      className="sc-admin-add-link"
+                      onClick={() => toggleOpen("addService", g.id)}
+                    >
+                      {isOpen("addService", g.id) ? "Close" : "+ Add service"}
+                    </button>
+                  </div>
+                  {isOpen("addService", g.id) && (
+                    <AddServicePanel
+                      accountKey={accountKey}
+                      group={g}
+                      onCancel={closePanel}
+                      onSaved={onAddSaved}
+                      showToast={showToast}
+                    />
+                  )}
                 </div>
-              )}
-              {isOpen("addService", g.id) && (
-                <AddServicePanel
-                  accountKey={accountKey}
-                  group={g}
-                  onCancel={closePanel}
-                  onSaved={onAddSaved}
-                  showToast={showToast}
-                />
               )}
             </section>
           );
