@@ -292,14 +292,20 @@
 @keyframes scSlide { from { opacity: 0; } to { opacity: 1; } }
 
 /* Header */
-.sc-day-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); background: #fff; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
+.sc-day-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); background: #fff; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; gap: 12px; }
+.sc-day-header-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sc-day-title { font-size: var(--type-emphasis); font-weight: 700; color: #111827; margin: 0; line-height: var(--line-heading); }
-.sc-day-nav { display: flex; align-items: center; gap: 6px; }
+.sc-day-account { font-size: 12px; font-weight: 500; color: #6b7280; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-day-nav { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .sc-day-nav-btn { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; font-size: 18px; color: #6b7280; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: all 0.15s; }
 .sc-day-nav-btn:hover { border-color: #0F6E56; color: #0F6E56; }
-.sc-day-nav-label { font-size: 11px; color: #9ca3af; }
-.sc-day-close { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-.sc-day-close:hover { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+.sc-day-nav-label { font-size: 11px; color: #9ca3af; font-variant-numeric: tabular-nums; }
+/* Close button: dressed as an icon-only ghost (no border at rest) to
+   sit visually below the nav-btn pair. Becomes a real button on hover
+   so the dismiss action is still legible without competing with the
+   prev/next chevrons at idle. */
+.sc-day-close { width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--radius-input); background: transparent; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin-left: 4px; }
+.sc-day-close:hover { border-color: #fecaca; color: #dc2626; background: #fef2f2; }
 
 /* Coaching banner */
 .sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--type-body-sm); font-weight: 500; border-bottom: 1px solid; flex-shrink: 0; }
@@ -454,14 +460,18 @@
   white-space: nowrap;
 }
 
-/* Per-group match button */
-.sc-day-match-btn { 
-  display: block; width: 100%; padding: 8px; margin: 8px 0 4px;
-  border: 1px dashed #0F6E56; border-radius: var(--radius-input); background: #E1F5EE;
-  color: #085041; font-size: 13px; font-weight: 600; cursor: pointer;
+/* Per-group match button. PR3 dial-down: no longer a full-width dashed
+   green hero bar. The hero treatment was reading as the primary commit
+   on the day (which it is not - it is a shortcut helper). Now a small
+   right-aligned secondary button so the input rows and footer commit
+   keep their visual weight. */
+.sc-day-match-btn {
+  display: block; width: fit-content; padding: 5px 10px; margin: 6px 0 4px auto;
+  border: 1px solid #d1fae5; border-radius: var(--radius-input); background: #f0fdf4;
+  color: #085041; font-size: 12px; font-weight: 600; cursor: pointer;
   font-family: inherit; transition: all 0.15s; text-align: center;
 }
-.sc-day-match-btn:hover { background: #0F6E56; color: #fff; border-style: solid; }
+.sc-day-match-btn:hover { background: #E1F5EE; border-color: #0F6E56; }
 
 /* Extras button — distinct from notes */
 .sc-day-extras-btn {
@@ -472,8 +482,15 @@
 .sc-day-extras-btn:hover { border-color: #0F6E56; color: #085041; background: #f0fdf4; }
 .sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: 50%; background: #e5e7eb; color: #6b7280; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; transition: all 0.15s; }
 .sc-day-extras-btn:hover .sc-day-extras-btn-icon { background: #0F6E56; color: #fff; }
-.sc-day-extras-hide { display: block; padding: 4px 0; margin-top: 4px; border: none; background: none; color: #9ca3af; font-size: 11px; cursor: pointer; font-family: inherit; }
-.sc-day-extras-hide:hover { color: #6b7280; }
+.sc-day-extras-hide {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 8px 0 0;
+  border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff;
+  cursor: pointer; font-size: 12px; color: #6b7280; font-weight: 500; transition: all 0.15s;
+  font-family: inherit;
+}
+.sc-day-extras-hide:hover { border-color: #9ca3af; color: #374151; }
+.sc-day-extras-hide .sc-day-extras-btn-icon { background: #e5e7eb; color: #6b7280; }
+.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: #9ca3af; color: #fff; }
 
 /* Group subtotal */
 .sc-day-group-subtotal { text-align: right; padding: 6px 0 2px; font-size: 12px; font-weight: 600; color: #085041; }
@@ -490,6 +507,7 @@
 
 /* Notes */
 .sc-day-notes { margin-top: 14px; }
+.sc-day-notes-label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
 .sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); font-size: var(--type-body-sm); font-family: inherit; color: #374151; background: #fff; resize: vertical; min-height: 44px; transition: border-color 0.15s; }
 .sc-day-notes-input:focus { outline: none; border-color: #0F6E56; }
 .sc-day-notes-input::placeholder { color: #b0b0b0; }
@@ -509,6 +527,24 @@
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 12px;
+  gap: 12px;
+}
+.sc-day-totals-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+/* "Projected" / "Total" label - quiet uppercase tag in front of the
+   meals + revenue so the operator reads "what these numbers represent"
+   before reading the numbers themselves. */
+.sc-day-total-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
 }
 .sc-day-total-meals {
   font-size: 15px;
@@ -516,13 +552,20 @@
   color: #111827;
   font-variant-numeric: tabular-nums;
 }
-.sc-day-total-pct { font-size: 13px; color: #9ca3af; }
+.sc-day-total-pct { font-size: 13px; color: #9ca3af; font-variant-numeric: tabular-nums; }
 .sc-day-total-rev {
   font-size: 22px;
   font-weight: 700;
   color: #085041;
   font-variant-numeric: tabular-nums;
 }
+/* Pre-entry state: nothing the operator has typed yet. Footer numbers
+   are still real (the day's projection), but desaturated so they read
+   as reference, not commitment. As soon as anything is touched the
+   class drops and the full color comes back. */
+.sc-day-totals--projected .sc-day-total-label { color: #9ca3af; }
+.sc-day-totals--projected .sc-day-total-meals { color: #6b7280; font-weight: 500; }
+.sc-day-totals--projected .sc-day-total-rev { color: #6b7280; font-weight: 600; }
 .sc-day-actions {
   display: flex;
   gap: 10px;
@@ -1289,9 +1332,10 @@
      stay legible alongside the input. */
   .sc-day-row-delta:empty { display: none; }
 
-  /* Per-group match button: full-width tap target. The 48px floor is
-     already met by the existing padding + line-height, but lock it. */
-  .sc-day-match-btn { min-height: 48px; padding: 12px; font-size: 14px; }
+  /* Per-group match button: dialed-down inline secondary on PR3, but on
+     phone still needs a real tap target. Stays right-aligned, sized to
+     content with a min-height to clear the 44px tap floor. */
+  .sc-day-match-btn { min-height: 44px; padding: 10px 14px; font-size: 13px; }
 
   /* Footer: thumb-zone primary. Stack actions full-width, primary
      commit ON TOP within the stack (it is the load-bearing action; the
@@ -1366,5 +1410,9 @@
   .sc-today-pill { display: none; }
 }
 
-.sc-btn--cancel { background: none; color: #6b7280; border: 1px solid #e5e7eb; }
-.sc-btn--cancel:hover { color: #dc2626; border-color: #dc2626; background: #fef2f2; }
+/* Cancel: ghost tier - no border at rest so it reads as a tertiary
+   action below the outline (secondary) and primary (commit). Surface
+   appears on hover so the click target stays legible. PR3 hierarchy:
+   primary > outline > cancel. */
+.sc-btn--cancel { background: transparent; color: #9ca3af; border: 1px solid transparent; font-weight: 500; }
+.sc-btn--cancel:hover { color: #6b7280; background: #f3f4f6; border-color: transparent; }

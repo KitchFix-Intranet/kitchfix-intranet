@@ -1288,6 +1288,7 @@ export default function ServiceCalendar({ showToast, session }) {
               overrides={data.overrides?.filter(o => o.date === focusDay) || []}
               onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
               dayIndex={focusIdx} totalDays={dayList.length} monthRevenue={metrics.actRev || metrics.projRev}
+              accountName={acctObj?.name || ""}
               isFeeAccount={isFeeAccount} homestandContext={homestandMap[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
               onClose={() => setFocusDay(null)} />
