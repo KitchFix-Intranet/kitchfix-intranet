@@ -193,6 +193,25 @@ function AdminDashboard({
   // dismisses.
   const [errors, setErrors] = useState({});
 
+  // Pending publish PRs (opd-edit/* branches with an open PR). Refreshed on
+  // mount and after each successful submit. A stuck PR (failed required
+  // check) stays open and remains here until Kevin sees it - this is how
+  // a silently-failing edit becomes visible.
+  const [pendingEdits, setPendingEdits] = useState([]);
+  const refreshPendingEdits = useCallback(() => {
+    fetch("/api/playbook?action=pending-edits", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.pending)) setPendingEdits(d.pending);
+      })
+      .catch(() => {
+        // Non-fatal: the indicator just stays at its prior state.
+      });
+  }, []);
+  useEffect(() => {
+    refreshPendingEdits();
+  }, [refreshPendingEdits]);
+
   // Tab state. Attention is the landing tab (the cockpit's reason for
   // existing); Worklist + Archive remain. Switching is purely client-side;
   // the worklist data is from bootstrap, archive is lazy-loaded on first
@@ -416,6 +435,31 @@ function AdminDashboard({
         <p className="pb-admin-sub">
           Owner cockpit · {email}
         </p>
+        {pendingEdits.length > 0 && (
+          <div
+            className="pb-admin-pending-edits"
+            aria-label="Pending publish"
+          >
+            <span className="pb-admin-pending-edits-count">
+              {pendingEdits.length} edit{pendingEdits.length === 1 ? "" : "s"} pending publish
+            </span>
+            <span className="pb-admin-pending-edits-list">
+              {pendingEdits.map((p, i) => (
+                <span key={p.number}>
+                  {i > 0 && ", "}
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pb-admin-pending-edits-link"
+                  >
+                    {p.doc_id} (PR #{p.number})
+                  </a>
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
       </header>
 
       {/* Tab nav ─ Attention / Worklist / Archive */}
@@ -600,6 +644,7 @@ function AdminDashboard({
         <MdxEditorSlideOver
           docId={openEditorDocId}
           onClose={() => setOpenEditorDocId(null)}
+          onSubmitted={refreshPendingEdits}
         />
       )}
     </div>
@@ -1515,18 +1560,27 @@ const FM_AUDIENCES = ["operator", "corporate", "internal"];
 const FM_ACCESS_LEVELS = ["unrestricted", "restricted", "slt"];
 const FM_LANGS = ["en", "es"];
 
-function MdxEditorSlideOver({ docId, onClose }) {
+function MdxEditorSlideOver({ docId, onClose, onSubmitted }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sha, setSha] = useState(null); // staleness guard - rotates after each save
+  // sha is the staleness guard against MAIN. The publish flow now writes to
+  // opd-edit/<docId> via a PR; the editor's sha stays anchored to main and
+  // does not rotate on submit (main hasn't changed). It only rotates after
+  // the PR auto-merges, at which point the next save naturally 409s and the
+  // Reload button picks up the new main sha.
+  const [sha, setSha] = useState(null);
   const [fm, setFm] = useState(null); // frontmatter state (object)
   const [body, setBody] = useState(""); // body MDX state
 
   // Save flow state.
-  // saveStatus: "idle" | "saving" | "ok" | "unchanged" | "validation" | "compile" | "stale" | "error"
+  // saveStatus values:
+  //   "idle" | "submitting" | "submitted" | "unchanged"
+  //   | "validation" | "compile" | "stale" | "error"
   const [saveStatus, setSaveStatus] = useState("idle");
   const [saveMessage, setSaveMessage] = useState(null);
   const [validationErrors, setValidationErrors] = useState(null);
+  // Submitted-state details (PR link, branch). Set on a successful submit.
+  const [submittedPr, setSubmittedPr] = useState(null);
 
   const loadDoc = (refreshOnly = false) => {
     let cancelled = false;
@@ -1540,6 +1594,7 @@ function MdxEditorSlideOver({ docId, onClose }) {
     setSaveStatus("idle");
     setSaveMessage(null);
     setValidationErrors(null);
+    setSubmittedPr(null);
     // cache: "no-store" is the client-side companion to the route's
     // Cache-Control: no-store + force-dynamic. The 2026-06-19 stale-sha
     // incident proved the editor must never read this from any HTTP cache:
@@ -1568,9 +1623,10 @@ function MdxEditorSlideOver({ docId, onClose }) {
 
   const handleSave = async () => {
     if (!fm || !sha) return;
-    setSaveStatus("saving");
+    setSaveStatus("submitting");
     setSaveMessage(null);
     setValidationErrors(null);
+    setSubmittedPr(null);
     try {
       const res = await fetch("/api/playbook?action=commit-mdx", {
         method: "POST",
@@ -1588,11 +1644,21 @@ function MdxEditorSlideOver({ docId, onClose }) {
         setSaveMessage(data.message || "MDX failed to compile.");
         return;
       }
-      if (res.status === 409 || data?.error === "stale") {
+      if (res.status === 409 && data?.error === "stale") {
         setSaveStatus("stale");
         setSaveMessage(
           data.message ||
             "This document changed since you opened it. Reload before saving."
+        );
+        return;
+      }
+      if (data?.error === "github_write_failed") {
+        // Honest surfacing of a GitHub-side rejection. Do NOT mislabel as
+        // stale - the user sees the real status + message.
+        setSaveStatus("error");
+        const step = data.step ? ` [${data.step}]` : "";
+        setSaveMessage(
+          `GitHub ${data.github_status}${step}: ${data.github_message || "(no message)"}`
         );
         return;
       }
@@ -1603,16 +1669,28 @@ function MdxEditorSlideOver({ docId, onClose }) {
       }
       if (data.unchanged) {
         setSaveStatus("unchanged");
-        setSaveMessage("No changes to save.");
+        setSaveMessage("No changes to submit.");
         return;
       }
-      // Success - rotate sha so a second save off the same editor session
-      // doesn't 409 against itself.
-      if (data.sha) setSha(data.sha);
-      setSaveStatus("ok");
-      setSaveMessage(
-        "Saved to GitHub. Run the projection to publish to the dashboard and reader."
-      );
+      if (data.status === "submitted") {
+        // Asynchronous publish. The PR will auto-merge when the required
+        // Playwright check passes; B2 then projects + re-embeds. The
+        // editor's sha STAYS anchored to main (it has not moved); a second
+        // submit in this session will update the same PR.
+        setSubmittedPr({
+          number: data.pr_number,
+          url: data.pr_url,
+          branch: data.branch,
+          autoMergeEnabled: !!data.auto_merge_enabled,
+          autoMergeWarning: data.auto_merge_warning || null,
+        });
+        setSaveStatus("submitted");
+        if (typeof onSubmitted === "function") onSubmitted();
+        return;
+      }
+      // Unknown shape - shouldn't happen, but be honest.
+      setSaveStatus("error");
+      setSaveMessage("Unexpected response from save endpoint.");
     } catch (e) {
       setSaveStatus("error");
       setSaveMessage(e.message || "Network error");
@@ -1667,8 +1745,9 @@ function MdxEditorSlideOver({ docId, onClose }) {
         ) : fm ? (
           <div className="pb-admin-editor-body">
             <p className="pb-admin-editor-note">
-              Save commits this MDX to main on GitHub. It does NOT publish -
-              run the projection to update the dashboard and reader.
+              Save opens a PR to main on GitHub. The PR auto-merges once the
+              required Playwright check passes (usually a few minutes); the
+              dashboard + reader then update automatically.
             </p>
 
             {saveStatus !== "idle" && (
@@ -1676,8 +1755,26 @@ function MdxEditorSlideOver({ docId, onClose }) {
                 className={`pb-admin-editor-status pb-admin-editor-status--${saveStatus}`}
                 role="status"
               >
-                {saveStatus === "saving" && "Saving…"}
-                {saveStatus === "ok" && saveMessage}
+                {saveStatus === "submitting" && "Submitting…"}
+                {saveStatus === "submitted" && submittedPr && (
+                  <>
+                    <strong>Submitted for publish.</strong>{" "}
+                    <a
+                      href={submittedPr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      PR #{submittedPr.number}
+                    </a>{" "}
+                    opened. It will publish automatically when checks pass
+                    (usually a few minutes).
+                    {submittedPr.autoMergeWarning && (
+                      <div className="pb-admin-editor-submitted-warning">
+                        Auto-merge note: {submittedPr.autoMergeWarning}
+                      </div>
+                    )}
+                  </>
+                )}
                 {saveStatus === "unchanged" && saveMessage}
                 {saveStatus === "compile" && (
                   <>
@@ -1711,7 +1808,7 @@ function MdxEditorSlideOver({ docId, onClose }) {
                 )}
                 {saveStatus === "error" && (
                   <>
-                    <strong>Save failed.</strong> {saveMessage}
+                    <strong>Submit failed.</strong> {saveMessage}
                   </>
                 )}
               </div>
@@ -1799,7 +1896,7 @@ function MdxEditorSlideOver({ docId, onClose }) {
                 type="button"
                 className="pb-admin-modal-btn"
                 onClick={onClose}
-                disabled={saveStatus === "saving"}
+                disabled={saveStatus === "submitting"}
               >
                 Close
               </button>
@@ -1807,9 +1904,9 @@ function MdxEditorSlideOver({ docId, onClose }) {
                 type="button"
                 className="pb-admin-modal-btn pb-admin-modal-btn--primary"
                 onClick={handleSave}
-                disabled={saveStatus === "saving" || saveStatus === "stale"}
+                disabled={saveStatus === "submitting" || saveStatus === "stale"}
               >
-                {saveStatus === "saving" ? "Saving…" : "Save to GitHub"}
+                {saveStatus === "submitting" ? "Submitting…" : "Submit for publish"}
               </button>
             </div>
           </div>
