@@ -386,9 +386,57 @@
 /* Corporate-only Admin link in the SC header. Brand navy family
    (#153968 + #f0f4f8) matching the SC today ring + the kf-bg page
    wash, not generic Tailwind blue. Rendered conditionally by
-   ServiceCalendar.js when isScAdmin(session email) is true. */
+   ServiceCalendar.js when isScAdmin(session email) is true.
+   NOTE: the Link element was retired when admin became an in-page
+   view mode; rules retained for cleanup in a follow-up CSS sweep. */
 .sc-admin-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #153968; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: var(--radius-input); padding: 4px 9px; text-decoration: none; transition: background 0.15s, border-color 0.15s; margin-left: 4px; }
 .sc-admin-link:hover { background: #e2e8f0; border-color: #cbd5e1; }
+
+/* In-page admin view mode (Bundle 2 follow-up): the selector slot is
+   replaced by a static "Admin · all accounts" label when in admin mode,
+   plus an "Overview" back-link when drilled into a specific account.
+   The Admin segment button reuses .sc-mode-btn styling; --admin modifier
+   left as a hook for future emphasis (none today). */
+.sc-header-admin-label { display: inline-flex; align-items: center; gap: 10px; }
+.sc-admin-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #153968;
+  background: #f0f4f8;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-input);
+  padding: 5px 12px;
+}
+.sc-admin-overview-back {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0F6E56;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-input);
+  transition: background 0.15s;
+}
+.sc-admin-overview-back:hover { background: #E1F5EE; }
+.sc-admin-overview-back:focus-visible { outline: 2px solid #0F6E56; outline-offset: 2px; }
+
+/* Admin segment button - reuses base .sc-mode-btn / --active. The
+   --admin modifier is present for any future emphasis pass. */
+.sc-mode-btn--admin { font-weight: 600; }
+
+/* Admin in-page body container. Just gives the AdminPanel the same
+   fade-in entrance as the month/year bodies. AdminPanel handles its
+   own internal structure (the AccountsOverview rows, the per-account
+   editor, the inline edit panels). */
+.sc-admin-body { padding: 16px 12px 28px; }
+@media (max-width: 640px) {
+  .sc-admin-body { padding: 12px 4px 24px; }
+}
 
 /* Keep old sc-focus classes for bulk panel */
 .sc-focus { padding: 24px 12px 28px; border-top: 2px solid #0F6E56; background: #fff; }

@@ -1,32 +1,27 @@
 // ════════════════════════════════════════════════════════════════════════════
-// /service-calendar/admin · Service Calendar - corporate admin dashboard
+// /service-calendar/admin · thin redirect.
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Server-component gate. Middleware already enforces "logged in"; this page
-// enforces "corporate". A logged-in non-corporate user gets redirected back
-// to the calendar surface, not shown a stub - the link in the SC header is
-// hidden for them too, so any GET to this URL is a deliberate poke.
+// SC admin became an in-page view mode on /service-calendar?view=admin
+// (segmented Year/Month/Today/Admin button on the calendar's control row).
+// This route used to render a dedicated AdminClient; that was retired in
+// favor of the in-page mount so the hero + account rail + chrome stay
+// constant when crossing into admin.
 //
-// The check is server-side via auth() + isScAdmin(); hiding the header link
-// is NOT the gate. Every admin API action this page eventually calls must
-// re-check isScAdmin() server-side too.
+// This file preserves old bookmarks pointing at /service-calendar/admin
+// by redirecting to the in-page deep link. The destination route
+// /service-calendar enforces its own Coming Soon gate for non-SC_ADMINS;
+// the in-page admin view + toggle are isScAdmin-gated client-side; and
+// every admin POST action is isScAdmin-gated server-side in
+// src/app/api/service-calendar/route.js. Triple coverage of the gate.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { isScAdmin } from "@/lib/admin";
-import AdminClient from "./AdminClient";
 
 export const metadata = {
   title: "Service Calendar admin · KitchFix",
-  description: "Corporate control panel for Service Calendar pricing, fees, and services.",
 };
 
-export default async function ServiceCalendarAdminPage() {
-  const session = await auth();
-  const email = session?.user?.email?.toLowerCase().trim();
-  if (!isScAdmin(email)) {
-    redirect("/service-calendar");
-  }
-  return <AdminClient email={email} />;
+export default function ServiceCalendarAdminRedirect() {
+  redirect("/service-calendar?view=admin");
 }
