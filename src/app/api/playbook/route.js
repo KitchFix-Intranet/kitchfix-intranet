@@ -498,6 +498,67 @@ export async function GET(request) {
       );
     }
 
+    // ── pending-edits ───────────────────────────────────────────────────
+    // List open PRs whose head branch matches opd-edit/* (the publish-
+    // through-the-gate flow's per-doc branches). The cockpit renders these
+    // as "N edit(s) pending publish" so a stuck or failing PR is visible
+    // rather than silent. A PR with a failed required check stays open and
+    // appears here until Kevin sees and resolves it.
+    if (action === "pending-edits") {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      const token = process.env.GITHUB_OPD_TOKEN;
+      if (!token) {
+        // Graceful: feature works even before the env var exists; the
+        // indicator just renders empty.
+        return NextResponse.json(
+          { pending: [] },
+          { headers: { "Cache-Control": "no-store, private, max-age=0, must-revalidate" } }
+        );
+      }
+      let listRes;
+      try {
+        listRes = await fetch(
+          "https://api.github.com/repos/KitchFix-Intranet/kitchfix-intranet/pulls?state=open&per_page=100",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "kitchfix-opd-authoring",
+            },
+            cache: "no-store",
+          }
+        );
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed: ${e.message}`, pending: [] },
+          { status: 502 }
+        );
+      }
+      if (!listRes.ok) {
+        return NextResponse.json(
+          { error: `GitHub ${listRes.status}`, pending: [] },
+          { status: 502 }
+        );
+      }
+      const all = await listRes.json();
+      const pending = (Array.isArray(all) ? all : [])
+        .filter((p) => typeof p?.head?.ref === "string" && p.head.ref.startsWith("opd-edit/"))
+        .map((p) => ({
+          number: p.number,
+          url: p.html_url,
+          doc_id: p.head.ref.slice("opd-edit/".length),
+          title: p.title,
+          created_at: p.created_at,
+        }));
+      return NextResponse.json(
+        { pending },
+        { headers: { "Cache-Control": "no-store, private, max-age=0, must-revalidate" } }
+      );
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     console.error("[playbook GET]", e.message);
@@ -712,21 +773,30 @@ export async function POST(request) {
     }
 
     // ── commit-mdx ───────────────────────────────────────────────────────
-    // OPD authoring A2: validate the edited MDX and commit it to main on
-    // GitHub. The PROJECTION STAYS MANUAL - this action only writes the
-    // .mdx file; Kevin runs scripts/content/project-catalog.mjs --apply
-    // afterwards to publish. Auto-projection is Part B, separately gated.
+    // OPD authoring: validate the edited MDX and SUBMIT it for publish via
+    // a per-doc PR that auto-merges once the required Playwright check
+    // passes. The B2 workflow then auto-projects + re-embeds on merge.
+    //
+    // Direct PUTs to main are blocked by ruleset 16364953 (Pull request
+    // required; required status check "Playwright tests"). The cockpit
+    // plays by the same rules everything else in the repo does, with
+    // GitHub's native auto-merge bridging "one-click save" and
+    // "branch-protection gate."
     //
     // Safety contract (non-negotiable):
     //   1. Validate frontmatter against the JSON Schema. Fail -> 422,
-    //      no commit.
-    //   2. Compile-check the body via @mdx-js/mdx. Fail -> 422, no commit.
-    //   3. Round-trip-faithful serialize (serializeMdx) so unchanged saves
-    //      are byte-identical and scalar edits produce one-line diffs.
+    //      no submit.
+    //   2. Compile-check the body via @mdx-js/mdx. Fail -> 422, no submit.
+    //   3. Round-trip-faithful serialize (serializeMdx) so unchanged
+    //      submits are byte-identical and scalar edits produce one-line
+    //      diffs.
     //   4. No-op detection: skip the commit when the serialized content
     //      equals the current file content.
-    //   5. Stale-sha guard: GitHub PUT requires the sha the editor was
-    //      opened with. A 409 from GitHub means the file moved under us.
+    //   5. Stale-sha guard against main: if main moved under the open
+    //      editor, return 409 with expected_sha + live_sha; the editor's
+    //      Reload button re-fetches.
+    //   6. Write to opd-edit/<id>, not main. The PR-level Playwright
+    //      check is the publish gate; auto-merge handles the rest.
     if (action === "commit-mdx") {
       const { id, frontmatter, body: mdxBody, sha } = body;
       if (!id || typeof id !== "string" || !/^[A-Z0-9-]+$/.test(id)) {
@@ -840,49 +910,42 @@ export async function POST(request) {
         return NextResponse.json({ unchanged: true, sha });
       }
 
-      // 5. Commit to main.
-      const commitMessage = `opd: edit ${id} via cockpit`;
-      const commitBody = {
-        message: commitMessage,
-        content: Buffer.from(serialized.content, "utf8").toString("base64"),
-        sha,
-        branch: "main",
-        committer: {
-          name: "OPD Authoring",
-          email: "noreply@kitchfix.com",
-        },
+      // 5. Publish through the gate (branch -> PR -> auto-merge).
+      //
+      // Direct PUTs to main are blocked by ruleset 16364953 (the cockpit
+      // saves are required to go through a PR with the Playwright check).
+      // The flow:
+      //   a. Determine per-doc branch opd-edit/<id>. Create it from main HEAD
+      //      if missing; reuse if it already exists (re-save case).
+      //   b. GET the file's blob sha ON THAT BRANCH (the PUT's `sha` must
+      //      match the branch, not main).
+      //   c. PUT the new content to the branch.
+      //   d. Find or open a PR (head=<branch>, base=main).
+      //   e. Enable GitHub native auto-merge via GraphQL so the PR merges
+      //      itself once the required check passes.
+      //   f. Return {status:"submitted", pr_number, pr_url, branch}.
+      //
+      // The pre-check above (currentJson.sha !== sha) keeps its original
+      // semantics: it guards against "main moved while the editor sat open",
+      // which is the only race that matters here. The editor's sha stays
+      // anchored to main; branch-blob shas are internal to this route.
+      const repoSlug = "KitchFix-Intranet/kitchfix-intranet";
+      const repoOwner = "KitchFix-Intranet";
+      const branchName = `opd-edit/${id}`;
+      const filePath = `content/documents/${encodeURIComponent(id)}.mdx`;
+
+      const ghHeaders = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "kitchfix-opd-authoring",
       };
-      let putRes;
-      try {
-        putRes = await fetch(contentsUrl, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-            "User-Agent": "kitchfix-opd-authoring",
-          },
-          body: JSON.stringify(commitBody),
-          cache: "no-store",
-        });
-      } catch (e) {
-        return NextResponse.json(
-          { error: `GitHub PUT failed: ${e.message}` },
-          { status: 502 }
-        );
-      }
-      if (!putRes.ok) {
-        // Surface GitHub's actual error instead of mislabeling everything
-        // as "stale". The prior code mapped 409/422 to a bare-body stale
-        // 409 on the theory that a PUT failure had to be a sha race;
-        // the 2026-06-19 audit found that repo ruleset 16364953's
-        // pull_request rule on main was rejecting direct contents-API
-        // PUTs (status 422 "Changes must be made through a pull request"),
-        // and the old mapping made it look like an editor-side staleness
-        // bug. Reflect the real GitHub response code + message so future
-        // failures are debuggable from one Network-tab response.
-        const rawText = await putRes.text();
+      const ghJsonHeaders = { ...ghHeaders, "Content-Type": "application/json" };
+
+      // Parse a GitHub error response into a stable shape. Centralized so
+      // every failure point below surfaces consistently.
+      const ghFail = async (failedRes, step) => {
+        const rawText = await failedRes.text();
         let githubMessage = rawText;
         try {
           const parsed = JSON.parse(rawText);
@@ -898,17 +961,216 @@ export async function POST(request) {
         return NextResponse.json(
           {
             error: "github_write_failed",
-            github_status: putRes.status,
+            step,
+            github_status: failedRes.status,
             github_message: githubMessage,
           },
           { status: 502 }
         );
+      };
+
+      // a. Branch existence check.
+      let branchExists;
+      try {
+        const refRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/git/refs/heads/${encodeURIComponent(branchName)}`,
+          { headers: ghHeaders, cache: "no-store" }
+        );
+        if (refRes.status === 200) {
+          branchExists = true;
+        } else if (refRes.status === 404) {
+          branchExists = false;
+        } else {
+          return await ghFail(refRes, "branch_check");
+        }
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed (branch_check): ${e.message}` },
+          { status: 502 }
+        );
       }
-      const putJson = await putRes.json();
+
+      // Create the branch from main HEAD if missing.
+      if (!branchExists) {
+        let mainCommitSha;
+        try {
+          const mainRefRes = await fetch(
+            `https://api.github.com/repos/${repoSlug}/git/refs/heads/main`,
+            { headers: ghHeaders, cache: "no-store" }
+          );
+          if (!mainRefRes.ok) return await ghFail(mainRefRes, "main_ref_lookup");
+          const mainRefJson = await mainRefRes.json();
+          mainCommitSha = mainRefJson?.object?.sha;
+          if (!mainCommitSha) {
+            return NextResponse.json(
+              { error: "github_write_failed", step: "main_ref_lookup", github_status: 502, github_message: "main ref missing object.sha" },
+              { status: 502 }
+            );
+          }
+        } catch (e) {
+          return NextResponse.json(
+            { error: `GitHub fetch failed (main_ref): ${e.message}` },
+            { status: 502 }
+          );
+        }
+        try {
+          const createRefRes = await fetch(
+            `https://api.github.com/repos/${repoSlug}/git/refs`,
+            {
+              method: "POST",
+              headers: ghJsonHeaders,
+              body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: mainCommitSha }),
+              cache: "no-store",
+            }
+          );
+          if (!createRefRes.ok) return await ghFail(createRefRes, "branch_create");
+        } catch (e) {
+          return NextResponse.json(
+            { error: `GitHub fetch failed (branch_create): ${e.message}` },
+            { status: 502 }
+          );
+        }
+      }
+
+      // b. Get the file blob sha on the target branch. After a fresh branch
+      // create this equals currentJson.sha (main blob), but on a re-save
+      // it's whatever the branch advanced to. The PUT's `sha` field is
+      // branch-scoped, not main-scoped.
+      let branchBlobSha;
+      try {
+        const branchFileRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/contents/${filePath}?ref=${encodeURIComponent(branchName)}`,
+          { headers: ghHeaders, cache: "no-store" }
+        );
+        if (!branchFileRes.ok) return await ghFail(branchFileRes, "branch_file_get");
+        const branchFileJson = await branchFileRes.json();
+        branchBlobSha = branchFileJson?.sha;
+        if (!branchBlobSha) {
+          return NextResponse.json(
+            { error: "github_write_failed", step: "branch_file_get", github_status: 502, github_message: "branch file response missing sha" },
+            { status: 502 }
+          );
+        }
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed (branch_file): ${e.message}` },
+          { status: 502 }
+        );
+      }
+
+      // c. PUT the new content to the branch.
+      const commitMessage = `opd: edit ${id} via cockpit`;
+      const commitBody = {
+        message: commitMessage,
+        content: Buffer.from(serialized.content, "utf8").toString("base64"),
+        sha: branchBlobSha,
+        branch: branchName,
+        committer: {
+          name: "OPD Authoring",
+          email: "noreply@kitchfix.com",
+        },
+      };
+      let putRes;
+      try {
+        putRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/contents/${filePath}`,
+          {
+            method: "PUT",
+            headers: ghJsonHeaders,
+            body: JSON.stringify(commitBody),
+            cache: "no-store",
+          }
+        );
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub PUT failed: ${e.message}` },
+          { status: 502 }
+        );
+      }
+      if (!putRes.ok) return await ghFail(putRes, "branch_commit");
+
+      // d. Find or open a PR for the branch.
+      let pr;
+      try {
+        const prListRes = await fetch(
+          `https://api.github.com/repos/${repoSlug}/pulls?state=open&head=${encodeURIComponent(`${repoOwner}:${branchName}`)}`,
+          { headers: ghHeaders, cache: "no-store" }
+        );
+        if (!prListRes.ok) return await ghFail(prListRes, "pr_list");
+        const prList = await prListRes.json();
+        if (Array.isArray(prList) && prList.length > 0) {
+          pr = prList[0];
+        } else {
+          const prCreateRes = await fetch(
+            `https://api.github.com/repos/${repoSlug}/pulls`,
+            {
+              method: "POST",
+              headers: ghJsonHeaders,
+              body: JSON.stringify({
+                title: `opd: edit ${id}`,
+                head: branchName,
+                base: "main",
+                body:
+                  "Authored via the OPD cockpit editor. Auto-merges when the " +
+                  "required Playwright check passes; B2 workflow then " +
+                  "auto-projects and re-embeds.",
+              }),
+              cache: "no-store",
+            }
+          );
+          if (!prCreateRes.ok) return await ghFail(prCreateRes, "pr_create");
+          pr = await prCreateRes.json();
+        }
+      } catch (e) {
+        return NextResponse.json(
+          { error: `GitHub fetch failed (pr_find_or_create): ${e.message}` },
+          { status: 502 }
+        );
+      }
+
+      // e. Enable GitHub native auto-merge (GraphQL). Already-enabled is
+      // sticky across pushes, so a second submit's mutation returns an
+      // "already enabled" error - we surface it as a non-fatal warning,
+      // not a failure. The PR exists either way.
+      let autoMergeEnabled = false;
+      let autoMergeWarning = null;
+      try {
+        const gqlRes = await fetch("https://api.github.com/graphql", {
+          method: "POST",
+          headers: ghJsonHeaders,
+          body: JSON.stringify({
+            query:
+              "mutation($pid: ID!) { enablePullRequestAutoMerge(input: { pullRequestId: $pid, mergeMethod: SQUASH }) { pullRequest { number autoMergeRequest { enabledAt mergeMethod } } } }",
+            variables: { pid: pr?.node_id },
+          }),
+          cache: "no-store",
+        });
+        if (gqlRes.ok) {
+          const gqlJson = await gqlRes.json();
+          if (Array.isArray(gqlJson.errors) && gqlJson.errors.length > 0) {
+            autoMergeWarning = gqlJson.errors
+              .map((e) => e.message)
+              .join("; ")
+              .slice(0, 300);
+          } else if (gqlJson?.data?.enablePullRequestAutoMerge?.pullRequest) {
+            autoMergeEnabled = true;
+          }
+        } else {
+          const txt = await gqlRes.text();
+          autoMergeWarning = `auto-merge graphql ${gqlRes.status}: ${txt.slice(0, 200)}`;
+        }
+      } catch (e) {
+        autoMergeWarning = `auto-merge enable failed: ${e.message}`;
+      }
+
+      // f. Done.
       return NextResponse.json({
-        ok: true,
-        sha: putJson?.content?.sha || null,
-        commit: putJson?.commit?.sha || null,
+        status: "submitted",
+        pr_number: pr?.number,
+        pr_url: pr?.html_url,
+        branch: branchName,
+        auto_merge_enabled: autoMergeEnabled,
+        ...(autoMergeWarning ? { auto_merge_warning: autoMergeWarning } : {}),
       });
     }
 
