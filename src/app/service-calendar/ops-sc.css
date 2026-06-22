@@ -164,18 +164,77 @@
 /* Bulk mode */
 .sc-tile--bulk-selectable { cursor: pointer; }
 .sc-tile--bulk-selected { border-color: #0F6E56 !important; box-shadow: 0 0 0 2px rgba(15,110,86,0.2); }
-.sc-bulk-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; transition: all 0.15s; }
+/* Bulk-mode affordances. Bulk operations are operator actions (select +
+   match + confirm) so the palette stays GREEN throughout (#0F6E56 /
+   #085041 / #E1F5EE). The bar gets a real container background + border
+   so it reads as a tool surface, not a floating row. */
+.sc-bulk-check {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid #d1d5db;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: transparent; transition: all 0.15s;
+}
 .sc-bulk-check--on { background: #0F6E56; border-color: #0F6E56; color: #fff; }
-.sc-bulk-bar { padding: 10px 0; display: flex; align-items: center; }
-.sc-bulk-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px dashed #0F6E56; border-radius: var(--radius-input); background: #E1F5EE; color: #085041; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.sc-bulk-bar {
+  padding: 10px 14px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  background: #f0fdf4;
+  border: 1px solid #b7e4cb;
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 2px rgba(15, 110, 86, 0.06);
+}
+.sc-bulk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px dashed #0F6E56;
+  border-radius: var(--radius-input);
+  background: #E1F5EE;
+  color: #085041;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
 .sc-bulk-toggle:hover { background: #0F6E56; color: #fff; }
 .sc-bulk-toggle svg { flex-shrink: 0; }
-.sc-bulk-active { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
-.sc-bulk-count { font-size: 14px; font-weight: 600; color: #0F6E56; }
+.sc-bulk-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+.sc-bulk-count { font-size: 14px; font-weight: 600; color: #085041; }
 .sc-bulk-actions { display: flex; align-items: center; gap: 8px; }
-.sc-bulk-cancel { padding: 6px 14px; border: none; background: none; color: #6b7280; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
-.sc-bulk-cancel:hover { color: #dc2626; }
-.sc-bulk-panel { border: 2px solid #0F6E56; border-radius: var(--radius-card); margin: 12px 0; }
+.sc-bulk-cancel {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  background: none;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: var(--radius-input);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.sc-bulk-cancel:hover {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+.sc-bulk-panel {
+  border: 2px solid #0F6E56;
+  border-radius: var(--radius-card);
+  margin: 12px 0;
+}
 
 /* Status badges */
 .sc-badge { font-size: 12px; font-weight: 700; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -251,32 +310,115 @@
 
 .sc-day-body { padding: var(--space-3) var(--space-4); overflow-y: auto; flex: 1; }
 
-/* Group */
-.sc-day-group { margin-bottom: 14px; }
-.sc-day-group--expanded { margin-top: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3); background: #fff; border-radius: var(--radius-card); border: 1px solid #e5e7eb; }
-.sc-day-group-header { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid #0F6E56; margin-bottom: 4px; }
-.sc-day-group-name { font-size: 10px; font-weight: 700; color: #085041; text-transform: uppercase; letter-spacing: 0.05em; }
-.sc-day-group-price { font-size: 10px; font-weight: 600; color: #085041; }
-.sc-day-group-hint { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.03em; }
-
-/* Service row */
-.sc-day-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f0f0f0; }
-.sc-day-row:last-of-type { border-bottom: none; }
-.sc-day-row-left { display: flex; flex-direction: column; }
-.sc-day-row-name { font-size: var(--type-body); color: #111827; }
-.sc-day-row-proj-label { font-size: var(--type-caption); color: #9ca3af; }
-.sc-day-row-right { display: flex; align-items: center; gap: 8px; }
-
-/* Input — ghost = empty with placeholder, touched = solid with value */
-.sc-day-input {
-  width: 72px; padding: var(--space-2); border-radius: var(--radius-input);
-  font-size: var(--type-body); font-weight: 600; color: #111827; text-align: center;
-  background: #fff; font-family: inherit; transition: all 0.15s;
+/* Group card - matches the admin's "Fuller" group treatment
+   (sc-admin-group in ops-sc-admin.css: 1px #e2e8f0, 10px radius, subtle
+   navy-tinted shadow). Both entry surfaces - single-day popup and
+   bulk-entry modal - render through the same .sc-day-group class. */
+.sc-day-group {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
+  margin-bottom: 14px;
 }
-.sc-day-input--ghost { border: 1.5px dashed #d1d5db; border-radius: var(--radius-input); color: #111827; }
-.sc-day-input--ghost::placeholder { color: #d1d5db; font-weight: 400; }
-.sc-day-input--touched { border: 1.5px solid #0F6E56; color: #085041; background: #f0fdf4; }
-.sc-day-input:focus { outline: none; border: 1.5px solid #0F6E56; background: #fff; }
+.sc-day-group--expanded {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+/* Header BAND - light fill + NAVY left-accent (#153968 = structural
+   definition layer, matches sc-admin-group-header-band). Replaces the
+   prior 2px green underline which was carrying both structure and
+   action color at once. Group name moves to navy here too so the band
+   reads as the structural container; the green operator-semantic color
+   is preserved on the touched input, the match button, the delta
+   indicators, and the subtotal below. */
+.sc-day-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: 3px solid #153968;
+  margin-bottom: 0;
+}
+.sc-day-group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #153968;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.sc-day-group-price {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+.sc-day-group-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Service row - sits on white inside the group card. Roomier so the
+   hero input has space. The 0.5px divider stays as a quiet inside-card
+   row separator. */
+.sc-day-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 0.5px solid #f0f0f0;
+  gap: 12px;
+}
+.sc-day-row:last-of-type { border-bottom: none; }
+.sc-day-row-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sc-day-row-name { font-size: var(--type-body); font-weight: 500; color: #111827; }
+.sc-day-row-proj-label { font-size: var(--type-caption); color: #9ca3af; }
+.sc-day-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+/* INPUT AS HERO - the operator's primary touch target. Wider, taller,
+   bigger font so the meal-count value is the visual focus of the row.
+   Ghost (untouched) stays dashed/quiet to read as "not yet entered".
+   Touched stays GREEN (#0F6E56 / #085041 / #f0fdf4) - that is the
+   operator-semantic "entered/confirmed" color and must not move to
+   navy. PR2 handles tap targets at narrow widths; here we ensure the
+   desktop base is already >= 44px tall so the floor is met. */
+.sc-day-input {
+  width: 92px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: var(--radius-input);
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+  background: #fff;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.15s;
+}
+.sc-day-input--ghost {
+  border: 1.5px dashed #d1d5db;
+  color: #111827;
+}
+.sc-day-input--ghost::placeholder {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+.sc-day-input--touched {
+  border: 1.5px solid #0F6E56;
+  color: #085041;
+  background: #f0fdf4;
+}
+.sc-day-input:focus {
+  outline: none;
+  border: 1.5px solid #0F6E56;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+}
 
 /* Delta */
 .sc-day-row-delta { font-size: 12px; min-width: 36px; text-align: right; }
@@ -343,13 +485,41 @@
 .sc-day-notes-input:focus { outline: none; border-color: #0F6E56; }
 .sc-day-notes-input::placeholder { color: #b0b0b0; }
 
-/* Footer — sticky at bottom of overlay */
-.sc-day-footer { padding: var(--space-3) var(--space-4); border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 12px 12px; flex-shrink: 0; }
-.sc-day-totals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.sc-day-total-meals { font-size: 14px; font-weight: 500; color: #111827; }
+/* Footer - sticky at bottom of overlay. Slightly more presence so it
+   reads as a real commit zone. The total-rev stays green (operator
+   semantics: "this is what you have entered/committed"). */
+.sc-day-footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
+}
+.sc-day-totals {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.sc-day-total-meals {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
 .sc-day-total-pct { font-size: 13px; color: #9ca3af; }
-.sc-day-total-rev { font-size: 20px; font-weight: 700; color: #085041; }
-.sc-day-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.sc-day-total-rev {
+  font-size: 22px;
+  font-weight: 700;
+  color: #085041;
+  font-variant-numeric: tabular-nums;
+}
+.sc-day-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
 
 /* ── Review overlay ── */
 .sc-day-review-inner { padding: var(--space-4) var(--space-4); overflow-y: auto; flex: 1; }
@@ -376,11 +546,45 @@
 .sc-day-success-actions { display: flex; gap: 10px; justify-content: center; }
 
 /* Shared btn styles */
-.sc-btn { padding: var(--space-2) var(--space-5); border-radius: var(--radius-input); font-size: var(--type-body); font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit; border: none; }
+/* Real-button language matching the admin polish (PRs #245/#246). Primary
+   = the commit affordance, carries shadow weight + the green operator-
+   semantic color (commit = green here, the row inputs use the same
+   green when touched - one consistent operator color). Outline = the
+   quieter secondary action ("All match projections" - confirm-shortcut
+   variant). Cancel stays neutral. Minimum 40px tall so the footer
+   actions are real targets at desktop; PR2 bumps to >= 48px on mobile.
+   Padding moved to fixed values so the hierarchy reads cleanly. */
+.sc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: var(--radius-input);
+  font-size: var(--type-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+  border: 1px solid transparent;
+}
 .sc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.sc-btn--primary { background: #0F6E56; color: #fff; }
-.sc-btn--primary:hover:not(:disabled) { background: #085041; }
-.sc-btn--outline { background: #fff; color: #0F6E56; border: 1px solid #0F6E56; }
+.sc-btn--primary {
+  background: #0F6E56;
+  color: #fff;
+  border-color: #0F6E56;
+  box-shadow: 0 1px 2px rgba(15, 110, 86, 0.18);
+}
+.sc-btn--primary:hover:not(:disabled) {
+  background: #085041;
+  border-color: #085041;
+  box-shadow: 0 2px 4px rgba(8, 80, 65, 0.22);
+}
+.sc-btn--outline {
+  background: #fff;
+  color: #0F6E56;
+  border: 1px solid #0F6E56;
+}
 .sc-btn--outline:hover:not(:disabled) { background: #E1F5EE; }
 
 /* Corporate-only Admin link in the SC header. Brand navy family
