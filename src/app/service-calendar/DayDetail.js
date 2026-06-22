@@ -28,7 +28,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, onPrev, onNext, onClose, isFeeAccount, homestandContext }) {
+export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onClose, isFeeAccount, homestandContext }) {
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
@@ -48,7 +48,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
         // either, so any value the operator typed would be a silent orphan.
         if (!isInServiceOnDay(s, day.date)) continue;
         if (day.actual[s.colIndex] != null) {
-          // Day already has actuals saved — show them as real values
+          // Day already has actuals saved - show them as real values
           vals[s.colIndex] = String(day.actual[s.colIndex]);
           t.add(s.colIndex);
         } else {
@@ -137,6 +137,24 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   const hasTouchedAny = touched.size > 0;
 
+  // Footer total is display-only: shows projected for untouched services
+  // and entered for touched ones, so the operator always sees a real
+  // running total instead of "0 meals" before the first keystroke. Save
+  // path still uses getVal/summary - this calc never reaches the wire.
+  const footerDisplay = useMemo(() => {
+    let meals = 0, rev = 0;
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        const v = touched.has(s.colIndex) ? getVal(s.colIndex) : (day.projected[s.colIndex] ?? 0);
+        meals += v;
+        rev += v * s.price;
+      }
+    }
+    return { meals, revenue: rev };
+  }, [serviceGroups, touched, getVal, day.projected, day.date]);
+  const footerLabel = hasTouchedAny ? "Total" : "Projected";
+
   const executeSave = useCallback(async () => {
     // P0-1: ONLY send touched services. Untouched services are preserved
     // by the orchestrator (no row written = existing PG row left alone).
@@ -191,7 +209,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
-  const revPct = monthRevenue > 0 ? Math.round(summary.revenue / monthRevenue * 100) : 0;
+  const revPct = monthRevenue > 0 ? Math.round(footerDisplay.revenue / monthRevenue * 100) : 0;
 
   // Coaching banner: fee accounts reframe around delivery + homestand
   // context. Game days vs prep days get different language; revenue
@@ -201,20 +219,20 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   const coaching = isFeeAccount
     ? (
         isPrepDay
-          ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: `${homestandContext.dayType} day — enter counts if meals were served.` }
+          ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: `${homestandContext.dayType} day - enter counts if meals were served.` }
           : isGameDay && status === "entered"
             ? { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Delivery logged. Edit and re-save if needed." }
             : isGameDay && status === "needs-entry"
-              ? { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Game day — enter meal counts." }
+              ? { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Game day - enter meal counts." }
               : isGameDay && status === "overdue"
-                ? { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due game day — enter meal counts now." }
+                ? { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due game day - enter meal counts now." }
                 : isGameDay
                   ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Upcoming game day. Projections shown for reference." }
                   : { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter meal counts if any were served." }
       )
     : {
         "needs-entry": { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Enter actual meal counts. Projections shown for reference." },
-        "overdue": { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due — enter actual counts as soon as possible." },
+        "overdue": { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due - enter actual counts as soon as possible." },
         "upcoming": { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter actual meal counts. Projections shown for reference." },
         "entered": { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Actuals recorded. Edit and re-save if needed." },
       }[status];
@@ -236,7 +254,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 <div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
           {/* Fee accounts: drop the $X/plate label - svc.price is $0 here. */}
-<span className="sc-day-row-proj-label">Proj: {projVal}{isFeeAccount ? "" : ` · ${fmtPrice(svc.price)}`}</span>
+<span className="sc-day-row-proj-label">Projected: {projVal}{isFeeAccount ? "" : ` · ${fmtPrice(svc.price)}`}</span>
         </div>
         <div className="sc-day-row-right">
           {inService ? (
@@ -334,12 +352,15 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   return (
     <div className="sc-day">
       <div className="sc-day-header">
-        <h3 className="sc-day-title">{formatDate(day.date)}</h3>
+        <div className="sc-day-header-titles">
+          <h3 className="sc-day-title">{formatDate(day.date)}</h3>
+          {accountName && <div className="sc-day-account">{accountName}</div>}
+        </div>
         <div className="sc-day-nav">
           {onPrev && <button className="sc-day-nav-btn" onClick={onPrev}>&#8249;</button>}
-          <span className="sc-day-nav-label">{dayIndex + 1} of {totalDays}</span>
+          <span className="sc-day-nav-label">Day {dayIndex + 1} of {totalDays}</span>
           {onNext && <button className="sc-day-nav-btn" onClick={onNext}>&#8250;</button>}
-          <button className="sc-day-close" onClick={onClose}>
+          <button className="sc-day-close" onClick={onClose} aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
@@ -380,18 +401,23 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               {/* Per-group "actuals match" button */}
               {!groupTouched && activeSvcs.length > 0 && (
                 <button className="sc-day-match-btn" onClick={() => fillGroupWithProjections(group)}>
-                  Actuals match projections
+                  Match projections
                 </button>
               )}
 
               {inactiveSvcs.length > 0 && !extrasOpen && (
-                <div className="sc-day-extras-btn" onClick={() => toggleExtras(group.name)}>
+                <button type="button" className="sc-day-extras-btn" onClick={() => toggleExtras(group.name)}>
                   <span className="sc-day-extras-btn-icon">+</span>
-                  <span>{inactiveSvcs.length} more services (no projection)</span>
-                </div>
+                  <span>{inactiveSvcs.length} more {inactiveSvcs.length === 1 ? "service" : "services"}</span>
+                </button>
               )}
               {extrasOpen && inactiveSvcs.map(svc => renderServiceRow(svc))}
-              {extrasOpen && <button className="sc-day-extras-hide" onClick={() => toggleExtras(group.name)}>Hide extras</button>}
+              {extrasOpen && (
+                <button type="button" className="sc-day-extras-hide" onClick={() => toggleExtras(group.name)}>
+                  <span className="sc-day-extras-btn-icon">−</span>
+                  <span>Hide extras</span>
+                </button>
+              )}
 
               {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
             </div>
@@ -404,7 +430,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           return (
             <div key={group.name}>
               <button className="sc-day-collapsed-btn" onClick={() => toggleGroup(group.name)}>
-                <span>{group.name} — off today ({group.services.length} services)</span>
+                <span>{group.name} - off today ({group.services.length} {group.services.length === 1 ? "service" : "services"})</span>
                 <span className="sc-day-collapsed-icon">{isOpen ? "−" : "+"}</span>
               </button>
               {isOpen && (
@@ -422,18 +448,20 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
         })}
 
         <div className="sc-day-notes">
-          <textarea className="sc-day-notes-input" placeholder="Day notes — rain delay, added dinner, etc."
+          <label className="sc-day-notes-label">Day notes (optional)</label>
+          <textarea className="sc-day-notes-input" placeholder="Rain delay, added dinner, etc."
             value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
         </div>
       </div>
 
       <div className="sc-day-footer">
-        <div className="sc-day-totals">
-          <div>
-            <span className="sc-day-total-meals">{summary.meals.toLocaleString()} meals</span>
-            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct"> · {revPct}% of month</span>}
+        <div className={`sc-day-totals${hasTouchedAny ? "" : " sc-day-totals--projected"}`}>
+          <div className="sc-day-totals-left">
+            <span className="sc-day-total-label">{footerLabel}</span>
+            <span className="sc-day-total-meals">{footerDisplay.meals.toLocaleString()} meals</span>
+            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct">{revPct}% of month</span>}
           </div>
-          {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(summary.revenue)}</span>}
+          {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(footerDisplay.revenue)}</span>}
         </div>
 <div className="sc-day-actions">
           {!day.hasActuals && (
