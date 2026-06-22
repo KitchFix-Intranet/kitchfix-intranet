@@ -400,12 +400,21 @@
   font-variant-numeric: tabular-nums;
   transition: all 0.15s;
 }
+/* Ghost (resting) state: reads as a fillable INPUT BOX, not a disabled
+   ghost. Was 1.5px dashed #d1d5db - dashed border read as "locked /
+   placeholder field", which is the opposite of the primary affordance.
+   Solid border + faint fill so the operator instantly sees "these are
+   fields I type into". The projection still shows as placeholder text
+   inside (placeholder-is-projection behavior preserved). Touched state
+   (green) remains visually distinct - same green border + green text +
+   green bg as before. */
 .sc-day-input--ghost {
-  border: 1.5px dashed #d1d5db;
+  border: 1.5px solid #cbd5e1;
+  background: #fafbfc;
   color: #111827;
 }
 .sc-day-input--ghost::placeholder {
-  color: #cbd5e1;
+  color: #9ca3af;
   font-weight: 500;
 }
 .sc-day-input--touched {
@@ -660,26 +669,6 @@
 @media (max-width: 640px) {
   .sc-admin-body { padding: 12px 4px 24px; }
 }
-
-/* Keep old sc-focus classes for bulk panel */
-.sc-focus { padding: 24px 12px 28px; border-top: 2px solid #0F6E56; background: #fff; }
-.sc-focus-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-.sc-focus-title { font-size: 22px; font-weight: 700; color: #111827; margin: 0; }
-.sc-focus-meta { font-size: 13px; color: #6b7280; margin-top: 2px; }
-.sc-focus-close { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-.sc-focus-close:hover { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
-.sc-focus-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 20px; }
-.sc-focus-group-header { display: flex; align-items: center; gap: 6px; padding: 8px 0; margin-bottom: 4px; }
-.sc-focus-group-bar { width: 3px; height: 14px; background: #0F6E56; border-radius: 2px; }
-.sc-focus-group-name { font-size: 11px; font-weight: 700; color: #0F6E56; text-transform: uppercase; letter-spacing: 0.05em; }
-.sc-focus-group-price { font-size: 11px; font-weight: 700; color: #0F6E56; text-transform: uppercase; }
-.sc-focus-svc-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
-.sc-focus-svc-row:last-child { border-bottom: none; }
-.sc-focus-svc-left { display: flex; flex-direction: column; }
-.sc-focus-svc-name { font-size: 15px; color: #111827; font-weight: 500; }
-.sc-focus-input { width: 80px; padding: 6px 8px; border: none; border-bottom: 2px solid #e5e7eb; font-size: 24px; font-weight: 700; color: #111827; text-align: center; background: transparent; font-family: inherit; }
-.sc-focus-input:focus { outline: none; border-bottom-color: #0F6E56; }
-.sc-focus-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
 /* ══════════════════════════════════════
    YEAR VIEW + HEATMAP
@@ -1226,10 +1215,6 @@
   .sc-tile { min-height: 88px; padding: 10px; }
   .sc-tile-date { font-size: 16px; }
   .sc-tile-rev { font-size: 14px; }
-  .sc-focus-input { width: 88px; font-size: 28px; padding: 8px; }
-  .sc-focus-svc-name { font-size: 16px; }
-  .sc-btn { padding: 12px 28px; font-size: 15px; }
-  .sc-focus-nav-btn { width: 40px; height: 40px; font-size: 24px; }
 }
 
 @media (max-width: 768px) {
@@ -1246,14 +1231,128 @@
   .sc-tile-game { display: none; }
   .sc-tile-meals { font-size: 10px; }
   .sc-tile-rev { font-size: 11px; }
-  .sc-focus { padding: 16px 8px 20px; }
-  .sc-focus-title { font-size: 18px; }
-  .sc-focus-groups { grid-template-columns: 1fr; gap: 16px; }
-  .sc-focus-input { width: 72px; font-size: 20px; }
-  .sc-focus-total-rev { font-size: 20px; }
-  .sc-focus-actions { flex-direction: column; }
-  .sc-btn { width: 100%; text-align: center; }
   .sc-year-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ENTRY SURFACE MOBILE PASS (PR2 - floor/cooler, <= 640px)
+   ════════════════════════════════════════════════════════════════════
+   Both entry surfaces (DayDetail single-day popup + the bulk-entry
+   modal in ServiceCalendar.js) render through the same sc-overlay-card
+   + sc-day-* classes, so this single media block covers both.
+   - Full-sheet modal (no centered floating card)
+   - Footer actions stack full-width with the primary commit in the
+     thumb zone (bottom)
+   - Tap targets >= 48px (inputs, buttons, match button)
+   - No horizontal overflow at 375px */
+@media (max-width: 640px) {
+  /* Modal frame becomes a full-sheet. Backdrop padding 0; card grows to
+     fill the viewport. Use dvh where available so the iOS Safari URL
+     bar does not eat the bottom of the modal; fall back to vh. */
+  .sc-overlay-backdrop { padding: 0; }
+  .sc-overlay-card {
+    max-width: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .sc-day {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+
+  /* Body padding tightens slightly but stays Comfortable. */
+  .sc-day-body { padding: 12px 12px 16px; }
+
+  /* Service row + input on a phone. Input grows to a thumb-friendly
+     hero (>= 48px tall). Row stays name+proj LEFT, input+delta RIGHT
+     - the delta is small (12px) and stays inline; if there is a
+     visible value (--match / --pos / --neg) it still fits at 375px
+     since the input is 88px and the gap is 10px. The empty-delta
+     spacer (the {!isTouched && <span/>} branch in DayDetail.js) is
+     hidden on phone to free a few px and stop the row from feeling
+     padded right when nothing is touched. */
+  .sc-day-row { padding: 12px 6px; gap: 10px; }
+  .sc-day-row-name { font-size: 15px; }
+  .sc-day-row-right { gap: 8px; }
+  .sc-day-input {
+    width: 88px;
+    min-height: 48px;
+    padding: 10px 8px;
+    font-size: 20px;
+  }
+  /* Empty delta (no number) takes no space on phone; non-empty deltas
+     stay legible alongside the input. */
+  .sc-day-row-delta:empty { display: none; }
+
+  /* Per-group match button: full-width tap target. The 48px floor is
+     already met by the existing padding + line-height, but lock it. */
+  .sc-day-match-btn { min-height: 48px; padding: 12px; font-size: 14px; }
+
+  /* Footer: thumb-zone primary. Stack actions full-width, primary
+     commit ON TOP within the stack (it is the load-bearing action; the
+     screen-bottom position + visual weight together put it in reach
+     under a thumb without forcing the operator to scan). Secondary
+     "All match projections" and "Cancel" sit below.
+
+     Order on the wire (DayDetail.js footer JSX, lines 439-447):
+       1. "All match projections" (outline)  <- conditional, may be absent
+       2. "Save actuals" (primary)
+       3. "Cancel" (cancel)
+     We want primary FIRST visually so it lands closest to the thumb
+     when the operator looks down to the screen edge. Using flex
+     column-reverse so the rendered "Cancel" stays at the visual
+     bottom (least common action) and the primary rises above it -
+     but we also want primary above the outline. flexbox `order` on
+     each variant handles this cleanly:
+       - --primary -> order 1 (top of the stack)
+       - --outline -> order 2 (middle)
+       - --cancel  -> order 3 (bottom, least-reached)
+     This keeps the JSX byte-identical (no JS touched) while putting
+     the most-used button under the thumb. */
+  .sc-day-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .sc-day-actions .sc-btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 14px 18px;
+    font-size: 15px;
+  }
+  .sc-day-actions .sc-btn--primary { order: 1; }
+  .sc-day-actions .sc-btn--outline { order: 2; }
+  .sc-day-actions .sc-btn--cancel { order: 3; }
+
+  /* Footer container slightly tighter padding to give the action stack
+     more breathing room without bleeding off-screen. */
+  .sc-day-footer { padding: 12px 12px 16px; border-radius: 0; }
+
+  /* Bulk bar: the count + actions can crowd at 375px. Stack so the
+     actions land beneath the count (operator sees what is selected
+     before the action choices). Tap targets >= 48px. */
+  .sc-bulk-bar { margin: 8px 0; padding: 10px 12px; }
+  .sc-bulk-active { flex-direction: column; align-items: stretch; gap: 10px; }
+  .sc-bulk-actions { flex-wrap: wrap; gap: 8px; }
+  .sc-bulk-actions .sc-btn {
+    width: 100%;
+    min-height: 48px;
+  }
+  .sc-bulk-toggle, .sc-bulk-cancel {
+    min-height: 48px;
+    padding: 12px 14px;
+  }
+
+  /* Day header on phone: navigation buttons + close are tappable. */
+  .sc-day-nav-btn, .sc-day-close {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 @media (max-width: 480px) {
