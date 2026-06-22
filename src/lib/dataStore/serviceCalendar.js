@@ -329,7 +329,10 @@ export async function loadAccountConfig(accountKey) {
 //   4. sc_service_prices - bulk lookup, split current vs upcoming
 //
 // Plus one for the changelog:
-//   5. sc_config_changelog max(changed_at) per account
+//   5. sc_changelog_latest_by_account (sc-7 view) - one row per
+//      account_key with the most recent changed_at. Replaces a prior
+//      unbounded all-rows read on sc_config_changelog that PostgREST
+//      silently capped at 1000 rows.
 //
 // Total payload bounded by ~270 rows; well under PostgREST's 1000-row
 // default. No pagination required.
@@ -359,9 +362,8 @@ async function loadAllAccountsConfigPostgres() {
       .is("deleted_at", null)
       .order("sort_order", { ascending: true }),
     supa
-      .from(SC_TABLES.changelog)
-      .select("account_key, changed_at")
-      .order("changed_at", { ascending: false }),
+      .from("sc_changelog_latest_by_account")
+      .select("account_key, last_changed_at"),
   ]);
   throwOnError(accountsRes.error,  "loadAllAccountsConfig.accounts");
   throwOnError(groupsRes.error,    "loadAllAccountsConfig.groups");
@@ -413,13 +415,16 @@ async function loadAllAccountsConfigPostgres() {
     }
   }
 
-  // Per-account latest changelog timestamp (sorted DESC above, so the
-  // first row seen per account is its latest). Captured as an ISO date
-  // string for the UI; the timestamp itself is preserved as well.
+  // Per-account latest changelog timestamp. Sourced from the
+  // sc_changelog_latest_by_account view (sc-7), which does the MAX(changed_at)
+  // GROUP BY account_key in Postgres. Bounded by account count, so the
+  // PostgREST 1000-row cap that broke the prior unbounded read cannot
+  // bite. The view's row shape is { account_key, last_changed_at } - one
+  // row per account that has ever been written to changelog.
   const lastChangelogByAccount = new Map();
   for (const r of logRes.data || []) {
-    if (!lastChangelogByAccount.has(r.account_key)) {
-      lastChangelogByAccount.set(r.account_key, r.changed_at);
+    if (r.last_changed_at) {
+      lastChangelogByAccount.set(r.account_key, r.last_changed_at);
     }
   }
 
