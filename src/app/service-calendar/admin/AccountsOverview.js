@@ -82,6 +82,19 @@ export default function AccountsOverview({ onSelectPerMeal, onSelectFee }) {
   const fee = data.accounts.filter(isFee);
   const totalCount = data.accounts.length;
 
+  // Total annual contract value across fee accounts. Bundled accounts
+  // (e.g. TXR - TX - V) carry amount = 0 + a coveredByAccountKey marker
+  // and correctly contribute zero - their value is counted by the
+  // covering account. Derived from already-loaded feesByKey; no new
+  // fetch.
+  const totalAnnualValue = fee.reduce((sum, a) => {
+    const amount = feesByKey[a.key]?.current?.amount;
+    return sum + (Number(amount) || 0);
+  }, 0);
+  const formattedAnnual = totalAnnualValue >= 1_000_000
+    ? `$${(totalAnnualValue / 1_000_000).toFixed(2)}M`
+    : `$${totalAnnualValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
   return (
     <div className="sc-admin-overview">
       {/* At-a-glance summary strip. Echoes the operator calendar's stat
@@ -93,6 +106,12 @@ export default function AccountsOverview({ onSelectPerMeal, onSelectFee }) {
         <span className="sc-admin-summary-item"><strong>{perMeal.length}</strong> per-meal</span>
         <span className="sc-admin-summary-sep" aria-hidden="true">·</span>
         <span className="sc-admin-summary-item"><strong>{fee.length}</strong> fee</span>
+        {totalAnnualValue > 0 && (
+          <>
+            <span className="sc-admin-summary-sep" aria-hidden="true">·</span>
+            <span className="sc-admin-summary-item"><strong>{formattedAnnual}</strong> annual contracts</span>
+          </>
+        )}
       </div>
 
       {perMeal.length > 0 && (
