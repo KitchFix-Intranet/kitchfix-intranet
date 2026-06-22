@@ -17,6 +17,12 @@
 import AccountsOverview from "./AccountsOverview";
 import AccountEditor from "./AccountEditor";
 import FeeAccountEditor from "./FeeAccountEditor";
+// Co-locate the admin stylesheet with the admin component. Deleting
+// AdminClient.js in PR #243 removed the only import of this stylesheet
+// and nothing re-imported it, so every sc-admin-* class rendered
+// unstyled. Anchoring the import here means the styles ship with
+// AdminPanel wherever it mounts.
+import "./ops-sc-admin.css";
 
 export default function AdminPanel({ view, onViewChange, showToast }) {
   if (view?.mode === "overview" || !view) {
