@@ -410,30 +410,49 @@
   border-radius: var(--radius-input);
   padding: 5px 12px;
 }
+/* In-hero "Overview" back-button. Same treatment as the editor's
+   .sc-admin-back (in ops-sc-admin.css) so the two back-affordances read
+   as the same control - quiet secondary button, white on neutral
+   border, navy text, subtle shadow. */
 .sc-admin-overview-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
-  color: #0F6E56;
-  background: none;
-  border: none;
+  font-weight: 500;
+  color: #153968;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: var(--radius-input);
-  transition: background 0.15s;
+  box-shadow: 0 1px 2px rgba(21, 57, 104, 0.06);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.sc-admin-overview-back:hover { background: #E1F5EE; }
-.sc-admin-overview-back:focus-visible { outline: 2px solid #0F6E56; outline-offset: 2px; }
+.sc-admin-overview-back:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
+}
+.sc-admin-overview-back:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
 
 /* Admin segment button - reuses base .sc-mode-btn / --active. The
    --admin modifier is present for any future emphasis pass. */
 .sc-mode-btn--admin { font-weight: 600; }
 
-/* Admin in-page body container. Just gives the AdminPanel the same
-   fade-in entrance as the month/year bodies. AdminPanel handles its
-   own internal structure (the AccountsOverview rows, the per-account
-   editor, the inline edit panels). */
-.sc-admin-body { padding: 16px 12px 28px; }
+/* Admin in-page body container. Faint page wash (#fafbfc) so the white
+   group/section cards inside lift off it - "Fuller" definition pass.
+   AdminPanel handles its own internal structure (the AccountsOverview
+   rows, the per-account editor, the inline edit panels). */
+.sc-admin-body {
+  padding: 16px 12px 28px;
+  background: #fafbfc;
+  border-radius: var(--radius-card);
+}
 @media (max-width: 640px) {
   .sc-admin-body { padding: 12px 4px 24px; }
 }
