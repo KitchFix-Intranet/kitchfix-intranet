@@ -190,9 +190,11 @@
 .sc-admin-summary-sep { color: #d1d5db; font-weight: 400; }
 
 .sc-admin-section { display: flex; flex-direction: column; gap: 8px; }
+/* Bumped one step (12px -> 13px, #6b7280 -> #475569) for legibility.
+   Uppercase tracking pattern preserved. */
 .sc-admin-section-title {
-  font-size: 12px; font-weight: 700;
-  color: #6b7280;
+  font-size: 13px; font-weight: 700;
+  color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0;
@@ -246,28 +248,65 @@
 .sc-admin-editor-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sc-admin-editor-title { font-size: var(--type-h2); font-weight: 700; color: #153968; margin: 0; line-height: var(--line-heading); }
 .sc-admin-editor-name { font-size: var(--type-body); color: #6b7280; font-weight: 500; }
+/* Editor section label - matches sc-admin-section-title bump for
+   legibility consistency. */
 .sc-admin-editor-section {
-  font-size: 12px; font-weight: 700;
-  color: #6b7280;
+  font-size: 13px; font-weight: 700;
+  color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 12px 0 0;
 }
 
 .sc-admin-group { display: flex; flex-direction: column; gap: 6px; }
-.sc-admin-group-title { font-size: 14px; font-weight: 700; color: #111827; margin: 8px 0 0; }
+/* Group titles read as the primary chunks when scanning (Miller's Law).
+   Bumped 14px/700/#111827 -> 16px/700/#153968 (brand navy) so groups
+   register above their service rows. */
+.sc-admin-group-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #153968;
+  margin: 12px 0 0;
+  letter-spacing: -0.01em;
+}
 .sc-admin-svc-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
-.sc-admin-svc-item { border-top: 1px solid #f3f4f6; }
-.sc-admin-svc-item:first-child { border-top: none; }
+
+/* Service rows - ItemCatalog (.ic-item) pattern.
+   The ROW is the click target. At rest: name on left, price on right.
+   Clicking toggles a detail strip with current-price line + action
+   triggers. Tight density (10px x 14px), border-bottom hairline. */
+.sc-admin-svc-item {
+  border-bottom: 1px solid #f3f4f6;
+  border-left: 3px solid transparent;
+  transition: background 0.12s, border-left-color 0.12s;
+}
+.sc-admin-svc-item:last-child { border-bottom: none; }
+.sc-admin-svc-item--focused { background: #f0f5ff; border-left-color: #bfdbfe; }
+.sc-admin-svc-item--open { background: #f8fafc; }
 
 .sc-admin-svc-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
 }
-.sc-admin-svc-name { color: #111827; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.sc-admin-svc-row:hover { background: #fafbfc; }
+.sc-admin-svc-row:focus-visible { outline: 2px solid #0F6E56; outline-offset: -2px; }
+/* ItemCatalog name treatment: 13px/500/navy. */
+.sc-admin-svc-name {
+  color: #153968;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
 .sc-admin-svc-tag {
   font-size: 10px; font-weight: 700;
   color: #475569;
@@ -282,11 +321,16 @@
   color: #b45309;
   font-style: italic;
 }
+/* Price column: tabular nums, ItemCatalog price weight (500 navy), right
+   side of the row. Stacks into a scannable column when multiple rows
+   render under the same group. */
 .sc-admin-svc-price {
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: #111827;
-  font-size: 14px;
+  font-weight: 500;
+  color: #153968;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .sc-admin-svc-edit {
   font-family: inherit;
@@ -301,6 +345,50 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .sc-admin-svc-edit:hover { background: #f0fdf4; border-color: #0F6E56; }
+
+/* Detail strip - ItemCatalog (.ic-detail) equivalent. Inline expansion
+   below the row, indented + bordered. Hosts the current-price meta
+   line + the action triggers + (when an action is invoked) the matching
+   edit panel. */
+.sc-admin-svc-detail {
+  margin: 4px 14px 12px 28px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sc-admin-svc-detail-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.sc-admin-svc-detail-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+.sc-admin-svc-detail-value {
+  color: #153968;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sc-admin-svc-detail-since {
+  color: #94a3b8;
+  font-weight: 400;
+  margin-left: 2px;
+}
+.sc-admin-svc-detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 4px;
+}
 
 /* Inline edit panel */
 .sc-admin-panel {
@@ -517,17 +605,11 @@
   .sc-admin-row-count { grid-area: count; }
   .sc-admin-row-chev { grid-area: chev; justify-self: end; }
   .sc-admin-row-fee-amount { grid-area: updated; justify-self: end; }
-  .sc-admin-svc-row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      "name  price"
-      "up    edit";
-    gap: 6px 10px;
-  }
-  .sc-admin-svc-name { grid-area: name; }
-  .sc-admin-svc-price { grid-area: price; }
-  .sc-admin-svc-upcoming { grid-area: up; }
-  .sc-admin-svc-edit { grid-area: edit; }
+  /* sc-admin-svc-row is now flex name | price; no mobile grid override
+     needed - the row collapses naturally on narrow viewports. The
+     detail strip below the row tightens its indent on phone. */
+  .sc-admin-svc-detail { margin: 4px 8px 12px 16px; padding: 10px 12px; }
+  .sc-admin-svc-detail-actions { flex-direction: column; align-items: stretch; }
   .sc-admin-fee-history-row {
     grid-template-columns: 1fr auto;
     gap: 4px 8px;
