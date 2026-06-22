@@ -145,6 +145,37 @@
   font-weight: 800;
 }
 
+/* Pending-publish indicator: open opd-edit/* PRs that have not yet
+   auto-merged. Slim row under the vitals; a stuck or failing PR stays
+   visible here until Kevin acts on it. */
+.pb-admin-pending-edits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--kf-r-input);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--kf-t-caption);
+  color: #78350f;
+}
+.pb-admin-pending-edits-count {
+  font-weight: 700;
+}
+.pb-admin-pending-edits-list {
+  color: #78350f;
+}
+.pb-admin-pending-edits-link {
+  color: #78350f;
+  text-decoration: underline;
+}
+.pb-admin-pending-edits-link:hover {
+  color: #92400e;
+}
+
 /* ─── Attention - the triage cockpit ────────────────────────────────────── */
 /* Two-zone layout: Needs action / Queue & activity, plus a slim PR D strip.
    align-items: start on the grids is the key fix - buckets size to their own
@@ -1381,14 +1412,26 @@
   background: var(--kf-surface-2);
   color: #1e293b;
 }
-.pb-admin-editor-status--saving {
+.pb-admin-editor-status--saving,
+.pb-admin-editor-status--submitting {
   background: var(--kf-surface-3);
   color: var(--kf-muted);
 }
-.pb-admin-editor-status--ok {
+.pb-admin-editor-status--ok,
+.pb-admin-editor-status--submitted {
   background: #d1fae5;
   border-color: #6ee7b7;
   color: #064e3b;
+}
+.pb-admin-editor-status--submitted a {
+  color: #064e3b;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.pb-admin-editor-submitted-warning {
+  margin-top: 6px;
+  font-size: var(--kf-t-caption);
+  color: #78350f;
 }
 .pb-admin-editor-status--unchanged {
   background: var(--kf-surface-3);
