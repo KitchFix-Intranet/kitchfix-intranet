@@ -16,10 +16,16 @@ export const OPS_LEADERSHIP_EMAILS = [
  * SC config edits (price changes, service deactivation) move money;
  * the gate stays restrictive until the v1 site-lead rollout settles.
  *
- * Three call sites today (all in src/app/service-calendar/):
+ * Call sites today (all in src/app/service-calendar/):
  *   - page.js                  page-level gate (Coming Soon screen)
- *   - ServiceConfig.js         admin editor vs request form
- *   - api/service-calendar/    server-side gate on config-update and config-add
+ *   - api/service-calendar/    server-side gate on every admin POST
+ *                              action (price, fee, archive/reactivate,
+ *                              add-service, add-group); see route.js
+ *                              for the action-by-action gate table
+ *
+ * The pre-Stage-2 ServiceConfig.js admin component was retired in PR
+ * #209; modern admin paths live under
+ * src/app/service-calendar/admin/.
  */
 export const SC_ADMINS = [
   "k.fietek@kitchfix.com",

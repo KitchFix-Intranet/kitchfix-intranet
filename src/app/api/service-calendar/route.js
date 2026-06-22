@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
-import { SC_ADMINS, isScAdmin } from "@/lib/admin";
+import { isScAdmin } from "@/lib/admin";
 import {
   loadAccountConfig,
   loadAllAccountsConfig,
@@ -11,7 +11,6 @@ import {
   saveActuals,
   saveBulkActuals,
   updateServiceConfig,
-  addService,
   submitConfigRequest,
   loadFeeSchedule,
   loadFeeAccountHistory,
@@ -38,8 +37,10 @@ import {
 // canonical source from import day; there is no Sheets fallback.
 //
 // JSON SHAPES are preserved verbatim from the prior Sheets-based route
-// so the UI (ServiceCalendar.js, DayDetail.js, ServiceConfig.js) reads
-// the same field names. The mapping happens at this layer.
+// so the calendar UI (ServiceCalendar.js, DayDetail.js) reads the same
+// field names. The mapping happens at this layer. (The pre-Stage-2
+// ServiceConfig.js admin component was retired in PR #209; modern
+// admin paths live under src/app/service-calendar/admin/.)
 //
 // colIndex CONVENTION
 //   The legacy route used Sheets column numbers for `colIndex` as the
@@ -48,10 +49,10 @@ import {
 //   colIndex as an opaque string key (object lookups, equality only) -
 //   no numeric ops - so the swap is transparent.
 //
-// P0-3 (admin gate on config writes)
-//   sc-config-update and sc-config-add now check SC_ADMINS server-side
-//   before touching the orchestrator. The client-side ServiceConfig
-//   gate stays; this is defense in depth.
+// Admin gate on config writes:
+//   All admin POST actions (price, fee, archive/reactivate, add-service,
+//   add-group) check isScAdmin server-side before touching the
+//   orchestrator. Defense in depth above the client-side admin gate.
 //
 // P0-1 (untouched-fields-zeroing) STATUS
 //   The orchestrator's saveActuals upserts ONLY the entries it is
@@ -146,13 +147,22 @@ function transformServiceGroups(config) {
     const g = groupMap.get(s.groupId);
     if (!g) continue;
     g.services.push({
-      name:       s.serviceName,
-      price:      s.price,
-      colIndex:   s.id,
-      taxFree:    s.isTaxFree,
-      flatFee:    s.isFlatFee,
-      nonRevenue: s.isNonRevenue,
-      sortOrder:  s.sortOrder,
+      name:        s.serviceName,
+      price:       s.price,
+      colIndex:    s.id,
+      taxFree:     s.isTaxFree,
+      flatFee:     s.isFlatFee,
+      nonRevenue:  s.isNonRevenue,
+      sortOrder:   s.sortOrder,
+      // activeUntil flows through from sc-6a/6c so the calendar's
+      // DayDetail can apply the same in-service predicate the
+      // sc_daily_revenue view uses: a (service, day) pair is in service
+      // iff (activeUntil IS NULL OR day <= activeUntil). Without this,
+      // an archived service surfaces as an enterable input on days
+      // strictly after its archive date - the view drops those day
+      // rows but the UI still offers entry, producing a silent data
+      // path (orphan upserts that the view never surfaces).
+      activeUntil: s.activeUntil,
     });
   }
   return [...groupMap.values()]
@@ -293,6 +303,13 @@ export async function GET(request) {
         year = parts[0];
         month = parts[1];
       } else {
+        // UTC fallback. In practice unreached: ServiceCalendar.js
+        // initializes year/month from the CLIENT's local clock and
+        // always sends ?month=YYYY-MM on first load. This branch only
+        // catches a malformed param or a direct API hit; it computes
+        // server-local (UTC on Vercel) which can be off by one for an
+        // evening operator near a month boundary. The client-side
+        // discipline is the real correctness; do not rely on this.
         const now = new Date();
         year = now.getFullYear();
         month = now.getMonth() + 1;
@@ -536,12 +553,14 @@ export async function POST(request) {
       return NextResponse.json(result);
     }
 
-    // ── sc-config-update: change prices, deactivate services (ADMIN) ──
+    // ── sc-config-update: change prices (ADMIN) ──
+    // Archive/reactivate live in the sc-admin-archive-* / sc-admin-
+    // reactivate-* actions (Bundle 2 Step 3). This handler is the
+    // price-update path only.
     if (action === "sc-config-update") {
-      // Gate is the corporate-write set (SC_ADMIN_EMAILS via isScAdmin),
-      // not the dev-view SC_ADMINS allowlist. Stage 1 opened the admin
-      // page to 8 corporate users; without this swap, 6 of those 8 would
-      // 403 on save.
+      // Gate is the corporate-write set (SC_ADMIN_EMAILS via isScAdmin).
+      // Stage 1 opened the admin page to 8 corporate users; the gate
+      // here mirrors that.
       if (!isScAdmin(email)) {
         return NextResponse.json(
           { error: "Admin access required" },
@@ -656,12 +675,6 @@ export async function POST(request) {
             requestedBy:   c.requestedBy ? c.requestedBy.trim() : null,
             entityLabel:   `${c.groupName} - ${c.serviceName}`,
           };
-        }
-        if (c.type === "deactivate") {
-          return { type: "deactivate", serviceId: svc.id };
-        }
-        if (c.type === "reactivate") {
-          return { type: "reactivate", serviceId: svc.id };
         }
         throw new Error(`Unknown change type: ${c.type}`);
       });
@@ -991,39 +1004,6 @@ export async function POST(request) {
         email
       );
       return NextResponse.json(result);
-    }
-
-    // ── sc-config-add: add a new service to an account (ADMIN) ──
-    if (action === "sc-config-add") {
-      if (!SC_ADMINS.includes(email)) {
-        return NextResponse.json(
-          { error: "Admin access required" },
-          { status: 403 }
-        );
-      }
-      const { accountKey, groupName, serviceName, price, taxFree, flatFee, nonRevenue } = body;
-      if (!accountKey || !groupName || !serviceName) {
-        return NextResponse.json(
-          { success: false, error: "Missing fields" },
-          { status: 400 }
-        );
-      }
-      const result = await addService(
-        accountKey,
-        groupName,
-        serviceName,
-        Number(price) || 0,
-        {
-          isFlatFee:    !!flatFee,
-          isTaxFree:    !!taxFree,
-          isNonRevenue: !!nonRevenue,
-        },
-        email
-      );
-      // Legacy response field `colIndex` carried the Sheets column
-      // number; the PG version returns the new service UUID so the UI
-      // can index into the freshly-reloaded calendar shape.
-      return NextResponse.json({ success: true, colIndex: result.serviceId });
     }
 
     // ── sc-config-request: site lead submits a config change request ──

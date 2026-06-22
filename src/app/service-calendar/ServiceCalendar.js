@@ -96,6 +96,13 @@ function AccountDropdown({ accounts, value, onChange }) {
 export default function ServiceCalendar({ showToast, session }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
+  // year is hardcoded to the active season; month initializes from the
+  // CLIENT's local clock, not the server's. The calendar fetch below
+  // always sends ?month=YYYY-MM explicitly, so the server-side UTC
+  // fallback in route.js sc-load is never reached in practice.
+  // Operators span CT/ET/AZ; a server-side default would land the
+  // wrong month for an evening operator near a month boundary. Keep
+  // this client-local.
   const [year] = useState(2026);
   const [month, setMonth] = useState(new Date().getMonth());
   const [viewMode, setViewMode] = useState("month");

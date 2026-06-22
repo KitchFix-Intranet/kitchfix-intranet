@@ -14,6 +14,20 @@ function formatDate(dateStr) {
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
+// In-service predicate: a (service, day) pair is in service iff the service
+// has no archive date OR the day is on or before its archive date. Mirrors
+// the sc_daily_revenue view's catalog JOIN (sc-6b) exactly. Used to gate
+// data entry in DayDetail - services archived strictly after day.date
+// render as a read-only "Archived" chip instead of an editable input. The
+// view already drops those day rows; this stops the UI from offering
+// entry where the view will never surface a result. Pure YYYY-MM-DD
+// string compare; both inputs are already in that form (day.date from
+// loadMonthData, activeUntil from sc_services.active_until DATE).
+function isInServiceOnDay(svc, dayDate) {
+  if (!svc.activeUntil) return true;
+  return dayDate <= String(svc.activeUntil).slice(0, 10);
+}
+
 export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, onPrev, onNext, onClose, isFeeAccount, homestandContext }) {
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
@@ -29,6 +43,10 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     const t = new Set();
     for (const g of serviceGroups) {
       for (const s of g.services) {
+        // Skip services archived as of day.date - they should not appear as
+        // touched/initial-value entries. The view will not surface them
+        // either, so any value the operator typed would be a silent orphan.
+        if (!isInServiceOnDay(s, day.date)) continue;
         if (day.actual[s.colIndex] != null) {
           // Day already has actuals saved — show them as real values
           vals[s.colIndex] = String(day.actual[s.colIndex]);
@@ -61,17 +79,20 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     setExpandedExtras(prev => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   }, []);
 
-  // "Actuals match projections" for a specific group
+  // "Actuals match projections" for a specific group. Skips services
+  // archived as of day.date so the helper cannot retroactively populate
+  // a day for a service the view will not surface.
   const fillGroupWithProjections = useCallback((group) => {
     const newVals = { ...editValues };
     const newTouched = new Set(touched);
     for (const s of group.services) {
+      if (!isInServiceOnDay(s, day.date)) continue;
       newVals[s.colIndex] = String(day.projected[s.colIndex] ?? 0);
       newTouched.add(s.colIndex);
     }
     setEditValues(newVals);
     setTouched(newTouched);
-  }, [editValues, touched, day.projected]);
+  }, [editValues, touched, day.projected, day.date]);
 
   // Categorize groups. A group is "active" if EITHER a projection OR an
   // actual on any of its services is non-zero. The actual check matters
@@ -121,9 +142,14 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     // by the orchestrator (no row written = existing PG row left alone).
     // Saving with no touched fields is a no-op; the Save button is already
     // disabled in that case via hasTouchedAny.
+    // Bundle 2 guard: skip services archived as of day.date even if
+    // somehow flagged touched (defense in depth - the in-service helpers
+    // above never mark them touched, but this keeps the wire payload
+    // honest if a future code path tries).
     const entries = [];
     for (const g of serviceGroups) {
       for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
         if (touched.has(s.colIndex)) {
           entries.push({ colIndex: s.colIndex, value: getVal(s.colIndex) });
         }
@@ -147,9 +173,11 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     // User explicitly chose "All match projections" - intent is to apply
     // the projection value to every service. Send every service, including
     // those with projection=0 (records "no service occurred" intentionally).
+    // Bundle 2 guard: skip services archived as of day.date.
     const entries = [];
     for (const g of serviceGroups) {
       for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
         entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
       }
     }
@@ -197,26 +225,39 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     const isTouched = touched.has(svc.colIndex);
     const numVal = isTouched ? (editVal !== "" ? Number(editVal) : 0) : 0;
     const delta = isTouched ? numVal - projVal : null;
+    // Bundle 2: services archived as of day.date render a read-only chip
+    // instead of an editable input. Same visible-but-marked discipline as
+    // the admin side (archived = visible, archived = unenterable).
+    const inService = isInServiceOnDay(svc, day.date);
+    const archiveDate = !inService ? String(svc.activeUntil).slice(0, 10) : null;
 
     return (
-      <div key={svc.colIndex} className="sc-day-row">
+      <div key={svc.colIndex} className={`sc-day-row${!inService ? " sc-day-row--archived" : ""}`}>
 <div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
           {/* Fee accounts: drop the $X/plate label - svc.price is $0 here. */}
 <span className="sc-day-row-proj-label">Proj: {projVal}{isFeeAccount ? "" : ` · ${fmtPrice(svc.price)}`}</span>
         </div>
         <div className="sc-day-row-right">
-          <input type="text" inputMode="numeric" pattern="[0-9]*"
-            className={`sc-day-input ${isTouched ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
-            placeholder={String(projVal)}
-            value={editVal}
-            onChange={e => handleChange(svc.colIndex, e.target.value)} />
-          {isTouched && delta !== null && (
-            <span className={`sc-day-row-delta ${delta > 0 ? "sc-day-row-delta--pos" : delta < 0 ? "sc-day-row-delta--neg" : "sc-day-row-delta--match"}`}>
-              {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
+          {inService ? (
+            <>
+              <input type="text" inputMode="numeric" pattern="[0-9]*"
+                className={`sc-day-input ${isTouched ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
+                placeholder={String(projVal)}
+                value={editVal}
+                onChange={e => handleChange(svc.colIndex, e.target.value)} />
+              {isTouched && delta !== null && (
+                <span className={`sc-day-row-delta ${delta > 0 ? "sc-day-row-delta--pos" : delta < 0 ? "sc-day-row-delta--neg" : "sc-day-row-delta--match"}`}>
+                  {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
+                </span>
+              )}
+              {!isTouched && <span className="sc-day-row-delta" />}
+            </>
+          ) : (
+            <span className="sc-day-row-archived-chip" title={`Archived as of ${archiveDate}`}>
+              Archived {archiveDate}
             </span>
           )}
-          {!isTouched && <span className="sc-day-row-delta" />}
         </div>
       </div>
     );
