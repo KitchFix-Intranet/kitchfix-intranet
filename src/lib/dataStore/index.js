@@ -153,6 +153,8 @@ export {
   listIssues,
   updateDocument,
   createIssue,
+  updateIssue,
+  ISSUE_STATUSES,
   setPinned,
   clearPinned,
 } from "./opd.js";
