@@ -188,7 +188,7 @@ async function loadAccountConfigPostgres(accountKey) {
   const [groupsRes, servicesRes] = await Promise.all([
     supa
       .from(SC_TABLES.groups)
-      .select("id, group_name, sort_order, active")
+      .select("id, group_name, sort_order, active, active_until")
       .eq("account_key", accountKey)
       .is("deleted_at", null)
       .order("sort_order", { ascending: true }),
@@ -196,7 +196,7 @@ async function loadAccountConfigPostgres(accountKey) {
       .from(SC_TABLES.services)
       .select(
         "id, group_id, service_name, is_flat_fee, is_tax_free, " +
-        "is_non_revenue, sort_order, active"
+        "is_non_revenue, sort_order, active, active_until"
       )
       .eq("account_key", accountKey)
       .is("deleted_at", null)
@@ -206,10 +206,11 @@ async function loadAccountConfigPostgres(accountKey) {
   throwOnError(servicesRes.error, "loadAccountConfig.services");
 
   const groups = (groupsRes.data || []).map((g) => ({
-    id:        g.id,
-    groupName: g.group_name,
-    sortOrder: g.sort_order,
-    active:    g.active,
+    id:          g.id,
+    groupName:   g.group_name,
+    sortOrder:   g.sort_order,
+    active:      g.active,
+    activeUntil: g.active_until,
   }));
 
   const groupNameById = new Map(groups.map((g) => [g.id, g.groupName]));
@@ -286,6 +287,7 @@ async function loadAccountConfigPostgres(accountKey) {
         isNonRevenue:    !!s.is_non_revenue,
         sortOrder:       s.sort_order,
         active:          s.active,
+        activeUntil:     s.active_until,
       };
     })
     .sort((a, b) => {
@@ -345,14 +347,14 @@ async function loadAllAccountsConfigPostgres() {
       .order("team_key", { ascending: true }),
     supa
       .from(SC_TABLES.groups)
-      .select("id, account_key, group_name, sort_order, active")
+      .select("id, account_key, group_name, sort_order, active, active_until")
       .is("deleted_at", null)
       .order("sort_order", { ascending: true }),
     supa
       .from(SC_TABLES.services)
       .select(
         "id, account_key, group_id, service_name, is_flat_fee, " +
-        "is_tax_free, is_non_revenue, sort_order, active"
+        "is_tax_free, is_non_revenue, sort_order, active, active_until"
       )
       .is("deleted_at", null)
       .order("sort_order", { ascending: true }),
@@ -430,10 +432,11 @@ async function loadAllAccountsConfigPostgres() {
   for (const g of groupsRes.data || []) {
     if (!groupsByAccount.has(g.account_key)) groupsByAccount.set(g.account_key, []);
     groupsByAccount.get(g.account_key).push({
-      id:        g.id,
-      groupName: g.group_name,
-      sortOrder: g.sort_order,
-      active:    g.active,
+      id:          g.id,
+      groupName:   g.group_name,
+      sortOrder:   g.sort_order,
+      active:      g.active,
+      activeUntil: g.active_until,
     });
   }
   const servicesByAccount = new Map();
@@ -454,6 +457,7 @@ async function loadAllAccountsConfigPostgres() {
       isNonRevenue:          !!s.is_non_revenue,
       sortOrder:             s.sort_order,
       active:                s.active,
+      activeUntil:           s.active_until,
     });
   }
 
@@ -1453,6 +1457,375 @@ async function submitConfigRequestPostgres(accountKey, request, email) {
  */
 export async function submitConfigRequest(accountKey, request, email) {
   return submitConfigRequestPostgres(accountKey, request, email);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// Catalog lifecycle (Bundle 2 Step 3 - sc-6c)
+// ═══════════════════════════════════════════════════════════════
+//
+// Archive / reactivate / add for services and groups. Archive sets
+// the billing-relevant active_until DATE on the catalog table;
+// reactivate clears it. The views (sc-6b) filter on active_until so
+// archived rows drop out of sc_daily_revenue for service_date >
+// active_until while history at or before active_until is preserved.
+//
+// The pre-existing `active` BOOLEAN on both catalog tables is a UI
+// toggle from Stage 2 that no surface today writes to (the gear was
+// retired in PR #209). Views do NOT filter on it. We deliberately do
+// not touch it from this lifecycle path - active_until is the truth.
+// `deleted_at` stays dormant.
+//
+// Every write pairs an sc_config_changelog row (entity_type 'service'
+// or 'group') so the audit ledger captures who / when / why for every
+// catalog mutation.
+
+async function archiveServicePostgres(accountKey, serviceId, archiveDate, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  const { data: priorRows, error: priorErr } = await supa
+    .from(SC_TABLES.services)
+    .select("id, service_name, active_until")
+    .eq("id", serviceId)
+    .eq("account_key", accountKey)
+    .is("deleted_at", null)
+    .limit(1);
+  throwOnError(priorErr, "archiveService.prior");
+  if (!priorRows || priorRows.length === 0) {
+    throw new Error(`[dataStore.sc] archiveService: service ${serviceId} not found in ${accountKey}`);
+  }
+  const prior = priorRows[0];
+
+  const { error: updErr } = await supa
+    .from(SC_TABLES.services)
+    .update({ active_until: archiveDate, updated_at: new Date().toISOString() })
+    .eq("id", serviceId)
+    .eq("account_key", accountKey);
+  throwOnError(updErr, "archiveService.update");
+
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "service",
+    entity_id:      serviceId,
+    entity_label:   prior.service_name,
+    change_type:    "archive",
+    old_value:      { activeUntil: prior.active_until },
+    new_value:      { activeUntil: archiveDate },
+    effective_date: archiveDate,
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "archiveService.changelog");
+
+  return { success: true, serviceId, activeUntil: archiveDate };
+}
+
+/**
+ * Archive a service by setting its active_until DATE. The views filter on
+ * active_until so the service drops out of sc_daily_revenue for dates
+ * strictly after archiveDate while history at-or-before is preserved.
+ */
+export async function archiveService(accountKey, serviceId, archiveDate, reason, requestedBy, email) {
+  return archiveServicePostgres(accountKey, serviceId, archiveDate, reason, requestedBy, email);
+}
+
+
+async function reactivateServicePostgres(accountKey, serviceId, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  const { data: priorRows, error: priorErr } = await supa
+    .from(SC_TABLES.services)
+    .select("id, service_name, active_until")
+    .eq("id", serviceId)
+    .eq("account_key", accountKey)
+    .is("deleted_at", null)
+    .limit(1);
+  throwOnError(priorErr, "reactivateService.prior");
+  if (!priorRows || priorRows.length === 0) {
+    throw new Error(`[dataStore.sc] reactivateService: service ${serviceId} not found in ${accountKey}`);
+  }
+  const prior = priorRows[0];
+
+  const { error: updErr } = await supa
+    .from(SC_TABLES.services)
+    .update({ active_until: null, updated_at: new Date().toISOString() })
+    .eq("id", serviceId)
+    .eq("account_key", accountKey);
+  throwOnError(updErr, "reactivateService.update");
+
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "service",
+    entity_id:      serviceId,
+    entity_label:   prior.service_name,
+    change_type:    "reactivate",
+    old_value:      { activeUntil: prior.active_until },
+    new_value:      { activeUntil: null },
+    effective_date: null,
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "reactivateService.changelog");
+
+  return { success: true, serviceId };
+}
+
+/**
+ * Reactivate a service by clearing active_until (back to NULL = active
+ * forever).
+ */
+export async function reactivateService(accountKey, serviceId, reason, requestedBy, email) {
+  return reactivateServicePostgres(accountKey, serviceId, reason, requestedBy, email);
+}
+
+
+async function archiveServiceGroupPostgres(accountKey, groupId, archiveDate, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  const { data: priorRows, error: priorErr } = await supa
+    .from(SC_TABLES.groups)
+    .select("id, group_name, active_until")
+    .eq("id", groupId)
+    .eq("account_key", accountKey)
+    .is("deleted_at", null)
+    .limit(1);
+  throwOnError(priorErr, "archiveServiceGroup.prior");
+  if (!priorRows || priorRows.length === 0) {
+    throw new Error(`[dataStore.sc] archiveServiceGroup: group ${groupId} not found in ${accountKey}`);
+  }
+  const prior = priorRows[0];
+
+  const { error: updErr } = await supa
+    .from(SC_TABLES.groups)
+    .update({ active_until: archiveDate, updated_at: new Date().toISOString() })
+    .eq("id", groupId)
+    .eq("account_key", accountKey);
+  throwOnError(updErr, "archiveServiceGroup.update");
+
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "group",
+    entity_id:      groupId,
+    entity_label:   prior.group_name,
+    change_type:    "archive",
+    old_value:      { activeUntil: prior.active_until },
+    new_value:      { activeUntil: archiveDate },
+    effective_date: archiveDate,
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "archiveServiceGroup.changelog");
+
+  return { success: true, groupId, activeUntil: archiveDate };
+}
+
+/**
+ * Archive a service group by setting its active_until DATE. Affects every
+ * service in the group via the view's group JOIN. The UI confirms the
+ * blast radius (service count) before invoking.
+ */
+export async function archiveServiceGroup(accountKey, groupId, archiveDate, reason, requestedBy, email) {
+  return archiveServiceGroupPostgres(accountKey, groupId, archiveDate, reason, requestedBy, email);
+}
+
+
+async function reactivateServiceGroupPostgres(accountKey, groupId, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  const { data: priorRows, error: priorErr } = await supa
+    .from(SC_TABLES.groups)
+    .select("id, group_name, active_until")
+    .eq("id", groupId)
+    .eq("account_key", accountKey)
+    .is("deleted_at", null)
+    .limit(1);
+  throwOnError(priorErr, "reactivateServiceGroup.prior");
+  if (!priorRows || priorRows.length === 0) {
+    throw new Error(`[dataStore.sc] reactivateServiceGroup: group ${groupId} not found in ${accountKey}`);
+  }
+  const prior = priorRows[0];
+
+  const { error: updErr } = await supa
+    .from(SC_TABLES.groups)
+    .update({ active_until: null, updated_at: new Date().toISOString() })
+    .eq("id", groupId)
+    .eq("account_key", accountKey);
+  throwOnError(updErr, "reactivateServiceGroup.update");
+
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "group",
+    entity_id:      groupId,
+    entity_label:   prior.group_name,
+    change_type:    "reactivate",
+    old_value:      { activeUntil: prior.active_until },
+    new_value:      { activeUntil: null },
+    effective_date: null,
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "reactivateServiceGroup.changelog");
+
+  return { success: true, groupId };
+}
+
+/**
+ * Reactivate a service group by clearing active_until.
+ */
+export async function reactivateServiceGroup(accountKey, groupId, reason, requestedBy, email) {
+  return reactivateServiceGroupPostgres(accountKey, groupId, reason, requestedBy, email);
+}
+
+
+async function addServiceWithAuditPostgres(accountKey, groupId, serviceName, initialPrice, flags, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  // Verify the group exists + belongs to this account (avoid cross-account
+  // service writes via crafted groupId payloads).
+  const { data: groupRows, error: groupErr } = await supa
+    .from(SC_TABLES.groups)
+    .select("id, group_name, account_key")
+    .eq("id", groupId)
+    .eq("account_key", accountKey)
+    .is("deleted_at", null)
+    .limit(1);
+  throwOnError(groupErr, "addServiceWithAudit.group");
+  if (!groupRows || groupRows.length === 0) {
+    throw new Error(`[dataStore.sc] addServiceWithAudit: group ${groupId} not found in ${accountKey}`);
+  }
+  const groupName = groupRows[0].group_name;
+
+  // Next sort_order within the group.
+  const { data: maxSvcRows, error: maxSvcErr } = await supa
+    .from(SC_TABLES.services)
+    .select("sort_order")
+    .eq("group_id", groupId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  throwOnError(maxSvcErr, "addServiceWithAudit.maxSort");
+  const nextSort = (maxSvcRows?.[0]?.sort_order ?? -1) + 1;
+
+  const svcIns = await supa
+    .from(SC_TABLES.services)
+    .insert({
+      account_key:    accountKey,
+      group_id:       groupId,
+      service_name:   serviceName.trim(),
+      is_flat_fee:    !!(flags?.isFlatFee),
+      is_tax_free:    !!(flags?.isTaxFree),
+      is_non_revenue: !!(flags?.isNonRevenue),
+      sort_order:     nextSort,
+      created_by:     email,
+    })
+    .select("id")
+    .single();
+  throwOnError(svcIns.error, "addServiceWithAudit.insertService");
+  const serviceId = svcIns.data.id;
+
+  // Initial price row at today.
+  const today = isoDay(new Date());
+  const priceRounded = roundCents(Number(initialPrice) || 0);
+  const priceIns = await supa
+    .from(SC_TABLES.prices)
+    .insert({
+      service_id:     serviceId,
+      price:          Number(initialPrice) || 0,
+      effective_date: today,
+      created_by:     email,
+    });
+  throwOnError(priceIns.error, "addServiceWithAudit.insertPrice");
+
+  // Paired changelog row.
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "service",
+    entity_id:      serviceId,
+    entity_label:   `${groupName} - ${serviceName.trim()}`,
+    change_type:    "create",
+    old_value:      null,
+    new_value:      {
+      serviceName:    serviceName.trim(),
+      groupId,
+      initialPrice:   priceRounded,
+      isFlatFee:      !!(flags?.isFlatFee),
+      isTaxFree:      !!(flags?.isTaxFree),
+      isNonRevenue:   !!(flags?.isNonRevenue),
+    },
+    effective_date: today,
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "addServiceWithAudit.changelog");
+
+  return { success: true, serviceId, groupId, sortOrder: nextSort };
+}
+
+/**
+ * Add a new service to an existing group with a paired changelog row.
+ * The group must already exist + belong to the account (use addServiceGroup
+ * to create groups). Inserts the service + an initial price row at today.
+ */
+export async function addServiceWithAudit(accountKey, groupId, serviceName, initialPrice, flags, reason, requestedBy, email) {
+  return addServiceWithAuditPostgres(accountKey, groupId, serviceName, initialPrice, flags, reason, requestedBy, email);
+}
+
+
+async function addServiceGroupPostgres(accountKey, groupName, reason, requestedBy, email) {
+  const supa = getServiceClient();
+
+  // Next sort_order at the account level.
+  const { data: maxRows, error: maxErr } = await supa
+    .from(SC_TABLES.groups)
+    .select("sort_order")
+    .eq("account_key", accountKey)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  throwOnError(maxErr, "addServiceGroup.maxSort");
+  const nextSort = (maxRows?.[0]?.sort_order ?? -1) + 1;
+
+  const ins = await supa
+    .from(SC_TABLES.groups)
+    .insert({
+      account_key: accountKey,
+      group_name:  groupName.trim(),
+      sort_order:  nextSort,
+      created_by:  email,
+    })
+    .select("id")
+    .single();
+  throwOnError(ins.error, "addServiceGroup.insert");
+  const groupId = ins.data.id;
+
+  const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
+    account_key:    accountKey,
+    entity_type:    "group",
+    entity_id:      groupId,
+    entity_label:   groupName.trim(),
+    change_type:    "create",
+    old_value:      null,
+    new_value:      { groupName: groupName.trim() },
+    effective_date: isoDay(new Date()),
+    reason:         reason.trim(),
+    requested_by:   requestedBy ? requestedBy.trim() : null,
+    changed_by:     email,
+  });
+  throwOnError(logErr, "addServiceGroup.changelog");
+
+  return { success: true, groupId, sortOrder: nextSort };
+}
+
+/**
+ * Create a new service group under an account with a paired changelog
+ * row. Returns the new groupId so the UI can drop into add-service flow
+ * for the new group.
+ */
+export async function addServiceGroup(accountKey, groupName, reason, requestedBy, email) {
+  return addServiceGroupPostgres(accountKey, groupName, reason, requestedBy, email);
 }
 
 
