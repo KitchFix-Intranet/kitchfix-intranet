@@ -16,6 +16,12 @@ import {
   loadFeeSchedule,
   loadFeeAccountHistory,
   updateFeeSchedule,
+  archiveService,
+  reactivateService,
+  archiveServiceGroup,
+  reactivateServiceGroup,
+  addServiceWithAudit,
+  addServiceGroup,
 } from "@/lib/dataStore/serviceCalendar";
 
 // SHEETS REMOVED - PG orchestrator now handles all reads/writes.
@@ -764,6 +770,224 @@ export async function POST(request) {
           requestedBy:    requestedBy ? requestedBy.trim() : null,
           paymentCadence: paymentCadence ?? undefined,
         },
+        email
+      );
+      return NextResponse.json(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // CATALOG LIFECYCLE (Bundle 2 Step 3 - sc-6c)
+    // archive / reactivate / add for services and groups.
+    // All isScAdmin-gated. Reason required on every action.
+    // Archive date validation mirrors Stage 3 backdate (allowBackdate
+    // opt-in skips the today-or-future floor; still requires valid
+    // YYYY-MM-DD AND >= 2024-01-01 AND <= today).
+    // ─────────────────────────────────────────────────────────────
+    if (
+      action === "sc-admin-archive-service" ||
+      action === "sc-admin-archive-group"
+    ) {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const isGroup = action === "sc-admin-archive-group";
+      const { accountKey, archiveDate, reason, requestedBy, allowBackdate } = body;
+      const entityId = isGroup ? body.groupId : body.serviceId;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!entityId) {
+        return NextResponse.json(
+          { success: false, error: `Missing ${isGroup ? "groupId" : "serviceId"}` },
+          { status: 400 }
+        );
+      }
+      if (!archiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(archiveDate)) {
+        return NextResponse.json(
+          { success: false, error: "archiveDate required (YYYY-MM-DD)" },
+          { status: 400 }
+        );
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = (() => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      const BACKDATE_FLOOR = "2024-01-01";
+      if (allowBackdate === true) {
+        if (archiveDate < BACKDATE_FLOOR) {
+          return NextResponse.json(
+            { success: false, error: `archiveDate must be on or after ${BACKDATE_FLOOR} (older dates rejected as likely typos)` },
+            { status: 400 }
+          );
+        }
+        if (archiveDate > today) {
+          return NextResponse.json(
+            { success: false, error: "backdate mode requires a past archiveDate; use Future mode for forward-dated archives" },
+            { status: 400 }
+          );
+        }
+      } else if (archiveDate < yesterday) {
+        return NextResponse.json(
+          { success: false, error: "archiveDate must be today or future; choose Backdate to set a past date" },
+          { status: 400 }
+        );
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (requestedBy && (typeof requestedBy !== "string" || requestedBy.length > 280)) {
+        return NextResponse.json(
+          { success: false, error: "requestedBy must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      const fn = isGroup ? archiveServiceGroup : archiveService;
+      const result = await fn(accountKey, entityId, archiveDate, reason.trim(), requestedBy ? requestedBy.trim() : null, email);
+      return NextResponse.json(result);
+    }
+
+    if (
+      action === "sc-admin-reactivate-service" ||
+      action === "sc-admin-reactivate-group"
+    ) {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const isGroup = action === "sc-admin-reactivate-group";
+      const { accountKey, reason, requestedBy } = body;
+      const entityId = isGroup ? body.groupId : body.serviceId;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!entityId) {
+        return NextResponse.json(
+          { success: false, error: `Missing ${isGroup ? "groupId" : "serviceId"}` },
+          { status: 400 }
+        );
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (requestedBy && (typeof requestedBy !== "string" || requestedBy.length > 280)) {
+        return NextResponse.json(
+          { success: false, error: "requestedBy must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      const fn = isGroup ? reactivateServiceGroup : reactivateService;
+      const result = await fn(accountKey, entityId, reason.trim(), requestedBy ? requestedBy.trim() : null, email);
+      return NextResponse.json(result);
+    }
+
+    if (action === "sc-admin-add-service") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const {
+        accountKey, groupId, serviceName, initialPrice,
+        isFlatFee, isTaxFree, isNonRevenue,
+        reason, requestedBy,
+      } = body;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!groupId) {
+        return NextResponse.json({ success: false, error: "Missing groupId" }, { status: 400 });
+      }
+      if (!serviceName || typeof serviceName !== "string" || serviceName.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "serviceName required" }, { status: 400 });
+      }
+      if (serviceName.length > 120) {
+        return NextResponse.json(
+          { success: false, error: "serviceName must be 120 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (initialPrice === undefined || initialPrice === null || isNaN(Number(initialPrice)) || Number(initialPrice) < 0) {
+        return NextResponse.json(
+          { success: false, error: "initialPrice required and must be a non-negative number" },
+          { status: 400 }
+        );
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (requestedBy && (typeof requestedBy !== "string" || requestedBy.length > 280)) {
+        return NextResponse.json(
+          { success: false, error: "requestedBy must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      const result = await addServiceWithAudit(
+        accountKey,
+        groupId,
+        serviceName,
+        Number(initialPrice),
+        { isFlatFee: !!isFlatFee, isTaxFree: !!isTaxFree, isNonRevenue: !!isNonRevenue },
+        reason.trim(),
+        requestedBy ? requestedBy.trim() : null,
+        email
+      );
+      return NextResponse.json(result);
+    }
+
+    if (action === "sc-admin-add-group") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const { accountKey, groupName, reason, requestedBy } = body;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!groupName || typeof groupName !== "string" || groupName.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "groupName required" }, { status: 400 });
+      }
+      if (groupName.length > 120) {
+        return NextResponse.json(
+          { success: false, error: "groupName must be 120 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      if (requestedBy && (typeof requestedBy !== "string" || requestedBy.length > 280)) {
+        return NextResponse.json(
+          { success: false, error: "requestedBy must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      const result = await addServiceGroup(
+        accountKey,
+        groupName,
+        reason.trim(),
+        requestedBy ? requestedBy.trim() : null,
         email
       );
       return NextResponse.json(result);

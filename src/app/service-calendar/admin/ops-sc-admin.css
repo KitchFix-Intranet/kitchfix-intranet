@@ -452,3 +452,146 @@
   .sc-admin-fee-history-by { grid-column: 1; }
   .sc-admin-fee-history-reason { grid-column: 1 / -1; }
 }
+
+/* ─── Catalog lifecycle (Bundle 2 Step 3 - sc-6c) ─────────────────── */
+
+/* Group title row with archive/reactivate action */
+.sc-admin-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sc-admin-group-actions { display: inline-flex; gap: 8px; }
+
+.sc-admin-group--archived .sc-admin-group-title {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+.sc-admin-group--archived .sc-admin-svc-list {
+  opacity: 0.65;
+}
+
+/* Archived service rows: greyed but visible + marked */
+.sc-admin-svc-item--archived .sc-admin-svc-name {
+  color: #9ca3af;
+}
+.sc-admin-svc-item--archived .sc-admin-svc-price {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+.sc-admin-archived-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Service-row action cluster (Edit + Archive side-by-side) */
+.sc-admin-svc-actions { display: inline-flex; gap: 6px; }
+
+/* Danger variant for archive buttons */
+.sc-admin-svc-edit--danger { color: #b45309; border-color: #fde68a; }
+.sc-admin-svc-edit--danger:hover:not(:disabled) {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+.sc-admin-svc-edit--danger:disabled {
+  color: #cbd5e1;
+  border-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+/* Danger primary button (group archive confirm) */
+.sc-admin-btn--danger {
+  background: #b45309;
+  color: #fff;
+  border-color: #b45309;
+}
+.sc-admin-btn--danger:hover:not(:disabled) {
+  background: #92400e;
+  border-color: #92400e;
+}
+.sc-admin-btn--danger:disabled {
+  background: #cbd5e1;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* Strong warning variant (group-archive blast radius) */
+.sc-admin-eff-warning--strong {
+  background: #fff7ed;
+  border-color: #ea580c;
+  color: #9a3412;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.sc-admin-eff-warning--strong strong { color: #7c2d12; }
+
+/* Add link (at bottom of group / account) */
+.sc-admin-add-row {
+  margin-top: 8px;
+  padding: 4px 6px;
+}
+.sc-admin-add-row--account {
+  margin-top: var(--space-3);
+  border-top: 1px solid #f3f4f6;
+  padding-top: var(--space-3);
+}
+.sc-admin-add-link {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0F6E56;
+  background: none;
+  border: 1px dashed #d1d5db;
+  border-radius: var(--radius-input);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sc-admin-add-link:hover {
+  background: #f0fdf4;
+  border-color: #0F6E56;
+  border-style: solid;
+}
+
+/* Flag-checkbox row in add-service form */
+.sc-admin-flag-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+.sc-admin-flag-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #111827;
+  cursor: pointer;
+}
+.sc-admin-flag-label input[type="checkbox"] { accent-color: #0F6E56; }
+
+/* Confirm checkbox row (group archive acknowledge) */
+.sc-admin-confirm-row {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #111827;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.sc-admin-confirm-row input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: #b45309;
+}
