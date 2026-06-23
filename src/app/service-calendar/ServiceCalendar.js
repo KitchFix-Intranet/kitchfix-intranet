@@ -224,8 +224,8 @@ export default function ServiceCalendar({ showToast, session }) {
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
 
   const metrics = useMemo(() => {
-    if (!data?.days?.length) return { projMeals: 0, actMeals: 0, projRev: 0, actRev: 0, enteredProjRev: 0, complete: 0, needsEntry: 0, overdue: 0, total: 0 };
-    let projMeals = 0, actMeals = 0, projRev = 0, actRev = 0, enteredProjRev = 0, complete = 0, needsEntry = 0, overdue = 0;
+    if (!data?.days?.length) return { projMeals: 0, actMeals: 0, projRev: 0, actRev: 0, complete: 0, needsEntry: 0, overdue: 0, total: 0 };
+    let projMeals = 0, actMeals = 0, projRev = 0, actRev = 0, complete = 0, needsEntry = 0, overdue = 0;
     for (const day of data.days) {
       if (day.hasActuals) complete++;
       else if (day.isPast && day.isLocked) overdue++;
@@ -234,13 +234,10 @@ export default function ServiceCalendar({ showToast, session }) {
       // from sc_daily_revenue). Replaces the prior pv * priceLookup
       // recompute which used a single as-of-today price for every day
       // and drifted post a mid-period price change. day.totals is
-      // guaranteed present per loadMonthDataPostgres:608. Pace
-      // denominator (enteredProjRev) sums projected revenue ONLY for
-      // days with actuals - same shape as before.
+      // guaranteed present per loadMonthDataPostgres:608.
       projRev += day.totals.projectedRevenue || 0;
       if (day.hasActuals) {
-        actRev         += day.totals.actualRevenue    || 0;
-        enteredProjRev += day.totals.projectedRevenue || 0;
+        actRev += day.totals.actualRevenue || 0;
       }
       // Counts still sum from the per-service maps - those are the
       // count surface and are not affected by price drift.
@@ -250,15 +247,9 @@ export default function ServiceCalendar({ showToast, session }) {
         if (day.hasActuals && day.actual[ci] != null) actMeals += day.actual[ci];
       }
     }
-    return { projMeals, actMeals, projRev, actRev, enteredProjRev, complete, needsEntry, overdue, total: data.days.length };
+    return { projMeals, actMeals, projRev, actRev, complete, needsEntry, overdue, total: data.days.length };
   }, [data]);
 
-  // Pace = actuals vs projection ONLY for the days that have been entered.
-  // pacePct is the % delta against the same denominator. Both zero out
-  // cleanly when no days are entered (handled at the render site with a
-  // placeholder).
-  const pace = metrics.actRev - metrics.enteredProjRev;
-  const pacePct = metrics.enteredProjRev > 0 ? Math.round(pace / metrics.enteredProjRev * 100) : 0;
   const completionPct = metrics.total > 0 ? Math.round(metrics.complete / metrics.total * 100) : 0;
 
   // Calendar display mode classification - SPLIT into two predicates per
@@ -716,21 +707,6 @@ export default function ServiceCalendar({ showToast, session }) {
                     <div className="sc-metric-block">
                       <div className="sc-metric-label">Revenue</div>
                       <div className="sc-metric-row"><span className="sc-metric-hero sc-metric-hero--green">{fmt$(metrics.actRev)}</span><span className="sc-metric-context">billed to date</span></div>
-                    </div>
-                    <div className="sc-metric-divider" />
-                    <div className="sc-metric-block">
-                      <div className="sc-metric-label">Pace</div>
-                      {metrics.enteredProjRev > 0 ? (
-                        <>
-                          <div className={`sc-metric-hero ${pace >= 0 ? "sc-metric-hero--green" : "sc-metric-hero--amber"}`}>{pace >= 0 ? "+" : ""}{fmt$(pace)}</div>
-                          <div className="sc-metric-context">{Math.abs(pacePct)}% {pace < 0 ? "under" : "over"} forecast (entered days)</div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="sc-metric-hero" style={{ color: "#9ca3af" }}>—</div>
-                          <div className="sc-metric-context">no entries yet</div>
-                        </>
-                      )}
                     </div>
                     <div className="sc-metric-divider" />
                     <div className="sc-metric-block">
