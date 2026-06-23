@@ -16,112 +16,6 @@
 
 .sc-admin-root { padding: var(--space-4) var(--space-4) 60px; max-width: 1100px; margin: 0 auto; }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Hero band (dialed-down ops-shared .oh-hero). Reuses the .oh-hero / -overlay
-   / -content / -title / -subtitle classes from ops-shared.css so the admin
-   reads as the same component language as the operator calendar. Modifier-
-   only overrides here - do NOT touch the shared .oh-hero rule itself.
-   ──────────────────────────────────────────────────────────────────────────── */
-.sc-admin-hero {
-  /* Workspace, not landing: shorter than the operator 120px. */
-  height: 88px;
-  margin-top: 20px;
-  margin-bottom: 20px;
-  /* No background-image set - the navy gradient overlay renders solid navy. */
-}
-.sc-admin-hero-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-.sc-admin-hero-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-/* Primary back-link inside the hero. White on navy; subtle hover. */
-.sc-admin-hero-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
-  text-decoration: none;
-  margin-bottom: 2px;
-  transition: color 0.15s;
-  width: max-content;
-}
-.sc-admin-hero-back:hover { color: #fff; }
-.sc-admin-hero-back:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-
-.sc-admin-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-card);
-  padding: var(--space-4) var(--space-4);
-  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.04);
-}
-
-.sc-admin-header { margin-bottom: var(--space-4); }
-.sc-admin-title-row {
-  display: flex; align-items: center; gap: var(--space-2);
-  margin-bottom: 6px; flex-wrap: wrap;
-}
-.sc-admin-title {
-  font-size: var(--type-h2);
-  font-weight: 700;
-  color: #153968;
-  margin: 0;
-  line-height: var(--line-heading);
-}
-
-.sc-admin-corp-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 700;
-  color: #153968;
-  background: #f0f4f8;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: 3px 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-/* Hero variant - light-on-navy. The base chip's navy text on light blue
-   is invisible against the hero. Translucent white background + white
-   text reads cleanly on the navy gradient. */
-.sc-admin-corp-chip--hero {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.sc-admin-subtitle {
-  font-size: var(--type-body);
-  color: #6b7280;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.sc-admin-scaffold {
-  border-top: 1px solid #e5e7eb;
-  padding-top: var(--space-3);
-  display: flex; flex-direction: column; gap: var(--space-3);
-}
-.sc-admin-scaffold-line {
-  font-size: var(--type-body-sm);
-  color: #9ca3af;
-  margin: 0;
-  line-height: 1.55;
-  max-width: 60ch;
-}
-
 /* Quiet secondary back-button. Same treatment as .sc-admin-overview-back
    in ops-sc.css so the two back-affordances (editor "All accounts" + in-
    hero "Overview") read as the same control. White on neutral border,
@@ -151,10 +45,6 @@
 
 @media (max-width: 640px) {
   .sc-admin-root { padding: var(--space-3) var(--space-3) 40px; }
-  .sc-admin-card { padding: var(--space-3) var(--space-3); }
-  /* Tight phone viewport: drop hero height a touch + reduce its outer
-     padding from the shared 40px so the title doesn't get clipped. */
-  .sc-admin-hero { height: auto; min-height: 88px; padding: 14px 20px; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
