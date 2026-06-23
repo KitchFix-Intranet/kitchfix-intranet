@@ -998,7 +998,26 @@ async function loadYearSummaryPostgres(accountKey, year) {
     return monthObj;
   });
 
-  return { year: Number(year), months };
+  // Today's period + week (for the year-banner chip in the operator UI).
+  // Reads the same view; a single row keyed by today's date for this
+  // account. Returns null fields cleanly if today has no metadata (past
+  // the seeded data range, e.g. the fiscal-year boundary) so the banner
+  // chip is conditional rather than crashing.
+  const todayStr = today.toISOString().slice(0, 10);
+  const todayMetaRes = await supa
+    .from("sc_daily_revenue")
+    .select("period, week_label")
+    .eq("account_key", accountKey)
+    .eq("service_date", todayStr)
+    .limit(1)
+    .maybeSingle();
+  const todayBlock = {
+    date:   todayStr,
+    period: todayMetaRes.data?.period     || null,
+    week:   todayMetaRes.data?.week_label || null,
+  };
+
+  return { year: Number(year), months, today: todayBlock };
 }
 
 /**

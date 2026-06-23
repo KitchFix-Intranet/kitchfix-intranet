@@ -113,6 +113,7 @@ export default function ServiceCalendar({ showToast, session }) {
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
+  const [yearToday, setYearToday] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -183,6 +184,7 @@ export default function ServiceCalendar({ showToast, session }) {
   useEffect(() => {
     setData(null);
     setYearData(null);
+    setYearToday(null);
   }, [selectedAccount]);
 
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
@@ -204,7 +206,7 @@ export default function ServiceCalendar({ showToast, session }) {
     // refreshes the year heatmap on next visit; without it, the heatmap
     // showed stale grey dots after data flipped to "entered" in PG.
     fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}`)
-      .then(r => r.json()).then(d => { if (d.success) setYearData(d.months); }).catch(() => {});
+      .then(r => r.json()).then(d => { if (d.success) { setYearData(d.months); setYearToday(d.today || null); } }).catch(() => {});
   }, [viewMode, selectedAccount, reloadKey]);
 
   // URL sync: when viewMode flips into or out of "admin", update the
@@ -220,8 +222,38 @@ export default function ServiceCalendar({ showToast, session }) {
     }
   }, [viewMode, router, searchParams]);
 
+  const today = dateKey(new Date());
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
+
+  // Period ribbon derivation. Walks the visible-month days and buckets by
+  // meta.period; each bucket becomes a segment with its first/last in-month
+  // date. Days with no meta.period (past the seeded fiscal range) simply
+  // don't contribute - the ribbon renders only the populated stretch and
+  // hides entirely when no day in the month carries a period. Segment
+  // flex-grow is set to the day count so a period spanning most of the
+  // month visually dominates without rendering as a precise gantt.
+  // ribbonToday carries today's period/week for the highlight + chip; null
+  // when today is not in the visible month or has no metadata.
+  const periodRibbon = useMemo(() => {
+    if (!data?.days?.length) return { segments: [], today: null };
+    const byPeriod = new Map();
+    for (const d of data.days) {
+      const p = d?.meta?.period;
+      if (!p) continue;
+      if (!byPeriod.has(p)) byPeriod.set(p, { period: p, start: d.date, end: d.date, days: 0 });
+      const seg = byPeriod.get(p);
+      if (d.date < seg.start) seg.start = d.date;
+      if (d.date > seg.end)   seg.end   = d.date;
+      seg.days += 1;
+    }
+    const segments = [...byPeriod.values()].sort((a, b) => a.start.localeCompare(b.start));
+    const t = dayMap[today];
+    const ribbonToday = (t?.meta?.period)
+      ? { date: today, period: t.meta.period, week: t.meta.week || null }
+      : null;
+    return { segments, today: ribbonToday };
+  }, [data, dayMap, today]);
 
   const metrics = useMemo(() => {
     if (!data?.days?.length) return { projMeals: 0, actMeals: 0, projRev: 0, actRev: 0, complete: 0, needsEntry: 0, overdue: 0, total: 0 };
@@ -507,7 +539,6 @@ export default function ServiceCalendar({ showToast, session }) {
   }, []);
 
   const weeks = useMemo(() => getCalendarWeeks(year, month), [year, month]);
-  const today = dateKey(new Date());
   const todayMonth = new Date().getMonth();
   const goToToday = useCallback(() => { setMonth(todayMonth); setViewMode("month"); setTimeout(() => setFocusDay(today), 100); }, [todayMonth, today]);
 
@@ -742,6 +773,34 @@ export default function ServiceCalendar({ showToast, session }) {
 
             {!loading && data && (
               <>
+                {periodRibbon.segments.length > 0 && (
+                  <div className="sc-month-ribbon" aria-label="Fiscal period overview">
+                    <div className="sc-month-ribbon-track">
+                      {periodRibbon.segments.map((seg) => {
+                        const isCurrent = periodRibbon.today?.period === seg.period;
+                        const startD = new Date(seg.start + "T12:00:00");
+                        const endD   = new Date(seg.end   + "T12:00:00");
+                        const startLabel = `${MONTHS[startD.getMonth()].slice(0,3)} ${startD.getDate()}`;
+                        const endLabel   = `${MONTHS[endD.getMonth()].slice(0,3)} ${endD.getDate()}`;
+                        const range = seg.start === seg.end ? startLabel : `${startLabel} - ${endLabel}`;
+                        return (
+                          <div key={seg.period}
+                            className={`sc-month-ribbon-segment ${isCurrent ? "sc-month-ribbon-segment--current" : ""}`}
+                            style={{ flexGrow: seg.days, flexBasis: 0 }}>
+                            <span className="sc-month-ribbon-period">Period {seg.period}</span>
+                            <span className="sc-month-ribbon-range">{range}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {periodRibbon.today && (
+                      <div className="sc-month-ribbon-today">
+                        Today: Period {periodRibbon.today.period}{periodRibbon.today.week ? ` · ${periodRibbon.today.week}` : ""}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="sc-grid-header">{DOW_LABELS.map(d => <div key={d} className="sc-dow">{d}</div>)}</div>
 
                 {weeks.map((week, wi) => {
@@ -998,6 +1057,9 @@ export default function ServiceCalendar({ showToast, session }) {
             {yearBannerStats && (
               <div className="sc-year-banner">
                 <span className="sc-year-banner-item">Today: {yearBannerStats.todayLabel}</span>
+                {yearToday?.period && (
+                  <span className="sc-year-banner-period">Period {yearToday.period}{yearToday.week ? ` · ${yearToday.week}` : ""}</span>
+                )}
                 {hasHomestandSchedule ? (
                   <>
                     <span className="sc-year-banner-sep">|</span>

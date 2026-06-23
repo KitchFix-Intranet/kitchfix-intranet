@@ -395,6 +395,12 @@ export async function GET(request) {
       return NextResponse.json({
         success: true,
         accountKey,
+        // Top-level today block: { date, period, week } for the year-banner
+        // period chip. period/week are null when today has no metadata
+        // (past the seeded data range). The legacy month-level `period: ""`
+        // below is a Sheets-era display vestige and is NOT replaced by
+        // this block (a per-month period label is Phase B territory).
+        today: summary.today,
         months: summary.months.map((m) => {
           const monthOut = {
             month:             m.month,

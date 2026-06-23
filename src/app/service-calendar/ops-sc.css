@@ -91,6 +91,100 @@
 .sc-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; gap: 12px; color: #6b7280; font-size: 14px; }
 
 /* ══════════════════════════════════════
+   PERIOD RIBBON
+   ══════════════════════════════════════
+   Sits between the metrics strip and the grid header. Structural
+   summary of the fiscal periods that the visible month touches - navy
+   (#153968 brand structural accent, same as the admin shell + the
+   day-detail navy=structure convention) for the current segment so
+   the operator reads "structure" not "entered/confirmed" (green stays
+   reserved for operator-entry semantic). Sits OUTSIDE .sc-metrics so
+   its responsive rules below do not interact with the strip's flex-
+   wrap breakpoint at 768px. */
+.sc-month-ribbon {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.sc-month-ribbon-track {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+.sc-month-ribbon-segment {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sc-month-ribbon-period {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: var(--line-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-month-ribbon-range {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.sc-month-ribbon-segment--current {
+  background: #f0f4f8;
+  border-color: #153968;
+  color: #153968;
+}
+.sc-month-ribbon-segment--current .sc-month-ribbon-range {
+  color: #153968;
+}
+.sc-month-ribbon-today {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #153968;
+  border-radius: 999px;
+  padding: 4px 10px;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Year-banner period chip. Same navy-on-light treatment as the ribbon
+   today chip so the two surfaces read as the same control language. */
+.sc-year-banner-period {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #153968;
+  background: #f0f4f8;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 9px;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════
    CALENDAR GRID
    ══════════════════════════════════════ */
 .sc-grid-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; margin-top: var(--space-3); }
@@ -1269,6 +1363,10 @@
   .sc-metrics { flex-wrap: wrap; gap: 12px; }
   .sc-metric-hero { font-size: 18px; }
   .sc-metric-divider { display: none; }
+  /* Period ribbon at tablet: segments stay side-by-side but the labels
+     shrink a touch. The today chip stays its own line below the track. */
+  .sc-month-ribbon { gap: 6px; padding: 10px 0 12px; }
+  .sc-month-ribbon-segment { padding: 6px 10px; }
   .sc-tile { min-height: 64px; padding: 6px 8px; }
   .sc-tile--weekend { min-height: 36px; }
   .sc-tile-game { display: none; }
@@ -1408,6 +1506,11 @@
   .sc-tile-meals { display: none; }
   .sc-tile-rev { font-size: 10px; }
   .sc-today-pill { display: none; }
+  /* Period ribbon at phone: stack the segments vertically so each is
+     full-width and legible, rather than squeezing two segments into a
+     375px row with truncated labels. Today chip stays below. */
+  .sc-month-ribbon-track { flex-direction: column; gap: 6px; }
+  .sc-month-ribbon-segment { padding: 8px 12px; }
 }
 
 /* Cancel: ghost tier - no border at rest so it reads as a tertiary
