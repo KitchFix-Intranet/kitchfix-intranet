@@ -58,6 +58,12 @@ lastDayWorked: "Last Day Worked",
   eligNoDiscipline: "No Active Discipline",
   eligCertsCurrent: "Certifications Current",
   eligManagerApproved: "Manager Approved",
+  equipmentRequestType: "Request Type",
+  replacementReason: "Replacement Reason",
+  currentDeviceDetails: "Current Device",
+  equipmentShipTo: "Ship To",
+  confirmReturn: "Return Confirmed",
+  confirmReported: "Loss Reported",
 };
 
 // ── New hire: grouped display sections ──
@@ -84,6 +90,7 @@ const PAF_DISPLAY_FIELDS = {
 separation: ["effectiveDate", "lastDayWorked", "actionGroup", "separationReason", "rehireEligible", "explanation"],
   rate_change: ["effectiveDate", "oldRate", "newRate", "explanation"], // historical only
   pay_increase: ["increaseType", "employeeLevel", "role", "customRole", "effectiveDate", "oldRate", "newRate", "dollarIncrease", "pctIncrease", "eligSeasonComplete", "eligNoDiscipline", "eligCertsCurrent", "eligManagerApproved", "explanation"],
+  equipment_request: ["equipmentRequestType", "replacementReason", "currentDeviceDetails", "equipmentShipTo", "confirmReturn", "confirmReported", "explanation"],
   title_change: ["effectiveDate", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],
   status_change: ["effectiveDate", "statusChangeDirection"],
   reclassification: ["effectiveDate", "reclassFrom", "reclassTo", "reclassTitleChange", "oldTitle", "newTitle", "reclassChangeRate", "newRate", "explanation"],

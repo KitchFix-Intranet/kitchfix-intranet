@@ -236,6 +236,14 @@ const EmailTemplates = {
       body += this.row("Current " + (data.employeeLevel === "leadership" ? "Salary" : "Rate"), "$" + (data.oldRate || "-"));
       body += this.row("Proposed " + (data.employeeLevel === "leadership" ? "Salary" : "Rate"), "$" + (data.newRate || "-"));
       if (data.dollarIncrease) body += this.row("Increase", `${data.dollarIncrease} (${data.pctIncrease})`);
+    } else if (actionKey === "equipment_request") {
+      const reqType = data.equipmentRequestType === "new" ? "New Device" : "Replacement";
+      body += this.row("Request Type", reqType);
+      if (data.equipmentRequestType === "replacement") {
+        body += this.row("Reason", data.replacementReason || "-");
+        body += this.row("Current Device", data.currentDeviceDetails || "-");
+      }
+      body += this.row("Ship To", data.equipmentShipTo || "-");
 } else if (actionKey === "separation") {
       body += this.row("Type", data.actionGroup);
       body += this.row("Reason", data.separationReason);
@@ -458,6 +466,7 @@ if (action === "bootstrap") {
           { key: "add_cell_phone", label: "Cell Phone Reimbursement", category: "Expenses" },
           { key: "travel_reimbursement", label: "Travel Reimbursement", category: "Expenses" },
           { key: "other_reimbursement", label: "Other Reimbursement", category: "Expenses" },
+          { key: "equipment_request", label: "Equipment / Laptop Request", category: "IT & Equipment" },
         ],
         travelRates: {
           supplementRate: 50,
@@ -1013,6 +1022,15 @@ if (f.actionType === "rate_change") {
           details += `\n*Increase Type:* ${f.increaseType || "-"}`;
           details += `\n*Current:* $${f.oldRate || "0"}\n*Proposed:* $${f.newRate || "0"}${pct}`;
           if (f.explanation) details += `\n*Why:* ${f.explanation}`;
+} else if (f.actionType === "equipment_request") {
+          const reqType = f.equipmentRequestType === "new" ? "New Device" : "Replacement";
+          details += `\n*Request:* ${reqType}`;
+          if (f.equipmentRequestType === "replacement") {
+            details += `\n*Reason:* ${f.replacementReason || "-"}`;
+            details += `\n*Current Device:* ${f.currentDeviceDetails || "-"}`;
+          }
+          details += `\n*Ship To:* ${f.equipmentShipTo || "-"}`;
+          if (f.explanation) details += `\n*Details:* ${f.explanation}`;
 } else if (f.actionType === "separation") {
           details += `\n*Type:* ${f.actionGroup || "N/A"}\n*Reason:* ${f.separationReason || "N/A"}`;
           if (f.lastDayWorked) details += `\n*Last Day Worked:* ${f.lastDayWorked}`;

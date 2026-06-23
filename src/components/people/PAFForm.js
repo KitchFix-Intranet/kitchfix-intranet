@@ -101,6 +101,9 @@ actionType: "", actionGroup: "Voluntary", separationReason: "", rehireEligible: 
     increaseType: "", employeeLevel: "", role: "", customRole: "",
     dollarIncrease: "", pctIncrease: "",
     eligSeasonComplete: false, eligNoDiscipline: false, eligCertsCurrent: false, eligManagerApproved: false,
+    // equipment_request fields
+    equipmentRequestType: "", replacementReason: "", currentDeviceDetails: "",
+    equipmentShipTo: "", confirmReturn: false, confirmReported: false,
   };
 }
 
@@ -118,6 +121,7 @@ separation: ["actionGroup", "separationReason", "rehireEligible", "lastDayWorked
   add_deduction: ["amount"],
   add_gratuity: ["amount"],
   other_reimbursement: ["amount"],
+  equipment_request: ["equipmentRequestType", "replacementReason", "currentDeviceDetails", "equipmentShipTo", "confirmReturn", "confirmReported"],
 };
 
 // Separation sub-reasons by type
@@ -397,6 +401,133 @@ function ActionDetails({ form, update, errors, Formatter, bootstrapData, showTra
             placeholder="What have they done? What's changed? Be specific."
             rows={4} />
         </div>
+      </>
+    );
+  }
+
+  if (type === "equipment_request") {
+    const isReplacement = form.equipmentRequestType === "replacement";
+    const isLostStolen = isReplacement && (form.replacementReason === "Lost" || form.replacementReason === "Stolen");
+
+    return (
+      <>
+        {/* Request type */}
+        <label className="pp-label" style={{ textTransform: "none" }}>Request type</label>
+        <div className="pp-pill-group" style={{ marginBottom: 16 }}>
+          {[["new", "New device"], ["replacement", "Replacement"]].map(([val, label]) => (
+            <button key={val} type="button"
+              className={`pp-pill-option${form.equipmentRequestType === val ? " pp-pill-option--active" : ""}`}
+              onClick={() => { update("equipmentRequestType", val); update("replacementReason", ""); update("currentDeviceDetails", ""); update("confirmReturn", false); update("confirmReported", false); }}>{label}</button>
+          ))}
+        </div>
+        {!isReplacement && form.equipmentRequestType === "new" && (
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: -12, marginBottom: 16 }}>New device = first laptop for this employee.</div>
+        )}
+
+        {/* Replacement reason */}
+        {isReplacement && (
+          <div style={{ marginTop: 4, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+            <label className="pp-label" style={{ textTransform: "none" }}>Reason for replacement</label>
+            <div className="pp-pill-group" style={{ marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+              {["Damaged", "Lost", "Stolen", "End of life / upgrade"].map((r) => (
+                <button key={r} type="button"
+                  className={`pp-pill-option${form.replacementReason === r ? " pp-pill-option--active" : ""}${(r === "Lost" || r === "Stolen") ? " pp-pill-option--warn" : ""}`}
+                  style={{
+                    padding: "8px 12px", fontSize: 13,
+                    ...((r === "Lost" || r === "Stolen") && form.replacementReason !== r ? { background: "#fef2f2", color: "#991b1b", borderColor: "#fca5a5" } : {}),
+                    ...((r === "Lost" || r === "Stolen") && form.replacementReason === r ? { background: "#991b1b", color: "#fff", borderColor: "#991b1b" } : {}),
+                  }}
+                  onClick={() => { update("replacementReason", r); update("confirmReported", false); }}>{r}</button>
+              ))}
+            </div>
+
+            {/* Lost/stolen warning */}
+            {isLostStolen && (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", background: "#fffbeb", borderRadius: 8, marginTop: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.4 }}>
+                    <strong>Lost or stolen devices must be reported to the Senior Director of Operations within 24 hours of discovery</strong> per AGR-002. Damage or loss from negligence may be the employee&apos;s financial responsibility.
+                  </div>
+                </div>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", marginTop: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!form.confirmReported} onChange={(e) => update("confirmReported", e.target.checked)}
+                    style={{ width: 18, height: 18, minWidth: 18, marginTop: 1, accentColor: "#153968" }} />
+                  <div style={{ fontSize: 13, lineHeight: 1.4 }}>Reported to Sr. Director of Operations within 24 hours</div>
+                </label>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Current device details - replacement only */}
+        {isReplacement && form.replacementReason && (
+          <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+            <label className="pp-label" style={{ textTransform: "none" }}>Current device details</label>
+            <input className={`pp-input${errors.currentDeviceDetails ? " pp-input-error" : ""}`}
+              value={form.currentDeviceDetails} onChange={(e) => update("currentDeviceDetails", e.target.value)}
+              placeholder="Make, model, and what's wrong..." />
+          </div>
+        )}
+
+        {/* Ship to - always shown when request type is selected */}
+        {form.equipmentRequestType && (
+          <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+            <label className="pp-label" style={{ textTransform: "none" }}>{isReplacement ? "Ship new device to" : "Ship to"}</label>
+            <input className={`pp-input${errors.equipmentShipTo ? " pp-input-error" : ""}`}
+              value={form.equipmentShipTo} onChange={(e) => update("equipmentShipTo", e.target.value)}
+              placeholder="Account site, home address, or other..." />
+          </div>
+        )}
+
+        {/* Additional details */}
+        {form.equipmentRequestType && (
+          <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+            <label className="pp-label" style={{ textTransform: "none" }}>{form.equipmentRequestType === "new" ? "Why does this employee need a laptop?" : "Additional details"}</label>
+            <textarea className={`pp-textarea${errors.explanation ? " pp-input-error" : ""}`}
+              value={form.explanation} onChange={(e) => update("explanation", e.target.value)}
+              placeholder={form.equipmentRequestType === "new" ? "New hire, role change, operational need..." : "Any specs, urgency, or context..."}
+              rows={3} />
+          </div>
+        )}
+
+        {/* Return shipping notice - replacement only */}
+        {isReplacement && form.replacementReason && (
+          <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 20 }}>
+            <div style={{ padding: "14px 16px", background: "#f8fafc", borderRadius: 8, border: "0.5px solid #e2e8f0" }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0 }}><rect x="1" y="6" width="22" height="12" rx="2" /><path d="M1 10h22" /></svg>
+                Return current device to
+              </div>
+              <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
+                Kevin Fietek - Office 805<br />
+                Attn: KitchFix<br />
+                805 Greenwood St<br />
+                Evanston, IL 60201
+              </div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Per AGR-002, the current device must be returned before or at the time the replacement is issued.</div>
+            </div>
+
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", marginTop: 12, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form.confirmReturn} onChange={(e) => update("confirmReturn", e.target.checked)}
+                style={{ width: 18, height: 18, minWidth: 18, marginTop: 1, accentColor: "#153968" }} />
+              <div>
+                <div style={{ fontSize: 13, lineHeight: 1.4 }}>I acknowledge the current device will be shipped back to the address above</div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>Required before submitting</div>
+              </div>
+            </label>
+          </div>
+        )}
+
+        {/* New device AGR-002 info note */}
+        {form.equipmentRequestType === "new" && (
+          <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", background: "#eff6ff", borderRadius: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+            <div style={{ fontSize: 12, color: "#1e40af", lineHeight: 1.4 }}>
+              New devices are coordinated through Operations and IT. The employee will need to sign AGR-002 (Laptop Acceptance Agreement) when the device is issued.
+            </div>
+          </div>
+        )}
       </>
     );
   }
@@ -833,6 +964,17 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
         if (!form.newRate) errs.newRate = true;
         if (!form.explanation.trim()) errs.explanation = true;
       }
+      if (form.actionType === "equipment_request") {
+        if (!form.equipmentRequestType) errs.equipmentRequestType = true;
+        if (form.equipmentRequestType === "replacement") {
+          if (!form.replacementReason) errs.replacementReason = true;
+          if (!form.currentDeviceDetails) errs.currentDeviceDetails = true;
+          if (!form.confirmReturn) errs.confirmReturn = true;
+          if ((form.replacementReason === "Lost" || form.replacementReason === "Stolen") && !form.confirmReported) errs.confirmReported = true;
+        }
+        if (!form.equipmentShipTo) errs.equipmentShipTo = true;
+        if (!form.explanation.trim()) errs.explanation = true;
+      }
       if (form.actionType === "title_change") {
         if (!form.oldTitle.trim()) errs.oldTitle = true;
         if (!form.newTitle.trim()) errs.newTitle = true;
@@ -990,7 +1132,7 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                 <label className="pp-label">What needs to happen?</label>
                 <select className={`pp-select${errors.actionType ? " pp-input-error" : ""}`} value={form.actionType} onChange={(e) => update("actionType", e.target.value)}>
                   <option value="">Select an action...</option>
-                  {["HR Actions", "Payroll", "Expenses"].map((cat) => groups[cat] && (
+                  {["HR Actions", "Payroll", "Expenses", "IT & Equipment"].map((cat) => groups[cat] && (
                     <optgroup key={cat} label={cat}>
                       {groups[cat].map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
                     </optgroup>
@@ -1010,12 +1152,13 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                  form.actionType === "reclassification" ? "Transferring" :
                  form.actionType === "rate_change" ? "Pay adjustment for" :
                  form.actionType === "pay_increase" ? `Pay increase recommendation for` :
+                 form.actionType === "equipment_request" ? `Equipment request for` :
                  actionLabel + " for"} {form.employeeName}
               </p>
               <ActionDetails form={form} update={update} errors={errors} Formatter={Formatter} bootstrapData={bootstrapData} showTravelHelp={showTravelHelp} setShowTravelHelp={setShowTravelHelp} />
 
-              {/* Hide generic notes for separation, status_change, and pay_increase (pay_increase renders its own labeled rationale) */}
-              {!["separation", "status_change", "pay_increase"].includes(form.actionType) && (
+              {/* Hide generic notes for separation, status_change, pay_increase, and equipment_request (each renders its own labeled rationale) */}
+              {!["separation", "status_change", "pay_increase", "equipment_request"].includes(form.actionType) && (
                 <>
                   <label className="pp-label" style={{ marginTop: 24 }}>
                     {["title_change", "rate_change"].includes(form.actionType) ? "Reason for Change" :
@@ -1119,6 +1262,12 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
                   form.actionType === "pay_increase" && form.oldRate && ["Current " + (form.employeeLevel === "leadership" ? "Salary" : "Rate"), Formatter.toMoney(form.oldRate), 2],
                   form.actionType === "pay_increase" && form.newRate && ["Proposed " + (form.employeeLevel === "leadership" ? "Salary" : "Rate"), Formatter.toMoney(form.newRate), 2],
                   form.actionType === "pay_increase" && form.dollarIncrease && ["Increase", `${form.dollarIncrease} (${form.pctIncrease})`, 2],
+
+                  // Equipment Request
+                  form.actionType === "equipment_request" && form.equipmentRequestType && ["Request Type", form.equipmentRequestType === "new" ? "New Device" : "Replacement", 2],
+                  form.actionType === "equipment_request" && form.equipmentRequestType === "replacement" && form.replacementReason && ["Reason", form.replacementReason, 2],
+                  form.actionType === "equipment_request" && form.currentDeviceDetails && ["Current Device", form.currentDeviceDetails, 2],
+                  form.actionType === "equipment_request" && form.equipmentShipTo && ["Ship To", form.equipmentShipTo, 2],
 
                   // Amount-based
                   ["add_bonus", "add_deduction", "add_gratuity", "other_reimbursement"].includes(form.actionType) && form.amount && ["Amount", Formatter.toMoney(form.amount), 2],
