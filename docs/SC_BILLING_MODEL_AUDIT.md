@@ -325,3 +325,23 @@ STL-MO 2025-27 contract, Section 2(a)(iii) (verbatim):
 **The biggest design risk** is treating "fee account" as a binary when STL-FL needs a non-MLB-homestand fee display. Either widen the homestand model to support PDC camp blocks, or introduce a parallel display mode for fee accounts without game-day structure. The choice shapes the fee schedule's UX as much as its schema.
 
 End of report.
+---
+
+## RESOLUTIONS (June 2026 - from the lens-vision investigation)
+
+The open questions this doc previously flagged are now resolved. Recorded here so they are not re-investigated.
+
+### CIN-AZ pricing - RESOLVED
+The doc flagged that the 2026 spreadsheet price (~62% above the 2023 base + max CPI) implied a missing out-of-band amendment. Kevin's answer: **the pricing in the SC spreadsheet IS the agreed pricing.** The actuals total is what is charged the client, apart from the service fee, which is billed separately. The spreadsheet is authoritative for billing; there is no missing document blocking the build. Actuals prices are 70% of projected (a contracted discount baked into the Actuals tab).
+
+### TBR-FL 25% MiLB amortization discount - RESOLVED (empirically)
+The doc flagged that whether the 25% discount renews for 2026/2027 was unstated. **Empirical answer from the 2026 spreadsheet: the discount IS still applied in 2026.** MiLB Actuals-tab prices are exactly 75% of Projections-tab prices (in two forms: a direct multiplier on AFTER HOURS MEALS + Dinner, and a service-rename where MiLB-ST services become non-ST at 75% of the ST price). Major League services show 0% delta (no discount, per contract). `SC_PRICE_COMPARISON.md` independently confirms the negative delta. For the tool's math, TBR-FL 2026 actuals revenue uses the discounted prices and the new tool must reproduce that to match the P&L. NOTE: the contract Term reconciliation (is 2026 legitimately inside the discount Term, or is ops applying a stale discount?) is HOUSEKEEPING for Kevin to confirm with the SOW - it does not block the build, since the tool matches what is actually billed either way.
+
+### STL-FL flat-fee spread - RESOLVED
+The doc / clarify-list asked how STL-FL's $1.4M flat fee maps onto a time-unit view. **Answer from the 2026 P&L (confirmed against actuals through P6): the fee is PHASE-AWARE PRORATED, not flat-monthly or flat-quarterly.** Per-period: P1 $45,553, P2 $171,367, P3 $407,375 (ST peak), P4 $132,755, P5-P9 $98,915 each (FCL plateau), P10 $57,267, P11 $52,061, P12 $39,046, P13 $0. Total $1,400,000. ALL flows through `2400.1 Meal Service (Home)` - no Catering, no Service Charges line. The SC financial frame for STL-FL drives period revenue from this allocation, NOT from per-meal price x count (STL-FL per-meal prices are $0 by design as of the 2026-06-16 flip).
+
+### Passthrough / Service Charges in the topline - RESOLVED
+The doc recommended considering excluding cost-passthrough from the revenue KPI. **Answer from the actuals P&L: Service Charges is a SEPARATE revenue line that IS included in the P&L topline** (CIN-AZ P3 example: Meal Service $320,184 + Service Charges $115,234 + Catering = Total Revenue). It is not netted out. Decision: the SC's KPI revenue push includes Service Charges (matches the P&L, which is what operators compare against). The SC already computes both the meal-service revenue and the service-charge component, so it pushes the same three-line breakdown the P&L uses. If a "true margin" KPI is ever wanted, surface Service Charges separately and subtract on demand - but the default matches the P&L topline.
+
+### The confirmed revenue model (all accounts)
+Three revenue lines, consistent across the SC sheets, the budget P&Ls, the actuals-through-P6, and the legacy KPI tool: `2400.1 Meal Service (Home)`, `2300 Service Charges`, `2200 Catering Revenue`. `2400.2 Meal Service (Away)` exists in the template but is unused across all accounts. See `SC_KPI_PUSH_CONTRACT.md` for how this band pushes to the dashboard.
