@@ -17,7 +17,7 @@
 // not a scatter of edits across ServiceCalendar.js's mount path.
 export function computeInitialView({ urlView, isAdmin }) {
   if (urlView === "admin" && isAdmin) {
-    return { scope: "year", lens: "month", isAdminView: true };
+    return { scope: "year", lens: "calendar", isAdminView: true };
   }
-  return { scope: "year", lens: "month", isAdminView: false };
+  return { scope: "year", lens: "calendar", isAdminView: false };
 }
