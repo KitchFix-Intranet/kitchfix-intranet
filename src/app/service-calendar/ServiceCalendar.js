@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
+import LensBar from "./LensBar";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -151,9 +152,6 @@ export default function ServiceCalendar({ showToast, session }) {
   // re-created every render and would change reference identity).
   const isYearView  = !isAdminView && scope === "year"  && lens === "month";
   const isMonthView = !isAdminView && scope === "month" && lens === "month";
-  // Active-highlight helper for the (scope, lens) buttons in the
-  // segmented control.
-  const isLensScopeActive = (s, l) => !isAdminView && scope === s && lens === l;
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -702,31 +700,35 @@ export default function ServiceCalendar({ showToast, session }) {
               </>
             )}
           </div>
-          <div className="sc-mode-group">
-            {[{ scope: "year", lens: "month", label: "Year" }, { scope: "month", lens: "month", label: "Month" }].map(t => (
-              <button
-                key={t.label}
-                className={`sc-mode-btn ${isLensScopeActive(t.scope, t.lens) ? "sc-mode-btn--active" : ""}`}
-                onClick={() => { setScope(t.scope); setLens(t.lens); setIsAdminView(false); setFocusDay(null); setBulkMode(false); }}
-              >
-                {t.label}
-              </button>
-            ))}
-            <div className="sc-mode-divider" />
-            <button className="sc-mode-btn sc-mode-btn--today" onClick={goToToday}>Today</button>
-            {isAdmin && (
-              <>
-                <div className="sc-mode-divider" />
-                <button
-                  className={`sc-mode-btn sc-mode-btn--admin ${isAdminView ? "sc-mode-btn--active" : ""}`}
-                  onClick={() => { setIsAdminView(true); setFocusDay(null); setBulkMode(false); }}
-                  title="Service Calendar admin (corporate only)"
-                >
-                  Admin
-                </button>
-              </>
-            )}
-          </div>
+          <LensBar
+            scope={scope}
+            lens={lens}
+            isAdminView={isAdminView}
+            isAdmin={isAdmin}
+            onScopeChange={(nextScope) => {
+              setScope(nextScope);
+              setIsAdminView(false);
+              setFocusDay(null);
+              setBulkMode(false);
+            }}
+            // B1: Period is disabled in the dropdown so this only ever
+            // fires for "month". The scope-reset-on-lens-switch lives
+            // here so B2's activation is a body-only edit.
+            onLensChange={(nextLens) => {
+              setLens(nextLens);
+              setIsAdminView(false);
+              setFocusDay(null);
+              setBulkMode(false);
+            }}
+            onTodayClick={goToToday}
+            onAdminClick={() => {
+              setIsAdminView(true);
+              setFocusDay(null);
+              setBulkMode(false);
+            }}
+          />
+        </div>
+        <div className="sc-subheader">
           <div className="sc-date-nav">
             {isMonthView && (
               <>

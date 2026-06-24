@@ -6,7 +6,7 @@
 .sc-root { padding-bottom: 60px; }
 .sc-card { background: #fff; border-radius: var(--radius-card); border: 1px solid #e5e7eb; overflow: hidden; }
 
-.sc-header { padding: var(--space-3) var(--space-4); border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.sc-header { padding: var(--space-3) var(--space-4); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
 
 /* LEFT: Account */
 .sc-header-account { display: flex; align-items: center; gap: 8px; }
@@ -28,6 +28,62 @@
 .sc-mode-btn--today { color: #0F6E56; font-weight: 600; }
 .sc-mode-btn--today:hover { background: #E1F5EE; }
 .sc-mode-divider { width: 1px; height: 16px; background: #d1d5db; margin: 0 2px; }
+
+/* ══════════════════════════════════════
+   LENS BAR (Option 4) - PR-B1
+   Replaces the inline Year/Month/Today/Admin segmented control.
+   Layout: scope-segments + Today (left pill), lens dropdown (quiet,
+   to the right of the pill), admin escape button (far right, parallel
+   surface). .sc-subheader holds the date-nav on its own row below.
+   ══════════════════════════════════════ */
+.sc-lens-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex: 1; gap: var(--space-3); flex-wrap: wrap;
+}
+.sc-lens-bar-controls {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+}
+.sc-lens-dropdown {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--type-caption); color: #6b7280;
+}
+.sc-lens-dropdown-label { font-weight: 500; }
+.sc-lens-dropdown-select {
+  padding: 5px 8px;
+  font-family: inherit; font-size: var(--type-caption); font-weight: 600;
+  color: #111827; background: #fff;
+  border: 1px solid #cbd5e1; border-radius: var(--radius-input);
+  cursor: pointer; transition: border-color 0.15s;
+}
+.sc-lens-dropdown-select:hover { border-color: #0F6E56; }
+.sc-lens-dropdown-select:focus-visible { outline: 2px solid #153968; outline-offset: 1px; }
+.sc-lens-dropdown-select:disabled,
+.sc-lens-dropdown-select option:disabled { color: #9ca3af; }
+
+/* Admin escape - parallel surface, outlined, navy palette. Distinct
+   from the lens-bar pill so it reads as "leave and come back" not a
+   tab peer. */
+.sc-admin-esc {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  font-family: inherit; font-size: var(--type-caption); font-weight: 600;
+  color: #153968; background: #fff;
+  border: 1px solid #cbd5e1; border-radius: var(--radius-input);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.sc-admin-esc:hover { background: #f0f4f8; border-color: #94a3b8; }
+.sc-admin-esc:focus-visible { outline: 2px solid #153968; outline-offset: 2px; }
+.sc-admin-esc--active { background: #f0f4f8; border-color: #153968; }
+
+/* Subheader row holds the date-nav below the lens-bar. Owns the
+   bottom-border that separates the header zone from the body
+   (moved off .sc-header so the header + subheader read as one
+   continuous panel). */
+.sc-subheader {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  display: flex; justify-content: flex-end;
+  border-bottom: 1px solid #e5e7eb;
+}
 
 /* RIGHT: Date nav */
 .sc-date-nav {
@@ -791,10 +847,6 @@
   outline-offset: 2px;
 }
 
-/* Admin segment button - reuses base .sc-mode-btn / --active. The
-   --admin modifier is present for any future emphasis pass. */
-.sc-mode-btn--admin { font-weight: 600; }
-
 /* Admin in-page body container. Faint page wash (#fafbfc) so the white
    group/section cards inside lift off it - "Fuller" definition pass.
    AdminPanel handles its own internal structure (the AccountsOverview
@@ -1359,6 +1411,11 @@
   .sc-header { flex-direction: column; align-items: stretch; gap: 10px; }
   .sc-header-account { justify-content: center; }
   .sc-mode-group { justify-content: center; }
+  .sc-lens-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .sc-lens-bar-controls { flex-direction: column; align-items: stretch; gap: 10px; }
+  .sc-lens-dropdown { justify-content: center; }
+  .sc-admin-esc { align-self: center; }
+  .sc-subheader { justify-content: center; }
   .sc-date-nav { justify-content: center; }
   .sc-dropdown-trigger { min-width: 160px; }
   .sc-metrics { flex-wrap: wrap; gap: 12px; }
