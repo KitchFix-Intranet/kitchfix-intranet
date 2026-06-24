@@ -75,7 +75,6 @@
 .sc-metric-row { display: flex; align-items: baseline; gap: var(--space-1); }
 .sc-metric-hero { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-metric-hero--green { color: #0F6E56; }
-.sc-metric-hero--red { color: #dc2626; }
 .sc-metric-context { font-size: var(--type-caption); color: #9ca3af; }
 .sc-metric-warn { font-size: var(--type-caption); color: #b45309; margin-top: 2px; }
 .sc-metric-warn--link { cursor: pointer; text-decoration: underline; text-decoration-style: dashed; text-underline-offset: 2px; transition: color 0.15s; }
@@ -356,7 +355,7 @@
    ══════════════════════════════════════ */
 .sc-overlay-backdrop {
   position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,0.4); backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.32); backdrop-filter: blur(1.5px);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
   animation: scOverlayIn 0.2s ease;
@@ -416,7 +415,7 @@
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 .sc-day-group--expanded {
   margin-top: var(--space-2);
@@ -440,6 +439,8 @@
   margin-bottom: 0;
 }
 .sc-day-group-name {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: #153968;
@@ -525,8 +526,12 @@
   box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
 }
 
-/* Delta */
-.sc-day-row-delta { font-size: 12px; min-width: 36px; text-align: right; }
+/* Delta - fixed-width inline-block so the slot reserves the same 36px
+   whether the span is empty (untouched row) or carrying a "+15" / "-3" /
+   "match" indicator. Empty span without the explicit display: inline-block
+   was painting with collapsed width in some browser cases, ragging the
+   right edge as operators typed across rows. */
+.sc-day-row-delta { display: inline-block; width: 36px; font-size: 12px; text-align: right; }
 .sc-day-row-delta--match { color: #0F6E56; font-weight: 600; }
 .sc-day-row-delta--pos { color: #0F6E56; font-weight: 600; }
 .sc-day-row-delta--neg { color: #dc2626; font-weight: 600; }
@@ -556,7 +561,7 @@
    right-aligned secondary button so the input rows and footer commit
    keep their visual weight. */
 .sc-day-match-btn {
-  display: block; width: fit-content; padding: 5px 10px; margin: 6px 0 4px auto;
+  display: block; width: fit-content; padding: 5px 10px; margin: 10px 14px 6px auto;
   border: 1px solid #d1fae5; border-radius: var(--radius-input); background: #f0fdf4;
   color: #085041; font-size: 12px; font-weight: 600; cursor: pointer;
   font-family: inherit; transition: all 0.15s; text-align: center;
