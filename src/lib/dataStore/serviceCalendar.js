@@ -253,10 +253,16 @@ async function loadAccountConfigPostgres(accountKey) {
   const priceByServiceId = new Map();   // service_id -> { price, sinceDate }
   const upcomingByServiceId = new Map(); // service_id -> { price, effectiveDate }
   if (serviceIds.length > 0) {
+    // price_kind = 'projected' selects the planning/sticker price.
+    // The 'actual' kind (sc-8b backfill) is the contracted/billing
+    // price consumed only by sc_daily_revenue's actuals lateral; the
+    // account-config response is the planning surface (admin editor +
+    // chef's per-row hint in DayDetail), so it must read projected.
     const { data: priceRows, error: priceErr } = await supa
       .from(SC_TABLES.prices)
       .select("service_id, price, effective_date")
       .in("service_id", serviceIds)
+      .eq("price_kind", "projected")
       .order("effective_date", { ascending: false });
     throwOnError(priceErr, "loadAccountConfig.prices");
     // Walk rows DESC by effective_date. For each service_id, the first
@@ -395,10 +401,13 @@ async function loadAllAccountsConfigPostgres() {
   // lastUpdatedAt when the changelog has no rows for the account.
   const lastPricedByAccount = new Map();
   if (serviceIds.length > 0) {
+    // price_kind = 'projected': mirror the per-account loader's
+    // semantic (planning price, not actual/billing price).
     const { data: priceRows, error: priceErr } = await supa
       .from(SC_TABLES.prices)
       .select("service_id, price, effective_date")
       .in("service_id", serviceIds)
+      .eq("price_kind", "projected")
       .order("effective_date", { ascending: false });
     throwOnError(priceErr, "loadAllAccountsConfig.prices");
     const svcToAccount = new Map(
@@ -1219,19 +1228,24 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
 
       // Step 2: upsert the price row. Upsert (not insert) so a same-
       // date re-correction updates the existing row instead of failing
-      // on uq_sc_service_prices_service_date. Same-date overwrites are
-      // captured in the changelog write below, so the audit trail is
-      // preserved even when the price-row history is not.
+      // on uq_sc_service_prices_service_date_kind. Same-date overwrites
+      // are captured in the changelog write below, so the audit trail
+      // is preserved even when the price-row history is not.
+      // price_kind = 'projected': the admin editor surfaces the
+      // planning/sticker rate. The actual/billing rate is derived in
+      // sc_daily_revenue via the actuals lateral and is not edited
+      // from this surface.
       const newPriceRounded = roundCents(ch.newPrice);
       const { error } = await supa.from(SC_TABLES.prices).upsert(
         {
           service_id:     ch.serviceId,
           price:          Number(ch.newPrice),
           effective_date: effDate,
+          price_kind:     "projected",
           created_by:     email,
           notes:          ch.notes || null,
         },
-        { onConflict: "service_id,effective_date" }
+        { onConflict: "service_id,effective_date,price_kind" }
       );
       throwOnError(error, `updateServiceConfig.price[${applied}]`);
 
@@ -1611,6 +1625,9 @@ async function addServiceWithAuditPostgres(accountKey, groupId, serviceName, ini
   const serviceId = svcIns.data.id;
 
   // Initial price row at today.
+  // price_kind = 'projected': new services are added with their
+  // planning rate; the actual/billing rate is derived (or backfilled
+  // separately) per the discount map - not from this surface.
   const today = isoDay(new Date());
   const priceRounded = roundCents(Number(initialPrice) || 0);
   const priceIns = await supa
@@ -1619,6 +1636,7 @@ async function addServiceWithAuditPostgres(accountKey, groupId, serviceName, ini
       service_id:     serviceId,
       price:          Number(initialPrice) || 0,
       effective_date: today,
+      price_kind:     "projected",
       created_by:     email,
     });
   throwOnError(priceIns.error, "addServiceWithAudit.insertPrice");

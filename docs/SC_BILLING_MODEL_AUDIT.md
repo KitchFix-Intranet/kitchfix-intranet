@@ -345,3 +345,29 @@ The doc recommended considering excluding cost-passthrough from the revenue KPI.
 
 ### The confirmed revenue model (all accounts)
 Three revenue lines, consistent across the SC sheets, the budget P&Ls, the actuals-through-P6, and the legacy KPI tool: `2400.1 Meal Service (Home)`, `2300 Service Charges`, `2200 Catering Revenue`. `2400.2 Meal Service (Away)` exists in the template but is unused across all accounts. See `SC_KPI_PUSH_CONTRACT.md` for how this band pushes to the dashboard.
+
+---
+
+## PRICING-FIX shipped (sc-8a + sc-8b)
+
+The data-correctness bug this doc's resolutions referenced (live `sc_daily_revenue` multiplied both `projected_count` and `actual_count` by the same single sticker price, overstating CIN-AZ actuals by ~43% and TBR-FL MiLB actuals by ~33%) is now fixed at the schema + view layer.
+
+**What changed:**
+
+- `sc_service_prices` gained a `price_kind TEXT NOT NULL DEFAULT 'projected'` column with CHECK `('projected','actual')`. The UNIQUE constraint upgraded from `(service_id, effective_date)` to `(service_id, effective_date, price_kind)`. Index reshaped to `(service_id, price_kind, effective_date DESC)`. (`docs/migrations/sc-8a-price-kind-column.sql`.)
+- `sc_daily_revenue` forked its single price LATERAL into TWO per-kind LATERALs. `projected_revenue = projected_count * pr_proj.price`. `actual_revenue = actual_count * COALESCE(pr_act.price, pr_proj.price, 0)` so non-discounted accounts and skip-predicate services (flat-fee, tax-free) safely fall back to the projected price for actuals. Two columns added (`actual_price_at_date`, `actual_price_effective_date`); `price_at_date` kept its name and semantic (planning price) so the route response shape is unchanged. (`docs/migrations/sc-8b-actual-prices-and-view.sql`.)
+- `dataStore/serviceCalendar.js` reads `sc_service_prices` with `.eq("price_kind","projected")` everywhere it consumes the planning rate (the per-account config loader, the all-accounts admin loader). Admin upsert + new-service insert tag rows with `price_kind: 'projected'`. The actuals/billing price is not editable from the admin surface today; the discount map seeds it via the backfill.
+
+**The discount map used by the backfill** (extracted from the legacy spreadsheets, cross-checked against the contract docs - see the discount-map recon report):
+
+| account | scope | factor | source |
+|---|---|---|---|
+| CIN - AZ | all groups | 0.70 | 30% off (matches the Service Charges line on the CIN-AZ P&L) |
+| TXR - AZ | all groups | 0.80 | 20% Annual Deposit discount |
+| TBR - FL | Minor League only | 0.75 | 25% MiLB amortization discount (Major League is NOT discounted; community group Boys & Girls Club is not a contracted PDC scope) |
+| TBJ - FL, CIN - KY, TBJ - NY | per-meal | 1.00 | no contracted discount; view's COALESCE fallback handles them with no backfill rows |
+| STL - FL, CIN - OH, STL - MO, TXR - TX - H, TXR - TX - V | n/a | n/a | flat-fee revenue from `sc_fee_schedule`; out of scope for per-meal pricing |
+
+**Skip predicate within a discounted account**: services with `is_flat_fee = true` OR `is_tax_free = true` are not discounted - they pass through at factor 1.00. The backfill omits them (no `actual` row inserted); the view's COALESCE fallback applies the projected price. This covers CIN-AZ's Coffee Service + Fountain Bev (tax-free beverages), TBR-FL's Extra Protein / MLB Extra MTO / Road Sandwiches (flat-priced add-ons), and TXR-AZ's flat-fee items.
+
+**Verification gate** (run after `sc-8b` applies; passing is required for the migration to be considered done): CIN-AZ period 3 (2026-02-23 to 2026-03-22) `SUM(actual_revenue)` lands within a few percent of $320,184 (the P&L 2400.1 Meal Service line); pre-fix the live view returned $467,311. Sample day 2026-03-13 actual_revenue drops from $20,580 to ~$14,406. TBR-FL Minor League actuals bill at 0.75; TBR-FL Major League continues at 1.00. Projected revenue is unchanged for every account. TBJ-FL / CIN-KY / TBJ-NY actuals are unchanged (factor 1.00 via fallback). Flat-fee accounts are untouched. Full verification table in the PR body.
