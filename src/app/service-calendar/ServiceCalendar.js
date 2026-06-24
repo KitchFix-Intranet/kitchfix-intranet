@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import LensBar from "./LensBar";
+import PeriodLensView from "./PeriodLensView";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -46,6 +47,23 @@ function getCalendarWeeks(year, month) {
 
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// "2026-06-29" + "2026-07-26" -> ["2026-06", "2026-07"]. Returns the
+// 1 or 2 calendar months a fiscal period spans, used to drive the
+// period-data fetch in lens=period.
+function monthsBetween(startStr, endStr) {
+  if (!startStr || !endStr) return [];
+  const out = [];
+  const [sy, sm] = startStr.split("-").map(Number);
+  const [ey, em] = endStr.split("-").map(Number);
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2,"0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+    if (out.length > 3) break; // defensive: a fiscal period never spans >2 months
+  }
+  return out;
 }
 
 const CAT_ORDER = { PDC: 1, MLB: 2, MiLB: 3 };
@@ -133,6 +151,24 @@ export default function ServiceCalendar({ showToast, session }) {
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
   const [yearToday, setYearToday] = useState(null);
+  // PR-B2: period lens state.
+  //   periodKey   = which period ("P7") the user is viewing.
+  //   weekKey     = which week ("W2") within the period is active.
+  //   monthCache  = { "2026-06": <sc-load payload>, ... } - the
+  //                 already-fetched calendar months, used to merge
+  //                 1-2 months into a period view without refetching.
+  //                 Week-switch is 0ms because periodDays is memoized
+  //                 over (periodKey, monthCache), not weekKey.
+  //   periodRanges = [{ period, start, end }, ...] from sc-year-
+  //                 summary; drives prev/next period nav + period
+  //                 -> calendar-month derivation.
+  //   partialError = null | { failedMonth: "2026-07" } for the
+  //                 honest partial-data state.
+  const [periodKey, setPeriodKey] = useState(null);
+  const [weekKey, setWeekKey] = useState(null);
+  const [monthCache, setMonthCache] = useState({});
+  const [periodRanges, setPeriodRanges] = useState(null);
+  const [partialError, setPartialError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
   // One-shot guard for goToToday. Raised before goToToday changes
@@ -152,8 +188,12 @@ export default function ServiceCalendar({ showToast, session }) {
   // Use these for render conditions; effects must depend on the
   // underlying scope/lens state so they don't over-fire (these are
   // re-created every render and would change reference identity).
-  const isYearView  = !isAdminView && scope === "year"  && lens === "calendar";
-  const isMonthView = !isAdminView && scope === "month" && lens === "calendar";
+  // Year is lens-agnostic at scope=year: under either lens, scope=year
+  // shows the existing year grid. The lens-specific divergence happens
+  // at sub-year altitudes. (A 13-period year grid is Stage 3, not B2.)
+  const isYearView   = !isAdminView && scope === "year"   && (lens === "calendar" || lens === "period");
+  const isMonthView  = !isAdminView && scope === "month"  && lens === "calendar";
+  const isPeriodView = !isAdminView && scope === "period" && lens === "period";
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -194,11 +234,13 @@ export default function ServiceCalendar({ showToast, session }) {
         // honored only via ?view=admin deep-link + isAdmin gate.
         const initialView = computeInitialView({
           urlView: searchParams?.get("view"),
+          urlPeriod: searchParams?.get("period"),
           isAdmin,
         });
         setScope(initialView.scope);
         setLens(initialView.lens);
         setIsAdminView(initialView.isAdminView);
+        if (initialView.periodKey) setPeriodKey(initialView.periodKey);
       })
       .catch(() => showToast("Failed to load accounts", "error"));
     // searchParams + isAdmin captured at mount only; subsequent URL
@@ -206,6 +248,11 @@ export default function ServiceCalendar({ showToast, session }) {
     // by this fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showToast]);
+
+  // Today's date key. Declared here (high in the component) so the
+  // PR-B2 period effects below can use it without TDZ. Computed every
+  // render but the value is stable across the day - no perf cost.
+  const today = dateKey(new Date());
 
   // Clear cached data the instant the account changes. Without this,
   // switching accounts on the year view briefly rendered the NEW
@@ -219,6 +266,15 @@ export default function ServiceCalendar({ showToast, session }) {
     setData(null);
     setYearData(null);
     setYearToday(null);
+    // PR-B2: also clear period state on account-switch. monthCache
+    // is per-account; without clearing it a switch would render the
+    // PRIOR account's period days briefly. periodRanges is also
+    // per-account (the year-summary refetch will repopulate).
+    setMonthCache({});
+    setPeriodKey(null);
+    setWeekKey(null);
+    setPeriodRanges(null);
+    setPartialError(null);
   }, [selectedAccount]);
 
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
@@ -240,14 +296,119 @@ export default function ServiceCalendar({ showToast, session }) {
     // constant whose reference changes every render - depending on it
     // would re-fire this effect on every render and trigger extra
     // network calls. The guard inside handles the short-circuit.
-    if (!isYearView || !selectedAccount) return;
+    //
+    // PR-B2: also fires for lens=period to capture periodRanges (the
+    // [{ period, start, end }, ...] aggregation added in the dataStore
+    // extension). One endpoint, two consumers - the year heatmap and
+    // the period nav both feed from sc-year-summary.
+    const needsYearData = isYearView;
+    const needsPeriodRanges = lens === "period";
+    if (!selectedAccount || (!needsYearData && !needsPeriodRanges)) return;
     // reloadKey is in the dep array so a save in the month view also
     // refreshes the year heatmap on next visit; without it, the heatmap
     // showed stale grey dots after data flipped to "entered" in PG.
     fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}`)
-      .then(r => r.json()).then(d => { if (d.success) { setYearData(d.months); setYearToday(d.today || null); } }).catch(() => {});
+      .then(r => r.json()).then(d => {
+        if (!d.success) return;
+        setYearData(d.months);
+        setYearToday(d.today || null);
+        if (d.periodRanges) setPeriodRanges(d.periodRanges);
+      }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, lens, isAdminView, selectedAccount, reloadKey]);
+
+  // PR-B2 period-data effect. Derives the 1-2 calendar months the
+  // current period spans and fetches only the missing months in
+  // parallel, merging them into monthCache. Deps are PRIMARY state
+  // (lens / account / periodKey / periodRanges / reloadKey) - NEVER
+  // the derived isPeriodView (would over-fire). monthCache is read
+  // via the functional setMonthCache(prev=>...) form so it doesn't
+  // need to be in deps; if it were the effect would loop.
+  useEffect(() => {
+    if (lens !== "period" || !selectedAccount || !periodKey || !periodRanges) return;
+    const range = periodRanges.find(r => r.period === periodKey);
+    if (!range) return;
+    const monthsNeeded = monthsBetween(range.start, range.end);
+    const missing = monthsNeeded.filter(mk => !monthCache[mk]);
+    if (missing.length === 0) { setPartialError(null); return; }
+    const controller = new AbortController();
+    setLoading(true);
+    setPartialError(null);
+    Promise.allSettled(missing.map(mk =>
+      fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
+        .then(r => r.json())
+        .then(d => d.success ? { mk, payload: d } : Promise.reject({ mk, error: d.error || "Failed" }))
+    ))
+      .then(results => {
+        if (controller.signal.aborted) return;
+        const ok = []; let failed = null;
+        for (const r of results) {
+          if (r.status === "fulfilled") ok.push(r.value);
+          else if (!failed && r.reason?.mk) failed = r.reason.mk;
+        }
+        if (ok.length > 0) {
+          setMonthCache(prev => {
+            const next = { ...prev };
+            for (const { mk, payload } of ok) next[mk] = payload;
+            return next;
+          });
+        }
+        setPartialError(failed ? { failedMonth: failed } : null);
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+    // monthCache intentionally NOT in deps - read via functional set
+    // form so this effect doesn't loop when the cache populates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lens, selectedAccount, periodKey, periodRanges, reloadKey]);
+
+  // PR-B2 periodKey initialization. When entering lens=period and
+  // periodRanges arrives, land on the period containing today (or the
+  // first period if today is outside the year's coverage). Preserves
+  // an existing periodKey if it's still valid (so prev/next nav
+  // doesn't get clobbered by a periodRanges refresh).
+  useEffect(() => {
+    if (lens !== "period" || !periodRanges?.length) return;
+    if (periodKey && periodRanges.some(r => r.period === periodKey)) return;
+    const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
+    setPeriodKey(containingToday ? containingToday.period : periodRanges[0].period);
+  }, [lens, periodRanges, periodKey, today]);
+
+  // PR-B2 weekKey initialization. When periodDays land (or periodKey
+  // changes), default to the week containing today; fall back to the
+  // first week present in the period if today is outside the period
+  // OR if no week metadata is present on today.
+  // Note: this effect depends on monthCache because periodDays is
+  // re-derived from it via useMemo below; we recompute the same here.
+  useEffect(() => {
+    if (lens !== "period" || !periodKey || !periodRanges?.length) return;
+    const range = periodRanges.find(r => r.period === periodKey);
+    if (!range) return;
+    const monthsNeeded = monthsBetween(range.start, range.end);
+    if (monthsNeeded.some(mk => !monthCache[mk])) return; // wait for full payload
+    // Walk monthCache for the period's days to find today's week.
+    let todaysWeek = null; let firstWeek = null;
+    for (const mk of monthsNeeded) {
+      for (const d of monthCache[mk]?.days || []) {
+        if (d.meta?.period !== periodKey) continue;
+        if (!firstWeek && d.meta?.week) firstWeek = d.meta.week;
+        if (d.date === today && d.meta?.week) { todaysWeek = d.meta.week; break; }
+      }
+      if (todaysWeek) break;
+    }
+    // Don't clobber a deliberate user week-switch unless we don't have
+    // one yet (initial landing) or the current weekKey is not in this
+    // period (came from a different period).
+    const allWeeks = new Set();
+    for (const mk of monthsNeeded) {
+      for (const d of monthCache[mk]?.days || []) {
+        if (d.meta?.period === periodKey && d.meta?.week) allWeeks.add(d.meta.week);
+      }
+    }
+    if (!weekKey || !allWeeks.has(weekKey)) {
+      setWeekKey(todaysWeek || firstWeek || "W1");
+    }
+  }, [lens, periodKey, periodRanges, monthCache, today, weekKey]);
 
   // URL sync: when isAdminView flips, update the query param so deep-
   // links are bookmarkable and the back-button works. Shallow
@@ -264,9 +425,125 @@ export default function ServiceCalendar({ showToast, session }) {
     }
   }, [isAdminView, router, searchParams]);
 
-  const today = dateKey(new Date());
+  // PR-B2 save invalidation. When a save fires reloadKey, clear the
+  // monthCache so the period-data effect re-fetches the affected
+  // month(s) on its next run - the period view reflects the save
+  // without needing per-handler invalidation. reloadKey=0 is the
+  // initial value; only clear after a real save bumps it.
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    setMonthCache({});
+  }, [reloadKey]);
+
+  // PR-B2 URL ?period= sync. Mirrors the ?view=admin pattern but
+  // defensively preserves other params via URLSearchParams. periodKey
+  // is PRIMARY state so the read/write cycle cannot loop.
+  useEffect(() => {
+    const currentParam = searchParams?.get("period") || null;
+    const want = lens === "period" && periodKey ? periodKey : null;
+    if (currentParam === want) return;
+    const params = new URLSearchParams(searchParams);
+    if (want) params.set("period", want);
+    else params.delete("period");
+    const qs = params.toString();
+    router.replace(qs ? `/service-calendar?${qs}` : "/service-calendar", { scroll: false });
+  }, [lens, periodKey, router, searchParams]);
+
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
+
+  // PR-B2 periodDays: merge the 1-2 needed calendar months from
+  // monthCache, dedupe by date, filter to meta.period === periodKey,
+  // sort. Returns NULL if any needed month is missing (-> the
+  // partial-data path renders the skeleton header instead of a wrong
+  // total from half data). Memo keyed on (periodKey, periodRanges,
+  // monthCache) - intentionally NOT on weekKey so week switch is
+  // a 0ms visible-slice of already-loaded data, not a re-render.
+  const periodDays = useMemo(() => {
+    if (lens !== "period" || !periodKey || !periodRanges) return null;
+    const range = periodRanges.find(r => r.period === periodKey);
+    if (!range) return null;
+    const monthsNeeded = monthsBetween(range.start, range.end);
+    if (monthsNeeded.some(mk => !monthCache[mk])) return null;
+    const merged = [];
+    const seen = new Set();
+    for (const mk of monthsNeeded) {
+      for (const d of monthCache[mk].days || []) {
+        if (!seen.has(d.date) && d.meta?.period === periodKey) {
+          seen.add(d.date);
+          merged.push(d);
+        }
+      }
+    }
+    return merged.sort((a, b) => a.date.localeCompare(b.date));
+  }, [lens, periodKey, periodRanges, monthCache]);
+
+  // PR-B2 periodServiceGroups: pulled from the first available month
+  // in monthCache. serviceGroups is the same shape across months for
+  // a given account (it describes the account's service catalog,
+  // not the month's days), so either month's payload works. Required
+  // by DayDetail when a day-tile in the period view is clicked.
+  const periodServiceGroups = useMemo(() => {
+    if (!monthCache) return null;
+    const first = Object.values(monthCache)[0];
+    return first?.serviceGroups || null;
+  }, [monthCache]);
+
+  // PR-B2 periodMetrics: mirrors the month metrics, scoped to
+  // periodDays, with per-week subtotals for the sub-nav. Revenue
+  // reads from day.totals.actualRevenue / projectedRevenue (the
+  // #257-corrected sc_daily_revenue source - NEVER recomputed
+  // client-side; that drift was the bug that pricing-fix landed).
+  const periodMetrics = useMemo(() => {
+    if (!periodDays) return null;
+    const out = {
+      projMeals: 0, actMeals: 0,
+      projRev: 0, actRev: 0,
+      complete: 0, needsEntry: 0, overdue: 0,
+      total: 0,
+      weeks: {},
+    };
+    for (const day of periodDays) {
+      if (day.hasActuals) out.complete++;
+      else if (day.isPast && day.isLocked) out.overdue++;
+      else if (day.isPast) out.needsEntry++;
+      out.projRev += day.totals?.projectedRevenue || 0;
+      if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
+      for (const ci of Object.keys(day.projected || {})) {
+        const pv = day.projected[ci];
+        if (pv != null) out.projMeals += pv;
+        if (day.hasActuals && day.actual?.[ci] != null) out.actMeals += day.actual[ci];
+      }
+      const wk = day.meta?.week || "W?";
+      if (!out.weeks[wk]) out.weeks[wk] = { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0, needsEntry: 0, overdue: 0 };
+      const w = out.weeks[wk];
+      w.total++;
+      w.projRev += day.totals?.projectedRevenue || 0;
+      if (day.hasActuals) {
+        w.complete++;
+        w.actRev += day.totals?.actualRevenue || 0;
+        for (const ci of Object.keys(day.actual || {})) {
+          const av = day.actual[ci];
+          if (av != null) w.actMeals += av;
+        }
+      } else if (day.isPast && day.isLocked) w.overdue++;
+      else if (day.isPast) w.needsEntry++;
+    }
+    out.total = periodDays.length;
+    return out;
+  }, [periodDays]);
+
+  // PR-B2 next-service-period for the off-season empty state's
+  // jump button. Picks the next period after the current periodKey
+  // that has at least one service day (heuristic: any future period
+  // in periodRanges is fine since periodRanges only includes periods
+  // that have sc_day_metadata rows).
+  const nextServicePeriod = useMemo(() => {
+    if (!periodRanges?.length || !periodKey) return null;
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx === -1) return periodRanges[0]?.period || null;
+    return periodRanges[idx + 1]?.period || null;
+  }, [periodRanges, periodKey]);
 
   // Period ribbon derivation. Walks the visible-month days and buckets by
   // meta.period; each bucket becomes a segment with its first/last in-month
@@ -582,20 +859,53 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const weeks = useMemo(() => getCalendarWeeks(year, month), [year, month]);
   const todayMonth = new Date().getMonth();
+  // PR-B2: today's period + week for goToToday's lens-aware landing
+  // under lens=period. periodRanges drives the period; periodDays
+  // (when loaded) drives the week. Falls back to "W1" if today is
+  // outside the period or no week metadata is present.
+  const todayPeriod = useMemo(() => {
+    if (!periodRanges?.length) return null;
+    return periodRanges.find(r => today >= r.start && today <= r.end)?.period || null;
+  }, [periodRanges, today]);
+
   // Raise the one-shot ref BEFORE setMonth so the sc-load effect's
   // re-fire (keyed on mk) sees the flag and skips its own focusDay
   // clear. focusDay is then set synchronously - no setTimeout race.
+  //
+  // PR-B2: lens-aware. Under lens=period the goToToday lands at
+  // scope=period + periodKey=currentPeriod + focusDay=today. The
+  // weekKey lazily initializes (via the weekKey-init effect) once
+  // periodDays land - we don't need to set it here. Under lens=
+  // calendar the original behavior holds.
   const goToToday = useCallback(() => {
     todayLandingRef.current = true;
     setMonth(todayMonth);
-    setScope("month");
-    setLens("calendar");
     setIsAdminView(false);
+    if (lens === "period") {
+      setScope("period");
+      if (todayPeriod) setPeriodKey(todayPeriod);
+    } else {
+      setScope("month");
+      setLens("calendar");
+    }
     setFocusDay(today);
-  }, [todayMonth, today]);
+  }, [todayMonth, today, lens, todayPeriod]);
 
-  const focusDayData = focusDay ? dayMap[focusDay] : null;
-  const dayList = data?.days?.map(d => d.date) || [];
+  // PR-B2 focus-day data + nav extended to the period view. When
+  // lens=period, focusDayData first checks periodDays (which may
+  // include days from a calendar month different from `data`); the
+  // day-list (used by DayDetail's prev/next nav) is the period's
+  // sorted days. Under lens=calendar the original month-view source
+  // holds (data.days via dayMap).
+  const inPeriodView = lens === "period" && scope === "period" && !isAdminView;
+  const focusDayData = focusDay
+    ? (inPeriodView && periodDays
+        ? (periodDays.find(d => d.date === focusDay) || dayMap[focusDay] || null)
+        : (dayMap[focusDay] || null))
+    : null;
+  const dayList = inPeriodView && periodDays
+    ? periodDays.map(d => d.date)
+    : (data?.days?.map(d => d.date) || []);
   const focusIdx = focusDay ? dayList.indexOf(focusDay) : -1;
   const canPrev = focusIdx > 0; const canNext = focusIdx < dayList.length - 1;
   const navDay = useCallback((dir) => { const ni = focusIdx + dir; if (ni >= 0 && ni < dayList.length) setFocusDay(dayList[ni]); }, [focusIdx, dayList]);
@@ -713,14 +1023,19 @@ export default function ServiceCalendar({ showToast, session }) {
               setFocusDay(null);
               setBulkMode(false);
             }}
-            // B1: Period is disabled in the dropdown so this only ever
-            // fires for "calendar". The scope-reset-on-lens-switch lives
-            // here so B2's activation is a body-only edit.
+            // PR-B2 lens switch. Scope-reset to the lens's default
+            // sub-year altitude; year is shared and stays. This is
+            // the invalid-combo guard at the source - SEGMENTS_BY_LENS
+            // determines which segments render, and this reset keeps
+            // scope inside that set.
             onLensChange={(nextLens) => {
               setLens(nextLens);
               setIsAdminView(false);
               setFocusDay(null);
               setBulkMode(false);
+              if (scope !== "year") {
+                setScope(nextLens === "period" ? "period" : "month");
+              }
             }}
             onTodayClick={goToToday}
             // B1.1: admin button toggles. Entering admin clears focus +
@@ -747,6 +1062,31 @@ export default function ServiceCalendar({ showToast, session }) {
               </>
             )}
             {isYearView && <span className="sc-date-label">{year}</span>}
+            {isPeriodView && periodRanges && (() => {
+              const idx = periodRanges.findIndex(r => r.period === periodKey);
+              const cur = idx >= 0 ? periodRanges[idx] : null;
+              const prev = idx > 0 ? periodRanges[idx - 1] : null;
+              const next = idx >= 0 && idx < periodRanges.length - 1 ? periodRanges[idx + 1] : null;
+              return (
+                <>
+                  <button
+                    className="sc-date-btn"
+                    onClick={() => prev && setPeriodKey(prev.period)}
+                    disabled={!prev}
+                    aria-label="Previous period"
+                  >&#8249;</button>
+                  <span className="sc-date-label">
+                    {cur ? `Period ${cur.period.replace(/^P/, "")}` : (periodKey ? `Period ${periodKey.replace(/^P/, "")}` : "Period")}
+                  </span>
+                  <button
+                    className="sc-date-btn"
+                    onClick={() => next && setPeriodKey(next.period)}
+                    disabled={!next}
+                    aria-label="Next period"
+                  >&#8250;</button>
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -1369,6 +1709,32 @@ export default function ServiceCalendar({ showToast, session }) {
           </div>
         )}
 
+        {isPeriodView && (
+          <PeriodLensView
+            data={data}
+            periodDays={periodDays}
+            periodMetrics={periodMetrics}
+            periodKey={periodKey}
+            periodRange={periodRanges?.find(r => r.period === periodKey) || null}
+            weekKey={weekKey}
+            onWeekChange={setWeekKey}
+            onDayClick={(date) => setFocusDay(date)}
+            isFeeAccount={isFeeAccount}
+            hasHomestandSchedule={hasHomestandSchedule}
+            homestandMap={homestandMap}
+            isMilb={isMilb}
+            today={today}
+            loading={loading && !periodDays}
+            partialError={partialError}
+            onRetryPartial={() => setReloadKey(k => k + 1)}
+            STATUS={STATUS}
+            dayStatus={dayStatus}
+            daySummary={daySummary}
+            nextServicePeriod={nextServicePeriod}
+            onJumpToNextPeriod={() => { if (nextServicePeriod) setPeriodKey(nextServicePeriod); }}
+          />
+        )}
+
         {/* Admin in-page view mode (Bundle 2 follow-up). Renders ONLY for
             isAdmin - the API server-side gates on every admin POST action
             remain the security boundary; this gate is just about not
@@ -1385,14 +1751,17 @@ export default function ServiceCalendar({ showToast, session }) {
         )}
       </div>
 
-      {/* Day detail overlay */}
-      {focusDay && focusDayData && data?.serviceGroups && (
+      {/* Day detail overlay. serviceGroups fall back to periodServiceGroups
+          when in period view, since the focused day may belong to a calendar
+          month different from `data` (a period can span two months). */}
+      {focusDay && focusDayData && (data?.serviceGroups || periodServiceGroups) && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setFocusDay(null); }}>
           <div className="sc-overlay-card" data-density="comfortable">
-            <DayDetail day={focusDayData} serviceGroups={data.serviceGroups}
-              overrides={data.overrides?.filter(o => o.date === focusDay) || []}
+            <DayDetail day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
+              overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
               onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
-              dayIndex={focusIdx} totalDays={dayList.length} monthRevenue={metrics.actRev || metrics.projRev}
+              dayIndex={focusIdx} totalDays={dayList.length}
+              monthRevenue={inPeriodView ? (periodMetrics?.actRev || periodMetrics?.projRev || 0) : (metrics.actRev || metrics.projRev)}
               accountName={acctObj?.name || ""}
               isFeeAccount={isFeeAccount} homestandContext={homestandMap[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}

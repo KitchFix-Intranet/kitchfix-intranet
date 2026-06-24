@@ -1026,7 +1026,28 @@ async function loadYearSummaryPostgres(accountKey, year) {
     week:   todayMetaRes.data?.week_label || null,
   };
 
-  return { year: Number(year), months, today: todayBlock };
+  // Period ranges for the Period lens (PR-B2). Walks sc_day_metadata
+  // for the year and aggregates per-period { start, end } in JS -
+  // PostgREST doesn't expose MIN/MAX/GROUP BY ergonomically through
+  // the client, but ~30 rows per query is negligible.
+  const periodRangesRes = await supa
+    .from("sc_day_metadata")
+    .select("period, service_date")
+    .eq("account_key", accountKey)
+    .gte("service_date", first)
+    .lte("service_date", last)
+    .not("period", "is", null)
+    .order("service_date", { ascending: true });
+  throwOnError(periodRangesRes.error, "loadYearSummary.period_ranges");
+  const periodRangeMap = new Map();
+  for (const r of periodRangesRes.data || []) {
+    const cur = periodRangeMap.get(r.period);
+    if (!cur) periodRangeMap.set(r.period, { period: r.period, start: r.service_date, end: r.service_date });
+    else if (r.service_date > cur.end) cur.end = r.service_date;
+  }
+  const periodRanges = [...periodRangeMap.values()];
+
+  return { year: Number(year), months, today: todayBlock, periodRanges };
 }
 
 /**
