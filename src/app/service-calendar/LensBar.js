@@ -4,9 +4,9 @@
 //
 // Renders the scope segmented control (the dynamic-per-lens
 // altitude buttons), the Today shortcut, the quiet "Viewing by"
-// lens dropdown, and the admin-escape button at the right edge.
+// lens dropdown, and the admin escape button at the right edge.
 //
-// PR-B1 ships with lens="month" only active. The Period option
+// PR-B1 ships with lens="calendar" only active. The Period option
 // is present in the dropdown as a disabled seam so the control
 // exists end-to-end; PR-B2 flips the disabled flag and adds the
 // scope-reset-on-lens-switch behavior in the parent's
@@ -14,11 +14,11 @@
 //
 // Pure presentation. All state lives in ServiceCalendar.js and is
 // passed in via props; companion side-effects (clearing focusDay,
-// exiting bulk mode, leaving admin) live in the parent's
-// handlers, not here.
+// exiting bulk mode, toggling admin) live in the parent's handlers,
+// not here.
 
 const SEGMENTS_BY_LENS = {
-  month: [
+  calendar: [
     { scope: "year",  label: "Year"  },
     { scope: "month", label: "Month" },
   ],
@@ -39,7 +39,7 @@ export default function LensBar({
   onTodayClick,
   onAdminClick,
 }) {
-  const segments = SEGMENTS_BY_LENS[lens] || SEGMENTS_BY_LENS.month;
+  const segments = SEGMENTS_BY_LENS[lens] || SEGMENTS_BY_LENS.calendar;
   return (
     <div className="sc-lens-bar">
       <div className="sc-lens-bar-controls">
@@ -71,7 +71,7 @@ export default function LensBar({
             onChange={(e) => onLensChange(e.target.value)}
             aria-label="Lens"
           >
-            <option value="month">Month</option>
+            <option value="calendar">Calendar</option>
             {/* B1: Period is the seam, not yet reachable. B2 removes
                 the disabled attribute and wires the scope-reset. */}
             <option value="period" disabled>Period (coming soon)</option>
@@ -83,13 +83,26 @@ export default function LensBar({
           type="button"
           className={`sc-admin-esc ${isAdminView ? "sc-admin-esc--active" : ""}`}
           onClick={onAdminClick}
-          title="Service Calendar admin (corporate only)"
+          title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+          aria-pressed={isAdminView}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="11" width="18" height="10" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Admin
+          {isAdminView ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="m12 19-7-7 7-7" />
+              </svg>
+              Calendar
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="10" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Admin
+            </>
+          )}
         </button>
       )}
     </div>

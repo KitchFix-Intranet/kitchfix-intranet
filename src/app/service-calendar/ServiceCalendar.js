@@ -112,12 +112,14 @@ export default function ServiceCalendar({ showToast, session }) {
   // PR-A internal rename of the legacy viewMode tri-state. PR-B/D extend
   // these without changing the shape further.
   //   scope  = altitude within a lens. PR-A ships only year/month under
-  //            lens=month; the enum includes period/week/day for future
+  //            lens=calendar; the enum includes period/week/day for future
   //            stages. day is reserved for an explicit day-scope mode;
   //            today the day-detail overlay sits orthogonal as focusDay.
-  //   lens   = how time is carved. PR-A ships only "month" (the year-
-  //            of-months grid + single-month grid surfaces). PR-B adds
-  //            "period" with its own scope hierarchy.
+  //   lens   = how time is carved. PR-B1 ships only "calendar" (the
+  //            year-of-months grid + single-month grid surfaces). PR-B2
+  //            adds "period" with its own scope hierarchy. The lens used
+  //            to be called "month"; renamed to "calendar" in B1.1 so it
+  //            does not collide with the "Month" scope segment.
   //   isAdminView = the in-page admin parallel surface. NOT a lens or
   //            scope. Flipping it on suppresses (scope, lens) rendering
   //            and shows AdminPanel; flipping it off restores scope +
@@ -125,7 +127,7 @@ export default function ServiceCalendar({ showToast, session }) {
   // Server-side isScAdmin still gates every admin POST action in
   // route.js - the boolean here is render-only.
   const [scope, setScope] = useState("month");
-  const [lens, setLens]   = useState("month");
+  const [lens, setLens]   = useState("calendar");
   const [isAdminView, setIsAdminView] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
@@ -150,8 +152,8 @@ export default function ServiceCalendar({ showToast, session }) {
   // Use these for render conditions; effects must depend on the
   // underlying scope/lens state so they don't over-fire (these are
   // re-created every render and would change reference identity).
-  const isYearView  = !isAdminView && scope === "year"  && lens === "month";
-  const isMonthView = !isAdminView && scope === "month" && lens === "month";
+  const isYearView  = !isAdminView && scope === "year"  && lens === "calendar";
+  const isMonthView = !isAdminView && scope === "month" && lens === "calendar";
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -587,7 +589,7 @@ export default function ServiceCalendar({ showToast, session }) {
     todayLandingRef.current = true;
     setMonth(todayMonth);
     setScope("month");
-    setLens("month");
+    setLens("calendar");
     setIsAdminView(false);
     setFocusDay(today);
   }, [todayMonth, today]);
@@ -712,7 +714,7 @@ export default function ServiceCalendar({ showToast, session }) {
               setBulkMode(false);
             }}
             // B1: Period is disabled in the dropdown so this only ever
-            // fires for "month". The scope-reset-on-lens-switch lives
+            // fires for "calendar". The scope-reset-on-lens-switch lives
             // here so B2's activation is a body-only edit.
             onLensChange={(nextLens) => {
               setLens(nextLens);
@@ -721,10 +723,17 @@ export default function ServiceCalendar({ showToast, session }) {
               setBulkMode(false);
             }}
             onTodayClick={goToToday}
+            // B1.1: admin button toggles. Entering admin clears focus +
+            // bulk; exiting just flips the flag and the prior (scope,
+            // lens) re-renders underneath (PR-A preserves them).
             onAdminClick={() => {
-              setIsAdminView(true);
-              setFocusDay(null);
-              setBulkMode(false);
+              if (isAdminView) {
+                setIsAdminView(false);
+              } else {
+                setIsAdminView(true);
+                setFocusDay(null);
+                setBulkMode(false);
+              }
             }}
           />
         </div>
@@ -1183,7 +1192,7 @@ export default function ServiceCalendar({ showToast, session }) {
                 return (
                   <div key={mi} className={`sc-year-card ${isCurrent ? "sc-year-card--current" : ""}`}
                     style={{ animationDelay: `${mi * 40}ms` }}
-                    onClick={() => { setMonth(mi); setScope("month"); setLens("month"); }}>
+                    onClick={() => { setMonth(mi); setScope("month"); setLens("calendar"); }}>
                     <div className="sc-year-card-header">
                       <span className="sc-year-card-name">{name}</span>
                       <span className="sc-year-card-cue">View →</span>
