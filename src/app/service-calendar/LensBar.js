@@ -6,11 +6,10 @@
 // altitude buttons), the Today shortcut, the quiet "Viewing by"
 // lens dropdown, and the admin escape button at the right edge.
 //
-// PR-B1 ships with lens="calendar" only active. The Period option
-// is present in the dropdown as a disabled seam so the control
-// exists end-to-end; PR-B2 flips the disabled flag and adds the
-// scope-reset-on-lens-switch behavior in the parent's
-// onLensChange handler.
+// PR-B2 activates the Period lens. Both Calendar and Period are
+// selectable. SEGMENTS_BY_LENS provides the per-lens scope segments.
+// The scope-reset-on-lens-switch lives in the parent's onLensChange
+// handler so an invalid (lens, scope) combo cannot be reached.
 //
 // Pure presentation. All state lives in ServiceCalendar.js and is
 // passed in via props; companion side-effects (clearing focusDay,
@@ -72,9 +71,7 @@ export default function LensBar({
             aria-label="Lens"
           >
             <option value="calendar">Calendar</option>
-            {/* B1: Period is the seam, not yet reachable. B2 removes
-                the disabled attribute and wires the scope-reset. */}
-            <option value="period" disabled>Period (coming soon)</option>
+            <option value="period">Period</option>
           </select>
         </label>
       </div>

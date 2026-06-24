@@ -1399,6 +1399,314 @@
 .oh-sc-coming-footer { font-size: 13px; color: #94a3b8; font-weight: 600; margin: 0; }
 
 /* ══════════════════════════════════════
+   PERIOD LENS VIEW (PR-B2a, "View C")
+   D-1-A pinned financial header (F-A frame: entered hero / projected /
+   delta), D-2-B segmented week sub-nav (W1-W4 + per-week subtotals),
+   D-3-A day tiles reusing .sc-tile + .sc-tile--period modifier. All
+   states (skeleton / off-season empty / partial-data / fully-entered).
+   Mobile (<1024px) stacks day cards G-A and stickies the header.
+   Reuses .sc-tile-state--* tinting, GREEN/AMBER tokens, .sc-progress-*.
+   ══════════════════════════════════════ */
+.sc-period-view {
+  padding: 0;
+  background: #fff;
+}
+.sc-period-view--complete .sc-period-header { background: #f0fdf4; }
+
+/* Pinned header (D-1-A). On mobile becomes position:sticky so the
+   financial frame stays visible while scrolling the day cards. */
+.sc-period-header {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.sc-period-header-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--space-3); flex-wrap: wrap;
+}
+.sc-period-label {
+  margin: 0;
+  font-family: inherit; font-size: 24px; font-weight: 800;
+  color: #111827; letter-spacing: -0.01em; line-height: 1.15;
+}
+.sc-period-label:focus-visible {
+  outline: 2px solid #153968; outline-offset: 4px; border-radius: 4px;
+}
+.sc-period-range {
+  font-size: 13px; font-weight: 400; color: #6b7280; font-variant-numeric: tabular-nums;
+}
+
+/* Financial frame F-A: entered hero / projected calm / delta forward. */
+.sc-period-frame {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sc-period-frame-numbers {
+  display: flex; align-items: baseline; gap: 24px; flex-wrap: wrap;
+}
+.sc-period-frame-entered {
+  font-size: 36px; font-weight: 800; color: #0F6E56;
+  font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em;
+}
+.sc-period-frame-projected {
+  font-size: 18px; font-weight: 600; color: #6b7280;
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.sc-period-frame-delta {
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.sc-period-frame-labels {
+  display: flex; gap: 24px; flex-wrap: wrap;
+}
+.sc-period-frame-label {
+  font-size: 11px; font-weight: 600; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  min-width: 80px;
+}
+
+/* Operational frame (STL-FL, no-$): days-complete is the hero. Same
+   layout shape; the $ slots are structurally absent. */
+.sc-period-frame--operational .sc-period-frame-hero {
+  display: flex; align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.sc-period-frame--operational .sc-period-frame-num {
+  font-size: 36px; font-weight: 800; color: #111827; line-height: 1;
+}
+.sc-period-frame--operational .sc-period-frame-divisor {
+  font-size: 18px; font-weight: 600; color: #6b7280; margin-left: 4px;
+}
+
+.sc-period-homestand-ctx {
+  font-size: 12px; color: #4b5563; line-height: 1.4;
+}
+
+.sc-period-progress {
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.sc-period-progress-label {
+  font-size: 13px; color: #374151; font-variant-numeric: tabular-nums;
+}
+
+/* Audit-rail caption - the Ramp-grade "where the numbers come from"
+   signal. Hidden behind a small info icon to keep the hero clean. */
+.sc-period-audit {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 400; color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+.sc-period-audit svg { flex-shrink: 0; }
+
+/* Week sub-nav (D-2-B). Reuses .sc-mode-group visual idiom (same
+   pill/segment language as LensBar) for intentional system continuity. */
+.sc-period-week-nav {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+.sc-period-week-pills {
+  display: flex; align-items: center; gap: 2px;
+  background: #f3f4f6; border-radius: var(--radius-card); padding: 3px;
+}
+.sc-period-week-pill {
+  flex: 1; position: relative;
+  padding: 10px var(--space-3); min-height: 40px;
+  font-family: inherit; font-size: 16px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #6b7280; background: transparent;
+  border: none; border-radius: var(--radius-input);
+  cursor: pointer; transition: all 0.15s;
+}
+.sc-period-week-pill:hover { color: #111827; }
+.sc-period-week-pill:focus-visible { outline: 2px solid #153968; outline-offset: 2px; }
+.sc-period-week-pill--active {
+  background: #fff; color: #111827;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.sc-period-week-today-dot {
+  position: absolute; top: 4px; right: 6px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #0F6E56;
+  display: block;
+}
+.sc-period-week-stats {
+  display: flex; gap: 2px; padding: var(--space-2) 3px 0;
+}
+.sc-period-week-stat {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  padding: 0 var(--space-3); text-align: center;
+}
+.sc-period-week-subtotal {
+  font-size: 14px; font-weight: 600; color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.sc-period-week-subtotal--entered { color: #0F6E56; }
+.sc-period-week-subtotal--meals { color: #111827; }
+.sc-period-week-completion {
+  font-size: 12px; font-weight: 400; color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.sc-period-week-icon { font-weight: 700; }
+
+/* Day tiles (D-3-A). Existing .sc-tile + .sc-tile--period modifier.
+   Reuses tile state tinting + GREEN/AMBER. 7-across on desktop;
+   stacked as cards on mobile via the @media block below. */
+.sc-period-tiles {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+.sc-tile--period {
+  min-height: 96px;
+  padding: var(--space-2) var(--space-3);
+}
+.sc-tile--period .sc-tile-date {
+  font-size: 18px; font-weight: 800; color: #111827;
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0;
+}
+.sc-tile-dow {
+  font-size: 10px; font-weight: 600; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.06em; line-height: 1;
+}
+.sc-tile-dom {
+  font-size: 20px; font-weight: 800; color: #111827; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.sc-tile--period .sc-tile-rev {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Off-season empty state - calm onboarding tone, NOT apology. */
+.sc-period-empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
+  padding: 48px var(--space-4);
+  text-align: center;
+}
+.sc-period-empty-icon { color: #153968; }
+.sc-period-empty-title {
+  margin: 0; font-size: 16px; font-weight: 600; color: #153968;
+}
+.sc-period-empty-sub {
+  margin: 0; font-size: 13px; color: #6b7280; max-width: 360px;
+}
+.sc-period-empty-jump {
+  margin-top: var(--space-2);
+  padding: 8px 16px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  color: #153968; background: #fff;
+  border: 1px solid #cbd5e1; border-radius: var(--radius-input);
+  cursor: pointer; transition: all 0.15s;
+}
+.sc-period-empty-jump:hover { background: #f0f4f8; border-color: #153968; }
+.sc-period-empty-jump:focus-visible { outline: 2px solid #153968; outline-offset: 2px; }
+
+/* Partial-data banner (amber, recoverable). Pinned header stays
+   skeleton; tile area stays skeleton. NEVER a wrong total from half data. */
+.sc-period-partial-banner {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-2) var(--space-3);
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fde68a; border-radius: var(--radius-input);
+  font-size: 13px; font-weight: 500; line-height: 1.4;
+}
+.sc-period-partial-banner > span:first-of-type {
+  font-size: 14px; font-weight: 700;
+}
+.sc-period-partial-banner > span:nth-of-type(2) { flex: 1; }
+.sc-period-retry {
+  padding: 6px 12px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  color: #92400e; background: #fff;
+  border: 1px solid #fde68a; border-radius: var(--radius-input);
+  cursor: pointer; transition: all 0.15s;
+}
+.sc-period-retry:hover { background: #fef3c7; border-color: #d97706; }
+.sc-period-retry:focus-visible { outline: 2px solid #92400e; outline-offset: 2px; }
+
+/* Skeleton (matches View C shape, no layout shift). Shimmer respects
+   prefers-reduced-motion via the rule below. */
+@keyframes scShimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.sc-skel {
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+  animation: scShimmer 1.4s infinite ease-out;
+  border-radius: var(--radius-input);
+}
+.sc-skel--label    { width: 180px; height: 28px; }
+.sc-skel--range    { width: 140px; height: 16px; }
+.sc-skel--hero     { width: 220px; height: 40px; }
+.sc-skel--sub      { width: 100px; height: 18px; }
+.sc-skel--progress { width: 100%;  height: 8px;  border-radius: 999px; }
+.sc-skel--pill     { flex: 1; height: 56px; border-radius: var(--radius-card); }
+.sc-skel--tile     { height: 96px; border-radius: var(--radius-card); }
+.sc-period-view--loading .sc-period-frame {
+  flex-direction: row; gap: var(--space-3); flex-wrap: wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-skel {
+    background: #f3f4f6;
+    animation: none;
+  }
+}
+
+/* ── Mobile (G-A): stacked day cards + horizontal-scroll week pills
+   + sticky header. <1024px renders Comfortable per the system rule. */
+@media (max-width: 1023px) {
+  .sc-period-header {
+    position: sticky; top: 0; z-index: 10;
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+  }
+  .sc-period-label { font-size: 20px; }
+  .sc-period-frame-entered { font-size: 28px; }
+  .sc-period-frame-projected { font-size: 16px; }
+  .sc-period-frame-delta { font-size: 12px; }
+  .sc-period-frame-numbers { gap: 16px; }
+
+  /* Horizontal-scroll week pill row (Toast-grade tap targets). */
+  .sc-period-week-nav { padding: var(--space-2) var(--space-3); }
+  .sc-period-week-pills {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 3px;
+  }
+  .sc-period-week-pill {
+    min-width: 88px; min-height: 48px;
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+  }
+  .sc-period-week-stats { display: none; }
+
+  /* Stacked day cards (G-A). NOT a squished 7-across grid. Each card
+     is a tall full-width tap surface, 72px+ for cooler gloved hands. */
+  .sc-period-tiles {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+  .sc-tile--period {
+    min-height: 72px;
+    padding: var(--space-3) var(--space-4);
+    display: grid; grid-template-columns: 1fr auto;
+    gap: var(--space-2); align-items: center;
+  }
+  .sc-tile--period .sc-tile-top {
+    grid-row: 1; grid-column: 1 / span 2;
+    margin-bottom: 0;
+  }
+  .sc-tile--period .sc-tile-date {
+    flex-direction: row; align-items: baseline; gap: var(--space-2);
+  }
+  .sc-tile-dow { font-size: 11px; }
+  .sc-tile-dom { font-size: 18px; }
+}
+
+/* ══════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════ */
 @media (min-width: 768px) and (max-width: 1024px) {

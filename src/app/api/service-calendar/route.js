@@ -401,6 +401,11 @@ export async function GET(request) {
         // below is a Sheets-era display vestige and is NOT replaced by
         // this block (a per-month period label is Phase B territory).
         today: summary.today,
+        // Period ranges for the Period lens (PR-B2). Array of
+        // { period, start, end } sorted by start; drives both the
+        // period-data fetch (which 1-2 calendar months a period spans)
+        // and the prev/next period navigation.
+        periodRanges: summary.periodRanges,
         months: summary.months.map((m) => {
           const monthOut = {
             month:             m.month,
