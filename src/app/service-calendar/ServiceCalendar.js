@@ -132,6 +132,11 @@ export default function ServiceCalendar({ showToast, session }) {
   const [yearToday, setYearToday] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
+  // One-shot guard for goToToday. Raised before goToToday changes
+  // month synchronously; read-and-cleared inside the sc-load effect
+  // so the effect's own setFocusDay(null) skips exactly once - the
+  // landing focusDay survives instead of being racing-cleared.
+  const todayLandingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -220,7 +225,7 @@ export default function ServiceCalendar({ showToast, session }) {
   useEffect(() => {
     if (!selectedAccount) return;
     const controller = new AbortController();
-    setLoading(true); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    setLoading(true); if (!todayLandingRef.current) setFocusDay(null); todayLandingRef.current = false; setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (d.success) setData(d); else { showToast(d.error || "Failed", "error"); setData(null); } })
@@ -577,10 +582,17 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const weeks = useMemo(() => getCalendarWeeks(year, month), [year, month]);
   const todayMonth = new Date().getMonth();
-  // PR-A: setViewMode("month") rename only. The setTimeout(100) hack
-  // that races around the sc-load effect clearing focusDay STAYS - the
-  // de-hack is deferred to PR-A.1 so PR-A remains a pure rename.
-  const goToToday = useCallback(() => { setMonth(todayMonth); setScope("month"); setLens("month"); setIsAdminView(false); setTimeout(() => setFocusDay(today), 100); }, [todayMonth, today]);
+  // Raise the one-shot ref BEFORE setMonth so the sc-load effect's
+  // re-fire (keyed on mk) sees the flag and skips its own focusDay
+  // clear. focusDay is then set synchronously - no setTimeout race.
+  const goToToday = useCallback(() => {
+    todayLandingRef.current = true;
+    setMonth(todayMonth);
+    setScope("month");
+    setLens("month");
+    setIsAdminView(false);
+    setFocusDay(today);
+  }, [todayMonth, today]);
 
   const focusDayData = focusDay ? dayMap[focusDay] : null;
   const dayList = data?.days?.map(d => d.date) || [];
