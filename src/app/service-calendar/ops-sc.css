@@ -76,10 +76,6 @@
 .sc-metric-hero { font-size: var(--type-h2); font-weight: 700; color: #111827; line-height: var(--line-heading); }
 .sc-metric-hero--green { color: #0F6E56; }
 .sc-metric-hero--red { color: #dc2626; }
-/* Single amber-text token across the SC surface (pace hero, footer warn,
-   any future urgency text). The #EF9F27 / #fbbf24 hexes elsewhere are
-   accent / dot backgrounds, not text. */
-.sc-metric-hero--amber { color: #b45309; }
 .sc-metric-context { font-size: var(--type-caption); color: #9ca3af; }
 .sc-metric-warn { font-size: var(--type-caption); color: #b45309; margin-top: 2px; }
 .sc-metric-warn--link { cursor: pointer; text-decoration: underline; text-decoration-style: dashed; text-underline-offset: 2px; transition: color 0.15s; }
