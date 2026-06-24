@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
+import { computeInitialView } from "./computeInitialView";
 import {
   OperationalMetricsStrip,
   OperationalTileBody,
@@ -106,10 +107,25 @@ export default function ServiceCalendar({ showToast, session }) {
   // this client-local.
   const [year] = useState(2026);
   const [month, setMonth] = useState(new Date().getMonth());
-  // viewMode: "month" | "year" | "admin". Admin is a fourth in-page view
-  // mode, gated client-side by isAdmin (the API actions carry their own
-  // server-side isScAdmin gate - that is the real security boundary).
-  const [viewMode, setViewMode] = useState("month");
+  // View state - two orthogonal axes plus a parallel admin surface.
+  // PR-A internal rename of the legacy viewMode tri-state. PR-B/D extend
+  // these without changing the shape further.
+  //   scope  = altitude within a lens. PR-A ships only year/month under
+  //            lens=month; the enum includes period/week/day for future
+  //            stages. day is reserved for an explicit day-scope mode;
+  //            today the day-detail overlay sits orthogonal as focusDay.
+  //   lens   = how time is carved. PR-A ships only "month" (the year-
+  //            of-months grid + single-month grid surfaces). PR-B adds
+  //            "period" with its own scope hierarchy.
+  //   isAdminView = the in-page admin parallel surface. NOT a lens or
+  //            scope. Flipping it on suppresses (scope, lens) rendering
+  //            and shows AdminPanel; flipping it off restores scope +
+  //            lens to whatever they were underneath.
+  // Server-side isScAdmin still gates every admin POST action in
+  // route.js - the boolean here is render-only.
+  const [scope, setScope] = useState("month");
+  const [lens, setLens]   = useState("month");
+  const [isAdminView, setIsAdminView] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
@@ -123,6 +139,16 @@ export default function ServiceCalendar({ showToast, session }) {
   // RENDER, not authorization). Server-side isScAdmin checks on every
   // admin POST action in route.js remain the security boundary.
   const isAdmin = isScAdmin(session?.user?.email);
+
+  // Derived view booleans - pure functions of (scope, lens, isAdminView).
+  // Use these for render conditions; effects must depend on the
+  // underlying scope/lens state so they don't over-fire (these are
+  // re-created every render and would change reference identity).
+  const isYearView  = !isAdminView && scope === "year"  && lens === "month";
+  const isMonthView = !isAdminView && scope === "month" && lens === "month";
+  // Active-highlight helper for the (scope, lens) buttons in the
+  // segmented control.
+  const isLensScopeActive = (s, l) => !isAdminView && scope === s && lens === l;
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -155,16 +181,19 @@ export default function ServiceCalendar({ showToast, session }) {
           if (sorted.find(a => a.key === f)) { initial = f; break; }
         }
         setSelectedAccount(initial);
-        // Mount default: year view ("season-at-a-glance" is the right
-        // first read; operators can dropdown into the month for entry).
-        // EXCEPT: if the URL deep-links to ?view=admin AND the user is
-        // isAdmin, honor the link. Belt-and-suspenders: a shared
-        // ?view=admin link opened by a non-admin (e.g. a site lead once
-        // the tool widens) falls through to the year default - we
-        // never render admin for a non-admin even via a crafted URL.
-        const urlView = searchParams?.get("view");
-        const startInAdmin = urlView === "admin" && isAdmin;
-        setViewMode(startInAdmin ? "admin" : "year");
+        // Mount default: routed through computeInitialView() so PR-D can
+        // extend the body with role-conditional landing (floor -> their
+        // account's current month; leadership -> year overview) without
+        // editing the mount call sites here. PR-A keeps the helper at
+        // today's exact default: year/month for everyone, with admin
+        // honored only via ?view=admin deep-link + isAdmin gate.
+        const initialView = computeInitialView({
+          urlView: searchParams?.get("view"),
+          isAdmin,
+        });
+        setScope(initialView.scope);
+        setLens(initialView.lens);
+        setIsAdminView(initialView.isAdminView);
       })
       .catch(() => showToast("Failed to load accounts", "error"));
     // searchParams + isAdmin captured at mount only; subsequent URL
@@ -201,26 +230,34 @@ export default function ServiceCalendar({ showToast, session }) {
   }, [selectedAccount, mk, showToast, reloadKey]);
 
   useEffect(() => {
-    if (viewMode !== "year" || !selectedAccount) return;
+    // Depend on the underlying scope/lens state (PRIMARY state pieces),
+    // not on the derived isYearView boolean. isYearView is a per-render
+    // constant whose reference changes every render - depending on it
+    // would re-fire this effect on every render and trigger extra
+    // network calls. The guard inside handles the short-circuit.
+    if (!isYearView || !selectedAccount) return;
     // reloadKey is in the dep array so a save in the month view also
     // refreshes the year heatmap on next visit; without it, the heatmap
     // showed stale grey dots after data flipped to "entered" in PG.
     fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}`)
       .then(r => r.json()).then(d => { if (d.success) { setYearData(d.months); setYearToday(d.today || null); } }).catch(() => {});
-  }, [viewMode, selectedAccount, reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, lens, isAdminView, selectedAccount, reloadKey]);
 
-  // URL sync: when viewMode flips into or out of "admin", update the
-  // query param so deep-links are bookmarkable and the back-button works.
-  // Shallow router.replace - no full navigation, scroll preserved. The
-  // early-return guard prevents an infinite loop with searchParams in deps.
+  // URL sync: when isAdminView flips, update the query param so deep-
+  // links are bookmarkable and the back-button works. Shallow
+  // router.replace - no full navigation, scroll preserved. The early-
+  // return guard prevents an infinite loop with searchParams in deps.
+  // isAdminView is PRIMARY state (not derived), so the read/write
+  // cycle cannot loop.
   useEffect(() => {
     const currentParam = searchParams?.get("view") || null;
-    if (viewMode === "admin" && currentParam !== "admin") {
+    if (isAdminView && currentParam !== "admin") {
       router.replace("/service-calendar?view=admin", { scroll: false });
-    } else if (viewMode !== "admin" && currentParam === "admin") {
+    } else if (!isAdminView && currentParam === "admin") {
       router.replace("/service-calendar", { scroll: false });
     }
-  }, [viewMode, router, searchParams]);
+  }, [isAdminView, router, searchParams]);
 
   const today = dateKey(new Date());
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
@@ -540,7 +577,10 @@ export default function ServiceCalendar({ showToast, session }) {
 
   const weeks = useMemo(() => getCalendarWeeks(year, month), [year, month]);
   const todayMonth = new Date().getMonth();
-  const goToToday = useCallback(() => { setMonth(todayMonth); setViewMode("month"); setTimeout(() => setFocusDay(today), 100); }, [todayMonth, today]);
+  // PR-A: setViewMode("month") rename only. The setTimeout(100) hack
+  // that races around the sc-load effect clearing focusDay STAYS - the
+  // de-hack is deferred to PR-A.1 so PR-A remains a pure rename.
+  const goToToday = useCallback(() => { setMonth(todayMonth); setScope("month"); setLens("month"); setIsAdminView(false); setTimeout(() => setFocusDay(today), 100); }, [todayMonth, today]);
 
   const focusDayData = focusDay ? dayMap[focusDay] : null;
   const dayList = data?.days?.map(d => d.date) || [];
@@ -617,7 +657,7 @@ export default function ServiceCalendar({ showToast, session }) {
       <div className="sc-card">
         <div className="sc-header">
           <div className="sc-header-account">
-            {viewMode === "admin" ? (
+            {isAdminView ? (
               // Admin mode owns the selector slot. The account dropdown does
               // NOT drive the admin all-accounts overview; showing a stale
               // single account here would mislead. When drilled into a
@@ -651,9 +691,13 @@ export default function ServiceCalendar({ showToast, session }) {
             )}
           </div>
           <div className="sc-mode-group">
-            {["year","month"].map(v => (
-              <button key={v} className={`sc-mode-btn ${viewMode === v ? "sc-mode-btn--active" : ""}`} onClick={() => { setViewMode(v); setFocusDay(null); setBulkMode(false); }}>
-                {v.charAt(0).toUpperCase() + v.slice(1)}
+            {[{ scope: "year", lens: "month", label: "Year" }, { scope: "month", lens: "month", label: "Month" }].map(t => (
+              <button
+                key={t.label}
+                className={`sc-mode-btn ${isLensScopeActive(t.scope, t.lens) ? "sc-mode-btn--active" : ""}`}
+                onClick={() => { setScope(t.scope); setLens(t.lens); setIsAdminView(false); setFocusDay(null); setBulkMode(false); }}
+              >
+                {t.label}
               </button>
             ))}
             <div className="sc-mode-divider" />
@@ -662,8 +706,8 @@ export default function ServiceCalendar({ showToast, session }) {
               <>
                 <div className="sc-mode-divider" />
                 <button
-                  className={`sc-mode-btn sc-mode-btn--admin ${viewMode === "admin" ? "sc-mode-btn--active" : ""}`}
-                  onClick={() => { setViewMode("admin"); setFocusDay(null); setBulkMode(false); }}
+                  className={`sc-mode-btn sc-mode-btn--admin ${isAdminView ? "sc-mode-btn--active" : ""}`}
+                  onClick={() => { setIsAdminView(true); setFocusDay(null); setBulkMode(false); }}
                   title="Service Calendar admin (corporate only)"
                 >
                   Admin
@@ -672,18 +716,18 @@ export default function ServiceCalendar({ showToast, session }) {
             )}
           </div>
           <div className="sc-date-nav">
-            {viewMode === "month" && (
+            {isMonthView && (
               <>
                 <button className="sc-date-btn" onClick={() => setMonth(p => Math.max(0, p-1))}>&#8249;</button>
                 <span className="sc-date-label">{MONTHS[month]} {year}</span>
                 <button className="sc-date-btn" onClick={() => setMonth(p => Math.min(11, p+1))}>&#8250;</button>
               </>
             )}
-            {viewMode === "year" && <span className="sc-date-label">{year}</span>}
+            {isYearView && <span className="sc-date-label">{year}</span>}
           </div>
         </div>
 
-        {viewMode === "month" && (
+        {isMonthView && (
           <div className="sc-month-body sc-fade-in">
             {data && !loading && (
               <>
@@ -1044,7 +1088,7 @@ export default function ServiceCalendar({ showToast, session }) {
           </div>
         )}
 
-        {viewMode === "year" && (
+        {isYearView && (
           <div className="sc-year-body sc-fade-in">
             {(loading || !data || !yearData) ? (
               <div className="sc-loading"><div className="oh-spinner" /><p>Loading...</p></div>
@@ -1125,7 +1169,7 @@ export default function ServiceCalendar({ showToast, session }) {
                 return (
                   <div key={mi} className={`sc-year-card ${isCurrent ? "sc-year-card--current" : ""}`}
                     style={{ animationDelay: `${mi * 40}ms` }}
-                    onClick={() => { setMonth(mi); setViewMode("month"); }}>
+                    onClick={() => { setMonth(mi); setScope("month"); setLens("month"); }}>
                     <div className="sc-year-card-header">
                       <span className="sc-year-card-name">{name}</span>
                       <span className="sc-year-card-cue">View →</span>
@@ -1307,7 +1351,7 @@ export default function ServiceCalendar({ showToast, session }) {
             remain the security boundary; this gate is just about not
             showing a control to non-admins (and not rendering the body
             if a non-admin somehow lands on ?view=admin). */}
-        {viewMode === "admin" && isAdmin && (
+        {isAdminView && isAdmin && (
           <div className="sc-admin-body sc-fade-in">
             <AdminPanel
               view={adminView}
