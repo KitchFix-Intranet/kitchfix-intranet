@@ -30,11 +30,19 @@ import useAnimatedNumber from "./useAnimatedNumber";
 
 const fmt$ = (n) => "$" + Math.round(n).toLocaleString("en-US");
 
-// AnimatedDollar - drop-in for fmt$(value) on entered-$ figures. Wraps
+// AnimatedDollar - drop-in for fmt$(value) on $ figures. Wraps
 // useAnimatedNumber so the parent JSX stays clean. Returns plain text
 // so the caller's existing span/className is preserved.
-function AnimatedDollar({ value }) {
-  const v = useAnimatedNumber(value);
+//
+// CRITICAL: callers MUST render this component unconditionally - never
+// inside a ternary that sometimes renders it and sometimes renders
+// plain text. AnimatedDollar always calls a hook (useAnimatedNumber);
+// the optional `animate` prop gates whether to interpolate or snap.
+// Use `animate={false}` (the default true means animated) when the
+// value should display without animation (e.g. a projected-$ that
+// doesn't change on save).
+function AnimatedDollar({ value, animate = true }) {
+  const v = useAnimatedNumber(value, { animate });
   return <>{fmt$(v)}</>;
 }
 
@@ -129,6 +137,25 @@ export default function PeriodLensView({
     return todayDay?.meta?.week || null;
   }, [periodDays, today]);
 
+  // Homestand context line for the pinned header (MLB fee path).
+  // MUST run before the early returns below - hooks called after a
+  // conditional return change the hook count between renders (React
+  // #310 crash when the view transitions through loading/empty back
+  // to normal render). Returns null on the early-return paths; the
+  // pinned-header render reads it only when reached.
+  const homestandContext = useMemo(() => {
+    if (!hasHomestandSchedule || !periodDays?.length) return null;
+    const seen = new Set();
+    const ctx = [];
+    for (const d of periodDays) {
+      const hs = homestandMap?.[d.date];
+      if (!hs?.homestandId || seen.has(hs.homestandId)) continue;
+      seen.add(hs.homestandId);
+      ctx.push({ id: hs.homestandId, opponent: hs.opponent || null });
+    }
+    return ctx.slice(0, 3); // cap visual width
+  }, [hasHomestandSchedule, periodDays, homestandMap]);
+
   // ── Loading skeleton ────────────────────────────────────────────
   if (loading && !partialError) {
     return <PeriodSkeleton />;
@@ -202,20 +229,6 @@ export default function PeriodLensView({
     ? `+${fmt$(delta)} ahead`
     : `${fmt$(delta)} to go`;
   const deltaColor = delta >= 0 ? GREEN : "#d97706";
-
-  // Homestand context line for the pinned header (MLB fee path).
-  const homestandContext = useMemo(() => {
-    if (!hasHomestandSchedule || !periodDays?.length) return null;
-    const seen = new Set();
-    const ctx = [];
-    for (const d of periodDays) {
-      const hs = homestandMap?.[d.date];
-      if (!hs?.homestandId || seen.has(hs.homestandId)) continue;
-      seen.add(hs.homestandId);
-      ctx.push({ id: hs.homestandId, opponent: hs.opponent || null });
-    }
-    return ctx.slice(0, 3); // cap visual width
-  }, [hasHomestandSchedule, periodDays, homestandMap]);
 
   // ── Render the full view ──────────────────────────────────────
   return (
@@ -333,9 +346,17 @@ export default function PeriodLensView({
                     <span
                       className={`sc-period-week-subtotal ${ws.actRev > 0 ? "sc-period-week-subtotal--entered" : ""}`}
                     >
-                      {ws.actRev > 0
-                        ? <AnimatedDollar value={ws.actRev} />
-                        : fmt$(ws.projRev)}
+                      {/* AnimatedDollar is rendered UNCONDITIONALLY - the
+                          hook runs every render. The `animate` flag gates
+                          interpolation: entered $ count up on save;
+                          projected $ snaps (no animation when no actuals).
+                          The mount-on-actRev>0 anti-pattern would lose
+                          animation state and trigger React's hook-count
+                          guard - never do that here. */}
+                      <AnimatedDollar
+                        value={ws.actRev > 0 ? ws.actRev : ws.projRev}
+                        animate={ws.actRev > 0}
+                      />
                     </span>
                   )}
                   <span className="sc-period-week-completion">
