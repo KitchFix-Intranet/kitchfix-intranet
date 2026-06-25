@@ -28,7 +28,14 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onClose, isFeeAccount, homestandContext }) {
+export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
+  // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
+  // "% of {scope}" readout. Legacy callers (the legacy month/period
+  // views) don't pass it and default to "month" - the existing label
+  // stays unchanged. The new Period workspace passes "period" and
+  // sends the period's revenue as monthRevenue, so the readout reads
+  // correctly as "% of period". Surgical, backward-compatible fix to
+  // the audit-flagged monthRevenue trap (spec 11.3).
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
@@ -459,7 +466,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           <div className="sc-day-totals-left">
             <span className="sc-day-total-label">{footerLabel}</span>
             <span className="sc-day-total-meals">{footerDisplay.meals.toLocaleString()} meals</span>
-            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct">{revPct}% of month</span>}
+            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct">{revPct}% of {scopeLabel}</span>}
           </div>
           {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(footerDisplay.revenue)}</span>}
         </div>

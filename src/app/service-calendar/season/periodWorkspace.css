@@ -1,0 +1,581 @@
+/* ══════════════════════════════════════════════════════════════
+   PeriodWorkspace (Stage 3) - .sc-workspace-* namespace.
+   New layout replacing PeriodLensView's week-button + slide model.
+   Legacy PeriodLensView CSS stays - Stage 6 deletes.
+   ══════════════════════════════════════════════════════════════ */
+
+.sc-workspace {
+  padding: 12px 16px 32px;
+  background: #f7f6f3;
+  color: #0a2548;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ───────── NAV ROW ───────── */
+.sc-workspace-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 4px 0;
+}
+.sc-workspace-nav-climb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-nav-climb { transition: none; }
+}
+.sc-workspace-nav-climb:hover {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+.sc-workspace-nav-climb:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
+.sc-workspace-nav-arrow { font-size: 16px; }
+
+.sc-workspace-nav-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 3px;
+}
+.sc-workspace-nav-arrow-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 18px;
+  color: #4b5563;
+  font-family: inherit;
+}
+.sc-workspace-nav-arrow-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+.sc-workspace-nav-arrow-btn:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+.sc-workspace-nav-arrow-btn:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 1px;
+}
+.sc-workspace-nav-today {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0F6E56;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sc-workspace-nav-today:hover {
+  background: #E1F5EE;
+}
+.sc-workspace-nav-today:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 1px;
+}
+
+/* ───────── HEADER ───────── */
+.sc-workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+}
+.sc-workspace-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sc-workspace-title-period {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0a2548;
+}
+.sc-workspace-title-anchor {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+}
+.sc-workspace-title-phase {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5C3B1E;
+  background: #F4E4C2;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.sc-workspace-range {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────── FINANCIAL FRAME ───────── */
+.sc-workspace-frame {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sc-workspace-frame-numbers {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.sc-workspace-frame-money {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.sc-workspace-frame-entered {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #047857;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-projected {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-delta {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-labels {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sc-workspace-frame-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.sc-workspace-frame-progress-label {
+  font-size: 12px;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-progress-label strong { color: #0a2548; font-weight: 700; }
+.sc-workspace-frame-progress-pending { color: #B45309; }
+
+.sc-workspace-progress-bar {
+  height: 6px;
+  background: #ececec;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sc-workspace-progress-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-progress-bar-fill { transition: none; }
+}
+
+/* Fee homestand + operational variants share layout; the hero is
+   the day-completion count and there is no $ language. */
+.sc-workspace-frame--fee,
+.sc-workspace-frame--operational {
+  flex-direction: row;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.sc-workspace-frame-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sc-workspace-frame-hero-num {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0a2548;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-hero-num strong { color: #047857; font-weight: 800; }
+.sc-workspace-frame-hero-divisor {
+  font-size: 18px;
+  font-weight: 600;
+  color: #6b7280;
+}
+.sc-workspace-frame-hero-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sc-workspace-frame-aux {
+  display: flex;
+  gap: 22px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.sc-workspace-frame-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sc-workspace-frame-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sc-workspace-frame-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0a2548;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-frame-stat--warn .sc-workspace-frame-stat-value { color: #B45309; }
+.sc-workspace-frame--fee .sc-workspace-progress-bar,
+.sc-workspace-frame--operational .sc-workspace-progress-bar {
+  width: 100%;
+  flex: 1 0 100%;
+}
+
+/* ───────── TODAY HERO + PILL ───────── */
+.sc-workspace-today-hero {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF4 100%);
+  border: 1px solid #DDD8C9;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.sc-workspace-today-hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sc-workspace-today-hero-flag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: #153968;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.sc-workspace-today-hero-status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #B45309;
+}
+.sc-workspace-today-hero-date {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0a2548;
+  letter-spacing: -0.01em;
+}
+.sc-workspace-today-hero-projection {
+  font-size: 13px;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-today-hero-cta {
+  margin-top: 6px;
+  padding: 10px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: #0F6E56;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-today-hero-cta { transition: none; }
+}
+.sc-workspace-today-hero-cta:hover { background: #085041; }
+.sc-workspace-today-hero-cta:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
+
+/* Today-already-entered: a calm pill, not the action hero. */
+.sc-workspace-today-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 6px 12px;
+  background: #E1F5EE;
+  border: 1px solid #B0DCC6;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #085041;
+  font-weight: 600;
+}
+.sc-workspace-today-pill-flag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: #153968;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* ───────── BULK AFFORDANCE ───────── */
+.sc-workspace-bulk-rest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sc-workspace-bulk-rest-btn {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #153968;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sc-workspace-bulk-rest-btn:hover { background: #f0f4f8; border-color: #94a3b8; }
+.sc-workspace-bulk-rest-btn:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
+.sc-workspace-bulk-rest-hint {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.sc-workspace-bulk-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #FFF7E5;
+  border: 1px solid #F1D788;
+  border-radius: 10px;
+}
+.sc-workspace-bulk-active-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+}
+.sc-workspace-bulk-active-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sc-workspace-bulk-btn {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.sc-workspace-bulk-btn--primary {
+  background: #153968;
+  color: #fff;
+}
+.sc-workspace-bulk-btn--primary:hover:not(:disabled) { background: #0e2a4d; }
+.sc-workspace-bulk-btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.sc-workspace-bulk-btn--outline {
+  background: #fff;
+  color: #153968;
+  border-color: #cbd5e1;
+}
+.sc-workspace-bulk-btn--outline:hover:not(:disabled) { background: #f0f4f8; }
+.sc-workspace-bulk-cancel {
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.sc-workspace-bulk-cancel:hover { color: #0a2548; }
+
+/* ───────── DAY GRID ───────── */
+.sc-workspace-grid-wrap {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sc-workspace-grid-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  text-align: center;
+}
+.sc-workspace-grid-dow-cell { padding: 0 0 4px; }
+.sc-workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.sc-workspace-grid-cell {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  min-width: 0;
+}
+.sc-workspace-grid-cell > * {
+  width: 100%;
+  height: 100%;
+}
+.sc-workspace-grid-cell-empty {
+  display: block;
+  min-height: 80px;
+  background: transparent;
+}
+/* Atom at lg in this density - slight padding override for grid fit
+   while preserving the atom's lg semantics elsewhere (gallery, etc.). */
+.sc-workspace-grid .sc-daysq--lg {
+  min-height: 96px;
+}
+
+/* ───────── WEEK SUBTOTALS (quiet footnote) ───────── */
+.sc-workspace-weeks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.sc-workspace-weeks-item { display: inline-flex; align-items: baseline; gap: 4px; }
+.sc-workspace-weeks-label {
+  font-weight: 700;
+  color: #0a2548;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sc-workspace-weeks-body { color: #4b5563; }
+.sc-workspace-weeks-sep { color: #cbd5e1; }
+
+/* ───────── BANNERS + SKELETON ───────── */
+.sc-workspace-empty {
+  padding: 36px;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.sc-workspace-partial {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #FFF7E5;
+  border: 1px solid #F1D788;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.sc-workspace-skel {
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
+  background-size: 200% 100%;
+  animation: sc-season-shimmer 1.6s linear infinite;
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-skel { animation: none; background: #ececec; }
+}
+.sc-workspace-skel--frame { height: 130px; }
+.sc-workspace-skel--hero  { height: 110px; }
+.sc-workspace-skel--dow   { height: 14px; margin-bottom: 6px; }
+.sc-workspace-skel--tile  { height: 96px; }
+
+/* ───────── MOBILE ───────── */
+@media (max-width: 767px) {
+  .sc-workspace { padding: 8px 12px 32px; gap: 12px; }
+  .sc-workspace-frame { padding: 14px 16px; }
+  .sc-workspace-frame-entered { font-size: 26px; }
+  .sc-workspace-grid-wrap { padding: 10px 10px 14px; }
+  .sc-workspace-grid-dow-cell { font-size: 9px; }
+  .sc-workspace-grid-cell-empty { min-height: 60px; }
+  .sc-workspace-grid .sc-daysq--lg { min-height: 80px; }
+}

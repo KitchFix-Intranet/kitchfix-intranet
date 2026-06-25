@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import LensBar from "./LensBar";
 import PeriodLensView from "./PeriodLensView";
+import SeasonShell from "./season/SeasonShell";
+import PeriodWorkspace from "./season/PeriodWorkspace";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -198,6 +200,20 @@ export default function ServiceCalendar({ showToast, session }) {
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // PR-SC-Redesign Stage 1: ?legacy=year selects the legacy year body
+  // (the trusted heatmap render in this file) instead of the new Season
+  // shell. Default is the new shell. Pure URL read; no state, no effect.
+  const legacyYearView = searchParams?.get("legacy") === "year"
+                       || searchParams?.get("legacy") === "all";
+
+  // PR-SC-Redesign Stage 3: ?legacy=period (or ?legacy=all) routes
+  // the period drill target to the legacy PeriodLensView instead of
+  // the new Period workspace. The new workspace is the default - spec
+  // 11.4 fallback discipline preserved (lens/scope state untouched;
+  // periodMetrics + monthCache + focusDay + bulk handlers all reused).
+  const legacyPeriodView = searchParams?.get("legacy") === "period"
+                         || searchParams?.get("legacy") === "all";
 
   // Bulk mode
   const [bulkMode, setBulkMode] = useState(false);
@@ -1551,7 +1567,40 @@ export default function ServiceCalendar({ showToast, session }) {
           </div>
         )}
 
-        {isYearView && (
+        {/* PR-SC-Redesign Stage 1: the new Season shell becomes the
+            default year-landing render. The legacy `.sc-year-body`
+            below remains intact behind `?legacy=year` so the working
+            fallback survives through Stage 6 (spec 11.4). Both branches
+            consume the SAME yearData/yearToday/yearBannerStats; no data
+            fork. The new shell delegates month-card clicks to the
+            existing month-drill so wiring continues to work today. */}
+        {isYearView && !legacyYearView && (
+          <SeasonShell
+            account={data?.account}
+            year={year}
+            yearData={yearData}
+            yearToday={yearToday}
+            yearBannerStats={yearBannerStats}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            isMilb={isMilb}
+            loading={loading || !data || !yearData}
+            onMonthClick={(mi) => { setMonth(mi); setScope("month"); setLens("calendar"); }}
+            /* Stage 2: Period side of the toggle drills into the
+               existing PeriodLensView (lens=period, scope=period) as
+               the stub target. Stage 3 replaces it with the new
+               Period workspace. periodRanges already flows through
+               the existing year-summary effect. */
+            periodRanges={periodRanges}
+            onPeriodClick={(periodLabel) => {
+              setPeriodKey(periodLabel);
+              setLens("period");
+              setScope("period");
+            }}
+          />
+        )}
+
+        {isYearView && legacyYearView && (
           <div className="sc-year-body sc-fade-in">
             {(loading || !data || !yearData) ? (
               <div className="sc-loading"><div className="oh-spinner" /><p>Loading...</p></div>
@@ -1809,7 +1858,56 @@ export default function ServiceCalendar({ showToast, session }) {
           </div>
         )}
 
-        {isPeriodView && (
+        {/* PR-SC-Redesign Stage 3: PeriodWorkspace is the default
+            drill target replacing PeriodLensView. Legacy stays behind
+            ?legacy=period (or ?legacy=all). Reuses existing period
+            state (periodKey/periodDays/periodMetrics from B2a) + bulk
+            handlers - no engine change, no new effects. */}
+        {isPeriodView && !legacyPeriodView && (
+          <PeriodWorkspace
+            account={data?.account}
+            year={year}
+            periodKey={periodKey}
+            periodRange={periodRanges?.find(r => r.period === periodKey) || null}
+            periodRanges={periodRanges}
+            periodDays={periodDays}
+            periodMetrics={periodMetrics}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            isMilb={isMilb}
+            homestandMap={homestandMap}
+            today={today}
+            loading={loading && !periodDays}
+            partialError={partialError}
+            onClimbToSeason={() => { setLens("calendar"); setScope("year"); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); }}
+            onPrevPeriod={() => {
+              if (!periodRanges?.length) return;
+              const idx = periodRanges.findIndex(r => r.period === periodKey);
+              if (idx > 0) setPeriodKey(periodRanges[idx - 1].period);
+            }}
+            onNextPeriod={() => {
+              if (!periodRanges?.length) return;
+              const idx = periodRanges.findIndex(r => r.period === periodKey);
+              if (idx >= 0 && idx < periodRanges.length - 1) setPeriodKey(periodRanges[idx + 1].period);
+            }}
+            onTodayJump={() => {
+              if (!periodRanges?.length) return;
+              const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
+              if (containingToday) setPeriodKey(containingToday.period);
+            }}
+            onDayClick={(date) => setFocusDay(date)}
+            bulkMode={bulkMode}
+            onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
+            bulkSelected={bulkSelected}
+            onBulkTileClick={toggleBulkSelect}
+            onBulkOpenPanel={() => setBulkPanelOpen(true)}
+            onBulkConfirmAsProjected={handleBulkConfirm}
+            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
+            saving={saving}
+          />
+        )}
+
+        {isPeriodView && legacyPeriodView && (
           <PeriodLensView
             data={data}
             periodDays={periodDays}
@@ -1862,6 +1960,12 @@ export default function ServiceCalendar({ showToast, session }) {
               onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
               dayIndex={focusIdx} totalDays={dayList.length}
               monthRevenue={inPeriodView ? (periodMetrics?.actRev || periodMetrics?.projRev || 0) : (metrics.actRev || metrics.projRev)}
+              /* PR-SC-Redesign Stage 3 (spec 11.3): the "% of {scope}"
+                 readout reads period revenue as the denominator when
+                 opened from the Period workspace, so the label tracks
+                 the context. Legacy callers default to "month" via
+                 DayDetail's prop default - unchanged behavior. */
+              scopeLabel={inPeriodView ? "period" : "month"}
               accountName={acctObj?.name || ""}
               isFeeAccount={isFeeAccount} homestandContext={homestandMap[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
