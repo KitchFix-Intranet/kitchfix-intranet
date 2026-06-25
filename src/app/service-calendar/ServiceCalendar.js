@@ -1576,6 +1576,17 @@ export default function ServiceCalendar({ showToast, session }) {
             isMilb={isMilb}
             loading={loading || !data || !yearData}
             onMonthClick={(mi) => { setMonth(mi); setScope("month"); setLens("calendar"); }}
+            /* Stage 2: Period side of the toggle drills into the
+               existing PeriodLensView (lens=period, scope=period) as
+               the stub target. Stage 3 replaces it with the new
+               Period workspace. periodRanges already flows through
+               the existing year-summary effect. */
+            periodRanges={periodRanges}
+            onPeriodClick={(periodLabel) => {
+              setPeriodKey(periodLabel);
+              setLens("period");
+              setScope("period");
+            }}
           />
         )}
 

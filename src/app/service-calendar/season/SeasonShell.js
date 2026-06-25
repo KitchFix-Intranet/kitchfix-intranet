@@ -21,11 +21,14 @@
 // legacy lens/scope path remains intact alongside this new shell
 // (spec 11.4).
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import "./season.css";
 import PhaseStrip from "./PhaseStrip";
 import MonthCard from "./MonthCard";
+import PeriodCard from "./PeriodCard";
+import FullSeasonCard from "./FullSeasonCard";
 import { resolveDayKind } from "../dayResolvers";
+import { derivePhaseTimeline, bucketDaysByPeriod } from "./phaseDerivation";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -40,10 +43,14 @@ export default function SeasonShell({
   isMilb,
   loading,
   onMonthClick,             // (monthIndex) => void
+  // Stage 2 additions:
+  periodRanges,             // [{ period, start, end }] from sc-year-summary
+  onPeriodClick,            // (periodLabel) => void (drills to legacy PeriodLensView)
 }) {
-  // Stage 1: Period is disabled. We track the toggle state but
-  // selecting Period is a no-op for now (Stage 2 wires it).
-  const view = "calendar";
+  // Stage 2: the toggle is live. Calendar | Period. Calendar reuses
+  // the Stage 1 month grid; Period renders the new 4x3 period grid +
+  // the Full Season summary card in row 4.
+  const [view, setView] = useState("calendar");
 
   const kind = useMemo(
     () => resolveDayKind({
@@ -52,6 +59,21 @@ export default function SeasonShell({
       hasHomestandSchedule,
     }),
     [account?.billingModel, account?.category, hasHomestandSchedule]
+  );
+
+  // Phase timeline = the SHARED SPINE. Strip reads this; period-card
+  // tints read this. ONE derivation, two consumers.
+  const phaseTimeline = useMemo(
+    () => derivePhaseTimeline(account?.key, account?.category, year),
+    [account?.key, account?.category, year]
+  );
+
+  // Bucket year days into periods using periodRanges. Pure client
+  // (spec 11.6) - no engine extension. Only fires when Period view
+  // is active; dep-array is stable PRIMARY state (no derived bool).
+  const periodBuckets = useMemo(
+    () => view === "period" ? bucketDaysByPeriod(yearData, periodRanges) : new Map(),
+    [view, yearData, periodRanges]
   );
 
   const todayDate = yearToday?.date || null;
@@ -83,33 +105,94 @@ export default function SeasonShell({
       />
 
       <PhaseStrip
+        accountKey={account?.key}
         category={account?.category}
         today={yearToday}
         year={year}
       />
 
-      <CalendarPeriodToggle view={view} />
+      <CalendarPeriodToggle view={view} onChange={setView} />
 
-      <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
-        {MONTH_SHORT.map((_, monthIndex) => {
-          const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-          const monthSummary = yearData.find(m => m.month === monthKey) || null;
-          return (
-            <div role="listitem" key={monthIndex}>
-              <MonthCard
-                year={year}
-                monthIndex={monthIndex}
-                monthSummary={monthSummary}
-                todayDate={todayDate}
-                kind={kind}
-                hasHomestandSchedule={hasHomestandSchedule}
-                isFeeAccount={isFeeAccount}
-                isMilb={isMilb}
-                onClick={onMonthClick}
-              />
-            </div>
-          );
-        })}
+      {view === "calendar" ? (
+        <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
+          {MONTH_SHORT.map((_, monthIndex) => {
+            const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+            const monthSummary = yearData.find(m => m.month === monthKey) || null;
+            return (
+              <div role="listitem" key={monthIndex}>
+                <MonthCard
+                  year={year}
+                  monthIndex={monthIndex}
+                  monthSummary={monthSummary}
+                  todayDate={todayDate}
+                  kind={kind}
+                  hasHomestandSchedule={hasHomestandSchedule}
+                  isFeeAccount={isFeeAccount}
+                  isMilb={isMilb}
+                  onClick={onMonthClick}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <PeriodGrid
+          year={year}
+          periodRanges={periodRanges}
+          periodBuckets={periodBuckets}
+          todayDate={todayDate}
+          kind={kind}
+          hasHomestandSchedule={hasHomestandSchedule}
+          isFeeAccount={isFeeAccount}
+          timeline={phaseTimeline}
+          yearData={yearData}
+          yearBannerStats={yearBannerStats}
+          onPeriodClick={onPeriodClick}
+        />
+      )}
+    </div>
+  );
+}
+
+// PeriodGrid - the 4x3 of 13 period-cards + the Full Season summary.
+// P13 sits in row 4 column 1; Full Season summary fills cols 2-4
+// (grid-column: span 3 on desktop). The CSS handles wrap on smaller
+// viewports - on mobile both cards stack vertically.
+function PeriodGrid({
+  year, periodRanges, periodBuckets, todayDate, kind,
+  hasHomestandSchedule, isFeeAccount, timeline, yearData, yearBannerStats,
+  onPeriodClick,
+}) {
+  if (!periodRanges?.length) {
+    return (
+      <div className="sc-season-period-grid-empty">
+        Fiscal period data is loading.
+      </div>
+    );
+  }
+  return (
+    <div className="sc-season-period-grid" role="list" aria-label={`${year} fiscal periods`}>
+      {periodRanges.map((r) => (
+        <div role="listitem" key={r.period}>
+          <PeriodCard
+            periodRange={r}
+            days={periodBuckets.get(r.period) || []}
+            todayDate={todayDate}
+            kind={kind}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            timeline={timeline}
+            onClick={onPeriodClick}
+          />
+        </div>
+      ))}
+      <div role="listitem" className="sc-season-period-grid-summary">
+        <FullSeasonCard
+          yearData={yearData}
+          yearBannerStats={yearBannerStats}
+          isFeeAccount={isFeeAccount}
+          hasHomestandSchedule={hasHomestandSchedule}
+        />
       </div>
     </div>
   );
@@ -179,29 +262,27 @@ function YearBanner({ stats, yearToday, isFeeAccount, hasHomestandSchedule }) {
   );
 }
 
-// Calendar/Period toggle. Stage 1: Calendar is the only active side;
-// Period is disabled with a "Period view lands in Stage 2" affordance.
-// The toggle is purely visual at this stage (no state change), since
-// the segment lights up but nothing happens on click.
-function CalendarPeriodToggle({ view }) {
+// Calendar/Period toggle. Stage 2: both sides active. Toggling is the
+// ONE local toggle (spec section 2) - lives on the Season level, does
+// not follow the user down into a drilled period.
+function CalendarPeriodToggle({ view, onChange }) {
   return (
     <div className="sc-season-toggle" role="group" aria-label="View by">
       <button
         type="button"
         className={`sc-season-toggle-btn ${view === "calendar" ? "sc-season-toggle-btn--active" : ""}`}
         aria-pressed={view === "calendar"}
+        onClick={() => onChange?.("calendar")}
       >
         Calendar
       </button>
       <button
         type="button"
-        className="sc-season-toggle-btn sc-season-toggle-btn--disabled"
-        disabled
-        aria-disabled="true"
-        title="Period view lands in Stage 2"
+        className={`sc-season-toggle-btn ${view === "period" ? "sc-season-toggle-btn--active" : ""}`}
+        aria-pressed={view === "period"}
+        onClick={() => onChange?.("period")}
       >
         Period
-        <span className="sc-season-toggle-soon">soon</span>
       </button>
     </div>
   );
