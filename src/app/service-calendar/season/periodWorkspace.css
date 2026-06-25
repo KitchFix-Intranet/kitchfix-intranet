@@ -569,13 +569,179 @@
 .sc-workspace-skel--dow   { height: 14px; margin-bottom: 6px; }
 .sc-workspace-skel--tile  { height: 96px; }
 
-/* ───────── MOBILE ───────── */
+/* ───────── BREADCRUMB (Stage 4 nav) ───────── */
+.sc-workspace-breadcrumb {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.sc-workspace-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  min-width: 0;
+}
+.sc-workspace-breadcrumb-link {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #153968;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-breadcrumb-link { transition: none; }
+}
+.sc-workspace-breadcrumb-link:hover { background: #f0f4f8; }
+.sc-workspace-breadcrumb-link:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
+.sc-workspace-breadcrumb-sep {
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+}
+.sc-workspace-breadcrumb-phase-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #F4E4C2;
+  color: #7A5C28;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.sc-workspace-breadcrumb-current {
+  font-weight: 700;
+  color: #0a2548;
+}
+
+/* ───────── MOTION (calm, reduced-motion honored everywhere) ───────── */
+/* Drill transitions use .sc-fade-in (180ms fade-up). Skeletons +
+   shimmer respect reduced-motion via their own @media block above.
+   The workspace's interactive transitions (hover lifts, focus rings)
+   all degrade to instant under reduced-motion via the inline blocks
+   above this section. */
+
+/* ───────── MOBILE (the floor operator's primary surface) ───────── */
+/* The all-weeks grid becomes a STACKED DAY LIST. A 7-across grid at
+   375px gives ~50px tap targets - unusable with gloves at 6am. The
+   list reflow keeps the SAME atom (via CSS overrides scoped to this
+   context), no render branch needed. Each day is a full-width row
+   with date on the left, content right, status badge far right.
+
+   Leading/trailing out-of-period spacers HIDE on mobile (they only
+   exist to align days under the DOW header on desktop). The DOW
+   header itself hides too - a stacked list doesn't need column
+   labels.
+
+   Tap targets all >= 48px per WCAG + cooler-test (floor-first). */
 @media (max-width: 767px) {
   .sc-workspace { padding: 8px 12px 32px; gap: 12px; }
+
+  /* Nav row stacks if needed; breadcrumb stays on top */
+  .sc-workspace-nav { flex-direction: column; align-items: stretch; gap: 8px; padding: 4px 0; }
+  .sc-workspace-nav-step { align-self: flex-end; }
+  .sc-workspace-nav-arrow-btn { width: 44px; height: 44px; }
+  .sc-workspace-nav-today { padding: 11px 16px; }
+
+  /* Header + frame stack with reduced sizing */
+  .sc-workspace-header { padding: 0 2px; }
+  .sc-workspace-title-period { font-size: 22px; }
   .sc-workspace-frame { padding: 14px 16px; }
   .sc-workspace-frame-entered { font-size: 26px; }
-  .sc-workspace-grid-wrap { padding: 10px 10px 14px; }
-  .sc-workspace-grid-dow-cell { font-size: 9px; }
-  .sc-workspace-grid-cell-empty { min-height: 60px; }
-  .sc-workspace-grid .sc-daysq--lg { min-height: 80px; }
+  .sc-workspace-frame--fee,
+  .sc-workspace-frame--operational { gap: 16px; }
+
+  /* Today hero - tap target on the CTA at floor-spec */
+  .sc-workspace-today-hero { padding: 14px 16px; }
+  .sc-workspace-today-hero-cta { padding: 12px 20px; min-height: 48px; font-size: 14px; }
+
+  /* Bulk affordance - 48px+ tap targets */
+  .sc-workspace-bulk-rest-btn { padding: 12px 16px; min-height: 48px; font-size: 13px; }
+  .sc-workspace-bulk-btn { padding: 11px 14px; min-height: 44px; }
+  .sc-workspace-bulk-cancel { padding: 11px 14px; min-height: 44px; }
+  .sc-workspace-bulk-active { padding: 14px; }
+  .sc-workspace-bulk-active-actions { gap: 6px; }
+
+  /* THE DAY LIST - 1-column reflow, atom horizontalized */
+  .sc-workspace-grid-wrap { padding: 8px 8px 12px; }
+  .sc-workspace-grid-dow { display: none; }
+  .sc-workspace-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  /* Hide the empty out-of-period spacers in list mode - they only
+     exist for DOW alignment on desktop. */
+  .sc-workspace-grid-cell-empty { display: none; }
+
+  /* Atom at lg horizontalized for list rows. Date on left, content
+     right, status badge far right. 64px tall = comfortable thumb
+     target without being claustrophobic. */
+  .sc-workspace-grid .sc-daysq--lg {
+    min-height: 64px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+  .sc-workspace-grid .sc-daysq-top {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    min-width: 56px;
+  }
+  .sc-workspace-grid .sc-daysq-date {
+    font-size: 16px;
+  }
+  .sc-workspace-grid .sc-daysq-mid {
+    flex: 1;
+    text-align: right;
+    margin-top: 0;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Today pill repositions inside the row */
+  .sc-workspace-grid .sc-daysq-today-pill {
+    position: static;
+    margin-left: 4px;
+  }
+
+  /* Week subtotals: tighter wrap on mobile */
+  .sc-workspace-weeks { padding: 0 4px; gap: 4px 8px; font-size: 11px; }
+
+  /* Breadcrumb - shrink phase chip + allow wrap */
+  .sc-workspace-breadcrumb { gap: 4px; }
+  .sc-workspace-breadcrumb-phase-chip { max-width: 140px; font-size: 10px; padding: 2px 6px; }
+  .sc-workspace-breadcrumb-item { font-size: 12px; }
+  .sc-workspace-breadcrumb-link { font-size: 13px; padding: 6px 10px; min-height: 36px; }
+}
+
+/* ───────── NARROWER PHONES (<= 375) ───────── */
+@media (max-width: 375px) {
+  .sc-workspace-frame-entered { font-size: 22px; }
+  .sc-workspace-frame-projected { font-size: 13px; }
+  .sc-workspace-title-period { font-size: 20px; }
+  .sc-workspace-grid .sc-daysq--lg { padding: 10px 12px; }
+  .sc-workspace-grid .sc-daysq-mid { font-size: 12px; }
 }
