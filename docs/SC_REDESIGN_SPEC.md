@@ -199,3 +199,101 @@ anchors, the account-polymorphic content layer.
 - Each stage ships GREEN and is validated before the next.
 - The old lens/scope code stays until the dedicated removal stage, so a working
   fallback exists throughout.
+
+---
+
+## 11. Audit-driven revisions (post pre-build audit, PR #265)
+
+The pre-build scope audit (`docs/SC_REDESIGN_AUDIT.md`) surfaced findings that
+amend this spec. These supersede anything above that conflicts.
+
+### 11.1 Admin surface - EXPLICITLY OUT OF SCOPE
+~2,272 lines across ~12 files (AdminPanel, AccountEditor, FeeAccountEditor, and
+6 write panels) live behind the `isAdminView` gate. The redesign is the
+OPERATOR-FACING drill only (Season -> Period -> Day). The admin surface keeps
+working UNTOUCHED behind its gate. No redesign stage edits admin code. The
+`isAdminView` boolean and its branch are preserved as-is. If a stage finds itself
+touching admin code, that is out of scope - STOP.
+
+### 11.2 Bulk entry - SPEC IT INTO THE PERIOD WORKSPACE
+The bulk-entry flow currently lives in the (being-removed) month view. It moves
+to the Period workspace as a "bulk enter" affordance on the period day-grid:
+- The period workspace gains a bulk-entry entry point (e.g. a "Bulk enter" button
+  near the day grid, or multi-select on the day-squares -> enter many at once).
+- It calls the EXISTING `sc-bulk-submit` action (engine untouched).
+- This lands in the Period workspace stage (Stage 3). The day-square atom must
+  support a "selected" visual state for multi-select (add to the Stage 0 atom
+  spec: a selected/checked state, in addition to the 6 status states + today
+  ring).
+- Exact interaction (button-then-modal vs in-grid multi-select) is a Stage 3
+  design sub-decision; the REQUIREMENT is that bulk entry has a real home in the
+  new workspace and is not orphaned.
+
+### 11.3 DayDetail coupling - MORE THAN "MINOR PROP WIRING" (Stage 3)
+DayDetail is more coupled to the current view than the plan assumed:
+- `monthRevenue` is passed as a denominator for a "% of month" readout. Called
+  from the Period workspace, this silently becomes wrong (% of month when the
+  context is now a period). Stage 3 must pass the correct denominator (period
+  revenue) or remove/relabel the readout - do NOT let it silently misuse
+  monthRevenue.
+- `homestandContext`, `isFeeAccount`, and the `serviceGroups` fallback all need
+  deliberate inheritance when DayDetail is opened from the new workspace.
+- Treat DayDetail wiring as a real Stage 3 task with careful prop-contract
+  review, not a trivial pass.
+
+### 11.4 lens/scope are NOT dead code - removal is its OWN final stage
+`lens` and `scope` drive the year-summary effect, goToToday, render branching,
+and URL sync. They are load-bearing for the CURRENT (fallback) path. They must
+NOT be removed mid-build. Removal is Stage 6 (its own isolated stage), executed
+only after the new path fully replaces every job lens/scope did. The old path
+stays as a working fallback through Stages 0-5.
+
+### 11.5 Phase strip has a data-quality dependency (Stage 1/2)
+Phases are RECORDED for 3/5 PDCs (CIN-AZ, TXR-AZ, TBR-FL) and INFERRED for 2/5
+(TBJ-FL, STL-FL). No `sc_phases` table exists. The persistent phase strip needs
+a derivation helper that reads recorded Camp Name data where present and falls
+back to inference (or a graceful "phase data pending" state) where absent. The
+strip must degrade gracefully for accounts without clean phase data - it cannot
+assume every account has a clean phase timeline.
+
+### 11.6 Stage 2 per-day-period gap - client-solvable, no engine change
+`sc-year-summary.months[].days[]` does not carry per-day period labels, but
+`periodRanges` IS already exposed. The period-cards (Stage 2) derive each day's
+period client-side from periodRanges. NO engine/action change needed. (Confirms
+the re-skin frame: the engine stays untouched.)
+
+---
+
+## 12. The build sequence (7 stages - audit-revised, LOCKED)
+
+Supersedes the 6-stage sequence in SC_REDESIGN_PLAN.md.
+
+- **Stage 0 - The day-square atom (SOLO).** The universal atom, every state
+  (6 status + today-ring + SELECTED for bulk-entry multi-select), both size
+  variants, the polymorphic content line. A state gallery proves every variant.
+  No layout. Ships as the contract everything reuses.
+- **Stage 1 - Season shell + Calendar view.** The new shell (account header,
+  persistent phase strip with graceful degradation, Calendar/Period toggle with
+  Period DISABLED, 4x3 month-grid using the atom). Re-creates the known-good
+  heatmap in the new frame. Lands here.
+- **Stage 2 - Period view of the year.** Enable the toggle. 4x3 period-cards
+  (phase-tinted headers, human anchors, the atom, 13th-period + Full Season
+  card). Per-day period derived client-side from periodRanges. Color-load audit.
+- **Stage 3 - The Period workspace.** Financial frame (billing-model fork),
+  today hero, all-weeks day grid (no week buttons/slide), bulk-entry affordance
+  (sc-bulk-submit), DayDetail wiring with correct prop contract. Phase-straddle
+  decision lands here.
+- **Stage 4 - Drill wiring + landing + mobile (NO dead-code removal).** Connect
+  Season card -> workspace, breadcrumb climb-up, intent-aware landing, mobile
+  layout, motion pass. The old lens path STILL EXISTS as fallback.
+- **Stage 5 - Polymorphism hardening (the safety net, MID not last).** Walk every
+  account type (MLB-fee STL-MO, MiLB CIN-KY, PDC per-meal CIN-AZ, PDC-fee STL-FL)
+  through every level. Fix the forks. Structure proven across all types BEFORE
+  removal.
+- **Stage 6 - Dead-code removal (ISOLATED, last).** Remove lens/scope and the old
+  month-grid surface, only after Stages 0-5 prove the new path replaces every job
+  they did. The high-risk cleanup, alone, fully reversible.
+
+Sequencing logic: atom before layouts; known-good (Calendar) before novel
+(Period); drill source before target; polymorphism mid as the safety net before
+cleanup; removal isolated last so the fallback survives the whole build.
