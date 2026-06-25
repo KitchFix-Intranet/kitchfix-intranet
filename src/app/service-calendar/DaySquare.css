@@ -1,0 +1,232 @@
+/* ══════════════════════════════════════════════════════════════
+   DaySquare - the universal day atom (Stage 0)
+   New .sc-daysq-* namespace; does NOT touch legacy .sc-tile-* rules
+   (legacy stays as fallback through Stages 1-5; deleted at Stage 6).
+
+   Palette: calibrated saturated (Decision 1 - between the live soft
+   pastels and the prototype's full saturation, tuned so dark text
+   reads at 4.5:1+ on every fill).
+
+   Ring composition (Decision 2 - prove in gallery): focused / selected
+   / today layer their box-shadows on distinct radii so they never
+   visually collide when all three are present.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Container ---------------------------------------------------------- */
+.sc-daysq {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #0a2548; /* deep navy, near-black; readable on every status fill */
+  font-family: inherit;
+  position: relative;
+  text-align: left;
+  overflow: hidden;
+  /* Box-shadow is the overlay-ring system. Default = none. */
+  box-shadow: none;
+}
+
+.sc-daysq--interactive {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.sc-daysq--interactive:hover {
+  transform: translateY(-1px);
+}
+
+/* Reduced-motion: no hover lift, no transitions. The overlay box-
+   shadows still render (they're indicators, not motion). */
+@media (prefers-reduced-motion: reduce) {
+  .sc-daysq--interactive { transition: none; }
+  .sc-daysq--interactive:hover { transform: none; }
+}
+
+/* Sizes -------------------------------------------------------------- */
+.sc-daysq--sm {
+  min-height: 44px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.sc-daysq--lg {
+  min-height: 96px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+/* Top row (date + badge) -------------------------------------------- */
+.sc-daysq-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sc-daysq-date {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  line-height: 1.1;
+}
+.sc-daysq--sm .sc-daysq-date { font-size: 13px; }
+.sc-daysq--lg .sc-daysq-date { font-size: 20px; font-weight: 800; }
+
+.sc-daysq-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+}
+.sc-daysq--sm .sc-daysq-badge { font-size: 9px; width: 12px; height: 12px; }
+.sc-daysq--lg .sc-daysq-badge { font-size: 12px; width: 16px; height: 16px; }
+
+/* Middle line ------------------------------------------------------- */
+.sc-daysq-mid {
+  margin-top: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: #475569;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sc-daysq--sm .sc-daysq-mid { font-size: 10px; gap: 0; }
+.sc-daysq--lg .sc-daysq-mid { font-size: 12px; }
+.sc-daysq--sm .sc-daysq-mid--sm { margin-top: 2px; }
+
+.sc-daysq-mid-rev { font-weight: 700; }
+.sc-daysq-mid-rev--actual { color: #064e3b; }
+.sc-daysq-mid-rev--projected { color: #64748b; font-weight: 500; }
+.sc-daysq-mid-meals { font-weight: 500; color: #475569; }
+.sc-daysq-mid-opponent { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #0a2548; }
+
+/* MiLB day/night pill ---------------------------------------------- */
+.sc-daysq-milb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+.sc-daysq-milb-pill-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.sc-daysq-milb-pill--day .sc-daysq-milb-pill-dot { background: #EF9F27; }
+.sc-daysq-milb-pill--night .sc-daysq-milb-pill-dot { background: #153968; }
+
+/* ──────────────────────────────────────────────────────────────────
+   STATUS FILLS (Decision 1: calibrated palette)
+   Every fill keeps dark navy text at >=4.5:1 contrast. Badges echo the
+   fill at higher saturation so they read against the background.
+   ────────────────────────────────────────────────────────────────── */
+.sc-daysq--entered      { background: #A8E5C9; border-color: #7ECFAA; }
+.sc-daysq--needs-entry  { background: #FCD9A0; border-color: #E9B96B; }
+.sc-daysq--overdue      { background: #F4B5AC; border-color: #D88078; }
+.sc-daysq--upcoming     { background: #E0F1E7; border-color: #C7DFCF; }
+.sc-daysq--off          { background: #F1EFE8; border-color: #DDD8C9; color: #6b7280; }
+
+/* Per-status badge accents - icon color picks up the saturated hue */
+.sc-daysq-badge--entered      { color: #047857; }
+.sc-daysq-badge--needs-entry  { color: #B45309; }
+.sc-daysq-badge--overdue      { color: #991B1B; }
+.sc-daysq-badge--upcoming     { color: #047857; opacity: 0.6; }
+.sc-daysq-badge--off          { color: #9ca3af; }
+
+/* Off fills muted */
+.sc-daysq--off .sc-daysq-mid { color: #94a3b8; }
+.sc-daysq--off .sc-daysq-date { color: #6b7280; }
+
+/* ──────────────────────────────────────────────────────────────────
+   OVERLAY RINGS - layered box-shadows on distinct radii.
+   Composition test (proved in the gallery): focused + selected + today
+   render three concentric rings that don't overlap.
+
+   Stack (outer -> inner of box-shadow list):
+     today    : navy 2px outer ring (outermost)
+     selected : teal 4px outer ring (sits AROUND today)
+     focused  : teal 1px inset      (sits inside the border)
+
+   When all three present, the visible stack reads as:
+   [outer teal 4px] [navy 2px] [white tile body] [inset teal 1px]
+   Each ring lives on a distinct outset/inset offset so they don't
+   collide. Today is ALWAYS outermost so the "today" signal wins
+   if a viewer can only see one ring at a glance.
+   ────────────────────────────────────────────────────────────────── */
+
+/* focused-only */
+.sc-daysq--focused {
+  box-shadow: inset 0 0 0 1.5px #0F6E56;
+}
+
+/* selected-only */
+.sc-daysq--selected {
+  box-shadow: 0 0 0 3px #0F6E56;
+}
+
+/* today-only */
+.sc-daysq--today {
+  box-shadow: 0 0 0 2px #153968;
+}
+
+/* today + focused */
+.sc-daysq--today.sc-daysq--focused {
+  box-shadow: 0 0 0 2px #153968, inset 0 0 0 1.5px #0F6E56;
+}
+
+/* today + selected */
+.sc-daysq--today.sc-daysq--selected {
+  box-shadow: 0 0 0 2px #153968, 0 0 0 5px #0F6E56;
+}
+
+/* focused + selected */
+.sc-daysq--focused.sc-daysq--selected {
+  box-shadow: 0 0 0 3px #0F6E56, inset 0 0 0 1.5px #0F6E56;
+}
+
+/* today + selected + focused (the full composition test) */
+.sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  box-shadow: 0 0 0 2px #153968, 0 0 0 5px #0F6E56, inset 0 0 0 1.5px #0F6E56;
+}
+
+/* :focus-visible (keyboard focus) reuses the focused ring even if
+   the consumer didn't pass isFocused - so tab nav is never
+   unringed. */
+.sc-daysq--interactive:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px #0F6E56;
+}
+/* If both isToday + :focus-visible (no isSelected): preserve today
+   ring outside the focused inset. */
+.sc-daysq--today.sc-daysq--interactive:focus-visible {
+  box-shadow: 0 0 0 2px #153968, inset 0 0 0 1.5px #0F6E56;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   TODAY PILL
+   A tiny "TODAY" label below the date row, on lg only. Carries the
+   text-redundancy for the today ring (screen readers + sighted users
+   with hue loss). Hidden on sm because the date itself is the hero
+   and the ring + ariaLabel carry the signal.
+   ────────────────────────────────────────────────────────────────── */
+.sc-daysq-today-pill {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #153968;
+  color: #fff;
+  pointer-events: none;
+}
+.sc-daysq--sm .sc-daysq-today-pill { display: none; }
