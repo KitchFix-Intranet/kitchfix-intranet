@@ -1,0 +1,127 @@
+/* Gallery scaffolding - layout only. Atom styles live in DaySquare.css. */
+
+.gallery-root {
+  font-family: "Inter", system-ui, sans-serif;
+  color: #0a2548;
+  background: #f7f6f3;
+  padding: 32px max(24px, env(safe-area-inset-left, 0)) 96px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.gallery-header h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  color: #0a2548;
+}
+.gallery-header p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4b5563;
+  max-width: 720px;
+}
+.gallery-note {
+  font-size: 12px;
+  color: #6b7280;
+}
+.gallery-note code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+}
+
+.gallery-section {
+  margin: 40px 0;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.gallery-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #0a2548;
+}
+.gallery-section-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #4b5563;
+  max-width: 720px;
+  line-height: 1.5;
+}
+.gallery-fineprint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-style: italic;
+  color: #6b7280;
+  max-width: 720px;
+}
+
+.gallery-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+.gallery-row--tight {
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+.gallery-row + .gallery-row {
+  margin-top: 18px;
+}
+
+.gallery-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.gallery-cell-frame {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.gallery-cell-frame > * {
+  width: 100%;
+  max-width: 220px;
+}
+.gallery-row--tight .gallery-cell-frame > * { max-width: 80px; }
+
+.gallery-cell-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Mini calendar preview (section 7) */
+.gallery-mini-card {
+  max-width: 340px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.gallery-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.gallery-footer {
+  margin-top: 56px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+  font-style: italic;
+}
