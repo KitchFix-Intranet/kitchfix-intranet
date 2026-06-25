@@ -163,6 +163,8 @@ export default function PeriodWorkspace({
           onTodayJump={onTodayJump}
           canPrev={canPrev}
           canNext={canNext}
+          periodNum={periodNum}
+          phaseLabel={phasePrimaryLabel}
         />
         <WorkspacePartialBanner failedMonth={partialError.failedMonth} />
         <WorkspaceSkeleton inline />
@@ -179,6 +181,8 @@ export default function PeriodWorkspace({
           onTodayJump={onTodayJump}
           canPrev={canPrev}
           canNext={canNext}
+          periodNum={periodNum}
+          phaseLabel={phasePrimaryLabel}
         />
         <div className="sc-workspace-empty">Pick a period from the Season grid.</div>
       </div>
@@ -266,17 +270,37 @@ export default function PeriodWorkspace({
 }
 
 // ─── Nav row ─────────────────────────────────────────────────────
-function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext }) {
+// The breadcrumb (left) doubles as the climb-to-Season affordance:
+// click "Season" climbs up. The Stage 3 climb button is folded into
+// the breadcrumb's "Season" crumb so there's ONE climb path, not two.
+// Stepper (right) handles prev/next/today within the current period.
+function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel }) {
   return (
     <nav className="sc-workspace-nav" aria-label="Period navigation">
-      <button
-        type="button"
-        className="sc-workspace-nav-climb"
-        onClick={onClimbToSeason}
-        aria-label="Back to Season"
-      >
-        <span className="sc-workspace-nav-arrow">&#8592;</span> Season
-      </button>
+      <ol className="sc-workspace-breadcrumb">
+        <li className="sc-workspace-breadcrumb-item">
+          <button
+            type="button"
+            className="sc-workspace-breadcrumb-link"
+            onClick={onClimbToSeason}
+            aria-label="Back to Season"
+          >
+            Season
+          </button>
+        </li>
+        {phaseLabel && (
+          <li className="sc-workspace-breadcrumb-item sc-workspace-breadcrumb-phase" aria-hidden="true">
+            <span className="sc-workspace-breadcrumb-sep">/</span>
+            <span className="sc-workspace-breadcrumb-phase-chip">{phaseLabel}</span>
+          </li>
+        )}
+        {periodNum && (
+          <li className="sc-workspace-breadcrumb-item" aria-current="page">
+            <span className="sc-workspace-breadcrumb-sep">/</span>
+            <span className="sc-workspace-breadcrumb-current">Period {periodNum}</span>
+          </li>
+        )}
+      </ol>
       <div className="sc-workspace-nav-step">
         <button
           type="button"

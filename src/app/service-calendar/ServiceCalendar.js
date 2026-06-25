@@ -242,21 +242,32 @@ export default function ServiceCalendar({ showToast, session }) {
           if (sorted.find(a => a.key === f)) { initial = f; break; }
         }
         setSelectedAccount(initial);
-        // Mount default: routed through computeInitialView() so PR-D can
-        // extend the body with role-conditional landing (floor -> their
-        // account's current month; leadership -> year overview) without
-        // editing the mount call sites here. PR-A keeps the helper at
-        // today's exact default: year/month for everyone, with admin
-        // honored only via ?view=admin deep-link + isAdmin gate.
+        // Mount default: routed through computeInitialView() so the
+        // role-conditional landing (floor -> Period workspace at the
+        // current period; leadership -> Season overview) is one body
+        // edit in the helper, not a scatter here.
+        //
+        // Stage 4 landing wiring: the helper accepts `role`. The data
+        // path (contacts.role -> here) is NOT plumbed yet - extending
+        // sc-accounts with role would be an engine touch and is
+        // FLAGGED for follow-up. Until then, role=null falls through
+        // to the Season default (unchanged behavior). When the role
+        // path is added later, this call site just passes the value.
         const initialView = computeInitialView({
           urlView: searchParams?.get("view"),
           urlPeriod: searchParams?.get("period"),
           isAdmin,
+          role: null, // FLAG: requires role data from contacts.role
         });
         setScope(initialView.scope);
         setLens(initialView.lens);
         setIsAdminView(initialView.isAdminView);
         if (initialView.periodKey) setPeriodKey(initialView.periodKey);
+        // landOnCurrentPeriod handled by the periodRanges-init effect
+        // below: when a floor role lands and periodRanges arrives,
+        // periodKey gets set to the period containing today. The
+        // existing init effect already does this for the no-periodKey
+        // case, so the floor landing piggybacks on it for free.
       })
       .catch(() => showToast("Failed to load accounts", "error"));
     // searchParams + isAdmin captured at mount only; subsequent URL
