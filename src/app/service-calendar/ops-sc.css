@@ -1551,11 +1551,45 @@
 
 /* Day tiles (D-3-A). Existing .sc-tile + .sc-tile--period modifier.
    Reuses tile state tinting + GREEN/AMBER. 7-across on desktop;
-   stacked as cards on mobile via the @media block below. */
+   stacked as cards on mobile via the @media block below.
+
+   .sc-period-tiles (legacy) is kept ONLY for the loading skeleton's
+   7-placeholder grid. Live render uses the .sc-period-tile-track
+   structure below (PR-B2b directional slide).  */
 .sc-period-tiles {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-2);
   padding: var(--space-3) var(--space-4) var(--space-4);
 }
+
+/* PR-B2b directional slide track. The outer clips; the inner is a
+   grid-auto-flow:column rail with one column per week (each column
+   = 100% of outer width). Switching weeks shifts the inner via a
+   transform - no refetch, no re-render of off-screen weeks beyond
+   what React's reconciler does. Mobile gets the touch-swipe
+   equivalent via inline handlers on the outer element. */
+.sc-period-tile-track {
+  overflow: hidden;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  touch-action: pan-y; /* let vertical scroll pass through; we handle horizontal */
+}
+.sc-period-tile-track-inner {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  width: 100%;
+  transform: translateX(calc(var(--week-index, 0) * -100%));
+  transition: transform 200ms ease-out;
+}
+.sc-period-tile-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-period-tile-track-inner { transition: none; }
+}
+
 .sc-tile--period {
   min-height: 96px;
   padding: var(--space-2) var(--space-3);
@@ -1683,11 +1717,21 @@
   .sc-period-week-stats { display: none; }
 
   /* Stacked day cards (G-A). NOT a squished 7-across grid. Each card
-     is a tall full-width tap surface, 72px+ for cooler gloved hands. */
+     is a tall full-width tap surface, 72px+ for cooler gloved hands.
+     The slide track's mobile equivalent is the touch-swipe handler;
+     the per-week grid stacks to a single column so each week reads
+     as a vertical card list. */
   .sc-period-tiles {
     grid-template-columns: 1fr;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+  .sc-period-tile-track {
+    padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+  .sc-period-tile-week {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
   }
   .sc-tile--period {
     min-height: 72px;

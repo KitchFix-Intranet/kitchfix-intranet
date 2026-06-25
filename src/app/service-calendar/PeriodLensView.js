@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { GREEN, AMBER } from "./ServiceCalendar";
 import { OperationalTileBody } from "./OperationalView";
+import useAnimatedNumber from "./useAnimatedNumber";
 
-// PeriodLensView - View C surface for the Period lens (PR-B2a).
+// PeriodLensView - View C surface for the Period lens.
 //
 // Pure presentation. State lives in ServiceCalendar.js and is passed
 // in via props. Reuses the day-tile markup via the .sc-tile--period
@@ -17,11 +18,25 @@ import { OperationalTileBody } from "./OperationalView";
 //   - partial-data banner + skeleton header (one fetch missing - NEVER
 //     a wrong total from half data)
 //   - off-season empty (no service days in this period)
-//   - the active week's tiles + the pinned financial frame
+//   - the full period rendered with all weeks in a transform-driven
+//     track; the active week is the one in the viewport.
 //
-// Week switch is a hard cut in B2a; B2b adds the directional slide.
+// PR-B2b polish: week switch is a M-C directional slide (translateX on
+// a per-week track), with a mobile touch-swipe equivalent and reduced-
+// motion fallback to hard cut. Entered $ figures count up via
+// useAnimatedNumber on save. No refetch happens on week switch - all
+// the period's tiles are already rendered in the track; the transform
+// just moves the viewport (the P1 from B2a held intact).
 
 const fmt$ = (n) => "$" + Math.round(n).toLocaleString("en-US");
+
+// AnimatedDollar - drop-in for fmt$(value) on entered-$ figures. Wraps
+// useAnimatedNumber so the parent JSX stays clean. Returns plain text
+// so the caller's existing span/className is preserved.
+function AnimatedDollar({ value }) {
+  const v = useAnimatedNumber(value);
+  return <>{fmt$(v)}</>;
+}
 
 // "2026-06-29" -> "Mon Jun 29" for mobile card headers + tooltips.
 const DOW_LABELS_FULL = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -83,11 +98,28 @@ export default function PeriodLensView({
     return [...set].sort();
   }, [periodDays]);
 
-  // The active week's days (filtered + sorted by date).
-  const activeWeekDays = useMemo(() => {
-    if (!periodDays?.length || !weekKey) return [];
-    return periodDays.filter(d => d.meta?.week === weekKey);
-  }, [periodDays, weekKey]);
+  // Per-week sorted day lists. The slide track renders ALL weeks
+  // simultaneously and the transform translates the viewport - so we
+  // pre-bucket all days by week once, then the inner grid lays them
+  // out side-by-side. This is what makes the week switch a 0ms
+  // transform (no refetch, no re-derive - the data is already there).
+  const daysByWeek = useMemo(() => {
+    const m = {};
+    for (const w of weeks) m[w] = [];
+    if (periodDays) {
+      for (const d of periodDays) {
+        const w = d.meta?.week;
+        if (w && m[w]) m[w].push(d);
+      }
+    }
+    return m;
+  }, [periodDays, weeks]);
+
+  // Touch swipe state for the mobile equivalent of the directional
+  // slide. Horizontal swipe past 80px (and dominantly horizontal vs
+  // vertical) triggers the prev/next week. Reuses the same CSS
+  // transform so reduced-motion still gives a hard cut on swipe.
+  const touchStartRef = useRef(null);
 
   // The week containing today (for the GREEN today-dot marker on the
   // sub-nav, regardless of which week is active).
@@ -218,7 +250,7 @@ export default function PeriodLensView({
           // path also shows the optional context line below it).
           <div className="sc-period-frame">
             <div className="sc-period-frame-numbers">
-              <span className="sc-period-frame-entered">{fmt$(m.actRev)}</span>
+              <span className="sc-period-frame-entered"><AnimatedDollar value={m.actRev} /></span>
               <span className="sc-period-frame-projected">{fmt$(m.projRev)}</span>
               <span className="sc-period-frame-delta" style={{ color: deltaColor }}>{deltaLabel}</span>
             </div>
@@ -301,7 +333,9 @@ export default function PeriodLensView({
                     <span
                       className={`sc-period-week-subtotal ${ws.actRev > 0 ? "sc-period-week-subtotal--entered" : ""}`}
                     >
-                      {fmt$(ws.actRev > 0 ? ws.actRev : ws.projRev)}
+                      {ws.actRev > 0
+                        ? <AnimatedDollar value={ws.actRev} />
+                        : fmt$(ws.projRev)}
                     </span>
                   )}
                   <span className="sc-period-week-completion">
@@ -315,91 +349,147 @@ export default function PeriodLensView({
         </div>
       )}
 
-      {/* Day tiles for the active week (D-3-A: existing .sc-tile +
-          .sc-tile--period modifier). Mobile renders as stacked cards
-          via the same markup + the CSS .sc-tile--period mobile rules
-          (G-A). */}
-      <div className="sc-period-tiles">
-        {activeWeekDays.map((dd) => {
-          const status = dayStatus(dd);
-          const isTodayTile = dd.date === today;
-          const st = STATUS[status] || STATUS.future;
-          const { meals, revenue } = daySummary(dd);
-          const dParts = dateParts(dd.date);
-          const gameType = dd.gameType || dd.meta?.gameType || "";
-          const milbPill = isMilb && gameType
-            ? (gameType.toLowerCase().includes("day") ? "day"
-              : gameType.toLowerCase().includes("night") ? "night"
-              : null)
-            : null;
-          const hs = homestandMap?.[dd.date];
-
-          return (
-            <div
-              key={dd.date}
-              className={`sc-tile sc-tile--active sc-tile--period sc-tile-state--${status} ${isTodayTile ? "sc-tile--today" : ""} ${hasHomestandSchedule && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""}`}
-              onClick={() => onDayClick(dd.date)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDayClick(dd.date); } }}
-            >
-              <div className="sc-tile-top">
-                <span className={`sc-tile-date ${isTodayTile ? "sc-tile-date--today" : ""}`}>
-                  <span className="sc-tile-dow">{dParts.dow}</span>
-                  <span className="sc-tile-dom">{dParts.day}</span>
-                  {isTodayTile && <span className="sc-today-pill">TODAY</span>}
-                </span>
-                <span className={`sc-badge ${st.className}`}>{st.icon}</span>
+      {/* Day tiles in the slide track (M-C directional slide). ALL
+          weeks render side-by-side; the transform translates the
+          viewport. Week switch is a 0ms transform - no refetch, no
+          re-render of off-screen weeks beyond what React reconciles.
+          Mobile gets the touch-swipe equivalent. Both fall back to a
+          hard cut under prefers-reduced-motion via the CSS. */}
+      <div
+        className="sc-period-tile-track"
+        onTouchStart={(e) => {
+          touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }}
+        onTouchEnd={(e) => {
+          const s = touchStartRef.current;
+          if (!s) return;
+          touchStartRef.current = null;
+          const dx = e.changedTouches[0].clientX - s.x;
+          const dy = e.changedTouches[0].clientY - s.y;
+          // Require dominant horizontal motion + 80px threshold; in a
+          // cooler with gloves the gesture is often noisy.
+          if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+          const curIdx = weeks.indexOf(weekKey);
+          if (curIdx === -1) return;
+          if (dx < 0 && curIdx < weeks.length - 1) onWeekChange(weeks[curIdx + 1]);
+          if (dx > 0 && curIdx > 0) onWeekChange(weeks[curIdx - 1]);
+        }}
+      >
+        <div
+          className="sc-period-tile-track-inner"
+          style={{ "--week-index": Math.max(0, weeks.indexOf(weekKey)), "--week-count": weeks.length || 1 }}
+        >
+          {weeks.map((w) => {
+            const inactive = w !== weekKey;
+            // inert blocks focus + clicks + screen readers from the
+            // off-screen weeks. The active week is interactive; the
+            // tab order skips the others cleanly.
+            const inertProps = inactive ? { inert: "" } : {};
+            return (
+              <div
+                className="sc-period-tile-week"
+                key={w}
+                aria-hidden={inactive}
+                {...inertProps}
+              >
+                {daysByWeek[w].map((dd) => renderDayTile(dd, {
+                  STATUS, dayStatus, daySummary,
+                  isFeeAccount, hasHomestandSchedule, homestandMap, isMilb,
+                  today, onDayClick,
+                }))}
               </div>
-              {hasHomestandSchedule ? (
-                hs?.dayType === "GAME" ? (
-                  <>
-                    {hs.opponent && <div className="sc-tile-game">vs {hs.opponent}</div>}
-                    <div className="sc-tile-meals">{hs.homestandId}</div>
-                    {dd.hasActuals && <div className="sc-tile-rev sc-tile-rev--actual">{meals.toLocaleString()} meals</div>}
-                  </>
-                ) : (
-                  <>
-                    <div className="sc-tile-game">{hs?.dayType || "OFF"}</div>
-                    <div className="sc-tile-noservice">{hs?.homestandId || ""}</div>
-                  </>
-                )
-              ) : isFeeAccount ? (
-                <OperationalTileBody
-                  meals={meals}
-                  gameType={gameType}
-                  milbPill={milbPill}
-                  status={status}
-                  hasActuals={dd.hasActuals}
-                />
-              ) : (
-                <>
-                  {gameType && (
-                    <div className="sc-tile-game">
-                      {milbPill ? (
-                        <span className={`sc-mlb-pill sc-mlb-pill--${milbPill}`}>
-                          <span className="sc-mlb-pill-dot" />
-                          {milbPill === "day" ? "Day" : "Night"}
-                        </span>
-                      ) : gameType}
-                    </div>
-                  )}
-                  {status === "no-service" ? (
-                    <div className="sc-tile-noservice">No service</div>
-                  ) : (
-                    <>
-                      <div className={`sc-tile-meals ${dd.hasActuals ? "" : "sc-tile-meals--proj"}`}>{meals.toLocaleString()} meals</div>
-                      <div className={`sc-tile-rev ${dd.hasActuals ? "sc-tile-rev--actual" : status === "future" ? "sc-tile-rev--future" : "sc-tile-rev--projected"}`}>
-                        {!dd.hasActuals && status !== "future" ? "est. " : ""}{status === "future" ? "~" : ""}{fmt$(revenue)}
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Day tile renderer - extracted so the slide-track render can iterate
+// every week's days using the same tile body. Same JSX shape as the
+// B2a inline version; closure variables pulled in via the ctx arg.
+function renderDayTile(dd, ctx) {
+  const {
+    STATUS, dayStatus, daySummary,
+    isFeeAccount, hasHomestandSchedule, homestandMap, isMilb,
+    today, onDayClick,
+  } = ctx;
+  const status = dayStatus(dd);
+  const isTodayTile = dd.date === today;
+  const st = STATUS[status] || STATUS.future;
+  const { meals, revenue } = daySummary(dd);
+  const dParts = dateParts(dd.date);
+  const gameType = dd.gameType || dd.meta?.gameType || "";
+  const milbPill = isMilb && gameType
+    ? (gameType.toLowerCase().includes("day") ? "day"
+      : gameType.toLowerCase().includes("night") ? "night"
+      : null)
+    : null;
+  const hs = homestandMap?.[dd.date];
+
+  return (
+    <div
+      key={dd.date}
+      className={`sc-tile sc-tile--active sc-tile--period sc-tile-state--${status} ${isTodayTile ? "sc-tile--today" : ""} ${hasHomestandSchedule && status === "prep" ? "sc-tile--prep" : ""} ${status === "no-service" ? "sc-tile--no-service" : ""}`}
+      onClick={() => onDayClick(dd.date)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDayClick(dd.date); } }}
+    >
+      <div className="sc-tile-top">
+        <span className={`sc-tile-date ${isTodayTile ? "sc-tile-date--today" : ""}`}>
+          <span className="sc-tile-dow">{dParts.dow}</span>
+          <span className="sc-tile-dom">{dParts.day}</span>
+          {isTodayTile && <span className="sc-today-pill">TODAY</span>}
+        </span>
+        <span className={`sc-badge ${st.className}`}>{st.icon}</span>
+      </div>
+      {hasHomestandSchedule ? (
+        hs?.dayType === "GAME" ? (
+          <>
+            {hs.opponent && <div className="sc-tile-game">vs {hs.opponent}</div>}
+            <div className="sc-tile-meals">{hs.homestandId}</div>
+            {dd.hasActuals && <div className="sc-tile-rev sc-tile-rev--actual">{meals.toLocaleString()} meals</div>}
+          </>
+        ) : (
+          <>
+            <div className="sc-tile-game">{hs?.dayType || "OFF"}</div>
+            <div className="sc-tile-noservice">{hs?.homestandId || ""}</div>
+          </>
+        )
+      ) : isFeeAccount ? (
+        <OperationalTileBody
+          meals={meals}
+          gameType={gameType}
+          milbPill={milbPill}
+          status={status}
+          hasActuals={dd.hasActuals}
+        />
+      ) : (
+        <>
+          {gameType && (
+            <div className="sc-tile-game">
+              {milbPill ? (
+                <span className={`sc-mlb-pill sc-mlb-pill--${milbPill}`}>
+                  <span className="sc-mlb-pill-dot" />
+                  {milbPill === "day" ? "Day" : "Night"}
+                </span>
+              ) : gameType}
+            </div>
+          )}
+          {status === "no-service" ? (
+            <div className="sc-tile-noservice">No service</div>
+          ) : (
+            <>
+              <div className={`sc-tile-meals ${dd.hasActuals ? "" : "sc-tile-meals--proj"}`}>{meals.toLocaleString()} meals</div>
+              <div className={`sc-tile-rev ${dd.hasActuals ? "sc-tile-rev--actual" : status === "future" ? "sc-tile-rev--future" : "sc-tile-rev--projected"}`}>
+                {!dd.hasActuals && status !== "future" ? "est. " : ""}{status === "future" ? "~" : ""}{fmt$(revenue)}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
