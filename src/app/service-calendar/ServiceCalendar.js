@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import LensBar from "./LensBar";
 import PeriodLensView from "./PeriodLensView";
+import SeasonShell from "./season/SeasonShell";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -198,6 +199,11 @@ export default function ServiceCalendar({ showToast, session }) {
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // PR-SC-Redesign Stage 1: ?legacy=year selects the legacy year body
+  // (the trusted heatmap render in this file) instead of the new Season
+  // shell. Default is the new shell. Pure URL read; no state, no effect.
+  const legacyYearView = searchParams?.get("legacy") === "year";
 
   // Bulk mode
   const [bulkMode, setBulkMode] = useState(false);
@@ -1551,7 +1557,29 @@ export default function ServiceCalendar({ showToast, session }) {
           </div>
         )}
 
-        {isYearView && (
+        {/* PR-SC-Redesign Stage 1: the new Season shell becomes the
+            default year-landing render. The legacy `.sc-year-body`
+            below remains intact behind `?legacy=year` so the working
+            fallback survives through Stage 6 (spec 11.4). Both branches
+            consume the SAME yearData/yearToday/yearBannerStats; no data
+            fork. The new shell delegates month-card clicks to the
+            existing month-drill so wiring continues to work today. */}
+        {isYearView && !legacyYearView && (
+          <SeasonShell
+            account={data?.account}
+            year={year}
+            yearData={yearData}
+            yearToday={yearToday}
+            yearBannerStats={yearBannerStats}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            isMilb={isMilb}
+            loading={loading || !data || !yearData}
+            onMonthClick={(mi) => { setMonth(mi); setScope("month"); setLens("calendar"); }}
+          />
+        )}
+
+        {isYearView && legacyYearView && (
           <div className="sc-year-body sc-fade-in">
             {(loading || !data || !yearData) ? (
               <div className="sc-loading"><div className="oh-spinner" /><p>Loading...</p></div>
