@@ -545,6 +545,106 @@ export default function ServiceCalendar({ showToast, session }) {
     return periodRanges[idx + 1]?.period || null;
   }, [periodRanges, periodKey]);
 
+  // PR-B2b keyboard navigation. Arrow-left/right shifts the active
+  // week within the period; Cmd/Ctrl + arrow shifts the period within
+  // periodRanges. Guards:
+  //   - only fires when in period view AND no DayDetail is open
+  //     (focusDay null) - the modal owns arrow-nav when open.
+  //   - skips when typing in an input/textarea (standard guard).
+  // periodDays + weekKey + periodKey + periodRanges read via refs so
+  // the listener attaches once per (lens/scope/admin/focus) combo
+  // and reads the latest state without re-attaching on every memo
+  // recompute. Effect deps stay on PRIMARY state - the PR-A lesson.
+  const kbdRef = useRef({});
+  kbdRef.current = { periodKey, weekKey, periodRanges, periodDays };
+  useEffect(() => {
+    if (lens !== "period" || scope !== "period" || isAdminView || focusDay) return;
+    const handler = (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const tgt = e.target;
+      if (tgt?.tagName === "INPUT" || tgt?.tagName === "TEXTAREA" || tgt?.isContentEditable) return;
+      const { periodKey: pk, weekKey: wk, periodRanges: prs, periodDays: pds } = kbdRef.current;
+      const periodNav = e.metaKey || e.ctrlKey;
+      e.preventDefault();
+      if (periodNav) {
+        if (!prs?.length || !pk) return;
+        const idx = prs.findIndex(r => r.period === pk);
+        if (idx === -1) return;
+        const target = e.key === "ArrowRight" ? prs[idx + 1] : prs[idx - 1];
+        if (target) setPeriodKey(target.period);
+      } else {
+        if (!pds?.length || !wk) return;
+        const allWeeks = [...new Set(pds.map(d => d.meta?.week).filter(Boolean))].sort();
+        const idx = allWeeks.indexOf(wk);
+        if (idx === -1) return;
+        const target = e.key === "ArrowRight" ? allWeeks[idx + 1] : allWeeks[idx - 1];
+        if (target) setWeekKey(target);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lens, scope, isAdminView, focusDay]);
+
+  // PR-B2b idle-prefetch. After the current period renders, fetch the
+  // calendar months for the PREV and NEXT periods on idle so the
+  // prev/next period buttons feel instant. Best-effort + silent: a
+  // prefetch failure does NOT surface the partial banner or any
+  // error - that's only for the ACTIVE period's fetch.
+  //
+  // Early-return when no neighbor months are missing prevents the
+  // effect from looping after the prefetch lands (monthCache is in
+  // deps and changes when the prefetch updates it, but on the next
+  // run `needed` is empty and the effect exits).
+  useEffect(() => {
+    if (lens !== "period" || !selectedAccount || !periodKey || !periodRanges?.length) return;
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx === -1) return;
+    const neighbors = [
+      idx > 0 ? periodRanges[idx - 1] : null,
+      idx < periodRanges.length - 1 ? periodRanges[idx + 1] : null,
+    ].filter(Boolean);
+    const needed = [];
+    for (const n of neighbors) {
+      for (const mk of monthsBetween(n.start, n.end)) {
+        if (!monthCache[mk] && !needed.includes(mk)) needed.push(mk);
+      }
+    }
+    if (needed.length === 0) return;
+    const controller = new AbortController();
+    const schedule = typeof window !== "undefined" && window.requestIdleCallback
+      ? window.requestIdleCallback
+      : (cb) => setTimeout(cb, 250);
+    const cancel = typeof window !== "undefined" && window.cancelIdleCallback
+      ? window.cancelIdleCallback
+      : clearTimeout;
+    const idleId = schedule(() => {
+      if (controller.signal.aborted) return;
+      Promise.allSettled(needed.map(mk =>
+        fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
+          .then(r => r.json())
+          .then(d => (d && d.success) ? { mk, payload: d } : null)
+          .catch(() => null)
+      )).then(results => {
+        if (controller.signal.aborted) return;
+        const ok = results
+          .filter(r => r.status === "fulfilled" && r.value)
+          .map(r => r.value);
+        if (ok.length === 0) return;
+        setMonthCache(prev => {
+          const next = { ...prev };
+          for (const { mk, payload } of ok) {
+            if (!next[mk]) next[mk] = payload;
+          }
+          return next;
+        });
+      }).catch(() => { /* silent: prefetch failures are best-effort */ });
+    });
+    return () => {
+      try { cancel(idleId); } catch { /* ignore */ }
+      controller.abort();
+    };
+  }, [lens, selectedAccount, periodKey, periodRanges, monthCache, reloadKey]);
+
   // Period ribbon derivation. Walks the visible-month days and buckets by
   // meta.period; each bucket becomes a segment with its first/last in-month
   // date. Days with no meta.period (past the seeded fiscal range) simply
