@@ -384,3 +384,355 @@
   .sc-season-month-card-bar-fill { transition: none; }
 }
 .sc-season-month-card-bar-fill--complete { background: #047857; }
+
+/* ══════════════════════════════════════════════════════════════
+   STAGE 2: real strip blocks + period-cards + Full Season card
+   ══════════════════════════════════════════════════════════════ */
+
+/* ───────── STRIP BLOCKS (real timeline) ───────── */
+.sc-season-strip-blocks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sc-season-strip-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border-right: 1px solid rgba(255,255,255,0.6);
+  overflow: hidden;
+  pointer-events: auto;
+}
+.sc-season-strip-block:last-child { border-right: none; }
+.sc-season-strip-block-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+/* When the blocks render, the underlying month ticks become a
+   subtle backdrop - dimmer than Stage 1 since the blocks are the
+   primary signal. */
+.sc-season-strip-ticks--underlay {
+  background: transparent;
+  border-color: transparent;
+  opacity: 0.45;
+}
+.sc-season-strip-ticks--underlay .sc-season-strip-tick {
+  border-right-color: rgba(0,0,0,0.06);
+}
+.sc-season-strip-ticks--underlay .sc-season-strip-tick-label {
+  color: #6b7280;
+}
+
+/* ───────── PERIOD GRID (Stage 2) ───────── */
+.sc-season-period-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 1023px) { .sc-season-period-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 767px)  { .sc-season-period-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 479px)  { .sc-season-period-grid { grid-template-columns: 1fr; } }
+
+/* P13 sits in slot 1 of row 4; Full Season card grid-spans the
+   remaining 3 slots on desktop. Stacks naturally below on smaller
+   viewports via the grid auto-wrap. */
+.sc-season-period-grid-summary {
+  grid-column: span 3;
+}
+@media (max-width: 1023px) { .sc-season-period-grid-summary { grid-column: span 2; } }
+@media (max-width: 767px)  { .sc-season-period-grid-summary { grid-column: span 2; } }
+@media (max-width: 479px)  { .sc-season-period-grid-summary { grid-column: span 1; } }
+
+.sc-season-period-grid-empty {
+  padding: 32px;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+/* ───────── PERIOD CARD ───────── */
+.sc-season-period-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-season-period-card { transition: none; }
+}
+.sc-season-period-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border-color: #cbd5e1;
+}
+.sc-season-period-card:focus-visible {
+  outline: 2px solid #153968;
+  outline-offset: 2px;
+}
+.sc-season-period-card--current {
+  border-color: #153968;
+  box-shadow: 0 0 0 2px #153968 inset;
+}
+.sc-season-period-card--offseason {
+  opacity: 0.78;
+}
+
+/* Header carries the canonical phase tint (Decision 1 + 3). Tint is
+   applied via inline style from the derived phase; padding + type
+   stay consistent across phases for visual rhythm. */
+.sc-season-period-card-header {
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.sc-season-period-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.sc-season-period-card-num {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+.sc-season-period-card-anchor {
+  font-size: 11px;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.7;
+}
+.sc-season-period-card-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.85;
+}
+.sc-season-period-card-subtitle-pending {
+  font-style: italic;
+  opacity: 0.7;
+  letter-spacing: 0.03em;
+}
+
+/* Period-card day grid - 7 columns matches the month grid; rows
+   auto-fit. Atom sizes via the same override discipline as
+   MonthCard's grid (.sc-daysq--sm gets shrunk to ~26px in this
+   density, middle-line hidden). */
+.sc-season-period-card-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 10px 12px;
+}
+.sc-season-period-card-cell {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  min-width: 0;
+}
+.sc-season-period-card-cell > * {
+  width: 100%;
+  height: 100%;
+}
+.sc-season-period-card-grid .sc-daysq--sm {
+  min-height: 26px;
+  padding: 2px 2px;
+}
+.sc-season-period-card-grid .sc-daysq--sm .sc-daysq-date {
+  font-size: 10px;
+  font-weight: 700;
+}
+.sc-season-period-card-grid .sc-daysq--sm .sc-daysq-badge {
+  font-size: 7px;
+  width: 9px;
+  height: 9px;
+}
+.sc-season-period-card-grid .sc-daysq-mid {
+  display: none;
+}
+
+.sc-season-period-card-noservice {
+  font-size: 11px;
+  font-style: italic;
+  color: #94a3b8;
+  text-align: center;
+  padding: 8px 0 14px;
+}
+
+.sc-season-period-card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 12px;
+  margin-top: auto;
+}
+.sc-season-period-card-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.sc-season-period-card-stat-main strong {
+  color: #0a2548;
+  font-weight: 700;
+}
+.sc-season-period-card-stat-aux {
+  color: #94a3b8;
+}
+.sc-season-period-card-stat-warn {
+  color: #B45309;
+  font-weight: 600;
+}
+.sc-season-period-card-bar {
+  height: 4px;
+  background: #ececec;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sc-season-period-card-bar-fill {
+  height: 100%;
+  background: #A8E5C9;
+  transition: width 0.3s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-season-period-card-bar-fill { transition: none; }
+}
+.sc-season-period-card-bar-fill--complete { background: #047857; }
+
+/* ───────── FULL SEASON SUMMARY CARD ───────── */
+.sc-season-fullseason-card {
+  background: linear-gradient(180deg, #FBFAF6 0%, #F5F4EE 100%);
+  border: 1px solid #DDD8C9;
+  border-radius: 10px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 200px;
+}
+.sc-season-fullseason-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.sc-season-fullseason-card-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sc-season-fullseason-card-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0a2548;
+}
+.sc-season-fullseason-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sc-season-fullseason-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.sc-season-fullseason-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+}
+.sc-season-fullseason-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sc-season-fullseason-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0a2548;
+  font-variant-numeric: tabular-nums;
+}
+.sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #047857;
+}
+.sc-season-fullseason-stat--muted .sc-season-fullseason-stat-value {
+  color: #94a3b8;
+  font-weight: 600;
+}
+.sc-season-fullseason-stat--actual .sc-season-fullseason-stat-value {
+  color: #047857;
+}
+.sc-season-fullseason-stat--warn .sc-season-fullseason-stat-value {
+  color: #B45309;
+}
+.sc-season-fullseason-stat--alert .sc-season-fullseason-stat-value {
+  color: #991B1B;
+}
+.sc-season-fullseason-bar {
+  height: 6px;
+  background: #ececec;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: auto;
+}
+.sc-season-fullseason-bar-fill {
+  height: 100%;
+  background: #A8E5C9;
+  transition: width 0.3s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-season-fullseason-bar-fill { transition: none; }
+}
+.sc-season-fullseason-bar-fill--complete { background: #047857; }
+
+/* Period-card DOW header - same convention as MonthCard */
+.sc-season-period-card-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 12px;
+}
+.sc-season-period-card-dow-cell {
+  padding: 0 0 2px;
+}
+.sc-season-period-card-cell-empty {
+  display: block;
+  min-height: 26px;
+  background: transparent;
+}

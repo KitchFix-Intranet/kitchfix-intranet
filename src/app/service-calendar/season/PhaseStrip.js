@@ -1,99 +1,123 @@
 "use client";
 
-// PhaseStrip - the persistent operational strip (spec section 4.2).
+// PhaseStrip - the real operational strip (Stage 2 replaces Stage 1's
+// placeholder).
 //
-// PDC accounts -> phase timeline. MLB/MiLB -> homestand arc.
-// Per-meal corporate (no operational structure) -> minimal.
+// PDC accounts WITH recorded data (CIN-AZ, TXR-AZ, TBR-FL):
+//   - Colored phase blocks across the year, canonical palette.
+//   - Today marker positioned at today's fractional offset.
+//   - Phase labels overlaid where the block is wide enough.
 //
-// Stage 1 reality (spec 11.5): phases are RECORDED for 3/5 PDCs and
-// INFERRED for 2/5; no `sc_phases` table exists; the year-summary
-// response does NOT carry per-day phase labels OR year-wide homestand
-// ranges. So Stage 1's strip renders a SHAPE PLACEHOLDER for every
-// account: a 12-month axis + today marker + a "operational arc lands
-// in Stage 2" affordance. No hardcoded phase data, no fake data, no
-// special-case branches by account.
+// PDC accounts WITHOUT recorded data (TBJ-FL, STL-FL):
+//   - Year axis + month ticks + today marker (Stage 1 shape).
+//   - "Phase calendar pending confirmation" message - never fake data.
 //
-// Stage 2 fills in:
-//   - PDC accounts (CIN-AZ, TXR-AZ, TBR-FL): clean phase ranges
-//   - PDC accounts (TBJ-FL, STL-FL): inferred phase ranges
-//   - MLB/MiLB fee accounts: year-wide homestand ranges
-//   - per-meal corporate / fee corporate: stays minimal
+// MLB / MiLB / CORP:
+//   - Year axis + today marker.
+//   - Operational-kind label per category.
+//   - Homestand arc detail lands in Stage 3.
 //
-// Component contract for Stage 1: receives the account category and
-// today's date; renders the shape; never crashes if data is missing.
+// The shared spine (derivePhaseTimeline) is the same one PeriodCard
+// reads, so the strip's colors match the period-card header tints.
+
+import { derivePhaseTimeline, findPhaseAtDate } from "./phaseDerivation";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export default function PhaseStrip({ category, today, year }) {
-  // today.date is YYYY-MM-DD when present; we read month + day-of-year
-  // so the marker lines up to a fractional offset across the strip.
-  const todayDate = today?.date ? new Date(today.date + "T12:00:00") : null;
+export default function PhaseStrip({ accountKey, category, today, year }) {
+  const timeline = derivePhaseTimeline(accountKey, category, year);
+  const todayDate = today?.date || null;
   const todayFraction = todayDate ? dayOfYearFraction(todayDate, year) : null;
+  const todayPhase = todayDate ? findPhaseAtDate(timeline, todayDate) : null;
 
-  const operationalKind = pickOperationalKind(category);
+  const yearStart = new Date(year, 0, 1).getTime();
+  const yearEnd   = new Date(year + 1, 0, 1).getTime();
+  const yearSpan  = yearEnd - yearStart;
+
+  const blockPositions = (timeline.blocks || []).map(b => {
+    const blockStart = new Date(b.start + "T12:00:00").getTime();
+    const blockEnd   = new Date(b.end   + "T12:00:00").getTime();
+    const clampedStart = Math.max(blockStart, yearStart);
+    const clampedEnd   = Math.min(blockEnd,   yearEnd);
+    if (clampedEnd <= clampedStart) return null;
+    const left  = ((clampedStart - yearStart) / yearSpan) * 100;
+    const width = ((clampedEnd - clampedStart) / yearSpan) * 100;
+    return { ...b, left, width };
+  }).filter(Boolean);
 
   return (
     <section className="sc-season-strip" aria-label="Operational strip">
       <div className="sc-season-strip-frame">
         <div className="sc-season-strip-rail">
-          {/* Month tick marks across the year axis. */}
-          <div className="sc-season-strip-ticks">
-            {MONTH_SHORT.map((m, i) => (
+          {timeline.status === "recorded" && (
+            <div className="sc-season-strip-blocks" aria-hidden="true">
+              {blockPositions.map((b, i) => (
+                <div
+                  key={`${b.phase}-${i}`}
+                  className="sc-season-strip-block"
+                  style={{
+                    left: `${b.left}%`,
+                    width: `${b.width}%`,
+                    background: b.tint,
+                    color: b.textTint,
+                  }}
+                  title={`${b.label} · ${b.start} to ${b.end}${b.recordedLabel !== b.label ? ` (recorded as ${b.recordedLabel})` : ""}`}
+                >
+                  <span className="sc-season-strip-block-label">
+                    {b.width >= 9 ? b.label : b.width >= 4 ? b.short : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className={`sc-season-strip-ticks ${timeline.status === "recorded" ? "sc-season-strip-ticks--underlay" : ""}`}>
+            {MONTH_SHORT.map((m) => (
               <span key={m} className="sc-season-strip-tick">
                 <span className="sc-season-strip-tick-label">{m}</span>
               </span>
             ))}
           </div>
 
-          {/* Today marker - a small navy vertical line that lands at
-              today's fractional position across the year. Hidden when
-              today is outside the season (year != current year). */}
           {todayFraction != null && (
             <div
               className="sc-season-strip-today"
               style={{ left: `${todayFraction * 100}%` }}
-              aria-label={`Today: ${formatDateLabel(todayDate)}`}
+              aria-label={`Today: ${formatDateLabel(new Date(todayDate + "T12:00:00"))}`}
             >
               <span className="sc-season-strip-today-dot" aria-hidden="true" />
-              <span className="sc-season-strip-today-label">Today</span>
+              <span className="sc-season-strip-today-label">
+                Today{todayPhase ? ` · ${todayPhase.label}` : ""}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Tag rail - identifies the operational shape this account has
-            without faking content. Stage 2 replaces this with the
-            phase/homestand timeline that the strip's container makes
-            room for. */}
         <div className="sc-season-strip-tag">
-          <span className="sc-season-strip-tag-kind">{operationalKind.label}</span>
-          <span className="sc-season-strip-tag-pending">Detail lands in Stage 2</span>
+          <span className="sc-season-strip-tag-kind">
+            {operationalKindLabel(category, timeline.status)}
+          </span>
+          {timeline.reason && (
+            <span className="sc-season-strip-tag-pending">{timeline.reason}</span>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-// Map account category to the operational shape this strip eventually
-// displays. The label here ships in Stage 1 as informational; the
-// arrangement Stage 2 fills in stays consistent with this label.
-function pickOperationalKind(category) {
-  switch (category) {
-    case "PDC":   return { label: "Phase timeline" };
-    case "MLB":   return { label: "Homestand arc" };
-    case "MiLB":  return { label: "Homestand arc" };
-    case "CORP":  return { label: "No operational arc" };
-    default:      return { label: "Operational arc" };
-  }
+function operationalKindLabel(category, status) {
+  if (status === "recorded") return "Phase timeline";
+  if (category === "PDC")    return "Phase timeline";
+  if (category === "MLB")    return "Homestand arc";
+  if (category === "MiLB")   return "Homestand arc";
+  return "Operational arc";
 }
 
-// Returns 0-1 fraction of the year as of `date`. Used to position the
-// today marker across the strip axis. Anchors at midnight local on
-// Jan 1 of `year`; OK if `year` differs from `date`'s year - returns
-// out-of-range values cleanly (the caller hides them).
-function dayOfYearFraction(date, year) {
+function dayOfYearFraction(dateStr, year) {
   const start = new Date(year, 0, 1).getTime();
   const end   = new Date(year + 1, 0, 1).getTime();
-  const here  = date.getTime();
+  const here  = new Date(dateStr + "T12:00:00").getTime();
   if (here < start || here >= end) return null;
   return (here - start) / (end - start);
 }
