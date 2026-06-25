@@ -247,17 +247,17 @@ export default function ServiceCalendar({ showToast, session }) {
         // current period; leadership -> Season overview) is one body
         // edit in the helper, not a scatter here.
         //
-        // Stage 4 landing wiring: the helper accepts `role`. The data
-        // path (contacts.role -> here) is NOT plumbed yet - extending
-        // sc-accounts with role would be an engine touch and is
-        // FLAGGED for follow-up. Until then, role=null falls through
-        // to the Season default (unchanged behavior). When the role
-        // path is added later, this call site just passes the value.
+        // Role activation: sc-accounts now returns `roles[]` from
+        // contacts.role for the requesting user. A user can have
+        // multiple contacts rows (one per role/account combo, per
+        // sc-3 seed), so we pass the array - the helper applies the
+        // floor-wins tiebreaker (tierFromRoles). Empty/missing roles
+        // resolve to "unknown" tier -> Season default (no regression).
         const initialView = computeInitialView({
           urlView: searchParams?.get("view"),
           urlPeriod: searchParams?.get("period"),
           isAdmin,
-          role: null, // FLAG: requires role data from contacts.role
+          roles: d.roles || [],
         });
         setScope(initialView.scope);
         setLens(initialView.lens);

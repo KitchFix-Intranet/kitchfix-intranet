@@ -16,15 +16,17 @@
 //   4. role mapped to leadership / unknown -> Season overview (today's
 //                                            default)
 //
-// Stage 4 (current): the helper accepts `role` and applies the
-// alias-mapped routing. The mount currently passes role=null because
-// contacts.role is NOT exposed at the mount fetch yet (sc-accounts
-// returns defaultAccount but not role). FLAGGED for follow-up - to
-// activate floor-vs-leadership landing, either extend the existing
-// sc-accounts response with role from contacts, or add a sc-user-role
-// endpoint. Until then, every user gets the Season default - the same
-// behavior shipped pre-Stage 4. The seam is wired; the data path is
-// the next change.
+// Stage 4 wired the seam (helper + ROLE_TIERS map + landing precedence)
+// but the mount passed role=null because contacts.role wasn't exposed
+// at the mount fetch.
+//
+// Role activation (this PR): sc-accounts now returns the requesting
+// user's contacts.role values as `roles[]` (multiple rows possible per
+// the sc-3 seed). The mount captures roles and passes them here; we
+// resolve the tier via tierFromRoles() with the floor-wins tiebreaker.
+// Engine touch is minimal + scoped: the existing user-resolution in
+// sc-accounts gets one additional contacts query alongside the
+// user_accounts query (Promise.all).
 
 // ─── Role alias map ─────────────────────────────────────────────
 // contacts.role is free-text - the seed has 14 known roles (per
@@ -71,7 +73,35 @@ export function roleTier(role) {
   return ROLE_TIERS[key] || "unknown";
 }
 
-export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null }) {
+// Resolve a user's tier from ALL their role strings (per the sc-3
+// seed comment, a user can have multiple contacts rows). Tiebreaker
+// rule (locked): FLOOR WINS.
+//
+// Reasoning: a hybrid user (e.g. an Exec Chef who also has a Director
+// title) has a daily task of entering actuals. Landing them on the
+// workspace is zero-clicks-from-daily; the Season view is one climb
+// away. Leadership-wins would be backwards for hybrids. Floor-only
+// users: floor (unambiguous). Leadership-only: leadership. No data:
+// unknown -> Season default (no regression).
+export function tierFromRoles(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return "unknown";
+  const tiers = roles.map(roleTier);
+  if (tiers.includes("floor")) return "floor";
+  if (tiers.includes("leadership")) return "leadership";
+  return "unknown";
+}
+
+// Helper for tests/diagnostics: pick a representative role to expose
+// for logging/UI debug. Floor-tier role wins; else first known role;
+// else the first raw string. NEVER throws on empty input.
+function pickRepresentativeRole(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return null;
+  for (const r of roles) if (roleTier(r) === "floor") return r;
+  for (const r of roles) if (roleTier(r) === "leadership") return r;
+  return roles[0];
+}
+
+export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, roles = null }) {
   // 1) admin URL wins (explicit user intent + isAdmin gate)
   if (urlView === "admin" && isAdmin) {
     return {
@@ -88,12 +118,17 @@ export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null })
       landOnCurrentPeriod: false,
     };
   }
-  // 3) floor role lands on the workspace at the current period.
-  //    periodKey is null at mount; the mount effect that watches
-  //    periodRanges flips landOnCurrentPeriod -> sets periodKey to
-  //    the period containing today. Until role data is plumbed,
-  //    role=null -> falls through to (4).
-  if (roleTier(role) === "floor") {
+  // 3) floor tier -> workspace at the current period.
+  //    Resolve tier from either `roles` (multi-role aware) or `role`
+  //    (single - kept for backward compat with the Stage 4 signature).
+  //    Floor-wins applies on `roles`; single-role uses the same map.
+  //    periodKey is null at mount; the existing periodRanges-init
+  //    effect (B2a) sets periodKey to the period containing today
+  //    when landOnCurrentPeriod is true.
+  const tier = Array.isArray(roles)
+    ? tierFromRoles(roles)
+    : roleTier(role);
+  if (tier === "floor") {
     return {
       scope: "period", lens: "period",
       isAdminView: false, periodKey: null,

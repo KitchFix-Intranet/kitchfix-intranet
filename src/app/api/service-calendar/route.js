@@ -262,28 +262,43 @@ export async function GET(request) {
 
     // ── sc-accounts: list every imported account ──
     //
-    // Also returns defaultAccount: the account_key the requesting user is
-    // mapped to in user_accounts (seeded from the contacts table via
-    // docs/migrations/sc-3-user-accounts-seed.sql). The frontend uses this
-    // to auto-select the user's account on mount with fallback to CIN-AZ.
+    // Also returns:
+    //   defaultAccount: the account_key the requesting user is mapped
+    //     to in user_accounts (seeded from contacts via sc-3). The
+    //     frontend auto-selects this on mount, fallback CIN-AZ.
+    //   roles: the requesting user's role strings from contacts.role.
+    //     A user can have multiple contacts rows (one per role/account
+    //     combo - see sc-3 comment); we return ALL roles and let the
+    //     client apply the floor-wins tiebreaker via computeInitialView
+    //     for intent-aware landing (Stage 4 seam, activated here).
+    //     Empty array when no contacts row matches the email.
     if (action === "sc-accounts") {
       const accounts = await loadAccountList();
       let defaultAccount = null;
+      let roles = [];
       if (email) {
         try {
           const supa = getServiceClient();
-          const { data, error } = await supa
-            .from("user_accounts")
-            .select("account")
-            .ilike("email", email)
-            .limit(1);
-          if (!error && data?.[0]?.account) defaultAccount = data[0].account;
+          // Both queries use the same email match the route already
+          // applies for the SC's user identification - no new auth path.
+          const [acctRes, rolesRes] = await Promise.all([
+            supa.from("user_accounts").select("account").ilike("email", email).limit(1),
+            supa.from("contacts").select("role").ilike("email", email),
+          ]);
+          if (!acctRes.error && acctRes.data?.[0]?.account) {
+            defaultAccount = acctRes.data[0].account;
+          }
+          if (!rolesRes.error && rolesRes.data?.length) {
+            roles = rolesRes.data
+              .map(r => r.role)
+              .filter(r => r != null && String(r).trim() !== "");
+          }
         } catch {
-          // user_accounts missing or query failed - swallow, frontend
-          // falls back to CIN-AZ -> first account.
+          // user_accounts / contacts missing or query failed - swallow.
+          // Frontend falls back to CIN-AZ + Season default landing.
         }
       }
-      return NextResponse.json({ success: true, accounts, defaultAccount });
+      return NextResponse.json({ success: true, accounts, defaultAccount, roles });
     }
 
     // ── sc-load: full month data for one account ──
