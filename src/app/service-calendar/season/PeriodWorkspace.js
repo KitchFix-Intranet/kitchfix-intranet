@@ -633,9 +633,24 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
     };
   }
   if (kind === "milb") {
+    // Stage 5 polymorphism fix: MiLB is per-meal financially (the
+    // pill carries the operational shape; $ + meals carry the
+    // financial truth). docs/SC_BILLING_MODEL_AUDIT.md confirms
+    // CIN-KY is "Per-meal only, two-tier". Without revenue here,
+    // the workspace day-tile would silently drop $ for MiLB.
     const g = (day.gameType || day.meta?.gameType || "").toLowerCase();
-    const milbPill = g.includes("day") ? "day" : g.includes("night") ? "night" : null;
-    return { milbPill, meals: meals || null };
+    const milbPill = g.includes("day") ? "day"
+                  : g.includes("night") ? "night"
+                  : null;
+    const rev = day.hasActuals
+      ? day.totals?.actualRevenue
+      : day.totals?.projectedRevenue;
+    return {
+      milbPill,
+      meals: meals || null,
+      revenue: rev != null ? rev : null,
+      isEstimated: !day.hasActuals && day.isPast,
+    };
   }
   if (kind === "fee-no-dollar") {
     return { served: meals || null };

@@ -209,12 +209,24 @@ function renderMlbFee(content) {
 }
 
 function renderMilb(content, status) {
-  const { milbPill, meals } = content;
-  if (!milbPill && meals == null) return null;
+  // MiLB polymorphism (Stage 5 hardening): MiLB is per-meal financially
+  // per docs/SC_BILLING_MODEL_AUDIT.md (CIN-KY: "Per-meal only, two-tier").
+  // The two-axis model (spec section 6) composes operational shape
+  // (day/night homestand pill) with the financial frame (per-meal $).
+  // Render BOTH the pill AND the $/meals - the pill carries the
+  // operational signal; $/meals carry the financial truth.
+  const { milbPill, meals, revenue, isEstimated } = content;
+  const hasRev = revenue != null;
+  const hasMeals = meals != null;
+  if (!milbPill && !hasRev && !hasMeals) return null;
+  const revPrefix = status === "upcoming" ? "~" : (isEstimated ? "est. " : "");
+  const revClass = "sc-daysq-mid-rev"
+    + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
     <div className="sc-daysq-mid">
       {milbPill && <MilbPill type={milbPill} />}
-      {meals != null && <span className="sc-daysq-mid-meals"> / {fmtMeals(meals)}</span>}
+      {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
+      {hasMeals && <span className="sc-daysq-mid-meals"> / {fmtMeals(meals)}</span>}
     </div>
   );
 }
