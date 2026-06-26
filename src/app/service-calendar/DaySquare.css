@@ -123,26 +123,89 @@
 .sc-daysq-milb-pill--night .sc-daysq-milb-pill-dot { background: #153968; }
 
 /* ──────────────────────────────────────────────────────────────────
-   STATUS FILLS (Decision 1: calibrated palette)
-   Every fill keeps dark navy text at >=4.5:1 contrast. Badges echo the
-   fill at higher saturation so they read against the background.
+   STATUS FILLS (Design Batch 1: widened entered-vs-upcoming tier)
+   The pre-batch palette had entered #A8E5C9 vs upcoming #E0F1E7 at
+   ~84% vs ~91% grayscale lightness - a 7-point gap that read as the
+   same tile under quick scan or colorblind simulation (audit P0-3).
+   Widened: entered #7FD3AC (~74% lightness, saturated medium green)
+   vs upcoming #EAF1EC (~95% lightness, near-neutral). 21-point gap.
+   Both still keep navy text #0a2548 at >=4.5:1 contrast (entered
+   ~8.8:1, upcoming ~13.2:1).
+   Off-season is now distinct from generic "off": same neutral beige
+   base + a diagonal hatch overlay so "nothing scheduled" never reads
+   as "scheduled, coming" (audit non-negotiable #2).
+   Loading + failed cells render distinctly so a fetch in flight or
+   a fetch error never silently shows as zero (audit non-negotiable #2).
    ────────────────────────────────────────────────────────────────── */
-.sc-daysq--entered      { background: #A8E5C9; border-color: #7ECFAA; }
+.sc-daysq--entered      { background: #7FD3AC; border-color: #4FB78E; }
 .sc-daysq--needs-entry  { background: #FCD9A0; border-color: #E9B96B; }
 .sc-daysq--overdue      { background: #F4B5AC; border-color: #D88078; }
-.sc-daysq--upcoming     { background: #E0F1E7; border-color: #C7DFCF; }
+.sc-daysq--upcoming     { background: #EAF1EC; border-color: #D2DDD5; }
 .sc-daysq--off          { background: #F1EFE8; border-color: #DDD8C9; color: #6b7280; }
+
+/* Off-season: neutral beige + diagonal hatch overlay - reads as
+   "nothing scheduled" not "scheduled, coming." The hatch is the
+   non-color cue (rubric: distinguishable without color). */
+.sc-daysq--off-season {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #F1EFE8 0,
+      #F1EFE8 4px,
+      #E6E2D6 4px,
+      #E6E2D6 5px
+    );
+  border-color: #DDD8C9;
+  color: #6b7280;
+}
+
+/* Loading: neutral skeleton pulse, no number, no badge. The
+   prefers-reduced-motion guard at the top of this file disables the
+   pulse animation. */
+.sc-daysq--loading {
+  background:
+    linear-gradient(90deg, #F1EFE8 0%, #E5E0D2 50%, #F1EFE8 100%);
+  background-size: 200% 100%;
+  border-color: #DDD8C9;
+  color: transparent;
+  animation: scDaySqPulse 1.6s ease-in-out infinite;
+}
+@keyframes scDaySqPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-daysq--loading { animation: none; }
+}
+
+/* Failed: dashed border + muted fill + alert glyph. Distinct from
+   any normal state - never reads as zero or off. */
+.sc-daysq--failed {
+  background: #FBF1EF;
+  border-color: #D88078;
+  border-style: dashed;
+  border-width: 1.5px;
+  color: #7c2d12;
+}
 
 /* Per-status badge accents - icon color picks up the saturated hue */
 .sc-daysq-badge--entered      { color: #047857; }
 .sc-daysq-badge--needs-entry  { color: #B45309; }
 .sc-daysq-badge--overdue      { color: #991B1B; }
-.sc-daysq-badge--upcoming     { color: #047857; opacity: 0.6; }
+.sc-daysq-badge--upcoming     { color: #6b7280; }
 .sc-daysq-badge--off          { color: #9ca3af; }
+.sc-daysq-badge--off-season   { color: #9ca3af; }
+.sc-daysq-badge--failed       { color: #991B1B; }
 
-/* Off fills muted */
-.sc-daysq--off .sc-daysq-mid { color: #94a3b8; }
-.sc-daysq--off .sc-daysq-date { color: #6b7280; }
+/* Off + off-season fills muted */
+.sc-daysq--off .sc-daysq-mid,
+.sc-daysq--off-season .sc-daysq-mid { color: #94a3b8; }
+.sc-daysq--off .sc-daysq-date,
+.sc-daysq--off-season .sc-daysq-date { color: #6b7280; }
+
+/* Failed: hide middle line entirely - never render a number on a
+   failed-fetch cell. */
+.sc-daysq--failed .sc-daysq-mid { display: none; }
 
 /* ──────────────────────────────────────────────────────────────────
    OVERLAY RINGS - layered box-shadows on distinct radii.

@@ -40,10 +40,15 @@
 .sc-dropdown-item--active { background: #E1F5EE; color: #085041; font-weight: 600; }
 .sc-dropdown-item--active svg { color: #0F6E56; }
 
+/* Category tags = classification, NOT status. Tag hues must not
+   overlap any status fill (Design Batch 1, audit CC-8). The prior
+   MiLB tag was a green that read as the entered-state green - moved
+   to a cyan family that's distinct from every status fill in
+   DaySquare.css. */
 .sc-cat { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.5px; }
 .sc-cat--pdc { background: #eff6ff; color: #1e40af; }
 .sc-cat--mlb { background: #fef3c7; color: #92400e; }
-.sc-cat--milb { background: #ecfdf5; color: #065f46; }
+.sc-cat--milb { background: #cffafe; color: #155e75; }
 
 /* ══════════════════════════════════════
    OVERLAY

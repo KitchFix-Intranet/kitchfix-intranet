@@ -27,9 +27,25 @@
 //   off-season       outside the operational arc
 //   prep             non-game day in homestand (fee accounts)
 //
-// Atom enum (5 states + today/selected/focused overlays):
-//   entered, needs-entry, overdue, upcoming, off
-export function resolveDayStatus(serverStatus) {
+// Atom enum (Design Batch 1 expanded):
+//   entered, needs-entry, overdue, upcoming, off, off-season, loading, failed
+//   + today/selected/focused overlays.
+//
+// off-season splits from off so "outside the operational arc" reads
+// distinctly from "confirmed zero" / "planned off-day" (audit non-
+// negotiable #2). The atom CSS gives off-season a diagonal hatch as
+// the non-color cue.
+//
+// loadState is the client-side hook (no engine change). The shell
+// passes one of:
+//   undefined | "loaded" - resolve from serverStatus (the normal path)
+//   "loading"            - data fetch in flight, render the loading skeleton
+//   "failed"             - data fetch errored, render the failed-load cell
+// A failed or loading day NEVER falls back to a zero render - the rubric's
+// highest-priority tracker check.
+export function resolveDayStatus(serverStatus, loadState) {
+  if (loadState === "loading") return "loading";
+  if (loadState === "failed")  return "failed";
   switch (serverStatus) {
     case "entered":       return "entered";
     case "needs-entry":   return "needs-entry";
@@ -38,7 +54,7 @@ export function resolveDayStatus(serverStatus) {
     case "upcoming-game": return "upcoming";
     case "future-service":return "upcoming";
     case "no-service":    return "off";
-    case "off-season":    return "off";
+    case "off-season":    return "off-season";
     case "prep":          return "off";
     default:              return "off";
   }

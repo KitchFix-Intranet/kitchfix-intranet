@@ -37,6 +37,7 @@ import {
   humanAnchor,
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
+import StateLegend from "./StateLegend";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -200,6 +201,12 @@ export default function PeriodWorkspace({
         onTodayJump={onTodayJump}
         canPrev={canPrev}
         canNext={canNext}
+      />
+
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
       />
 
       <header className="sc-workspace-header">

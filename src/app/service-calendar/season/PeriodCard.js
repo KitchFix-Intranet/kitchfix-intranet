@@ -128,7 +128,7 @@ export default function PeriodCard({
       </div>
 
       {isOffSeasonPeriod ? (
-        <div className="sc-season-period-card-noservice">Offseason</div>
+        <div className="sc-season-period-card-noservice">Off-season</div>
       ) : (
         <PeriodCardFooter
           days={sortedDays}
