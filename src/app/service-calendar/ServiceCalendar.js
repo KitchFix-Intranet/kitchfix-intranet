@@ -457,6 +457,31 @@ export default function ServiceCalendar({ showToast, session }) {
     return out;
   }, [periodDays]);
 
+  // periodHomestandMap: merge the per-month homestandMap entries across
+  // the 1-2 calendar months the period spans. The route's sc-load
+  // returns homestandMap scoped to ONE calendar month; monthCache stores
+  // each fetched month's full payload (route.js:390 includes
+  // responsePayload.homestandMap). When a fiscal period crosses a month
+  // boundary (e.g. Period 9 = Jun 22 - Jul 19), the second-month days
+  // need the second-month's map for opponent + day_type. Without this
+  // merge, days in the off-data month look up an absent key and render
+  // blank (the symptom audited in docs/SC_DATA_AUDIT.md PART B).
+  //
+  // Per-meal accounts have no homestandMap in their payloads, so the
+  // merged result is {} (same as today's data.homestandMap fallback).
+  const periodHomestandMap = useMemo(() => {
+    if (lens !== "period" || !periodKey || !periodRanges) return null;
+    const range = periodRanges.find((r) => r.period === periodKey);
+    if (!range) return null;
+    const monthsNeeded = monthsBetween(range.start, range.end);
+    const merged = {};
+    for (const mk of monthsNeeded) {
+      const m = monthCache[mk];
+      if (m?.homestandMap) Object.assign(merged, m.homestandMap);
+    }
+    return merged;
+  }, [lens, periodKey, periodRanges, monthCache]);
+
   // PR-B2b idle-prefetch. After the current period renders, fetch the
   // calendar months for the PREV and NEXT periods on idle so the
   // prev/next period buttons feel instant. Best-effort + silent: a
@@ -830,7 +855,7 @@ export default function ServiceCalendar({ showToast, session }) {
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
-            homestandMap={homestandMap}
+            homestandMap={periodHomestandMap || homestandMap}
             today={today}
             loading={loading && !periodDays}
             partialError={partialError}
@@ -891,7 +916,7 @@ export default function ServiceCalendar({ showToast, session }) {
               monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
               scopeLabel="period"
               accountName={acctObj?.name || ""}
-              isFeeAccount={isFeeAccount} homestandContext={homestandMap[focusDay] || null}
+              isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
               onClose={() => setFocusDay(null)} />
           </div>
