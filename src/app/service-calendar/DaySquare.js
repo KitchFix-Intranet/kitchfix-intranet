@@ -32,7 +32,19 @@
 
 import "./DaySquare.css";
 
-const fmt$ = (n) => "$" + Math.round(n).toLocaleString("en-US");
+// Number formatting convention (Design Batch 1, audit P2-1).
+//   - Revenue >= $1M: $1.2M
+//   - Revenue >= $1K: $12K
+//   - Revenue <  $1K: $987
+//   - Meal counts: raw with thousands separator (1,234)
+//   - Compact meal counts (sm tiles): 1.2k for values >= 1,000
+// One convention; one place. KPI/revenue uses K/M; raw counts stay raw.
+const fmt$ = (n) => {
+  const v = Math.round(Number(n) || 0);
+  if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (v >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
+  return "$" + v.toLocaleString("en-US");
+};
 const fmtMeals = (n) => n.toLocaleString("en-US");
 
 // Compact format for small-size tiles when the count gets long.
@@ -44,13 +56,26 @@ function fmtCompactMeals(n) {
 }
 
 // Status -> { className, icon } for the badge that carries the
-// redundant non-color cue. The colorblind safety net.
+// redundant non-color cue. Design Batch 1 decisions:
+//   - "entered" carries NO glyph: the calm state relies on the
+//     saturated green fill (widened tier, audit P0-3) + the sticky
+//     legend. Action states retain glyphs (the redundant cue lives
+//     where the rubric most cares about it: needs-entry, overdue).
+//   - "loading" and "failed" exist as first-class atom states so a
+//     fetch in flight or a fetch error never renders as a silent 0
+//     (audit non-negotiable #2).
+//   - "off-season" splits from generic "off" so "nothing scheduled"
+//     reads distinctly from "upcoming." The CSS off-season fill carries
+//     a diagonal hatch as the non-color cue.
 const STATUS_META = {
-  entered:       { mod: "entered",       icon: "✓" }, // ✓
-  "needs-entry": { mod: "needs-entry",   icon: "✎" }, // ✎
-  overdue:       { mod: "overdue",       icon: "!"      },
-  upcoming:      { mod: "upcoming",      icon: "○" }, // ○
-  off:           { mod: "off",           icon: "—" }, // —
+  entered:       { mod: "entered",       icon: "" },
+  "needs-entry": { mod: "needs-entry",   icon: "✎" },
+  overdue:       { mod: "overdue",       icon: "!" },
+  upcoming:      { mod: "upcoming",      icon: "○" },
+  off:           { mod: "off",           icon: "—" },
+  "off-season":  { mod: "off-season",    icon: "—" },
+  loading:       { mod: "loading",       icon: "" },
+  failed:        { mod: "failed",        icon: "⚠" },
 };
 
 export default function DaySquare({
@@ -114,11 +139,13 @@ export default function DaySquare({
     >
       <div className="sc-daysq-top">
         <span className="sc-daysq-date">{day}</span>
-        <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
-          {meta.icon}
-        </span>
+        {meta.icon && (
+          <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
+            {meta.icon}
+          </span>
+        )}
       </div>
-      {middleLine}
+      {status !== "loading" && status !== "failed" && middleLine}
       {isToday && <span className="sc-daysq-today-pill" aria-hidden="true">TODAY</span>}
     </div>
   );
@@ -264,16 +291,37 @@ function fmtCompactRevenue(n) {
 
 function buildAriaLabel({ date, status, isToday, isSelected, content, kind }) {
   // Builds a human-readable label that doesn't depend on hue.
+  // Order: date, [today], [selected], status phrase, content details.
+  // The status phrase prefers a verb-led reading ("needs entry") over
+  // an enum slug ("needs-entry"). Loading/failed states surface as the
+  // last word so a screen reader hears the actionable signal first.
   const dateLabel = date ? formatDateForAria(date) : "";
-  const parts = [dateLabel, status.replace("-", " ")];
+  const parts = [dateLabel];
   if (isToday) parts.push("today");
   if (isSelected) parts.push("selected");
+  parts.push(statusPhrase(status));
   if (content) {
-    if (kind === "per-meal" && content.revenue != null) parts.push(fmt$(content.revenue));
-    if (content.meals != null) parts.push(`${content.meals} meals`);
     if (content.opponent) parts.push(`vs ${content.opponent}`);
+    if (content.milbPill) parts.push(`${content.milbPill} game`);
+    if (kind === "per-meal" && content.revenue != null) parts.push(fmt$(content.revenue));
+    const mealCount = content.served != null ? content.served : content.meals;
+    if (mealCount != null) parts.push(`${mealCount} meals`);
   }
   return parts.filter(Boolean).join(", ");
+}
+
+function statusPhrase(status) {
+  switch (status) {
+    case "entered":      return "entered";
+    case "needs-entry":  return "needs entry";
+    case "overdue":      return "overdue";
+    case "upcoming":     return "upcoming";
+    case "off-season":   return "off-season";
+    case "off":          return "off";
+    case "loading":      return "loading";
+    case "failed":       return "failed to load";
+    default:             return status.replace("-", " ");
+  }
 }
 
 function formatDateForAria(dateStr) {

@@ -27,6 +27,7 @@ import PhaseStrip from "./PhaseStrip";
 import MonthCard from "./MonthCard";
 import PeriodCard from "./PeriodCard";
 import FullSeasonCard from "./FullSeasonCard";
+import StateLegend from "./StateLegend";
 import { resolveDayKind } from "../dayResolvers";
 import { derivePhaseTimeline, bucketDaysByPeriod } from "./phaseDerivation";
 
@@ -86,6 +87,11 @@ export default function SeasonShell({
         <YearBanner stats={null} yearToday={null} isFeeAccount={isFeeAccount} hasHomestandSchedule={hasHomestandSchedule} />
         <PhaseStrip category={account?.category} today={null} year={year} />
         <CalendarPeriodToggle view={view} />
+        <StateLegend
+          hasHomestandSchedule={hasHomestandSchedule}
+          isFeeAccount={isFeeAccount}
+          isMilb={isMilb}
+        />
         <div className="sc-season-grid sc-season-grid--loading" aria-hidden="true">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="sc-season-month-skeleton" />
@@ -112,6 +118,12 @@ export default function SeasonShell({
       />
 
       <CalendarPeriodToggle view={view} onChange={setView} />
+
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+      />
 
       {view === "calendar" ? (
         <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
