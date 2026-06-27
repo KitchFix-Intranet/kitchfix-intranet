@@ -1,24 +1,20 @@
 "use client";
 
-// StateLegend - the day-cell state key (Design Batch 1, audit P0-1).
+// StateLegend - the day-cell state key (Design Batch 1 created; Batch 2
+// extended to one-line + info button).
 //
 // The audit's non-negotiable #1: a visible legend whenever cells carry
-// meaning by color + glyph. Absence of a key was the canonical Stage 6
-// regression - the legacy .sc-month-legend / .sc-year-legend rules
-// were deleted with the legacy chrome and never replaced. This is the
-// replacement: ONE legend, account-aware, sticky at the top of the
-// scrollable grid, lives in the Season shell + the Period workspace.
+// meaning by color + glyph. The line below is ALWAYS visible and never
+// hidden behind a button. The info button next to it opens
+// LegendInfoPopup with the FULLER detail (account-specific meaning,
+// loading / failed states, MiLB day/night).
 //
 // Account-aware: only renders the states the current account actually
-// renders. The MLB-fee accounts don't show "needs entry" or "overdue"
-// (no per-meal actuals expected). MiLB adds the day/night game cue.
-// The legend is the CONTRACT for the visual system: if a state isn't
-// in here, the atom shouldn't render it.
-//
-// Placement: between the Calendar/Period toggle and the cell grid in
-// SeasonShell, and at the top of the workspace in PeriodWorkspace.
-// Sticky on scroll so it stays visible while the user scans.
+// renders. MLB-fee accounts omit needs-entry / overdue (no per-meal
+// actuals expected). MiLB adds day/night.
 
+import { useRef, useState } from "react";
+import LegendInfoPopup from "./LegendInfoPopup";
 import "./stateLegend.css";
 
 export default function StateLegend({
@@ -26,59 +22,74 @@ export default function StateLegend({
   isFeeAccount = false,
   isMilb = false,
 }) {
-  // Resolve the in-use states per account type. Order matches the
-  // typical scan flow: entered first (the calm done state), action
-  // states next (needs-entry, overdue) so they read as the salient
-  // entries, upcoming, off-season, today, failed.
+  // The one-line key keeps the IN-USE states for the current account
+  // (rubric non-negotiable #1: always visible). The fuller cell-state
+  // taxonomy lives in the popup behind the info button.
   const items = [];
   if (hasHomestandSchedule) {
-    // MLB fee accounts: schedule-driven. No needs-entry / overdue
-    // because per-meal actuals aren't expected.
     items.push({ mod: "entered", icon: "", label: "Game day entered" });
-    items.push({ mod: "upcoming", icon: "○", label: "Scheduled game day" });
-    items.push({ mod: "off", icon: "—", label: "Prep / between games" });
+    items.push({ mod: "upcoming", icon: "○", label: "Scheduled" });
+    items.push({ mod: "off", icon: "—", label: "Prep / between" });
   } else if (isFeeAccount) {
-    // Operational-only (STL-FL): per-meal mechanics, no $ in cell.
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
   } else if (isMilb) {
-    // MiLB hybrid: per-meal + day/night game cue.
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
-    items.push({ mod: "milb-day", icon: "", label: "Day game" });
-    items.push({ mod: "milb-night", icon: "", label: "Night game" });
+    items.push({ mod: "milb-day", icon: "", label: "Day" });
+    items.push({ mod: "milb-night", icon: "", label: "Night" });
   } else {
-    // Per-meal default (PDC year-round).
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
   }
-
-  // Universal trailer applied to every account:
-  //   off-season    - outside the season window
-  //   today         - the today ring
-  //   failed        - fetch errored (rubric non-negotiable #2)
-  items.push({ mod: "off-season", icon: "—", label: "Off-season" });
+  // Universal trailer on every account.
   items.push({ mod: "today", icon: "", label: "Today" });
-  items.push({ mod: "failed", icon: "⚠", label: "Could not load" });
+
+  const [popupOpen, setPopupOpen] = useState(false);
+  const infoBtnRef = useRef(null);
 
   return (
-    <div className="sc-state-legend" role="group" aria-label="Day cell legend">
-      <span className="sc-state-legend-title">Legend</span>
-      <ul className="sc-state-legend-list">
-        {items.map((it) => (
-          <li key={it.mod} className="sc-state-legend-item">
-            <LegendSwatch mod={it.mod} icon={it.icon} />
-            <span className="sc-state-legend-label">{it.label}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <>
+      <div className="sc-state-legend" role="group" aria-label="Day cell legend">
+        <span className="sc-state-legend-title">Legend</span>
+        <ul className="sc-state-legend-list">
+          {items.map((it) => (
+            <li key={it.mod} className="sc-state-legend-item">
+              <LegendSwatch mod={it.mod} icon={it.icon} />
+              <span className="sc-state-legend-label">{it.label}</span>
+            </li>
+          ))}
+        </ul>
+        <button
+          ref={infoBtnRef}
+          type="button"
+          className="sc-state-legend-info"
+          onClick={() => setPopupOpen(true)}
+          aria-label="Open legend detail"
+          title="What do these mean?"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+        </button>
+      </div>
+      <LegendInfoPopup
+        open={popupOpen}
+        onClose={() => setPopupOpen(false)}
+        triggerRef={infoBtnRef}
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+      />
+    </>
   );
 }
 

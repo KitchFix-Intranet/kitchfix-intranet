@@ -1,0 +1,196 @@
+/* ══════════════════════════════════════════════════════════════
+   InfoCard - split context + action bands (Design Batch 2)
+   Audit P1-1: Von Restorff exceptions must be visually separable
+   from calm context. Two side-by-side bands; stacks on narrow.
+   ══════════════════════════════════════════════════════════════ */
+
+.sc-info-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
+  gap: 12px;
+  margin: 0 0 16px 0;
+}
+
+@media (max-width: 767px) {
+  .sc-info-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Context band - calm ────────────────────────────────────────── */
+.sc-info-card-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+  min-height: 56px;
+}
+
+.sc-info-card-context-segment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-info-card-context-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.sc-info-card-context-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0a2548;
+}
+
+.sc-info-card-context-sep {
+  width: 1px;
+  height: 18px;
+  background: #e5e7eb;
+  flex-shrink: 0;
+}
+
+/* ── Action band - three states ─────────────────────────────────── */
+.sc-info-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  min-height: 56px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+}
+
+.sc-info-card-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.sc-info-card-action-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-info-card-action-count {
+  font-size: 14px;
+  color: #78350f;
+}
+.sc-info-card-action-count strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+.sc-info-card-action-count--alert {
+  color: #7c2d12;
+}
+.sc-info-card-action-dot {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.sc-info-card-action-text {
+  font-size: 14px;
+  color: inherit;
+}
+.sc-info-card-action-text strong {
+  font-weight: 700;
+  font-size: 15px;
+}
+.sc-info-card-action-sub {
+  font-weight: 500;
+  opacity: 0.88;
+}
+
+/* (a) HAS WORK - amber band, prominent counts + jump button */
+.sc-info-card-action--work {
+  background: #FBF3E7;
+  border-color: #F4D9A8;
+  border-left-color: #D97706;
+  color: #78350f;
+}
+.sc-info-card-action--work .sc-info-card-action-icon { color: #B45309; }
+
+.sc-info-card-action-jump {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #153968;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.sc-info-card-action-jump:hover {
+  background: #0a2548;
+  transform: translateY(-1px);
+}
+.sc-info-card-action-jump:focus-visible {
+  outline: 2px solid #0F6E56;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-info-card-action-jump { transition: none; }
+  .sc-info-card-action-jump:hover { transform: none; }
+}
+
+/* (b) ALL CLEAR - green calm band, earned closure */
+.sc-info-card-action--clear {
+  background: #EDF6F0;
+  border-color: #B8E0C6;
+  border-left-color: #0F6E56;
+  color: #064e3b;
+}
+.sc-info-card-action--clear .sc-info-card-action-icon { color: #0F6E56; }
+
+/* (c) FEE - navy calm band, homestand/contract state */
+.sc-info-card-action--fee {
+  background: #F4F7FB;
+  border-color: #D6E0EE;
+  border-left-color: #153968;
+  color: #0a2548;
+}
+.sc-info-card-action--fee .sc-info-card-action-icon { color: #153968; }
+
+/* ── Loading skeleton ───────────────────────────────────────────── */
+.sc-info-card--loading .sc-info-card-context,
+.sc-info-card--loading .sc-info-card-action {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.sc-info-card-skel {
+  display: inline-block;
+  height: 14px;
+  background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: scInfoCardSkel 1.4s ease-in-out infinite;
+}
+.sc-info-card-skel--block { height: 18px; }
+@keyframes scInfoCardSkel {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-info-card-skel { animation: none; }
+}

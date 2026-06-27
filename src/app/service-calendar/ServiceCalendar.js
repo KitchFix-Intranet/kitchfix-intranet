@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
+import ChromeBar from "./season/ChromeBar";
+import HeroCollapse from "./season/HeroCollapse";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -72,7 +74,7 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-export default function ServiceCalendar({ showToast, session }) {
+export default function ServiceCalendar({ showToast, session, firstName, heroImage }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -130,6 +132,11 @@ export default function ServiceCalendar({ showToast, session }) {
   const [focusDay, setFocusDay] = useState(null);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Design Batch 2: data-freshness timestamp. Tracks when the year
+  // summary (the SC's primary data anchor) last landed. Rendered as
+  // "as of <time>" in the chrome bar (rubric Part 3 data-freshness).
+  const [asOf, setAsOf] = useState(null);
 
   // Admin gate (client-side - just controls whether the toggle + body
   // RENDER, not authorization). Server-side isScAdmin checks on every
@@ -273,6 +280,8 @@ export default function ServiceCalendar({ showToast, session }) {
         setYearData(d.months);
         setYearToday(d.today || null);
         if (d.periodRanges) setPeriodRanges(d.periodRanges);
+        // Design Batch 2: stamp the load time once data lands.
+        setAsOf(new Date());
       }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, lens, isAdminView, selectedAccount, reloadKey]);
@@ -724,85 +733,144 @@ export default function ServiceCalendar({ showToast, session }) {
     return { todayLabel, daysRecorded, totalDays, needsEntry, overdue, mealsYTD, gameDaysEntered, totalGameDays };
   }, [yearData]);
 
+  // Design Batch 2: fee-account headline. Derives current homestand
+  // detail (id + opponent set) client-side from data.homestandMap.
+  // For accounts not currently in a homestand, falls back to "Between
+  // homestands" or null (off-season). The data layer is unchanged -
+  // homestandMap is the existing route response shape.
+  const feeHeadline = useMemo(() => {
+    if (!isFeeAccount) return null;
+    if (!hasHomestandSchedule) return null;
+    const map = data?.homestandMap || {};
+    if (!Object.keys(map).length) return null;
+    const todayHs = map[today]?.homestandId || null;
+    if (todayHs) {
+      // Collect opponents in order of date for the same homestand.
+      const datesInHs = Object.entries(map)
+        .filter(([, v]) => v.homestandId === todayHs)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([, v]) => v.opponent)
+        .filter(Boolean);
+      const opponents = [...new Set(datesInHs)];
+      return { current: todayHs, opponents, note: null };
+    }
+    // Not in a homestand right now - find the next upcoming HS.
+    const upcomingDates = Object.entries(map)
+      .filter(([d]) => d > today)
+      .sort(([a], [b]) => a.localeCompare(b));
+    const nextEntry = upcomingDates.find(([, v]) => v.homestandId);
+    if (nextEntry) {
+      const [d, v] = nextEntry;
+      const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const dt = new Date(d + "T12:00:00");
+      const note = `Next: ${v.homestandId} ${MON[dt.getMonth()]} ${dt.getDate()}${v.opponent ? ` vs ${v.opponent}` : ""}`;
+      return { current: null, opponents: [], note };
+    }
+    return { current: null, opponents: [], note: "Between homestands" };
+  }, [isFeeAccount, hasHomestandSchedule, data, today]);
+
+  // Design Batch 2: jump-to-next-needing-entry. Finds the soonest
+  // (earliest service_date) day in yearData with status needs-entry
+  // or overdue. Returns { date, period } so the click handler can
+  // navigate to the right period workspace and focus the day. Pure
+  // memo over yearData + periodRanges; no fetch, no engine touch.
+  const jumpTarget = useMemo(() => {
+    if (!yearData) return null;
+    let earliest = null;
+    for (const m of yearData) {
+      if (!m.days) continue;
+      for (const d of m.days) {
+        if (d.status !== "needs-entry" && d.status !== "overdue") continue;
+        if (!earliest || d.date < earliest.date) {
+          earliest = { date: d.date, status: d.status };
+        }
+      }
+    }
+    if (!earliest) return null;
+    if (!periodRanges?.length) return earliest;
+    const range = periodRanges.find(r => earliest.date >= r.start && earliest.date <= r.end);
+    return { ...earliest, period: range?.period || null };
+  }, [yearData, periodRanges]);
+
+  const handleJumpToNext = useCallback(() => {
+    if (!jumpTarget) return;
+    if (jumpTarget.period) {
+      setPeriodKey(jumpTarget.period);
+      setLens("period");
+      setScope("period");
+    }
+    setFocusDay(jumpTarget.date);
+  }, [jumpTarget]);
+
+  // The chrome bar's Calendar | Period toggle controls the Season
+  // shell's SUB-view (year-of-months grid vs 4x3-periods grid),
+  // matching the legacy CalendarPeriodToggle that used to live inside
+  // SeasonShell. It does NOT drive the Season-vs-Workspace switch -
+  // that's driven by drilling (month-card or period-card click).
+  // We lift the sub-view here so the chrome bar can host the toggle.
+  const [seasonView, setSeasonView] = useState("calendar");
+  const handleSeasonViewChange = useCallback((next) => {
+    setSeasonView(next === "period" ? "period" : "calendar");
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setReloadKey(k => k + 1);
+  }, []);
+
+  const handleAdminToggle = useCallback(() => {
+    if (isAdminView) {
+      setIsAdminView(false);
+    } else {
+      setIsAdminView(true);
+      setFocusDay(null);
+      setBulkMode(false);
+    }
+  }, [isAdminView]);
+
+  // Design Batch 2: the chrome bar holds the picker / toggle / Admin
+  // (the controls that used to be scattered) and the as-of timestamp.
+  // The compressed hero sits below it. Both render in every view
+  // (Season + Period + admin) so they don't flash on toggle.
+  const accountDropdown = isAdminView ? (
+    <div className="sc-header-admin-label">
+      <span className="sc-admin-mode-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        {adminView.mode === "overview" ? "Admin · all accounts" : "Admin"}
+      </span>
+      {adminView.mode !== "overview" && (
+        <button
+          type="button"
+          className="sc-admin-overview-back"
+          onClick={() => setAdminView({ mode: "overview" })}
+        >
+          ← Overview
+        </button>
+      )}
+    </div>
+  ) : (
+    <AccountDropdown accounts={accounts} value={selectedAccount} onChange={setSelectedAccount} />
+  );
+
   return (
     <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <div className="sc-card">
-        <div className="sc-header">
-          <div className="sc-header-account">
-            {isAdminView ? (
-              // Admin mode owns the selector slot. The account dropdown does
-              // NOT drive the admin all-accounts overview; showing a stale
-              // single account here would mislead. When drilled into a
-              // specific account, the selector keeps the Admin label and
-              // exposes "Overview" as the back affordance - the dropdown
-              // never names the drilled account (the AccountEditor's own
-              // "All accounts" link is the drill-up).
-              <div className="sc-header-admin-label">
-                <span className="sc-admin-mode-chip">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  {adminView.mode === "overview" ? "Admin · all accounts" : "Admin"}
-                </span>
-                {adminView.mode !== "overview" && (
-                  <button
-                    type="button"
-                    className="sc-admin-overview-back"
-                    onClick={() => setAdminView({ mode: "overview" })}
-                  >
-                    ← Overview
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <AccountDropdown accounts={accounts} value={selectedAccount} onChange={setSelectedAccount} />
-                {category && <span className={`sc-cat sc-cat--${category.toLowerCase()}`}>{category}</span>}
-              </>
-            )}
-          </div>
-          {isAdmin && (
-            // Admin toggle. The Season + Period surfaces own all in-view
-            // navigation (CalendarPeriodToggle inside SeasonShell;
-            // NavRow with prev/next/today inside PeriodWorkspace), so
-            // the header only needs the admin-mode escape.
-            <button
-              type="button"
-              className={`sc-admin-esc ${isAdminView ? "sc-admin-esc--active" : ""}`}
-              onClick={() => {
-                if (isAdminView) {
-                  setIsAdminView(false);
-                } else {
-                  setIsAdminView(true);
-                  setFocusDay(null);
-                  setBulkMode(false);
-                }
-              }}
-              title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-              aria-pressed={isAdminView}
-            >
-              {isAdminView ? (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M19 12H5" />
-                    <path d="m12 19-7-7 7-7" />
-                  </svg>
-                  Calendar
-                </>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Admin
-                </>
-              )}
-            </button>
-          )}
-        </div>
+        <ChromeBar
+          accountDropdown={accountDropdown}
+          category={!isAdminView ? category : null}
+          view={seasonView}
+          onViewChange={handleSeasonViewChange}
+          showToggle={!isAdminView && isYearView}
+          asOf={asOf}
+          onRefresh={handleRefresh}
+          isAdmin={isAdmin}
+          isAdminView={isAdminView}
+          onAdminToggle={handleAdminToggle}
+        />
 
+        <HeroCollapse firstName={firstName} heroImage={heroImage} />
 
         {isYearView && (
           <SeasonShell
@@ -839,6 +907,12 @@ export default function ServiceCalendar({ showToast, session }) {
               setLens("period");
               setScope("period");
             }}
+            // Design Batch 2 - lifted view + info-card props
+            view={seasonView}
+            onViewChange={handleSeasonViewChange}
+            feeHeadline={feeHeadline}
+            onJumpToNext={handleJumpToNext}
+            hasJumpTarget={!!jumpTarget}
           />
         )}
 

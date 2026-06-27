@@ -1,0 +1,127 @@
+/* ══════════════════════════════════════════════════════════════
+   ChromeBar - unified SC chrome (Design Batch 2)
+   One band, one alignment line. Replaces the scattered sc-header.
+   Audit P1-5 (proximity / common region).
+   ══════════════════════════════════════════════════════════════ */
+
+.sc-chrome-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.sc-chrome-bar-left,
+.sc-chrome-bar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Toggle pill - inherits the look of the legacy sc-season-toggle so
+   visual treatment stays consistent with the rest of the SC. */
+.sc-chrome-bar-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.sc-chrome-bar-toggle-btn {
+  padding: 4px 14px;
+  font-family: inherit;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  color: #475569;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sc-chrome-bar-toggle-btn:hover {
+  color: #0f172a;
+}
+.sc-chrome-bar-toggle-btn--active {
+  background: #153968;
+  color: #ffffff;
+}
+.sc-chrome-bar-toggle-btn:focus-visible {
+  outline: 2px solid #0F6E56;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-chrome-bar-toggle-btn { transition: none; }
+}
+
+/* As-of timestamp pill */
+.sc-chrome-bar-asof {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+.sc-chrome-bar-asof-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0F6E56;
+  box-shadow: 0 0 0 2px #d1fae5;
+  flex-shrink: 0;
+}
+.sc-chrome-bar-asof-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sc-chrome-bar-asof-refresh:hover {
+  background: #e5e7eb;
+  color: #0F6E56;
+}
+.sc-chrome-bar-asof-refresh:focus-visible {
+  outline: 2px solid #0F6E56;
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-chrome-bar-asof-refresh { transition: none; }
+}
+
+/* Floor-first wrap. Below 768px, the bar wraps onto two rows: left
+   group on top (picker + toggle), right group below (asof + admin). */
+@media (max-width: 767px) {
+  .sc-chrome-bar {
+    padding: 12px;
+    gap: 10px;
+  }
+  .sc-chrome-bar-left,
+  .sc-chrome-bar-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .sc-chrome-bar-right {
+    justify-content: space-between;
+  }
+}
