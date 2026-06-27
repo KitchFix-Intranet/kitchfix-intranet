@@ -24,6 +24,7 @@
 import { useMemo, useState } from "react";
 import "./season.css";
 import PhaseStrip from "./PhaseStrip";
+import SeasonStepper from "./SeasonStepper";
 import MonthCard from "./MonthCard";
 import PeriodCard from "./PeriodCard";
 import FullSeasonCard from "./FullSeasonCard";
@@ -102,6 +103,17 @@ export default function SeasonShell({
         ? Math.round((stats.daysRecorded / stats.totalDays) * 100)
         : null);
 
+  // Design Batch 3: the stepper drills into the period that contains
+  // the clicked homestand's start date. The mapping happens here so
+  // SeasonStepper stays presentational.
+  const handleSegmentClick = (segment) => {
+    if (!segment || !onPeriodClick) return;
+    const range = periodRanges?.find(
+      (r) => segment.startDate >= r.start && segment.startDate <= r.end
+    );
+    if (range) onPeriodClick(range.period);
+  };
+
   // Loading skeleton matches the new shape so the layout doesn't
   // shift when data lands. Spec section 4 + GOTCHAS skeleton rule.
   if (loading || !yearData) {
@@ -113,7 +125,9 @@ export default function SeasonShell({
           isFeeAccount={isFeeAccount}
           isMilb={isMilb}
         />
-        <PhaseStrip category={account?.category} today={null} year={year} />
+        {!hasHomestandSchedule && (
+          <PhaseStrip category={account?.category} today={null} year={year} />
+        )}
         <div className="sc-season-grid sc-season-grid--loading" aria-hidden="true">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="sc-season-month-skeleton" />
@@ -144,12 +158,20 @@ export default function SeasonShell({
         isMilb={isMilb}
       />
 
-      <PhaseStrip
-        accountKey={account?.key}
-        category={account?.category}
-        today={yearToday}
-        year={year}
-      />
+      {hasHomestandSchedule ? (
+        <SeasonStepper
+          yearData={yearData}
+          todayDate={todayDate}
+          onSegmentClick={handleSegmentClick}
+        />
+      ) : (
+        <PhaseStrip
+          accountKey={account?.key}
+          category={account?.category}
+          today={yearToday}
+          year={year}
+        />
+      )}
 
       {effectiveView === "calendar" ? (
         <div className="sc-season-grid" role="list" aria-label={`${year} months`}>

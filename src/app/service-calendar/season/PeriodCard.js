@@ -36,6 +36,14 @@ export default function PeriodCard({
   timeline,                   // derivePhaseTimeline result (the shared spine)
   onClick,                    // (periodKey) => void
 }) {
+  // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
+  // derive a homestand-based subtitle from the bucketed days (every
+  // day carries homestandId + opponent + dayType for fee accounts).
+  // Falls back to NULL when the period has no homestand activity -
+  // we suppress the subtitle entirely rather than render
+  // "phase pending" / "PHASE PENDING" placeholder copy.
+  const homestandSubtitle = hasHomestandSchedule ? deriveHomestandSubtitle(days) : null;
+
   const periodLabel = String(periodRange.period);
   const periodNum = periodLabel.replace(/^P/i, "");
   const anchor = humanAnchor(periodRange.start, periodRange.end);
@@ -85,8 +93,14 @@ export default function PeriodCard({
             straddles
               ? phaseAssignment.bothLabels.slice(0, 2).join(" -> ")
               : primaryPhase.label
+          ) : homestandSubtitle ? (
+            <span className="sc-season-period-card-subtitle-hs">{homestandSubtitle}</span>
           ) : (
-            <span className="sc-season-period-card-subtitle-pending">phase pending</span>
+            // No phase, no homestand activity - render NOTHING. The
+            // "PHASE PENDING" placeholder copy never appears (audit
+            // P2-3). A non-breaking space keeps the subtitle row's
+            // height stable so cards stay aligned.
+            <span aria-hidden="true">&nbsp;</span>
           )}
         </div>
       </header>
@@ -295,4 +309,47 @@ function buildWeekAlignedCells(periodRange, sortedDays) {
 
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// Build a homestand-based subtitle for the 4 MLB-fee accounts. Reads
+// each day's homestandId + opponent (the dataStore writes these onto
+// each day record for fee accounts). Returns:
+//   - "HS8 vs ARI -> MIA"          single homestand in this period
+//   - "HS8-9 vs ARI -> MIA / MIL"  two homestands straddling the period
+//   - "Off-season" / null           no homestand activity at all
+// The format mirrors the SeasonStepper's caption so the two surfaces
+// read consistently.
+function deriveHomestandSubtitle(days) {
+  if (!days?.length) return null;
+  const byHs = new Map();
+  for (const d of days) {
+    if (!d.homestandId) continue;
+    let bucket = byHs.get(d.homestandId);
+    if (!bucket) {
+      bucket = { opponents: [], opponentSet: new Set() };
+      byHs.set(d.homestandId, bucket);
+    }
+    if (d.dayType === "GAME" && d.opponent && !bucket.opponentSet.has(d.opponent)) {
+      bucket.opponentSet.add(d.opponent);
+      bucket.opponents.push(d.opponent);
+    }
+  }
+  if (byHs.size === 0) return null;
+  // Sort by homestand number for a stable label.
+  const ids = [...byHs.keys()].sort((a, b) => hsNum(a) - hsNum(b));
+  const opps = [];
+  for (const id of ids) {
+    const bucket = byHs.get(id);
+    const oppLabel = bucket.opponents.length > 0 ? bucket.opponents.join("/") : "TBD";
+    opps.push(oppLabel);
+  }
+  const idLabel = ids.length === 1
+    ? ids[0]
+    : `HS${hsNum(ids[0])}-${hsNum(ids[ids.length - 1])}`;
+  return `${idLabel} vs ${opps.join(" / ")}`;
+}
+
+function hsNum(id) {
+  const n = parseInt(String(id).replace(/^HS/i, ""), 10);
+  return Number.isFinite(n) ? n : 0;
 }

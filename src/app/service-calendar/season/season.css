@@ -62,92 +62,120 @@
   .sc-season-banner-skel { animation: none; background: #ececec; }
 }
 
-/* ───────── STRIP ───────── */
+/* ───────── STRIP (Design Batch 3 rebuild) ───────── */
 .sc-season-strip {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 10px 14px 14px;
+  padding: 12px 16px 14px;
   margin-bottom: 12px;
 }
-.sc-season-strip-frame {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sc-season-strip-rail {
-  position: relative;
-  height: 28px;
-}
-.sc-season-strip-ticks {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  height: 100%;
-  border-top: 1px solid #DDD8C9;
-  border-bottom: 1px solid #DDD8C9;
-  background: #F1EFE8;
-  border-radius: 4px;
-}
-.sc-season-strip-tick {
+.sc-season-strip-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-right: 1px solid #E8E5DC;
-  font-size: 10px;
-  font-weight: 600;
-  color: #6b7280;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
-.sc-season-strip-tick:last-child { border-right: none; }
-.sc-season-strip-today {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: #153968;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-.sc-season-strip-today-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #153968;
-  margin-top: -4px;
-}
-.sc-season-strip-today-label {
-  position: absolute;
-  top: -16px;
-  font-size: 9px;
-  font-weight: 700;
-  color: #153968;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: #fff;
-  padding: 0 4px;
-  border-radius: 3px;
-}
-.sc-season-strip-tag {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.sc-season-strip-title {
   font-size: 11px;
-  color: #6b7280;
-  padding-top: 4px;
-}
-.sc-season-strip-tag-kind {
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #0a2548;
 }
-.sc-season-strip-tag-pending {
-  font-style: italic;
+.sc-season-strip-subtitle {
+  font-size: 11px;
+  font-weight: 500;
   color: #94a3b8;
+  font-style: italic;
+}
+.sc-season-strip-today-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  background: #F4F7FB;
+  border: 1px solid #D6E0EE;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #153968;
+  font-variant-numeric: tabular-nums;
+}
+.sc-season-strip-today-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #153968;
+  flex-shrink: 0;
+}
+.sc-season-strip-today-chip-sep { color: #94a3b8; }
+
+.sc-season-strip-rail {
+  position: relative;
+  height: 22px;
+  background: #F4F2EC;
+  border: 1px solid #E8E5DC;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sc-season-strip-blocks {
+  position: absolute;
+  inset: 0;
+}
+.sc-season-strip-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  /* Calm low-saturation rail (audit CC-13: tone down so today wins
+     hierarchy). Each phase gets a quiet beige-tinted wash; we set
+     the actual tint via class modifier below. */
+  background: #E9E5DA;
+}
+.sc-season-strip-block:last-child { border-right: none; }
+.sc-season-strip-block-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0 6px;
+  color: #5C5440;
+}
+
+/* Today marker: a permanent vertical navy line. It does NOT carry an
+   in-rail label - the label lives in the today-chip in the header
+   instead. No more floating-tooltip-looking box (audit P2-4). */
+.sc-season-strip-today-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #153968;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.sc-season-strip-ticks {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  margin-top: 6px;
+}
+.sc-season-strip-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ───────── TOGGLE ───────── */
@@ -389,48 +417,6 @@
    STAGE 2: real strip blocks + period-cards + Full Season card
    ══════════════════════════════════════════════════════════════ */
 
-/* ───────── STRIP BLOCKS (real timeline) ───────── */
-.sc-season-strip-blocks {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.sc-season-strip-block {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
-  border-right: 1px solid rgba(255,255,255,0.6);
-  overflow: hidden;
-  pointer-events: auto;
-}
-.sc-season-strip-block:last-child { border-right: none; }
-.sc-season-strip-block-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  padding: 0 4px;
-}
-/* When the blocks render, the underlying month ticks become a
-   subtle backdrop - dimmer than Stage 1 since the blocks are the
-   primary signal. */
-.sc-season-strip-ticks--underlay {
-  background: transparent;
-  border-color: transparent;
-  opacity: 0.45;
-}
-.sc-season-strip-ticks--underlay .sc-season-strip-tick {
-  border-right-color: rgba(0,0,0,0.06);
-}
-.sc-season-strip-ticks--underlay .sc-season-strip-tick-label {
-  color: #6b7280;
-}
-
 /* ───────── PERIOD GRID (Stage 2) ───────── */
 .sc-season-period-grid {
   display: grid;
@@ -621,21 +607,28 @@
 }
 .sc-season-period-card-bar-fill--complete { background: #047857; }
 
-/* ───────── FULL SEASON SUMMARY CARD ───────── */
+/* ───────── FULL SEASON SUMMARY CARD (Design Batch 3) ─────────
+   Clear white card boundary on the beige page (audit P1-8 bg-clash
+   fix). Revenue-forward KPI row + a completion bar with explicit
+   label. No duplication of the InfoCard action band (needs-entry /
+   overdue lived here before - now consolidated to one source). */
 .sc-season-fullseason-card {
-  background: linear-gradient(180deg, #FBFAF6 0%, #F5F4EE 100%);
-  border: 1px solid #DDD8C9;
-  border-radius: 10px;
-  padding: 18px 22px;
+  background: #ffffff;
+  border: 1px solid #DCD7C8;
+  border-radius: 12px;
+  padding: 20px 22px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-height: 200px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .sc-season-fullseason-card-header {
   display: flex;
   align-items: baseline;
   gap: 10px;
+  border-bottom: 1px solid #f1f0ea;
+  padding-bottom: 12px;
 }
 .sc-season-fullseason-card-eyebrow {
   font-size: 11px;
@@ -653,17 +646,23 @@
 .sc-season-fullseason-card-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .sc-season-fullseason-row {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
 }
+/* KPI row spreads stats evenly on desktop; wraps on narrow. */
+.sc-season-fullseason-row--kpi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px 24px;
+}
 .sc-season-fullseason-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 110px;
 }
 .sc-season-fullseason-stat-label {
@@ -680,7 +679,7 @@
   font-variant-numeric: tabular-nums;
 }
 .sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #047857;
@@ -692,28 +691,48 @@
 .sc-season-fullseason-stat--actual .sc-season-fullseason-stat-value {
   color: #047857;
 }
-.sc-season-fullseason-stat--warn .sc-season-fullseason-stat-value {
-  color: #B45309;
-}
-.sc-season-fullseason-stat--alert .sc-season-fullseason-stat-value {
-  color: #991B1B;
+
+/* Completion bar with an inline label below it.
+   "<pct>% of season recorded" - the rubric's KPI-card "number +
+   label + context" line. */
+.sc-season-fullseason-completion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
 }
 .sc-season-fullseason-bar {
   height: 6px;
-  background: #ececec;
+  background: #eef0ee;
   border-radius: 999px;
   overflow: hidden;
-  margin-top: auto;
 }
 .sc-season-fullseason-bar-fill {
   height: 100%;
-  background: #A8E5C9;
+  background: #7FD3AC;
   transition: width 0.3s ease;
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-fullseason-bar-fill { transition: none; }
 }
-.sc-season-fullseason-bar-fill--complete { background: #047857; }
+.sc-season-fullseason-bar-fill--complete { background: #4FB78E; }
+.sc-season-fullseason-completion-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Caption beneath the KPI row - used for the fee-account "contract
+   value will surface when wired" line. Calm muted micro-copy. */
+.sc-season-fullseason-card-note {
+  margin: 0;
+  font-size: 11px;
+  font-style: italic;
+  color: #94a3b8;
+  line-height: 1.4;
+}
 
 /* Period-card DOW header - same convention as MonthCard */
 .sc-season-period-card-dow {
