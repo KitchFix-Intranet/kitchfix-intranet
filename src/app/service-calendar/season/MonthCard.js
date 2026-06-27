@@ -57,10 +57,9 @@ export default function MonthCard({
   });
   const [expanded, setExpanded] = useState(!collapseDefault);
 
-  const toggle = (e) => {
-    e.stopPropagation();
-    setExpanded((v) => !v);
-  };
+  const handleExpand = () => setExpanded(true);
+  const handleCollapse = () => setExpanded(false);
+  const handleDrill = () => onClick?.(monthIndex);
 
   const totalDays = Number(monthSummary?.totalDays) || 0;
   const daysEntered = Number(monthSummary?.daysWithActuals) || 0;
@@ -80,52 +79,72 @@ export default function MonthCard({
     isCurrentMonth && "sc-season-month-card--current",
   ].filter(Boolean).join(" ");
 
+  // Cleanup batch: no button-inside-a-button anymore (WCAG 4.1.2).
+  //   Collapsed: ONE row-button that expands the card. The chevron
+  //             is decorative (aria-hidden) inside that button.
+  //   Expanded:  plain header container with two SIBLING buttons -
+  //             chevron (collapse) + View -> (drill). No role on the
+  //             header; the buttons own the keyboard semantics
+  //             natively.
+  // This also resolves audit CC-4: collapsed = tap anywhere on the
+  // row to expand; expanded = explicit "View ->" drills.
   return (
     <article
       className={cardClass}
       aria-label={`${monthName} ${year}`}
       data-state={monthState}
     >
-      <header
-        className="sc-season-month-card-header"
-        onClick={(e) => {
-          // Header click on collapsed card expands; on expanded card it
-          // drills (matches the "View ->" affordance). The chevron is
-          // the explicit expand/collapse control either way.
-          if (!expanded) { e.stopPropagation(); setExpanded(true); return; }
-          onClick?.(monthIndex);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (!expanded) { setExpanded(true); return; }
-            onClick?.(monthIndex);
-          }
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        <span className="sc-season-month-card-name">{monthName}</span>
-        <CollapsedSummary
-          monthSummary={monthSummary}
-          monthState={monthState}
-          hasHomestandSchedule={hasHomestandSchedule}
-          isFeeAccount={isFeeAccount}
-          totalDays={totalDays}
-          daysEntered={daysEntered}
-        />
-        <ChevronToggle expanded={expanded} onClick={toggle} />
-        {expanded && (
+      {expanded ? (
+        <header className="sc-season-month-card-header">
+          <span className="sc-season-month-card-name">{monthName}</span>
+          <CollapsedSummary
+            monthSummary={monthSummary}
+            monthState={monthState}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            totalDays={totalDays}
+            daysEntered={daysEntered}
+          />
+          <button
+            type="button"
+            className="sc-season-month-card-chevron"
+            onClick={handleCollapse}
+            aria-label={`Collapse ${monthName}`}
+            aria-expanded={true}
+          >
+            <ChevronGlyph expanded={true} />
+          </button>
           <button
             type="button"
             className="sc-season-month-card-drill"
-            onClick={(e) => { e.stopPropagation(); onClick?.(monthIndex); }}
+            onClick={handleDrill}
             aria-label={`Open ${monthName}`}
           >
             View <span aria-hidden="true">→</span>
           </button>
-        )}
-      </header>
+        </header>
+      ) : (
+        <button
+          type="button"
+          className="sc-season-month-card-header sc-season-month-card-collapsed-trigger"
+          onClick={handleExpand}
+          aria-label={`Expand ${monthName}`}
+          aria-expanded={false}
+        >
+          <span className="sc-season-month-card-name">{monthName}</span>
+          <CollapsedSummary
+            monthSummary={monthSummary}
+            monthState={monthState}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            totalDays={totalDays}
+            daysEntered={daysEntered}
+          />
+          <span className="sc-season-month-card-chevron sc-season-month-card-chevron--static" aria-hidden="true">
+            <ChevronGlyph expanded={false} />
+          </span>
+        </button>
+      )}
 
       {expanded && !noService && (
         <>
@@ -212,30 +231,29 @@ function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFe
   );
 }
 
-function ChevronToggle({ expanded, onClick }) {
+// Glyph-only chevron. The interactive wrapping (button vs decorative
+// span) lives at the call site so each state can have its own valid
+// semantics: a single row-button when collapsed, a sibling button
+// when expanded.
+function ChevronGlyph({ expanded }) {
   return (
-    <button
-      type="button"
-      className="sc-season-month-card-chevron"
-      onClick={onClick}
-      aria-label={expanded ? "Collapse month" : "Expand month"}
-      aria-expanded={expanded}
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+        transition: "transform 150ms ease",
+      }}
+      aria-hidden="true"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}
-        aria-hidden="true"
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </button>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }
 

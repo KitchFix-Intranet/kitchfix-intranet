@@ -154,38 +154,58 @@
   .sc-state-legend { backdrop-filter: none; background: #ffffff; }
 }
 
-/* Mobile Overhaul E2: collapse the legend to a compact strip on
-   phone widths. The 7+ swatches don't fit in a row and stack into a
-   wall above the grid. Hide the swatch list; keep "Legend [i]"
-   tappable - the popup carries the full key. The always-visible
-   key requirement (rubric non-negotiable #1) is met by the popup
-   being one tap away.
-   Slightly larger tap target on the info button so it meets the
-   44x44 mobile minimum (WCAG 2.5.5). */
+/* Cleanup batch: the mobile legend now keeps a COMPACT always-
+   visible key (rubric non-negotiable #1 - never hide the key on the
+   priority surface). The swatch list wraps to at most two compact
+   rows; swatches shrink to 10px, labels to 10px, gaps tighten. The
+   "Legend" title is dropped (the swatches are self-explanatory at
+   this size; the row reclaims the space). The info "i" button stays
+   for the verbose detail (account-specific meanings, loading/failed
+   states) at a 44x44 hit area (WCAG 2.5.5). */
 @media (max-width: 767px) {
   .sc-state-legend {
-    padding: 6px 12px;
+    padding: 6px 10px;
     margin-bottom: 8px;
+    gap: 6px;
     flex-wrap: nowrap;
+    align-items: flex-start;
   }
-  .sc-state-legend-title {
-    border-right: none;
-    margin-right: 0;
-    padding-right: 0;
+  .sc-state-legend-title { display: none; }
+  .sc-state-legend-list {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 5px 9px;
+    flex-wrap: wrap;
+    max-height: 38px;
+    overflow: hidden;
   }
-  .sc-state-legend-list { display: none; }
+  .sc-state-legend-item { gap: 4px; }
+  .sc-state-legend-swatch {
+    width: 12px;
+    height: 12px;
+    font-size: 9px;
+    border-radius: 3px;
+  }
+  .sc-state-legend-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #475569;
+  }
   .sc-state-legend-info {
     width: 36px;
     height: 36px;
     min-width: 36px;
     min-height: 36px;
+    flex-shrink: 0;
+    align-self: center;
+    position: relative;
   }
   .sc-state-legend-info::after {
     content: " ";
     position: absolute;
     inset: -4px;
   }
-  .sc-state-legend-info { position: relative; }
 }
 
 /* Floor-first (cooler viewport): wrap onto multiple rows, tighter
