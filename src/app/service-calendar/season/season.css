@@ -335,8 +335,35 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
   min-height: 36px;
+}
+
+/* Cleanup batch: the collapsed-state row is now a SINGLE button (no
+   nested interactives). Reset native button chrome so it visually
+   matches the prior header. Keyboard focus paints a clear outline.
+   The chevron inside is a decorative span (the --static modifier),
+   not a button. */
+.sc-season-month-card-collapsed-trigger {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.sc-season-month-card-collapsed-trigger:focus-visible {
+  outline: 2px solid #0F6E56;
+  outline-offset: 2px;
+}
+.sc-season-month-card-chevron--static {
+  background: transparent;
+  border: none;
+  cursor: inherit;
+  pointer-events: none;
+  color: #6b7280;
 }
 .sc-season-month-card-name {
   font-size: 14px;
