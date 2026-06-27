@@ -39,16 +39,16 @@ import {
 // strip + card-tints render the SAME canonical phase color for the
 // same recorded label, no matter where the consumer reads it from.
 export function derivePhaseTimeline(accountKey, category, year) {
-  // Non-PDC accounts: phases don't apply at year scope. The strip
-  // renders its operational-shape placeholder (Stage 1 behavior),
-  // the period-card headers don't tint.
+  // Non-PDC accounts: phases don't apply at year scope. PhaseStrip
+  // renders a calm "Season axis" (Design Batch 3 - the legacy
+  // "Stage 3" placeholder copy is gone). The 4 MLB-fee accounts
+  // render SeasonStepper instead of PhaseStrip for the season view;
+  // this branch covers MiLB / AAA / non-homestand MLB.
   if (category !== "PDC") {
     return {
       status: "non-pdc",
       blocks: [],
-      reason: category === "MLB" || category === "MiLB"
-        ? "Homestand arc - detail lands in Stage 3"
-        : "No operational arc",
+      reason: null,
     };
   }
 
