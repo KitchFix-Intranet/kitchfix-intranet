@@ -116,6 +116,38 @@
 .sc-state-legend-swatch--milb-day .sc-state-legend-pill-dot   { background: #EF9F27; }
 .sc-state-legend-swatch--milb-night .sc-state-legend-pill-dot { background: #153968; }
 
+/* Info button - opens LegendInfoPopup for the fuller detail
+   (Design Batch 2). The one-line key stays always visible (rubric
+   non-negotiable #1); the popup only adds depth (account-specific
+   meanings, loading/failed states). */
+.sc-state-legend-info {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sc-state-legend-info:hover {
+  background: #f3f4f6;
+  color: #153968;
+  border-color: #94a3b8;
+}
+.sc-state-legend-info:focus-visible {
+  outline: 2px solid #0F6E56;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-state-legend-info { transition: none; }
+}
+
 /* Reduced motion: drop the backdrop blur (some implementations
    animate during scroll). Solid white still legible. */
 @media (prefers-reduced-motion: reduce) {

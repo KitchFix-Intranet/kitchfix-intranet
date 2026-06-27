@@ -28,6 +28,7 @@ import MonthCard from "./MonthCard";
 import PeriodCard from "./PeriodCard";
 import FullSeasonCard from "./FullSeasonCard";
 import StateLegend from "./StateLegend";
+import InfoCard from "./InfoCard";
 import { resolveDayKind } from "../dayResolvers";
 import { derivePhaseTimeline, bucketDaysByPeriod } from "./phaseDerivation";
 
@@ -46,12 +47,22 @@ export default function SeasonShell({
   onMonthClick,             // (monthIndex) => void
   // Stage 2 additions:
   periodRanges,             // [{ period, start, end }] from sc-year-summary
-  onPeriodClick,            // (periodLabel) => void (drills to legacy PeriodLensView)
+  onPeriodClick,            // (periodLabel) => void
+  // Design Batch 2 - info card props (passed from orchestrator):
+  view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
+  onViewChange,             // (next) => void
+  feeHeadline,              // { current, opponents[], note } | null - derived in orchestrator
+  onJumpToNext,             // () => void; jumps to the next needs-entry/overdue day
+  hasJumpTarget = false,    // boolean
 }) {
-  // Stage 2: the toggle is live. Calendar | Period. Calendar reuses
-  // the Stage 1 month grid; Period renders the new 4x3 period grid +
-  // the Full Season summary card in row 4.
-  const [view, setView] = useState("calendar");
+  // Calendar | Period view state. Design Batch 2 lifts this to the
+  // orchestrator's chrome bar so the toggle lives in the chrome with
+  // the other controls; SeasonShell becomes a controlled consumer.
+  // Backwards-compat: if the parent doesn't pass view/onViewChange,
+  // fall back to local state so prior call sites keep working.
+  const [localView, setLocalView] = useState("calendar");
+  const effectiveView = view ?? localView;
+  const handleViewChange = onViewChange ?? setLocalView;
 
   const kind = useMemo(
     () => resolveDayKind({
@@ -73,25 +84,36 @@ export default function SeasonShell({
   // (spec 11.6) - no engine extension. Only fires when Period view
   // is active; dep-array is stable PRIMARY state (no derived bool).
   const periodBuckets = useMemo(
-    () => view === "period" ? bucketDaysByPeriod(yearData, periodRanges) : new Map(),
+    () => effectiveView === "period" ? bucketDaysByPeriod(yearData, periodRanges) : new Map(),
     [view, yearData, periodRanges]
   );
 
   const todayDate = yearToday?.date || null;
+
+  // Derive the InfoCard inputs from yearBannerStats + yearToday.
+  // pctRecorded reflects the user's actual completion - days for per-
+  // meal, game days for homestand-fee accounts.
+  const stats = yearBannerStats;
+  const pctRecorded = hasHomestandSchedule
+    ? (stats?.totalGameDays > 0
+        ? Math.round((stats.gameDaysEntered / stats.totalGameDays) * 100)
+        : null)
+    : (stats?.totalDays > 0
+        ? Math.round((stats.daysRecorded / stats.totalDays) * 100)
+        : null);
 
   // Loading skeleton matches the new shape so the layout doesn't
   // shift when data lands. Spec section 4 + GOTCHAS skeleton rule.
   if (loading || !yearData) {
     return (
       <div className="sc-season sc-season-shell sc-fade-in">
-        <YearBanner stats={null} yearToday={null} isFeeAccount={isFeeAccount} hasHomestandSchedule={hasHomestandSchedule} />
-        <PhaseStrip category={account?.category} today={null} year={year} />
-        <CalendarPeriodToggle view={view} />
+        <InfoCard loading />
         <StateLegend
           hasHomestandSchedule={hasHomestandSchedule}
           isFeeAccount={isFeeAccount}
           isMilb={isMilb}
         />
+        <PhaseStrip category={account?.category} today={null} year={year} />
         <div className="sc-season-grid sc-season-grid--loading" aria-hidden="true">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="sc-season-month-skeleton" />
@@ -103,11 +125,23 @@ export default function SeasonShell({
 
   return (
     <div className="sc-season sc-season-shell sc-fade-in">
-      <YearBanner
-        stats={yearBannerStats}
-        yearToday={yearToday}
+      <InfoCard
+        todayLabel={stats?.todayLabel}
+        periodNum={yearToday?.period ? String(yearToday.period).replace(/^P/, "") : null}
+        weekNum={yearToday?.week ? String(yearToday.week).replace(/^W/, "") : null}
+        pctRecorded={pctRecorded}
         isFeeAccount={isFeeAccount}
+        needsEntry={stats?.needsEntry || 0}
+        overdue={stats?.overdue || 0}
+        feeHeadline={feeHeadline}
+        onJumpToNext={onJumpToNext}
+        hasJumpTarget={hasJumpTarget}
+      />
+
+      <StateLegend
         hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
       />
 
       <PhaseStrip
@@ -117,15 +151,7 @@ export default function SeasonShell({
         year={year}
       />
 
-      <CalendarPeriodToggle view={view} onChange={setView} />
-
-      <StateLegend
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        isMilb={isMilb}
-      />
-
-      {view === "calendar" ? (
+      {effectiveView === "calendar" ? (
         <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
           {MONTH_SHORT.map((_, monthIndex) => {
             const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
@@ -210,92 +236,3 @@ function PeriodGrid({
   );
 }
 
-// Top banner. Mirrors the existing year-banner's information density:
-// today's date + period/week chip + per-account stats. Uses the SAME
-// yearBannerStats the legacy year body computes (passed in by the
-// orchestrator), so the numbers match the trusted view exactly.
-function YearBanner({ stats, yearToday, isFeeAccount, hasHomestandSchedule }) {
-  // Skeleton state.
-  if (!stats) {
-    return (
-      <div className="sc-season-banner sc-season-banner--loading" aria-hidden="true">
-        <span className="sc-season-banner-skel" style={{ width: 80 }} />
-        <span className="sc-season-banner-skel" style={{ width: 120 }} />
-        <span className="sc-season-banner-skel" style={{ width: 180 }} />
-      </div>
-    );
-  }
-  return (
-    <div className="sc-season-banner">
-      <span className="sc-season-banner-today">
-        Today: <strong>{stats.todayLabel}</strong>
-      </span>
-      {yearToday?.period && (
-        <span className="sc-season-banner-period">
-          Period {yearToday.period}
-          {yearToday.week ? ` · ${yearToday.week}` : ""}
-        </span>
-      )}
-      <span className="sc-season-banner-sep" aria-hidden="true">|</span>
-      {hasHomestandSchedule ? (
-        <>
-          <span className="sc-season-banner-stat">
-            <strong>{stats.gameDaysEntered.toLocaleString("en-US")}</strong> of {stats.totalGameDays.toLocaleString("en-US")} game days recorded
-          </span>
-          <span className="sc-season-banner-sep" aria-hidden="true">|</span>
-          <span className="sc-season-banner-stat">
-            <strong>{stats.mealsYTD.toLocaleString("en-US")}</strong> meals YTD
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="sc-season-banner-stat">
-            <strong>{stats.daysRecorded.toLocaleString("en-US")}</strong> of {stats.totalDays.toLocaleString("en-US")} days recorded
-          </span>
-          {!isFeeAccount && (
-            <>
-              <span className="sc-season-banner-sep" aria-hidden="true">|</span>
-              <span className={`sc-season-banner-stat ${stats.needsEntry > 0 ? "sc-season-banner-stat--warn" : ""}`}>
-                <strong>{stats.needsEntry.toLocaleString("en-US")}</strong> need entry
-              </span>
-              <span className="sc-season-banner-sep" aria-hidden="true">|</span>
-              <span className={`sc-season-banner-stat ${stats.overdue > 0 ? "sc-season-banner-stat--alert" : ""}`}>
-                <strong>{stats.overdue.toLocaleString("en-US")}</strong> overdue
-              </span>
-            </>
-          )}
-          <span className="sc-season-banner-sep" aria-hidden="true">|</span>
-          <span className="sc-season-banner-stat">
-            <strong>{stats.mealsYTD.toLocaleString("en-US")}</strong> meals YTD
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
-
-// Calendar/Period toggle. Stage 2: both sides active. Toggling is the
-// ONE local toggle (spec section 2) - lives on the Season level, does
-// not follow the user down into a drilled period.
-function CalendarPeriodToggle({ view, onChange }) {
-  return (
-    <div className="sc-season-toggle" role="group" aria-label="View by">
-      <button
-        type="button"
-        className={`sc-season-toggle-btn ${view === "calendar" ? "sc-season-toggle-btn--active" : ""}`}
-        aria-pressed={view === "calendar"}
-        onClick={() => onChange?.("calendar")}
-      >
-        Calendar
-      </button>
-      <button
-        type="button"
-        className={`sc-season-toggle-btn ${view === "period" ? "sc-season-toggle-btn--active" : ""}`}
-        aria-pressed={view === "period"}
-        onClick={() => onChange?.("period")}
-      >
-        Period
-      </button>
-    </div>
-  );
-}
