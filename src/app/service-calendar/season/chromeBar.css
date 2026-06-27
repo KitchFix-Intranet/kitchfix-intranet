@@ -94,8 +94,17 @@
   border: none;
   border-radius: 50%;
   color: #6b7280;
+  position: relative;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+}
+/* Mobile Overhaul: ensure the refresh tap target meets WCAG 2.5.5
+   (>=44x44 hit area on phone) without enlarging the visual chip. */
+.sc-chrome-bar-asof-refresh::after {
+  content: "";
+  position: absolute;
+  inset: -13px;
+  border-radius: 50%;
 }
 .sc-chrome-bar-asof-refresh:hover {
   background: #e5e7eb;

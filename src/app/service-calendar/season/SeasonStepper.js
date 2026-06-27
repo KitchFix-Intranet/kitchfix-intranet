@@ -48,14 +48,16 @@ export default function SeasonStepper({
 
   return (
     <section className="sc-stepper" aria-label="Homestand season stepper">
-      <Caption focus={focus} totalCount={segments.length} />
-
-      {/* Desktop: full stepper - hidden below 1024px via CSS */}
+      {/* Desktop carries the caption + full stepper. The mobile
+          spotlight repeats the same fact, so rendering the caption
+          there too would print the homestand 3x with the InfoCard's
+          fee band (mobile-overhaul bug A3). */}
       <div className="sc-stepper-desktop">
+        <Caption focus={focus} totalCount={segments.length} />
         <Stepper segments={segments} onSegmentClick={onSegmentClick} />
       </div>
 
-      {/* Mobile / floor: spotlight + 13-segment bar */}
+      {/* Mobile / floor: spotlight + 13-segment bar (no caption). */}
       <div className="sc-stepper-mobile">
         {focus && (
           <Spotlight

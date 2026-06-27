@@ -48,7 +48,10 @@ export default function StateLegend({
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
   }
-  // Universal trailer on every account.
+  // Universal trailer on every account. Off-season is back on the
+  // line (Mobile Overhaul E2 / recon #2) so the hatched fill is
+  // decodable without opening the popup.
+  items.push({ mod: "off-season", icon: "—", label: "Off-season" });
   items.push({ mod: "today", icon: "", label: "Today" });
 
   const [popupOpen, setPopupOpen] = useState(false);

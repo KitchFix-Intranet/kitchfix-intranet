@@ -52,7 +52,6 @@ export default function SeasonShell({
   // Design Batch 2 - info card props (passed from orchestrator):
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
   onViewChange,             // (next) => void
-  feeHeadline,              // { current, opponents[], note } | null - derived in orchestrator
   onJumpToNext,             // () => void; jumps to the next needs-entry/overdue day
   hasJumpTarget = false,    // boolean
 }) {
@@ -141,13 +140,16 @@ export default function SeasonShell({
     <div className="sc-season sc-season-shell sc-fade-in">
       <InfoCard
         todayLabel={stats?.todayLabel}
-        periodNum={yearToday?.period ? String(yearToday.period).replace(/^P/, "") : null}
-        weekNum={yearToday?.week ? String(yearToday.week).replace(/^W/, "") : null}
+        periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
+        weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
         pctRecorded={pctRecorded}
         isFeeAccount={isFeeAccount}
         needsEntry={stats?.needsEntry || 0}
         overdue={stats?.overdue || 0}
-        feeHeadline={feeHeadline}
+        feeStats={isFeeAccount && stats ? {
+          gameDaysEntered: stats.gameDaysEntered || 0,
+          totalGameDays: stats.totalGameDays || 0,
+        } : null}
         onJumpToNext={onJumpToNext}
         hasJumpTarget={hasJumpTarget}
       />

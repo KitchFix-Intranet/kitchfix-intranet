@@ -12,9 +12,19 @@
 }
 
 @media (max-width: 767px) {
+  /* Mobile Overhaul: stack + tighten gap so more content fits per
+     phone viewport. */
   .sc-info-card {
     grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
   }
+  .sc-info-card-context,
+  .sc-info-card-action {
+    padding: 10px 14px;
+    min-height: 48px;
+  }
+  .sc-info-card-context-segment { gap: 4px; }
 }
 
 /* ── Context band - calm ────────────────────────────────────────── */

@@ -1,21 +1,24 @@
 "use client";
 
-// MonthCard - one month-card in the Calendar grid. Renders its days
-// through the Stage 0 atom at small size. Reproduces the trusted
-// year-heatmap's information density (M-S DOW header + ~28 day cells
-// + a footer of "X/Y entered" + revenue or completion).
+// MonthCard - one month-card in the Calendar grid. Mobile Overhaul
+// adds the COLLAPSE accordion:
+//   - Completed months (daysEntered === totalDays > 0) default to a
+//     one-line collapsed tile.
+//   - Empty future months (daysEntered === 0 AND today is BEFORE the
+//     first day of the month) default to a one-line "Upcoming" tile.
+//   - Off-season months default to a one-line "Off-season" tile (no
+//     dense grid of em-dashes - audit P2-7).
+//   - Current month + partial-progress months default expanded.
+// Tapping the collapsed tile toggles to expanded in place. The
+// "View ->" link still drills into the workspace from the expanded
+// header. Chevron (expand-in-place) and "View ->" (drill) stay
+// visually distinct.
 //
-// The atom is the SINGLE source of day rendering - no day tile
-// re-implemented inline. The MonthCard's job is:
-//   1. Build the 7x6 calendar grid for the month
-//   2. Look up each in-month day's status from the year-summary data
-//   3. Map (resolveDayStatus + buildCompactContent) into atom props
-//   4. Render off-day fills for the cells that fall outside the month
-//      (the leading/trailing days of the first/last week)
-//   5. Show off-season state when the month has no service
-//   6. Show the per-account footer (revenue for per-meal, completion
-//      for fee, homestand count for MLB-fee)
+// Closes audit P1-3 (uniform card heights - within each state),
+// P1-9 (future-period 0/X punitive framing), P2-7 (off-season
+// month-card collapse) plus the mobile-overhaul collapse centerpiece.
 
+import { useState } from "react";
 import DaySquare from "../DaySquare";
 import { resolveDayStatus, buildCompactContent } from "../dayResolvers";
 
@@ -36,21 +39,9 @@ export default function MonthCard({
   isMilb,                    // bool - drives no-service detection on per-meal
   onClick,                   // (monthIndex) => void
 }) {
-  // Build the calendar grid. The week starts on Monday to match the
-  // existing heatmap's DOW header convention.
-  const weeks = buildMonthWeeks(year, monthIndex);
-
-  // Index the days[] payload by date string for O(1) lookup as we
-  // walk the 7x6 grid cells.
-  const daysByDate = new Map();
-  if (monthSummary?.days) {
-    for (const d of monthSummary.days) daysByDate.set(d.date, d);
-  }
-
   const monthName = MONTH_NAMES[monthIndex];
-  const isCurrentMonth = todayDate
-    ? Number(todayDate.slice(5, 7)) - 1 === monthIndex
-    : false;
+  const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
+  const isCurrentMonth = todayMonth != null && todayMonth === monthIndex;
 
   const noService = detectNoService({
     monthSummary,
@@ -59,57 +50,205 @@ export default function MonthCard({
     isMilb,
   });
 
+  // Derive collapse defaults. The user can toggle with the chevron,
+  // overriding the default. Only EXPANDED state mounts the grid.
+  const collapseDefault = computeCollapseDefault({
+    isCurrentMonth, noService, monthSummary, todayDate, year, monthIndex,
+  });
+  const [expanded, setExpanded] = useState(!collapseDefault);
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    setExpanded((v) => !v);
+  };
+
+  const totalDays = Number(monthSummary?.totalDays) || 0;
+  const daysEntered = Number(monthSummary?.daysWithActuals) || 0;
+  const isComplete = totalDays > 0 && daysEntered === totalDays;
+  const monthState = noService
+    ? "off"
+    : isComplete
+      ? "done"
+      : (totalDays > 0 && daysEntered === 0 && isFutureMonth(year, monthIndex, todayDate)
+          ? "upcoming"
+          : isCurrentMonth ? "current" : "in-progress");
+
+  const cardClass = [
+    "sc-season-month-card",
+    expanded ? "sc-season-month-card--expanded" : "sc-season-month-card--collapsed",
+    `sc-season-month-card--state-${monthState}`,
+    isCurrentMonth && "sc-season-month-card--current",
+  ].filter(Boolean).join(" ");
+
   return (
     <article
-      className={`sc-season-month-card ${isCurrentMonth ? "sc-season-month-card--current" : ""}`}
-      onClick={() => onClick?.(monthIndex)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(monthIndex); }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`${monthName} ${year}, open month`}
+      className={cardClass}
+      aria-label={`${monthName} ${year}`}
+      data-state={monthState}
     >
-      <header className="sc-season-month-card-header">
+      <header
+        className="sc-season-month-card-header"
+        onClick={(e) => {
+          // Header click on collapsed card expands; on expanded card it
+          // drills (matches the "View ->" affordance). The chevron is
+          // the explicit expand/collapse control either way.
+          if (!expanded) { e.stopPropagation(); setExpanded(true); return; }
+          onClick?.(monthIndex);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (!expanded) { setExpanded(true); return; }
+            onClick?.(monthIndex);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
         <span className="sc-season-month-card-name">{monthName}</span>
-        <span className="sc-season-month-card-drill" aria-hidden="true">View →</span>
-      </header>
-
-      <div className="sc-season-month-card-dow" aria-hidden="true">
-        {DOW_HEADER.map((d, i) => (
-          <span key={i} className="sc-season-month-card-dow-cell">{d}</span>
-        ))}
-      </div>
-
-      <div className="sc-season-month-card-grid">
-        {weeks.flat().map((cell, i) => renderCell({
-          cell, monthIndex, daysByDate, todayDate, kind,
-        })).map((node, i) => (
-          <span key={i} className="sc-season-month-card-cell">{node}</span>
-        ))}
-      </div>
-
-      {noService ? (
-        <div className="sc-season-month-card-noservice">Off-season</div>
-      ) : (
-        <MonthCardFooter
+        <CollapsedSummary
           monthSummary={monthSummary}
+          monthState={monthState}
           hasHomestandSchedule={hasHomestandSchedule}
           isFeeAccount={isFeeAccount}
+          totalDays={totalDays}
+          daysEntered={daysEntered}
         />
+        <ChevronToggle expanded={expanded} onClick={toggle} />
+        {expanded && (
+          <button
+            type="button"
+            className="sc-season-month-card-drill"
+            onClick={(e) => { e.stopPropagation(); onClick?.(monthIndex); }}
+            aria-label={`Open ${monthName}`}
+          >
+            View <span aria-hidden="true">→</span>
+          </button>
+        )}
+      </header>
+
+      {expanded && !noService && (
+        <>
+          <div className="sc-season-month-card-dow" aria-hidden="true">
+            {DOW_HEADER.map((d, i) => (
+              <span key={i} className="sc-season-month-card-dow-cell">{d}</span>
+            ))}
+          </div>
+
+          <div className="sc-season-month-card-grid">
+            {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind,
+            })).map((node, i) => (
+              <span key={i} className="sc-season-month-card-cell">{node}</span>
+            ))}
+          </div>
+
+          <MonthCardFooter
+            monthSummary={monthSummary}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            monthState={monthState}
+          />
+        </>
       )}
     </article>
   );
 }
 
-// Renders a single cell - either an in-month atom tile or a quiet
-// out-of-month spacer. The atom carries every day's status, today
-// flag, and compact content.
+// Inline summary that sits in the header row when the card is
+// collapsed AND below the month name when expanded. Carries the
+// glance state: completed (check + $), upcoming, in-progress, or
+// off-season.
+function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFeeAccount, totalDays, daysEntered }) {
+  if (monthState === "off") {
+    return <span className="sc-season-month-card-summary">Off-season</span>;
+  }
+  if (monthState === "upcoming") {
+    return (
+      <span className="sc-season-month-card-summary sc-season-month-card-summary--upcoming">
+        upcoming
+        {totalDays > 0 && (
+          <span className="sc-season-month-card-summary-aux"> · 0/{totalDays}</span>
+        )}
+      </span>
+    );
+  }
+  // done / in-progress / current
+  if (hasHomestandSchedule) {
+    const hs = monthSummary?.homestandSummary || {};
+    const gameDaysEntered = hs.gameDaysEntered || 0;
+    const gameDays = hs.gameDays || 0;
+    const done = gameDays > 0 && gameDaysEntered === gameDays;
+    return (
+      <span className={`sc-season-month-card-summary ${done ? "sc-season-month-card-summary--done" : ""}`}>
+        {gameDaysEntered}/{gameDays} game days
+        {done && (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        )}
+      </span>
+    );
+  }
+  const done = totalDays > 0 && daysEntered === totalDays;
+  const hasActuals = daysEntered > 0;
+  const displayRev = hasActuals
+    ? Number(monthSummary?.actualRevenue) || 0
+    : Number(monthSummary?.projectedRevenue) || 0;
+  return (
+    <span className={`sc-season-month-card-summary ${done ? "sc-season-month-card-summary--done" : ""}`}>
+      {daysEntered}/{totalDays} entered
+      {!isFeeAccount && displayRev > 0 && (
+        <span className={`sc-season-month-card-summary-rev ${hasActuals ? "sc-season-month-card-summary-rev--actual" : ""}`}>
+          · {fmtK(displayRev)}
+        </span>
+      )}
+      {done && (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function ChevronToggle({ expanded, onClick }) {
+  return (
+    <button
+      type="button"
+      className="sc-season-month-card-chevron"
+      onClick={onClick}
+      aria-label={expanded ? "Collapse month" : "Expand month"}
+      aria-expanded={expanded}
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}
+        aria-hidden="true"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+  );
+}
+
+function indexDays(monthSummary) {
+  const m = new Map();
+  if (monthSummary?.days) {
+    for (const d of monthSummary.days) m.set(d.date, d);
+  }
+  return m;
+}
+
 function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
   if (cell.month !== monthIndex) {
-    // Out-of-month cell - render a quiet placeholder, NOT through the
-    // atom (the atom is for actual day rendering). Keeps the calendar
-    // grid shape without polluting the atom's contract.
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
   const day = daysByDate.get(cell.dateStr);
@@ -129,12 +268,17 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
   );
 }
 
-// The month-card footer matches the trusted heatmap's three modes.
-// Per-meal: "X/Y entered" + $ (lifetime-K-formatted). Fee homestand:
-// "X/Y game days" + "N homestand(s)". Operational fee (STL-FL):
-// "X/Y entered" only, NO $ token.
-function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount }) {
+// Footer renders only when expanded.
+function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount, monthState }) {
   if (!monthSummary) return null;
+  if (monthState === "upcoming") {
+    // Calm "Upcoming" framing - no 0% bar, no 0/X red flag.
+    return (
+      <footer className="sc-season-month-card-footer sc-season-month-card-footer--upcoming">
+        <span className="sc-season-month-card-stat-aux">Upcoming month - nothing required yet.</span>
+      </footer>
+    );
+  }
   const totalDays = Number(monthSummary.totalDays) || 0;
   const daysEntered = Number(monthSummary.daysWithActuals) || 0;
   const completionPct = totalDays > 0 ? Math.round(daysEntered / totalDays * 100) : 0;
@@ -159,10 +303,7 @@ function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount }) {
       </footer>
     );
   }
-
   if (isFeeAccount) {
-    // Operational-only fee (STL-FL): NO $ token. The structural
-    // discipline lives in the JSX absence - never call fmtMoney here.
     return (
       <footer className="sc-season-month-card-footer">
         <div className="sc-season-month-card-stats">
@@ -174,9 +315,6 @@ function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount }) {
       </footer>
     );
   }
-
-  // Per-meal / MiLB - shows $ (lifetime-K formatted, matching the
-  // current heatmap's footer convention).
   const hasActuals = daysEntered > 0;
   const displayRev = hasActuals
     ? Number(monthSummary.actualRevenue) || 0
@@ -207,9 +345,28 @@ function ProgressBar({ pct }) {
   );
 }
 
-// "Off-season" detection per account type. Matches the trusted year-
-// heatmap's noService logic so the redesigned card surfaces the same
-// "Off-season" label on the same months.
+// Collapse default per the brief:
+//   completed -> collapsed
+//   empty future -> collapsed
+//   off-season -> collapsed (single-line "Off-season")
+//   current OR partial -> expanded
+function computeCollapseDefault({ isCurrentMonth, noService, monthSummary, todayDate, year, monthIndex }) {
+  if (isCurrentMonth) return false;
+  if (noService) return true;
+  if (!monthSummary) return true;
+  const totalDays = Number(monthSummary.totalDays) || 0;
+  const daysEntered = Number(monthSummary.daysWithActuals) || 0;
+  if (totalDays > 0 && daysEntered === totalDays) return true; // completed
+  if (totalDays > 0 && daysEntered === 0 && isFutureMonth(year, monthIndex, todayDate)) return true;
+  return false; // partial -> expanded
+}
+
+function isFutureMonth(year, monthIndex, todayDate) {
+  if (!todayDate) return true;
+  const firstOfMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+  return firstOfMonth > todayDate;
+}
+
 function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isMilb }) {
   if (!monthSummary) return true;
   if (hasHomestandSchedule) {
@@ -217,8 +374,6 @@ function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isM
     return !hs || (hs.gameDays === 0 && hs.prepDays === 0);
   }
   if (isFeeAccount) {
-    // STL-FL with $0 per-meal prices: rev-based gate would always say
-    // "no service". Use count-based: no projected AND no actual meals.
     const projCovers = Number(monthSummary.projectedCovers) || 0;
     const actCovers  = Number(monthSummary.actualCovers) || 0;
     return Number(monthSummary.totalDays) === 0 || (projCovers === 0 && actCovers === 0);
@@ -226,22 +381,16 @@ function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isM
   if (isMilb) {
     return Number(monthSummary.totalDays) === 0;
   }
-  // Per-meal default: both projected and actual revenue zero with a
-  // positive day count = "no service" (planned off-season).
   const projRev = Number(monthSummary.projectedRevenue) || 0;
   const actRev  = Number(monthSummary.actualRevenue)    || 0;
   const totalDays = Number(monthSummary.totalDays)      || 0;
   return projRev === 0 && actRev === 0 && totalDays > 0;
 }
 
-// Build a 6-week grid of cells for the given month. Mondays start
-// each row to match the trusted heatmap's DOW header. Out-of-month
-// cells carry month=null sentinel so the renderer can distinguish.
 function buildMonthWeeks(year, monthIndex) {
   const first = new Date(year, monthIndex, 1);
   const last = new Date(year, monthIndex + 1, 0);
-  // Find the Monday on or before first-of-month.
-  const startDow = first.getDay(); // 0=Sun, 1=Mon, ...
+  const startDow = first.getDay();
   const daysBeforeMonday = startDow === 0 ? 6 : startDow - 1;
   const gridStart = new Date(first);
   gridStart.setDate(gridStart.getDate() - daysBeforeMonday);
@@ -262,13 +411,14 @@ function buildMonthWeeks(year, monthIndex) {
       cursor.setDate(cursor.getDate() + 1);
     }
     weeks.push(row);
-    // Stop early once we're past last-of-month AND back on a Monday
     if (cursor > last && cursor.getDay() === 1) break;
   }
   return weeks;
 }
 
 function fmtK(n) {
-  if (n >= 1000) return "$" + Math.round(n / 1000) + "K";
-  return "$" + Math.round(n);
+  const v = Math.round(Number(n) || 0);
+  if (Math.abs(v) >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (Math.abs(v) >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
+  return "$" + v.toLocaleString("en-US");
 }

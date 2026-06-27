@@ -230,6 +230,8 @@ export default function PeriodWorkspace({
         kind={kind}
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
+        periodRange={periodRange}
+        today={today}
       />
 
       {isCurrentPeriod && todayDay && (
@@ -288,11 +290,24 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
         <li className="sc-workspace-breadcrumb-item">
           <button
             type="button"
-            className="sc-workspace-breadcrumb-link"
+            className="sc-workspace-breadcrumb-link sc-workspace-breadcrumb-link--back"
             onClick={onClimbToSeason}
             aria-label="Back to Season"
           >
-            Season
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            <span>Season</span>
           </button>
         </li>
         {phaseLabel && (
@@ -340,9 +355,40 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
 //   per-meal: $ entered / projected / delta + days bar
 //   mlb-fee (homestand): completeness (game-days entered) + meals
 //   fee-no-dollar (STL-FL): days entered + meals YTD, NO $ tokens
-function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount }) {
+//
+// Mobile Overhaul D2 (P1-9 the "0/28" punitive fix): when the
+// period is entirely future / unstarted (no entered days AND today
+// is before the period's start date), render a calm "Upcoming"
+// frame instead of the punitive "0 / 28" with an empty bar.
+function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
   const progressColor = (m.needsEntry + m.overdue) > 0 ? "#EF9F27" : "#0F6E56";
+
+  // Upcoming-period detection: today is before periodRange.start AND
+  // nothing has been entered yet. The whole period is in the future.
+  const isUpcoming = m.complete === 0
+    && periodRange?.start
+    && today
+    && today < periodRange.start;
+
+  if (isUpcoming) {
+    const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const startDt = new Date(periodRange.start + "T12:00:00");
+    const startLabel = `${MON[startDt.getMonth()]} ${startDt.getDate()}`;
+    return (
+      <section className="sc-workspace-frame sc-workspace-frame--upcoming">
+        <div className="sc-workspace-frame-upcoming">
+          <span className="sc-workspace-frame-upcoming-tag">Upcoming</span>
+          <span className="sc-workspace-frame-upcoming-title">Starts {startLabel}</span>
+          {m.total > 0 && (
+            <span className="sc-workspace-frame-upcoming-sub">
+              {m.total} service {m.total === 1 ? "day" : "days"} scheduled
+            </span>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (hasHomestandSchedule) {
     return (
@@ -478,16 +524,21 @@ function TodayHero({ day, kind, homestandMap, onEnterActuals }) {
     }
   }
 
-  // Pick the urgency word per status.
+  // Pick the urgency word per status. We only render the word when
+  // it adds signal beyond the "TODAY" flag - falling through to
+  // "today" used to print "TODAY today" -> "TODAY TODAY" via CSS
+  // uppercase, the live-bug Kevin caught.
   const statusWord = day.status === "overdue" ? "overdue"
                    : day.status === "needs-entry" ? "needs entry"
-                   : "today";
+                   : null;
 
   return (
     <section className="sc-workspace-today-hero" aria-label="Today">
       <div className="sc-workspace-today-hero-eyebrow">
         <span className="sc-workspace-today-hero-flag">TODAY</span>
-        <span className="sc-workspace-today-hero-status">{statusWord}</span>
+        {statusWord && (
+          <span className="sc-workspace-today-hero-status">{statusWord}</span>
+        )}
       </div>
       <div className="sc-workspace-today-hero-date">{dateLabel}</div>
       {projection && <div className="sc-workspace-today-hero-projection">{projection}</div>}

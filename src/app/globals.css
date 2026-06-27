@@ -84,15 +84,25 @@ body {
 /* ═══════════════════════════════════════════════════════════
    HERO BANNER
    ═══════════════════════════════════════════════════════════ */
+/* Mobile Overhaul - compact flat hero matching oh-hero / pp-hero
+   spec. Was 140px banner; now 84px (96px desktop). The bottom-row
+   greeting + date + weather stays - it just shrinks. */
 .kf-hero-container {
   position: relative;
-  height: 140px;
-  border-radius: 20px;
+  height: 84px;
+  border-radius: 14px;
   overflow: hidden;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   background-color: var(--kf-navy);
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px -2px rgba(0,0,0,0.12);
   flex-shrink: 0;
+}
+@media (min-width: 768px) {
+  .kf-hero-container {
+    height: 96px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
 }
 
 .kf-hero-bg {
@@ -121,34 +131,46 @@ body {
 .kf-hero-content {
   position: relative;
   z-index: 3;
-  padding: 20px 24px;
+  padding: 10px 18px;
   display: flex;
   flex-direction: column;
   height: 100%;
-  justify-content: space-between;
+  justify-content: center;
   color: white;
 }
+@media (min-width: 768px) {
+  .kf-hero-content { padding: 14px 24px; }
+}
 
-.kf-hero-top { flex: 1; }
-.kf-hero-bottom { margin-top: auto; }
+/* Top spacer no longer needed at 84px - the content sits centered.
+   Keep the class so existing markup doesn't error. */
+.kf-hero-top { display: none; }
+.kf-hero-bottom { margin: 0; }
 
 .kf-hero-bottom-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .kf-hero-left { flex: 1; min-width: 0; }
 
 .kf-greeting-title {
   font-family: 'Inter', sans-serif;
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 800;
   color: white;
-  margin: 0 0 4px 0;
-  line-height: 1.2;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  margin: 0 0 2px 0;
+  line-height: 1.15;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 768px) {
+  .kf-greeting-title { font-size: 22px; margin-bottom: 3px; }
 }
 
 .kf-meta-row {
@@ -156,18 +178,16 @@ body {
   align-items: center;
   gap: 8px;
   color: rgba(255,255,255,0.9);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  flex-wrap: wrap;
+}
+@media (min-width: 768px) {
+  .kf-meta-row { font-size: 12px; }
 }
 
 .kf-meta-divider { opacity: 0.5; }
-
-@media (max-width: 600px) {
-  .kf-hero-container { height: auto; min-height: 140px; }
-  .kf-hero-bottom-row { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .kf-greeting-title { font-size: 22px; }
-}
 
 /* ═══════════════════════════════════════════════════════════
    WEATHER BADGE

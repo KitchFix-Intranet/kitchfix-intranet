@@ -44,27 +44,43 @@ body:has(.pp-app) {
   padding: 0 20px;
 }
 
-/* â”€â”€ Hero â”€â”€ */
+/* Mobile Overhaul - compact flat hero matching oh-hero / kf-hero
+   spec. Was 120px banner; now 84px (96px desktop) with a focal-band
+   photo crop. */
 .pp-hero {
   position: relative;
-  height: 120px;
-  margin-top: 32px;
-  margin-bottom: 24px;
-  border-radius: 20px;
+  height: 84px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  border-radius: 14px;
   background-color: var(--pp-navy);
   overflow: hidden;
   box-shadow: var(--pp-shadow);
   display: flex;
   align-items: center;
-  padding: 0 40px;
+  padding: 0 22px;
   background-size: cover;
-  background-position: center;
+  background-position: center 35%;
+}
+@media (min-width: 768px) {
+  .pp-hero {
+    height: 96px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding: 0 32px;
+  }
 }
 
 .pp-hero-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(15, 48, 87, 0.95) 0%, rgba(15, 48, 87, 0.85) 50%, rgba(15, 48, 87, 0.2) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(15, 48, 87, 0.95) 0%,
+    rgba(15, 48, 87, 0.78) 38%,
+    rgba(15, 48, 87, 0.32) 78%,
+    rgba(15, 48, 87, 0.18) 100%
+  );
 }
 
 .pp-hero-content {
@@ -76,17 +92,22 @@ body:has(.pp-app) {
 .pp-hero-title {
   font-family: var(--pp-font-head);
   font-weight: 800;
-  font-size: 28px;
+  font-size: 20px;
   margin: 0;
-  letter-spacing: -0.5px;
-  line-height: 1;
+  letter-spacing: -0.4px;
+  line-height: 1.1;
 }
 
 .pp-hero-subtitle {
-  margin: 4px 0 0 0;
-  opacity: 0.9;
-  font-size: 14px;
+  margin: 2px 0 0 0;
+  opacity: 0.88;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.2;
+}
+@media (min-width: 768px) {
+  .pp-hero-title { font-size: 24px; }
+  .pp-hero-subtitle { font-size: 13px; margin-top: 3px; }
 }
 
 /* â”€â”€ Navigation â”€â”€ */
@@ -1409,16 +1430,10 @@ body:has(.pp-app) {
 @keyframes pp-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes pp-shrink { from { width: 100%; } to { width: 0%; } }
 
-/* â”€â”€ Mobile â”€â”€ */
-@media (max-width: 768px) {
-  .pp-hero {
-    height: 100px;
-    padding: 0 24px;
-    margin-top: 16px;
-  }
-
-  .pp-hero-title { font-size: 22px; }
-
+/* Mobile overhaul: hero sizing handled in the main .pp-hero block
+   above (compact flat hero). This responsive block focuses on nav +
+   form adjustments. */
+@media (max-width: 767px) {
   .pp-nav-item {
     padding: 8px 20px;
     font-size: 13px;
