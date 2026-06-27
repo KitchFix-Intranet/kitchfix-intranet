@@ -49,6 +49,14 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
   const title = phaseStripTitle(category, timeline.status);
   const subtitle = phaseStripSubtitle(timeline.status);
 
+  // Mobile chip: at phone width the 12-segment strip clips badly
+  // (audit Part E1). Collapse to a compact "current phase -> next"
+  // chip. Find the next phase after today's by walking blocks in
+  // order.
+  const nextPhase = todayDate
+    ? (timeline.blocks || []).find((b) => b.start > todayDate) || null
+    : null;
+
   return (
     <section className="sc-season-strip" aria-label={title}>
       {/* Title row: name on the left, today chip on the right.
@@ -74,6 +82,24 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
           </span>
         )}
       </header>
+
+      {/* Mobile-only compact "current -> next" chip. The full 12-block
+          rail clips at phone width; this chip carries the same signal
+          at a readable scale (audit Part E1). */}
+      {(todayPhase || nextPhase) && (
+        <div className="sc-season-strip-mobile-chip">
+          <span className="sc-season-strip-mobile-chip-tag">Now</span>
+          <span className="sc-season-strip-mobile-chip-value">
+            {todayPhase ? todayPhase.label : "Season"}
+          </span>
+          {nextPhase && (
+            <>
+              <span className="sc-season-strip-mobile-chip-sep" aria-hidden="true">-&gt;</span>
+              <span className="sc-season-strip-mobile-chip-next">{nextPhase.label}</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Rail: blocks (when present), today line. Month ticks only
           render BELOW the rail so they cannot overlap phase labels. */}
@@ -109,9 +135,8 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
         )}
       </div>
 
-      {/* Month ticks underneath the rail. Always visible; never
-          overlapping with phase labels because they live on their
-          own row. */}
+      {/* Month ticks underneath the rail. Always visible on desktop;
+          hidden on mobile (the chip above carries the signal). */}
       <div className="sc-season-strip-ticks" aria-hidden="true">
         {MONTH_SHORT.map((m) => (
           <span key={m} className="sc-season-strip-tick">{m}</span>

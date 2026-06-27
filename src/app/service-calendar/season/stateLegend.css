@@ -154,6 +154,40 @@
   .sc-state-legend { backdrop-filter: none; background: #ffffff; }
 }
 
+/* Mobile Overhaul E2: collapse the legend to a compact strip on
+   phone widths. The 7+ swatches don't fit in a row and stack into a
+   wall above the grid. Hide the swatch list; keep "Legend [i]"
+   tappable - the popup carries the full key. The always-visible
+   key requirement (rubric non-negotiable #1) is met by the popup
+   being one tap away.
+   Slightly larger tap target on the info button so it meets the
+   44x44 mobile minimum (WCAG 2.5.5). */
+@media (max-width: 767px) {
+  .sc-state-legend {
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    flex-wrap: nowrap;
+  }
+  .sc-state-legend-title {
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+  }
+  .sc-state-legend-list { display: none; }
+  .sc-state-legend-info {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .sc-state-legend-info::after {
+    content: " ";
+    position: absolute;
+    inset: -4px;
+  }
+  .sc-state-legend-info { position: relative; }
+}
+
 /* Floor-first (cooler viewport): wrap onto multiple rows, tighter
    spacing, slightly larger swatches for visibility. */
 @media (max-width: 1023px) {

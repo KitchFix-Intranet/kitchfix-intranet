@@ -22,6 +22,16 @@
   gap: 12px;
   padding: 8px 4px 0;
 }
+/* Mobile Overhaul: tighten the NavRow so the breadcrumb + period
+   stepper don't leave a giant empty band above the workspace
+   header. Both rows compress; the climb-to-Season chevron stays
+   visible as a back-affordance, not as a floating "Season" word. */
+@media (max-width: 767px) {
+  .sc-workspace-nav {
+    padding: 4px 0 0;
+    gap: 8px;
+  }
+}
 .sc-workspace-nav-climb {
   display: inline-flex;
   align-items: center;
@@ -154,6 +164,43 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Upcoming-period frame (Mobile Overhaul D2): calm slate, no
+   punitive "0 / 28" or empty progress bar. */
+.sc-workspace-frame--upcoming {
+  background: #F8FAFC;
+  border-color: #e2e8f0;
+  border-left: 3px solid #94a3b8;
+  padding: 14px 18px;
+  gap: 0;
+}
+.sc-workspace-frame-upcoming {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sc-workspace-frame-upcoming-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #94a3b8;
+  color: #ffffff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sc-workspace-frame-upcoming-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0a2548;
+}
+.sc-workspace-frame-upcoming-sub {
+  font-size: 13px;
+  color: #6b7280;
 }
 .sc-workspace-frame-numbers {
   display: flex;
@@ -600,6 +647,13 @@
   cursor: pointer;
   transition: background 0.15s;
 }
+.sc-workspace-breadcrumb-link--back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+.sc-workspace-breadcrumb-link--back svg { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .sc-workspace-breadcrumb-link { transition: none; }
 }
@@ -694,23 +748,24 @@
      exist for DOW alignment on desktop. */
   .sc-workspace-grid-cell-empty { display: none; }
 
-  /* Atom at lg horizontalized for list rows. Date on left, content
-     right, status badge far right. 64px tall = comfortable thumb
-     target without being claustrophobic. */
+  /* Mobile Overhaul F: tighter rows so more fit per phone screen
+     (was 64px tall - now 48px, still >= 44px tap target per WCAG
+     2.5.5). Entered vs un-entered keep their atom fill + glyph
+     for distinction. */
   .sc-workspace-grid .sc-daysq--lg {
-    min-height: 64px;
+    min-height: 48px;
     flex-direction: row;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 10px;
+    padding: 6px 12px;
   }
   .sc-workspace-grid .sc-daysq-top {
     flex: 0 0 auto;
     margin-bottom: 0;
-    min-width: 56px;
+    min-width: 48px;
   }
   .sc-workspace-grid .sc-daysq-date {
-    font-size: 16px;
+    font-size: 15px;
   }
   .sc-workspace-grid .sc-daysq-mid {
     flex: 1;

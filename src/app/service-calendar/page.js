@@ -92,18 +92,27 @@ export default function ServiceCalendarPage() {
     );
   }
 
-  // Design Batch 2: the welcome hero now lives inside ServiceCalendar
-  // (HeroCollapse) so it can sit below the chrome bar and animate on
-  // scroll without a layout shift in the grid below. The page just
-  // wraps the surface and passes firstName + heroImage down.
+  // Mobile Overhaul: hero is now the shared compact oh-hero rendered
+  // ABOVE the SC content, matching how People Portal and Home work.
+  // The Batch-2 HeroCollapse + scroll-listener is retired - at 84px
+  // there's nothing to collapse. ChromeBar floats above the content
+  // (not boxed inside an outer card) as its own row.
   return (
     <div className="oh-app">
       <div className="oh-bound">
+        <div
+          className="oh-hero"
+          style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
+        >
+          <div className="oh-hero-overlay" />
+          <div className="oh-hero-content">
+            <h1 className="oh-hero-title">Service Calendar</h1>
+            <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+          </div>
+        </div>
         <ServiceCalendar
           showToast={showToast}
           session={session}
-          firstName={firstName}
-          heroImage={heroImage}
         />
       </div>
       {toast && (

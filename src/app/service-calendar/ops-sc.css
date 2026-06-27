@@ -3,8 +3,12 @@
    Green (#0F6E56) / Amber (#EF9F27) / Red (#dc2626) system
    ══════════════════════════════════════════════════════════════ */
 
+/* Mobile Overhaul: the SC content is no longer wrapped in a boxing
+   white sc-card. ChromeBar floats above as its own row; sc-body holds
+   the views. Each piece (InfoCard / legend / stepper / strip / grid)
+   carries its own border, matching how People Portal + Home work. */
 .sc-root { padding-bottom: 60px; }
-.sc-card { background: #fff; border-radius: var(--radius-card); border: 1px solid #e5e7eb; overflow: hidden; }
+.sc-body { display: flex; flex-direction: column; }
 
 .sc-header { padding: var(--space-3) var(--space-4); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
 

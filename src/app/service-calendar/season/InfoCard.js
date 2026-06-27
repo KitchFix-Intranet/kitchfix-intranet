@@ -25,7 +25,7 @@ export default function InfoCard({
   isFeeAccount = false,
   needsEntry = 0,
   overdue = 0,
-  feeHeadline = null,         // { current, opponents[], note } for fee account headline
+  feeStats = null,            // { gameDaysEntered, totalGameDays } for fee account contract band
   // actions
   onJumpToNext,               // () => void; rendered only when there's work
   hasJumpTarget = false,      // boolean - whether the jump-to-next target is resolvable
@@ -59,7 +59,7 @@ export default function InfoCard({
         isFeeAccount={isFeeAccount}
         needsEntry={needsEntry}
         overdue={overdue}
-        feeHeadline={feeHeadline}
+        feeStats={feeStats}
         todayLabel={todayLabel}
         onJumpToNext={onJumpToNext}
         hasJumpTarget={hasJumpTarget}
@@ -101,9 +101,9 @@ function ContextBand({ todayLabel, periodNum, weekNum, pctRecorded }) {
 // Action band: three states. The branch order matters - fee accounts
 // short-circuit before the per-meal action/all-clear branches because
 // they never carry needs-entry/overdue counts.
-function ActionBand({ isFeeAccount, needsEntry, overdue, feeHeadline, todayLabel, onJumpToNext, hasJumpTarget }) {
+function ActionBand({ isFeeAccount, needsEntry, overdue, feeStats, todayLabel, onJumpToNext, hasJumpTarget }) {
   if (isFeeAccount) {
-    return <FeeBand headline={feeHeadline} />;
+    return <FeeBand feeStats={feeStats} />;
   }
   const hasWork = (needsEntry || 0) > 0 || (overdue || 0) > 0;
   if (hasWork) {
@@ -166,50 +166,36 @@ function ActionBand({ isFeeAccount, needsEntry, overdue, feeHeadline, todayLabel
   );
 }
 
-// Fee account: homestand + contract state. NO needs-entry/overdue
-// (fee accounts don't track per-meal actuals - audit CC-7). When
-// current-homestand detail is available, render it. When between
-// homestands or off-season, fall back to a contract-only headline.
-function FeeBand({ headline }) {
-  if (!headline) {
-    return (
-      <div className="sc-info-card-action sc-info-card-action--fee">
-        <span className="sc-info-card-action-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14" />
-            <path d="m12 5 7 7-7 7" />
-          </svg>
-        </span>
-        <span className="sc-info-card-action-text">
-          <strong>Season in progress</strong>
-          <span className="sc-info-card-action-sub"> · contract on track</span>
-        </span>
-      </div>
-    );
-  }
-  const { current, opponents = [], note } = headline;
+// Fee account: contract status only. The homestand / opponent detail
+// used to render here AND in the SeasonStepper caption AND in the
+// mobile spotlight - three copies of the same fact on one screen.
+// As of the mobile overhaul, this band is contract-only; the
+// stepper owns homestand detail.
+function FeeBand({ feeStats }) {
+  // feeStats may be null (per-meal account) - the parent gates this
+  // branch on isFeeAccount === true so we never render that case.
+  const hasGameDays = feeStats?.totalGameDays > 0;
   return (
     <div className="sc-info-card-action sc-info-card-action--fee">
       <span className="sc-info-card-action-icon" aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6 9 17l-5-5" />
         </svg>
       </span>
       <span className="sc-info-card-action-text">
-        {current ? (
+        {hasGameDays ? (
           <>
-            <strong>{current} in progress</strong>
-            {opponents.length > 0 && (
-              <span className="sc-info-card-action-sub"> · {opponents.join(" -> ")}</span>
-            )}
+            <strong>
+              {feeStats.gameDaysEntered} of {feeStats.totalGameDays} game days recorded
+            </strong>
+            <span className="sc-info-card-action-sub"> · contract on track</span>
           </>
         ) : (
           <>
-            <strong>{note || "Between homestands"}</strong>
+            <strong>Contract on track</strong>
+            <span className="sc-info-card-action-sub"> · season in progress</span>
           </>
         )}
-        <span className="sc-info-card-action-sub"> · contract on track</span>
       </span>
     </div>
   );

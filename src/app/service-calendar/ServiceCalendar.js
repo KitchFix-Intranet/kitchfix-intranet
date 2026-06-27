@@ -5,7 +5,7 @@ import DayDetail from "./DayDetail";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import ChromeBar from "./season/ChromeBar";
-import HeroCollapse from "./season/HeroCollapse";
+import StickyContext from "./season/StickyContext";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
@@ -74,7 +74,7 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-export default function ServiceCalendar({ showToast, session, firstName, heroImage }) {
+export default function ServiceCalendar({ showToast, session }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -733,42 +733,6 @@ export default function ServiceCalendar({ showToast, session, firstName, heroIma
     return { todayLabel, daysRecorded, totalDays, needsEntry, overdue, mealsYTD, gameDaysEntered, totalGameDays };
   }, [yearData]);
 
-  // Design Batch 2: fee-account headline. Derives current homestand
-  // detail (id + opponent set) client-side from data.homestandMap.
-  // For accounts not currently in a homestand, falls back to "Between
-  // homestands" or null (off-season). The data layer is unchanged -
-  // homestandMap is the existing route response shape.
-  const feeHeadline = useMemo(() => {
-    if (!isFeeAccount) return null;
-    if (!hasHomestandSchedule) return null;
-    const map = data?.homestandMap || {};
-    if (!Object.keys(map).length) return null;
-    const todayHs = map[today]?.homestandId || null;
-    if (todayHs) {
-      // Collect opponents in order of date for the same homestand.
-      const datesInHs = Object.entries(map)
-        .filter(([, v]) => v.homestandId === todayHs)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, v]) => v.opponent)
-        .filter(Boolean);
-      const opponents = [...new Set(datesInHs)];
-      return { current: todayHs, opponents, note: null };
-    }
-    // Not in a homestand right now - find the next upcoming HS.
-    const upcomingDates = Object.entries(map)
-      .filter(([d]) => d > today)
-      .sort(([a], [b]) => a.localeCompare(b));
-    const nextEntry = upcomingDates.find(([, v]) => v.homestandId);
-    if (nextEntry) {
-      const [d, v] = nextEntry;
-      const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      const dt = new Date(d + "T12:00:00");
-      const note = `Next: ${v.homestandId} ${MON[dt.getMonth()]} ${dt.getDate()}${v.opponent ? ` vs ${v.opponent}` : ""}`;
-      return { current: null, opponents: [], note };
-    }
-    return { current: null, opponents: [], note: "Between homestands" };
-  }, [isFeeAccount, hasHomestandSchedule, data, today]);
-
   // Design Batch 2: jump-to-next-needing-entry. Finds the soonest
   // (earliest service_date) day in yearData with status needs-entry
   // or overdue. Returns { date, period } so the click handler can
@@ -856,22 +820,42 @@ export default function ServiceCalendar({ showToast, session, firstName, heroIma
 
   return (
     <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
-      <div className="sc-card">
-        <ChromeBar
-          accountDropdown={accountDropdown}
-          category={!isAdminView ? category : null}
-          view={seasonView}
-          onViewChange={handleSeasonViewChange}
-          showToggle={!isAdminView && isYearView}
-          asOf={asOf}
-          onRefresh={handleRefresh}
-          isAdmin={isAdmin}
-          isAdminView={isAdminView}
-          onAdminToggle={handleAdminToggle}
+      <ChromeBar
+        accountDropdown={accountDropdown}
+        category={!isAdminView ? category : null}
+        view={seasonView}
+        onViewChange={handleSeasonViewChange}
+        showToggle={!isAdminView && isYearView}
+        asOf={asOf}
+        onRefresh={handleRefresh}
+        isAdmin={isAdmin}
+        isAdminView={isAdminView}
+        onAdminToggle={handleAdminToggle}
+      />
+
+      {!isAdminView && (
+        <StickyContext
+          accountKey={selectedAccount}
+          todayLabel={yearBannerStats?.todayLabel}
+          periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
+          weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
+          pctRecorded={hasHomestandSchedule
+            ? (yearBannerStats?.totalGameDays > 0
+                ? Math.round((yearBannerStats.gameDaysEntered / yearBannerStats.totalGameDays) * 100)
+                : null)
+            : (yearBannerStats?.totalDays > 0
+                ? Math.round((yearBannerStats.daysRecorded / yearBannerStats.totalDays) * 100)
+                : null)
+          }
+          isFeeAccount={isFeeAccount}
+          needsEntry={yearBannerStats?.needsEntry || 0}
+          overdue={yearBannerStats?.overdue || 0}
+          gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
+          totalGameDays={yearBannerStats?.totalGameDays || 0}
         />
+      )}
 
-        <HeroCollapse firstName={firstName} heroImage={heroImage} />
-
+      <div className="sc-body">
         {isYearView && (
           <SeasonShell
             account={data?.account}
@@ -910,7 +894,6 @@ export default function ServiceCalendar({ showToast, session, firstName, heroIma
             // Design Batch 2 - lifted view + info-card props
             view={seasonView}
             onViewChange={handleSeasonViewChange}
-            feeHeadline={feeHeadline}
             onJumpToNext={handleJumpToNext}
             hasJumpTarget={!!jumpTarget}
           />
