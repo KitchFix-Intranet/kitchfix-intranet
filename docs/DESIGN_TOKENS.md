@@ -40,10 +40,12 @@ Status is NOT calendar-only - use it in People, Vendor, dashboards.
 token (not `--accent-directory`) for actual error states.
 
 ## Type - modular scale (ratio 1.2), roles lock size/weight/leading/tracking
-Fonts: `--font-ui` (Inter), `--font-body` (Mulish), `--font-mono` (JetBrains Mono).
+Fonts: `--font-ui` (Inter) for all screen UI, headings, and body; `--font-mono`
+(JetBrains Mono) for numeric/code. Mulish is reserved for the print/PDF pipeline
+(Pre-Service Materials) and is not part of the screen token set.
 Sizes: micro 10 / caption 12 / body 14 / subhead 17 / h3 20 / h2 24 / h1 29 / display 35.
 Weights: 400/500/600/700/800. Roles: display 35/800, h1 29/700, h2 24/700, h3 20/700,
-subhead 17/600, body 14/400 (Mulish), body-strong 14/600, caption 12/600, eyebrow 12/700
+subhead 17/600, body 14/400, body-strong 14/600, caption 12/600, eyebrow 12/700
 caps, micro 10/600. ALL numeric data uses `font-variant-numeric: var(--num-tabular)`.
 
 ## Shape - 6 radii + the rule

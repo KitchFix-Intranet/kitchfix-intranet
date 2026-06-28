@@ -26,7 +26,7 @@
   --fill-needs:#FCD9A0; --fill-needs-bd:#E4AD84; --fill-upcoming:#E2EFE4; --fill-upcoming-bd:#C6D8C8;
   --fill-off:#F1EEE7; --fill-off-bd:#DDD7CA;
   /* Type */
-  --font-ui:'Inter',-apple-system,system-ui,sans-serif; --font-body:'Mulish',-apple-system,system-ui,sans-serif;
+  --font-ui:'Inter',-apple-system,system-ui,sans-serif; --font-body:'Inter',-apple-system,system-ui,sans-serif;  /* screen body = Inter; Mulish is print/PDF only (Pre-Service Materials pipeline) */
   --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
   --size-micro:10px; --size-caption:12px; --size-body:14px; --size-subhead:17px; --size-h3:20px;
   --size-h2:24px; --size-h1:29px; --size-display:35px;
