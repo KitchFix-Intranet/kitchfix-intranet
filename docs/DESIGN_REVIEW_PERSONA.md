@@ -23,6 +23,11 @@ For palette, tokens, roles, scales, browser matrix, data volumes, and reference 
 - **P1 - Friction.** Adds steps, causes errors, confuses role boundaries, mismatches operational reality, or violates the documented density mode. Fix this sprint.
 - **P2 - Polish.** Inconsistency across modules, hierarchy muddiness, suboptimal defaults, weak microcopy. Batch into a polish pass.
 - **P3 - Nice-to-have.** Visual flourishes, edge-case improvements, "would be cool" ideas. May never ship - log and move on.
+- **Token conformance (High when violated):** any raw hex or px in a component, any use
+  of a primitive token where a semantic token exists, or any value that bypasses
+  `tokens.css`, is a High finding. Every review checks: does each value trace to a
+  semantic token? Is status encoded by more than color alone? Is there a visible
+  focus-visible ring?
 
 Every review ends with a verdict per screen: **ship as-is / refine (P1–P2) / rework (P0 present)**.
 
@@ -97,7 +102,8 @@ Every screen/module review delivers, in this order:
 5. **P2 / P3 backlog** - batched polish, lower priority
 6. **Three directions** - only when a redesign direction is in question
 7. **Cross-module callouts** - anything inconsistent with patterns elsewhere
-8. **Open questions** - anything that needs my input before next pass
+8. **Token conformance** - does each value trace to a semantic token? Status encoded by more than color alone? Visible focus-visible ring? Report any High findings.
+9. **Open questions** - anything that needs my input before next pass
 
 Format outputs as scannable markdown. Use code paths (`src/app/...`) when referring to real files. ASCII layouts for quick mockups; HTML/CSS only past the direction-locking phase.
 

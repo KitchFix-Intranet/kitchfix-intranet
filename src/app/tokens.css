@@ -1,0 +1,105 @@
+/* ============================================================
+   KitchFix Design Tokens - canonical source of truth.
+   See docs/DESIGN_TOKENS.md for the system, rules, and usage.
+   TIER 1 = primitives (raw values). TIER 2 = semantic (intent).
+   COMPONENTS CONSUME SEMANTIC TOKENS ONLY - never primitives, never raw hex/px.
+   Color ramps are OKLCH-generated; every text/background pair is WCAG-AA verified.
+   ============================================================ */
+:root {
+  /* ---------- TIER 1: PRIMITIVES ---------- */
+  /* Navy - brand at 700 */
+  --navy-50:#F4F7FC; --navy-100:#D1DAE6; --navy-200:#AFBDD1; --navy-300:#8FA2BC; --navy-400:#6F87A6;
+  --navy-500:#516C92; --navy-600:#33527D; --navy-700:#153968; --navy-800:#092B55; --navy-900:#011D42;
+  /* Amber - accent at 500 */
+  --amber-50:#FFF2E2; --amber-100:#FFDABE; --amber-200:#F7C299; --amber-300:#EEA973; --amber-400:#E4904B;
+  --amber-500:#D97706; --amber-600:#B25800; --amber-700:#8C3A00; --amber-800:#671C00; --amber-900:#440000;
+  /* Green - success at 500 (entered = 300/400) */
+  --green-50:#E9FDEC; --green-100:#C6EBCB; --green-200:#A2D9AB; --green-300:#7DC78B; --green-400:#54B56B;
+  --green-500:#16A34A; --green-600:#008330; --green-700:#006515; --green-800:#004800; --green-900:#002C00;
+  /* Red - danger at 500 (overdue = 200/300) */
+  --red-50:#FFEDE7; --red-100:#FFCAC1; --red-200:#FFA69B; --red-300:#F88276; --red-400:#EB5B50;
+  --red-500:#DC2626; --red-600:#B9000C; --red-700:#970000; --red-800:#760000; --red-900:#560000;
+  /* Neutral - warm surfaces to cool ink */
+  --n-0:#FFFFFF; --n-50:#FAF9F5; --n-100:#F4F2EC; --n-200:#F0EEE7; --n-300:#E5E7EB; --n-400:#D3CFC4;
+  --n-500:#94A3B8; --n-600:#64748B; --n-700:#475569; --n-800:#334155; --n-900:#0A2548;
+  /* Soft state fills - low-chroma, family-derived */
+  --fill-needs:#FCD9A0; --fill-needs-bd:#E4AD84; --fill-upcoming:#E2EFE4; --fill-upcoming-bd:#C6D8C8;
+  --fill-off:#F1EEE7; --fill-off-bd:#DDD7CA;
+  /* Type */
+  --font-ui:'Inter',-apple-system,system-ui,sans-serif; --font-body:'Inter',-apple-system,system-ui,sans-serif;  /* screen body = Inter; Mulish is print/PDF only (Pre-Service Materials pipeline) */
+  --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+  --size-micro:10px; --size-caption:12px; --size-body:14px; --size-subhead:17px; --size-h3:20px;
+  --size-h2:24px; --size-h1:29px; --size-display:35px;
+  --wt-regular:400; --wt-medium:500; --wt-semibold:600; --wt-bold:700; --wt-display:800;
+  --lead-tight:1.1; --lead-snug:1.25; --lead-normal:1.5; --track-tight:-0.01em; --track-caps:0.06em;
+  --num-tabular:tabular-nums;
+  /* Space - 4px base */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-7:32px; --space-8:40px;
+  /* Radius */
+  --rad-4:4px; --rad-6:6px; --rad-10:10px; --rad-14:14px; --rad-pill:9999px; --rad-circle:50%;
+  /* Border width */
+  --border-thin:1px; --border-thick:2px;
+  /* Elevation */
+  --sh-sm:0 1px 2px rgba(15,23,42,0.05); --sh-md:0 4px 12px rgba(15,23,42,0.08); --sh-lg:0 16px 32px rgba(15,23,42,0.12);
+  /* Motion */
+  --duration-fast:120ms; --duration-base:180ms; --duration-slow:280ms;
+  --ease-standard:cubic-bezier(.2,0,0,1); --ease-emphasized:cubic-bezier(.3,0,0,1); --ease-exit:cubic-bezier(.4,0,1,1);
+  /* Z-index */
+  --z-base:0; --z-dropdown:1000; --z-sticky:1100; --z-overlay:1200; --z-popover:1300; --z-toast:1400;
+  /* Opacity */
+  --opacity-disabled:.45; --opacity-muted:.6; --opacity-scrim:.5;
+  /* Icon */
+  --icon-sm:16px; --icon-md:20px; --icon-lg:24px;
+
+  /* ---------- TIER 2: SEMANTIC (components consume these) ---------- */
+  /* text */
+  --text-heading:var(--n-900); --text-strong:var(--n-800); --text-default:var(--n-700); --text-muted:var(--n-600);
+  --text-subtle:var(--n-500); --text-inverse:var(--n-0); --text-link:var(--navy-700);
+  --text-success:var(--green-600); --text-danger:var(--red-500);
+  /* surface */
+  --surface-page:var(--n-100); --surface-card:var(--n-0); --surface-sunken:var(--n-50); --surface-overlay:var(--n-0);
+  /* border */
+  --border-subtle:var(--n-200); --border-default:var(--n-300); --border-strong:var(--n-400);
+  /* action */
+  --action-primary-bg:var(--navy-700); --action-primary-bg-hover:var(--navy-800); --action-primary-text:var(--n-0);
+  --action-secondary-bg:var(--n-0); --action-secondary-border:var(--n-400); --action-secondary-text:var(--n-700);
+  /* accent - contrast-split so the failing white-on-amber pair is unreachable */
+  --accent:var(--amber-500);          /* fills with dark text / borders / icons */
+  --accent-solid:var(--amber-600);    /* when WHITE text is required (AA) */
+  --accent-text:var(--amber-700);     /* amber as text on light */
+  --accent-backplate:var(--amber-50); /* CTA wash */
+  /* tool accents (Tier 3 - per-surface identity) */
+  --accent-ops:var(--amber-500); --accent-people:#7C3AED; --accent-directory:#C41E3A; --accent-playbook:#0F6E56;
+  /* status family - bg / border / fg(AA) / subtle / strong */
+  --status-entered-bg:var(--green-300); --status-entered-bd:var(--green-400); --status-entered-fg:var(--green-800); --status-entered-subtle:var(--green-100); --status-entered-strong:var(--green-500);
+  --status-needs-bg:var(--fill-needs); --status-needs-bd:var(--fill-needs-bd); --status-needs-fg:var(--amber-700); --status-needs-subtle:var(--amber-100); --status-needs-strong:var(--amber-500);
+  --status-overdue-bg:var(--red-200); --status-overdue-bd:var(--red-300); --status-overdue-fg:var(--red-700); --status-overdue-subtle:var(--red-100); --status-overdue-strong:var(--red-500);
+  --status-upcoming-bg:var(--fill-upcoming); --status-upcoming-bd:var(--fill-upcoming-bd); --status-upcoming-fg:var(--n-700); --status-upcoming-subtle:var(--n-100); --status-upcoming-strong:var(--n-500);
+  --status-off-bg:var(--fill-off); --status-off-bd:var(--fill-off-bd); --status-off-fg:var(--n-700); --status-off-subtle:var(--n-50); --status-off-strong:var(--n-400);
+  --status-today-ring:var(--navy-700); --status-today-fg:var(--navy-700);
+  /* feedback */
+  --feedback-success:var(--green-600); --feedback-warning:var(--amber-500); --feedback-danger:var(--red-500); --feedback-info:#2563EB;
+  /* radius roles */
+  --radius-cell:var(--rad-4); --radius-control:var(--rad-10); --radius-container:var(--rad-10);
+  --radius-container-lg:var(--rad-14); --radius-pill:var(--rad-pill); --radius-circle:var(--rad-circle);
+  /* elevation roles */
+  --elevation-card:var(--sh-sm); --elevation-raised:var(--sh-md); --elevation-popover:var(--sh-lg);
+  /* focus + motion + disabled */
+  --focus-ring-width:var(--border-thick); --focus-ring-offset:2px; --focus-ring-color:var(--navy-700);
+  --motion-control:var(--duration-fast) var(--ease-standard); --motion-surface:var(--duration-base) var(--ease-emphasized);
+  --disabled-opacity:var(--opacity-disabled);
+  /* density-aware semantic spacing (Comfortable defaults) */
+  --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);
+  --control-height:40px; --control-pad-x:var(--space-4); --row-height:48px; --cell-size:34px;
+}
+
+/* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */
+[data-density="compact"] {
+  --space-stack:var(--space-4); --space-card-pad:var(--space-3); --space-inline:var(--space-2);
+  --control-height:32px; --control-pad-x:var(--space-3); --row-height:40px; --cell-size:28px;
+}
+
+/* Reduced motion - zero non-essential durations at the token layer. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast:0ms; --duration-base:0ms; --duration-slow:0ms; }
+}

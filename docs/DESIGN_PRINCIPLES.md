@@ -55,6 +55,14 @@ The Ops Hub has two density modes (Density and Comfortable, full spec in `DESIGN
 
 Lists and queues take Density. Forms and entry take Comfortable. Mobile is always Comfortable. When uncertain, default to the module's mode and flag for review.
 
+### Tokens are law
+Every design value traces to a token. Components consume **semantic** tokens
+(`--text-default`, `--surface-page`, `--status-overdue-fg`, `--radius-control`) - never
+primitives, never raw hex or px. A raw color or pixel value in a component is a defect,
+not a style choice. The canonical system is `src/app/tokens.css`, documented in
+`docs/DESIGN_TOKENS.md`. Theming (dark, density, rebrand) is a remap of the semantic
+layer with zero component edits - that is the whole point of the tier split.
+
 ---
 
 ## Best practices baseline (apply, don't recite)
