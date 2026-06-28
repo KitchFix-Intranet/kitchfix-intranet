@@ -1,3 +1,4 @@
+import "./tokens.css";
 import "./globals.css";
 import Providers from "./providers";
 import TopNav from "@/components/TopNav";

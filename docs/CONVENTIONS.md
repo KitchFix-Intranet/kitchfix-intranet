@@ -82,6 +82,14 @@ If you have time, consolidating to one location is a P2 polish target.
 `src/app/ops/css/ops-{tool}.css` - Ops Hub sub-tool CSS files.
 `src/app/globals.css` - root variables, fonts, and Tailwind import. Don't add module-specific styles here.
 
+### Design values come from tokens, never literals
+CSS must consume semantic tokens from `tokens.css` (`var(--text-default)`,
+`var(--radius-control)`, `var(--space-card-pad)`, etc.) - never raw hex, rgb(), or px for
+anything the token system covers (color, type, spacing, radius, border, elevation, motion,
+z-index, opacity). The module prefixes (`oh-`, `pp-`, `td-`, `sc-`) own only their distinct
+tool accent (`--accent-ops/people/directory/playbook`) and otherwise consume the shared
+semantic tokens. Do not re-declare shared values per namespace. See `docs/DESIGN_TOKENS.md`.
+
 ---
 
 ## CSS namespace prefixes

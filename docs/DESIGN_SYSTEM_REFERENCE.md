@@ -24,56 +24,17 @@
 
 ## Brand & color
 
-### Canonical navy: `#153968`
-
-This is the only valid navy. Two existing values in the codebase are **drift to be corrected**, not parallel valid options:
-
-| Location | Current value | Action |
-|---|---|---|
-| `globals.css` `--kf-navy` | `#0f3057` | **Drift** - update to `#153968` |
-| Ops Hub dark navy | `#0b1d35` | **Drift** - update to `#153968`, OR document as deliberate dark variant if a darker navy is genuinely needed |
-
-When proposing CSS, always use `#153968` for navy unless a different value is explicitly called out. Flag any non-canonical navy as P2 polish.
-
-### PFS brand palette (customer-facing, Team Directory)
-
-- Navy: `#153968`
-- Sky Blue: `#C4E3E8`
-- Red: `#E53530`
-
-### Ops Hub palette (internal tools)
-
-- Brand Navy: `#153968`
-- Amber: `#d97706` / `#D97706`
-- Neutral grays
-
-### CSS variables (from `globals.css`)
-
-css--kf-navy: #0f3057    /* DRIFT - should be #153968 */
---kf-blue: #2563eb
---kf-gold: #fbbf24
---kf-green: #10b981
---kf-red: #ef4444
---kf-purple: #6366f1
---kf-bg: #f0f4f8
---kf-border: #e2e8f0
---kf-card: #ffffff
---kk-teal: #0d9488
---kf-mustard: #fbbf24
---kf-mustard-light: #fffbeb
---kf-mustard-text: #92400e
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
 ## Typography
 
-- **Screen UI (both density modes):** Inter (weights 400 / 600 / 800)
-- **Print / PDF only (Pre-Service Materials):** Mulish (weights 400 / 700)
-- Both loaded via Google Fonts in `globals.css`
-
-**Mulish is demoted from screen.** All screen UI uses Inter regardless of density mode. Mulish remains canonical for the print/PDF pipeline (Pre-Service Materials) only. If you find Mulish on a screen surface, that's drift to fix.
-
-Type scale lives inside the density mode tables below - there is no single screen type scale. See "Density modes."
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
@@ -92,54 +53,41 @@ Type scale lives inside the density mode tables below - there is no single scree
 
 ## Spacing scale
 
-Spacing values live inside the density mode tables below. Both modes can pull wider values (32 / 48 / 64) when hero/section breathing room is needed - the per-mode tables show the common case, not a ceiling.
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
 ## Radius scale
 
-Radius values live inside the density mode tables below. Modal and pill values are mode-independent:
-
-| Element | Value (both modes) |
-|---|---|
-| Modal | 12 |
-| Pill | 999 |
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
 ## Elevation
 
-| Level | Shadow |
-|---|---|
-| flat | none |
-| card | 1–2px |
-| modal | 8–12px |
-| overlay | 16px+ |
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
 ## Motion
 
-- Default: 150ms ease-out
-- Layout shifts: 250ms
-- Never exceed 400ms
-- Always respect `prefers-reduced-motion`
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
 ## Z-index
 
-**Current state in repo: chaotic.** 20+ different values across the codebase, no enforced scale. Common clusters: `1`, `2`, `10`, `100`, `1000`, `9999`. Z-index normalization is a known **P2 system-wide cleanup** - log once, not per module.
-
-### Target scale (use for all new work)
-
-| Value | Lane |
-|---|---|
-| 0 | Base |
-| 10 | Sticky elements |
-| 100 | Dropdowns |
-| 1000 | Modals |
-| 10000 | Toasts, overlays |
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
@@ -197,105 +145,15 @@ The general rule: **lists and queues take density; forms and entry take comforta
 
 ### Token tables
 
-#### Type scale - Inter only
-
-| Role | Density | Comfortable |
-|---|---|---|
-| Caption / metadata / label | 11 | 12 |
-| Body small / table cell | 13 | 14 |
-| Body (default reading) | 14 | 16 |
-| Body emphasis / h3 | 16 | 18 |
-| h2 / section head | 20 | 24 |
-| h1 / hero | 24 | 32 |
-| Line height - body | 1.3 | 1.5 |
-| Line height - headings | 1.15 | 1.2 |
-
-11px is reserved for table column headers and metadata labels. Never body.
-
-#### Spacing scale
-
-| Density | Comfortable |
-|---|---|
-| 4 / 8 / 12 / 16 / 20 / 24 | 8 / 12 / 16 / 24 / 32 / 48 |
-
-Wider values (32 / 48 / 64) are available in both modes for hero/section breathing room. The table is the common case, not a ceiling.
-
-#### Radius
-
-| Element | Density | Comfortable |
-|---|---|---|
-| Card | 8 | 12 |
-| Input / button | 4 | 8 |
-| Modal | 12 | 12 |
-| Pill | 999 | 999 |
-
-#### Card padding
-
-| Card type | Density | Comfortable |
-|---|---|---|
-| List / queue card | 12 | 24 |
-| Content card | 16 | 24 |
-| Hero / feature card | 20 | 32 |
-
-#### Tap targets (mode-independent)
-
-| Viewport | Minimum tap target |
-|---|---|
-| Desktop (≥1024px) | 32×32 |
-| Tablet (768–1023px) | 48×48 |
-| Phone (<768px) | 48×48 |
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ### CSS variable structure
 
-Both mode token sets live in `globals.css`, gated by `data-density` attribute on the page root or module root:
-
-css[data-density="compact"] {
---type-caption: 11px;
---type-body-sm: 13px;
---type-body: 14px;
---type-emphasis: 16px;
---type-h2: 20px;
---type-h1: 24px;
---line-body: 1.3;
---line-heading: 1.15;
---space-1: 4px;
---space-2: 8px;
---space-3: 12px;
---space-4: 16px;
---space-5: 20px;
---space-6: 24px;
---radius-card: 8px;
---radius-input: 4px;
---pad-card-list: 12px;
---pad-card-content: 16px;
---pad-card-hero: 20px;
-}[data-density="comfortable"] {
---type-caption: 12px;
---type-body-sm: 14px;
---type-body: 16px;
---type-emphasis: 18px;
---type-h2: 24px;
---type-h1: 32px;
---line-body: 1.5;
---line-heading: 1.2;
---space-1: 8px;
---space-2: 12px;
---space-3: 16px;
---space-4: 24px;
---space-5: 32px;
---space-6: 48px;
---radius-card: 12px;
---radius-input: 8px;
---pad-card-list: 24px;
---pad-card-content: 24px;
---pad-card-hero: 32px;
-}@media (max-width: 1023px) {
-[data-density="compact"] {
-/* mobile override - fall back to comfortable tokens */
-}
-}
-
-The mobile override block can either redefine all variables to match comfortable, or apply `data-density="comfortable"` programmatically at <1024px. Implementation choice; outcome is the same.
+> Canonical values live in `src/app/tokens.css`; the system is documented in
+> `docs/DESIGN_TOKENS.md`. This section is a usage guide only - do not duplicate values
+> here.
 
 ---
 
