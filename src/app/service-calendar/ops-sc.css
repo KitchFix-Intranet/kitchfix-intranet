@@ -18,21 +18,6 @@
 .sc-header-account { display: flex; align-items: center; gap: var(--space-2); }
 
 
-/* Admin escape - parallel surface, outlined, navy palette. Distinct
-   from the lens-bar pill so it reads as "leave and come back" not a
-   tab peer. */
-.sc-admin-esc {
-  display: inline-flex; align-items: center; gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  font-family: inherit; font-size: var(--size-caption); font-weight: var(--wt-semibold);
-  color: var(--text-link); background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-strong); border-radius: var(--radius-control);
-  cursor: pointer; transition: background var(--motion-control), border-color var(--motion-control), box-shadow var(--motion-control);
-}
-.sc-admin-esc:hover { background: var(--surface-page); border-color: var(--text-subtle); }
-.sc-admin-esc:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
-.sc-admin-esc--active { background: var(--surface-page); border-color: var(--text-link); }
-
 /* Redesign PR 1A: admin entry as a circular lock button anchored to
    the operator hero's top-right corner. Translucent-white treatment
    matches the in-hero corp chip so the lock reads as the same chrome

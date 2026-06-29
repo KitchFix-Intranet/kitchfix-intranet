@@ -81,6 +81,7 @@
   --status-today-ring:var(--navy-700); --status-today-fg:var(--navy-700);
   /* feedback */
   --feedback-success:var(--green-600); --feedback-warning:var(--amber-500); --feedback-danger:var(--red-500); --feedback-info:#2563EB;
+  --feedback-info-subtle:#f0f5ff; --feedback-info-border:#bfdbfe;
   /* radius roles */
   --radius-cell:var(--rad-4); --radius-control:var(--rad-10); --radius-container:var(--rad-10);
   --radius-container-lg:var(--rad-14); --radius-pill:var(--rad-pill); --radius-circle:var(--rad-circle);
