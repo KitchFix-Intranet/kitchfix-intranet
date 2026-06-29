@@ -10,7 +10,7 @@
    ══════════════════════════════════════════════════════════════ */
 
 .sc-season {
-  padding: var(--space-3) var(--space-4) var(--space-7);
+  padding: var(--space-3) var(--space-4) var(--space-4);
   background: var(--surface-sunken);
   color: var(--text-heading);
   font-family: inherit;

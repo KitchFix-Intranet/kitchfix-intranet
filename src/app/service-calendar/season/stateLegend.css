@@ -15,10 +15,11 @@
   gap: var(--space-3);
   flex-wrap: wrap;
   padding: var(--space-2) var(--space-4);
-  margin: var(--space-2) 0 var(--space-3) 0;
+  margin: 0;
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-control);
+  border-top: var(--border-thin) solid var(--border-default);
+  border-bottom-left-radius: var(--radius-container-lg);
+  border-bottom-right-radius: var(--radius-container-lg);
   font-size: var(--size-caption);
   color: var(--text-default);
 }
@@ -166,7 +167,7 @@
 @media (max-width: 767px) {
   .sc-state-legend {
     padding: 6px var(--space-2);
-    margin-bottom: var(--space-2);
+    margin-bottom: 0;
     gap: 6px;
     flex-wrap: nowrap;
     align-items: flex-start;
