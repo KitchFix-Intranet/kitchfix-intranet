@@ -3,6 +3,9 @@
    Sticky strip placed between the Calendar/Period toggle and the
    grid. Carries the visual contract: every state the atom renders
    has a swatch + label here. Audit P0-1 (non-negotiable #1).
+
+   The swatch fills MUST consume the same --status-* tokens as
+   DaySquare.css so the legend is byte-locked to the cells.
    ══════════════════════════════════════════════════════════════ */
 
 .sc-state-legend {
@@ -11,27 +14,27 @@
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 10px 14px;
-  margin: 0 0 12px 0;
+  padding: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-3) 0;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(6px);
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 11px;
-  color: #475569;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  font-size: var(--size-caption);
+  color: var(--text-default);
 }
 
 .sc-state-legend-title {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: #6b7280;
-  padding-right: 4px;
-  border-right: 1px solid #e5e7eb;
-  margin-right: 4px;
+  color: var(--text-muted);
+  padding-right: var(--space-1);
+  border-right: var(--border-thin) solid var(--border-default);
+  margin-right: var(--space-1);
 }
 
 .sc-state-legend-list {
@@ -40,20 +43,20 @@
   padding: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
 .sc-state-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-variant-numeric: tabular-nums;
+  gap: var(--space-2);
+  font-variant-numeric: var(--num-tabular);
 }
 
 .sc-state-legend-label {
-  color: #374151;
-  font-weight: 500;
+  color: var(--text-default);
+  font-weight: var(--wt-medium);
 }
 
 /* Swatches mirror the atom's status fills + glyphs. Smaller, fixed
@@ -61,60 +64,61 @@
 .sc-state-legend-swatch {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
+  border-radius: var(--radius-cell);
+  border: var(--border-thin) solid var(--border-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
   line-height: 1;
-  color: #0a2548;
+  color: var(--text-heading);
   flex-shrink: 0;
 }
 
-/* Pull swatch fills + badge accents from the atom palette (Design
-   Batch 1 widened tier). Keep these in sync with DaySquare.css. */
-.sc-state-legend-swatch--entered      { background: #7FD3AC; border-color: #4FB78E; }
-.sc-state-legend-swatch--needs-entry  { background: #FCD9A0; border-color: #E9B96B; color: #B45309; }
-.sc-state-legend-swatch--overdue      { background: #F4B5AC; border-color: #D88078; color: #991B1B; }
-.sc-state-legend-swatch--upcoming     { background: #EAF1EC; border-color: #D2DDD5; color: #6b7280; }
-.sc-state-legend-swatch--off          { background: #F1EFE8; border-color: #DDD8C9; color: #9ca3af; }
+/* Pull swatch fills + badge accents from the atom palette. These
+   resolve to the SAME --status-* tokens DaySquare.css uses on the
+   matching cell states - the legend is locked to the cells. */
+.sc-state-legend-swatch--entered      { background: var(--status-entered-bg); border-color: var(--status-entered-bd); }
+.sc-state-legend-swatch--needs-entry  { background: var(--status-needs-bg); border-color: var(--status-needs-bd); color: var(--accent-text); }
+.sc-state-legend-swatch--overdue      { background: var(--status-overdue-bg); border-color: var(--status-overdue-bd); color: var(--status-overdue-fg); }
+.sc-state-legend-swatch--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); color: var(--text-muted); }
+.sc-state-legend-swatch--off          { background: var(--status-off-bg); border-color: var(--status-off-bd); color: var(--text-subtle); }
 .sc-state-legend-swatch--off-season {
   background:
     repeating-linear-gradient(
       135deg,
-      #F1EFE8 0,
-      #F1EFE8 3px,
-      #E6E2D6 3px,
-      #E6E2D6 4px
+      var(--status-off-bg) 0,
+      var(--status-off-bg) 3px,
+      var(--status-off-bd) 3px,
+      var(--status-off-bd) 4px
     );
-  border-color: #DDD8C9;
-  color: #9ca3af;
+  border-color: var(--status-off-bd);
+  color: var(--text-subtle);
 }
 .sc-state-legend-swatch--today {
-  background: #ffffff;
-  border: 2px solid #153968;
+  background: var(--surface-card);
+  border: 2px solid var(--status-today-ring);
 }
 .sc-state-legend-swatch--failed {
-  background: #FBF1EF;
-  border: 1.5px dashed #D88078;
-  color: #991B1B;
+  background: var(--status-overdue-subtle);
+  border: 1.5px dashed var(--status-overdue-bd);
+  color: var(--status-overdue-fg);
 }
 
 /* MiLB day / night swatches use the pill-dot pattern from the atom. */
 .sc-state-legend-swatch--milb-day,
 .sc-state-legend-swatch--milb-night {
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-strong);
 }
 .sc-state-legend-pill-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
-.sc-state-legend-swatch--milb-day .sc-state-legend-pill-dot   { background: #EF9F27; }
-.sc-state-legend-swatch--milb-night .sc-state-legend-pill-dot { background: #153968; }
+.sc-state-legend-swatch--milb-day .sc-state-legend-pill-dot   { background: var(--status-needs-strong); }
+.sc-state-legend-swatch--milb-night .sc-state-legend-pill-dot { background: var(--text-link); }
 
 /* Info button - opens LegendInfoPopup for the fuller detail
    (Design Batch 2). The one-line key stays always visible (rubric
@@ -129,20 +133,20 @@
   height: 22px;
   padding: 0;
   background: transparent;
-  border: 1px solid #cbd5e1;
-  border-radius: 50%;
-  color: #6b7280;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-circle);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
 }
 .sc-state-legend-info:hover {
-  background: #f3f4f6;
-  color: #153968;
-  border-color: #94a3b8;
+  background: var(--surface-sunken);
+  color: var(--text-link);
+  border-color: var(--text-subtle);
 }
 .sc-state-legend-info:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-state-legend-info { transition: none; }
@@ -151,7 +155,7 @@
 /* Reduced motion: drop the backdrop blur (some implementations
    animate during scroll). Solid white still legible. */
 @media (prefers-reduced-motion: reduce) {
-  .sc-state-legend { backdrop-filter: none; background: #ffffff; }
+  .sc-state-legend { backdrop-filter: none; background: var(--surface-card); }
 }
 
 /* Cleanup batch: the mobile legend now keeps a COMPACT always-
@@ -164,8 +168,8 @@
    states) at a 44x44 hit area (WCAG 2.5.5). */
 @media (max-width: 767px) {
   .sc-state-legend {
-    padding: 6px 10px;
-    margin-bottom: 8px;
+    padding: 6px var(--space-2);
+    margin-bottom: var(--space-2);
     gap: 6px;
     flex-wrap: nowrap;
     align-items: flex-start;
@@ -180,7 +184,7 @@
     max-height: 38px;
     overflow: hidden;
   }
-  .sc-state-legend-item { gap: 4px; }
+  .sc-state-legend-item { gap: var(--space-1); }
   .sc-state-legend-swatch {
     width: 12px;
     height: 12px;
@@ -188,9 +192,9 @@
     border-radius: 3px;
   }
   .sc-state-legend-label {
-    font-size: 10px;
-    font-weight: 500;
-    color: #475569;
+    font-size: var(--size-micro);
+    font-weight: var(--wt-medium);
+    color: var(--text-default);
   }
   .sc-state-legend-info {
     width: 36px;
@@ -212,10 +216,10 @@
    spacing, slightly larger swatches for visibility. */
 @media (max-width: 1023px) {
   .sc-state-legend {
-    gap: 10px;
-    padding: 10px 12px;
-    font-size: 12px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--size-caption);
   }
-  .sc-state-legend-list { gap: 12px; }
+  .sc-state-legend-list { gap: var(--space-3); }
   .sc-state-legend-swatch { width: 20px; height: 20px; }
 }

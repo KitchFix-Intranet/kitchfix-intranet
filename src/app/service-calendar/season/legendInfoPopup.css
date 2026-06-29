@@ -5,13 +5,13 @@
 .sc-legend-popup-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-overlay);
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
   animation: scLegendPopupIn 160ms ease;
 }
 
@@ -25,12 +25,12 @@
 }
 
 .sc-legend-popup {
-  background: #ffffff;
+  background: var(--surface-card);
   width: 100%;
   max-width: 520px;
   max-height: 80vh;
-  border-radius: 12px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-container-lg);
+  box-shadow: var(--elevation-popover);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -41,14 +41,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 18px 22px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: var(--border-thin) solid var(--border-default);
 }
 
 .sc-legend-popup-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #0a2548;
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
 }
 
 .sc-legend-popup-close {
@@ -60,15 +60,15 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: #6b7280;
+  border-radius: var(--radius-cell);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--motion-control), color var(--motion-control);
 }
-.sc-legend-popup-close:hover { background: #f3f4f6; color: #0a2548; }
+.sc-legend-popup-close:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .sc-legend-popup-close:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-legend-popup-close { transition: none; }
@@ -79,44 +79,44 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .sc-legend-popup-section-title {
-  margin: 0 0 8px 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .sc-legend-popup-rows {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .sc-legend-popup-row {
   display: grid;
   grid-template-columns: 28px 1fr;
-  gap: 10px;
+  gap: var(--space-3);
   align-items: start;
 }
 
 .sc-legend-popup-swatch {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
+  border-radius: var(--radius-cell);
+  border: var(--border-thin) solid var(--border-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
   line-height: 1;
-  color: #0a2548;
+  color: var(--text-heading);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -127,15 +127,15 @@
 
 .sc-legend-popup-row-label {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #0a2548;
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
 }
 
 .sc-legend-popup-row-desc {
   margin: 2px 0 0 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-default);
   line-height: 1.4;
 }
