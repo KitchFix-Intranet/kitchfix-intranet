@@ -138,7 +138,13 @@ function dayContext(serviceDate, today) {
 // back to server-local midnight (UTC on Vercel).
 function buildTodayAnchor(clientToday) {
   if (clientToday && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)) {
-    return new Date(clientToday + "T00:00:00");
+    const d = new Date(clientToday + "T00:00:00");
+    // Defense-in-depth: a shaped-but-invalid date ("2026-99-99") would
+    // construct an Invalid Date and silently poison every downstream
+    // compare. The route's parseClientToday round-trip-validates, but
+    // any future direct caller can land here. Fall through to the
+    // server-local midnight fallback on isNaN.
+    if (!isNaN(d.getTime())) return d;
   }
   const t = new Date();
   t.setHours(0, 0, 0, 0);

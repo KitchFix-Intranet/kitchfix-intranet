@@ -343,20 +343,16 @@
 /* Service rows - ItemCatalog (.ic-item) pattern.
    The ROW is the click target. At rest: name on left, price on right.
    Clicking toggles a detail strip with current-price line + action
-   triggers. Tight density (10px x 14px), border-bottom hairline.
-   FLAGGED: --focused state below uses raw #f0f5ff / #bfdbfe - this is
-   the info-blue callout family, which doesn't have a semantic tint
-   token (only --feedback-info as a solid). Leaving raw rather than
-   neutralizing to --surface-sunken / --border-default, which would
-   lose the info-blue semantic. Needs a future --feedback-info tint
-   family in tokens.css. */
+   triggers. Tight density (10px x 14px), border-bottom hairline. The
+   --focused state uses the --feedback-info-subtle / -border token
+   family for the info-blue callout. */
 .sc-admin-svc-item {
   border-bottom: var(--border-thin) solid var(--border-subtle);
   border-left: 3px solid transparent;
   transition: background var(--motion-control), border-left-color var(--motion-control);
 }
 .sc-admin-svc-item:last-child { border-bottom: none; }
-.sc-admin-svc-item--focused { background: #f0f5ff; border-left-color: #bfdbfe; }
+.sc-admin-svc-item--focused { background: var(--feedback-info-subtle); border-left-color: var(--feedback-info-border); }
 .sc-admin-svc-item--open { background: var(--surface-sunken); }
 
 .sc-admin-svc-row {
