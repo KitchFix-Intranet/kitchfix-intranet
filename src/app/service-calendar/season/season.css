@@ -248,16 +248,19 @@
 .sc-season-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  /* grid-auto-rows: 1fr makes every row of the small-multiples grid
-     equal to the tallest card's height, so all 12 cards land exactly
-     the same height even when a whole row is off-season / upcoming
-     and would otherwise be shorter than its sibling rows. */
-  grid-auto-rows: 1fr;
   gap: var(--space-3);
 }
 @media (max-width: 1023px) { .sc-season-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 767px)  { .sc-season-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 479px)  { .sc-season-grid { grid-template-columns: 1fr; } }
+/* grid-auto-rows: 1fr only applies on DESKTOP (>=768px, the useIsDesktop
+   breakpoint), where MonthCard force-expands every card. Below 768px
+   cards are mixed collapsed/expanded and must size naturally - an
+   unscoped 1fr would stretch a collapsed card to match an expanded
+   sibling in the 2-col range. */
+@media (min-width: 768px) {
+  .sc-season-grid { grid-auto-rows: 1fr; }
+}
 
 /* Loading skeleton. Sized close to the 6-row card height so the
    load -> loaded transition does not jump. */
@@ -274,6 +277,7 @@
 
 /* ───────── MONTH CARD ───────── */
 .sc-season-month-card {
+  position: relative; /* anchors the .sc-season-month-card-drill overlay */
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
@@ -307,6 +311,7 @@
 .sc-season-month-card:hover {
   box-shadow: var(--elevation-raised);
   border-color: var(--text-subtle);
+  transform: translateY(-1px);
 }
 .sc-season-month-card:focus-visible {
   outline: var(--focus-ring-width) solid var(--status-today-ring);
@@ -382,6 +387,10 @@
 .sc-season-month-card-summary-rev--actual { color: var(--text-success); font-weight: var(--wt-bold); }
 
 .sc-season-month-card-chevron {
+  /* Sits ABOVE the whole-card drill overlay so the mobile collapse
+     button stays tappable inside the click-to-drill target. */
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -408,29 +417,23 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Whole-card click target: a stretched invisible button covering the
+   article's interior so clicking ANYWHERE on the card drills into the
+   month (mirrors the period-card pattern). The mobile chevron sits
+   above it via z-index so collapsing still works. */
 .sc-season-month-card-drill {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-1) var(--space-2);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   background: transparent;
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-pill);
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  color: var(--text-link);
+  border: none;
   cursor: pointer;
-  font-family: inherit;
-  letter-spacing: 0.02em;
-}
-.sc-season-month-card-drill:hover {
-  background: var(--surface-sunken);
-  border-color: var(--border-default);
+  border-radius: inherit;
 }
 .sc-season-month-card-drill:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: var(--focus-ring-offset);
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
-.sc-season-month-card-drill > span { margin-left: var(--space-1); }
 
 .sc-season-month-card-dow {
   display: grid;
