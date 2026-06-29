@@ -207,6 +207,7 @@ export default function PeriodWorkspace({
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
+        showDayNight={true}
       />
 
       <header className="sc-workspace-header">

@@ -145,18 +145,11 @@
 .sc-daysq--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); }
 .sc-daysq--off          { background: var(--status-off-bg); border-color: var(--status-off-bd); color: var(--text-muted); }
 
-/* Off-season: neutral beige + diagonal hatch overlay - reads as
-   "nothing scheduled" not "scheduled, coming." The hatch is the
-   non-color cue (rubric: distinguishable without color). */
+/* Off-season: flat neutral fill - reads as "nothing scheduled."
+   (Hatch removed per polish; off-season now renders as plain grey,
+   self-evidently not a game/service day.) */
 .sc-daysq--off-season {
-  background:
-    repeating-linear-gradient(
-      135deg,
-      var(--status-off-bg) 0,
-      var(--status-off-bg) 4px,
-      var(--status-off-bd) 4px,
-      var(--status-off-bd) 5px
-    );
+  background: var(--status-off-bg);
   border-color: var(--status-off-bd);
   color: var(--text-muted);
 }

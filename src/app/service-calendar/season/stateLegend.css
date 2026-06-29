@@ -15,13 +15,24 @@
   gap: var(--space-3);
   flex-wrap: wrap;
   padding: var(--space-2) var(--space-4);
-  margin: 0;
+  margin: var(--space-2) 0 var(--space-3) 0;
   background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  font-size: var(--size-caption);
+  color: var(--text-default);
+}
+
+/* The YEAR-view legend is rendered by SeasonShell as a direct child of
+   sc-body (a sibling of the .sc-season well), so it's the card's flush
+   bottom band. The WORKSPACE legend lives inside .sc-workspace, so it
+   keeps the default pill above. */
+.sc-body > .sc-state-legend {
+  margin: 0;
+  border: none;
   border-top: var(--border-thin) solid var(--border-default);
   border-bottom-left-radius: var(--radius-container-lg);
   border-bottom-right-radius: var(--radius-container-lg);
-  font-size: var(--size-caption);
-  color: var(--text-default);
 }
 
 .sc-state-legend-title {
@@ -83,14 +94,7 @@
 .sc-state-legend-swatch--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); color: var(--text-muted); }
 .sc-state-legend-swatch--off          { background: var(--status-off-bg); border-color: var(--status-off-bd); color: var(--text-subtle); }
 .sc-state-legend-swatch--off-season {
-  background:
-    repeating-linear-gradient(
-      135deg,
-      var(--status-off-bg) 0,
-      var(--status-off-bg) 3px,
-      var(--status-off-bd) 3px,
-      var(--status-off-bd) 4px
-    );
+  background: var(--status-off-bg);
   border-color: var(--status-off-bd);
   color: var(--text-subtle);
 }
@@ -167,7 +171,7 @@
 @media (max-width: 767px) {
   .sc-state-legend {
     padding: 6px var(--space-2);
-    margin-bottom: 0;
+    margin-bottom: var(--space-2);
     gap: 6px;
     flex-wrap: nowrap;
     align-items: flex-start;
