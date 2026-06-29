@@ -1,18 +1,18 @@
 /* ══════════════════════════════════════════════════════════════
-   SeasonStepper - homestand journey (Design Batch 3)
-   Audit P1-7: chart type matches the data (sequence, not Gantt).
-   Status via fill + shape + label (rubric Part 3 non-color cues).
+   SeasonStepper - homestand tracker (Design Batch 3, render 2)
+   Segmented season bar: 13 segments; focus segment widens + labels.
+   Status via fill + size + label (rubric Part 3 non-color cues).
    ══════════════════════════════════════════════════════════════ */
 
 .sc-stepper {
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
-  padding: var(--space-card-pad) var(--space-5);
+  padding: var(--space-card-pad) var(--space-4);
   margin: 0 0 var(--space-4) 0;
 }
 
-/* ── Caption (above the stepper) ─────────────────────────────── */
+/* ── Caption (above the bar) ──────────────────────────────── */
 .sc-stepper-caption {
   display: flex;
   align-items: center;
@@ -66,7 +66,7 @@
   color: var(--text-subtle);
 }
 
-/* ── Desktop stepper ──────────────────────────────────────────── */
+/* ── Desktop / mobile shell ────────────────────────────────── */
 .sc-stepper-desktop { display: block; }
 .sc-stepper-mobile  { display: none; }
 
@@ -75,134 +75,7 @@
   .sc-stepper-mobile  { display: block; }
 }
 
-.sc-stepper-rail {
-  position: relative;
-  list-style: none;
-  margin: 0;
-  padding: 18px var(--space-2) var(--space-1);
-  display: grid;
-  grid-template-columns: repeat(var(--sc-stepper-stops, 13), minmax(0, 1fr));
-  align-items: end;
-}
-
-.sc-stepper-line {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  top: 28px;
-  height: 3px;
-  background: var(--border-default);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.sc-stepper-line-fill {
-  height: 100%;
-  background: var(--action-primary-bg);
-  border-radius: var(--radius-pill);
-  transition: width var(--motion-surface);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-stepper-line-fill { transition: none; }
-}
-
-.sc-stepper-stop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  position: relative;
-  z-index: 1;
-}
-
-.sc-stepper-stop-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  color: inherit;
-  width: 100%;
-  min-width: 0;
-}
-.sc-stepper-stop-button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: 4px;
-  border-radius: var(--radius-cell);
-}
-
-.sc-stepper-stop-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-circle);
-  border: 1.5px solid var(--text-subtle);
-  background: var(--surface-card);
-  flex-shrink: 0;
-  transition: transform var(--motion-control), box-shadow var(--motion-control);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-stepper-stop-dot { transition: none; }
-}
-
-.sc-stepper-stop--done .sc-stepper-stop-dot {
-  background: var(--action-primary-bg);
-  border-color: var(--action-primary-bg);
-  color: var(--action-primary-text);
-}
-.sc-stepper-stop--now .sc-stepper-stop-dot {
-  background: var(--accent);
-  border-color: var(--accent);
-  width: 22px;
-  height: 22px;
-  box-shadow: 0 0 0 3px var(--status-needs-subtle);
-}
-.sc-stepper-stop--next .sc-stepper-stop-dot {
-  background: var(--surface-card);
-  border-color: var(--text-subtle);
-}
-
-.sc-stepper-stop-button:hover .sc-stepper-stop-dot {
-  transform: scale(1.08);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-stepper-stop-button:hover .sc-stepper-stop-dot { transform: none; }
-}
-
-.sc-stepper-stop-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  font-variant-numeric: var(--num-tabular);
-  gap: 1px;
-  min-width: 0;
-  max-width: 100%;
-}
-.sc-stepper-stop-id {
-  font-size: var(--size-micro);
-  font-weight: var(--wt-bold);
-  color: var(--text-muted);
-}
-.sc-stepper-stop-opp {
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  color: var(--text-heading);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.sc-stepper-stop--done .sc-stepper-stop-id { color: var(--text-default); }
-.sc-stepper-stop--now  .sc-stepper-stop-id { color: var(--accent-text); }
-
-/* ── Mobile spotlight + bar ───────────────────────────────────── */
+/* ── Mobile spotlight card ─────────────────────────────────── */
 .sc-stepper-spotlight {
   display: block;
   width: 100%;
@@ -268,18 +141,26 @@
 .sc-stepper-spotlight-count { font-weight: var(--wt-medium); color: var(--text-default); }
 .sc-stepper-spotlight-sep { color: var(--text-subtle); }
 
+/* ── Segmented bar ─────────────────────────────────────────── */
 .sc-stepper-bar {
-  display: grid;
-  grid-template-columns: repeat(var(--sc-stepper-stops, 13), minmax(0, 1fr));
+  display: flex;
   gap: var(--space-1);
   list-style: none;
   margin: 0;
   padding: 0;
 }
+.sc-stepper-bar-segment {
+  flex: 1;
+  display: flex;
+}
+.sc-stepper-bar-segment--focus {
+  flex: 1.7;
+}
 .sc-stepper-bar-segment-button {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  height: 14px;
   padding: 0;
   border: none;
   border-radius: var(--radius-cell);
@@ -290,9 +171,24 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-stepper-bar-segment--done .sc-stepper-bar-segment-button { background: var(--action-primary-bg); }
-.sc-stepper-bar-segment--now  .sc-stepper-bar-segment-button {
+.sc-stepper-bar-segment--done  .sc-stepper-bar-segment-button { background: var(--action-primary-bg); }
+.sc-stepper-bar-segment--next  .sc-stepper-bar-segment-button { background: var(--border-default); }
+.sc-stepper-bar-segment--focus .sc-stepper-bar-segment-button {
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--status-needs-subtle), inset 0 0 0 1px rgba(255,255,255,0.4);
 }
-.sc-stepper-bar-segment--next .sc-stepper-bar-segment-button { background: var(--border-default); }
+.sc-stepper-bar-segment-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-display);
+  color: #fff;
+  letter-spacing: var(--track-caps);
+}
+
+/* Desktop bar reads as a band so the focus label sits comfortably. */
+.sc-stepper-desktop .sc-stepper-bar-segment-button {
+  min-height: var(--cell-size);
+}
+/* Mobile bar respects the floor-first tap target (Comfortable). */
+.sc-stepper-mobile .sc-stepper-bar-segment-button {
+  min-height: var(--row-height);
+}
