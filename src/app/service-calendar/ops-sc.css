@@ -95,7 +95,10 @@
   border-color: rgba(255, 255, 255, 0.5);
 }
 .sc-hero-asof .sc-chrome-bar-asof-dot {
-  background: var(--surface-card);
+  /* Kept green (the chrome-bar dot's original accent) so the
+     freshness indicator reads consistently across the bar and the
+     hero. The dot tints visibly against the photo even at 6px. */
+  background: var(--accent-sc);
   box-shadow: none;
 }
 .sc-hero-asof .sc-chrome-bar-asof-refresh {
