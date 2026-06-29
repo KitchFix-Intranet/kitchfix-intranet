@@ -12,6 +12,8 @@
   padding: var(--space-3) var(--space-4);
   background: var(--surface-card);
   border-bottom: var(--border-thin) solid var(--border-default);
+  border-top-left-radius: var(--radius-container-lg);
+  border-top-right-radius: var(--radius-container-lg);
   flex-wrap: wrap;
 }
 

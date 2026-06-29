@@ -112,6 +112,7 @@ export default function SeasonShell({
   // the shell now in both loaded and loading states.
   if (loading || !yearData) {
     return (
+      <>
       <div className="sc-season sc-season-shell sc-fade-in">
         {!hasHomestandSchedule && (
           <PhaseStrip category={account?.category} today={null} year={year} />
@@ -121,16 +122,18 @@ export default function SeasonShell({
             <div key={i} className="sc-season-month-skeleton" />
           ))}
         </div>
-        <StateLegend
-          hasHomestandSchedule={hasHomestandSchedule}
-          isFeeAccount={isFeeAccount}
-          isMilb={isMilb}
-        />
       </div>
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+      />
+      </>
     );
   }
 
   return (
+    <>
     <div className="sc-season sc-season-shell sc-fade-in">
       {hasHomestandSchedule ? (
         <SeasonStepper
@@ -185,15 +188,17 @@ export default function SeasonShell({
           onPeriodClick={onPeriodClick}
         />
       )}
+      </div>
 
-      {/* Bundle 1 (Section C1): legend at the bottom, static (not
-          sticky). Renders in both calendar and period sub-views. */}
+      {/* Legend as the card's bottom band - moved out of .sc-season so it
+          sits flush as a sibling, like the chrome bar is the top band.
+          Renders in both calendar and period sub-views. */}
       <StateLegend
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
       />
-    </div>
+      </>
   );
 }
 
