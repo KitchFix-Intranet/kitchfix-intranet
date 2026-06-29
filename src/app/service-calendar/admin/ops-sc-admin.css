@@ -2,14 +2,16 @@
    Service Calendar - admin dashboard styles
    sc-admin-* prefix; comfortable density. Imported by AdminClient.js.
 
-   Styling foundation (verified 2026-06-18 against ops-sc.css):
-   - SC consumes the --space-* / --type-* / --radius-* tokens from globals.
-   - SC hardcodes COLORS (no color tokens consumed); the admin shell
-     matches that pattern so it visually reads as the same product.
+   Styling foundation (PR2e conformance, 2026-06-28):
+   - SC now consumes the canonical design tokens from tokens.css for color,
+     type size scale, radius roles, motion, elevation, and density-aware
+     spacing. The admin shell matches the operator-facing screens through
+     the same tokens.
+   - Brand navy (--text-link / --action-primary-bg / --status-today-ring,
+     all resolve to navy-700) is the primary heading + corp-chip color.
+   - Brand green (--accent-sc family) is the back-link accent + primary
+     button identity.
    - No dark mode in SC or globals; light-mode-only here too.
-   - Brand navy #153968 (the same hex .sc-dot--today uses for the today
-     ring) is the primary heading + corp-chip color, not Tailwind blue.
-   - Brand green #0F6E56 (the SC GREEN constant) is the back-link accent.
 
    Stage 1 = scaffold only; later stages add section nav, editors, log views.
    ════════════════════════════════════════════════════════════════════════════ */
@@ -25,14 +27,14 @@
 .sc-admin-hero {
   /* Workspace, not landing: shorter than the operator 120px. */
   height: 88px;
-  margin-top: 20px;
-  margin-bottom: 20px;
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-5);
   /* No background-image set - the navy gradient overlay renders solid navy. */
 }
 .sc-admin-hero-content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
 }
 .sc-admin-hero-row {
@@ -46,19 +48,19 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
   margin-bottom: 2px;
-  transition: color 0.15s;
+  transition: color var(--motion-control);
   width: max-content;
 }
-.sc-admin-hero-back:hover { color: #fff; }
+.sc-admin-hero-back:hover { color: var(--surface-card); }
 .sc-admin-hero-back:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline: var(--focus-ring-width) solid rgba(255, 255, 255, 0.6);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-cell);
 }
 
 .sc-admin-header { margin-bottom: var(--space-4); }
@@ -67,20 +69,20 @@
   margin-bottom: 6px; flex-wrap: wrap;
 }
 .sc-admin-title {
-  font-size: var(--type-h2);
-  font-weight: 700;
-  color: #153968;
+  font-size: var(--size-h2);
+  font-weight: var(--wt-bold);
+  color: var(--text-link);
   margin: 0;
-  line-height: var(--line-heading);
+  line-height: var(--lead-snug);
 }
 
 .sc-admin-corp-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 700;
-  color: #153968;
-  background: #f0f4f8;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
+  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  color: var(--text-link);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
   padding: 3px 9px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -89,26 +91,26 @@
    is invisible against the hero. Translucent white background + white
    text reads cleanly on the navy gradient. */
 .sc-admin-corp-chip--hero {
-  color: #fff;
+  color: var(--surface-card);
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
 }
 
 .sc-admin-subtitle {
-  font-size: var(--type-body);
-  color: #6b7280;
+  font-size: var(--size-body);
+  color: var(--text-muted);
   margin: 0;
-  line-height: 1.5;
+  line-height: var(--lead-normal);
 }
 
 .sc-admin-scaffold {
-  border-top: 1px solid #e5e7eb;
+  border-top: var(--border-thin) solid var(--border-default);
   padding-top: var(--space-3);
   display: flex; flex-direction: column; gap: var(--space-3);
 }
 .sc-admin-scaffold-line {
-  font-size: var(--type-body-sm);
-  color: #9ca3af;
+  font-size: var(--size-body);
+  color: var(--text-subtle);
   margin: 0;
   line-height: 1.55;
   max-width: 60ch;
@@ -120,58 +122,59 @@
    navy text, subtle shadow. */
 .sc-admin-back {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: var(--type-body-sm);
-  font-weight: 500;
-  color: #153968;
+  font-size: var(--size-body);
+  font-weight: var(--wt-medium);
+  color: var(--text-link);
   text-decoration: none;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 6px 12px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-cell);
+  padding: 6px var(--space-3);
   box-shadow: 0 1px 2px rgba(21, 57, 104, 0.06);
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background var(--motion-control), border-color var(--motion-control), box-shadow var(--motion-control);
 }
 .sc-admin-back:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--surface-sunken);
+  border-color: var(--text-subtle);
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
 }
 .sc-admin-back:focus-visible {
-  outline: 2px solid #153968;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 @media (max-width: 640px) {
-  .sc-admin-root { padding: var(--space-3) var(--space-3) 40px; }
+  .sc-admin-root { padding: var(--space-3) var(--space-3) var(--space-8); }
   /* Tight phone viewport: drop hero height a touch + reduce its outer
      padding from the shared 40px so the title doesn't get clipped. */
-  .sc-admin-hero { height: auto; min-height: 88px; padding: 14px 20px; }
+  .sc-admin-hero { height: auto; min-height: 88px; padding: 14px var(--space-5); }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
    STAGE 2 - all-accounts overview + per-account editor + inline edit panel.
-   Same brand palette: navy #153968, green #0F6E56, slate neutrals (#e5e7eb,
-   #6b7280, #9ca3af, #fff). No new colors introduced.
+   Same brand palette through the design tokens: navy via --text-link /
+   --action-primary-bg, green via --accent-sc family, warm neutrals via
+   --text-* / --border-* / --surface-*. No new colors introduced.
    ════════════════════════════════════════════════════════════════════════════ */
 
 .sc-admin-loading {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 48px 16px; gap: 12px;
-  color: #6b7280; font-size: 14px;
+  padding: 48px var(--space-4); gap: var(--space-3);
+  color: var(--text-muted); font-size: var(--size-body);
 }
 .sc-admin-error {
-  padding: 14px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  border-radius: var(--radius-card);
-  font-size: 13px;
+  padding: 14px var(--space-4);
+  background: var(--status-overdue-subtle);
+  border: var(--border-thin) solid var(--status-overdue-bd);
+  color: var(--status-overdue-fg);
+  border-radius: var(--radius-container);
+  font-size: var(--size-body);
 }
 .sc-admin-empty {
-  padding: 28px 16px;
-  color: #9ca3af;
+  padding: 28px var(--space-4);
+  color: var(--text-subtle);
   text-align: center;
-  font-size: 14px;
+  font-size: var(--size-body);
 }
 
 .sc-admin-overview { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-4); }
@@ -183,18 +186,18 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-card);
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 4px;
+  gap: var(--space-2);
+  padding: var(--space-2) 14px;
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  font-size: var(--size-body);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
 }
-.sc-admin-summary-item { font-weight: 500; }
-.sc-admin-summary-item strong { color: #111827; font-weight: 700; font-variant-numeric: tabular-nums; }
-.sc-admin-summary-sep { color: #d1d5db; font-weight: 400; }
+.sc-admin-summary-item { font-weight: var(--wt-medium); }
+.sc-admin-summary-item strong { color: var(--text-heading); font-weight: var(--wt-bold); font-variant-numeric: var(--num-tabular); }
+.sc-admin-summary-sep { color: var(--border-strong); font-weight: var(--wt-regular); }
 
 /* Overview sections - contained units matching the editor's group
    cards. Section header band (light fill, hairline rule via ::after on
@@ -202,32 +205,32 @@
 .sc-admin-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px 14px;
+  gap: var(--space-2);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) 14px;
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
 }
 /* Section label + hairline rule. The ::after rule fills the remaining
    width so the label reads as a true section divider rather than a
-   floating tag. Pure CSS (no markup change). Bumped one step (12px ->
-   13px, #6b7280 -> #475569) for legibility. */
+   floating tag. Pure CSS (no markup change). Bumped one step (caption ->
+   body, muted -> default) for legibility. */
 .sc-admin-section-title {
-  font-size: 13px; font-weight: 700;
-  color: #475569;
+  font-size: var(--size-body); font-weight: var(--wt-bold);
+  color: var(--text-default);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--track-caps);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
 }
 .sc-admin-section-title::after {
   content: "";
   flex: 1;
   height: 1px;
-  background: #e2e8f0;
+  background: var(--border-default);
 }
 
 /* Row list tightened toward Density. ~25% lighter vertical padding + tighter
@@ -235,35 +238,35 @@
    not the individual padding box). Edit panels keep their comfortable
    density - per the doc, forms stay comfortable even inside a density
    module. */
-.sc-admin-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sc-admin-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 
 .sc-admin-row {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto auto;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 9px 14px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-card);
-  font-size: 14px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  font-size: var(--size-body);
   text-align: left;
   width: 100%;
   font-family: inherit;
 }
-.sc-admin-row--clickable { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
-.sc-admin-row--clickable:hover { border-color: #0F6E56; box-shadow: 0 2px 8px rgba(15, 110, 86, 0.08); transform: translateY(-1px); }
-.sc-admin-row--clickable:focus-visible { outline: 2px solid #0F6E56; outline-offset: 2px; }
+.sc-admin-row--clickable { cursor: pointer; transition: border-color var(--motion-control), box-shadow var(--motion-control), transform var(--motion-control); }
+.sc-admin-row--clickable:hover { border-color: var(--accent-sc); box-shadow: 0 2px 8px rgba(15, 110, 86, 0.08); transform: translateY(-1px); }
+.sc-admin-row--clickable:focus-visible { outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset); }
 .sc-admin-row--disabled { opacity: 0.7; cursor: default; }
 
-.sc-admin-row-key { font-weight: 700; color: #153968; font-size: 13px; letter-spacing: 0.02em; min-width: 90px; }
-.sc-admin-row-name { color: #111827; font-weight: 500; }
-.sc-admin-row-count { font-size: 12px; color: #6b7280; }
-/* Bumped from #9ca3af italic to #6b7280 upright - the metadata reads
+.sc-admin-row-key { font-weight: var(--wt-bold); color: var(--text-link); font-size: var(--size-body); letter-spacing: 0.02em; min-width: 90px; }
+.sc-admin-row-name { color: var(--text-heading); font-weight: var(--wt-medium); }
+.sc-admin-row-count { font-size: var(--size-caption); color: var(--text-muted); }
+/* Bumped from subtle italic to muted upright - the metadata reads
    clearly without the italic-on-light-grey low-contrast issue. */
-.sc-admin-row-updated { font-size: 12px; color: #6b7280; }
-.sc-admin-row-chev { color: #cbd5e1; font-size: 18px; font-weight: 400; line-height: 1; }
-.sc-admin-row-fee-amount { font-size: 13px; color: #111827; font-variant-numeric: tabular-nums; font-weight: 600; justify-self: end; }
+.sc-admin-row-updated { font-size: var(--size-caption); color: var(--text-muted); }
+.sc-admin-row-chev { color: var(--text-subtle); font-size: var(--size-h3); font-weight: var(--wt-regular); line-height: 1; }
+.sc-admin-row-fee-amount { font-size: var(--size-body); color: var(--text-heading); font-variant-numeric: var(--num-tabular); font-weight: var(--wt-semibold); justify-self: end; }
 
 /* Per-account editor */
 .sc-admin-editor { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -275,28 +278,28 @@
   font-family: inherit;
   align-self: flex-start;
 }
-.sc-admin-editor-head { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.sc-admin-editor-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.sc-admin-editor-title { font-size: var(--type-h2); font-weight: 700; color: #153968; margin: 0; line-height: var(--line-heading); }
-.sc-admin-editor-name { font-size: var(--type-body); color: #6b7280; font-weight: 500; }
+.sc-admin-editor-head { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); }
+.sc-admin-editor-title-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.sc-admin-editor-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--text-link); margin: 0; line-height: var(--lead-snug); }
+.sc-admin-editor-name { font-size: var(--size-body); color: var(--text-muted); font-weight: var(--wt-medium); }
 /* Editor section label - matches sc-admin-section-title bump for
    legibility consistency, plus the same hairline rule via ::after so
    the editor and the overview read with the same section dividers. */
 .sc-admin-editor-section {
-  font-size: 13px; font-weight: 700;
-  color: #475569;
+  font-size: var(--size-body); font-weight: var(--wt-bold);
+  color: var(--text-default);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 12px 0 0;
+  letter-spacing: var(--track-caps);
+  margin: var(--space-3) 0 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
 }
 .sc-admin-editor-section::after {
   content: "";
   flex: 1;
   height: 1px;
-  background: #e2e8f0;
+  background: var(--border-default);
 }
 
 /* Group becomes a contained card. White body sits below a header band
@@ -307,31 +310,31 @@
 .sc-admin-group {
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
   margin-bottom: 14px;
 }
 .sc-admin-group-header-band {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  border-left: 3px solid #153968;
-  padding: 10px 14px;
+  background: var(--surface-sunken);
+  border-bottom: var(--border-thin) solid var(--border-default);
+  border-left: 3px solid var(--text-link);
+  padding: var(--space-2) 14px;
 }
 .sc-admin-group-footer {
-  background: #fcfdfe;
-  border-top: 1px solid #f4f6f8;
-  padding: 8px 14px;
+  background: var(--surface-sunken);
+  border-top: var(--border-thin) solid var(--surface-sunken);
+  padding: var(--space-2) 14px;
 }
-/* Calmer group title weight inside the band (was 16px/700, now 15px/600
+/* Calmer group title weight inside the band (was 16px/700, now body/600
    so the band itself provides the visual chunk and the title sits as
    a label rather than a heading shout). Navy preserved. */
 .sc-admin-group-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #153968;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-link);
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -340,317 +343,323 @@
 /* Service rows - ItemCatalog (.ic-item) pattern.
    The ROW is the click target. At rest: name on left, price on right.
    Clicking toggles a detail strip with current-price line + action
-   triggers. Tight density (10px x 14px), border-bottom hairline. */
+   triggers. Tight density (10px x 14px), border-bottom hairline.
+   FLAGGED: --focused state below uses raw #f0f5ff / #bfdbfe - this is
+   the info-blue callout family, which doesn't have a semantic tint
+   token (only --feedback-info as a solid). Leaving raw rather than
+   neutralizing to --surface-sunken / --border-default, which would
+   lose the info-blue semantic. Needs a future --feedback-info tint
+   family in tokens.css. */
 .sc-admin-svc-item {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: var(--border-thin) solid var(--border-subtle);
   border-left: 3px solid transparent;
-  transition: background 0.12s, border-left-color 0.12s;
+  transition: background var(--motion-control), border-left-color var(--motion-control);
 }
 .sc-admin-svc-item:last-child { border-bottom: none; }
 .sc-admin-svc-item--focused { background: #f0f5ff; border-left-color: #bfdbfe; }
-.sc-admin-svc-item--open { background: #f8fafc; }
+.sc-admin-svc-item--open { background: var(--surface-sunken); }
 
 .sc-admin-svc-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: var(--space-3);
+  padding: var(--space-2) 14px;
   cursor: pointer;
   user-select: none;
 }
-.sc-admin-svc-row:hover { background: #fafbfc; }
-.sc-admin-svc-row:focus-visible { outline: 2px solid #0F6E56; outline-offset: -2px; }
-/* ItemCatalog name treatment: 13px/500/navy. */
+.sc-admin-svc-row:hover { background: var(--surface-sunken); }
+.sc-admin-svc-row:focus-visible { outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: -2px; }
+/* ItemCatalog name treatment: body/500/navy. */
 .sc-admin-svc-name {
-  color: #153968;
-  font-size: 13px;
-  font-weight: 500;
+  color: var(--text-link);
+  font-size: var(--size-body);
+  font-weight: var(--wt-medium);
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   flex: 1;
   min-width: 0;
 }
 .sc-admin-svc-tag {
-  font-size: 10px; font-weight: 700;
-  color: #475569;
-  background: #f1f5f9;
-  border-radius: 4px;
+  font-size: var(--size-micro); font-weight: var(--wt-bold);
+  color: var(--text-default);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-cell);
   padding: 2px 6px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .sc-admin-svc-upcoming {
-  font-size: 11px;
-  color: #b45309;
+  font-size: var(--size-caption);
+  color: var(--accent-text);
   font-style: italic;
 }
 /* Price column: tabular nums, ItemCatalog price weight (500 navy), right
    side of the row. Stacks into a scannable column when multiple rows
    render under the same group. */
 .sc-admin-svc-price {
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  color: #153968;
-  font-size: 13px;
+  font-variant-numeric: var(--num-tabular);
+  font-weight: var(--wt-medium);
+  color: var(--text-link);
+  font-size: var(--size-body);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .sc-admin-svc-edit {
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: #0F6E56;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  color: var(--accent-sc);
   background: none;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-input);
-  padding: 4px 12px;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control);
 }
-.sc-admin-svc-edit:hover { background: #f0fdf4; border-color: #0F6E56; }
+.sc-admin-svc-edit:hover { background: var(--accent-sc-tint); border-color: var(--accent-sc); }
 
 /* Detail strip - ItemCatalog (.ic-detail) equivalent. Inline expansion
    below the row, indented + bordered. Hosts the current-price meta
    line + the action triggers + (when an action is invoked) the matching
    edit panel. */
 .sc-admin-svc-detail {
-  margin: 4px 14px 12px 28px;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  margin: var(--space-1) 14px var(--space-3) 28px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sc-admin-svc-detail-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--size-caption);
   padding: 2px 0;
 }
 .sc-admin-svc-detail-label {
-  color: #94a3b8;
-  font-weight: 500;
+  color: var(--text-subtle);
+  font-weight: var(--wt-medium);
 }
 .sc-admin-svc-detail-value {
-  color: #153968;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  color: var(--text-link);
+  font-weight: var(--wt-semibold);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-admin-svc-detail-since {
-  color: #94a3b8;
-  font-weight: 400;
+  color: var(--text-subtle);
+  font-weight: var(--wt-regular);
   margin-left: 2px;
 }
 .sc-admin-svc-detail-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  padding-top: 4px;
-  border-top: 1px solid #f1f5f9;
-  margin-top: 4px;
+  padding-top: var(--space-1);
+  border-top: var(--border-thin) solid var(--border-subtle);
+  margin-top: var(--space-1);
 }
 
 /* Inline edit panel */
 .sc-admin-panel {
-  background: #fafafa;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
   padding: var(--space-3) var(--space-3);
-  margin: 4px 0 8px;
-  display: flex; flex-direction: column; gap: 12px;
+  margin: var(--space-1) 0 var(--space-2);
+  display: flex; flex-direction: column; gap: var(--space-3);
 }
-.sc-admin-panel-current { font-size: 13px; color: #475569; }
-.sc-admin-panel-current strong { color: #111827; font-variant-numeric: tabular-nums; }
-.sc-admin-panel-since { color: #9ca3af; font-size: 12px; }
+.sc-admin-panel-current { font-size: var(--size-body); color: var(--text-default); }
+.sc-admin-panel-current strong { color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
+.sc-admin-panel-since { color: var(--text-subtle); font-size: var(--size-caption); }
 
-.sc-admin-field { display: flex; flex-direction: column; gap: 4px; }
-.sc-admin-field-label { font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
-.sc-admin-field-required { color: #b45309; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 11px; }
-.sc-admin-field-optional { color: #9ca3af; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 11px; }
-.sc-admin-field-count { font-size: 11px; color: #9ca3af; align-self: flex-end; }
+.sc-admin-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.sc-admin-field-label { font-size: var(--size-caption); font-weight: var(--wt-bold); color: var(--text-default); text-transform: uppercase; letter-spacing: 0.04em; }
+.sc-admin-field-required { color: var(--accent-text); font-weight: var(--wt-semibold); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
+.sc-admin-field-optional { color: var(--text-subtle); font-weight: var(--wt-medium); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
+.sc-admin-field-count { font-size: var(--size-caption); color: var(--text-subtle); align-self: flex-end; }
 
 .sc-admin-price-input-wrap {
-  display: inline-flex; align-items: center; gap: 4px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-input);
-  padding: 6px 10px;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: 6px var(--space-2);
   max-width: 140px;
 }
-.sc-admin-price-input-wrap:focus-within { border-color: #0F6E56; box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12); }
-.sc-admin-price-input-dollar { color: #6b7280; font-weight: 600; font-size: 14px; }
+.sc-admin-price-input-wrap:focus-within { border-color: var(--accent-sc); box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12); }
+.sc-admin-price-input-dollar { color: var(--text-muted); font-weight: var(--wt-semibold); font-size: var(--size-body); }
 .sc-admin-price-input {
   flex: 1; min-width: 0;
   border: none; outline: none; background: none;
   font-family: inherit;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: #111827;
+  font-size: var(--size-body);
+  font-variant-numeric: var(--num-tabular);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
 }
 
-.sc-admin-eff-options { display: flex; flex-direction: column; gap: 10px; }
-.sc-admin-eff-option { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #111827; cursor: pointer; }
-.sc-admin-eff-option input[type="radio"] { margin-top: 3px; accent-color: #0F6E56; }
-.sc-admin-eff-option strong { font-weight: 600; }
-.sc-admin-eff-caption { display: block; color: #9ca3af; font-size: 12px; margin-top: 2px; font-weight: 400; }
+.sc-admin-eff-options { display: flex; flex-direction: column; gap: var(--space-2); }
+.sc-admin-eff-option { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--size-body); color: var(--text-heading); cursor: pointer; }
+.sc-admin-eff-option input[type="radio"] { margin-top: 3px; accent-color: var(--accent-sc); }
+.sc-admin-eff-option strong { font-weight: var(--wt-semibold); }
+.sc-admin-eff-caption { display: block; color: var(--text-subtle); font-size: var(--size-caption); margin-top: 2px; font-weight: var(--wt-regular); }
 .sc-admin-eff-caption--inline { display: inline; margin-left: 0; margin-top: 0; }
-.sc-admin-eff-future-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sc-admin-eff-future-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
 /* Backdate warning - shown only when Backdate radio is chosen + a valid past
    date is selected. Amber on cream so it reads as deliberate and consequential
    but not destructive. */
 .sc-admin-eff-warning {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  border-radius: var(--radius-card);
-  color: #92400e;
-  font-size: 12px;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent-backplate);
+  border: var(--border-thin) solid var(--accent);
+  border-radius: var(--radius-container);
+  color: var(--accent-text);
+  font-size: var(--size-caption);
   line-height: 1.55;
 }
-.sc-admin-eff-warning strong { color: #78350f; font-weight: 700; }
+.sc-admin-eff-warning strong { color: var(--accent-text); font-weight: var(--wt-bold); }
 
 .sc-admin-eff-date {
   font-family: inherit;
-  font-size: 13px;
-  padding: 4px 8px;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-input);
-  color: #111827;
-  background: #fff;
+  font-size: var(--size-body);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-heading);
+  background: var(--surface-card);
 }
-.sc-admin-eff-date:focus { outline: none; border-color: #0F6E56; box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12); }
-.sc-admin-eff-date:disabled { background: #f9fafb; color: #9ca3af; cursor: not-allowed; }
+.sc-admin-eff-date:focus { outline: none; border-color: var(--accent-sc); box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12); }
+.sc-admin-eff-date:disabled { background: var(--surface-sunken); color: var(--text-subtle); cursor: not-allowed; }
 
 .sc-admin-textarea,
 .sc-admin-text-input {
   font-family: inherit;
-  font-size: 13px;
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-input);
-  color: #111827;
-  background: #fff;
+  font-size: var(--size-body);
+  padding: var(--space-2) var(--space-2);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-heading);
+  background: var(--surface-card);
   width: 100%;
   resize: vertical;
 }
 .sc-admin-textarea:focus,
 .sc-admin-text-input:focus {
   outline: none;
-  border-color: #0F6E56;
+  border-color: var(--accent-sc);
   box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12);
 }
 
-.sc-admin-panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.sc-admin-panel-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-1); }
 .sc-admin-btn {
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 18px;
-  border-radius: var(--radius-input);
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  padding: var(--space-2) 18px;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  border: 1px solid transparent;
+  transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
+  border: var(--border-thin) solid transparent;
 }
 .sc-admin-btn--primary {
-  background: #0F6E56;
-  color: #fff;
-  border-color: #0F6E56;
+  background: var(--accent-sc);
+  color: var(--surface-card);
+  border-color: var(--accent-sc);
 }
-.sc-admin-btn--primary:hover:not(:disabled) { background: #085041; border-color: #085041; }
-.sc-admin-btn--primary:disabled { background: #cbd5e1; border-color: #cbd5e1; cursor: not-allowed; }
+.sc-admin-btn--primary:hover:not(:disabled) { background: var(--accent-sc-dark); border-color: var(--accent-sc-dark); }
+.sc-admin-btn--primary:disabled { background: var(--border-default); border-color: var(--border-default); cursor: not-allowed; }
 .sc-admin-btn--ghost {
   background: none;
-  color: #6b7280;
+  color: var(--text-muted);
   border-color: transparent;
 }
-.sc-admin-btn--ghost:hover:not(:disabled) { color: #111827; }
+.sc-admin-btn--ghost:hover:not(:disabled) { color: var(--text-heading); }
 
 /* Toast */
 .sc-admin-toast-container {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 1000;
+  position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%);
+  z-index: var(--z-toast);
 }
 .sc-admin-toast {
-  padding: 10px 18px;
-  border-radius: var(--radius-card);
-  background: #153968;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: var(--space-2) 18px;
+  border-radius: var(--radius-container);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  box-shadow: var(--elevation-popover);
 }
-.sc-admin-toast--error { background: #991b1b; }
+.sc-admin-toast--error { background: var(--status-overdue-fg); }
 
 /* Fee schedule editor (Bundle 1 Stage 2) */
 .sc-admin-fee-current-card {
-  background: #fafafa;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
   padding: var(--space-3) var(--space-3);
 }
 .sc-admin-fee-active { display: flex; flex-direction: column; gap: 6px; }
 .sc-admin-fee-active-label {
-  font-size: 11px; font-weight: 700;
-  color: #6b7280;
+  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--track-caps);
 }
 .sc-admin-fee-active-amount {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  font-size: var(--size-h1);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
+  line-height: var(--lead-tight);
 }
-.sc-admin-fee-active-meta { font-size: 12px; color: #6b7280; display: flex; gap: 4px; flex-wrap: wrap; }
-.sc-admin-fee-active-actions { margin-top: 8px; }
+.sc-admin-fee-active-meta { font-size: var(--size-caption); color: var(--text-muted); display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.sc-admin-fee-active-actions { margin-top: var(--space-2); }
 
-.sc-admin-fee-bundled { display: flex; flex-direction: column; gap: 4px; }
+.sc-admin-fee-bundled { display: flex; flex-direction: column; gap: var(--space-1); }
 .sc-admin-fee-bundled-label {
-  font-size: 11px; font-weight: 700;
-  color: #6b7280;
+  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--track-caps);
 }
-.sc-admin-fee-bundled-text { font-size: 16px; color: #111827; }
-.sc-admin-fee-bundled-text strong { color: #153968; }
-.sc-admin-fee-bundled-note { font-size: 12px; color: #6b7280; font-style: italic; }
+.sc-admin-fee-bundled-text { font-size: var(--size-subhead); color: var(--text-heading); }
+.sc-admin-fee-bundled-text strong { color: var(--text-link); }
+.sc-admin-fee-bundled-note { font-size: var(--size-caption); color: var(--text-muted); font-style: italic; }
 
 /* Wider input for fees - $1,400,000.00 doesn't fit the 140px price box. */
 .sc-admin-fee-input-wrap { max-width: 220px; }
 
-.sc-admin-fee-history { display: flex; flex-direction: column; gap: 8px; margin-top: var(--space-3); }
-.sc-admin-fee-history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sc-admin-fee-history { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.sc-admin-fee-history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .sc-admin-fee-history-row {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: baseline;
-  padding: 8px 10px;
-  background: #fff;
-  border: 1px solid #f3f4f6;
-  border-radius: var(--radius-input);
-  font-size: 12px;
+  padding: var(--space-2) var(--space-2);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  font-size: var(--size-caption);
 }
-.sc-admin-fee-history-amount { font-weight: 700; color: #111827; font-variant-numeric: tabular-nums; }
-.sc-admin-fee-history-eff { color: #475569; }
-.sc-admin-fee-history-by { color: #6b7280; font-style: italic; }
-.sc-admin-fee-history-when { color: #9ca3af; justify-self: end; }
+.sc-admin-fee-history-amount { font-weight: var(--wt-bold); color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
+.sc-admin-fee-history-eff { color: var(--text-default); }
+.sc-admin-fee-history-by { color: var(--text-muted); font-style: italic; }
+.sc-admin-fee-history-when { color: var(--text-subtle); justify-self: end; }
 .sc-admin-fee-history-reason {
   grid-column: 1 / -1;
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
-  font-size: 12px;
-  border-top: 1px dashed #f3f4f6;
+  font-size: var(--size-caption);
+  border-top: var(--border-thin) dashed var(--border-subtle);
   padding-top: 6px;
 }
 
@@ -662,7 +671,7 @@
       "key   name"
       "cat   updated"
       "count chev";
-    gap: 6px 10px;
+    gap: 6px var(--space-2);
   }
   .sc-admin-row-key { grid-area: key; }
   .sc-admin-row-name { grid-area: name; }
@@ -674,11 +683,11 @@
   /* sc-admin-svc-row is now flex name | price; no mobile grid override
      needed - the row collapses naturally on narrow viewports. The
      detail strip below the row tightens its indent on phone. */
-  .sc-admin-svc-detail { margin: 4px 8px 12px 16px; padding: 10px 12px; }
+  .sc-admin-svc-detail { margin: var(--space-1) var(--space-2) var(--space-3) var(--space-4); padding: var(--space-2) var(--space-3); }
   .sc-admin-svc-detail-actions { flex-direction: column; align-items: stretch; }
   .sc-admin-fee-history-row {
     grid-template-columns: 1fr auto;
-    gap: 4px 8px;
+    gap: var(--space-1) var(--space-2);
   }
   .sc-admin-fee-history-when { grid-column: 2; }
   .sc-admin-fee-history-by { grid-column: 1; }
@@ -693,10 +702,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
-.sc-admin-group-actions { display: inline-flex; gap: 8px; }
+.sc-admin-group-actions { display: inline-flex; gap: var(--space-2); }
 
 /* Archived group: dim the whole card (desaturated), drop the navy left-
    accent (the navy is a "this is live" cue), strike the title. The
@@ -706,30 +715,30 @@
   opacity: 0.65;
 }
 .sc-admin-group--archived .sc-admin-group-header-band {
-  border-left-color: #cbd5e1;
+  border-left-color: var(--text-subtle);
 }
 .sc-admin-group--archived .sc-admin-group-title {
-  color: #9ca3af;
+  color: var(--text-subtle);
   text-decoration: line-through;
 }
 
 /* Archived service rows: greyed but visible + marked */
 .sc-admin-svc-item--archived .sc-admin-svc-name {
-  color: #9ca3af;
+  color: var(--text-subtle);
 }
 .sc-admin-svc-item--archived .sc-admin-svc-price {
-  color: #9ca3af;
+  color: var(--text-subtle);
   text-decoration: line-through;
 }
 .sc-admin-archived-badge {
   display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 700;
+  margin-left: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -738,43 +747,43 @@
 .sc-admin-svc-actions { display: inline-flex; gap: 6px; }
 
 /* Danger variant for archive buttons */
-.sc-admin-svc-edit--danger { color: #b45309; border-color: #fde68a; }
+.sc-admin-svc-edit--danger { color: var(--accent-text); border-color: var(--status-needs-bd); }
 .sc-admin-svc-edit--danger:hover:not(:disabled) {
-  background: #fffbeb;
-  border-color: #f59e0b;
-  color: #92400e;
+  background: var(--accent-backplate);
+  border-color: var(--accent);
+  color: var(--accent-text);
 }
 .sc-admin-svc-edit--danger:disabled {
-  color: #cbd5e1;
-  border-color: #f3f4f6;
+  color: var(--text-subtle);
+  border-color: var(--border-subtle);
   cursor: not-allowed;
 }
 
 /* Danger primary button (group archive confirm) */
 .sc-admin-btn--danger {
-  background: #b45309;
-  color: #fff;
-  border-color: #b45309;
+  background: var(--accent-text);
+  color: var(--surface-card);
+  border-color: var(--accent-text);
 }
 .sc-admin-btn--danger:hover:not(:disabled) {
-  background: #92400e;
-  border-color: #92400e;
+  background: var(--accent-text);
+  border-color: var(--accent-text);
 }
 .sc-admin-btn--danger:disabled {
-  background: #cbd5e1;
-  border-color: #cbd5e1;
+  background: var(--border-default);
+  border-color: var(--border-default);
   cursor: not-allowed;
 }
 
 /* Strong warning variant (group-archive blast radius) */
 .sc-admin-eff-warning--strong {
-  background: #fff7ed;
-  border-color: #ea580c;
-  color: #9a3412;
+  background: var(--accent-backplate);
+  border-color: var(--accent);
+  color: var(--accent-text);
   margin-top: 0;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
-.sc-admin-eff-warning--strong strong { color: #7c2d12; }
+.sc-admin-eff-warning--strong strong { color: var(--accent-text); }
 
 /* Add link row. Inside a .sc-admin-group-footer (group card footer
    band) this is flush; the --account variant adds standalone spacing
@@ -785,54 +794,54 @@
 .sc-admin-add-row--account {
   margin-top: var(--space-3);
   padding: var(--space-3) 0 0;
-  border-top: 1px solid #e2e8f0;
+  border-top: var(--border-thin) solid var(--border-default);
 }
 .sc-admin-add-link {
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: #0F6E56;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--accent-sc);
   background: none;
-  border: 1px dashed #d1d5db;
-  border-radius: var(--radius-input);
+  border: var(--border-thin) dashed var(--border-strong);
+  border-radius: var(--radius-control);
   padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control);
 }
 .sc-admin-add-link:hover {
-  background: #f0fdf4;
-  border-color: #0F6E56;
+  background: var(--accent-sc-tint);
+  border-color: var(--accent-sc);
   border-style: solid;
 }
 
 /* Flag-checkbox row in add-service form */
 .sc-admin-flag-row {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 .sc-admin-flag-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: #111827;
+  font-size: var(--size-body);
+  color: var(--text-heading);
   cursor: pointer;
 }
-.sc-admin-flag-label input[type="checkbox"] { accent-color: #0F6E56; }
+.sc-admin-flag-label input[type="checkbox"] { accent-color: var(--accent-sc); }
 
 /* Confirm checkbox row (group archive acknowledge) */
 .sc-admin-confirm-row {
   display: inline-flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: #111827;
+  gap: var(--space-2);
+  font-size: var(--size-body);
+  color: var(--text-heading);
   cursor: pointer;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .sc-admin-confirm-row input[type="checkbox"] {
   margin-top: 2px;
-  accent-color: #b45309;
+  accent-color: var(--accent-text);
 }
