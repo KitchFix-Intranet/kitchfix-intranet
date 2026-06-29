@@ -74,7 +74,7 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-export default function ServiceCalendar({ showToast, session }) {
+export default function ServiceCalendar({ showToast, session, heroImage, firstName }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -819,6 +819,37 @@ export default function ServiceCalendar({ showToast, session }) {
   );
 
   return (
+    <>
+      <div
+        className="oh-hero"
+        style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
+      >
+        <div className="oh-hero-overlay" />
+        <div className="oh-hero-content">
+          <h1 className="oh-hero-title">Service Calendar</h1>
+          <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+        </div>
+        {/* Redesign PR 1A: admin entry relocated from the ChromeBar to
+            a circular lock in the hero's top-right corner. Visible only
+            for admins AND only in operator view - in admin view the
+            existing admin back-link owns the exit. Wires to the same
+            handleAdminToggle the old ChromeBar button used; isAdminView
+            state + URL sync are unchanged. */}
+        {isAdmin && !isAdminView && (
+          <button
+            type="button"
+            className="sc-hero-admin"
+            onClick={handleAdminToggle}
+            aria-label="Service Calendar admin (corporate only)"
+            title="Service Calendar admin (corporate only)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </button>
+        )}
+      </div>
     <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <ChromeBar
         accountDropdown={accountDropdown}
@@ -828,9 +859,6 @@ export default function ServiceCalendar({ showToast, session }) {
         showToggle={!isAdminView && isYearView}
         asOf={asOf}
         onRefresh={handleRefresh}
-        isAdmin={isAdmin}
-        isAdminView={isAdminView}
-        onAdminToggle={handleAdminToggle}
       />
 
       {!isAdminView && (
@@ -1033,5 +1061,6 @@ export default function ServiceCalendar({ showToast, session }) {
       )}
 
     </div>
+    </>
   );
 }

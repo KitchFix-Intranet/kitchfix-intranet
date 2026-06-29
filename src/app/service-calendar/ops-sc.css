@@ -33,6 +33,42 @@
 .sc-admin-esc:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
 .sc-admin-esc--active { background: var(--surface-page); border-color: var(--text-link); }
 
+/* Redesign PR 1A: admin entry as a circular lock button anchored to
+   the operator hero's top-right corner. Translucent-white treatment
+   matches the in-hero corp chip so the lock reads as the same chrome
+   family on the navy gradient + food-photo background. The shared
+   .oh-hero rule is position:relative; this rule only adds the absolute
+   positioning + the button skin (no edits to .oh-hero itself). */
+.sc-hero-admin {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--surface-card);
+  background: rgba(255, 255, 255, 0.15);
+  border: var(--border-thin) solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-circle);
+  cursor: pointer;
+  z-index: 1;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-hero-admin:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.sc-hero-admin:focus-visible {
+  outline: var(--focus-ring-width) solid var(--surface-card);
+  outline-offset: var(--focus-ring-offset);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-hero-admin { transition: none; }
+}
+
 .sc-dropdown { position: relative; }
 .sc-dropdown-trigger { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-family: inherit; font-size: var(--size-body); font-weight: var(--wt-semibold); color: var(--text-heading); transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control); min-width: 200px; }
 .sc-dropdown-trigger:hover { border-color: var(--accent-sc); }
