@@ -89,15 +89,17 @@ export default function MonthCard({
     isCurrentMonth && "sc-season-month-card--current",
   ].filter(Boolean).join(" ");
 
-  // Cleanup batch: no button-inside-a-button anymore (WCAG 4.1.2).
-  //   Collapsed: ONE row-button that expands the card. The chevron
-  //             is decorative (aria-hidden) inside that button.
-  //   Expanded:  plain header container with two SIBLING buttons -
-  //             chevron (collapse) + View -> (drill). No role on the
-  //             header; the buttons own the keyboard semantics
-  //             natively.
-  // This also resolves audit CC-4: collapsed = tap anywhere on the
-  // row to expand; expanded = explicit "View ->" drills.
+  // No button-inside-a-button (WCAG 4.1.2). The interactive elements
+  // are SIBLINGS of the article's children:
+  //   Collapsed: ONE row-button that expands the card. The chevron is
+  //             a decorative (aria-hidden) span inside that button.
+  //   Expanded:  the header is plain content (name + optional mobile
+  //             chevron-collapse), and the whole-card drill is a
+  //             stretched invisible button rendered as the article's
+  //             LAST child (inset: 0 covers the card; the chevron sits
+  //             above it via z-index so tapping the chevron collapses
+  //             instead of drilling). Mirrors the period-card click
+  //             pattern; resolves audit CC-4.
   return (
     <article
       className={cardClass}
@@ -122,14 +124,6 @@ export default function MonthCard({
               <ChevronGlyph expanded={true} />
             </button>
           )}
-          <button
-            type="button"
-            className="sc-season-month-card-drill"
-            onClick={handleDrill}
-            aria-label={`Open ${monthName}`}
-          >
-            View <span aria-hidden="true">→</span>
-          </button>
         </header>
       ) : (
         <button
@@ -183,6 +177,21 @@ export default function MonthCard({
             monthState={monthState}
           />
         </>
+      )}
+
+      {/* Whole-card drill: a stretched invisible button anchored to
+          the article (which is now position: relative). Renders only
+          when expanded - the collapsed-trigger button already covers
+          the whole tile for the expand action. The mobile collapse
+          chevron sits above this via z-index so tapping the chevron
+          collapses without drilling. */}
+      {expanded && (
+        <button
+          type="button"
+          className="sc-season-month-card-drill"
+          onClick={handleDrill}
+          aria-label={`Open ${monthName}`}
+        />
       )}
     </article>
   );
