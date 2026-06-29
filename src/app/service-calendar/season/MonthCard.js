@@ -171,6 +171,18 @@ export default function MonthCard({
           />
         </>
       )}
+
+      {/* Bundle 1 follow-up: off-season expanded body. Without this the
+          expanded branch above is gated on !noService, so an off-season
+          month (e.g. December for non-MLB accounts) rendered only the
+          header and a near-empty 220px card with no label. The placeholder
+          fills the body area so the small-multiples grid stays uniform
+          and the card carries a clean "Off-season" signal. */}
+      {expanded && noService && (
+        <div className="sc-season-month-card-offseason" aria-label="Off-season">
+          Off-season
+        </div>
+      )}
     </article>
   );
 }
@@ -290,6 +302,13 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
 // Footer renders only when expanded.
 function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount, monthState }) {
   if (!monthSummary) return null;
+  // Bundle 1 follow-up: off-season months never carry a footer figure -
+  // the body placeholder already says "Off-season" and the per-meal
+  // fall-through would have printed a misleading "0/0 entered $0".
+  // Defensive guard even though the wrapping branch already gates on
+  // !noService - keeps the footer safe if someone later renders the
+  // footer in an off-season alternative layout.
+  if (monthState === "off") return null;
   if (monthState === "upcoming") {
     // Calm "Upcoming" framing - no 0% bar, no 0/X red flag.
     return (
