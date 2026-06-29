@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
-import ChromeBar from "./season/ChromeBar";
+import ChromeBar, { AsOf } from "./season/ChromeBar";
 import StickyContext from "./season/StickyContext";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
@@ -858,6 +858,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             )}
           </button>
         )}
+        {/* As-of pill relocated from the ChromeBar into the hero's
+            bottom-right corner so the bar can sit on one row at
+            desktop widths. Reuses the existing .sc-chrome-bar-asof
+            base styling and layers an on-photo .sc-hero-asof modifier
+            that mirrors the .sc-hero-admin treatment above. Hidden on
+            phones via the modifier; StickyContext carries freshness
+            context there. */}
+        {asOf && (
+          <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
+        )}
       </div>
     <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <ChromeBar
@@ -866,8 +876,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         view={seasonView}
         onViewChange={handleSeasonViewChange}
         showToggle={!isAdminView && isYearView}
-        asOf={asOf}
-        onRefresh={handleRefresh}
         showStats={!isAdminView && isYearView}
         todayLabel={yearBannerStats?.todayLabel}
         periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}

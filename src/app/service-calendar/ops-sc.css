@@ -69,6 +69,53 @@
   .sc-hero-admin { transition: none; }
 }
 
+/* As-of pill relocated from the ChromeBar into the hero's bottom-right
+   corner so the chrome bar can stay on one row at desktop widths. The
+   pill reuses the .sc-chrome-bar-asof base (layout, padding, radius,
+   font, tabular numerals) and this modifier overrides only what the
+   on-photo treatment needs: matching .sc-hero-admin's translucent-
+   white skin (raw rgba is acceptable here per the existing pattern -
+   the in-hero translucent-white treatment is shared by .sc-hero-admin
+   and .sc-admin-corp-chip--hero; this is not a token regression). The
+   dot + refresh inherit white via the parent color. Hidden on phones -
+   the compact 84px hero cannot stack admin + as-of, and StickyContext
+   already carries freshness context there. */
+.sc-hero-asof {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  color: var(--surface-card);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  z-index: 1;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-hero-asof:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.sc-hero-asof .sc-chrome-bar-asof-dot {
+  background: var(--surface-card);
+  box-shadow: none;
+}
+.sc-hero-asof .sc-chrome-bar-asof-refresh {
+  color: var(--surface-card);
+}
+.sc-hero-asof .sc-chrome-bar-asof-refresh:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--surface-card);
+}
+.sc-hero-asof .sc-chrome-bar-asof-refresh:focus-visible {
+  outline: var(--focus-ring-width) solid var(--surface-card);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-hero-asof { transition: none; }
+}
+@media (max-width: 767px) {
+  .sc-hero-asof { display: none; }
+}
+
 .sc-dropdown { position: relative; }
 .sc-dropdown-trigger { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-family: inherit; font-size: var(--size-body); font-weight: var(--wt-semibold); color: var(--text-heading); transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control); min-width: 200px; }
 .sc-dropdown-trigger:hover { border-color: var(--accent-sc); }
