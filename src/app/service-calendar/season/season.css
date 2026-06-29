@@ -315,6 +315,28 @@
   border-color: var(--border-default);
 }
 
+/* Bundle 1 follow-up: off-season expanded body placeholder. Fills the
+   card body so the small-multiples 4-col grid stays visually uniform
+   with active expanded cards (no short ragged December). flex:1 lets it
+   absorb whatever the active sibling cards' day-grid + footer take, and
+   --surface-sunken echoes the calm off-season day-cell aesthetic
+   without competing with the live months around it. */
+.sc-season-month-card-offseason {
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  font-size: var(--size-body);
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-align: center;
+  padding: var(--space-4);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sc-season-month-card { transition: none; }
 }
