@@ -21,6 +21,7 @@
 //     a calm "Season axis" with month ticks + today only.
 
 import { derivePhaseTimeline, findPhaseAtDate } from "./phaseDerivation";
+import { CANONICAL_PHASES } from "./phaseCalendar";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -29,7 +30,6 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
   const todayDate = today?.date || null;
   const todayFraction = todayDate ? dayOfYearFraction(todayDate, year) : null;
   const todayPhase = todayDate ? findPhaseAtDate(timeline, todayDate) : null;
-  const todayLabel = todayDate ? formatDateLabel(new Date(todayDate + "T12:00:00")) : null;
 
   const yearStart = new Date(year, 0, 1).getTime();
   const yearEnd   = new Date(year + 1, 0, 1).getTime();
@@ -45,6 +45,8 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
     const width = ((clampedEnd - clampedStart) / yearSpan) * 100;
     return { ...b, left, width };
   }).filter(Boolean);
+
+  const railGradient = timeline.status === "recorded" ? buildRailGradient(blockPositions) : null;
 
   const title = phaseStripTitle(category, timeline.status);
   const subtitle = phaseStripSubtitle(timeline.status);
@@ -62,24 +64,14 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
       {/* Title row: name on the left, today chip on the right.
           Title sits ABOVE the rail (audit P1-2 - the eye reads the
           title before scanning the strip). */}
+      {/* Bundle 2: the header today chip was redundant - the InfoCard /
+          ChromeBar stats above already show today's date and the navy
+          today line on the rail already marks the position. Removed
+          (along with the dead chip CSS) so the title sits clean. */}
       <header className="sc-season-strip-header">
         <span className="sc-season-strip-title">{title}</span>
         {subtitle && (
           <span className="sc-season-strip-subtitle">{subtitle}</span>
-        )}
-        {todayLabel && (
-          <span className="sc-season-strip-today-chip">
-            <span className="sc-season-strip-today-chip-dot" aria-hidden="true" />
-            Today
-            <span className="sc-season-strip-today-chip-sep" aria-hidden="true">·</span>
-            {todayLabel}
-            {todayPhase && (
-              <>
-                <span className="sc-season-strip-today-chip-sep" aria-hidden="true">·</span>
-                {todayPhase.label}
-              </>
-            )}
-          </span>
         )}
       </header>
 
@@ -101,9 +93,21 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
         </div>
       )}
 
-      {/* Rail: blocks (when present), today line. Month ticks only
-          render BELOW the rail so they cannot overlap phase labels. */}
-      <div className="sc-season-strip-rail">
+      {/* Rail: a single continuous gradient across the year painted by
+          buildRailGradient (Bundle 2 change 2) when phases are recorded -
+          adjacent phase tints blend through a small transition zone, and
+          pre/post-season spans get the off-season wash so the rail is
+          never bare (the prior Jan-Mar void is filled). The block <div>s
+          stay - they position the phase labels - but their backgrounds
+          and the white right-border seam come off in CSS so the
+          underlying gradient shows through. The today line is the last
+          child so it paints on top of the gradient. Non-recorded
+          accounts ("Season axis") get a bare rail per the calm
+          treatment. */}
+      <div
+        className="sc-season-strip-rail"
+        style={railGradient ? { background: railGradient } : undefined}
+      >
         {timeline.status === "recorded" && (
           <div className="sc-season-strip-blocks" aria-hidden="true">
             {blockPositions.map((b, i) => (
@@ -171,6 +175,42 @@ function dayOfYearFraction(dateStr, year) {
   return (here - start) / (end - start);
 }
 
-function formatDateLabel(d) {
-  return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+// Bundle 2 change 2: build a left-to-right linear-gradient that paints
+// the entire 0-100% year span with the canonical phase tints. Adjacent
+// phases blend through a small FADE zone instead of meeting at a hard
+// line, so the rail reads as the seasonal arc. Year-start and year-end
+// spans not covered by a phase fill with CANONICAL_PHASES.off.tint so
+// the rail is never bare (this is what closes the Jan-Mar void on PDC
+// accounts).
+//
+// The tint hex values intentionally come from the data-model phase
+// palette (CANONICAL_PHASES), not from CSS tokens - PeriodCard already
+// consumes block.tint inline the same way. This is a phase-identity
+// palette, not a token regression.
+function buildRailGradient(blocks) {
+  if (!blocks?.length) return null;
+  const offTint = CANONICAL_PHASES.off.tint;
+  const FADE = 1.2;
+  const clamp = (n) => Math.max(0, Math.min(100, n));
+  const sorted = [...blocks].sort((a, b) => a.left - b.left);
+  const stops = [];
+  const first = sorted[0];
+  if (first.left > 0.5) {
+    stops.push(`${offTint} 0%`);
+    stops.push(`${offTint} ${clamp(first.left - FADE).toFixed(2)}%`);
+  }
+  sorted.forEach((b, i) => {
+    const start = b.left;
+    const end = b.left + b.width;
+    const startFade = (i === 0 && first.left <= 0.5) ? 0 : FADE;
+    stops.push(`${b.tint} ${clamp(start + startFade).toFixed(2)}%`);
+    stops.push(`${b.tint} ${clamp(end - FADE).toFixed(2)}%`);
+  });
+  const last = sorted[sorted.length - 1];
+  const lastEnd = last.left + last.width;
+  if (lastEnd < 99.5) {
+    stops.push(`${offTint} ${clamp(lastEnd + FADE).toFixed(2)}%`);
+    stops.push(`${offTint} 100%`);
+  }
+  return `linear-gradient(to right, ${stops.join(", ")})`;
 }
