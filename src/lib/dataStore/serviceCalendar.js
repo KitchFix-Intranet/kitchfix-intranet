@@ -115,21 +115,13 @@ function yearBounds(year) {
 
 // Returns the day's relationship to "today" + lock cutoff.
 //
-// "today" is computed via SERVER-LOCAL midnight (UTC on Vercel), not
-// the operator's local clock. For a CT operator at 8pm Friday the
-// server already sees Saturday UTC and may flip Friday's tile to
-// isPast=true a few hours early. This is ADVISORY-ONLY UI coloring -
-// the isPast/isLocked flags drive tile styling; no invoice cutoff or
-// write enforcement reads them. Accepted as a known coloring quirk
-// to keep loadMonthData's output shape stable.
-//
-// If evening tile-coloring ever matters operationally, the fix is to
-// stop emitting isPast/isLocked from the orchestrator and have the
-// calendar recompute them client-side per render. That is a separate
-// future PR; do not bake it in here.
-function dayContext(serviceDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+// "today" is supplied by the caller (built from opts.clientToday when
+// the client sends its local date on the read; otherwise server-local
+// midnight = UTC on Vercel as the fallback). Constructed consistently
+// with the per-day comparison dates (d = new Date(date + "T12:00:00")
+// is local midday) so the calendar-date compare is correct in either
+// timezone.
+function dayContext(serviceDate, today) {
   const lockCutoff = new Date(today);
   lockCutoff.setDate(lockCutoff.getDate() - LOCK_DAYS);
   const d = new Date(serviceDate + "T12:00:00");
@@ -137,6 +129,20 @@ function dayContext(serviceDate) {
     isPast: d < today,
     isLocked: d < lockCutoff,
   };
+}
+
+// Build the "today" anchor used by the read paths. When clientToday is
+// a YYYY-MM-DD string sent by the operator's browser, construct local
+// midnight of that date so the d < today compare (with d = local
+// midday) reflects the operator's actual calendar day. Otherwise fall
+// back to server-local midnight (UTC on Vercel).
+function buildTodayAnchor(clientToday) {
+  if (clientToday && /^\d{4}-\d{2}-\d{2}$/.test(clientToday)) {
+    return new Date(clientToday + "T00:00:00");
+  }
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t;
 }
 
 // Wraps any supabase error into a thrown Error with a [dataStore.sc]
@@ -557,9 +563,10 @@ export async function loadAllAccountsConfig() {
 // fetch pages explicitly via .range to be safe against future
 // service-count growth.
 
-async function loadMonthDataPostgres(accountKey, year, month) {
+async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   const supa = getServiceClient();
   const { first, last } = monthBounds(year, month);
+  const today = buildTodayAnchor(opts.clientToday);
 
   // Fetch with explicit range to bypass the 1000-default ceiling for
   // wider months (PDC accounts with 13 services * 31 days = 403 rows
@@ -619,7 +626,7 @@ async function loadMonthDataPostgres(accountKey, year, month) {
   const days = [...dayBuckets.values()]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((day) => {
-      const ctx = dayContext(day.date);
+      const ctx = dayContext(day.date, today);
       let projectedCount = 0;
       let actualCount = 0;
       let projectedRevenue = 0;
@@ -651,9 +658,14 @@ async function loadMonthDataPostgres(accountKey, year, month) {
 /**
  * Read one month of projection + actual data for an account.
  * Backed by the sc_daily_revenue view.
+ *
+ * opts.clientToday (YYYY-MM-DD): the operator's local today, used to
+ * anchor isPast/isLocked so evening operators in CT/ET/AZ get correct
+ * cell coloring. Validated upstream in the route handler; when absent
+ * or invalid, the orchestrator falls back to server-local midnight.
  */
-export async function loadMonthData(accountKey, year, month) {
-  return loadMonthDataPostgres(accountKey, year, month);
+export async function loadMonthData(accountKey, year, month, opts = {}) {
+  return loadMonthDataPostgres(accountKey, year, month, opts);
 }
 
 
@@ -737,7 +749,7 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
 }
 
 
-async function loadYearSummaryPostgres(accountKey, year) {
+async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   const supa = getServiceClient();
   const { first, last } = yearBounds(year);
 
@@ -809,8 +821,7 @@ async function loadYearSummaryPostgres(accountKey, year) {
   // accounts recognize "past day with all-zero projection AND no actuals
   // entered" as a planned off-day instead of a missed entry. See the
   // classify() comment below for the gated branch.
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = buildTodayAnchor(opts.clientToday);
   const lockCutoff = new Date(today);
   lockCutoff.setDate(lockCutoff.getDate() - LOCK_DAYS);
 
@@ -1012,7 +1023,13 @@ async function loadYearSummaryPostgres(accountKey, year) {
   // account. Returns null fields cleanly if today has no metadata (past
   // the seeded data range, e.g. the fiscal-year boundary) so the banner
   // chip is conditional rather than crashing.
-  const todayStr = today.toISOString().slice(0, 10);
+  //
+  // When the client sent its local today, emit that verbatim so the
+  // string surfaced to the UI matches the operator's calendar day (no
+  // .toISOString round-trip - that would re-apply UTC and undo the fix).
+  const todayStr = opts.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(opts.clientToday)
+    ? opts.clientToday
+    : today.toISOString().slice(0, 10);
   const todayMetaRes = await supa
     .from("sc_daily_revenue")
     .select("period, week_label")
@@ -1053,9 +1070,15 @@ async function loadYearSummaryPostgres(accountKey, year) {
 /**
  * Read 12-month aggregate + per-day status for the year heatmap.
  * Backed by sc_month_summary + sc_daily_revenue views.
+ *
+ * opts.clientToday (YYYY-MM-DD): the operator's local today, used as
+ * the classify() boundary AND as the emitted summary.today so the
+ * year-grid ring, the cell colors, and the period/week chips all agree
+ * on the operator's actual calendar day. Validated upstream; absent or
+ * invalid -> server-local midnight (UTC on Vercel) fallback.
  */
-export async function loadYearSummary(accountKey, year) {
-  return loadYearSummaryPostgres(accountKey, year);
+export async function loadYearSummary(accountKey, year, opts = {}) {
+  return loadYearSummaryPostgres(accountKey, year, opts);
 }
 
 

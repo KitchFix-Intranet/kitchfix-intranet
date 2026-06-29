@@ -249,13 +249,13 @@ export default function ServiceCalendar({ showToast, session }) {
     if (!selectedAccount) return;
     const controller = new AbortController();
     setLoading(true); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
-    fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
+    fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (d.success) setData(d); else { showToast(d.error || "Failed", "error"); setData(null); } })
       .catch(e => { if (e.name !== "AbortError") { showToast("Network error", "error"); setData(null); } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [selectedAccount, mk, showToast, reloadKey]);
+  }, [selectedAccount, mk, showToast, reloadKey, today]);
 
   useEffect(() => {
     // Depend on the underlying scope/lens state (PRIMARY state pieces),
@@ -274,7 +274,7 @@ export default function ServiceCalendar({ showToast, session }) {
     // reloadKey is in the dep array so a save in the month view also
     // refreshes the year heatmap on next visit; without it, the heatmap
     // showed stale grey dots after data flipped to "entered" in PG.
-    fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}`)
+    fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}&clientToday=${encodeURIComponent(today)}`)
       .then(r => r.json()).then(d => {
         if (!d.success) return;
         setYearData(d.months);
@@ -284,7 +284,7 @@ export default function ServiceCalendar({ showToast, session }) {
         setAsOf(new Date());
       }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, lens, isAdminView, selectedAccount, reloadKey]);
+  }, [scope, lens, isAdminView, selectedAccount, reloadKey, today]);
 
   // PR-B2 period-data effect. Derives the 1-2 calendar months the
   // current period spans and fetches only the missing months in
@@ -304,7 +304,7 @@ export default function ServiceCalendar({ showToast, session }) {
     setLoading(true);
     setPartialError(null);
     Promise.allSettled(missing.map(mk =>
-      fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
+      fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
         .then(r => r.json())
         .then(d => d.success ? { mk, payload: d } : Promise.reject({ mk, error: d.error || "Failed" }))
     ))
@@ -329,7 +329,7 @@ export default function ServiceCalendar({ showToast, session }) {
     // monthCache intentionally NOT in deps - read via functional set
     // form so this effect doesn't loop when the cache populates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lens, selectedAccount, periodKey, periodRanges, reloadKey]);
+  }, [lens, selectedAccount, periodKey, periodRanges, reloadKey, today]);
 
   // PR-B2 periodKey initialization. When entering lens=period and
   // periodRanges arrives, land on the period containing today (or the
@@ -526,7 +526,7 @@ export default function ServiceCalendar({ showToast, session }) {
     const idleId = schedule(() => {
       if (controller.signal.aborted) return;
       Promise.allSettled(needed.map(mk =>
-        fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}`, { signal: controller.signal })
+        fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
           .then(r => r.json())
           .then(d => (d && d.success) ? { mk, payload: d } : null)
           .catch(() => null)
@@ -549,7 +549,7 @@ export default function ServiceCalendar({ showToast, session }) {
       try { cancel(idleId); } catch { /* ignore */ }
       controller.abort();
     };
-  }, [lens, selectedAccount, periodKey, periodRanges, monthCache, reloadKey]);
+  }, [lens, selectedAccount, periodKey, periodRanges, monthCache, reloadKey, today]);
 
   // Account-level mode classification (consumed by SeasonShell and
   // PeriodWorkspace via props). Three display modes per spec section 6
