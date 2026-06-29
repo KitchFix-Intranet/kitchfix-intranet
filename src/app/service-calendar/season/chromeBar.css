@@ -155,6 +155,55 @@
   align-self: center;
 }
 
+/* Action signal folded into the chrome (replaces the InfoCard band).
+   Per-meal urgency counts are buttons that jump to the first day of
+   that status; colored via the same status-* fg tokens as the legend
+   and day tiles so the toolbar, key, and grid all agree. */
+.sc-chrome-bar-stats-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.sc-chrome-bar-stats-count:hover { text-decoration-style: solid; }
+.sc-chrome-bar-stats-count:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-cell);
+}
+.sc-chrome-bar-stats-count-num {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+}
+.sc-chrome-bar-stats-count-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+.sc-chrome-bar-stats-count--needs   { color: var(--status-needs-fg); }
+.sc-chrome-bar-stats-count--overdue { color: var(--status-overdue-fg); }
+
+/* Fee-account on-track marker (replaces the FeeBand reassurance). */
+.sc-chrome-bar-stats-ontrack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--status-entered-fg);
+}
+
 /* Floor-first wrap. Below 768px, the bar wraps onto two rows: left
    group on top (picker + toggle), right group below (asof + admin).
    The chrome stats cluster hides below 640px so the toolbar stays
