@@ -90,28 +90,9 @@
   color: var(--text-subtle);
   font-style: italic;
 }
-.sc-season-strip-today-chip {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  background: var(--surface-sunken);
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-pill);
-  font-size: var(--size-caption);
-  font-weight: var(--wt-semibold);
-  color: var(--text-link);
-  font-variant-numeric: var(--num-tabular);
-}
-.sc-season-strip-today-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-circle);
-  background: var(--status-today-ring);
-  flex-shrink: 0;
-}
-.sc-season-strip-today-chip-sep { color: var(--text-subtle); }
+/* Bundle 2 change 4: the .sc-season-strip-today-chip family was
+   removed - the header today chip was redundant with the InfoCard /
+   ChromeBar stats above and the navy today line on the rail below. */
 
 .sc-season-strip-rail {
   position: relative;
@@ -131,14 +112,13 @@
   bottom: 0;
   display: flex;
   align-items: center;
-  border-right: var(--border-thin) solid rgba(255, 255, 255, 0.85);
   overflow: hidden;
-  /* Calm low-saturation rail (audit CC-13: tone down so today wins
-     hierarchy). Each phase gets a quiet beige-tinted wash; we set
-     the actual tint via class modifier below. */
-  background: var(--border-subtle);
+  /* Bundle 2 change 3: blocks position the phase LABELS only. The
+     phase fill comes from the rail-level linear-gradient built in
+     PhaseStrip.js (buildRailGradient) so adjacent phases blend
+     smoothly with no white seam between them. */
+  background: transparent;
 }
-.sc-season-strip-block:last-child { border-right: none; }
 .sc-season-strip-block-label {
   font-size: 9px;
   font-weight: var(--wt-bold);
@@ -692,10 +672,14 @@
   opacity: 0.7;
 }
 .sc-season-period-card-subtitle {
+  /* Bundle 2 change 5: text-transform: uppercase removed. The phase
+     labels are already Title Case in the data and the homestand
+     variant ("HS8 vs ARI -> MIA") needs to preserve "vs" lowercase
+     and the all-caps team codes. capitalize would have mangled both;
+     removing the transform reads correctly in every variant. */
   font-size: var(--size-micro);
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: inherit;
   opacity: 0.85;
 }
