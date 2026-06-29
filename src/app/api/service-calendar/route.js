@@ -68,6 +68,28 @@ function dayOfWeek(dateStr) {
   return DOW[d.getDay()] || "";
 }
 
+// Validate a clientToday query param. The browser sends its local
+// YYYY-MM-DD on sc-load and sc-year-summary so the orchestrator can
+// anchor isPast/isLocked and the year-summary classify() boundary on
+// the operator's actual calendar day (CT/ET/AZ operators differ from
+// UTC by several hours in the evening). Returns the validated string
+// when it is a real calendar date that round-trips, otherwise null so
+// the orchestrator falls back to its UTC default. Intentionally
+// stricter than a bare regex - "2026-13-45" matches /^\d{4}-\d{2}-\d{2}$/
+// but is not a real date and would construct a garbage anchor.
+function parseClientToday(s) {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() !== m - 1 ||
+    date.getUTCDate() !== d
+  ) return null;
+  return s;
+}
+
 // accounts.level -> UI category (preserves the legacy 3-bucket model).
 function levelToCategory(level) {
   if (!level) return "Other";
@@ -330,9 +352,11 @@ export async function GET(request) {
         month = now.getMonth() + 1;
       }
 
+      const clientToday = parseClientToday(searchParams.get("clientToday"));
+
       const [config, monthData, accountInfo, accounts] = await Promise.all([
         loadAccountConfig(accountKey),
-        loadMonthData(accountKey, year, month),
+        loadMonthData(accountKey, year, month, { clientToday }),
         loadAccountInfo(accountKey),
         loadAccountList(),
       ]);
@@ -405,7 +429,8 @@ export async function GET(request) {
         ? Number(yearParam)
         : new Date().getFullYear();
 
-      const summary = await loadYearSummary(accountKey, year);
+      const clientToday = parseClientToday(searchParams.get("clientToday"));
+      const summary = await loadYearSummary(accountKey, year, { clientToday });
 
       return NextResponse.json({
         success: true,
