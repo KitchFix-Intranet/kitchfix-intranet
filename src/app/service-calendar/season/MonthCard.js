@@ -11,13 +11,16 @@
 // in via the isDesktop prop computed once at the SeasonShell level
 // via a matchMedia listener (SSR-safe, default true).
 //
-// Closes audit P1-3 (uniform card heights), P1-9 (future-period 0/X
-// punitive framing). Three follow-ups in this PR:
-//   - Upcoming months no longer print a footer line - the scheduled
-//     day tiles + the month name already say "future month."
+// Closes audit P1-3 (uniform card heights). Footer + body rules:
+//   - Upcoming / future months render the same x/Y entered + projected
+//     $ footer as the active months for grid consistency (the projected
+//     dollar figure uses monthSummary.projectedRevenue via displayRev;
+//     no progress bar at 0%).
 //   - Off-season months render the day-tile grid (all tiles in the
 //     off state) instead of a separate "Off-season" placeholder, so
-//     every card reads as a real calendar.
+//     every card reads as a real calendar. The off-season footer
+//     guard suppresses the misleading "0/0 entered $0" line on those
+//     cards.
 //   - buildMonthWeeks always produces 6 week-rows + a CSS
 //     grid-auto-rows floor ensures trailing all-empty rows hold
 //     height, so short months no longer render shorter than long
@@ -319,10 +322,12 @@ function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount, mon
   // !noService - keeps the footer safe if someone later renders the
   // footer in an off-season alternative layout.
   if (monthState === "off") return null;
-  // Upcoming months no longer print a footer. The scheduled day tiles
-  // + the month name already convey "future month"; the prior
-  // "Upcoming month - nothing required yet" line was filler.
-  if (monthState === "upcoming") return null;
+  // Upcoming months fall through to the standard footer below - the
+  // per-meal branch prints "0/X entered" + the projected $XK
+  // (displayRev uses projectedRevenue when there are no actuals), the
+  // fee branch prints "0/X entered", and the homestand branch prints
+  // "0/X game days". No progress bar at 0%, so the framing stays calm
+  // without being inconsistent with sibling cards.
   const totalDays = Number(monthSummary.totalDays) || 0;
   const daysEntered = Number(monthSummary.daysWithActuals) || 0;
   const completionPct = totalDays > 0 ? Math.round(daysEntered / totalDays * 100) : 0;

@@ -327,6 +327,11 @@
   align-items: center;
   gap: var(--space-2);
   min-height: 36px;
+  /* Matched parity with .sc-season-period-card-header. rgba(0,0,0,0.06)
+     is intentional - same literal value as the period card so the two
+     surfaces share one hairline. Update both together if this is ever
+     tokenized. */
+  border-bottom: var(--border-thin) solid rgba(0, 0, 0, 0.06);
 }
 
 /* Cleanup batch: the collapsed-state row is now a SINGLE button (no
