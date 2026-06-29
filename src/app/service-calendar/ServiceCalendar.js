@@ -8,7 +8,7 @@ import ChromeBar, { AsOf } from "./season/ChromeBar";
 import StickyContext from "./season/StickyContext";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
-import { computeInitialView } from "./computeInitialView";
+import { tierFromRoles } from "./computeInitialView";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -110,6 +110,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [scope, setScope] = useState("year");
   const [lens, setLens]   = useState("calendar");
   const [isAdminView, setIsAdminView] = useState(false);
+  const [roleTier, setRoleTier] = useState("unknown");
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
@@ -194,16 +195,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         // sc-3 seed), so we pass the array - the helper applies the
         // floor-wins tiebreaker (tierFromRoles). Empty/missing roles
         // resolve to "unknown" tier -> Season default (no regression).
-        const initialView = computeInitialView({
-          urlView: searchParams?.get("view"),
-          urlPeriod: searchParams?.get("period"),
-          isAdmin,
-          roles: d.roles || [],
-        });
-        setScope(initialView.scope);
-        setLens(initialView.lens);
-        setIsAdminView(initialView.isAdminView);
-        if (initialView.periodKey) setPeriodKey(initialView.periodKey);
+        // The URL is the source of truth for the routed view (see the
+        // URL->state effect below), so the mount no longer sets
+        // scope/lens/periodKey/isAdminView here. We only capture the
+        // role tier, used by the floor-default landing redirect.
+        setRoleTier(tierFromRoles(d.roles || []));
         // landOnCurrentPeriod handled by the periodRanges-init effect
         // below: when a floor role lands and periodRanges arrives,
         // periodKey gets set to the period containing today. The
@@ -238,8 +234,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // is per-account; without clearing it a switch would render the
     // PRIOR account's period days briefly. periodRanges is also
     // per-account (the year-summary refetch will repopulate).
+    // periodKey is now owned by the URL (the URL->state effect), so we
+    // do NOT clear it here - the view persists across an account switch
+    // and the new account's data refetches underneath it. Clearing
+    // monthCache already prevents the prior account's days from showing.
     setMonthCache({});
-    setPeriodKey(null);
     setPeriodRanges(null);
     setPartialError(null);
   }, [selectedAccount]);
@@ -343,20 +342,43 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setPeriodKey(containingToday ? containingToday.period : periodRanges[0].period);
   }, [lens, periodRanges, periodKey, today]);
 
-  // URL sync: when isAdminView flips, update the query param so deep-
-  // links are bookmarkable and the back-button works. Shallow
-  // router.replace - no full navigation, scroll preserved. The early-
-  // return guard prevents an infinite loop with searchParams in deps.
-  // isAdminView is PRIMARY state (not derived), so the read/write
-  // cycle cannot loop.
+  // URL is the single source of truth for the routed view. Any URL
+  // change - mount, in-app push, or browser back/forward - derives the
+  // view state from it. ONE-WAY: handlers push the URL; this reads it;
+  // state never writes back, so there is no sync loop. Replaces the old
+  // isAdminView->URL and periodKey->URL replace effects, which never
+  // built a back-stack. Redundant sets are no-ops (React bails when the
+  // value is unchanged).
   useEffect(() => {
-    const currentParam = searchParams?.get("view") || null;
-    if (isAdminView && currentParam !== "admin") {
-      router.replace("/service-calendar?view=admin", { scroll: false });
-    } else if (!isAdminView && currentParam === "admin") {
-      router.replace("/service-calendar", { scroll: false });
+    const view = searchParams?.get("view") || null;
+    const period = searchParams?.get("period") || null;
+    if (view === "admin" && isAdmin) {
+      setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null);
+    } else if (period && /^P\d+$/.test(period)) {
+      setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period);
+    } else {
+      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null);
     }
-  }, [isAdminView, router, searchParams]);
+  }, [searchParams, isAdmin]);
+
+  // Floor-role default landing (preserved behavior): a floor user with a
+  // clean URL lands on the current period workspace. Fires once
+  // periodRanges is ready, and only while the URL is still clean - a
+  // deep-link or any navigation takes precedence. Replace (not push) so
+  // the default does not sit in the back-stack behind first paint.
+  const floorRedirectDone = useRef(false);
+  useEffect(() => {
+    if (floorRedirectDone.current) return;
+    if (roleTier !== "floor" || !periodRanges?.length) return;
+    if (searchParams?.get("view") || searchParams?.get("period")) {
+      floorRedirectDone.current = true; // explicit URL wins; never redirect later
+      return;
+    }
+    const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
+    const target = containingToday ? containingToday.period : periodRanges[0].period;
+    floorRedirectDone.current = true;
+    router.replace(`/service-calendar?period=${target}`, { scroll: false });
+  }, [roleTier, periodRanges, searchParams, today, router]);
 
   // PR-B2 save invalidation. When a save fires reloadKey, clear the
   // monthCache so the period-data effect re-fetches the affected
@@ -367,20 +389,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     if (reloadKey === 0) return;
     setMonthCache({});
   }, [reloadKey]);
-
-  // PR-B2 URL ?period= sync. Mirrors the ?view=admin pattern but
-  // defensively preserves other params via URLSearchParams. periodKey
-  // is PRIMARY state so the read/write cycle cannot loop.
-  useEffect(() => {
-    const currentParam = searchParams?.get("period") || null;
-    const want = lens === "period" && periodKey ? periodKey : null;
-    if (currentParam === want) return;
-    const params = new URLSearchParams(searchParams);
-    if (want) params.set("period", want);
-    else params.delete("period");
-    const qs = params.toString();
-    router.replace(qs ? `/service-calendar?${qs}` : "/service-calendar", { scroll: false });
-  }, [lens, periodKey, router, searchParams]);
 
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
@@ -764,12 +772,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const jumpToDay = useCallback((t) => {
     if (!t) return;
     if (t.period) {
-      setPeriodKey(t.period);
-      setLens("period");
-      setScope("period");
+      router.push(`/service-calendar?period=${t.period}`, { scroll: false });
     }
     setFocusDay(t.date);
-  }, []);
+  }, [router]);
   const handleJumpToNeeds = useCallback(() => jumpToDay(jumpTargets.needs), [jumpToDay, jumpTargets]);
   const handleJumpToOverdue = useCallback(() => jumpToDay(jumpTargets.overdue), [jumpToDay, jumpTargets]);
 
@@ -790,13 +796,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   const handleAdminToggle = useCallback(() => {
     if (isAdminView) {
-      setIsAdminView(false);
+      router.push("/service-calendar", { scroll: false });
     } else {
-      setIsAdminView(true);
+      router.push("/service-calendar?view=admin", { scroll: false });
       setFocusDay(null);
       setBulkMode(false);
     }
-  }, [isAdminView]);
+  }, [isAdminView, router]);
 
   // Design Batch 2: the chrome bar holds the picker / toggle / Admin
   // (the controls that used to be scattered) and the as-of timestamp.
@@ -942,17 +948,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               const fallback = periodRanges?.find(r => today >= r.start && today <= r.end) || periodRanges?.[0];
               const next = containing || fallback;
               if (!next) return;
-              setPeriodKey(next.period);
-              setLens("period");
-              setScope("period");
+              router.push(`/service-calendar?period=${next.period}`, { scroll: false });
               setFocusDay(null);
               setBulkMode(false);
             }}
             periodRanges={periodRanges}
             onPeriodClick={(periodLabel) => {
-              setPeriodKey(periodLabel);
-              setLens("period");
-              setScope("period");
+              router.push(`/service-calendar?period=${periodLabel}`, { scroll: false });
             }}
             // Lifted view toggle (the action signal moved to the chrome
             // bar, so the season shell no longer carries jump props).
@@ -978,21 +980,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             today={today}
             loading={loading && !periodDays}
             partialError={partialError}
-            onClimbToSeason={() => { setLens("calendar"); setScope("year"); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); }}
+            onClimbToSeason={() => { router.push("/service-calendar", { scroll: false }); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); }}
             onPrevPeriod={() => {
               if (!periodRanges?.length) return;
               const idx = periodRanges.findIndex(r => r.period === periodKey);
-              if (idx > 0) setPeriodKey(periodRanges[idx - 1].period);
+              if (idx > 0) router.push(`/service-calendar?period=${periodRanges[idx - 1].period}`, { scroll: false });
             }}
             onNextPeriod={() => {
               if (!periodRanges?.length) return;
               const idx = periodRanges.findIndex(r => r.period === periodKey);
-              if (idx >= 0 && idx < periodRanges.length - 1) setPeriodKey(periodRanges[idx + 1].period);
+              if (idx >= 0 && idx < periodRanges.length - 1) router.push(`/service-calendar?period=${periodRanges[idx + 1].period}`, { scroll: false });
             }}
             onTodayJump={() => {
               if (!periodRanges?.length) return;
               const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-              if (containingToday) setPeriodKey(containingToday.period);
+              if (containingToday) router.push(`/service-calendar?period=${containingToday.period}`, { scroll: false });
             }}
             onDayClick={(date) => setFocusDay(date)}
             bulkMode={bulkMode}
