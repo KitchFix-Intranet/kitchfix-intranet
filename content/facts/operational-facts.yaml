@@ -143,7 +143,7 @@ brand_promise:
   scope: global
   default:
     value: "Best Food, Best Service, Best Hospitality"
-    authority: "PB-001"
+    authority: "PB-014"
   owner: "Senior Director of Operations"
 
 operating_states:
@@ -215,6 +215,35 @@ pip_standard_days:
     value: "30 days (60-day option)"
     authority: "SOP-004"
   owner: "People Operations"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Culture OS canonical facts (PB-014) - mission, vision, culinary principles.
+# Culture OS is the canonical home of mission/vision; downstream docs
+# reference these via <Fact> rather than restating the wording. The
+# culinary_principles fact is authored by PB-006 (Culinary OS) - Culture OS
+# only cites it. brand_promise (above) authority moved from PB-001 to PB-014.
+# ─────────────────────────────────────────────────────────────────────────────
+
+mission_statement:
+  scope: global
+  default:
+    value: "We exist to fuel, heal, and genuinely care for every team we serve - through the food we make and the hospitality behind it."
+    authority: "PB-014"
+  owner: "SLT"
+
+vision_statement:
+  scope: global
+  default:
+    value: "Be the vital partner for every performance-focused organization we serve - the one they can't imagine winning without."
+    authority: "PB-014"
+  owner: "SLT"
+
+culinary_principles:
+  scope: global
+  default:
+    value: "Remarkable, Authentic, Responsible, Inspiring"
+    authority: "PB-006"
+  owner: "Director of Culinary"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tier 2 - Override-bearing facts (state dimension)
