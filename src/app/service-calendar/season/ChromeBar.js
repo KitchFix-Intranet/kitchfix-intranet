@@ -6,7 +6,7 @@
 //
 // Contents, left to right:
 //   account dropdown -> category tag -> Calendar/Period toggle ->
-//   spacer -> Today / Period / Week / Recorded stats -> as-of timestamp
+//   spacer -> Today / Period / Week / Recorded stats
 //
 // The stats cluster is the redesign Bundle 1 (Section B) promotion of
 // the old InfoCard ContextBand into the chrome's freed-by-Admin slot,
@@ -14,6 +14,12 @@
 //
 // The Admin entry lives in the hero's top-right corner (redesign PR
 // 1A) - the sc-hero-admin lock button rendered by ServiceCalendar.js.
+//
+// The as-of timestamp pill was relocated out of the bar into the
+// hero's bottom-right corner so the bar can stay on one row at
+// desktop widths. AsOf is named-exported so ServiceCalendar can
+// render it in the hero with a sc-hero-asof modifier; formatAsOf
+// stays local to this module.
 //
 // The global Ops Hub notification bell lives in the page-wide TopNav
 // above this bar; not part of the SC chrome, not relocated.
@@ -30,9 +36,6 @@ export default function ChromeBar({
   view,                        // "calendar" | "period"
   onViewChange,                // (next: "calendar" | "period") => void
   showToggle,                  // hide when in admin view or periodworkspace
-  // data freshness
-  asOf,                        // Date | null
-  onRefresh,                   // optional () => void to trigger a refresh
   // Bundle 1 (Section B): chrome stats cluster (was InfoCard ContextBand)
   showStats,                   // gate - only render in operator year view
   todayLabel,                  // "Jun 28"
@@ -80,9 +83,6 @@ export default function ChromeBar({
             pctRecorded={pctRecorded}
           />
         )}
-        {asOf && (
-          <AsOf asOf={asOf} onRefresh={onRefresh} />
-        )}
       </div>
     </div>
   );
@@ -127,10 +127,17 @@ function ChromeStats({ todayLabel, periodNum, weekNum, pctRecorded }) {
 //   "as of 4:51 PM"            - today
 //   "as of Jun 25, 4:51 PM"    - yesterday or older
 // The optional refresh button is shown only when onRefresh is wired.
-function AsOf({ asOf, onRefresh }) {
+//
+// Named export: ServiceCalendar.js relocates this into the hero's
+// bottom-right corner via the sc-hero-asof modifier so the chrome bar
+// can sit on one row at desktop widths.
+export function AsOf({ asOf, onRefresh, className }) {
   const label = formatAsOf(asOf);
   return (
-    <span className="sc-chrome-bar-asof" title={asOf.toLocaleString()}>
+    <span
+      className={`sc-chrome-bar-asof ${className || ""}`.trim()}
+      title={asOf.toLocaleString()}
+    >
       <span aria-hidden="true" className="sc-chrome-bar-asof-dot" />
       <span>{label}</span>
       {onRefresh && (

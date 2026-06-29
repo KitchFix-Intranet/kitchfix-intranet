@@ -127,7 +127,7 @@
 .sc-chrome-bar-stats {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-2);
   font-variant-numeric: var(--num-tabular);
 }
 .sc-chrome-bar-stats-segment {
