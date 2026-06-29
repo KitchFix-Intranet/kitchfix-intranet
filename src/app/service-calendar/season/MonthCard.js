@@ -12,9 +12,16 @@
 // via a matchMedia listener (SSR-safe, default true).
 //
 // Closes audit P1-3 (uniform card heights), P1-9 (future-period 0/X
-// punitive framing). The upcoming summary aux ("0/totalDays") is
-// dropped per D3 - the calm footer line already says "Upcoming month
-// - nothing required yet" so the 0/X read like a failing grade.
+// punitive framing). Three follow-ups in this PR:
+//   - Upcoming months no longer print a footer line - the scheduled
+//     day tiles + the month name already say "future month."
+//   - Off-season months render the day-tile grid (all tiles in the
+//     off state) instead of a separate "Off-season" placeholder, so
+//     every card reads as a real calendar.
+//   - buildMonthWeeks always produces 6 week-rows + a CSS
+//     grid-auto-rows floor ensures trailing all-empty rows hold
+//     height, so short months no longer render shorter than long
+//     ones and the small-multiples grid is uniform.
 
 import { useState } from "react";
 import DaySquare from "../DaySquare";
@@ -147,7 +154,13 @@ export default function MonthCard({
         </button>
       )}
 
-      {expanded && !noService && (
+      {/* Body grid renders for ALL expanded months including off-
+          season. indexDays() yields an empty map when monthSummary has
+          no days[], so off-season cells fall through to status "off"
+          and render as off day tiles. The MonthCardFooter's off-season
+          guard keeps the misleading "0/0 entered $0" line off those
+          cards. */}
+      {expanded && (
         <>
           <div className="sc-season-month-card-dow" aria-hidden="true">
             {DOW_HEADER.map((d, i) => (
@@ -170,18 +183,6 @@ export default function MonthCard({
             monthState={monthState}
           />
         </>
-      )}
-
-      {/* Bundle 1 follow-up: off-season expanded body. Without this the
-          expanded branch above is gated on !noService, so an off-season
-          month (e.g. December for non-MLB accounts) rendered only the
-          header and a near-empty 220px card with no label. The placeholder
-          fills the body area so the small-multiples grid stays uniform
-          and the card carries a clean "Off-season" signal. */}
-      {expanded && noService && (
-        <div className="sc-season-month-card-offseason" aria-label="Off-season">
-          Off-season
-        </div>
       )}
     </article>
   );
@@ -309,14 +310,10 @@ function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount, mon
   // !noService - keeps the footer safe if someone later renders the
   // footer in an off-season alternative layout.
   if (monthState === "off") return null;
-  if (monthState === "upcoming") {
-    // Calm "Upcoming" framing - no 0% bar, no 0/X red flag.
-    return (
-      <footer className="sc-season-month-card-footer sc-season-month-card-footer--upcoming">
-        <span className="sc-season-month-card-stat-aux">Upcoming month - nothing required yet.</span>
-      </footer>
-    );
-  }
+  // Upcoming months no longer print a footer. The scheduled day tiles
+  // + the month name already convey "future month"; the prior
+  // "Upcoming month - nothing required yet" line was filler.
+  if (monthState === "upcoming") return null;
   const totalDays = Number(monthSummary.totalDays) || 0;
   const daysEntered = Number(monthSummary.daysWithActuals) || 0;
   const completionPct = totalDays > 0 ? Math.round(daysEntered / totalDays * 100) : 0;
@@ -433,6 +430,12 @@ function buildMonthWeeks(year, monthIndex) {
   const gridStart = new Date(first);
   gridStart.setDate(gridStart.getDate() - daysBeforeMonday);
 
+  // Always emit 6 rows. The grid is a standard calendar layout, and a
+  // fixed 6-row count is what keeps every month's body the same height
+  // - short months pad with trailing next-month cells (rendered as
+  // sc-season-month-card-cell-empty by renderCell). Combined with the
+  // CSS grid-auto-rows floor on .sc-season-month-card-grid, this makes
+  // the 12 cards true small-multiples.
   const weeks = [];
   const cursor = new Date(gridStart);
   for (let w = 0; w < 6; w++) {
@@ -449,7 +452,6 @@ function buildMonthWeeks(year, monthIndex) {
       cursor.setDate(cursor.getDate() + 1);
     }
     weeks.push(row);
-    if (cursor > last && cursor.getDay() === 1) break;
   }
   return weeks;
 }

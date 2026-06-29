@@ -248,15 +248,21 @@
 .sc-season-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  /* grid-auto-rows: 1fr makes every row of the small-multiples grid
+     equal to the tallest card's height, so all 12 cards land exactly
+     the same height even when a whole row is off-season / upcoming
+     and would otherwise be shorter than its sibling rows. */
+  grid-auto-rows: 1fr;
   gap: var(--space-3);
 }
 @media (max-width: 1023px) { .sc-season-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 767px)  { .sc-season-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 479px)  { .sc-season-grid { grid-template-columns: 1fr; } }
 
-/* Loading skeleton */
+/* Loading skeleton. Sized close to the 6-row card height so the
+   load -> loaded transition does not jump. */
 .sc-season-month-skeleton {
-  height: 240px;
+  height: 290px;
   background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
   background-size: 200% 100%;
   animation: sc-season-shimmer 1.6s linear infinite;
@@ -293,28 +299,6 @@
 .sc-season-month-card--state-upcoming.sc-season-month-card--collapsed {
   background: var(--surface-sunken);
   border-color: var(--border-default);
-}
-
-/* Bundle 1 follow-up: off-season expanded body placeholder. Fills the
-   card body so the small-multiples 4-col grid stays visually uniform
-   with active expanded cards (no short ragged December). flex:1 lets it
-   absorb whatever the active sibling cards' day-grid + footer take, and
-   --surface-sunken echoes the calm off-season day-cell aesthetic
-   without competing with the live months around it. */
-.sc-season-month-card-offseason {
-  flex: 1;
-  min-height: 160px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  font-size: var(--size-body);
-  font-style: italic;
-  letter-spacing: 0.02em;
-  text-align: center;
-  padding: var(--space-4);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -448,18 +432,6 @@
 }
 .sc-season-month-card-drill > span { margin-left: var(--space-1); }
 
-.sc-season-month-card-footer--upcoming {
-  background: var(--surface-sunken);
-  border-top: var(--border-thin) dashed var(--border-default);
-  padding-top: 6px;
-  margin-top: var(--space-1);
-}
-.sc-season-month-card-footer--upcoming .sc-season-month-card-stat-aux {
-  font-size: var(--size-caption);
-  color: var(--text-subtle);
-  font-style: italic;
-}
-
 .sc-season-month-card-dow {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -478,10 +450,20 @@
 /* The grid that holds the atom tiles and the empty out-of-month
    cells. 7 columns matches the DOW header above. Atom tiles
    intrinsically size to fill the cell at sm via the .sc-daysq--sm
-   rules in DaySquare.css. */
+   rules in DaySquare.css.
+   - grid-auto-rows minmax floors each of the 6 week rows at the
+     day-square row height (28px matches .sc-daysq--sm min-height),
+     so a trailing all-empty row in a short month still holds height
+     and the 6-row uniformity reads.
+   - flex: 1 + align-content: start lets the grid absorb the card
+     body so the footer (when present) pins to the bottom and the
+     day rows stay packed at the top (no stretched tiles). */
 .sc-season-month-card-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: minmax(28px, auto);
+  align-content: start;
+  flex: 1;
   gap: 2px;
 }
 .sc-season-month-card-cell {
