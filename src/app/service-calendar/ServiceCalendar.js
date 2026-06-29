@@ -829,24 +829,33 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           <h1 className="oh-hero-title">Service Calendar</h1>
           <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
         </div>
-        {/* Redesign PR 1A: admin entry relocated from the ChromeBar to
-            a circular lock in the hero's top-right corner. Visible only
-            for admins AND only in operator view - in admin view the
-            existing admin back-link owns the exit. Wires to the same
-            handleAdminToggle the old ChromeBar button used; isAdminView
-            state + URL sync are unchanged. */}
-        {isAdmin && !isAdminView && (
+        {/* Redesign PR 1A: admin entry in the hero's top-right corner.
+            Bundle 1 (Section A) makes the button a TOGGLE - it now
+            renders in admin view too, switching to a back-arrow icon
+            so the operator has an exit path (the previous gate hid the
+            button in admin view, leaving no way back). Wires to the
+            same handleAdminToggle the old ChromeBar button used;
+            isAdminView state + URL sync are unchanged. */}
+        {isAdmin && (
           <button
             type="button"
             className="sc-hero-admin"
             onClick={handleAdminToggle}
-            aria-label="Service Calendar admin (corporate only)"
-            title="Service Calendar admin (corporate only)"
+            aria-label={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+            title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+            aria-pressed={isAdminView}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="11" width="18" height="10" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            {isAdminView ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="m12 19-7-7 7-7" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="10" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            )}
           </button>
         )}
       </div>
@@ -859,6 +868,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         showToggle={!isAdminView && isYearView}
         asOf={asOf}
         onRefresh={handleRefresh}
+        showStats={!isAdminView && isYearView}
+        todayLabel={yearBannerStats?.todayLabel}
+        periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
+        weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
+        pctRecorded={hasHomestandSchedule
+          ? (yearBannerStats?.totalGameDays > 0
+              ? Math.round((yearBannerStats.gameDaysEntered / yearBannerStats.totalGameDays) * 100)
+              : null)
+          : (yearBannerStats?.totalDays > 0
+              ? Math.round((yearBannerStats.daysRecorded / yearBannerStats.totalDays) * 100)
+              : null)
+        }
       />
 
       {!isAdminView && (
