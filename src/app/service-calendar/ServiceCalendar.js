@@ -354,7 +354,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     const period = searchParams?.get("period") || null;
     if (view === "admin" && isAdmin) {
       setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null);
-    } else if (period && /^P\d+$/.test(period)) {
+    } else if (period) {
+      // Any non-empty ?period= means "show this period's workspace."
+      // The identifier is the bare period number (e.g. "1"), NOT "P1" -
+      // the old /^P\d+$/ guard never matched, so drilling changed the
+      // URL but never opened the workspace. An unknown value renders the
+      // workspace empty state (graceful), so no format regex is needed.
       setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period);
     } else {
       setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null);
