@@ -29,7 +29,6 @@ import MonthCard from "./MonthCard";
 import PeriodCard from "./PeriodCard";
 import FullSeasonCard from "./FullSeasonCard";
 import StateLegend from "./StateLegend";
-import InfoCard from "./InfoCard";
 import { resolveDayKind } from "../dayResolvers";
 import { derivePhaseTimeline, bucketDaysByPeriod } from "./phaseDerivation";
 
@@ -49,11 +48,10 @@ export default function SeasonShell({
   // Stage 2 additions:
   periodRanges,             // [{ period, start, end }] from sc-year-summary
   onPeriodClick,            // (periodLabel) => void
-  // Design Batch 2 - info card props (passed from orchestrator):
+  // Lifted view toggle (passed from orchestrator). The action signal
+  // moved to the ChromeBar, so the shell no longer carries jump props.
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
   onViewChange,             // (next) => void
-  onJumpToNext,             // () => void; jumps to the next needs-entry/overdue day
-  hasJumpTarget = false,    // boolean
 }) {
   // Calendar | Period view state. Design Batch 2 lifts this to the
   // orchestrator's chrome bar so the toggle lives in the chrome with
@@ -90,12 +88,6 @@ export default function SeasonShell({
 
   const todayDate = yearToday?.date || null;
 
-  // Derive the InfoCard inputs from yearBannerStats. Bundle 1
-  // (Section B) moved Today / Period / Week / Recorded into the
-  // ChromeBar, so the InfoCard now only consumes the action-band
-  // inputs (needs / overdue / feeStats).
-  const stats = yearBannerStats;
-
   // Bundle 1 (Section D1): the all-expanded-on-desktop layout needs
   // one matchMedia listener for the 12 cards instead of one per card.
   // SSR-safe: default true so the desktop layout (dominant case) is
@@ -121,7 +113,6 @@ export default function SeasonShell({
   if (loading || !yearData) {
     return (
       <div className="sc-season sc-season-shell sc-fade-in">
-        <InfoCard loading />
         {!hasHomestandSchedule && (
           <PhaseStrip category={account?.category} today={null} year={year} />
         )}
@@ -141,19 +132,6 @@ export default function SeasonShell({
 
   return (
     <div className="sc-season sc-season-shell sc-fade-in">
-      <InfoCard
-        isFeeAccount={isFeeAccount}
-        needsEntry={stats?.needsEntry || 0}
-        overdue={stats?.overdue || 0}
-        feeStats={isFeeAccount && stats ? {
-          gameDaysEntered: stats.gameDaysEntered || 0,
-          totalGameDays: stats.totalGameDays || 0,
-        } : null}
-        todayLabel={stats?.todayLabel}
-        onJumpToNext={onJumpToNext}
-        hasJumpTarget={hasJumpTarget}
-      />
-
       {hasHomestandSchedule ? (
         <SeasonStepper
           yearData={yearData}

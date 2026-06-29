@@ -36,12 +36,20 @@ export default function ChromeBar({
   view,                        // "calendar" | "period"
   onViewChange,                // (next: "calendar" | "period") => void
   showToggle,                  // hide when in admin view or periodworkspace
-  // Bundle 1 (Section B): chrome stats cluster (was InfoCard ContextBand)
+  // Chrome stats cluster (was InfoCard ContextBand). The action signal
+  // (per-meal urgency counts / fee contract status) is folded in here
+  // too, replacing the standalone InfoCard band.
   showStats,                   // gate - only render in operator year view
   todayLabel,                  // "Jun 28"
   periodNum,                   // "7" | null
   weekNum,                     // "2" | null (omits the Week segment when falsy)
-  pctRecorded,                 // 0-100 number, or null
+  isFeeAccount = false,        // fee accounts show a contract stat, not urgency counts
+  needsEntry = 0,              // per-meal: count of days needing entry (clickable)
+  overdue = 0,                 // per-meal: count of overdue days (clickable)
+  gameDaysEntered = 0,         // fee: game days recorded
+  totalGameDays = 0,           // fee: total game days
+  onJumpToNeeds,               // () => void; jump to first needs-entry day
+  onJumpToOverdue,             // () => void; jump to first overdue day
   // misc
   className,
 }) {
@@ -80,7 +88,13 @@ export default function ChromeBar({
             todayLabel={todayLabel}
             periodNum={periodNum}
             weekNum={weekNum}
-            pctRecorded={pctRecorded}
+            isFeeAccount={isFeeAccount}
+            needsEntry={needsEntry}
+            overdue={overdue}
+            gameDaysEntered={gameDaysEntered}
+            totalGameDays={totalGameDays}
+            onJumpToNeeds={onJumpToNeeds}
+            onJumpToOverdue={onJumpToOverdue}
           />
         )}
       </div>
@@ -88,12 +102,17 @@ export default function ChromeBar({
   );
 }
 
-// Chrome stats cluster - the Today / Period / Week / Recorded line
-// promoted from the old InfoCard ContextBand (Bundle 1 Section B).
-// Every segment is label-then-value (the recorded inversion fix);
-// Week omits gracefully when weekNum is falsy, mirroring the
-// ContextBand's prior behavior. Presentational; no roles needed.
-function ChromeStats({ todayLabel, periodNum, weekNum, pctRecorded }) {
+// Chrome stats cluster - Today / Period / Week, then the folded action
+// signal. The old InfoCard band is gone: per-meal accounts surface
+// clickable urgency counts here (UrgencyStats), fee accounts surface
+// contract status here (FeeStat). Recorded % was removed - per-meal
+// reads the grid, fee reads the game-days stat. Week omits gracefully
+// when falsy. Presentational.
+function ChromeStats({
+  todayLabel, periodNum, weekNum,
+  isFeeAccount, needsEntry, overdue, gameDaysEntered, totalGameDays,
+  onJumpToNeeds, onJumpToOverdue,
+}) {
   return (
     <div className="sc-chrome-bar-stats" aria-label="Today context">
       <span className="sc-chrome-bar-stats-segment">
@@ -114,12 +133,89 @@ function ChromeStats({ todayLabel, periodNum, weekNum, pctRecorded }) {
           </span>
         </>
       )}
-      <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
-      <span className="sc-chrome-bar-stats-segment">
-        <span className="sc-chrome-bar-stats-label">Recorded</span>
-        <span className="sc-chrome-bar-stats-value">{pctRecorded != null ? `${pctRecorded}%` : "-"}</span>
-      </span>
+      {isFeeAccount ? (
+        <FeeStat gameDaysEntered={gameDaysEntered} totalGameDays={totalGameDays} />
+      ) : (
+        <UrgencyStats
+          needsEntry={needsEntry}
+          overdue={overdue}
+          onJumpToNeeds={onJumpToNeeds}
+          onJumpToOverdue={onJumpToOverdue}
+        />
+      )}
     </div>
+  );
+}
+
+// Per-meal action signal folded into the chrome (replaces the InfoCard
+// ActionBand). Each count is a button that jumps to the first day of
+// that status. Renders nothing when caught up - absence is the
+// all-clear signal (no separate celebration band, per the frame-2
+// CTA decision). Colored via the same status-* fg tokens the legend
+// and day tiles use, so the toolbar, key, and grid all agree.
+function UrgencyStats({ needsEntry, overdue, onJumpToNeeds, onJumpToOverdue }) {
+  const hasNeeds = (needsEntry || 0) > 0;
+  const hasOverdue = (overdue || 0) > 0;
+  if (!hasNeeds && !hasOverdue) return null;
+  return (
+    <>
+      {hasNeeds && (
+        <>
+          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--needs"
+            onClick={onJumpToNeeds}
+            aria-label={`Jump to first of ${needsEntry} days needing entry`}
+          >
+            <span className="sc-chrome-bar-stats-count-num">{needsEntry}</span>
+            <span className="sc-chrome-bar-stats-count-label">need entry</span>
+          </button>
+        </>
+      )}
+      {hasOverdue && (
+        <>
+          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--overdue"
+            onClick={onJumpToOverdue}
+            aria-label={`Jump to first of ${overdue} overdue days`}
+          >
+            <span className="sc-chrome-bar-stats-count-num">{overdue}</span>
+            <span className="sc-chrome-bar-stats-count-label">overdue</span>
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
+// Fee-account contract signal folded into the chrome (replaces the
+// InfoCard FeeBand). Shows game-days-recorded when the schedule has
+// game days, plus an on-track marker. Fee accounts carry no per-day
+// urgency, so there are no jump counts here.
+function FeeStat({ gameDaysEntered, totalGameDays }) {
+  const hasGameDays = (totalGameDays || 0) > 0;
+  return (
+    <>
+      {hasGameDays && (
+        <>
+          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+          <span className="sc-chrome-bar-stats-segment">
+            <span className="sc-chrome-bar-stats-label">Game days</span>
+            <span className="sc-chrome-bar-stats-value">{gameDaysEntered}/{totalGameDays}</span>
+          </span>
+        </>
+      )}
+      <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+      <span className="sc-chrome-bar-stats-ontrack">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+        on track
+      </span>
+    </>
   );
 }
 

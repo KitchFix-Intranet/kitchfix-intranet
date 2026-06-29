@@ -733,38 +733,45 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     return { todayLabel, daysRecorded, totalDays, needsEntry, overdue, mealsYTD, gameDaysEntered, totalGameDays };
   }, [yearData]);
 
-  // Design Batch 2: jump-to-next-needing-entry. Finds the soonest
-  // (earliest service_date) day in yearData with status needs-entry
-  // or overdue. Returns { date, period } so the click handler can
-  // navigate to the right period workspace and focus the day. Pure
-  // memo over yearData + periodRanges; no fetch, no engine touch.
-  const jumpTarget = useMemo(() => {
-    if (!yearData) return null;
-    let earliest = null;
+  // Two targeted jump goals - the earliest day of each status. Replaces
+  // the single jump-to-next now that the chrome surfaces both counts
+  // independently (CTA redesign, Direction B). Each resolves its
+  // containing period so the click opens the right workspace and
+  // focuses the day. Pure memo over yearData + periodRanges; no fetch,
+  // no engine touch.
+  const jumpTargets = useMemo(() => {
+    const attachPeriod = (t) => {
+      if (!t) return null;
+      if (!periodRanges?.length) return t;
+      const range = periodRanges.find(r => t.date >= r.start && t.date <= r.end);
+      return { ...t, period: range?.period || null };
+    };
+    if (!yearData) return { needs: null, overdue: null };
+    let needs = null, overdue = null;
     for (const m of yearData) {
       if (!m.days) continue;
       for (const d of m.days) {
-        if (d.status !== "needs-entry" && d.status !== "overdue") continue;
-        if (!earliest || d.date < earliest.date) {
-          earliest = { date: d.date, status: d.status };
+        if (d.status === "needs-entry") {
+          if (!needs || d.date < needs.date) needs = { date: d.date };
+        } else if (d.status === "overdue") {
+          if (!overdue || d.date < overdue.date) overdue = { date: d.date };
         }
       }
     }
-    if (!earliest) return null;
-    if (!periodRanges?.length) return earliest;
-    const range = periodRanges.find(r => earliest.date >= r.start && earliest.date <= r.end);
-    return { ...earliest, period: range?.period || null };
+    return { needs: attachPeriod(needs), overdue: attachPeriod(overdue) };
   }, [yearData, periodRanges]);
 
-  const handleJumpToNext = useCallback(() => {
-    if (!jumpTarget) return;
-    if (jumpTarget.period) {
-      setPeriodKey(jumpTarget.period);
+  const jumpToDay = useCallback((t) => {
+    if (!t) return;
+    if (t.period) {
+      setPeriodKey(t.period);
       setLens("period");
       setScope("period");
     }
-    setFocusDay(jumpTarget.date);
-  }, [jumpTarget]);
+    setFocusDay(t.date);
+  }, []);
+  const handleJumpToNeeds = useCallback(() => jumpToDay(jumpTargets.needs), [jumpToDay, jumpTargets]);
+  const handleJumpToOverdue = useCallback(() => jumpToDay(jumpTargets.overdue), [jumpToDay, jumpTargets]);
 
   // The chrome bar's Calendar | Period toggle controls the Season
   // shell's SUB-view (year-of-months grid vs 4x3-periods grid),
@@ -880,14 +887,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         todayLabel={yearBannerStats?.todayLabel}
         periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
         weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
-        pctRecorded={hasHomestandSchedule
-          ? (yearBannerStats?.totalGameDays > 0
-              ? Math.round((yearBannerStats.gameDaysEntered / yearBannerStats.totalGameDays) * 100)
-              : null)
-          : (yearBannerStats?.totalDays > 0
-              ? Math.round((yearBannerStats.daysRecorded / yearBannerStats.totalDays) * 100)
-              : null)
-        }
+        isFeeAccount={isFeeAccount}
+        needsEntry={yearBannerStats?.needsEntry || 0}
+        overdue={yearBannerStats?.overdue || 0}
+        gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
+        totalGameDays={yearBannerStats?.totalGameDays || 0}
+        onJumpToNeeds={handleJumpToNeeds}
+        onJumpToOverdue={handleJumpToOverdue}
       />
 
       {!isAdminView && (
@@ -948,11 +954,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               setLens("period");
               setScope("period");
             }}
-            // Design Batch 2 - lifted view + info-card props
+            // Lifted view toggle (the action signal moved to the chrome
+            // bar, so the season shell no longer carries jump props).
             view={seasonView}
             onViewChange={handleSeasonViewChange}
-            onJumpToNext={handleJumpToNext}
-            hasJumpTarget={!!jumpTarget}
           />
         )}
 
