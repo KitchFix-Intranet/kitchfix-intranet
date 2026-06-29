@@ -7,8 +7,8 @@
 .sc-info-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
-  gap: 12px;
-  margin: 0 0 16px 0;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4) 0;
 }
 
 @media (max-width: 767px) {
@@ -16,26 +16,26 @@
      phone viewport. */
   .sc-info-card {
     grid-template-columns: 1fr;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
   }
   .sc-info-card-context,
   .sc-info-card-action {
-    padding: 10px 14px;
+    padding: var(--space-2) var(--space-4);
     min-height: 48px;
   }
-  .sc-info-card-context-segment { gap: 4px; }
+  .sc-info-card-context-segment { gap: var(--space-1); }
 }
 
 /* ── Context band - calm ────────────────────────────────────────── */
 .sc-info-card-context {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  gap: var(--space-3);
+  padding: var(--space-card-pad) var(--space-5);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
   flex-wrap: wrap;
   min-height: 56px;
 }
@@ -43,28 +43,28 @@
 .sc-info-card-context-segment {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  font-variant-numeric: tabular-nums;
+  gap: var(--space-2);
+  font-variant-numeric: var(--num-tabular);
 }
 
 .sc-info-card-context-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--text-subtle);
 }
 
 .sc-info-card-context-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0a2548;
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
 }
 
 .sc-info-card-context-sep {
   width: 1px;
   height: 18px;
-  background: #e5e7eb;
+  background: var(--border-default);
   flex-shrink: 0;
 }
 
@@ -72,11 +72,11 @@
 .sc-info-card-action {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-radius: 10px;
+  gap: var(--space-2);
+  padding: var(--space-card-pad) var(--space-5);
+  border-radius: var(--radius-control);
   min-height: 56px;
-  border: 1px solid transparent;
+  border: var(--border-thin) solid transparent;
   border-left-width: 3px;
 }
 
@@ -92,71 +92,71 @@
 .sc-info-card-action-counts {
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
-  font-variant-numeric: tabular-nums;
+  gap: var(--space-2);
+  font-variant-numeric: var(--num-tabular);
 }
 
 .sc-info-card-action-count {
-  font-size: 14px;
-  color: #78350f;
+  font-size: var(--size-body);
+  color: var(--accent-text);
 }
 .sc-info-card-action-count strong {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-display);
 }
 .sc-info-card-action-count--alert {
-  color: #7c2d12;
+  color: var(--accent-text);
 }
 .sc-info-card-action-dot {
-  color: #b45309;
-  font-weight: 700;
+  color: var(--accent-text);
+  font-weight: var(--wt-bold);
 }
 
 .sc-info-card-action-text {
-  font-size: 14px;
+  font-size: var(--size-body);
   color: inherit;
 }
 .sc-info-card-action-text strong {
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: var(--wt-bold);
+  font-size: var(--size-subhead);
 }
 .sc-info-card-action-sub {
-  font-weight: 500;
+  font-weight: var(--wt-medium);
   opacity: 0.88;
 }
 
 /* (a) HAS WORK - amber band, prominent counts + jump button */
 .sc-info-card-action--work {
-  background: #FBF3E7;
-  border-color: #F4D9A8;
-  border-left-color: #D97706;
-  color: #78350f;
+  background: var(--status-needs-subtle);
+  border-color: var(--status-needs-bd);
+  border-left-color: var(--accent);
+  color: var(--accent-text);
 }
-.sc-info-card-action--work .sc-info-card-action-icon { color: #B45309; }
+.sc-info-card-action--work .sc-info-card-action-icon { color: var(--accent-text); }
 
 .sc-info-card-action-jump {
-  margin-left: 8px;
+  margin-left: var(--space-2);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #153968;
-  color: #ffffff;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
   cursor: pointer;
-  transition: background 0.15s, transform 0.15s;
+  transition: background var(--motion-control), transform var(--motion-control);
 }
 .sc-info-card-action-jump:hover {
-  background: #0a2548;
+  background: var(--action-primary-bg-hover);
   transform: translateY(-1px);
 }
 .sc-info-card-action-jump:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-info-card-action-jump { transition: none; }
@@ -165,35 +165,35 @@
 
 /* (b) ALL CLEAR - green calm band, earned closure */
 .sc-info-card-action--clear {
-  background: #EDF6F0;
-  border-color: #B8E0C6;
-  border-left-color: #0F6E56;
-  color: #064e3b;
+  background: var(--accent-sc-tint);
+  border-color: var(--status-entered-subtle);
+  border-left-color: var(--accent-sc);
+  color: var(--accent-sc-dark);
 }
-.sc-info-card-action--clear .sc-info-card-action-icon { color: #0F6E56; }
+.sc-info-card-action--clear .sc-info-card-action-icon { color: var(--accent-sc); }
 
 /* (c) FEE - navy calm band, homestand/contract state */
 .sc-info-card-action--fee {
-  background: #F4F7FB;
-  border-color: #D6E0EE;
-  border-left-color: #153968;
-  color: #0a2548;
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
+  border-left-color: var(--text-link);
+  color: var(--text-heading);
 }
-.sc-info-card-action--fee .sc-info-card-action-icon { color: #153968; }
+.sc-info-card-action--fee .sc-info-card-action-icon { color: var(--text-link); }
 
 /* ── Loading skeleton ───────────────────────────────────────────── */
 .sc-info-card--loading .sc-info-card-context,
 .sc-info-card--loading .sc-info-card-action {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
 }
 
 .sc-info-card-skel {
   display: inline-block;
   height: 14px;
-  background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background: linear-gradient(90deg, var(--border-default) 0%, var(--surface-sunken) 50%, var(--border-default) 100%);
   background-size: 200% 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-cell);
   animation: scInfoCardSkel 1.4s ease-in-out infinite;
 }
 .sc-info-card-skel--block { height: 18px; }

@@ -10,8 +10,8 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--surface-card);
+  border-bottom: var(--border-thin) solid var(--border-default);
   flex-wrap: wrap;
 }
 
@@ -28,33 +28,33 @@
 .sc-chrome-bar-toggle {
   display: inline-flex;
   align-items: center;
-  background: #f3f4f6;
-  border-radius: 999px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
   padding: 2px;
   gap: 2px;
 }
 .sc-chrome-bar-toggle-btn {
-  padding: 4px 14px;
+  padding: var(--space-1) var(--space-4);
   font-family: inherit;
-  font-size: var(--type-caption);
-  font-weight: 600;
-  color: #475569;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  color: var(--text-default);
   background: transparent;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--motion-control), color var(--motion-control);
 }
 .sc-chrome-bar-toggle-btn:hover {
-  color: #0f172a;
+  color: var(--text-heading);
 }
 .sc-chrome-bar-toggle-btn--active {
-  background: #153968;
-  color: #ffffff;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
 }
 .sc-chrome-bar-toggle-btn:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-chrome-bar-toggle-btn { transition: none; }
@@ -64,22 +64,22 @@
 .sc-chrome-bar-asof {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #475569;
-  font-variant-numeric: tabular-nums;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-chrome-bar-asof-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  background: #0F6E56;
-  box-shadow: 0 0 0 2px #d1fae5;
+  border-radius: var(--radius-circle);
+  background: var(--accent-sc);
+  box-shadow: 0 0 0 2px var(--status-entered-subtle);
   flex-shrink: 0;
 }
 .sc-chrome-bar-asof-refresh {
@@ -92,11 +92,11 @@
   margin-left: 2px;
   background: transparent;
   border: none;
-  border-radius: 50%;
-  color: #6b7280;
+  border-radius: var(--radius-circle);
+  color: var(--text-muted);
   position: relative;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--motion-control), color var(--motion-control);
 }
 /* Mobile Overhaul: ensure the refresh tap target meets WCAG 2.5.5
    (>=44x44 hit area on phone) without enlarging the visual chip. */
@@ -104,14 +104,14 @@
   content: "";
   position: absolute;
   inset: -13px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 .sc-chrome-bar-asof-refresh:hover {
-  background: #e5e7eb;
-  color: #0F6E56;
+  background: var(--border-default);
+  color: var(--accent-sc);
 }
 .sc-chrome-bar-asof-refresh:focus-visible {
-  outline: 2px solid #0F6E56;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: 1px;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -122,8 +122,8 @@
    group on top (picker + toggle), right group below (asof + admin). */
 @media (max-width: 767px) {
   .sc-chrome-bar {
-    padding: 12px;
-    gap: 10px;
+    padding: var(--space-3);
+    gap: var(--space-2);
   }
   .sc-chrome-bar-left,
   .sc-chrome-bar-right {
