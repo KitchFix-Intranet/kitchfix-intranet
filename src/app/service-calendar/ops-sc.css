@@ -1,6 +1,8 @@
 /* ══════════════════════════════════════════════════════════════
    OPS-SC.CSS — Service Calendar v4
-   Green (#0F6E56) / Amber (#EF9F27) / Red (#dc2626) system
+   Color system: accent-sc (SC green identity) + accent (amber) +
+   feedback-danger (red). All values now consume semantic tokens from
+   tokens.css; raw hex/px are out.
    ══════════════════════════════════════════════════════════════ */
 
 /* Mobile Overhaul: the SC content is no longer wrapped in a boxing
@@ -13,62 +15,65 @@
 .sc-header { padding: var(--space-3) var(--space-4); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
 
 /* LEFT: Account */
-.sc-header-account { display: flex; align-items: center; gap: 8px; }
+.sc-header-account { display: flex; align-items: center; gap: var(--space-2); }
 
 
 /* Admin escape - parallel surface, outlined, navy palette. Distinct
    from the lens-bar pill so it reads as "leave and come back" not a
    tab peer. */
 .sc-admin-esc {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px;
-  font-family: inherit; font-size: var(--type-caption); font-weight: 600;
-  color: #153968; background: #fff;
-  border: 1px solid #cbd5e1; border-radius: var(--radius-input);
-  cursor: pointer; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit; font-size: var(--size-caption); font-weight: var(--wt-semibold);
+  color: var(--text-link); background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-strong); border-radius: var(--radius-control);
+  cursor: pointer; transition: background var(--motion-control), border-color var(--motion-control), box-shadow var(--motion-control);
 }
-.sc-admin-esc:hover { background: #f0f4f8; border-color: #94a3b8; }
-.sc-admin-esc:focus-visible { outline: 2px solid #153968; outline-offset: 2px; }
-.sc-admin-esc--active { background: #f0f4f8; border-color: #153968; }
+.sc-admin-esc:hover { background: var(--surface-page); border-color: var(--text-subtle); }
+.sc-admin-esc:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
+.sc-admin-esc--active { background: var(--surface-page); border-color: var(--text-link); }
 
 .sc-dropdown { position: relative; }
-.sc-dropdown-trigger { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; font-family: inherit; font-size: var(--type-body-sm); font-weight: 600; color: #111827; transition: all 0.15s; min-width: 200px; }
-.sc-dropdown-trigger:hover { border-color: #0F6E56; }
+.sc-dropdown-trigger { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-family: inherit; font-size: var(--size-body); font-weight: var(--wt-semibold); color: var(--text-heading); transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control); min-width: 200px; }
+.sc-dropdown-trigger:hover { border-color: var(--accent-sc); }
 .sc-dropdown-val { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-dropdown-arrow { transition: transform 0.2s; color: #6b7280; flex-shrink: 0; }
+.sc-dropdown-arrow { transition: transform var(--motion-control); color: var(--text-muted); flex-shrink: 0; }
 .sc-dropdown-arrow--open { transform: rotate(180deg); }
-.sc-dropdown-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 280px; background: #fff; border: 1px solid #e5e7eb; border-radius: var(--radius-card); box-shadow: 0 12px 24px rgba(0,0,0,0.12); z-index: 100; max-height: 360px; overflow-y: auto; padding: var(--space-1); }
-.sc-dropdown-cat { padding: var(--space-2) var(--space-3) var(--space-1); font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #d97706; }
-.sc-dropdown-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: var(--space-2) var(--space-3); border: none; background: none; cursor: pointer; font-family: inherit; font-size: var(--type-body-sm); font-weight: 500; color: #374151; border-radius: var(--radius-input); transition: background 0.1s; text-align: left; }
-.sc-dropdown-item:hover { background: #f0fdf4; }
-.sc-dropdown-item--active { background: #E1F5EE; color: #085041; font-weight: 600; }
-.sc-dropdown-item--active svg { color: #0F6E56; }
+.sc-dropdown-menu { position: absolute; top: calc(100% + var(--space-1)); left: 0; min-width: 280px; background: var(--surface-card); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-container); box-shadow: var(--elevation-popover); z-index: var(--z-dropdown); max-height: 360px; overflow-y: auto; padding: var(--space-1); }
+.sc-dropdown-cat { padding: var(--space-2) var(--space-3) var(--space-1); font-size: var(--size-micro); font-weight: var(--wt-display); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--accent); }
+.sc-dropdown-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: var(--space-2) var(--space-3); border: none; background: none; cursor: pointer; font-family: inherit; font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-default); border-radius: var(--radius-control); transition: background var(--motion-control); text-align: left; }
+.sc-dropdown-item:hover { background: var(--accent-sc-tint); }
+.sc-dropdown-item--active { background: var(--accent-sc-subtle); color: var(--accent-sc-dark); font-weight: var(--wt-semibold); }
+.sc-dropdown-item--active svg { color: var(--accent-sc); }
 
 /* Category tags = classification, NOT status. Tag hues must not
    overlap any status fill (Design Batch 1, audit CC-8). The prior
    MiLB tag was a green that read as the entered-state green - moved
    to a cyan family that's distinct from every status fill in
-   DaySquare.css. */
-.sc-cat { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.5px; }
+   DaySquare.css. FLAGGED: tag palette hexes are CATEGORY-IDENTITY
+   colors (PDC blue, MLB amber wash, MiLB cyan); they don't map to
+   semantic tokens - left as literals until a tag-identity token
+   family is defined. */
+.sc-cat { font-size: var(--size-micro); font-weight: var(--wt-bold); padding: 3px var(--space-2); border-radius: var(--radius-cell); letter-spacing: 0.5px; }
 .sc-cat--pdc { background: #eff6ff; color: #1e40af; }
-.sc-cat--mlb { background: #fef3c7; color: #92400e; }
+.sc-cat--mlb { background: #fef3c7; color: var(--accent-text); }
 .sc-cat--milb { background: #cffafe; color: #155e75; }
 
 /* ══════════════════════════════════════
    OVERLAY
    ══════════════════════════════════════ */
 .sc-overlay-backdrop {
-  position: fixed; inset: 0; z-index: 1000;
+  position: fixed; inset: 0; z-index: var(--z-overlay);
   background: rgba(0,0,0,0.32); backdrop-filter: blur(1.5px);
   display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
   animation: scOverlayIn 0.2s ease;
 }
 @keyframes scOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 .sc-overlay-card {
   width: 100%; max-width: 640px; max-height: 90vh;
-  background: #fff; border-radius: 12px;
-  box-shadow: 0 24px 48px rgba(0,0,0,0.16);
+  background: var(--surface-card); border-radius: var(--radius-container-lg);
+  box-shadow: var(--elevation-popover);
   display: flex; flex-direction: column;
   overflow: hidden;
   animation: scCardUp 0.25s ease;
@@ -85,82 +90,82 @@
 @keyframes scSlide { from { opacity: 0; } to { opacity: 1; } }
 
 /* Header */
-.sc-day-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); background: #fff; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; gap: 12px; }
+.sc-day-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); background: var(--surface-card); border-bottom: var(--border-thin) solid var(--surface-sunken); flex-shrink: 0; gap: var(--space-3); }
 .sc-day-header-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sc-day-title { font-size: var(--type-emphasis); font-weight: 700; color: #111827; margin: 0; line-height: var(--line-heading); }
-.sc-day-account { font-size: 12px; font-weight: 500; color: #6b7280; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-day-nav { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.sc-day-nav-btn { width: 32px; height: 32px; border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff; cursor: pointer; font-size: 18px; color: #6b7280; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: all 0.15s; }
-.sc-day-nav-btn:hover { border-color: #0F6E56; color: #0F6E56; }
-.sc-day-nav-label { font-size: 11px; color: #9ca3af; font-variant-numeric: tabular-nums; }
+.sc-day-title { font-size: var(--size-subhead); font-weight: var(--wt-bold); color: var(--text-heading); margin: 0; line-height: var(--lead-tight); }
+.sc-day-account { font-size: var(--size-caption); font-weight: var(--wt-medium); color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-day-nav { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; }
+.sc-day-nav-btn { width: 32px; height: 32px; border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-size: var(--size-h3); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-family: inherit; transition: border-color var(--motion-control), color var(--motion-control); }
+.sc-day-nav-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc); }
+.sc-day-nav-label { font-size: var(--size-caption); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
 /* Close button: dressed as an icon-only ghost (no border at rest) to
    sit visually below the nav-btn pair. Becomes a real button on hover
    so the dismiss action is still legible without competing with the
    prev/next chevrons at idle. */
-.sc-day-close { width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--radius-input); background: transparent; cursor: pointer; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.15s; margin-left: 4px; }
-.sc-day-close:hover { border-color: #fecaca; color: #dc2626; background: #fef2f2; }
+.sc-day-close { width: 32px; height: 32px; border: var(--border-thin) solid transparent; border-radius: var(--radius-control); background: transparent; cursor: pointer; color: var(--text-subtle); display: flex; align-items: center; justify-content: center; transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control); margin-left: var(--space-1); }
+.sc-day-close:hover { border-color: var(--status-overdue-bd); color: var(--feedback-danger); background: var(--status-overdue-subtle); }
 
 /* Coaching banner */
-.sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--type-body-sm); font-weight: 500; border-bottom: 1px solid; flex-shrink: 0; }
+.sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid; flex-shrink: 0; }
 
 /* Overdue (legacy) */
-.sc-day-overdue { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); background: #fef2f2; color: #dc2626; font-size: var(--type-body-sm); font-weight: 500; border-bottom: 1px solid #fecaca; flex-shrink: 0; }
-.sc-day-overdue-icon { width: 20px; height: 20px; border-radius: 50%; background: #dc2626; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+.sc-day-overdue { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); background: var(--status-overdue-subtle); color: var(--feedback-danger); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid var(--status-overdue-bd); flex-shrink: 0; }
+.sc-day-overdue-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--feedback-danger); color: var(--surface-card); display: flex; align-items: center; justify-content: center; font-size: var(--size-caption); font-weight: var(--wt-display); flex-shrink: 0; }
 
 .sc-day-body { padding: var(--space-3) var(--space-4); overflow-y: auto; flex: 1; }
 
 /* Group card - matches the admin's "Fuller" group treatment
-   (sc-admin-group in ops-sc-admin.css: 1px #e2e8f0, 10px radius, subtle
-   navy-tinted shadow). Both entry surfaces - single-day popup and
-   bulk-entry modal - render through the same .sc-day-group class. */
+   (sc-admin-group in ops-sc-admin.css: thin border, container radius,
+   subtle navy-tinted shadow). Both entry surfaces - single-day popup
+   and bulk-entry modal - render through the same .sc-day-group class. */
 .sc-day-group {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
-  margin-bottom: 18px;
+  box-shadow: var(--elevation-card);
+  margin-bottom: var(--space-4);
 }
 .sc-day-group--expanded {
   margin-top: var(--space-2);
   margin-bottom: var(--space-3);
 }
-/* Header BAND - light fill + NAVY left-accent (#153968 = structural
-   definition layer, matches sc-admin-group-header-band). Replaces the
-   prior 2px green underline which was carrying both structure and
-   action color at once. Group name moves to navy here too so the band
-   reads as the structural container; the green operator-semantic color
-   is preserved on the touched input, the match button, the delta
-   indicators, and the subtotal below. */
+/* Header BAND - light fill + NAVY left-accent (text-link =
+   structural definition layer, matches sc-admin-group-header-band).
+   Replaces the prior 2px green underline which was carrying both
+   structure and action color at once. Group name moves to navy here
+   too so the band reads as the structural container; the green
+   operator-semantic color is preserved on the touched input, the
+   match button, the delta indicators, and the subtotal below. */
 .sc-day-group-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  border-left: 3px solid #153968;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-page);
+  border-bottom: var(--border-thin) solid var(--border-default);
+  border-left: 3px solid var(--text-link);
   margin-bottom: 0;
 }
 .sc-day-group-name {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #153968;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-link);
   text-transform: none;
   letter-spacing: 0;
 }
 .sc-day-group-price {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
 }
 .sc-day-group-hint {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: var(--size-caption);
+  color: var(--text-subtle);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--track-caps);
 }
 
 /* Service row - sits on white inside the group card. Roomier so the
@@ -170,63 +175,63 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 14px;
-  border-bottom: 0.5px solid #f0f0f0;
-  gap: 12px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 0.5px solid var(--border-subtle);
+  gap: var(--space-3);
 }
 .sc-day-row:last-of-type { border-bottom: none; }
 .sc-day-row-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sc-day-row-name { font-size: var(--type-body); font-weight: 500; color: #111827; }
-.sc-day-row-proj-label { font-size: var(--type-caption); color: #9ca3af; }
-.sc-day-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.sc-day-row-name { font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-heading); }
+.sc-day-row-proj-label { font-size: var(--size-caption); color: var(--text-subtle); }
+.sc-day-row-right { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 
 /* INPUT AS HERO - the operator's primary touch target. Wider, taller,
    bigger font so the meal-count value is the visual focus of the row.
    Ghost (untouched) stays dashed/quiet to read as "not yet entered".
-   Touched stays GREEN (#0F6E56 / #085041 / #f0fdf4) - that is the
-   operator-semantic "entered/confirmed" color and must not move to
-   navy. PR2 handles tap targets at narrow widths; here we ensure the
-   desktop base is already >= 44px tall so the floor is met. */
+   Touched stays GREEN (accent-sc / accent-sc-dark / accent-sc-tint) -
+   that is the operator-semantic "entered/confirmed" color and must
+   not move to navy. PR2 handles tap targets at narrow widths; here
+   we ensure the desktop base is already >= 44px tall so the floor is
+   met. */
 .sc-day-input {
   width: 92px;
   min-height: 44px;
-  padding: 8px 10px;
-  border-radius: var(--radius-input);
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-control);
+  font-size: var(--size-h3);
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
   text-align: center;
-  background: #fff;
+  background: var(--surface-card);
   font-family: inherit;
-  font-variant-numeric: tabular-nums;
-  transition: all 0.15s;
+  font-variant-numeric: var(--num-tabular);
+  transition: border-color var(--motion-control), background var(--motion-control), color var(--motion-control), box-shadow var(--motion-control);
 }
-/* Ghost (resting) state: reads as a fillable INPUT BOX, not a disabled
-   ghost. Was 1.5px dashed #d1d5db - dashed border read as "locked /
-   placeholder field", which is the opposite of the primary affordance.
-   Solid border + faint fill so the operator instantly sees "these are
-   fields I type into". The projection still shows as placeholder text
-   inside (placeholder-is-projection behavior preserved). Touched state
-   (green) remains visually distinct - same green border + green text +
-   green bg as before. */
+/* Ghost (resting) state: reads as a fillable INPUT BOX, not a
+   disabled ghost. Was 1.5px dashed - dashed border read as "locked /
+   placeholder field", the opposite of the primary affordance. Solid
+   border + faint fill so the operator instantly sees "these are
+   fields I type into". The projection still shows as placeholder
+   text inside (placeholder-is-projection behavior preserved).
+   Touched state (accent-sc) remains visually distinct. */
 .sc-day-input--ghost {
-  border: 1.5px solid #cbd5e1;
-  background: #fafbfc;
-  color: #111827;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-heading);
 }
 .sc-day-input--ghost::placeholder {
-  color: #9ca3af;
-  font-weight: 500;
+  color: var(--text-subtle);
+  font-weight: var(--wt-medium);
 }
 .sc-day-input--touched {
-  border: 1.5px solid #0F6E56;
-  color: #085041;
-  background: #f0fdf4;
+  border: 1.5px solid var(--accent-sc);
+  color: var(--accent-sc-dark);
+  background: var(--accent-sc-tint);
 }
 .sc-day-input:focus {
   outline: none;
-  border: 1.5px solid #0F6E56;
-  background: #fff;
+  border: 1.5px solid var(--accent-sc);
+  background: var(--surface-card);
   box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
 }
 
@@ -235,27 +240,27 @@
    "match" indicator. Empty span without the explicit display: inline-block
    was painting with collapsed width in some browser cases, ragging the
    right edge as operators typed across rows. */
-.sc-day-row-delta { display: inline-block; width: 36px; font-size: 12px; text-align: right; }
-.sc-day-row-delta--match { color: #0F6E56; font-weight: 600; }
-.sc-day-row-delta--pos { color: #0F6E56; font-weight: 600; }
-.sc-day-row-delta--neg { color: #dc2626; font-weight: 600; }
+.sc-day-row-delta { display: inline-block; width: 36px; font-size: var(--size-caption); text-align: right; }
+.sc-day-row-delta--match { color: var(--accent-sc); font-weight: var(--wt-semibold); }
+.sc-day-row-delta--pos { color: var(--accent-sc); font-weight: var(--wt-semibold); }
+.sc-day-row-delta--neg { color: var(--feedback-danger); font-weight: var(--wt-semibold); }
 
 /* Bundle 2 archived-day chip: a service archived as of day.date renders
    this read-only chip in place of the editable input. Same visible-but-
    marked discipline as the admin side. Same visual weight as the non-rev
    tag - operator sees why entry is gone without the row being hidden. */
-.sc-day-row--archived .sc-day-row-name { color: #9ca3af; }
-.sc-day-row--archived .sc-day-row-proj-label { color: #d1d5db; }
+.sc-day-row--archived .sc-day-row-name { color: var(--text-subtle); }
+.sc-day-row--archived .sc-day-row-proj-label { color: var(--border-strong); }
 .sc-day-row-archived-chip {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 700;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--track-caps);
   white-space: nowrap;
 }
 
@@ -263,75 +268,76 @@
    green hero bar. The hero treatment was reading as the primary commit
    on the day (which it is not - it is a shortcut helper). Now a small
    right-aligned secondary button so the input rows and footer commit
-   keep their visual weight. */
+   keep their visual weight. FLAGGED: #d1fae5 is a green-100 wash for
+   the rest-border; mapped to status-entered-subtle (closest semantic). */
 .sc-day-match-btn {
-  display: block; width: fit-content; padding: 5px 10px; margin: 10px 14px 6px auto;
-  border: 1px solid #d1fae5; border-radius: var(--radius-input); background: #f0fdf4;
-  color: #085041; font-size: 12px; font-weight: 600; cursor: pointer;
-  font-family: inherit; transition: all 0.15s; text-align: center;
+  display: block; width: fit-content; padding: var(--space-1) var(--space-2); margin: var(--space-2) var(--space-4) 6px auto;
+  border: var(--border-thin) solid var(--status-entered-subtle); border-radius: var(--radius-control); background: var(--accent-sc-tint);
+  color: var(--accent-sc-dark); font-size: var(--size-caption); font-weight: var(--wt-semibold); cursor: pointer;
+  font-family: inherit; transition: background var(--motion-control), border-color var(--motion-control); text-align: center;
 }
-.sc-day-match-btn:hover { background: #E1F5EE; border-color: #0F6E56; }
+.sc-day-match-btn:hover { background: var(--accent-sc-subtle); border-color: var(--accent-sc); }
 
 /* Extras button — distinct from notes */
 .sc-day-extras-btn {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 8px 0 0;
-  border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff;
-  cursor: pointer; font-size: 12px; color: #6b7280; font-weight: 500; transition: all 0.15s;
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
+  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
+  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control);
 }
-.sc-day-extras-btn:hover { border-color: #0F6E56; color: #085041; background: #f0fdf4; }
-.sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: 50%; background: #e5e7eb; color: #6b7280; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; transition: all 0.15s; }
-.sc-day-extras-btn:hover .sc-day-extras-btn-icon { background: #0F6E56; color: #fff; }
+.sc-day-extras-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc-dark); background: var(--accent-sc-tint); }
+.sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--border-default); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: var(--size-body); font-weight: var(--wt-semibold); flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control); }
+.sc-day-extras-btn:hover .sc-day-extras-btn-icon { background: var(--accent-sc); color: var(--surface-card); }
 .sc-day-extras-hide {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 8px 0 0;
-  border: 1px solid #e5e7eb; border-radius: var(--radius-input); background: #fff;
-  cursor: pointer; font-size: 12px; color: #6b7280; font-weight: 500; transition: all 0.15s;
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
+  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
+  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control);
   font-family: inherit;
 }
-.sc-day-extras-hide:hover { border-color: #9ca3af; color: #374151; }
-.sc-day-extras-hide .sc-day-extras-btn-icon { background: #e5e7eb; color: #6b7280; }
-.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: #9ca3af; color: #fff; }
+.sc-day-extras-hide:hover { border-color: var(--text-subtle); color: var(--text-default); }
+.sc-day-extras-hide .sc-day-extras-btn-icon { background: var(--border-default); color: var(--text-muted); }
+.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: var(--text-subtle); color: var(--surface-card); }
 
 /* Group subtotal */
-.sc-day-group-subtotal { text-align: right; padding: 6px 0 2px; font-size: 12px; font-weight: 600; color: #085041; }
+.sc-day-group-subtotal { text-align: right; padding: 6px 0 2px; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); }
 
 /* Collapsed inactive group — button style, distinct from notes */
 .sc-day-collapsed-btn {
   display: flex; justify-content: space-between; align-items: center; width: 100%;
-  padding: var(--space-2) var(--space-3); background: #fff; border: 1px solid #e5e7eb; border-radius: var(--radius-input);
-  cursor: pointer; margin-bottom: 6px; font-size: 13px; color: #9ca3af;
-  font-family: inherit; transition: all 0.15s;
+  padding: var(--space-2) var(--space-3); background: var(--surface-card); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control);
+  cursor: pointer; margin-bottom: 6px; font-size: var(--size-body); color: var(--text-subtle);
+  font-family: inherit; transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
 }
-.sc-day-collapsed-btn:hover { background: #f9fafb; color: #6b7280; border-color: #0F6E56; }
-.sc-day-collapsed-icon { font-size: 16px; font-weight: 600; }
+.sc-day-collapsed-btn:hover { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--accent-sc); }
+.sc-day-collapsed-icon { font-size: var(--size-subhead); font-weight: var(--wt-semibold); }
 
 /* Notes */
-.sc-day-notes { margin-top: 14px; }
-.sc-day-notes-label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
-.sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid #e5e7eb; border-radius: var(--radius-input); font-size: var(--type-body-sm); font-family: inherit; color: #374151; background: #fff; resize: vertical; min-height: 44px; transition: border-color 0.15s; }
-.sc-day-notes-input:focus { outline: none; border-color: #0F6E56; }
-.sc-day-notes-input::placeholder { color: #b0b0b0; }
+.sc-day-notes { margin-top: var(--space-4); }
+.sc-day-notes-label { display: block; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--track-caps); margin-bottom: 6px; }
+.sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); font-size: var(--size-body); font-family: inherit; color: var(--text-default); background: var(--surface-card); resize: vertical; min-height: 44px; transition: border-color var(--motion-control); }
+.sc-day-notes-input:focus { outline: none; border-color: var(--accent-sc); }
+.sc-day-notes-input::placeholder { color: var(--text-subtle); }
 
 /* Footer - sticky at bottom of overlay. Slightly more presence so it
    reads as a real commit zone. The total-rev stays green (operator
    semantics: "this is what you have entered/committed"). */
 .sc-day-footer {
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
-  border-radius: 0 0 12px 12px;
+  border-top: var(--border-thin) solid var(--border-default);
+  background: var(--surface-sunken);
+  border-radius: 0 0 var(--radius-container-lg) var(--radius-container-lg);
   flex-shrink: 0;
 }
 .sc-day-totals {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 12px;
-  gap: 12px;
+  margin-bottom: var(--space-3);
+  gap: var(--space-3);
 }
 .sc-day-totals-left {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -339,131 +345,131 @@
    meals + revenue so the operator reads "what these numbers represent"
    before reading the numbers themselves. */
 .sc-day-total-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6b7280;
+  letter-spacing: var(--track-caps);
+  color: var(--text-muted);
 }
 .sc-day-total-meals {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
 }
-.sc-day-total-pct { font-size: 13px; color: #9ca3af; font-variant-numeric: tabular-nums; }
+.sc-day-total-pct { font-size: var(--size-body); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
 .sc-day-total-rev {
-  font-size: 22px;
-  font-weight: 700;
-  color: #085041;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-h2);
+  font-weight: var(--wt-bold);
+  color: var(--accent-sc-dark);
+  font-variant-numeric: var(--num-tabular);
 }
 /* Pre-entry state: nothing the operator has typed yet. Footer numbers
    are still real (the day's projection), but desaturated so they read
    as reference, not commitment. As soon as anything is touched the
    class drops and the full color comes back. */
-.sc-day-totals--projected .sc-day-total-label { color: #9ca3af; }
-.sc-day-totals--projected .sc-day-total-meals { color: #6b7280; font-weight: 500; }
-.sc-day-totals--projected .sc-day-total-rev { color: #6b7280; font-weight: 600; }
+.sc-day-totals--projected .sc-day-total-label { color: var(--text-subtle); }
+.sc-day-totals--projected .sc-day-total-meals { color: var(--text-muted); font-weight: var(--wt-medium); }
+.sc-day-totals--projected .sc-day-total-rev { color: var(--text-muted); font-weight: var(--wt-semibold); }
 .sc-day-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
 /* ── Review overlay ── */
 .sc-day-review-inner { padding: var(--space-4) var(--space-4); overflow-y: auto; flex: 1; }
-.sc-day-review-header { margin-bottom: 16px; }
-.sc-day-review-title { font-size: var(--type-emphasis); font-weight: 700; color: #111827; margin: 0 0 4px; }
-.sc-day-review-date { font-size: 13px; color: #6b7280; margin: 0; }
-.sc-day-review-body { margin-bottom: 16px; }
-.sc-day-review-group { margin-bottom: 12px; }
-.sc-day-review-group-name { font-size: 10px; font-weight: 700; color: #085041; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
-.sc-day-review-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; color: #374151; }
-.sc-day-review-val { font-weight: 600; color: #111827; }
-.sc-day-review-subtotal { text-align: right; font-size: 12px; font-weight: 600; color: #085041; padding-top: 4px; }
-.sc-day-review-summary { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid #e5e7eb; margin-bottom: 16px; }
-.sc-day-review-total-meals { font-size: 15px; font-weight: 500; color: #111827; }
-.sc-day-review-total-rev { font-size: 22px; font-weight: 700; color: #085041; }
-.sc-day-review-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.sc-day-review-header { margin-bottom: var(--space-4); }
+.sc-day-review-title { font-size: var(--size-subhead); font-weight: var(--wt-bold); color: var(--text-heading); margin: 0 0 var(--space-1); }
+.sc-day-review-date { font-size: var(--size-body); color: var(--text-muted); margin: 0; }
+.sc-day-review-body { margin-bottom: var(--space-4); }
+.sc-day-review-group { margin-bottom: var(--space-3); }
+.sc-day-review-group-name { font-size: var(--size-micro); font-weight: var(--wt-bold); color: var(--accent-sc-dark); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 6px; border-bottom: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-1); }
+.sc-day-review-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: var(--size-body); color: var(--text-default); }
+.sc-day-review-val { font-weight: var(--wt-semibold); color: var(--text-heading); }
+.sc-day-review-subtotal { text-align: right; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); padding-top: var(--space-1); }
+.sc-day-review-summary { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) 0; border-top: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-4); }
+.sc-day-review-total-meals { font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-heading); }
+.sc-day-review-total-rev { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); }
+.sc-day-review-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
 
 /* ── Success state ── */
-.sc-day-success-inner { padding: 48px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
-.sc-day-success-check { width: 56px; height: 56px; border-radius: 50%; background: #E1F5EE; color: #0F6E56; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; margin-bottom: 12px; animation: scPop 0.3s ease; }
+.sc-day-success-inner { padding: 48px var(--space-6); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
+.sc-day-success-check { width: 56px; height: 56px; border-radius: var(--radius-circle); background: var(--accent-sc-subtle); color: var(--accent-sc); display: inline-flex; align-items: center; justify-content: center; font-size: var(--size-h1); font-weight: var(--wt-bold); margin-bottom: var(--space-3); animation: scPop 0.3s ease; }
 @keyframes scPop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
-.sc-day-success-title { font-size: var(--type-h2); font-weight: 700; color: #085041; margin: 0 0 6px; }
-.sc-day-success-detail { font-size: 13px; color: #6b7280; margin: 0 0 20px; }
-.sc-day-success-actions { display: flex; gap: 10px; justify-content: center; }
+.sc-day-success-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); margin: 0 0 6px; }
+.sc-day-success-detail { font-size: var(--size-body); color: var(--text-muted); margin: 0 0 var(--space-5); }
+.sc-day-success-actions { display: flex; gap: var(--space-2); justify-content: center; }
 
 /* Shared btn styles */
-/* Real-button language matching the admin polish (PRs #245/#246). Primary
-   = the commit affordance, carries shadow weight + the green operator-
-   semantic color (commit = green here, the row inputs use the same
-   green when touched - one consistent operator color). Outline = the
-   quieter secondary action ("All match projections" - confirm-shortcut
-   variant). Cancel stays neutral. Minimum 40px tall so the footer
-   actions are real targets at desktop; PR2 bumps to >= 48px on mobile.
-   Padding moved to fixed values so the hierarchy reads cleanly. */
+/* Real-button language matching the admin polish. Primary = the
+   commit affordance, carries shadow weight + the SC operator-
+   semantic color (commit = accent-sc here, the row inputs use the
+   same accent-sc when touched - one consistent operator color).
+   Outline = the quieter secondary action ("All match projections" -
+   confirm-shortcut variant). Cancel stays neutral. Minimum 40px tall
+   so the footer actions are real targets at desktop; PR2 bumps to
+   >= 48px on mobile. */
 .sc-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 40px;
-  padding: 8px 18px;
-  border-radius: var(--radius-input);
-  font-size: var(--type-body);
-  font-weight: 600;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-control);
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background var(--motion-control), border-color var(--motion-control), color var(--motion-control), box-shadow var(--motion-control);
   font-family: inherit;
-  border: 1px solid transparent;
+  border: var(--border-thin) solid transparent;
 }
-.sc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sc-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .sc-btn--primary {
-  background: #0F6E56;
-  color: #fff;
-  border-color: #0F6E56;
+  background: var(--accent-sc);
+  color: var(--surface-card);
+  border-color: var(--accent-sc);
   box-shadow: 0 1px 2px rgba(15, 110, 86, 0.18);
 }
 .sc-btn--primary:hover:not(:disabled) {
-  background: #085041;
-  border-color: #085041;
+  background: var(--accent-sc-dark);
+  border-color: var(--accent-sc-dark);
   box-shadow: 0 2px 4px rgba(8, 80, 65, 0.22);
 }
 .sc-btn--outline {
-  background: #fff;
-  color: #0F6E56;
-  border: 1px solid #0F6E56;
+  background: var(--surface-card);
+  color: var(--accent-sc);
+  border: var(--border-thin) solid var(--accent-sc);
 }
-.sc-btn--outline:hover:not(:disabled) { background: #E1F5EE; }
+.sc-btn--outline:hover:not(:disabled) { background: var(--accent-sc-subtle); }
 
 /* Corporate-only Admin link in the SC header. Brand navy family
-   (#153968 + #f0f4f8) matching the SC today ring + the kf-bg page
-   wash, not generic Tailwind blue. Rendered conditionally by
-   ServiceCalendar.js when isScAdmin(session email) is true.
+   matching the SC today ring + the page wash, not generic Tailwind
+   blue. Rendered conditionally by ServiceCalendar.js when
+   isScAdmin(session email) is true.
    NOTE: the Link element was retired when admin became an in-page
    view mode; rules retained for cleanup in a follow-up CSS sweep. */
-.sc-admin-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #153968; background: #f0f4f8; border: 1px solid #e2e8f0; border-radius: var(--radius-input); padding: 4px 9px; text-decoration: none; transition: background 0.15s, border-color 0.15s; margin-left: 4px; }
-.sc-admin-link:hover { background: #e2e8f0; border-color: #cbd5e1; }
+.sc-admin-link { display: inline-flex; align-items: center; gap: 5px; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-link); background: var(--surface-page); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); padding: var(--space-1) 9px; text-decoration: none; transition: background var(--motion-control), border-color var(--motion-control); margin-left: var(--space-1); }
+.sc-admin-link:hover { background: var(--border-default); border-color: var(--border-strong); }
 
 /* In-page admin view mode (Bundle 2 follow-up): the selector slot is
    replaced by a static "Admin · all accounts" label when in admin mode,
    plus an "Overview" back-link when drilled into a specific account.
    The Admin segment button reuses .sc-mode-btn styling; --admin modifier
    left as a hook for future emphasis (none today). */
-.sc-header-admin-label { display: inline-flex; align-items: center; gap: 10px; }
+.sc-header-admin-label { display: inline-flex; align-items: center; gap: var(--space-2); }
 .sc-admin-mode-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #153968;
-  background: #f0f4f8;
-  border: 1px solid #e2e8f0;
-  border-radius: var(--radius-input);
-  padding: 5px 12px;
+  gap: var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-link);
+  background: var(--surface-page);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-3);
 }
 /* In-hero "Overview" back-button. Same treatment as the editor's
    .sc-admin-back (in ops-sc-admin.css) so the two back-affordances read
@@ -472,40 +478,40 @@
 .sc-admin-overview-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: #153968;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 6px 12px;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-link);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(21, 57, 104, 0.06);
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  box-shadow: var(--elevation-card);
+  transition: background var(--motion-control), border-color var(--motion-control), box-shadow var(--motion-control);
 }
 .sc-admin-overview-back:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
+  background: var(--surface-page);
+  border-color: var(--text-subtle);
+  box-shadow: var(--elevation-raised);
 }
 .sc-admin-overview-back:focus-visible {
-  outline: 2px solid #153968;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
-/* Admin in-page body container. Faint page wash (#fafbfc) so the white
+/* Admin in-page body container. Faint page wash so the white
    group/section cards inside lift off it - "Fuller" definition pass.
    AdminPanel handles its own internal structure (the AccountsOverview
    rows, the per-account editor, the inline edit panels). */
 .sc-admin-body {
-  padding: 16px 12px 28px;
-  background: #fafbfc;
-  border-radius: var(--radius-card);
+  padding: var(--space-4) var(--space-3) 28px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-container);
 }
 @media (max-width: 640px) {
-  .sc-admin-body { padding: 12px 4px 24px; }
+  .sc-admin-body { padding: var(--space-3) var(--space-1) var(--space-6); }
 }
 
 .sc-fade-in { animation: scFadeIn 0.3s ease; }
@@ -513,13 +519,13 @@
 /* ══════════════════════════════════════
    COMING SOON
    ══════════════════════════════════════ */
-.oh-sc-coming-soon { text-align: center; padding: 60px 24px 80px; max-width: 520px; margin: 0 auto; }
-.oh-sc-coming-icon { display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 20px; background: var(--oh-mustard-soft); color: var(--oh-mustard); margin-bottom: 24px; }
-.oh-sc-coming-title { font-family: var(--oh-font-head); font-size: 28px; font-weight: 800; color: var(--oh-navy); margin: 0 0 12px; }
-.oh-sc-coming-desc { font-size: 15px; color: var(--oh-grey); line-height: 1.6; margin: 0 0 24px; }
-.oh-sc-coming-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 32px; }
-.oh-sc-coming-chip { font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 8px; background: var(--oh-mustard-soft); color: var(--oh-mustard); border: 1px solid var(--oh-mustard-border); }
-.oh-sc-coming-footer { font-size: 13px; color: #94a3b8; font-weight: 600; margin: 0; }
+.oh-sc-coming-soon { text-align: center; padding: 60px var(--space-6) 80px; max-width: 520px; margin: 0 auto; }
+.oh-sc-coming-icon { display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: var(--radius-container-lg); background: var(--oh-mustard-soft); color: var(--oh-mustard); margin-bottom: var(--space-6); }
+.oh-sc-coming-title { font-family: var(--oh-font-head); font-size: var(--size-h2); font-weight: var(--wt-display); color: var(--oh-navy); margin: 0 0 var(--space-3); }
+.oh-sc-coming-desc { font-size: var(--size-body); color: var(--oh-grey); line-height: var(--lead-normal); margin: 0 0 var(--space-6); }
+.oh-sc-coming-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-7); }
+.oh-sc-coming-chip { font-size: var(--size-caption); font-weight: var(--wt-bold); padding: 6px var(--space-4); border-radius: var(--radius-control); background: var(--oh-mustard-soft); color: var(--oh-mustard); border: var(--border-thin) solid var(--oh-mustard-border); }
+.oh-sc-coming-footer { font-size: var(--size-body); color: var(--text-subtle); font-weight: var(--wt-semibold); margin: 0; }
 
 /* ════════════════════════════════════════════════════════════════════
    ENTRY SURFACE MOBILE PASS (PR2 - floor/cooler, <= 640px)
@@ -553,7 +559,7 @@
   }
 
   /* Body padding tightens slightly but stays Comfortable. */
-  .sc-day-body { padding: 12px 12px 16px; }
+  .sc-day-body { padding: var(--space-3) var(--space-3) var(--space-4); }
 
   /* Service row + input on a phone. Input grows to a thumb-friendly
      hero (>= 48px tall). Row stays name+proj LEFT, input+delta RIGHT
@@ -563,14 +569,14 @@
      spacer (the {!isTouched && <span/>} branch in DayDetail.js) is
      hidden on phone to free a few px and stop the row from feeling
      padded right when nothing is touched. */
-  .sc-day-row { padding: 12px 6px; gap: 10px; }
-  .sc-day-row-name { font-size: 15px; }
-  .sc-day-row-right { gap: 8px; }
+  .sc-day-row { padding: var(--space-3) 6px; gap: var(--space-2); }
+  .sc-day-row-name { font-size: var(--size-body); }
+  .sc-day-row-right { gap: var(--space-2); }
   .sc-day-input {
     width: 88px;
     min-height: 48px;
-    padding: 10px 8px;
-    font-size: 20px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--size-h3);
   }
   /* Empty delta (no number) takes no space on phone; non-empty deltas
      stay legible alongside the input. */
@@ -579,7 +585,7 @@
   /* Per-group match button: dialed-down inline secondary on PR3, but on
      phone still needs a real tap target. Stays right-aligned, sized to
      content with a min-height to clear the 44px tap floor. */
-  .sc-day-match-btn { min-height: 44px; padding: 10px 14px; font-size: 13px; }
+  .sc-day-match-btn { min-height: 44px; padding: var(--space-2) var(--space-4); font-size: var(--size-body); }
 
   /* Footer: thumb-zone primary. Stack actions full-width, primary
      commit ON TOP within the stack (it is the load-bearing action; the
@@ -605,13 +611,13 @@
   .sc-day-actions {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: var(--space-2);
   }
   .sc-day-actions .sc-btn {
     width: 100%;
     min-height: 48px;
-    padding: 14px 18px;
-    font-size: 15px;
+    padding: 14px var(--space-5);
+    font-size: var(--size-body);
   }
   .sc-day-actions .sc-btn--primary { order: 1; }
   .sc-day-actions .sc-btn--outline { order: 2; }
@@ -619,21 +625,21 @@
 
   /* Footer container slightly tighter padding to give the action stack
      more breathing room without bleeding off-screen. */
-  .sc-day-footer { padding: 12px 12px 16px; border-radius: 0; }
+  .sc-day-footer { padding: var(--space-3) var(--space-3) var(--space-4); border-radius: 0; }
 
   /* Bulk bar: the count + actions can crowd at 375px. Stack so the
      actions land beneath the count (operator sees what is selected
      before the action choices). Tap targets >= 48px. */
-  .sc-bulk-bar { margin: 8px 0; padding: 10px 12px; }
-  .sc-bulk-active { flex-direction: column; align-items: stretch; gap: 10px; }
-  .sc-bulk-actions { flex-wrap: wrap; gap: 8px; }
+  .sc-bulk-bar { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); }
+  .sc-bulk-active { flex-direction: column; align-items: stretch; gap: var(--space-2); }
+  .sc-bulk-actions { flex-wrap: wrap; gap: var(--space-2); }
   .sc-bulk-actions .sc-btn {
     width: 100%;
     min-height: 48px;
   }
   .sc-bulk-toggle, .sc-bulk-cancel {
     min-height: 48px;
-    padding: 12px 14px;
+    padding: var(--space-3) var(--space-4);
   }
 
   /* Day header on phone: navigation buttons + close are tappable. */
@@ -647,5 +653,5 @@
    action below the outline (secondary) and primary (commit). Surface
    appears on hover so the click target stays legible. PR3 hierarchy:
    primary > outline > cancel. */
-.sc-btn--cancel { background: transparent; color: #9ca3af; border: 1px solid transparent; font-weight: 500; }
-.sc-btn--cancel:hover { color: #6b7280; background: #f3f4f6; border-color: transparent; }
+.sc-btn--cancel { background: transparent; color: var(--text-subtle); border: var(--border-thin) solid transparent; font-weight: var(--wt-medium); }
+.sc-btn--cancel:hover { color: var(--text-muted); background: var(--surface-sunken); border-color: transparent; }

@@ -70,6 +70,8 @@
   --accent-backplate:var(--amber-50); /* CTA wash */
   /* tool accents (Tier 3 - per-surface identity) */
   --accent-ops:var(--amber-500); --accent-people:#7C3AED; --accent-directory:#C41E3A; --accent-playbook:#0F6E56;
+  /* SC tool accent family (the SC green identity) */
+  --accent-sc:#0F6E56; --accent-sc-dark:#085041; --accent-sc-subtle:#E1F5EE; --accent-sc-tint:#F0FDF4;
   /* status family - bg / border / fg(AA) / subtle / strong */
   --status-entered-bg:var(--green-300); --status-entered-bd:var(--green-400); --status-entered-fg:var(--green-800); --status-entered-subtle:var(--green-100); --status-entered-strong:var(--green-500);
   --status-needs-bg:var(--fill-needs); --status-needs-bd:var(--fill-needs-bd); --status-needs-fg:var(--amber-700); --status-needs-subtle:var(--amber-100); --status-needs-strong:var(--amber-500);
