@@ -97,22 +97,19 @@ export default function ServiceCalendarPage() {
   // The Batch-2 HeroCollapse + scroll-listener is retired - at 84px
   // there's nothing to collapse. ChromeBar floats above the content
   // (not boxed inside an outer card) as its own row.
+  //
+  // Redesign PR 1A: the hero is now rendered by ServiceCalendar itself
+  // so the in-hero admin lock button can wire directly to the existing
+  // handleAdminToggle without state lifting. heroImage + firstName
+  // pass through as props.
   return (
     <div className="oh-app">
       <div className="oh-bound">
-        <div
-          className="oh-hero"
-          style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
-        >
-          <div className="oh-hero-overlay" />
-          <div className="oh-hero-content">
-            <h1 className="oh-hero-title">Service Calendar</h1>
-            <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
-          </div>
-        </div>
         <ServiceCalendar
           showToast={showToast}
           session={session}
+          heroImage={heroImage}
+          firstName={firstName}
         />
       </div>
       {toast && (

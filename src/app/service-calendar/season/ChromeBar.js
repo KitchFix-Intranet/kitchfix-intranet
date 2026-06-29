@@ -6,7 +6,10 @@
 //
 // Contents, left to right:
 //   account dropdown -> category tag -> Calendar/Period toggle ->
-//   spacer -> as-of timestamp -> Admin button
+//   spacer -> as-of timestamp
+//
+// The Admin entry lives in the hero's top-right corner (redesign PR
+// 1A) - the sc-hero-admin lock button rendered by ServiceCalendar.js.
 //
 // The global Ops Hub notification bell lives in the page-wide TopNav
 // above this bar; not part of the SC chrome, not relocated.
@@ -26,11 +29,6 @@ export default function ChromeBar({
   // data freshness
   asOf,                        // Date | null
   onRefresh,                   // optional () => void to trigger a refresh
-  // admin
-  isAdmin,                     // boolean - render admin button at all?
-  isAdminView,
-  onAdminToggle,
-  adminLabel,                  // optional override label inside Admin mode
   // misc
   className,
 }) {
@@ -66,33 +64,6 @@ export default function ChromeBar({
       <div className="sc-chrome-bar-right">
         {asOf && (
           <AsOf asOf={asOf} onRefresh={onRefresh} />
-        )}
-        {isAdmin && (
-          <button
-            type="button"
-            className={`sc-admin-esc ${isAdminView ? "sc-admin-esc--active" : ""}`}
-            onClick={onAdminToggle}
-            title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-            aria-pressed={isAdminView}
-          >
-            {isAdminView ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M19 12H5" />
-                  <path d="m12 19-7-7 7-7" />
-                </svg>
-                {adminLabel || "Calendar"}
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="11" width="18" height="10" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Admin
-              </>
-            )}
-          </button>
         )}
       </div>
     </div>
