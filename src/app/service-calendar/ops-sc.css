@@ -5,10 +5,11 @@
    tokens.css; raw hex/px are out.
    ══════════════════════════════════════════════════════════════ */
 
-/* Mobile Overhaul: the SC content is no longer wrapped in a boxing
-   white sc-card. ChromeBar floats above as its own row; sc-body holds
-   the views. Each piece (InfoCard / legend / stepper / strip / grid)
-   carries its own border, matching how People Portal + Home work. */
+/* The SC content is wrapped in one elevated card (sc-root). ChromeBar
+   is the rounded top band; sc-body holds the views; the year-view
+   legend (SeasonShell renders it as a direct child of sc-body) is the
+   rounded bottom band. No overflow:hidden so the account dropdown can
+   escape the card. */
 .sc-root {
   background: var(--surface-card);
   border-radius: var(--radius-container-lg);

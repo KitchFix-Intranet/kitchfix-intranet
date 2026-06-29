@@ -275,8 +275,13 @@ function useSortedUniqueDays(days) {
 // spacers fill any leading/trailing days outside the period range
 // so the columns stay coherent with the DOW header (Mon-first).
 function buildWeekAlignedCells(periodRange, sortedDays) {
-  if (!sortedDays?.length) return [];
-  const byDate = new Map(sortedDays.map(d => [d.date, d]));
+  // Build from the period RANGE, not the data - so off-season periods
+  // with no day rows still render the full grid of grey "off" tiles
+  // (matching MonthCard, which builds from the calendar). In-range
+  // cells fall through to { status: "off" } below when there's no
+  // matching day; the old `!sortedDays?.length` bail left an empty grid.
+  if (!periodRange?.start || !periodRange?.end) return [];
+  const byDate = new Map((sortedDays || []).map(d => [d.date, d]));
   const startStr = periodRange.start;
   const endStr   = periodRange.end;
   const start = new Date(startStr + "T12:00:00");

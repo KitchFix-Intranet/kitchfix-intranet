@@ -21,6 +21,7 @@ export default function StateLegend({
   hasHomestandSchedule = false,
   isFeeAccount = false,
   isMilb = false,
+  showDayNight = false,
 }) {
   // The one-line key keeps the IN-USE states for the current account
   // (rubric non-negotiable #1: always visible). The fuller cell-state
@@ -40,18 +41,23 @@ export default function StateLegend({
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
-    items.push({ mod: "milb-day", icon: "", label: "Day" });
-    items.push({ mod: "milb-night", icon: "", label: "Night" });
+    // Day/night only on the expanded (workspace) legend - the year /
+    // period card tiles don't distinguish day vs night, so the swatches
+    // are noise there. The workspace day grid does distinguish them, so
+    // its legend passes showDayNight.
+    if (showDayNight) {
+      items.push({ mod: "milb-day", icon: "", label: "Day" });
+      items.push({ mod: "milb-night", icon: "", label: "Night" });
+    }
   } else {
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
   }
-  // Universal trailer on every account. Off-season is back on the
-  // line (Mobile Overhaul E2 / recon #2) so the hatched fill is
-  // decodable without opening the popup.
-  items.push({ mod: "off-season", icon: "", label: "Off-season" });
+  // Universal trailer. Off-season dropped from the line - it's now flat
+  // grey and self-evident (still explained in the info popup). Today
+  // stays; the navy ring is worth calling out.
   items.push({ mod: "today", icon: "", label: "Today" });
 
   const [popupOpen, setPopupOpen] = useState(false);
