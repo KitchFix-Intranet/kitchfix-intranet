@@ -10,9 +10,9 @@
    ══════════════════════════════════════════════════════════════ */
 
 .sc-season {
-  padding: 12px 16px 32px;
-  background: #f7f6f3;
-  color: #0a2548;
+  padding: var(--space-3) var(--space-4) var(--space-7);
+  background: var(--surface-sunken);
+  color: var(--text-heading);
   font-family: inherit;
 }
 
@@ -20,105 +20,105 @@
 .sc-season-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 13px;
-  margin-bottom: 12px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  font-size: var(--size-body);
+  margin-bottom: var(--space-3);
 }
-.sc-season-banner-today { color: #4b5563; }
+.sc-season-banner-today { color: var(--text-default); }
 .sc-season-banner-period {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: #ECECEA;
-  color: #5C3B1E;
-  padding: 3px 8px;
-  border-radius: 12px;
+  background: var(--border-subtle);
+  color: var(--accent-text);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-container-lg);
 }
-.sc-season-banner-stat { color: #4b5563; }
-.sc-season-banner-stat strong { color: #0a2548; font-variant-numeric: tabular-nums; }
-.sc-season-banner-stat--warn strong { color: #B45309; }
-.sc-season-banner-stat--alert strong { color: #991B1B; }
-.sc-season-banner-sep { color: #cbd5e1; }
-.sc-season-banner--loading { gap: 12px; }
+.sc-season-banner-stat { color: var(--text-default); }
+.sc-season-banner-stat strong { color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
+.sc-season-banner-stat--warn strong { color: var(--accent-text); }
+.sc-season-banner-stat--alert strong { color: var(--status-overdue-fg); }
+.sc-season-banner-sep { color: var(--text-subtle); }
+.sc-season-banner--loading { gap: var(--space-3); }
 .sc-season-banner-skel {
   display: inline-block;
   height: 14px;
-  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
+  background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
   background-size: 200% 100%;
   animation: sc-season-shimmer 1.6s linear infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-cell);
 }
 @keyframes sc-season-shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-season-banner-skel { animation: none; background: #ececec; }
+  .sc-season-banner-skel { animation: none; background: var(--border-subtle); }
 }
 
 /* ───────── STRIP (Design Batch 3 rebuild) ───────── */
 .sc-season-strip {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px 16px 14px;
-  margin-bottom: 12px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-3) var(--space-4) 14px;
+  margin-bottom: var(--space-3);
 }
 .sc-season-strip-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2);
 }
 .sc-season-strip-title {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-display);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: #0a2548;
+  color: var(--text-heading);
 }
 .sc-season-strip-subtitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-subtle);
   font-style: italic;
 }
 .sc-season-strip-today-chip {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  background: #F4F7FB;
-  border: 1px solid #D6E0EE;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #153968;
-  font-variant-numeric: tabular-nums;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  color: var(--text-link);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-season-strip-today-chip-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  background: #153968;
+  border-radius: var(--radius-circle);
+  background: var(--status-today-ring);
   flex-shrink: 0;
 }
-.sc-season-strip-today-chip-sep { color: #94a3b8; }
+.sc-season-strip-today-chip-sep { color: var(--text-subtle); }
 
 .sc-season-strip-rail {
   position: relative;
   height: 22px;
-  background: #F4F2EC;
-  border: 1px solid #E8E5DC;
-  border-radius: 4px;
+  background: var(--surface-page);
+  border: var(--border-thin) solid var(--border-subtle);
+  border-radius: var(--radius-cell);
   overflow: hidden;
 }
 .sc-season-strip-blocks {
@@ -131,22 +131,22 @@
   bottom: 0;
   display: flex;
   align-items: center;
-  border-right: 1px solid rgba(255, 255, 255, 0.85);
+  border-right: var(--border-thin) solid rgba(255, 255, 255, 0.85);
   overflow: hidden;
   /* Calm low-saturation rail (audit CC-13: tone down so today wins
      hierarchy). Each phase gets a quiet beige-tinted wash; we set
      the actual tint via class modifier below. */
-  background: #E9E5DA;
+  background: var(--border-subtle);
 }
 .sc-season-strip-block:last-child { border-right: none; }
 .sc-season-strip-block-label {
   font-size: 9px;
-  font-weight: 700;
+  font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
   padding: 0 6px;
-  color: #5C5440;
+  color: var(--accent-text);
 }
 
 /* Today marker: a permanent vertical navy line. It does NOT carry an
@@ -157,7 +157,7 @@
   top: -2px;
   bottom: -2px;
   width: 2px;
-  background: #153968;
+  background: var(--status-today-ring);
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -171,9 +171,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  color: #94a3b8;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  color: var(--text-subtle);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -184,82 +184,82 @@
 .sc-season-strip-mobile-chip-tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  background: #153968;
-  color: #ffffff;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  padding: 2px var(--space-2);
+  background: var(--status-today-ring);
+  color: var(--surface-card);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-display);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
-.sc-season-strip-mobile-chip-value { font-weight: 800; color: #0a2548; }
-.sc-season-strip-mobile-chip-sep { color: #94a3b8; font-weight: 700; }
-.sc-season-strip-mobile-chip-next { font-weight: 600; color: #475569; }
+.sc-season-strip-mobile-chip-value { font-weight: var(--wt-display); color: var(--text-heading); }
+.sc-season-strip-mobile-chip-sep { color: var(--text-subtle); font-weight: var(--wt-bold); }
+.sc-season-strip-mobile-chip-next { font-weight: var(--wt-semibold); color: var(--text-default); }
 @media (max-width: 767px) {
   .sc-season-strip-mobile-chip {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    margin-top: 4px;
-    padding: 6px 10px;
-    background: #F4F7FB;
-    border: 1px solid #D6E0EE;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #0a2548;
+    margin-top: var(--space-1);
+    padding: 6px var(--space-2);
+    background: var(--surface-sunken);
+    border: var(--border-thin) solid var(--border-default);
+    border-radius: var(--radius-control);
+    font-size: var(--size-caption);
+    color: var(--text-heading);
   }
   .sc-season-strip-rail,
   .sc-season-strip-ticks { display: none; }
-  .sc-season-strip { padding: 10px 14px 12px; }
+  .sc-season-strip { padding: var(--space-2) 14px var(--space-3); }
 }
 
 /* ───────── TOGGLE ───────── */
 .sc-season-toggle {
   display: inline-flex;
   gap: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  background: #fff;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
   padding: 3px;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .sc-season-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 16px;
+  padding: 6px var(--space-4);
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--motion-control), color var(--motion-control);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-toggle-btn { transition: none; }
 }
 .sc-season-toggle-btn--active {
-  background: #153968;
-  color: #fff;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
 }
 .sc-season-toggle-btn--disabled,
 .sc-season-toggle-btn:disabled {
-  color: #94a3b8;
+  color: var(--text-subtle);
   cursor: not-allowed;
 }
 .sc-season-toggle-btn--disabled:hover { background: transparent; }
 .sc-season-toggle-soon {
   font-size: 9px;
-  font-weight: 700;
-  background: #ECECEA;
-  color: #6b7280;
+  font-weight: var(--wt-bold);
+  background: var(--border-subtle);
+  color: var(--text-muted);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-cell);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -268,7 +268,7 @@
 .sc-season-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
 }
 @media (max-width: 1023px) { .sc-season-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 767px)  { .sc-season-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -277,64 +277,64 @@
 /* Loading skeleton */
 .sc-season-month-skeleton {
   height: 240px;
-  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
+  background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
   background-size: 200% 100%;
   animation: sc-season-shimmer 1.6s linear infinite;
-  border-radius: 10px;
+  border-radius: var(--radius-container);
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-season-month-skeleton { animation: none; background: #ececec; }
+  .sc-season-month-skeleton { animation: none; background: var(--border-subtle); }
 }
 
 /* ───────── MONTH CARD ───────── */
 .sc-season-month-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-3);
+  transition: transform var(--motion-control), box-shadow var(--motion-control), border-color var(--motion-control);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 /* Mobile Overhaul Part D: uniform heights per state. Closes audit
    P1-3 (small-multiples consistency) by giving collapsed cards one
    compact height and expanded cards one full height. */
-.sc-season-month-card--collapsed { min-height: 56px; gap: 0; padding: 8px 12px; }
+.sc-season-month-card--collapsed { min-height: 56px; gap: 0; padding: var(--space-2) var(--space-3); }
 .sc-season-month-card--expanded  { min-height: 220px; }
 .sc-season-month-card--state-done.sc-season-month-card--collapsed {
-  background: #F2FAF5;
-  border-color: #B8E0C6;
+  background: var(--accent-sc-tint);
+  border-color: var(--status-entered-subtle);
 }
 .sc-season-month-card--state-off.sc-season-month-card--collapsed {
-  background: #FAF8F1;
-  border-color: #E8E2D0;
+  background: var(--surface-sunken);
+  border-color: var(--border-subtle);
 }
 .sc-season-month-card--state-upcoming.sc-season-month-card--collapsed {
-  background: #F8FAFC;
-  border-color: #e5e7eb;
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sc-season-month-card { transition: none; }
 }
 .sc-season-month-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  border-color: #cbd5e1;
+  box-shadow: var(--elevation-raised);
+  border-color: var(--text-subtle);
 }
 .sc-season-month-card:focus-visible {
-  outline: 2px solid #153968;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--status-today-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .sc-season-month-card--current {
-  border-color: #153968;
-  box-shadow: 0 0 0 2px #153968 inset;
+  border-color: var(--status-today-ring);
+  box-shadow: 0 0 0 2px var(--status-today-ring) inset;
 }
 
 .sc-season-month-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 36px;
 }
 
@@ -352,48 +352,48 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-cell);
 }
 .sc-season-month-card-collapsed-trigger:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 .sc-season-month-card-chevron--static {
   background: transparent;
   border: none;
   cursor: inherit;
   pointer-events: none;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 .sc-season-month-card-name {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0a2548;
+  font-size: var(--size-body);
+  font-weight: var(--wt-display);
+  color: var(--text-heading);
   flex-shrink: 0;
 }
 .sc-season-month-card-summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
   flex: 1;
   min-width: 0;
 }
 .sc-season-month-card-summary--done {
-  color: #047857;
+  color: var(--text-success);
 }
 .sc-season-month-card-summary--upcoming {
-  color: #6b7280;
-  font-weight: 500;
+  color: var(--text-muted);
+  font-weight: var(--wt-medium);
   text-transform: lowercase;
   letter-spacing: 0.02em;
 }
-.sc-season-month-card-summary-aux { color: #94a3b8; font-weight: 500; }
-.sc-season-month-card-summary-rev { color: #6b7280; font-weight: 500; }
-.sc-season-month-card-summary-rev--actual { color: #047857; font-weight: 700; }
+.sc-season-month-card-summary-aux { color: var(--text-subtle); font-weight: var(--wt-medium); }
+.sc-season-month-card-summary-rev { color: var(--text-muted); font-weight: var(--wt-medium); }
+.sc-season-month-card-summary-rev--actual { color: var(--text-success); font-weight: var(--wt-bold); }
 
 .sc-season-month-card-chevron {
   display: inline-flex;
@@ -404,8 +404,8 @@
   min-width: 32px;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: #6b7280;
+  border-radius: var(--radius-cell);
+  color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -416,45 +416,45 @@
     min-width: 44px;
   }
 }
-.sc-season-month-card-chevron:hover { background: #f3f4f6; color: #0a2548; }
+.sc-season-month-card-chevron:hover { background: var(--surface-sunken); color: var(--text-heading); }
 .sc-season-month-card-chevron:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .sc-season-month-card-drill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-2);
   background: transparent;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #153968;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  color: var(--text-link);
   cursor: pointer;
   font-family: inherit;
   letter-spacing: 0.02em;
 }
 .sc-season-month-card-drill:hover {
-  background: #F4F7FB;
-  border-color: #D6E0EE;
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
 }
 .sc-season-month-card-drill:focus-visible {
-  outline: 2px solid #0F6E56;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
 }
-.sc-season-month-card-drill > span { margin-left: 4px; }
+.sc-season-month-card-drill > span { margin-left: var(--space-1); }
 
 .sc-season-month-card-footer--upcoming {
-  background: #F8FAFC;
-  border-top: 1px dashed #e5e7eb;
+  background: var(--surface-sunken);
+  border-top: var(--border-thin) dashed var(--border-default);
   padding-top: 6px;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .sc-season-month-card-footer--upcoming .sc-season-month-card-stat-aux {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: var(--size-caption);
+  color: var(--text-subtle);
   font-style: italic;
 }
 
@@ -463,8 +463,8 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   font-size: 9px;
-  font-weight: 600;
-  color: #94a3b8;
+  font-weight: var(--wt-semibold);
+  color: var(--text-subtle);
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -508,8 +508,8 @@
   padding: 2px 3px;
 }
 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
 }
 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-badge {
   font-size: 8px;
@@ -525,11 +525,11 @@
 
 /* Off-season label inside the month card. */
 .sc-season-month-card-noservice {
-  font-size: 12px;
+  font-size: var(--size-caption);
   font-style: italic;
-  color: #94a3b8;
+  color: var(--text-subtle);
   text-align: center;
-  padding: 16px 0 4px;
+  padding: var(--space-4) 0 var(--space-1);
 }
 
 /* Footer (stats + progress bar). */
@@ -542,38 +542,38 @@
 .sc-season-month-card-stats {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
-  color: #6b7280;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-caption);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-season-month-card-stat-main strong {
-  color: #0a2548;
-  font-weight: 700;
+  color: var(--text-heading);
+  font-weight: var(--wt-bold);
 }
 .sc-season-month-card-stat-aux {
-  color: #94a3b8;
+  color: var(--text-subtle);
 }
 .sc-season-month-card-stat-rev {
-  color: #6b7280;
-  font-weight: 600;
+  color: var(--text-muted);
+  font-weight: var(--wt-semibold);
 }
-.sc-season-month-card-stat-rev--actual { color: #047857; }
+.sc-season-month-card-stat-rev--actual { color: var(--text-success); }
 
 .sc-season-month-card-bar {
   height: 4px;
-  background: #ececec;
-  border-radius: 999px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 .sc-season-month-card-bar-fill {
   height: 100%;
-  background: #A8E5C9;
-  transition: width 0.3s ease;
+  background: var(--status-entered-bg);
+  transition: width var(--motion-surface);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-month-card-bar-fill { transition: none; }
 }
-.sc-season-month-card-bar-fill--complete { background: #047857; }
+.sc-season-month-card-bar-fill--complete { background: var(--text-success); }
 
 /* ══════════════════════════════════════════════════════════════
    STAGE 2: real strip blocks + period-cards + Full Season card
@@ -583,7 +583,7 @@
 .sc-season-period-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
 }
 @media (max-width: 1023px) { .sc-season-period-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 767px)  { .sc-season-period-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -600,23 +600,23 @@
 @media (max-width: 479px)  { .sc-season-period-grid-summary { grid-column: span 1; } }
 
 .sc-season-period-grid-empty {
-  padding: 32px;
+  padding: var(--space-7);
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
 }
 
 /* ───────── PERIOD CARD ───────── */
 .sc-season-period-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
   padding: 0;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  transition: transform var(--motion-control), box-shadow var(--motion-control), border-color var(--motion-control);
   display: flex;
   flex-direction: column;
   min-height: 200px;
@@ -627,16 +627,16 @@
 }
 .sc-season-period-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  border-color: #cbd5e1;
+  box-shadow: var(--elevation-raised);
+  border-color: var(--text-subtle);
 }
 .sc-season-period-card:focus-visible {
-  outline: 2px solid #153968;
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--status-today-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .sc-season-period-card--current {
-  border-color: #153968;
-  box-shadow: 0 0 0 2px #153968 inset;
+  border-color: var(--status-today-ring);
+  box-shadow: 0 0 0 2px var(--status-today-ring) inset;
 }
 .sc-season-period-card--offseason {
   opacity: 0.78;
@@ -646,11 +646,11 @@
    applied via inline style from the derived phase; padding + type
    stay consistent across phases for visual rhythm. */
 .sc-season-period-card-header {
-  padding: 10px 12px 8px;
+  padding: var(--space-2) var(--space-3) var(--space-2);
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  border-bottom: var(--border-thin) solid rgba(0,0,0,0.06);
 }
 .sc-season-period-card-title {
   display: flex;
@@ -658,20 +658,20 @@
   gap: 6px;
 }
 .sc-season-period-card-num {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-display);
   letter-spacing: -0.01em;
   color: inherit;
 }
 .sc-season-period-card-anchor {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
   color: inherit;
   opacity: 0.7;
 }
 .sc-season-period-card-subtitle {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: inherit;
@@ -691,7 +691,7 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 .sc-season-period-card-cell {
   display: flex;
@@ -708,8 +708,8 @@
   padding: 2px 2px;
 }
 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-date {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
 }
 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-badge {
   font-size: 7px;
@@ -721,53 +721,53 @@
 }
 
 .sc-season-period-card-noservice {
-  font-size: 11px;
+  font-size: var(--size-caption);
   font-style: italic;
-  color: #94a3b8;
+  color: var(--text-subtle);
   text-align: center;
-  padding: 8px 0 14px;
+  padding: var(--space-2) 0 14px;
 }
 
 .sc-season-period-card-footer {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 0 12px 12px;
+  padding: 0 var(--space-3) var(--space-3);
   margin-top: auto;
 }
 .sc-season-period-card-stats {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
-  color: #6b7280;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-caption);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-season-period-card-stat-main strong {
-  color: #0a2548;
-  font-weight: 700;
+  color: var(--text-heading);
+  font-weight: var(--wt-bold);
 }
 .sc-season-period-card-stat-aux {
-  color: #94a3b8;
+  color: var(--text-subtle);
 }
 .sc-season-period-card-stat-warn {
-  color: #B45309;
-  font-weight: 600;
+  color: var(--accent-text);
+  font-weight: var(--wt-semibold);
 }
 .sc-season-period-card-bar {
   height: 4px;
-  background: #ececec;
-  border-radius: 999px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 .sc-season-period-card-bar-fill {
   height: 100%;
-  background: #A8E5C9;
-  transition: width 0.3s ease;
+  background: var(--status-entered-bg);
+  transition: width var(--motion-surface);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-period-card-bar-fill { transition: none; }
 }
-.sc-season-period-card-bar-fill--complete { background: #047857; }
+.sc-season-period-card-bar-fill--complete { background: var(--text-success); }
 
 /* ───────── FULL SEASON SUMMARY CARD (Design Batch 3) ─────────
    Clear white card boundary on the beige page (audit P1-8 bg-clash
@@ -775,83 +775,83 @@
    label. No duplication of the InfoCard action band (needs-entry /
    overdue lived here before - now consolidated to one source). */
 .sc-season-fullseason-card {
-  background: #ffffff;
-  border: 1px solid #DCD7C8;
-  border-radius: 12px;
-  padding: 20px 22px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-subtle);
+  border-radius: var(--radius-container-lg);
+  padding: var(--space-5) 22px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: 200px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--elevation-card);
 }
 .sc-season-fullseason-card-header {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  border-bottom: 1px solid #f1f0ea;
-  padding-bottom: 12px;
+  gap: var(--space-2);
+  border-bottom: var(--border-thin) solid var(--surface-sunken);
+  padding-bottom: var(--space-3);
 }
 .sc-season-fullseason-card-eyebrow {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 .sc-season-fullseason-card-title {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: var(--size-h2);
+  font-weight: var(--wt-display);
   letter-spacing: -0.01em;
-  color: #0a2548;
+  color: var(--text-heading);
 }
 .sc-season-fullseason-card-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .sc-season-fullseason-row {
   display: flex;
-  gap: 24px;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 /* KPI row spreads stats evenly on desktop; wraps on narrow. */
 .sc-season-fullseason-row--kpi {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 16px 24px;
+  gap: var(--space-4) var(--space-6);
 }
 .sc-season-fullseason-stat {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 110px;
 }
 .sc-season-fullseason-stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 .sc-season-fullseason-stat-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #0a2548;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--size-h3);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--size-h1);
+  font-weight: var(--wt-display);
   letter-spacing: -0.01em;
-  color: #047857;
+  color: var(--text-success);
 }
 .sc-season-fullseason-stat--muted .sc-season-fullseason-stat-value {
-  color: #94a3b8;
-  font-weight: 600;
+  color: var(--text-subtle);
+  font-weight: var(--wt-semibold);
 }
 .sc-season-fullseason-stat--actual .sc-season-fullseason-stat-value {
-  color: #047857;
+  color: var(--text-success);
 }
 
 /* Completion bar with an inline label below it.
@@ -865,34 +865,34 @@
 }
 .sc-season-fullseason-bar {
   height: 6px;
-  background: #eef0ee;
-  border-radius: 999px;
+  background: var(--accent-sc-tint);
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 .sc-season-fullseason-bar-fill {
   height: 100%;
-  background: #7FD3AC;
-  transition: width 0.3s ease;
+  background: var(--status-entered-bg);
+  transition: width var(--motion-surface);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-fullseason-bar-fill { transition: none; }
 }
-.sc-season-fullseason-bar-fill--complete { background: #4FB78E; }
+.sc-season-fullseason-bar-fill--complete { background: var(--status-entered-bd); }
 .sc-season-fullseason-completion-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
   letter-spacing: 0.02em;
-  color: #475569;
-  font-variant-numeric: tabular-nums;
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
 }
 
 /* Caption beneath the KPI row - used for the fee-account "contract
    value will surface when wired" line. Calm muted micro-copy. */
 .sc-season-fullseason-card-note {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--size-caption);
   font-style: italic;
-  color: #94a3b8;
+  color: var(--text-subtle);
   line-height: 1.4;
 }
 
@@ -902,12 +902,12 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   font-size: 9px;
-  font-weight: 600;
-  color: #94a3b8;
+  font-weight: var(--wt-semibold);
+  color: var(--text-subtle);
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 .sc-season-period-card-dow-cell {
   padding: 0 0 2px;
@@ -925,21 +925,21 @@
    the strip + toggle adapt.
    ══════════════════════════════════════════════════════════════ */
 @media (max-width: 767px) {
-  .sc-season { padding: 8px 12px 32px; }
+  .sc-season { padding: var(--space-2) var(--space-3) var(--space-7); }
   /* Force single-column on mobile so cards become full-width tap
      targets - 48px+ inside via existing padding. */
-  .sc-season-grid { grid-template-columns: 1fr; gap: 10px; }
-  .sc-season-period-grid { grid-template-columns: 1fr; gap: 10px; }
+  .sc-season-grid { grid-template-columns: 1fr; gap: var(--space-2); }
+  .sc-season-period-grid { grid-template-columns: 1fr; gap: var(--space-2); }
   .sc-season-period-grid-summary { grid-column: span 1; }
   /* Card chrome scales down */
   .sc-season-month-card,
   .sc-season-period-card { min-height: 180px; }
   /* Banner wraps cleanly */
-  .sc-season-banner { padding: 10px 14px; font-size: 12px; gap: 8px; }
+  .sc-season-banner { padding: var(--space-2) 14px; font-size: var(--size-caption); gap: var(--space-2); }
   .sc-season-banner-sep { display: none; }
   /* Strip: shrink the tag text + tighter spacing */
-  .sc-season-strip { padding: 8px 12px 12px; }
-  .sc-season-strip-tag { font-size: 10px; }
+  .sc-season-strip { padding: var(--space-2) var(--space-3) var(--space-3); }
+  .sc-season-strip-tag { font-size: var(--size-micro); }
   /* Toggle taps to floor-spec */
-  .sc-season-toggle-btn { padding: 10px 18px; min-height: 44px; }
+  .sc-season-toggle-btn { padding: var(--space-2) 18px; min-height: 44px; }
 }
