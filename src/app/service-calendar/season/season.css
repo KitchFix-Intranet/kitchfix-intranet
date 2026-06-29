@@ -469,7 +469,7 @@
 .sc-season-month-card-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: minmax(28px, auto);
+  grid-auto-rows: minmax(26px, auto);
   align-content: start;
   flex: 1;
   gap: 2px;
@@ -487,7 +487,7 @@
 .sc-season-month-card-cell-empty {
   display: block;
   width: 100%;
-  min-height: 28px;
+  min-height: 26px;
   background: transparent;
 }
 
@@ -496,17 +496,17 @@
    Override .sc-daysq--sm specifically inside the month-card grid
    (does NOT touch the atom's defaults). */
 .sc-season-month-card-grid .sc-daysq--sm {
-  min-height: 28px;
-  padding: 2px 3px;
+  min-height: 26px;
+  padding: 2px 2px;
 }
 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date {
-  font-size: var(--size-caption);
+  font-size: var(--size-micro);
   font-weight: var(--wt-bold);
 }
 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-badge {
-  font-size: 8px;
-  width: 10px;
-  height: 10px;
+  font-size: 7px;
+  width: 9px;
+  height: 9px;
 }
 /* Hide the compact middle line entirely at this density - the date
    number + status fill carry the signal. The polymorphic middle line
@@ -650,7 +650,7 @@
   gap: 6px;
 }
 .sc-season-period-card-num {
-  font-size: var(--size-subhead);
+  font-size: var(--size-body);
   font-weight: var(--wt-display);
   letter-spacing: -0.01em;
   color: inherit;
