@@ -29,7 +29,7 @@ export default function StateLegend({
   if (hasHomestandSchedule) {
     items.push({ mod: "entered", icon: "", label: "Game day entered" });
     items.push({ mod: "upcoming", icon: "○", label: "Scheduled" });
-    items.push({ mod: "off", icon: "—", label: "Prep / between" });
+    items.push({ mod: "off", icon: "", label: "Prep / between" });
   } else if (isFeeAccount) {
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
@@ -51,7 +51,7 @@ export default function StateLegend({
   // Universal trailer on every account. Off-season is back on the
   // line (Mobile Overhaul E2 / recon #2) so the hatched fill is
   // decodable without opening the popup.
-  items.push({ mod: "off-season", icon: "—", label: "Off-season" });
+  items.push({ mod: "off-season", icon: "", label: "Off-season" });
   items.push({ mod: "today", icon: "", label: "Today" });
 
   const [popupOpen, setPopupOpen] = useState(false);

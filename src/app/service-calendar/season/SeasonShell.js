@@ -21,7 +21,7 @@
 // legacy lens/scope path remains intact alongside this new shell
 // (spec 11.4).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./season.css";
 import PhaseStrip from "./PhaseStrip";
 import SeasonStepper from "./SeasonStepper";
@@ -90,17 +90,18 @@ export default function SeasonShell({
 
   const todayDate = yearToday?.date || null;
 
-  // Derive the InfoCard inputs from yearBannerStats + yearToday.
-  // pctRecorded reflects the user's actual completion - days for per-
-  // meal, game days for homestand-fee accounts.
+  // Derive the InfoCard inputs from yearBannerStats. Bundle 1
+  // (Section B) moved Today / Period / Week / Recorded into the
+  // ChromeBar, so the InfoCard now only consumes the action-band
+  // inputs (needs / overdue / feeStats).
   const stats = yearBannerStats;
-  const pctRecorded = hasHomestandSchedule
-    ? (stats?.totalGameDays > 0
-        ? Math.round((stats.gameDaysEntered / stats.totalGameDays) * 100)
-        : null)
-    : (stats?.totalDays > 0
-        ? Math.round((stats.daysRecorded / stats.totalDays) * 100)
-        : null);
+
+  // Bundle 1 (Section D1): the all-expanded-on-desktop layout needs
+  // one matchMedia listener for the 12 cards instead of one per card.
+  // SSR-safe: default true so the desktop layout (dominant case) is
+  // the first paint; on mount we read the media query and subscribe
+  // to changes.
+  const isDesktop = useIsDesktop();
 
   // Design Batch 3: the stepper drills into the period that contains
   // the clicked homestand's start date. The mapping happens here so
@@ -115,15 +116,12 @@ export default function SeasonShell({
 
   // Loading skeleton matches the new shape so the layout doesn't
   // shift when data lands. Spec section 4 + GOTCHAS skeleton rule.
+  // Bundle 1 (Section C1): the StateLegend renders at the BOTTOM of
+  // the shell now in both loaded and loading states.
   if (loading || !yearData) {
     return (
       <div className="sc-season sc-season-shell sc-fade-in">
         <InfoCard loading />
-        <StateLegend
-          hasHomestandSchedule={hasHomestandSchedule}
-          isFeeAccount={isFeeAccount}
-          isMilb={isMilb}
-        />
         {!hasHomestandSchedule && (
           <PhaseStrip category={account?.category} today={null} year={year} />
         )}
@@ -132,6 +130,11 @@ export default function SeasonShell({
             <div key={i} className="sc-season-month-skeleton" />
           ))}
         </div>
+        <StateLegend
+          hasHomestandSchedule={hasHomestandSchedule}
+          isFeeAccount={isFeeAccount}
+          isMilb={isMilb}
+        />
       </div>
     );
   }
@@ -139,10 +142,6 @@ export default function SeasonShell({
   return (
     <div className="sc-season sc-season-shell sc-fade-in">
       <InfoCard
-        todayLabel={stats?.todayLabel}
-        periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
-        weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
-        pctRecorded={pctRecorded}
         isFeeAccount={isFeeAccount}
         needsEntry={stats?.needsEntry || 0}
         overdue={stats?.overdue || 0}
@@ -150,14 +149,9 @@ export default function SeasonShell({
           gameDaysEntered: stats.gameDaysEntered || 0,
           totalGameDays: stats.totalGameDays || 0,
         } : null}
+        todayLabel={stats?.todayLabel}
         onJumpToNext={onJumpToNext}
         hasJumpTarget={hasJumpTarget}
-      />
-
-      <StateLegend
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        isMilb={isMilb}
       />
 
       {hasHomestandSchedule ? (
@@ -191,6 +185,7 @@ export default function SeasonShell({
                   hasHomestandSchedule={hasHomestandSchedule}
                   isFeeAccount={isFeeAccount}
                   isMilb={isMilb}
+                  isDesktop={isDesktop}
                   onClick={onMonthClick}
                 />
               </div>
@@ -212,8 +207,38 @@ export default function SeasonShell({
           onPeriodClick={onPeriodClick}
         />
       )}
+
+      {/* Bundle 1 (Section C1): legend at the bottom, static (not
+          sticky). Renders in both calendar and period sub-views. */}
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+      />
     </div>
   );
+}
+
+// useIsDesktop - SSR-safe matchMedia hook used by Bundle 1 (Section
+// D1) to force every MonthCard expanded on desktop while preserving
+// mobile collapse behavior. Default true so first paint matches the
+// dominant viewport; mount effect reads the actual match and
+// subscribes to changes.
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    setIsDesktop(mq.matches);
+    const onChange = (e) => setIsDesktop(e.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    }
+    mq.addListener(onChange);
+    return () => mq.removeListener(onChange);
+  }, []);
+  return isDesktop;
 }
 
 // PeriodGrid - the 4x3 of 13 period-cards + the Full Season summary.

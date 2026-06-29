@@ -1,22 +1,20 @@
 "use client";
 
-// MonthCard - one month-card in the Calendar grid. Mobile Overhaul
-// adds the COLLAPSE accordion:
-//   - Completed months (daysEntered === totalDays > 0) default to a
-//     one-line collapsed tile.
-//   - Empty future months (daysEntered === 0 AND today is BEFORE the
-//     first day of the month) default to a one-line "Upcoming" tile.
-//   - Off-season months default to a one-line "Off-season" tile (no
-//     dense grid of em-dashes - audit P2-7).
-//   - Current month + partial-progress months default expanded.
-// Tapping the collapsed tile toggles to expanded in place. The
-// "View ->" link still drills into the workspace from the expanded
-// header. Chevron (expand-in-place) and "View ->" (drill) stay
-// visually distinct.
+// MonthCard - one month-card in the Calendar grid.
 //
-// Closes audit P1-3 (uniform card heights - within each state),
-// P1-9 (future-period 0/X punitive framing), P2-7 (off-season
-// month-card collapse) plus the mobile-overhaul collapse centerpiece.
+// Bundle 1 (Section D1-D3) reshape: on DESKTOP all 12 months render
+// expanded and uniform (the chevron is suppressed, the top summary
+// inside the expanded header is dropped, the footer carries the X/Y
+// figure). On MOBILE the existing collapse accordion behavior is
+// preserved (completed/off/empty-future default collapsed; current +
+// partial default expanded; tap to toggle). The desktop check comes
+// in via the isDesktop prop computed once at the SeasonShell level
+// via a matchMedia listener (SSR-safe, default true).
+//
+// Closes audit P1-3 (uniform card heights), P1-9 (future-period 0/X
+// punitive framing). The upcoming summary aux ("0/totalDays") is
+// dropped per D3 - the calm footer line already says "Upcoming month
+// - nothing required yet" so the 0/X read like a failing grade.
 
 import { useState } from "react";
 import DaySquare from "../DaySquare";
@@ -37,6 +35,7 @@ export default function MonthCard({
   hasHomestandSchedule,      // bool - drives footer mode
   isFeeAccount,              // bool - drives footer mode
   isMilb,                    // bool - drives no-service detection on per-meal
+  isDesktop = true,          // Bundle 1 D1: force-expanded gate; SSR-safe default
   onClick,                   // (monthIndex) => void
 }) {
   const monthName = MONTH_NAMES[monthIndex];
@@ -50,15 +49,19 @@ export default function MonthCard({
     isMilb,
   });
 
-  // Derive collapse defaults. The user can toggle with the chevron,
-  // overriding the default. Only EXPANDED state mounts the grid.
+  // Derive collapse default for MOBILE only. User can toggle with the
+  // chevron / tap-to-expand. On DESKTOP, expanded is always true (the
+  // userExpanded state is still maintained so a mobile user who
+  // toggled and then resized to desktop keeps their preference under
+  // the desktop force).
   const collapseDefault = computeCollapseDefault({
     isCurrentMonth, noService, monthSummary, todayDate, year, monthIndex,
   });
-  const [expanded, setExpanded] = useState(!collapseDefault);
+  const [userExpanded, setUserExpanded] = useState(!collapseDefault);
+  const expanded = isDesktop ? true : userExpanded;
 
-  const handleExpand = () => setExpanded(true);
-  const handleCollapse = () => setExpanded(false);
+  const handleExpand = () => setUserExpanded(true);
+  const handleCollapse = () => setUserExpanded(false);
   const handleDrill = () => onClick?.(monthIndex);
 
   const totalDays = Number(monthSummary?.totalDays) || 0;
@@ -97,23 +100,21 @@ export default function MonthCard({
       {expanded ? (
         <header className="sc-season-month-card-header">
           <span className="sc-season-month-card-name">{monthName}</span>
-          <CollapsedSummary
-            monthSummary={monthSummary}
-            monthState={monthState}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            totalDays={totalDays}
-            daysEntered={daysEntered}
-          />
-          <button
-            type="button"
-            className="sc-season-month-card-chevron"
-            onClick={handleCollapse}
-            aria-label={`Collapse ${monthName}`}
-            aria-expanded={true}
-          >
-            <ChevronGlyph expanded={true} />
-          </button>
+          {/* Bundle 1 D2: the CollapsedSummary that used to live here
+              was a duplicate of the footer figure - removed. The
+              chevron is mobile-only per D1 (desktop is always
+              expanded, no collapse affordance needed). */}
+          {!isDesktop && (
+            <button
+              type="button"
+              className="sc-season-month-card-chevron"
+              onClick={handleCollapse}
+              aria-label={`Collapse ${monthName}`}
+              aria-expanded={true}
+            >
+              <ChevronGlyph expanded={true} />
+            </button>
+          )}
           <button
             type="button"
             className="sc-season-month-card-drill"
@@ -183,12 +184,12 @@ function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFe
     return <span className="sc-season-month-card-summary">Off-season</span>;
   }
   if (monthState === "upcoming") {
+    // Bundle 1 D3: drop the "0/totalDays" aux - it read as a failing
+    // grade on a future month. The calm "Upcoming" framing in the
+    // footer carries the same signal without the punitive 0/X.
     return (
       <span className="sc-season-month-card-summary sc-season-month-card-summary--upcoming">
         upcoming
-        {totalDays > 0 && (
-          <span className="sc-season-month-card-summary-aux"> · 0/{totalDays}</span>
-        )}
       </span>
     );
   }

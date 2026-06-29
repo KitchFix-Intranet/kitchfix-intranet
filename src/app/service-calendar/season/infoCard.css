@@ -1,71 +1,23 @@
 /* ══════════════════════════════════════════════════════════════
-   InfoCard - split context + action bands (Design Batch 2)
-   Audit P1-1: Von Restorff exceptions must be visually separable
-   from calm context. Two side-by-side bands; stacks on narrow.
+   InfoCard - the action band of the season landing.
+   Bundle 1 (Section B): the prior ContextBand (Today / Period /
+   Week / Recorded) was promoted into the ChromeBar, so the info
+   card is now action-only and renders as a single full-width band.
    ══════════════════════════════════════════════════════════════ */
 
 .sc-info-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
-  gap: var(--space-3);
+  display: block;
   margin: 0 0 var(--space-4) 0;
 }
 
 @media (max-width: 767px) {
-  /* Mobile Overhaul: stack + tighten gap so more content fits per
-     phone viewport. */
   .sc-info-card {
-    grid-template-columns: 1fr;
-    gap: var(--space-2);
     margin-bottom: var(--space-3);
   }
-  .sc-info-card-context,
   .sc-info-card-action {
     padding: var(--space-2) var(--space-4);
     min-height: 48px;
   }
-  .sc-info-card-context-segment { gap: var(--space-1); }
-}
-
-/* ── Context band - calm ────────────────────────────────────────── */
-.sc-info-card-context {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-card-pad) var(--space-5);
-  background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-control);
-  flex-wrap: wrap;
-  min-height: 56px;
-}
-
-.sc-info-card-context-segment {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  font-variant-numeric: var(--num-tabular);
-}
-
-.sc-info-card-context-label {
-  font-size: var(--size-caption);
-  font-weight: var(--wt-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
-
-.sc-info-card-context-value {
-  font-size: var(--size-body);
-  font-weight: var(--wt-bold);
-  color: var(--text-heading);
-}
-
-.sc-info-card-context-sep {
-  width: 1px;
-  height: 18px;
-  background: var(--border-default);
-  flex-shrink: 0;
 }
 
 /* ── Action band - three states ─────────────────────────────────── */

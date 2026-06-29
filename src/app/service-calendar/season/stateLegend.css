@@ -1,25 +1,22 @@
 /* ══════════════════════════════════════════════════════════════
-   StateLegend - the day-cell state key (Design Batch 1)
-   Sticky strip placed between the Calendar/Period toggle and the
-   grid. Carries the visual contract: every state the atom renders
-   has a swatch + label here. Audit P0-1 (non-negotiable #1).
+   StateLegend - the day-cell state key (Design Batch 1).
+   Bundle 1 (Section C1) moved the legend to the BOTTOM of the
+   season shell as a static element (no position:sticky). Carries
+   the visual contract: every state the atom renders has a swatch +
+   label here. Audit P0-1 (non-negotiable #1).
 
    The swatch fills MUST consume the same --status-* tokens as
    DaySquare.css so the legend is byte-locked to the cells.
    ══════════════════════════════════════════════════════════════ */
 
 .sc-state-legend {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
   padding: var(--space-2) var(--space-4);
-  margin: 0 0 var(--space-3) 0;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(6px);
+  margin: var(--space-4) 0 var(--space-3) 0;
+  background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   font-size: var(--size-caption);
@@ -96,9 +93,15 @@
   border-color: var(--status-off-bd);
   color: var(--text-subtle);
 }
+/* Bundle 1 (Section C2): the "today" swatch now mirrors the atom's
+   today chrome more visibly - a neutral warm tile (matching the day
+   cell's resting fill) with a thicker navy ring inset so the
+   recognition is unmistakable at 18px. The prior 2px solid border on
+   a white background read as near-invisible against the white legend. */
 .sc-state-legend-swatch--today {
-  background: var(--surface-card);
-  border: 2px solid var(--status-today-ring);
+  background: var(--surface-sunken);
+  border: var(--border-thin) solid var(--status-today-ring);
+  box-shadow: 0 0 0 1px var(--status-today-ring);
 }
 .sc-state-legend-swatch--failed {
   background: var(--status-overdue-subtle);
@@ -150,12 +153,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-state-legend-info { transition: none; }
-}
-
-/* Reduced motion: drop the backdrop blur (some implementations
-   animate during scroll). Solid white still legible. */
-@media (prefers-reduced-motion: reduce) {
-  .sc-state-legend { backdrop-filter: none; background: var(--surface-card); }
 }
 
 /* Cleanup batch: the mobile legend now keeps a COMPACT always-

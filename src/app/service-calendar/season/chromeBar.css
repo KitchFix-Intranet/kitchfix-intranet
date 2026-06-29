@@ -118,8 +118,48 @@
   .sc-chrome-bar-asof-refresh { transition: none; }
 }
 
+/* Chrome stats cluster (Bundle 1 Section B). Today / Period / Week /
+   Recorded line promoted from the InfoCard ContextBand. Sits in the
+   right side immediately before AsOf so left = controls, right = info-
+   only. Each segment is a label-then-value pair separated by a hairline
+   token rule. Numeric values use tabular numerals so % and date numbers
+   land on a stable baseline. */
+.sc-chrome-bar-stats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-chrome-bar-stats-segment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.sc-chrome-bar-stats-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.sc-chrome-bar-stats-value {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+.sc-chrome-bar-stats-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border-default);
+  flex-shrink: 0;
+  align-self: center;
+}
+
 /* Floor-first wrap. Below 768px, the bar wraps onto two rows: left
-   group on top (picker + toggle), right group below (asof + admin). */
+   group on top (picker + toggle), right group below (asof + admin).
+   The chrome stats cluster hides below 640px so the toolbar stays
+   intact on phone - context there is carried by the mobile StickyContext
+   scroll-reveal bar plus the InfoCard ActionBand. */
 @media (max-width: 767px) {
   .sc-chrome-bar {
     padding: var(--space-3);
@@ -133,4 +173,7 @@
   .sc-chrome-bar-right {
     justify-content: space-between;
   }
+}
+@media (max-width: 639px) {
+  .sc-chrome-bar-stats { display: none; }
 }

@@ -1,31 +1,24 @@
 "use client";
 
-// InfoCard - the split context + action bands (Design Batch 2,
-// audit P1-1). Replaces the single-sentence YearBanner with two
-// side-by-side bands:
-//   LEFT  - context: "Today <date> | Period <n> | Week <n> | <pct>%
-//           recorded" in calm body weight
-//   RIGHT - action: three states
-//     (a) HAS WORK   - amber band + jump-to-next button
-//     (b) ALL CLEAR  - green band + "All caught up, nicely done"
-//     (c) FEE        - homestand/contract status (CC-7)
+// InfoCard - the action band of the season landing (Design Batch 2,
+// audit P1-1). Bundle 1 (Section B) promoted the prior ContextBand
+// (Today / Period / Week / Recorded) up into the ChromeBar so the
+// info card now carries only the action signal:
+//   (a) HAS WORK   - amber band + jump-to-next button
+//   (b) ALL CLEAR  - green band + "All caught up, nicely done"
+//   (c) FEE        - homestand/contract status (CC-7)
 //
-// Stacks vertically on narrow viewports (<768px). PRESENTATIONAL:
-// takes resolved props in, emits onClick out.
+// PRESENTATIONAL: takes resolved props in, emits onClick out.
 
 import "./infoCard.css";
 
 export default function InfoCard({
-  // context-band data
-  todayLabel,                 // "Jun 26"
-  periodNum,                  // "7"
-  weekNum,                    // "2"
-  pctRecorded,                // 54  (already rounded)
   // action-band data
   isFeeAccount = false,
   needsEntry = 0,
   overdue = 0,
   feeStats = null,            // { gameDaysEntered, totalGameDays } for fee account contract band
+  todayLabel,                 // "Jun 28" - used only by the all-clear sub-text
   // actions
   onJumpToNext,               // () => void; rendered only when there's work
   hasJumpTarget = false,      // boolean - whether the jump-to-next target is resolvable
@@ -35,11 +28,6 @@ export default function InfoCard({
   if (loading) {
     return (
       <div className="sc-info-card sc-info-card--loading" aria-hidden="true">
-        <div className="sc-info-card-context">
-          <span className="sc-info-card-skel" style={{ width: 90 }} />
-          <span className="sc-info-card-skel" style={{ width: 70 }} />
-          <span className="sc-info-card-skel" style={{ width: 110 }} />
-        </div>
         <div className="sc-info-card-action">
           <span className="sc-info-card-skel sc-info-card-skel--block" style={{ width: 220 }} />
         </div>
@@ -49,12 +37,6 @@ export default function InfoCard({
 
   return (
     <div className="sc-info-card">
-      <ContextBand
-        todayLabel={todayLabel}
-        periodNum={periodNum}
-        weekNum={weekNum}
-        pctRecorded={pctRecorded}
-      />
       <ActionBand
         isFeeAccount={isFeeAccount}
         needsEntry={needsEntry}
@@ -64,36 +46,6 @@ export default function InfoCard({
         onJumpToNext={onJumpToNext}
         hasJumpTarget={hasJumpTarget}
       />
-    </div>
-  );
-}
-
-function ContextBand({ todayLabel, periodNum, weekNum, pctRecorded }) {
-  return (
-    <div className="sc-info-card-context" role="group" aria-label="Today context">
-      <span className="sc-info-card-context-segment">
-        <span className="sc-info-card-context-label">Today</span>
-        <span className="sc-info-card-context-value">{todayLabel || "—"}</span>
-      </span>
-      <span className="sc-info-card-context-sep" aria-hidden="true" />
-      <span className="sc-info-card-context-segment">
-        <span className="sc-info-card-context-label">Period</span>
-        <span className="sc-info-card-context-value">{periodNum || "—"}</span>
-      </span>
-      {weekNum && (
-        <>
-          <span className="sc-info-card-context-sep" aria-hidden="true" />
-          <span className="sc-info-card-context-segment">
-            <span className="sc-info-card-context-label">Week</span>
-            <span className="sc-info-card-context-value">{weekNum}</span>
-          </span>
-        </>
-      )}
-      <span className="sc-info-card-context-sep" aria-hidden="true" />
-      <span className="sc-info-card-context-segment">
-        <span className="sc-info-card-context-value">{pctRecorded != null ? `${pctRecorded}%` : "—"}</span>
-        <span className="sc-info-card-context-label">recorded</span>
-      </span>
     </div>
   );
 }

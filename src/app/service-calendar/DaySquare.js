@@ -67,13 +67,19 @@ function fmtCompactMeals(n) {
 //   - "off-season" splits from generic "off" so "nothing scheduled"
 //     reads distinctly from "upcoming." The CSS off-season fill carries
 //     a diagonal hatch as the non-color cue.
+// Bundle 1 (Section D4): off + off-season no longer render an em-dash
+// glyph. The dash read as "nothing here / missing data" against the
+// dense year-grid; the deliberate "off" tile fill (and the diagonal
+// hatch on off-season) now carry the state alone. Action states
+// (needs-entry, overdue) keep their glyphs - the rubric prioritizes
+// the redundant cue where the operator has to act on it.
 const STATUS_META = {
   entered:       { mod: "entered",       icon: "" },
   "needs-entry": { mod: "needs-entry",   icon: "✎" },
   overdue:       { mod: "overdue",       icon: "!" },
   upcoming:      { mod: "upcoming",      icon: "○" },
-  off:           { mod: "off",           icon: "—" },
-  "off-season":  { mod: "off-season",    icon: "—" },
+  off:           { mod: "off",           icon: "" },
+  "off-season":  { mod: "off-season",    icon: "" },
   loading:       { mod: "loading",       icon: "" },
   failed:        { mod: "failed",        icon: "⚠" },
 };

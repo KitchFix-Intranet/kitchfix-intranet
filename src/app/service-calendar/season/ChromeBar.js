@@ -6,7 +6,11 @@
 //
 // Contents, left to right:
 //   account dropdown -> category tag -> Calendar/Period toggle ->
-//   spacer -> as-of timestamp
+//   spacer -> Today / Period / Week / Recorded stats -> as-of timestamp
+//
+// The stats cluster is the redesign Bundle 1 (Section B) promotion of
+// the old InfoCard ContextBand into the chrome's freed-by-Admin slot,
+// gated on showStats so it only renders in operator year view.
 //
 // The Admin entry lives in the hero's top-right corner (redesign PR
 // 1A) - the sc-hero-admin lock button rendered by ServiceCalendar.js.
@@ -29,6 +33,12 @@ export default function ChromeBar({
   // data freshness
   asOf,                        // Date | null
   onRefresh,                   // optional () => void to trigger a refresh
+  // Bundle 1 (Section B): chrome stats cluster (was InfoCard ContextBand)
+  showStats,                   // gate - only render in operator year view
+  todayLabel,                  // "Jun 28"
+  periodNum,                   // "7" | null
+  weekNum,                     // "2" | null (omits the Week segment when falsy)
+  pctRecorded,                 // 0-100 number, or null
   // misc
   className,
 }) {
@@ -62,10 +72,53 @@ export default function ChromeBar({
       </div>
 
       <div className="sc-chrome-bar-right">
+        {showStats && (
+          <ChromeStats
+            todayLabel={todayLabel}
+            periodNum={periodNum}
+            weekNum={weekNum}
+            pctRecorded={pctRecorded}
+          />
+        )}
         {asOf && (
           <AsOf asOf={asOf} onRefresh={onRefresh} />
         )}
       </div>
+    </div>
+  );
+}
+
+// Chrome stats cluster - the Today / Period / Week / Recorded line
+// promoted from the old InfoCard ContextBand (Bundle 1 Section B).
+// Every segment is label-then-value (the recorded inversion fix);
+// Week omits gracefully when weekNum is falsy, mirroring the
+// ContextBand's prior behavior. Presentational; no roles needed.
+function ChromeStats({ todayLabel, periodNum, weekNum, pctRecorded }) {
+  return (
+    <div className="sc-chrome-bar-stats" aria-label="Today context">
+      <span className="sc-chrome-bar-stats-segment">
+        <span className="sc-chrome-bar-stats-label">Today</span>
+        <span className="sc-chrome-bar-stats-value">{todayLabel || "-"}</span>
+      </span>
+      <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+      <span className="sc-chrome-bar-stats-segment">
+        <span className="sc-chrome-bar-stats-label">Period</span>
+        <span className="sc-chrome-bar-stats-value">{periodNum || "-"}</span>
+      </span>
+      {weekNum && (
+        <>
+          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+          <span className="sc-chrome-bar-stats-segment">
+            <span className="sc-chrome-bar-stats-label">Week</span>
+            <span className="sc-chrome-bar-stats-value">{weekNum}</span>
+          </span>
+        </>
+      )}
+      <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+      <span className="sc-chrome-bar-stats-segment">
+        <span className="sc-chrome-bar-stats-label">Recorded</span>
+        <span className="sc-chrome-bar-stats-value">{pctRecorded != null ? `${pctRecorded}%` : "-"}</span>
+      </span>
     </div>
   );
 }
