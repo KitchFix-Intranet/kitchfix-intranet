@@ -29,6 +29,7 @@
 import { useState } from "react";
 import DaySquare from "../DaySquare";
 import { resolveDayStatus, buildCompactContent } from "../dayResolvers";
+import { mlbMonthPhaseLabel } from "./mlbSeasonPhase";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -92,6 +93,8 @@ export default function MonthCard({
     isCurrentMonth && "sc-season-month-card--current",
   ].filter(Boolean).join(" ");
 
+  const phaseLabel = hasHomestandSchedule ? mlbMonthPhaseLabel(monthIndex) : null;
+
   // No button-inside-a-button (WCAG 4.1.2). The interactive elements
   // are SIBLINGS of the article's children:
   //   Collapsed: ONE row-button that expands the card. The chevron is
@@ -111,11 +114,12 @@ export default function MonthCard({
     >
       {expanded ? (
         <header className="sc-season-month-card-header">
-          <span className="sc-season-month-card-name">{monthName}</span>
-          {/* Bundle 1 D2: the CollapsedSummary that used to live here
-              was a duplicate of the footer figure - removed. The
-              chevron is mobile-only per D1 (desktop is always
-              expanded, no collapse affordance needed). */}
+          <span className="sc-season-month-card-titlecol">
+            <span className="sc-season-month-card-name">{monthName}</span>
+            {phaseLabel && (
+              <span className="sc-season-month-card-phase">{phaseLabel}</span>
+            )}
+          </span>
           {!isDesktop && (
             <button
               type="button"
@@ -144,6 +148,7 @@ export default function MonthCard({
             isFeeAccount={isFeeAccount}
             totalDays={totalDays}
             daysEntered={daysEntered}
+            monthIndex={monthIndex}
           />
           <span className="sc-season-month-card-chevron sc-season-month-card-chevron--static" aria-hidden="true">
             <ChevronGlyph expanded={false} />
@@ -204,9 +209,10 @@ export default function MonthCard({
 // collapsed AND below the month name when expanded. Carries the
 // glance state: completed (check + $), upcoming, in-progress, or
 // off-season.
-function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFeeAccount, totalDays, daysEntered }) {
+function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFeeAccount, totalDays, daysEntered, monthIndex }) {
   if (monthState === "off") {
-    return <span className="sc-season-month-card-summary">Off-season</span>;
+    const offLabel = (hasHomestandSchedule && mlbMonthPhaseLabel(monthIndex)) || "Off-season";
+    return <span className="sc-season-month-card-summary sc-season-month-card-summary--phase">{offLabel}</span>;
   }
   if (monthState === "upcoming") {
     // Bundle 1 D3: drop the "0/totalDays" aux - it read as a failing

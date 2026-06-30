@@ -361,11 +361,24 @@
   pointer-events: none;
   color: var(--text-muted);
 }
+.sc-season-month-card-titlecol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .sc-season-month-card-name {
   font-size: var(--size-body);
   font-weight: var(--wt-display);
   color: var(--text-heading);
   flex-shrink: 0;
+}
+.sc-season-month-card-phase {
+  font-size: var(--size-micro);
+  font-style: italic;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
 }
 .sc-season-month-card-summary {
   display: inline-flex;
@@ -390,6 +403,11 @@
 .sc-season-month-card-summary-aux { color: var(--text-subtle); font-weight: var(--wt-medium); }
 .sc-season-month-card-summary-rev { color: var(--text-muted); font-weight: var(--wt-medium); }
 .sc-season-month-card-summary-rev--actual { color: var(--text-success); font-weight: var(--wt-bold); }
+.sc-season-month-card-summary--phase {
+  font-style: italic;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+}
 
 .sc-season-month-card-chevron {
   /* Sits ABOVE the whole-card drill overlay so the mobile collapse
@@ -677,6 +695,12 @@
   font-style: italic;
   opacity: 0.7;
   letter-spacing: 0.03em;
+}
+.sc-season-period-card-subtitle-phase {
+  font-style: italic;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 /* Period-card day grid - 7 columns matches the month grid; rows
