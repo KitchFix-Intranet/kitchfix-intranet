@@ -25,6 +25,7 @@ import {
   humanAnchor,
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
+import { mlbPeriodPhaseLabel } from "./mlbSeasonPhase";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -53,6 +54,8 @@ export default function PeriodCard({
     ? CANONICAL_PHASES[phaseAssignment.primary]
     : null;
   const straddles = phaseAssignment.secondary != null;
+
+  const mlbPhaseLabel = hasHomestandSchedule ? mlbPeriodPhaseLabel(periodRange) : null;
 
   // Sort + dedupe by date defensively. Year-summary's days[] is
   // ordered, but a period spans 1-2 months so days come from two
@@ -93,6 +96,8 @@ export default function PeriodCard({
             straddles
               ? phaseAssignment.bothLabels.slice(0, 2).join(" -> ")
               : primaryPhase.label
+          ) : mlbPhaseLabel ? (
+            <span className="sc-season-period-card-subtitle-phase">{mlbPhaseLabel}</span>
           ) : homestandSubtitle ? (
             <span className="sc-season-period-card-subtitle-hs">{homestandSubtitle}</span>
           ) : (
