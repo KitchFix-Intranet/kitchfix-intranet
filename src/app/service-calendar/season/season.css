@@ -796,14 +796,13 @@
    overdue lived here before - now consolidated to one source). */
 .sc-season-fullseason-card {
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-subtle);
-  border-radius: var(--radius-container-lg);
-  padding: var(--space-5) 22px;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-height: 200px;
-  box-shadow: var(--elevation-card);
 }
 .sc-season-fullseason-card-header {
   display: flex;
@@ -813,14 +812,14 @@
   padding-bottom: var(--space-3);
 }
 .sc-season-fullseason-card-eyebrow {
-  font-size: var(--size-caption);
+  font-size: var(--size-micro);
   font-weight: var(--wt-bold);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--text-muted);
 }
 .sc-season-fullseason-card-title {
-  font-size: var(--size-h2);
+  font-size: var(--size-subhead);
   font-weight: var(--wt-display);
   letter-spacing: -0.01em;
   color: var(--text-heading);
@@ -828,7 +827,7 @@
 .sc-season-fullseason-card-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 .sc-season-fullseason-row {
   display: flex;
@@ -839,7 +838,7 @@
 .sc-season-fullseason-row--kpi {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-4) var(--space-6);
+  gap: var(--space-3) var(--space-4);
 }
 .sc-season-fullseason-stat {
   display: flex;
@@ -855,13 +854,13 @@
   color: var(--text-muted);
 }
 .sc-season-fullseason-stat-value {
-  font-size: var(--size-h3);
+  font-size: var(--size-body);
   font-weight: var(--wt-bold);
   color: var(--text-heading);
   font-variant-numeric: var(--num-tabular);
 }
 .sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value {
-  font-size: var(--size-h1);
+  font-size: var(--size-subhead);
   font-weight: var(--wt-display);
   letter-spacing: -0.01em;
   color: var(--text-success);
