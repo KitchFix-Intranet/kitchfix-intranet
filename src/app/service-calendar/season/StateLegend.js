@@ -30,7 +30,7 @@ export default function StateLegend({
   if (hasHomestandSchedule) {
     items.push({ mod: "entered", icon: "", label: "Game day entered" });
     items.push({ mod: "upcoming", icon: "○", label: "Scheduled" });
-    items.push({ mod: "off", icon: "", label: "Prep / between" });
+    items.push({ mod: "off", icon: "", label: "Non Game day" });
   } else if (isFeeAccount) {
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });

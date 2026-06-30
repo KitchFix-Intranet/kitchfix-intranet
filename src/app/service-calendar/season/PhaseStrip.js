@@ -51,6 +51,15 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
   const title = phaseStripTitle(category, timeline.status);
   const subtitle = phaseStripSubtitle(timeline.status);
 
+  // Bare = no phase blocks (MiLB + not-yet-confirmed PDC). Drives the
+  // mobile rail/ticks override + a subtle season gradient on the rail.
+  const isBare = (timeline.blocks || []).length === 0;
+  const railBackground =
+    railGradient ||
+    (isBare
+      ? "linear-gradient(90deg, var(--surface-page) 0%, var(--surface-page) 20%, var(--accent-sc-tint) 40%, var(--accent-sc-tint) 60%, var(--surface-page) 80%, var(--surface-page) 100%)"
+      : undefined);
+
   // Mobile chip: at phone width the 12-segment strip clips badly
   // (audit Part E1). Collapse to a compact "current phase -> next"
   // chip. Find the next phase after today's by walking blocks in
@@ -60,7 +69,7 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
     : null;
 
   return (
-    <section className="sc-season-strip" aria-label={title}>
+    <section className={`sc-season-strip${isBare ? " sc-season-strip--bare" : ""}`} aria-label={title}>
       {/* Title row: name on the left, today chip on the right.
           Title sits ABOVE the rail (audit P1-2 - the eye reads the
           title before scanning the strip). */}
@@ -106,7 +115,7 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
           treatment. */}
       <div
         className="sc-season-strip-rail"
-        style={railGradient ? { background: railGradient } : undefined}
+        style={railBackground ? { background: railBackground } : undefined}
       >
         {timeline.status === "recorded" && (
           <div className="sc-season-strip-blocks" aria-hidden="true">
@@ -156,7 +165,7 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
 function phaseStripTitle(category, status) {
   if (status === "recorded") return "Phase timeline";
   if (category === "PDC")    return "Phase timeline";
-  return "Season axis";
+  return "Season";
 }
 
 // Subtitle is OPTIONAL - it only shows for PDC accounts that don't

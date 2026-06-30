@@ -190,8 +190,8 @@
     font-size: var(--size-caption);
     color: var(--text-heading);
   }
-  .sc-season-strip-rail,
-  .sc-season-strip-ticks { display: none; }
+  .sc-season-strip:not(.sc-season-strip--bare) .sc-season-strip-rail,
+  .sc-season-strip:not(.sc-season-strip--bare) .sc-season-strip-ticks { display: none; }
   .sc-season-strip { padding: var(--space-2) 14px var(--space-3); }
 }
 
