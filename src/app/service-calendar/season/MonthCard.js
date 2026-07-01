@@ -93,8 +93,6 @@ export default function MonthCard({
     isCurrentMonth && "sc-season-month-card--current",
   ].filter(Boolean).join(" ");
 
-  const phaseLabel = hasHomestandSchedule ? mlbMonthPhaseLabel(monthIndex) : null;
-
   // No button-inside-a-button (WCAG 4.1.2). The interactive elements
   // are SIBLINGS of the article's children:
   //   Collapsed: ONE row-button that expands the card. The chevron is
@@ -114,12 +112,7 @@ export default function MonthCard({
     >
       {expanded ? (
         <header className="sc-season-month-card-header">
-          <span className="sc-season-month-card-titlecol">
-            <span className="sc-season-month-card-name">{monthName}</span>
-            {phaseLabel && (
-              <span className="sc-season-month-card-phase">{phaseLabel}</span>
-            )}
-          </span>
+          <span className="sc-season-month-card-name">{monthName}</span>
           {!isDesktop && (
             <button
               type="button"
@@ -180,6 +173,7 @@ export default function MonthCard({
 
           <MonthCardFooter
             monthSummary={monthSummary}
+            monthIndex={monthIndex}
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
             monthState={monthState}
@@ -319,15 +313,23 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
 }
 
 // Footer renders only when expanded.
-function MonthCardFooter({ monthSummary, hasHomestandSchedule, isFeeAccount, monthState }) {
+function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFeeAccount, monthState }) {
   if (!monthSummary) return null;
-  // Bundle 1 follow-up: off-season months never carry a footer figure -
-  // the body placeholder already says "Off-season" and the per-meal
-  // fall-through would have printed a misleading "0/0 entered $0".
-  // Defensive guard even though the wrapping branch already gates on
-  // !noService - keeps the footer safe if someone later renders the
-  // footer in an off-season alternative layout.
-  if (monthState === "off") return null;
+  // Off-season / no-game months carry the phase word at the bottom in
+  // place of a stats figure, so every card has a populated footer line
+  // (figures win whenever there are actuals; phase text fills the rest).
+  // MLB resolves to Off-season / Spring Training / Post Season by month;
+  // PDC + MiLB resolve to "Off-season".
+  if (monthState === "off") {
+    const phaseText = hasHomestandSchedule
+      ? (mlbMonthPhaseLabel(monthIndex) || "Off-season")
+      : "Off-season";
+    return (
+      <footer className="sc-season-month-card-footer">
+        <span className="sc-season-month-card-phasefoot">{phaseText}</span>
+      </footer>
+    );
+  }
   // Upcoming months fall through to the standard footer below - the
   // per-meal branch prints "0/X entered" + the projected $XK
   // (displayRev uses projectedRevenue when there are no actuals), the
