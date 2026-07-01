@@ -31,8 +31,7 @@
   margin: 0;
   border: none;
   border-top: var(--border-thin) solid var(--border-default);
-  border-bottom-left-radius: var(--radius-container-lg);
-  border-bottom-right-radius: var(--radius-container-lg);
+  border-radius: 0 0 var(--radius-container-lg) var(--radius-container-lg);
 }
 
 .sc-state-legend-title {

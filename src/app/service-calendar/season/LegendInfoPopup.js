@@ -110,7 +110,7 @@ export default function LegendInfoPopup({
                 <Row mod="upcoming" label="Scheduled game day">
                   An upcoming game on the homestand schedule.
                 </Row>
-                <Row mod="off" label="Prep / between games">
+                <Row mod="off" label="Non Game day">
                   Prep, open, close, or off-day between homestands.
                 </Row>
               </>
@@ -165,9 +165,6 @@ export default function LegendInfoPopup({
           </Section>
 
           <Section title="Calendar context">
-            <Row mod="off-season" label="Off-season" icon="—">
-              Outside the season window. Diagonal hatch separates this from a scheduled-but-upcoming day.
-            </Row>
             <Row mod="today" label="Today">
               Today's date carries a navy outer ring.
             </Row>
