@@ -53,7 +53,6 @@ export default function PeriodCard({
   const primaryPhase = phaseAssignment.primary
     ? CANONICAL_PHASES[phaseAssignment.primary]
     : null;
-  const straddles = phaseAssignment.secondary != null;
 
   const mlbPhaseLabel = hasHomestandSchedule ? mlbPeriodPhaseLabel(periodRange) : null;
 
@@ -92,19 +91,13 @@ export default function PeriodCard({
           <span className="sc-season-period-card-anchor">· {anchor}</span>
         </div>
         <div className="sc-season-period-card-subtitle">
-          {primaryPhase ? (
-            straddles
-              ? phaseAssignment.bothLabels.slice(0, 2).join(" -> ")
-              : primaryPhase.label
-          ) : mlbPhaseLabel ? (
-            <span className="sc-season-period-card-subtitle-phase">{mlbPhaseLabel}</span>
-          ) : homestandSubtitle ? (
+          {homestandSubtitle ? (
             <span className="sc-season-period-card-subtitle-hs">{homestandSubtitle}</span>
           ) : (
-            // No phase, no homestand activity - render NOTHING. The
-            // "PHASE PENDING" placeholder copy never appears (audit
-            // P2-3). A non-breaking space keeps the subtitle row's
-            // height stable so cards stay aligned.
+            // Phase words moved to the card's bottom slot (figures win
+            // whenever there are actuals). The top subtitle now only
+            // carries the MLB homestand line; otherwise a non-breaking
+            // space keeps the row height stable so cards stay aligned.
             <span aria-hidden="true">&nbsp;</span>
           )}
         </div>
@@ -147,7 +140,7 @@ export default function PeriodCard({
       </div>
 
       {isOffSeasonPeriod ? (
-        <div className="sc-season-period-card-noservice">Off-season</div>
+        <div className="sc-season-period-card-noservice">{mlbPhaseLabel || "Off-season"}</div>
       ) : (
         <PeriodCardFooter
           days={sortedDays}
