@@ -314,12 +314,13 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
 
 // Footer renders only when expanded.
 function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFeeAccount, monthState }) {
-  if (!monthSummary) return null;
-  // Off-season / no-game months carry the phase word at the bottom in
-  // place of a stats figure, so every card has a populated footer line
-  // (figures win whenever there are actuals; phase text fills the rest).
-  // MLB resolves to Off-season / Spring Training / Post Season by month;
-  // PDC + MiLB resolve to "Off-season".
+  // Off-state renders the phase word instead of a stats figure, so every
+  // card has a populated bottom line (figures win whenever there are
+  // actuals; phase text fills the rest). This runs BEFORE the monthSummary
+  // guard on purpose: off-season months are absent from the year-summary
+  // (monthSummary === null) yet still need their label. MLB resolves to
+  // Off-season / Spring Training / Post Season by month; PDC + MiLB to
+  // "Off-season".
   if (monthState === "off") {
     const phaseText = hasHomestandSchedule
       ? (mlbMonthPhaseLabel(monthIndex) || "Off-season")
@@ -330,6 +331,7 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
       </footer>
     );
   }
+  if (!monthSummary) return null;
   // Upcoming months fall through to the standard footer below - the
   // per-meal branch prints "0/X entered" + the projected $XK
   // (displayRev uses projectedRevenue when there are no actuals), the
