@@ -15,8 +15,8 @@
 | CIN-AZ | Camp Name column (Projections + Actuals identical) | CLEAN - zero gaps, zero typos |
 | TXR-AZ | Camp Name column (Projections only; Actuals tab lacks the column) | CLEAN macro phases; per-day game labels need normalization |
 | TBR-FL | Camp Name column (Projections clean; Actuals adds per-game noise) | Projections CLEAN; use Projections as canonical |
-| TBJ-FL | NOT recorded (column used for one-day event flags) | Infer + confirm |
-| STL-FL | NOT recorded ("Homestand" column, blank) | Infer + confirm |
+| TBJ-FL | Confirmed simple calendar (meal-signal + TBR-FL peer arc) | CONFIRMED - Kevin-approved 2026-07 |
+| STL-FL | Confirmed simple calendar (meal-signal + TBR-FL peer arc) | CONFIRMED - Kevin-approved 2026-07 |
 
 ---
 
@@ -74,11 +74,28 @@ Cleanest calendar of all 5. Projections tab is canonical (Actuals adds per-game-
 | 2026-10-12 | 2026-11-22 | 42 | Camps |
 | 2026-11-23 | 2026-12-20 | 28 | OFF |
 
-### TBJ-FL (Toronto Blue Jays, Dunedin FL - Florida Complex) - NOT recorded
+### TBJ-FL (Toronto Blue Jays, Dunedin FL - Florida Complex) - Confirmed simple
 The Camp Name column is mostly blank (146 consecutive blank days Feb 10 - Jul 5; 131 blank days Jul 15 - Nov 22). Used for one-day event flags only: "Early Camp" (Jan 26), "SPRING TRAINING" (Feb 9, all-caps, 1 day), "AllStar Break" (Jul 6), "Draft Dinner" (Jul 11), "New Drafted Players" (Jul 14), plus split-cell holiday annotations. Phases must be inferred + confirmed. From the meal-signal recon, TBJ runs a genuine early camp (Major League services active from ~Jan 12, the only PDC with January MLB activity), then Spring Training, then a summer plateau, then a fall taper.
 
-### STL-FL (St Louis Cardinals, Jupiter FL - Florida Complex, flat-fee) - NOT recorded
+### STL-FL (St Louis Cardinals, Jupiter FL - Florida Complex, flat-fee) - Confirmed simple
 The phase column is labeled "Homestand" and is entirely blank. Phases must be inferred + confirmed. Operationally PDC-shaped (follows the developmental arc) despite flat-fee billing. From the meal-signal recon: cold January, Spring Training Feb-Mar, drop into Extended in April, FCL plateau through summer (heavily noised by weekly Palm Beach Cardinals home/away rotation), fall taper.
+
+### Confirmed simple calendars - TBJ-FL + STL-FL (fiscal 2026, Kevin-approved)
+
+Neither account records phases in a usable column, so these are a CONFIRMED simple calendar, not a column read. Method: TBR-FL's arc as the FL-peer skeleton, keeping the three boundaries each account's own covers actually show, TBR-anchoring the silent stretches, and collapsing every split the data cannot back. Both accounts run the same arc (TBJ ~2x STL volume), so the blocks are identical.
+
+| start | end | camp name | basis |
+|---|---|---|---|
+| 2025-12-29 | 2026-01-04 | OFF | data (zero covers) |
+| 2026-01-05 | 2026-02-08 | Camps | TBR-peer |
+| 2026-02-09 | 2026-03-22 | ST | data (covers step + TBJ operator flag 2/9) |
+| 2026-03-23 | 2026-04-26 | Extended | TBR-peer |
+| 2026-04-27 | 2026-07-26 | FCL | TBR-peer |
+| 2026-07-27 | 2026-09-27 | Bridge | TBR-peer |
+| 2026-09-28 | 2026-11-22 | Camps | TBR-peer (collapsed TBR's Rehab+Camps fall split) |
+| 2026-11-23 | 2026-12-20 | OFF | data (TBJ operator flag "CLOSED FOR THANKSGIVING" 11/23) |
+
+Simplifications vs the raw draft: ST-end uses each account's own covers step (3/22), not TBR's 3/29; the fall Rehab+Camps split is collapsed to one Camps block; the Jan sub-camps (Battery/Fantasy/Early) are dropped to plain Camps. Known deviation: TBJ-FL shows two ~5-day windows of ~100 weekday covers in late Nov / early Dec that are folded into OFF here - revisit as a Staff/Rehab window if the tint should reflect that activity.
 
 ---
 
@@ -117,6 +134,6 @@ The complex (ACL vs FCL) is determined by the account's state: AZ accounts -> AC
 ## Open questions (Kevin / domain - for Stage 2 scoping)
 
 - Finalize the canonical phase vocabulary + the alias map.
-- Confirm TBJ-FL and STL-FL inferred phase drafts before recording.
+- RESOLVED (2026-07): TBJ-FL + STL-FL recorded with a Kevin-approved simple calendar (see above).
 - Decide whether the Extended -> Complex-League distinction (recorded for the 3 clean accounts) should be a hard boundary operators plan around, or a softer label.
 - Confirm the ACL/FCL-by-state rule holds for all current and future PDC accounts.

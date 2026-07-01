@@ -5,9 +5,11 @@
 // (phaseDerivation.js). It is purely declarative - no logic, no
 // React, no fetches. derivePhaseTimeline() reads it.
 //
-// Source of truth: docs/SC_PDC_PHASES.md (recorded for 3/5 PDCs from
-// the "Camp Name" column in the SC spreadsheets; not recorded for
-// TBJ-FL / STL-FL).
+// Source of truth: docs/SC_PDC_PHASES.md. 3/5 PDCs (CIN-AZ, TXR-AZ,
+// TBR-FL) recorded from the "Camp Name" column in the SC spreadsheets.
+// TBJ-FL / STL-FL carry a confirmed simple calendar inferred from the
+// meal-signal (TBR-FL peer arc + each account's own data-visible
+// boundaries), Kevin-approved 2026-07.
 //
 // When fiscal 2027 lands: add 2027 entries to the PER_ACCOUNT_2026
 // constant alongside (rename if helpful) or migrate to an
@@ -141,13 +143,39 @@ export const PER_ACCOUNT_2026 = {
     { start: "2026-11-23", end: "2026-12-20", recordedLabel: "OFF" },
   ],
 
-  // TBJ-FL and STL-FL: NOT recorded (SC_PDC_PHASES.md).
-  // Returning null here makes derivePhaseTimeline emit the
-  // "phase calendar pending confirmation" degraded state. Stage 3+
-  // could seed an inference draft for Kevin to confirm; not in scope
-  // for Stage 2.
-  "TBJ - FL": null,
-  "STL - FL": null,
+  // TBJ-FL and STL-FL: no clean recorded phase column (TBJ = one-day
+  // event flags only; STL = blank "Homestand" column). These blocks are
+  // a CONFIRMED simple calendar (Kevin-approved 2026-07): TBR-FL's arc as
+  // the FL-peer skeleton, with the three boundaries each account's own
+  // covers actually show - OFF year-ends; Camps->ST 2/9; ST->Extended 3/22
+  // (their own covers step, not TBR's 3/29); Camps->OFF 11/23. Internal
+  // Extended/FCL/Bridge dates are peer-anchored (data silent, esp. STL's
+  // 140/240 summer rotation). Invented sub-splits (Jan Battery/Fantasy/
+  // Early Camp; fall Rehab/Camps) collapsed to plain Camps. TBJ's
+  // ~100-cover late-Nov/early-Dec activity is folded into OFF for the
+  // simple pass (see SC_PDC_PHASES.md). Both accounts run the same arc;
+  // TBJ ~2x STL volume. FL -> FCL, never ACL.
+  "TBJ - FL": [
+    { start: "2025-12-29", end: "2026-01-04", recordedLabel: "OFF" },
+    { start: "2026-01-05", end: "2026-02-08", recordedLabel: "Camps" },
+    { start: "2026-02-09", end: "2026-03-22", recordedLabel: "ST" },
+    { start: "2026-03-23", end: "2026-04-26", recordedLabel: "Extended" },
+    { start: "2026-04-27", end: "2026-07-26", recordedLabel: "FCL" },
+    { start: "2026-07-27", end: "2026-09-27", recordedLabel: "Bridge" },
+    { start: "2026-09-28", end: "2026-11-22", recordedLabel: "Camps" },
+    { start: "2026-11-23", end: "2026-12-20", recordedLabel: "OFF" },
+  ],
+
+  "STL - FL": [
+    { start: "2025-12-29", end: "2026-01-04", recordedLabel: "OFF" },
+    { start: "2026-01-05", end: "2026-02-08", recordedLabel: "Camps" },
+    { start: "2026-02-09", end: "2026-03-22", recordedLabel: "ST" },
+    { start: "2026-03-23", end: "2026-04-26", recordedLabel: "Extended" },
+    { start: "2026-04-27", end: "2026-07-26", recordedLabel: "FCL" },
+    { start: "2026-07-27", end: "2026-09-27", recordedLabel: "Bridge" },
+    { start: "2026-09-28", end: "2026-11-22", recordedLabel: "Camps" },
+    { start: "2026-11-23", end: "2026-12-20", recordedLabel: "OFF" },
+  ],
 };
 
 // Resolve a recorded label to canonical phase key. Case-insensitive,
