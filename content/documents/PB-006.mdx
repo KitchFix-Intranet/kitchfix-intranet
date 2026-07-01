@@ -3,21 +3,386 @@ id: PB-006
 title: "Culinary OS Handbook"
 doc_class: PB
 shelf: "Culinary & Kitchen Operations"
-status: Placeholder
-version: null
-card_line: null
-summary: "Culinary OS Handbook. Awaiting delivery from Britt (Director of Culinary; ~90% built, not yet handed over). Closes the company-identity / Latin-cuisine gap and is the target of PB-001 section 03's culinary cross-reference. Placeholder catalog row so cross-references resolve while authoring completes."
+status: In Build
+version: "1.0"
+card_line: "Philosophy, principles, and operating standards for every KitchFix kitchen."
+summary: "The culinary operating system of KitchFix Performance Food Service. Three sections: Culinary Philosophy (Purpose, Promise, and the four culinary Principles - Remarkable, Authentic, Responsible, Inspiring), Culinary Overview (what the four Principles look like in the kitchen every day), and Culinary Defined (the company-wide operating standards, 3.1 through 3.15: cooking methods, sourcing, protein framework, ingredient principles, restricted/prohibited products, meal service, stations, action stations, Latin program, cultural programming, menu cycle and approval, quality control and tasting, allergens, sanitation, and branding). The framework is held company-wide; the SLA (PB-005) tunes the specifics per account. Allergens defer to the Allergen Playbook (PB-002); food safety to SOP-008. Culinary OS is the canonical home of the culinary_principles Fact."
+keywords:
+  - culinary
+  - operating system
+  - philosophy
+  - principles
+  - remarkable
+  - authentic
+  - responsible
+  - inspiring
+  - cooking methods
+  - sourcing
+  - protein framework
+  - menu cycle
+  - stations
+  - action stations
+  - Latin program
+  - allergens
+  - food safety
+  - quality control
+  - tasting
+  - SLA
+  - PB-006
 owner: "Director of Culinary"
 approver: "SLT + Director of Culinary"
 audience: operator
 classification: "KitchFix Internal"
 lang: en
-in_corpus: false
+in_corpus: true
 applies_to: company-wide
+review_interval_months: 12
+sort_order: 5
+relationships:
+  - { to: PB-014, type: references, from_section: "Culinary Philosophy (principles cascade from Culture OS)" }
+  - { to: PB-005, type: references, from_section: "Culinary Defined (the SLA tunes specifics per account)" }
+  - { to: PB-002, type: references, from_section: "3.13 Allergens (Allergen Playbook holds the working detail)" }
+  - { to: SOP-008, type: references, from_section: "3.14 Sanitation and Food Safety" }
 ---
 
-# Placeholder (catalog row only)
+*Philosophy, principles, and operating standards for every KitchFix kitchen.*
 
-Frontmatter-only stub for PB-006. Culinary OS Handbook awaiting delivery from Britt (~90% built). Closes the company-identity / Latin-cuisine gap and is the target of PB-001 section 03's culinary cross-reference.
+# Culinary Philosophy
 
-This document has no body content. The catalog row exists so cross-references resolve and the dependency graph stays complete. Excluded from the SousAI corpus.
+*Who we are as a culinary team. Purpose, Promise, Principles.*
+
+## Purpose
+
+*We fuel high-performance teams with food that respects where they come from, meets their everyday nutrition needs, and never feels like the same meal twice. We do it through chefs who care as much about the people they are feeding as the food they are cooking. The dining room is part of the performance environment, not a break from it.*
+
+## Promise
+
+We take the food and the people equally seriously. We cook authentically, because the people we feed come from somewhere. We fuel intentionally, because their performance depends on it. We hold standards in the kitchen and warmth in the dining room. We are present - on the line, in the dining room, and throughout the organization.
+
+> PROMISE: <Fact id="brand_promise" />. We don't choose between the three. We deliver all of them, or we haven't done our job.
+
+## Principles
+
+The four culinary principles are <Fact id="culinary_principles" />. We hold them in the kitchen, with the menu, on the line, and in the dining room every day.
+
+**Remarkable** - We cook food worth talking about. Remarkable is not a gimmick or a garnish - it is designed. Every menu is built to fuel the team we serve, and every dish is on the line because it earns its place. Good enough is forgettable. The goal is the remark: the player who tells a teammate about lunch, the client who brings a guest to the line. Partners who talk about us renew us, refer us, and grow us.
+
+**Authentic** - Authentic is the bar that separates KitchFix from generic contract food service. If we cook a cuisine, we cook it the way the people who built that cuisine would recognize it - ingredients, technique, presentation, and intent. Authenticity is also why players from every background feel at home in the dining room. An authentic dish starts with a kitchen culture where our chefs can be authentically themselves.
+
+**Responsible** - Every plate earns its place. Every ingredient is chosen for what it brings to the plate - nutritious, flavorful, authentic, and purposeful. Our chefs only send out dishes they would proudly eat themselves - flavor, presentation, and execution all matter. Nutrition, craveability, food safety, and budget stewardship are our responsibility, not the client's.
+
+**Inspiring** - We strive to be innovative in our field - staying ahead of trends and bringing cuisines, flavors, and ingredients to the clubhouse line that clients have not seen before. We surround ourselves with like-minded chefs who are willing to grow and who challenge and inspire each other to be better every day. We educate - not only our staff, but our peers and the guests we feed - making dining in our operation fun, memorable, and informative.
+
+# Culinary Overview
+
+*The four Principles, in the kitchen. What Remarkable, Authentic, Responsible, and Inspiring look like every day in our operations.*
+
+## Remarkable in the Kitchen
+
+### Give them something to talk about
+
+Tacos are a great example. Every team has seen a thousand taco bars - we're not here to do a thousand-and-one. We're here to make them wonder what we did differently this time: the thing that makes someone stop mid-bite, the detail they can't quite name but can't stop thinking about, the element that didn't have to be there but makes everything better. Built differently enough that they notice, familiar enough that they want it again. That's the standard, because remarkable isn't about show - it's about intention. Before anything goes on the line, the question is: *what does this give someone to talk about?* If the answer is nothing, we go back to the menu.
+
+### We know the team we serve
+
+We meet the players where they are. We understand the team's nutrition philosophy and performance goals. We act as a culinary partner with our client. We develop our menu and dishes to strengthen our partnership and contribute to the performance of our teams. Food lands as remarkable when it was clearly made for the people eating it.
+
+### Every menu is designed
+
+Menus are thoughtful, well-planned, communicated, and followed through - that's our commitment to the client. We are strategic in our menu development: lean protein cadence, carbohydrate rotation, vegetable variety, Latin presence, cultural rotations, action stations, salad bar and deli bar programs.
+
+### Remarkable is planned, not improvised
+
+The production plan is built before service, not improvised during it. Prep lists are written, par levels are set, station setups are mapped, and the team walks in knowing what each shift looks like before the line opens. Intention does not stop when the menu is approved - it continues through every pre-service, every service, and every order placed. The remark happens in the dining room, but it is earned in the prep list.
+
+## Authentic in the Kitchen
+
+### Authenticity is the recipe
+
+Authentic ingredients are sourced where available. Authentic techniques are adapted to our operation. Authentic plating respects the dish. If we cannot do a dish justice, we do not serve it - we respect the cuisine, learn the recipes, educate our palates, and earn the right to put it on the line.
+
+### Diversity in our menu
+
+Our chefs bring diverse backgrounds and knowledge of regional and international cuisines. We craft our menus to be inclusive and diverse and to fight food fatigue.
+
+### We foster an authentic kitchen
+
+Authenticity doesn't mean every dish traces back to a traditional recipe. It means we don't pretend - and it means we care. When players want the flavors they grew up with, we cook those and we cook them well. And where our team has roots, they cook those roots without apology. Our Latin cuisine is genuinely theirs: the techniques, the seasoning, the instinct that doesn't come from a recipe card. A cook who is respected for their background cooks that background with pride - and pride is what the player tastes. That love and care, the real kind, is what makes food authentic regardless of the recipe. Nothing performed, nothing scripted. Egos do not run our kitchens, and every voice on the line is heard - that is where the next authentic dish comes from.
+
+### Authenticity is a posture of respect
+
+We approach every cuisine with humility - we listen to the players who grew up eating it, we ask when something is not right, and we adjust from their feedback. A Dominican player who tells us the mangu is off is doing us a favor. We thank them and fix it.
+
+## Responsible in the Kitchen
+
+### Safety is built in
+
+Temperature logs, sanitizer concentration, three-compartment sink protocol, holding times, allergen storage, and daily sanitation are part of every shift. Every salaried leader holds a ServSafe Food Manager and Allergens Certificate. Every cook holds a ServSafe Food Handlers and Allergens Certificate. Certifications are kept current and on file; the full food-safety standard lives in Food Safety Management (SOP-008). This is the promise we make to every client: a kitchen where every person holding a knife is trained, certified, and accountable for the safety of the team they're feeding.
+
+### Allergens are non-negotiable
+
+The KitchFix Allergen Playbook (PB-002) applies in full at every account. Top 9 allergens are tracked and labeled at every meal period in English and Spanish. The Operations Team is kept aware of all allergens in house at each account, so leadership has visibility into what the team is actively managing. No peanuts or tree nuts on the open buffet. No claims of allergen-free meals or stations, ever. Severe-allergy accommodation is a Chef-level decision in partnership with the dietitian.
+
+### Nutrition leads the menu
+
+The dietitian sets the program; we execute it. Lean proteins lead. Vegetables are present at every meal. Whole grains anchor the carbohydrate program. Heavier and richer proteins appear where the meal period calls for them. Fried, par-fried, and pre-breaded items are restricted. Our job is not to interpret nutrition for the player - it's to deliver the program in partnership with the dietitian with food the player actually wants to eat.
+
+### We steward the budget
+
+Under the fee model, the client owns the food cost, and we manage it on their behalf. Under full-service, KitchFix owns it outright. Either way, we treat every dollar of food spent as if it were ours - order to par, manage waste, rotate stock, source smart, and never approve spending the client would not approve.
+
+## Inspiring in the Kitchen
+
+### Inspiration through innovation
+
+We inspire ourselves to bring new cuisines, new flavors, new ingredients, and new techniques to our kitchens and dining rooms. Chef tastings, culinary tours on the line, action stations as moments of engagement. Innovation is collaborative; anyone at KitchFix can be an innovator.
+
+### We lead by example
+
+Every culinary leader walks the line. We taste. We plate. We coach in the moment. Standards are held by demonstrating them, not lecturing them. A line cook learns the bar by watching the chef set it every day. Leading by example also means staying teachable - a younger cook may know something we do not, and the line is a place for ideas to surface from anywhere.
+
+### We educate
+
+Education runs in every direction in our kitchens. Cooks pick up new cuisines from the chefs they work alongside, sous chefs grow into leaders by mentoring the cooks behind them, and every site visit is treated as an exchange - the field learns from the visit, and the visit learns from the field. When invited, we share what we know with the players too. A dish is more memorable when there is something to learn about it.
+
+### The culture in the kitchen
+
+The culture our guests feel in the dining room is built in the kitchen first. Our kitchens run on respect, not volume - egos do not run our lines. We coach in the moment, recognize the work out loud, and correct privately. A cook who is treated well cooks like it. The energy on the line ends up on the plate, and the player can taste the difference.
+
+# Culinary Defined
+
+*The operating standards every KitchFix kitchen holds. The framework the SLA tunes per account.*
+
+> ANCHOR: From principles to practice. This section is where the values land as standards. Every operating bar below is held company-wide. The SLA (PB-005) tunes the specifics per account.
+
+## 3.1 Cooking Methods
+
+We cook with technique that respects the ingredients and serves the client. These cooking methods are our standard unless otherwise specified by the SLA.
+
+### Approved cooking methods
+
+- **Grilling** - default for proteins where char and color contribute to the dish.
+- **Baking** - default for batch protein execution and final fire.
+- **Roasting** - used for proteins, vegetables, and starches that benefit from caramelization.
+- **Broiling** - top-heat finish for proteins, fish, and gratin applications.
+- **Pan-searing** - high-heat with minimal oil. Used for proteins where surface texture matters.
+- **Sauteing** - minimal oil, high heat, short duration. Default for vegetables and quick proteins.
+- **Steaming** - used for delicate vegetables, fish, and specific cultural preparations.
+- **Braising and stewing** - low and slow. Default for tougher cuts and Latin protein preparations.
+- **Poaching** - used for eggs, fish, and chicken where moisture retention is the goal.
+- **Par-frying** - with approved oils, must be baked to finish and must be approved in the SLA.
+
+### Prohibited cooking methods
+
+- **Deep frying.**
+- **Microwaves** - microwaves can be provided to the club for players to reheat their food only.
+
+## 3.2 Sourcing
+
+Whole, minimally processed ingredients are the default at every account. Highly processed foods are restricted on the open buffet; pre-packaged exceptions in grab-and-go are deliberate and documented per SLA.
+
+### Intentional sourcing
+
+Every ingredient enters our kitchens with intention. Nothing is on the order because it has always been on the order - every product earns its place by what it brings to the plate: nutrition, flavor, authenticity, and purpose. We know where our ingredients come from, why we chose them, and what they do for the team we feed. When a cheaper or easier product would compromise that, we do not buy it. Sourcing high-quality, affordable, and unique ingredients is a challenge we commit to each day.
+
+### Standards we hold to
+
+- **Wild-caught fish** - where available within the account's budget per the SLA.
+- **Free-range poultry and pork** - where available within the account's budget per the SLA.
+- **Beef** - focus on lean cuts; source grass-fed where available within the account's budget per the SLA.
+- **Seasonal and local produce** - menu seasonal and local produce as the standard.
+- **Organic** - when available and within the budget per the SLA.
+- **Commercial or domestic grade** - defined per site-level SLA.
+
+### Preferred vendors
+
+Every Site Leader maintains a vendor list of approved suppliers. Every site is required to source from reputable Meat, Seafood, Broadline, and Bakery vendors. Specialty vendors are okay with approval.
+
+## 3.3 Protein Framework
+
+Proteins are organized in three tiers. Exact products per account live in the SLA.
+
+- **Lean** - the primary protein direction at every meal period. Skinless chicken breast, turkey, white-fleshed fish, lean cuts of beef (flank, ground, teres major, sirloin) and pork (tenderloin). Lean leads the menu.
+- **Heavy** - heavier cuts are reserved primarily for arrival or post-game (dinner). Chicken thighs, brisket, short rib, sausages, pork shoulder.
+- **High-end** - based on budget and client requirements outlined in the SLA, traditionally reserved for post-game. Beef tenderloin, ribeye, striploin, sea bass, halibut.
+
+### Cadence principles
+
+- **Lean proteins** - present at every meal period.
+- **Cured and processed meats** - cadence controlled by account per SLA.
+- **Heavy and high-end proteins** - based on budget and client requirements outlined in the SLA.
+
+## 3.4 Ingredient Principles
+
+### Grains and starches
+
+We work across the full carbohydrate library. Breads range from whole grain through gluten-free. Rice runs white through brown, basmati, jasmine, sushi, and arborio. Pasta covers regular, whole grain, couscous, chickpea, and gluten-free. Potatoes, sweet potatoes, plantains, yuca, and other tubers carry the same weight as grains and lead in many cuisines. The cuisine and the meal period decide which carbohydrate is on the line.
+
+### Dairy
+
+Whole, skim, chocolate, and non-dairy alternatives (almond, oat, coconut) are part of the dairy offerings defined in the SLA. Greek yogurt, cream cheese, sour cream, half-and-half, non-dairy creamers, and butter round out the library. Fresh (mozzarella, ricotta, queso fresco, cotija, feta, halloumi), aged (parmesan, manchego, gruyère, aged cheddar), and culturally specific cheeses sit in the library, chosen by what the dish actually calls for. We avoid highly processed cheeses such as American slices, jar sauces, and pre-melted blends (unless permitted).
+
+### Vegetables and fruit
+
+Variety is the operating principle. Vegetables run across categories - leafy, cruciferous, root, allium, nightshades, squashes, and seasonal - and across preparations - roasted, grilled, sautéed, charred, raw, and pickled - so the same vegetable rarely lands the same way twice in a week. Fruit covers tropical, stone, citrus, berry, and melon, whole and fresh-cut, with a focus on seasonality for the best product. The salad bar standard consists of leafy greens, fresh-cut produce, assorted toppings, and dressings (specifics per SLA). Pre-game service skews away from cruciferous and chili-heavy preparations for digestive comfort.
+
+### Approved fats and oils
+
+- **Avocado oil** - preferred for high-heat applications.
+- **Extra virgin olive oil** - preferred for finishing, salad bar, and low-heat applications.
+- **Olive oil** - for medium-heat applications.
+- **Sesame oil** - for finishing in Asian applications.
+- **Butter** - used sparingly. Permitted for finishing, baked goods, and where the dish requires it.
+- **Beef tallow** - used for par-frying only when the SLA approves.
+- **Specialty fats and oils** - such as truffle oil, coconut oil, and ghee, used when applicable. Allergens must always be identified.
+
+## 3.5 Restricted and Prohibited Products
+
+Restricted items must be clarified in the SLA for use. Prohibited products are never to be used in our operations.
+
+### Restricted products
+
+- **Pre-breaded items** - we do not serve items that arrive pre-breaded. Freshly breaded and baked items are permitted per the SLA.
+- **Frozen prepared items** - frozen finished products are not used as a primary protein, starch, or vegetable application.
+- **Iceberg lettuce** - spinach, chopped romaine, kale, arugula, and spring mix are the approved standalone greens. Iceberg can be used for specific dishes with approval.
+- **Highly processed snacks on the open line** - pre-packaged grab-and-go exceptions are documented per SLA.
+- **Peanuts and tree nuts** - restricted to individually contained and labeled toppings or single-use packaging (smoothies, bites, PB&J).
+- **Soy sauce** - approved as a retail bottle on the sauce station, or within pre-made sauces with transparent allergen labeling.
+
+### Prohibited products
+
+- **Seed oils** - grapeseed, canola, sunflower, soy, and any blends are prohibited.
+- **Nut oils** - peanut and tree nut oils are strictly prohibited.
+- **Peanuts and tree nuts** - as an ingredient on the buffet line.
+- **Soy sauce** - as an ingredient for buffet production. Use tamari or coconut aminos.
+
+## 3.6 Meal Service Framework
+
+We serve to fuel the client. The framework is built around cooked protein, carbohydrate, and vegetable portions calibrated to meal period and meal type specified by the SLA.
+
+- **Breakfast** - includes eggs, breakfast proteins, starches (potatoes, pancakes, waffles, and the like), specialties (handhelds), a Latin option, fruits, yogurts, and oatmeal. Additional items per SLA.
+- **Lunch (arrival)** - a meal-sized portion of cooked protein, carbohydrate, and vegetable per person. Additional items per SLA.
+- **Pre-game** - a focused, lighter portion that fuels game-time without overloading. Includes handhelds for on-the-go moments. Additional items per SLA.
+- **Dinner** - a heavy-focused meal that can include fattier or richer items, while still offering a variety of protein, starch, and vegetables. Additional items per SLA.
+- **Mini meal** - a protein-forward snack that would not qualify as a full balanced meal but provides fuel between meal and game times.
+
+## 3.7 Station Program
+
+Every KitchFix dining room runs a station program built around the same components. The composition of each station and any additional specialty stations are documented in the SLA per account.
+
+### Core stations every kitchen runs
+
+- **Hot line** - buffet line that offers meals specified per the standard meal service framework.
+- **Oatmeal bar** - oatmeal with the standard topping suite (light brown sugar, assorted dried fruit and nuts).
+- **Salad bar** - build-your-own with romaine and one additional leafy green, the standard veggie suite, protein toppings, seeds, nut toppings, and dressings per the SLA.
+- **Sandwich and deli bar** - whole grain and sourdough breads, assorted deli meats, multiple cheese options, fresh vegetables, and approved house sauces on the side.
+- **Always Available** - a stocked grab-and-go program available all day. Options include yogurt parfaits, hard-boiled eggs, avocado halves, sandwiches and wraps, salads, whole fruit, and snackables.
+- **Beverage program** - coffee, hot tea, milk, and juice. Bottled beverages, sports drinks, and specialty beverages are specified in the SLA.
+
+### Specialty stations - activated where the SLA scopes them
+
+- Omelet station and made-to-order breakfast.
+- Made-to-order lunch, standard at MLB Clubhouse.
+- Pizza station with scratch-made dough.
+- Smoothie station.
+- Acai bar.
+- Juice and shot bar.
+- Snackie or appetizer station.
+- Action stations.
+- Snack and beverage stations.
+
+## 3.8 Action Stations
+
+Action stations bring craft to the dining room as a moment, not just a menu item. A KitchFix chef prepares a specialty dish in front of the player. Every action station is chef-driven, themed, approved through the menu workflow, and intentional. Cadence is set per SLA. Engagement is the point: the interaction between the chef and the player is the value of the station, not the menu item alone.
+
+## 3.9 Latin Program
+
+Latin cooking is present throughout the day. We replicate Latin dishes faithfully, per our commitment to authenticity.
+
+## 3.10 Cultural, Religious, and Special Programming
+
+### Cultural and religious accommodations
+
+Halal, Kosher, Hindu vegetarian, and other religious dietary needs are accommodated case by case through the dietitian and Chef, to the best of our abilities and within the scope of the facility and operation.
+
+### Food holidays, special events, and themed days
+
+Food holidays, special events, cultural observances, and themed days (such as Taco Tuesday) are planned when relevant. All non-standard menus go through the approval workflow and per client requests via the SLA.
+
+### One-offs and catering events outside daily scope
+
+Events outside the standard scope of service are scoped and approved separately from the SLA. This is a conversation and agreement between the client, Site Leader, and corporate team.
+
+## 3.11 Menu Cycle and Approval
+
+### Standard approval process
+
+Every menu cycle at every account passes through the same approval workflow before service:
+
+- Site Leader builds the menu for review.
+- Director of Culinary reviews based on location (new chef, client opportunities, specific client requests).
+- Site Leader adjusts from feedback and submits to client.
+- Client gives feedback and/or approves.
+
+### Cycle structure by contract type
+
+- **PDC accounts** - four-to-six-week rotating cycle (per location), refreshed seasonally to align with Spring Training, Extended ST, FCL, and Instructional League calendars.
+- **MLB Clubhouse accounts** - series-based cycle. One approved menu document per home series, with one tab per game day named by date.
+- **Visiting clubhouses** - series-based menus per the client's catering requests.
+
+### Lead time
+
+Lead time, revision turnaround, and final lock cadence are set per SLA. PDC menus run on a two-week lead; MLB Clubhouse menus run on a seven-day lead with a forty-eight-hour final lock. Substitutions for product quality or availability are documented same-day and communicated to the dietitian.
+
+## 3.12 Quality Control and Tasting
+
+### Daily tasting standard
+
+Every hot line dish is personally tasted by the Site Leader or Sous Chef before service starts. Every sauce, every soup, every protein, every starch is tasted, adjusted if needed, and signed off before service. Tasting is the last quality control before food meets the player.
+
+### Plating and presentation standard
+
+- **Portion accuracy** - the cook holds the portion to the SLA-specified spec.
+- **Presentation** - every dish is presented to a standard the chef would put their name on.
+- **Hot food hot, cold food cold** - temperatures verified.
+- **Line stocking** - the line stays stocked through service.
+
+### Pre-service line check
+
+- Line check by Site Leader or Sous Chef before service starts.
+- Allergen labels verified against the menu.
+- Hot line ready 15 minutes before service starts. Cold line and salad bar ready 30 minutes before.
+- Cleanliness of dining room, buffet lines, and stations verified by the Site Leader or Sous Chef before the first guest arrives.
+
+### During-service line maintenance
+
+The line should look as appealing for the last guest as it did for the first.
+
+- Pans stay clean, full, and garnished throughout service.
+- Food that dries out or loses its sheen is refreshed with water or stock, replated, or swapped for a fresh pan.
+- The last guest served never receives the worst of the batch.
+
+## 3.13 Allergens
+
+Adherence to the KitchFix Allergen Playbook (PB-002) is the company-wide standard and applies in full at every account. PB-002 holds the working detail.
+
+### Standing positions
+
+- **Top 9 allergens** - milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soybeans, and sesame are tracked and labeled at every meal period in English and Spanish. Labeling is complete before any food enters the line.
+- **No allergen-free meals or stations** - we do not represent any meal or station as allergen-free, ever. Severe allergy accommodation is handled case by case at the Chef level through the dietitian.
+- **Peanut and tree nut standard** - no peanuts or tree nuts on the open buffet. Only individually-packaged exceptions are permitted, with clear labeling per the Playbook.
+- **Vendor substitution** - substitutions are evaluated against the original product's allergen profile before service. New Top 9 allergens require dietitian notification.
+- **Storage** - segregated storage, dedicated utensils, and color-coded handling per the Playbook.
+- **No account-level overrides** - unless documented in the SLA with rationale, approval trail, and Director of Culinary sign-off.
+
+### Severe allergy and emergency response
+
+Players, coaches, or staff with severe allergies are flagged to KitchFix in advance by the team dietitian. Accommodation plans are built per individual through the Chef and dietitian. For anaphylaxis response, team medical staff is the primary responder. The KitchFix Site Leader is notified immediately, food preparation in the affected area is paused, and 911 is contacted by team medical staff. KitchFix supports the investigation by preserving food samples, ingredient lists, and prep records as requested.
+
+## 3.14 Sanitation and Food Safety
+
+Adherence to the food safety and sanitation requirements is followed at all times. The full standard lives in Food Safety Management (SOP-008).
+
+## 3.15 Branding and Information
+
+Brand-compliant signage in the dining area follows KitchFix and client branding per the KitchFix Brand Standards (forthcoming).
