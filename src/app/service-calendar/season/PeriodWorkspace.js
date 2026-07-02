@@ -38,7 +38,7 @@ import {
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import StateLegend from "./StateLegend";
-import { ChevronLeft, ChevronRight } from "../Icons";
+import { ChevronLeft, ChevronRight, CheckCircle } from "../Icons";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -236,16 +236,15 @@ export default function PeriodWorkspace({
         isFeeAccount={isFeeAccount}
         periodRange={periodRange}
         today={today}
+        todaySlot={isCurrentPeriod && todayDay ? (
+          <TodayRail
+            day={todayDay}
+            kind={kind}
+            homestandMap={homestandMap}
+            onEnterActuals={() => onDayClick?.(todayDay.date)}
+          />
+        ) : null}
       />
-
-      {isCurrentPeriod && todayDay && (
-        <TodayHero
-          day={todayDay}
-          kind={kind}
-          homestandMap={homestandMap}
-          onEnterActuals={() => onDayClick?.(todayDay.date)}
-        />
-      )}
 
       <BulkAffordance
         bulkMode={bulkMode}
@@ -362,7 +361,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
 // period is entirely future / unstarted (no entered days AND today
 // is before the period's start date), render a calm "Upcoming"
 // frame instead of the punitive "0 / 28" with an empty bar.
-function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today }) {
+function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today, todaySlot }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
   const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)";
 
@@ -408,6 +407,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
           </div>
         </div>
         <ProgressLine pct={completionPct} color={progressColor} />
+        {todaySlot}
       </section>
     );
   }
@@ -438,6 +438,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
           )}
         </div>
         <ProgressLine pct={completionPct} color={progressColor} />
+        {todaySlot}
       </section>
     );
   }
@@ -475,6 +476,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
         </div>
         <ProgressLine pct={completionPct} color={progressColor} />
       </div>
+      {todaySlot}
     </section>
   );
 }
@@ -490,20 +492,28 @@ function ProgressLine({ pct, color }) {
   );
 }
 
-// ─── Today hero ──────────────────────────────────────────────────
-// Spec 5.4: prominent card for the 6am floor user. Only renders on
-// the current period AND when today's day record is unentered (needs
-// entry / overdue / future / no-service). For already-entered today,
-// a quieter "Today entered" badge replaces the action card.
-function TodayHero({ day, kind, homestandMap, onEnterActuals }) {
+// ─── Today rail ──────────────────────────────────────────────────
+// Spec 5.4 (PR 2 restructure): the today action folds into the
+// financial frame as a single-row rail under a hairline divider,
+// replacing the standalone hero card. Only renders on the current
+// period AND when today's day record is unentered (needs entry /
+// overdue / future / no-service). For already-entered today, a
+// quieter row (TODAY flag + "{dateLabel} entered" + check glyph,
+// no CTA) sits in the same slot.
+function TodayRail({ day, kind, homestandMap, onEnterActuals }) {
   const dateLabel = formatHumanDate(day.date);
   const needsAction = !day.hasActuals && day.status !== "off-season";
 
   if (!needsAction) {
     return (
-      <div className="sc-workspace-today-pill">
-        <span className="sc-workspace-today-pill-flag">TODAY</span>
-        <span className="sc-workspace-today-pill-text">{dateLabel} entered</span>
+      <div className="sc-workspace-frame-today" aria-label="Today">
+        <div className="sc-workspace-frame-today-info">
+          <span className="sc-workspace-frame-today-flag">TODAY</span>
+          <span className="sc-workspace-frame-today-done">
+            <CheckCircle size="sm" />
+            {dateLabel} entered
+          </span>
+        </div>
       </div>
     );
   }
@@ -535,23 +545,23 @@ function TodayHero({ day, kind, homestandMap, onEnterActuals }) {
                    : null;
 
   return (
-    <section className="sc-workspace-today-hero" aria-label="Today">
-      <div className="sc-workspace-today-hero-eyebrow">
-        <span className="sc-workspace-today-hero-flag">TODAY</span>
+    <div className="sc-workspace-frame-today" aria-label="Today">
+      <div className="sc-workspace-frame-today-info">
+        <span className="sc-workspace-frame-today-flag">TODAY</span>
         {statusWord && (
-          <span className="sc-workspace-today-hero-status">{statusWord}</span>
+          <span className="sc-workspace-frame-today-status">{statusWord}</span>
         )}
+        <span className="sc-workspace-frame-today-date">{dateLabel}</span>
+        {projection && <span>{projection}</span>}
       </div>
-      <div className="sc-workspace-today-hero-date">{dateLabel}</div>
-      {projection && <div className="sc-workspace-today-hero-projection">{projection}</div>}
       <button
         type="button"
-        className="sc-workspace-today-hero-cta"
+        className="sc-workspace-frame-today-cta"
         onClick={onEnterActuals}
       >
         Enter actuals
       </button>
-    </section>
+    </div>
   );
 }
 

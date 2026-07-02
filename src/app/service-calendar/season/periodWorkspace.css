@@ -337,23 +337,33 @@
   flex: 1 0 100%;
 }
 
-/* ───────── TODAY HERO + PILL ───────── */
-.sc-workspace-today-hero {
-  background: linear-gradient(180deg, var(--surface-card) 0%, var(--surface-sunken) 100%);
-  border: var(--border-thin) solid var(--status-off-bd);
-  border-radius: var(--radius-container-lg);
-  padding: var(--space-4) var(--space-5);
+/* ───────── TODAY RAIL (folded into the frame, replaces the standalone hero card) ───────── */
+.sc-workspace-frame-today {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-thin) solid var(--border-subtle);
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
-.sc-workspace-today-hero-eyebrow {
+/* In the row-layout variants the rail must break to its own full-width line,
+   mirroring how the progress bar is forced full width there. */
+.sc-workspace-frame--fee .sc-workspace-frame-today,
+.sc-workspace-frame--operational .sc-workspace-frame-today {
+  flex: 1 0 100%;
+}
+.sc-workspace-frame-today-info {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--size-body);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
 }
-.sc-workspace-today-hero-flag {
+.sc-workspace-frame-today-flag {
   font-size: var(--size-micro);
   font-weight: var(--wt-display);
   letter-spacing: 0.08em;
@@ -362,26 +372,23 @@
   padding: 2px var(--space-2);
   border-radius: var(--radius-cell);
 }
-.sc-workspace-today-hero-status {
+.sc-workspace-frame-today-status {
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--accent-text);
 }
-.sc-workspace-today-hero-date {
-  font-size: var(--size-h3);
-  font-weight: var(--wt-display);
-  color: var(--text-heading);
-  letter-spacing: -0.01em;
+.sc-workspace-frame-today-date { font-weight: var(--wt-bold); color: var(--text-heading); }
+.sc-workspace-frame-today-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-caption);
+  color: var(--accent-sc-dark);
+  font-weight: var(--wt-semibold);
 }
-.sc-workspace-today-hero-projection {
-  font-size: var(--size-body);
-  color: var(--text-default);
-  font-variant-numeric: var(--num-tabular);
-}
-.sc-workspace-today-hero-cta {
-  margin-top: 6px;
+.sc-workspace-frame-today-cta {
   padding: var(--space-2) 18px;
   font-family: inherit;
   font-size: var(--size-body);
@@ -393,37 +400,13 @@
   cursor: pointer;
   transition: background var(--motion-control);
 }
-@media (prefers-reduced-motion: reduce) {
-  .sc-workspace-today-hero-cta { transition: none; }
-}
-.sc-workspace-today-hero-cta:hover { background: var(--accent-sc-dark); }
-.sc-workspace-today-hero-cta:focus-visible {
+.sc-workspace-frame-today-cta:hover { background: var(--accent-sc-dark); }
+.sc-workspace-frame-today-cta:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
-
-/* Today-already-entered: a calm pill, not the action hero. */
-.sc-workspace-today-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  align-self: flex-start;
-  padding: 6px var(--space-3);
-  background: var(--accent-sc-subtle);
-  border: var(--border-thin) solid var(--status-entered-subtle);
-  border-radius: var(--radius-pill);
-  font-size: var(--size-caption);
-  color: var(--accent-sc-dark);
-  font-weight: var(--wt-semibold);
-}
-.sc-workspace-today-pill-flag {
-  font-size: 9px;
-  font-weight: var(--wt-display);
-  letter-spacing: 0.08em;
-  color: var(--surface-card);
-  background: var(--status-today-ring);
-  padding: 1px 6px;
-  border-radius: var(--radius-cell);
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-frame-today-cta { transition: none; }
 }
 
 /* ───────── BULK AFFORDANCE ───────── */
@@ -722,9 +705,9 @@
   .sc-workspace-frame--fee,
   .sc-workspace-frame--operational { gap: var(--space-4); }
 
-  /* Today hero - tap target on the CTA at floor-spec */
-  .sc-workspace-today-hero { padding: 14px var(--space-4); }
-  .sc-workspace-today-hero-cta { padding: var(--space-3) var(--space-5); min-height: 48px; font-size: var(--size-body); }
+  /* Today rail - tap target on the CTA at floor-spec */
+  .sc-workspace-frame-today { gap: var(--space-2); }
+  .sc-workspace-frame-today-cta { min-height: 48px; padding: var(--space-3) var(--space-5); }
 
   /* Bulk affordance - 48px+ tap targets */
   .sc-workspace-bulk-rest-btn { padding: var(--space-3) var(--space-4); min-height: 48px; font-size: var(--size-body); }
