@@ -358,7 +358,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     <div className="sc-day">
       <div className="sc-day-header">
         <div className="sc-day-header-titles">
-          <h3 className="sc-day-title">{formatDate(day.date)}</h3>
+          <h3 className="sc-day-title" id="sc-day-detail-title">{formatDate(day.date)}</h3>
           {accountName && <div className="sc-day-account">{accountName}</div>}
         </div>
         <div className="sc-day-nav">
