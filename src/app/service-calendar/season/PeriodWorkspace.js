@@ -208,13 +208,6 @@ export default function PeriodWorkspace({
         phaseTint={phasePrimaryMeta}
       />
 
-      <StateLegend
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        isMilb={isMilb}
-        showDayNight={true}
-      />
-
       <header className="sc-workspace-header">
         <div className="sc-workspace-title">
           <span className="sc-workspace-title-period">Period {periodNum}</span>
@@ -282,6 +275,13 @@ export default function PeriodWorkspace({
         kind={kind}
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
+      />
+
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+        showDayNight={true}
       />
     </div>
   );
