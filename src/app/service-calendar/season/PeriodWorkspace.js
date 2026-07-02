@@ -201,6 +201,8 @@ export default function PeriodWorkspace({
         onTodayJump={onTodayJump}
         canPrev={canPrev}
         canNext={canNext}
+        periodNum={periodNum}
+        phaseLabel={phasePrimaryLabel}
       />
 
       <StateLegend
