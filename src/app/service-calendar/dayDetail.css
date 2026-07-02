@@ -42,6 +42,15 @@
 
 /* Coaching banner */
 .sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid; flex-shrink: 0; }
+/* Coaching-banner tone modifiers - the base rule leaves border-bottom
+   colorless; each modifier supplies bg + border-color + fg from the
+   status family (neutral falls back to surface-sunken / border-default
+   / text-muted). Replaces 12 inline-hex tuples that used to live in
+   DayDetail.js and ServiceCalendar.js. */
+.sc-day-coaching--neutral { background: var(--surface-sunken); border-color: var(--border-default); color: var(--text-muted); }
+.sc-day-coaching--entered { background: var(--status-entered-bg); border-color: var(--status-entered-bd); color: var(--status-entered-fg); }
+.sc-day-coaching--needs   { background: var(--status-needs-bg);   border-color: var(--status-needs-bd);   color: var(--status-needs-fg); }
+.sc-day-coaching--overdue { background: var(--status-overdue-bg); border-color: var(--status-overdue-bd); color: var(--status-overdue-fg); }
 
 /* Overdue (legacy) */
 .sc-day-overdue { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); background: var(--status-overdue-subtle); color: var(--feedback-danger); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid var(--status-overdue-bd); flex-shrink: 0; }
