@@ -5,6 +5,7 @@ import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
 import "@/app/ops/css/ops-shared.css";
 import "./ops-sc.css";
+import "./dayDetail.css";
 
 // Page-level gate. Currently identical to SC_ADMINS - only the two
 // listed emails see the live tool; everyone else gets the Coming Soon
