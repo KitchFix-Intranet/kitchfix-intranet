@@ -25,7 +25,7 @@
 .sc-day-nav-btn { width: 32px; height: 32px; border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-size: var(--size-h3); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-family: inherit; transition: border-color var(--motion-control), color var(--motion-control); }
 .sc-day-nav-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc); }
 .sc-day-nav-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-nav-label { font-size: var(--size-caption); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
@@ -36,7 +36,7 @@
 .sc-day-close { width: 32px; height: 32px; border: var(--border-thin) solid transparent; border-radius: var(--radius-control); background: transparent; cursor: pointer; color: var(--text-subtle); display: flex; align-items: center; justify-content: center; transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control); margin-left: var(--space-1); }
 .sc-day-close:hover { border-color: var(--status-overdue-bd); color: var(--feedback-danger); background: var(--status-overdue-subtle); }
 .sc-day-close:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -222,7 +222,7 @@
 }
 .sc-day-match-btn:hover { background: var(--accent-sc-subtle); border-color: var(--accent-sc); }
 .sc-day-match-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -234,7 +234,7 @@
 }
 .sc-day-extras-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc-dark); background: var(--accent-sc-tint); }
 .sc-day-extras-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--border-default); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: var(--size-body); font-weight: var(--wt-semibold); flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control); }
@@ -247,7 +247,7 @@
 }
 .sc-day-extras-hide:hover { border-color: var(--text-subtle); color: var(--text-default); }
 .sc-day-extras-hide:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-extras-hide .sc-day-extras-btn-icon { background: var(--border-default); color: var(--text-muted); }
@@ -265,7 +265,7 @@
 }
 .sc-day-collapsed-btn:hover { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--accent-sc); }
 .sc-day-collapsed-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-collapsed-icon { font-size: var(--size-subhead); font-weight: var(--wt-semibold); }
@@ -275,7 +275,7 @@
 .sc-day-notes-label { display: block; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--track-caps); margin-bottom: 6px; }
 .sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); font-size: var(--size-body); font-family: inherit; color: var(--text-default); background: var(--surface-card); resize: vertical; min-height: 44px; transition: border-color var(--motion-control); }
 .sc-day-notes-input:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
   border-color: var(--accent-sc);
 }

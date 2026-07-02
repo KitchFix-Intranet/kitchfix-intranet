@@ -182,7 +182,7 @@
 }
 .sc-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .sc-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-btn--primary {
@@ -256,7 +256,7 @@
   box-shadow: var(--elevation-raised);
 }
 .sc-admin-overview-back:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 

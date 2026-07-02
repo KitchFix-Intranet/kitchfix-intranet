@@ -9,13 +9,15 @@ that is its own explicit conversation with Kevin.
 - Workspace page surface (--surface-sunken vs --surface-page)
 - Panel radius (--radius-container-lg 14 vs --radius-container 10)
 - Money green (one of: --text-success / --accent-sc / --accent-sc-dark)
-- Focus ring color (--focus-ring-color navy vs --accent-sc green; the overview ships green;
-  #317 merged shipping navy - a follow-up PR is queued to settle this as green, see HANDOFF_CHAT 7.2)
 - Primary-action color rule (commit vs view-toggle)
 - Progress-bar grammar (--accent-sc identity vs --status-entered status)
 
 ## Decided
-(none yet)
+- **Focus ring color = `var(--accent-sc)` (green) on every SC surface.** Decided 2026-07-02.
+  The overview already shipped green rings; #317 landed the drill-in's rings as navy
+  `--focus-ring-color`; this follow-up swapped all 16 SC occurrences (dayDetail.css x7,
+  periodWorkspace.css x6, ops-sc.css x2, admin/ops-sc-admin.css x1) to `--accent-sc`.
+  The app-wide `--focus-ring-color` token itself is unchanged (navy, non-SC surfaces).
 
 ## Per-section log
 (sections appended as they complete: date · section · decisions · PR #)

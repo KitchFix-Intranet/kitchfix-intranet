@@ -139,7 +139,7 @@
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
 }
 .sc-admin-back:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 
