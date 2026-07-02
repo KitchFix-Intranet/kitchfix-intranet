@@ -143,10 +143,8 @@
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent-text);
-  background: var(--status-needs-subtle);
   padding: 3px var(--space-2);
-  border-radius: var(--radius-container-lg);
+  border-radius: var(--radius-pill);
 }
 .sc-workspace-range {
   font-size: var(--size-body);
@@ -159,8 +157,8 @@
 .sc-workspace-frame {
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
-  padding: 18px 22px;
+  border-radius: var(--radius-container);
+  padding: var(--space-card-pad);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -487,10 +485,10 @@
   border: var(--border-thin) solid transparent;
 }
 .sc-workspace-bulk-btn--primary {
-  background: var(--action-primary-bg);
+  background: var(--accent-sc);
   color: var(--action-primary-text);
 }
-.sc-workspace-bulk-btn--primary:hover:not(:disabled) { background: var(--action-primary-bg-hover); }
+.sc-workspace-bulk-btn--primary:hover:not(:disabled) { background: var(--accent-sc-dark); }
 .sc-workspace-bulk-btn--primary:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .sc-workspace-bulk-btn--outline {
   background: var(--surface-card);
@@ -514,8 +512,8 @@
 .sc-workspace-grid-wrap {
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
-  padding: 14px var(--space-4) 18px;
+  border-radius: var(--radius-container);
+  padding: var(--space-card-pad);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -588,7 +586,7 @@
   font-style: italic;
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
+  border-radius: var(--radius-container);
 }
 .sc-workspace-partial {
   display: flex;
@@ -672,9 +670,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px var(--space-2);
-  background: var(--status-needs-subtle);
-  color: var(--accent-text);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-pill);
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;

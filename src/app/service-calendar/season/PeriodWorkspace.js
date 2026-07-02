@@ -38,6 +38,7 @@ import {
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import StateLegend from "./StateLegend";
+import { ChevronLeft, ChevronRight } from "../Icons";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -143,9 +144,10 @@ export default function PeriodWorkspace({
   // Header title
   const periodNum = periodKey ? String(periodKey).replace(/^P/i, "") : "";
   const anchor = periodRange ? humanAnchor(periodRange.start, periodRange.end) : "";
-  const phasePrimaryLabel = phaseAssignment?.primary
-    ? CANONICAL_PHASES[phaseAssignment.primary]?.label
+  const phasePrimaryMeta = phaseAssignment?.primary
+    ? CANONICAL_PHASES[phaseAssignment.primary]
     : null;
+  const phasePrimaryLabel = phasePrimaryMeta?.label ?? null;
   const dateRangeLabel = periodRange
     ? `${fmtDateRange(periodRange.start, periodRange.end)}`
     : "";
@@ -166,6 +168,7 @@ export default function PeriodWorkspace({
           canNext={canNext}
           periodNum={periodNum}
           phaseLabel={phasePrimaryLabel}
+          phaseTint={phasePrimaryMeta}
         />
         <WorkspacePartialBanner failedMonth={partialError.failedMonth} />
         <WorkspaceSkeleton inline />
@@ -184,6 +187,7 @@ export default function PeriodWorkspace({
           canNext={canNext}
           periodNum={periodNum}
           phaseLabel={phasePrimaryLabel}
+          phaseTint={phasePrimaryMeta}
         />
         <div className="sc-workspace-empty">Pick a period from the Season grid.</div>
       </div>
@@ -201,13 +205,9 @@ export default function PeriodWorkspace({
         onTodayJump={onTodayJump}
         canPrev={canPrev}
         canNext={canNext}
-      />
-
-      <StateLegend
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        isMilb={isMilb}
-        showDayNight={true}
+        periodNum={periodNum}
+        phaseLabel={phasePrimaryLabel}
+        phaseTint={phasePrimaryMeta}
       />
 
       <header className="sc-workspace-header">
@@ -215,7 +215,10 @@ export default function PeriodWorkspace({
           <span className="sc-workspace-title-period">Period {periodNum}</span>
           <span className="sc-workspace-title-anchor">· {anchor}</span>
           {phasePrimaryLabel && (
-            <span className="sc-workspace-title-phase">
+            <span
+              className="sc-workspace-title-phase"
+              style={phasePrimaryMeta ? { background: phasePrimaryMeta.tint, color: phasePrimaryMeta.textTint } : undefined}
+            >
               · {phasePrimaryLabel}
               {phaseAssignment.secondary
                 ? ` (-> ${CANONICAL_PHASES[phaseAssignment.secondary]?.label})`
@@ -275,6 +278,13 @@ export default function PeriodWorkspace({
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
       />
+
+      <StateLegend
+        hasHomestandSchedule={hasHomestandSchedule}
+        isFeeAccount={isFeeAccount}
+        isMilb={isMilb}
+        showDayNight={true}
+      />
     </div>
   );
 }
@@ -284,7 +294,7 @@ export default function PeriodWorkspace({
 // click "Season" climbs up. The Stage 3 climb button is folded into
 // the breadcrumb's "Season" crumb so there's ONE climb path, not two.
 // Stepper (right) handles prev/next/today within the current period.
-function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel }) {
+function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel, phaseTint }) {
   return (
     <nav className="sc-workspace-nav" aria-label="Period navigation">
       <ol className="sc-workspace-breadcrumb">
@@ -295,26 +305,17 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
             onClick={onClimbToSeason}
             aria-label="Back to Season"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
+            <ChevronLeft size="sm" />
             <span>Season</span>
           </button>
         </li>
         {phaseLabel && (
           <li className="sc-workspace-breadcrumb-item sc-workspace-breadcrumb-phase" aria-hidden="true">
             <span className="sc-workspace-breadcrumb-sep">/</span>
-            <span className="sc-workspace-breadcrumb-phase-chip">{phaseLabel}</span>
+            <span
+              className="sc-workspace-breadcrumb-phase-chip"
+              style={phaseTint ? { background: phaseTint.tint, color: phaseTint.textTint } : undefined}
+            >{phaseLabel}</span>
           </li>
         )}
         {periodNum && (
@@ -331,7 +332,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
           disabled={!canPrev}
           onClick={onPrevPeriod}
           aria-label="Previous period"
-        >&#8249;</button>
+        ><ChevronLeft size="sm" /></button>
         <button
           type="button"
           className="sc-workspace-nav-today"
@@ -345,7 +346,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
           disabled={!canNext}
           onClick={onNextPeriod}
           aria-label="Next period"
-        >&#8250;</button>
+        ><ChevronRight size="sm" /></button>
       </div>
     </nav>
   );
@@ -363,7 +364,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
 // frame instead of the punitive "0 / 28" with an empty bar.
 function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
-  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--accent-sc)";
+  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)";
 
   // Upcoming-period detection: today is before periodRange.start AND
   // nothing has been entered yet. The whole period is in the future.
@@ -446,7 +447,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   const delta = m.actRev - m.projRev;
   const deltaLabel = delta >= 0
     ? `+${fmt$(Math.abs(delta))} ahead`
-    : `${fmt$(delta)} to go`;
+    : `${fmt$(Math.abs(delta))} to go`;
   const deltaColor = delta >= 0 ? "var(--text-success)" : "var(--accent-text)";
 
   return (
