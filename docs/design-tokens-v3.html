@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix Design Tokens v3 - foundation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Mulish:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ============ TIER 1 - PRIMITIVES (OKLCH-generated; components never touch) ============ */
+  /* Navy - brand at 700 */
+  --navy-50:#F4F7FC;--navy-100:#D1DAE6;--navy-200:#AFBDD1;--navy-300:#8FA2BC;--navy-400:#6F87A6;--navy-500:#516C92;--navy-600:#33527D;--navy-700:#153968;--navy-800:#092B55;--navy-900:#011D42;
+  /* Amber - accent at 500 */
+  --amber-50:#FFF2E2;--amber-100:#FFDABE;--amber-200:#F7C299;--amber-300:#EEA973;--amber-400:#E4904B;--amber-500:#D97706;--amber-600:#B25800;--amber-700:#8C3A00;--amber-800:#671C00;--amber-900:#440000;
+  /* Green - success at 500 */
+  --green-50:#E9FDEC;--green-100:#C6EBCB;--green-200:#A2D9AB;--green-300:#7DC78B;--green-400:#54B56B;--green-500:#16A34A;--green-600:#008330;--green-700:#006515;--green-800:#004800;--green-900:#002C00;
+  /* Red - danger at 500 */
+  --red-50:#FFEDE7;--red-100:#FFCAC1;--red-200:#FFA69B;--red-300:#F88276;--red-400:#EB5B50;--red-500:#DC2626;--red-600:#B9000C;--red-700:#970000;--red-800:#760000;--red-900:#560000;
+  /* Neutral - two-temperature (warm surfaces, cool ink) */
+  --n-0:#FFFFFF;--n-50:#FAF9F5;--n-100:#F4F2EC;--n-200:#F0EEE7;--n-300:#E5E7EB;--n-400:#D3CFC4;--n-500:#94A3B8;--n-600:#64748B;--n-700:#475569;--n-800:#334155;--n-900:#0A2548;
+  /* Soft state fills (OKLCH low-chroma steps off their families) */
+  --fill-needs:#FCD9A0;--fill-needs-bd:#E4AD84;--fill-upcoming:#E2EFE4;--fill-upcoming-bd:#C6D8C8;--fill-off:#F1EEE7;--fill-off-bd:#DDD7CA;
+  /* Type primitives */
+  --font-ui:'Inter',-apple-system,system-ui,sans-serif;--font-body:'Mulish',-apple-system,system-ui,sans-serif;--font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+  /* Modular size scale - ratio 1.2 (major third), base 14 */
+  --size-micro:10px;--size-caption:12px;--size-body:14px;--size-subhead:17px;--size-h3:20px;--size-h2:24px;--size-h1:29px;--size-display:35px;
+  --wt-regular:400;--wt-medium:500;--wt-semibold:600;--wt-bold:700;--wt-display:800;
+  --lead-tight:1.1;--lead-snug:1.25;--lead-normal:1.5;--track-tight:-0.01em;--track-caps:0.06em;
+  --num-tabular:tabular-nums;
+  /* Space - 4px base */
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-7:32px;--space-8:40px;
+  /* Radius */
+  --rad-4:4px;--rad-6:6px;--rad-10:10px;--rad-14:14px;--rad-pill:9999px;--rad-circle:50%;
+  /* Border width */
+  --border-thin:1px;--border-thick:2px;
+  /* Elevation */
+  --sh-sm:0 1px 2px rgba(15,23,42,0.05);--sh-md:0 4px 12px rgba(15,23,42,0.08);--sh-lg:0 16px 32px rgba(15,23,42,0.12);
+  /* Motion */
+  --duration-fast:120ms;--duration-base:180ms;--duration-slow:280ms;
+  --ease-standard:cubic-bezier(.2,0,0,1);--ease-emphasized:cubic-bezier(.3,0,0,1);--ease-exit:cubic-bezier(.4,0,1,1);
+  /* Z-index */
+  --z-base:0;--z-dropdown:1000;--z-sticky:1100;--z-overlay:1200;--z-popover:1300;--z-toast:1400;
+  /* Opacity */
+  --opacity-disabled:.45;--opacity-muted:.6;--opacity-scrim:.5;
+  /* Icon */
+  --icon-sm:16px;--icon-md:20px;--icon-lg:24px;--icon-stroke:2;
+
+  /* ============ TIER 2 - SEMANTIC (the consumed layer) ============ */
+  --text-heading:var(--n-900);--text-strong:var(--n-800);--text-default:var(--n-700);--text-muted:var(--n-600);--text-subtle:var(--n-500);--text-inverse:var(--n-0);--text-link:var(--navy-700);--text-success:var(--green-600);--text-danger:var(--red-500);
+  --surface-page:var(--n-100);--surface-card:var(--n-0);--surface-sunken:var(--n-50);--surface-overlay:var(--n-0);
+  --border-subtle:var(--n-200);--border-default:var(--n-300);--border-strong:var(--n-400);
+  --action-primary-bg:var(--navy-700);--action-primary-bg-hover:var(--navy-800);--action-primary-text:var(--n-0);
+  --action-secondary-bg:var(--n-0);--action-secondary-border:var(--n-400);--action-secondary-text:var(--n-700);
+  --accent:var(--amber-500);            /* fills with DARK text / borders / icons */
+  --accent-solid:var(--amber-600);      /* when WHITE text is required (AA) */
+  --accent-text:var(--amber-700);       /* amber as text on light */
+  --accent-backplate:var(--amber-50);   /* CTA wash */
+  /* Status family - bg / border / fg(AA-gated) / subtle / strong */
+  --status-entered-bg:var(--green-300);--status-entered-bd:var(--green-400);--status-entered-fg:var(--green-800);--status-entered-subtle:var(--green-100);--status-entered-strong:var(--green-500);
+  --status-needs-bg:var(--fill-needs);--status-needs-bd:var(--fill-needs-bd);--status-needs-fg:var(--amber-700);--status-needs-subtle:var(--amber-100);--status-needs-strong:var(--amber-500);
+  --status-overdue-bg:var(--red-200);--status-overdue-bd:var(--red-300);--status-overdue-fg:var(--red-700);--status-overdue-subtle:var(--red-100);--status-overdue-strong:var(--red-500);
+  --status-upcoming-bg:var(--fill-upcoming);--status-upcoming-bd:var(--fill-upcoming-bd);--status-upcoming-fg:var(--n-700);--status-upcoming-subtle:var(--n-100);--status-upcoming-strong:var(--n-500);
+  --status-off-bg:var(--fill-off);--status-off-bd:var(--fill-off-bd);--status-off-fg:var(--n-700);--status-off-subtle:var(--n-50);--status-off-strong:var(--n-400);
+  --status-today-ring:var(--navy-700);--status-today-fg:var(--navy-700);
+  --feedback-success:var(--green-600);--feedback-warning:var(--amber-500);--feedback-danger:var(--red-500);--feedback-info:var(--navy-500);
+  --radius-cell:var(--rad-4);--radius-control:var(--rad-10);--radius-container:var(--rad-10);--radius-container-lg:var(--rad-14);--radius-pill:var(--rad-pill);--radius-circle:var(--rad-circle);
+  --elevation-card:var(--sh-sm);--elevation-raised:var(--sh-md);--elevation-popover:var(--sh-lg);
+  --focus-ring-width:var(--border-thick);--focus-ring-offset:2px;--focus-ring-color:var(--navy-700);
+  --motion-control:var(--duration-fast) var(--ease-standard);--motion-surface:var(--duration-base) var(--ease-emphasized);
+  --disabled-opacity:var(--opacity-disabled);
+  /* density-aware */
+  --space-stack:var(--space-6);--space-card-pad:var(--space-4);--space-inline:var(--space-3);--control-height:40px;--control-pad-x:var(--space-4);--row-height:48px;--cell-size:34px;
+}
+@media (prefers-reduced-motion: reduce){
+  :root{--duration-fast:0ms;--duration-base:0ms;--duration-slow:0ms;}
+}
+/* DENSITY remap (scoped to demo) */
+.density-demo[data-density="compact"]{--space-stack:var(--space-4);--space-card-pad:var(--space-3);--space-inline:var(--space-2);--control-height:32px;--control-pad-x:var(--space-3);--row-height:40px;--cell-size:28px;}
+/* DARK remap - SEMANTIC ONLY (scoped to demo). Proof: zero primitive/component edits. */
+.dark-demo[data-theme="dark"]{
+  --surface-page:#0E1726;--surface-card:#172234;--surface-sunken:#111A29;--surface-overlay:#1C293D;
+  --text-heading:#F1F5F9;--text-strong:#E2E8F0;--text-default:#CBD5E1;--text-muted:#94A3B8;--text-subtle:#64748B;--text-inverse:#0E1726;
+  --border-subtle:#22304A;--border-default:#2A3A55;--border-strong:#3A4D6E;
+  --action-primary-bg:var(--navy-500);--action-primary-bg-hover:var(--navy-400);--action-primary-text:#FFFFFF;
+  --action-secondary-bg:#1C293D;--action-secondary-border:#3A4D6E;--action-secondary-text:#E2E8F0;
+  --accent-backplate:#2A1E0A;--focus-ring-color:var(--navy-300);
+  --status-entered-bg:#10502F;--status-entered-bd:#1C7538;--status-entered-fg:#9FE6B4;
+  --status-needs-bg:#4A2E08;--status-needs-bd:#6B4410;--status-needs-fg:#F7C299;
+  --status-overdue-bg:#4A1714;--status-overdue-bd:#6B201C;--status-overdue-fg:#FFA69B;
+  --status-today-ring:var(--navy-300);--status-today-fg:var(--navy-300);
+}
+
+*{box-sizing:border-box;}
+body{margin:0;background:var(--surface-page);font-family:var(--font-ui);color:var(--text-heading);padding:32px 20px 64px;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1120px;margin:0 auto;}
+.doc-title{font-size:var(--size-display);font-weight:var(--wt-display);letter-spacing:var(--track-tight);line-height:var(--lead-tight);margin:0 0 6px;}
+.doc-sub{font-family:var(--font-body);font-size:var(--size-body);color:var(--text-muted);margin:0 0 24px;max-width:740px;line-height:var(--lead-normal);}
+section{background:var(--surface-card);border:var(--border-thin) solid var(--border-default);border-radius:var(--radius-container-lg);padding:24px 26px;margin-bottom:20px;box-shadow:var(--elevation-card);}
+.sect-h{font-size:var(--size-micro);font-weight:var(--wt-bold);letter-spacing:0.09em;text-transform:uppercase;color:var(--accent-text);margin:0 0 4px;}
+.sect-t{font-size:var(--size-h3);font-weight:var(--wt-bold);color:var(--text-heading);margin:0 0 6px;}
+.sect-note{font-family:var(--font-body);font-size:var(--size-caption);color:var(--text-subtle);margin:0 0 18px;line-height:var(--lead-normal);max-width:780px;}
+.sect-note code,.inlinecode{font-family:var(--font-mono);font-size:11px;color:var(--text-default);background:var(--surface-sunken);padding:1px 5px;border-radius:4px;}
+.badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:3px 9px;border-radius:var(--radius-pill);margin-bottom:10px;}
+.b-t1{background:var(--navy-100);color:var(--navy-700);} .b-t2{background:var(--amber-100);color:var(--amber-700);} .b-new{background:var(--green-100);color:var(--green-800);}
+.grouplabel{font-size:var(--size-micro);font-weight:var(--wt-bold);letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle);margin:18px 0 9px;}
+.grouplabel:first-of-type{margin-top:4px;}
+
+/* what's new */
+.whatsnew{background:var(--green-50);border:1px solid var(--green-200);border-left:4px solid var(--green-500);border-radius:var(--radius-container);padding:15px 18px;margin-bottom:22px;}
+.whatsnew h3{margin:0 0 8px;font-size:var(--size-caption);font-weight:700;color:var(--green-800);}
+.whatsnew li{font-family:var(--font-body);font-size:var(--size-caption);color:var(--text-strong);line-height:1.6;}
+.whatsnew b{font-family:var(--font-ui);}
+
+/* arch */
+.arch{display:flex;gap:0;align-items:stretch;flex-wrap:wrap;}
+.arch-col{flex:1 1 220px;border:1px solid var(--border-default);border-radius:var(--radius-container);padding:15px;}
+.arch-col h4{margin:0 0 5px;font-size:var(--size-caption);font-weight:700;}
+.arch-col p{margin:0 0 8px;font-family:var(--font-body);font-size:11px;color:var(--text-muted);line-height:1.45;}
+.arch-col code{font-family:var(--font-mono);font-size:10px;color:var(--text-default);background:var(--surface-sunken);padding:2px 5px;border-radius:4px;display:inline-block;margin:1px 0;}
+.arch-arrow{display:flex;align-items:center;justify-content:center;flex:0 0 34px;font-size:20px;color:var(--text-subtle);}
+
+/* ramps */
+.ramp{display:flex;border-radius:var(--radius-control);overflow:hidden;border:1px solid var(--border-subtle);margin-bottom:4px;}
+.ramp-step{flex:1;height:44px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;font-family:var(--font-mono);font-size:8.5px;font-weight:600;}
+.ramp-cap{font-family:var(--font-body);font-size:11px;color:var(--text-subtle);margin-bottom:12px;}
+.ramp-cap b{color:var(--text-default);font-family:var(--font-ui);font-weight:600;}
+
+/* contrast report */
+.contrast-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:8px;}
+.cpair{display:flex;align-items:center;gap:10px;border:1px solid var(--border-subtle);border-radius:var(--radius-control);padding:7px 9px;}
+.cswatch{flex:0 0 56px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+.cmeta{min-width:0;flex:1;}
+.cname{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);line-height:1.3;}
+.cratio{font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-heading);}
+.cpass{display:inline-block;font-size:8px;font-weight:700;letter-spacing:0.04em;padding:2px 6px;border-radius:var(--radius-pill);background:var(--green-100);color:var(--green-800);margin-left:4px;}
+.cui{background:var(--amber-100);color:var(--amber-700);}
+
+/* semantic alias rows */
+.sem-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;}
+.sem{display:flex;align-items:center;gap:9px;border:1px solid var(--border-subtle);border-radius:var(--radius-control);padding:7px 9px;}
+.sem-chip{width:28px;height:28px;border-radius:6px;flex:0 0 28px;border:1px solid rgba(0,0,0,0.07);}
+.sem-name{font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:var(--text-default);}
+.sem-ref{font-family:var(--font-mono);font-size:9.5px;color:var(--text-subtle);}
+.sem-ref b{color:var(--accent-text);font-weight:600;}
+
+/* type */
+.type-row{display:flex;align-items:baseline;gap:16px;padding:10px 0;border-bottom:1px solid var(--border-subtle);}
+.type-row:last-child{border-bottom:none;}
+.type-sample{flex:1;min-width:0;color:var(--text-heading);}
+.type-meta{flex:0 0 270px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-subtle);}
+.type-meta b{color:var(--text-default);font-family:var(--font-ui);font-weight:700;}
+.scale-vis{display:flex;align-items:flex-end;gap:6px;margin:6px 0 16px;height:46px;}
+.scale-bar{background:var(--navy-200);border-radius:3px 3px 0 0;width:30px;display:flex;align-items:flex-start;justify-content:center;}
+.scale-bar span{font-family:var(--font-mono);font-size:8px;color:var(--navy-700);margin-top:2px;}
+
+/* icons */
+.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.icon-cell{display:flex;align-items:center;gap:10px;border:1px solid var(--border-subtle);border-radius:var(--radius-control);padding:10px 12px;}
+.icon-cell svg{width:var(--icon-md);height:var(--icon-md);color:var(--text-default);flex:0 0 auto;}
+.icon-meaning{font-size:11px;font-weight:700;color:var(--text-heading);}
+.icon-glyph{font-family:var(--font-mono);font-size:9px;color:var(--text-subtle);}
+.icon-sizes{display:flex;align-items:flex-end;gap:18px;margin-top:6px;}
+.icon-sizes div{display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--accent-text);}
+.icon-sizes .lbl{font-family:var(--font-mono);font-size:9px;color:var(--text-subtle);}
+
+/* status family showcase */
+.statusboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:12px;}
+.statuscol{border:1px solid var(--border-subtle);border-radius:var(--radius-container);padding:13px;text-align:center;}
+.statuscol .nm{font-size:var(--size-caption);font-weight:700;margin-bottom:11px;}
+.statuscol .row{display:flex;flex-direction:column;gap:9px;align-items:center;}
+.s-cell{width:28px;height:28px;border-radius:var(--radius-cell);}
+.s-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:var(--radius-pill);letter-spacing:0.02em;}
+.s-rowline{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-muted);font-family:var(--font-body);}
+.s-dot{width:8px;height:8px;border-radius:var(--radius-circle);}
+.s-bar{width:46px;height:5px;border-radius:var(--radius-pill);}
+
+/* density + dark demos */
+.demo-bar{display:flex;align-items:center;gap:14px;margin-bottom:15px;flex-wrap:wrap;}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--radius-pill);overflow:hidden;}
+.seg button{border:none;background:var(--surface-card);color:var(--text-muted);font-family:var(--font-ui);font-size:12px;font-weight:600;padding:7px 16px;cursor:pointer;transition:var(--motion-control);}
+.seg button.active{background:var(--action-primary-bg);color:var(--action-primary-text);}
+.den-label{font-family:var(--font-mono);font-size:10.5px;color:var(--text-subtle);}
+.demo-frame{border:1px dashed var(--border-strong);border-radius:var(--radius-container);padding:var(--space-card-pad);background:var(--surface-sunken);transition:padding var(--motion-surface),background var(--motion-surface);}
+.demo-cluster{display:flex;flex-wrap:wrap;gap:var(--space-inline);align-items:center;margin-bottom:var(--space-stack);transition:gap var(--motion-surface),margin var(--motion-surface);}
+.dbtn{height:var(--control-height);padding:0 var(--control-pad-x);border:none;border-radius:var(--radius-control);background:var(--action-primary-bg);color:var(--action-primary-text);font-family:var(--font-ui);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:var(--motion-surface);}
+.dbtn.sec{background:var(--action-secondary-bg);color:var(--action-secondary-text);border:1px solid var(--action-secondary-border);}
+.dbtn svg{width:var(--icon-sm);height:var(--icon-sm);}
+.drow{height:var(--row-height);display:flex;align-items:center;padding:0 14px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-control);margin-bottom:6px;font-family:var(--font-body);font-size:13px;color:var(--text-default);transition:var(--motion-surface);}
+.drow .num{margin-left:auto;font-family:var(--font-ui);font-weight:600;font-variant-numeric:var(--num-tabular);color:var(--text-success);}
+.dcells{display:flex;gap:4px;}
+.dcells span{width:var(--cell-size);height:var(--cell-size);border-radius:var(--radius-cell);background:var(--status-entered-bg);border:1px solid var(--status-entered-bd);transition:var(--motion-surface);}
+.dchip{display:inline-flex;align-items:center;gap:5px;background:var(--surface-card);border:1px solid var(--border-strong);border-radius:var(--radius-pill);padding:4px 11px;font-size:11px;font-weight:600;color:var(--text-default);}
+.dchip i{width:6px;height:6px;border-radius:var(--radius-circle);background:var(--feedback-success);}
+
+/* state coverage */
+.states{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}
+.state-cell{border:1px solid var(--border-subtle);border-radius:var(--radius-container);padding:14px;text-align:center;}
+.state-cell .lbl{font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-subtle);margin-bottom:12px;}
+.btnp{height:36px;padding:0 16px;border:none;border-radius:var(--radius-control);background:var(--action-primary-bg);color:var(--action-primary-text);font-family:var(--font-ui);font-size:13px;font-weight:600;}
+.btnp.hov{background:var(--action-primary-bg-hover);}
+.btnp.foc{outline:var(--focus-ring-width) solid var(--focus-ring-color);outline-offset:var(--focus-ring-offset);}
+.btnp.dis{opacity:var(--disabled-opacity);cursor:not-allowed;}
+.skel{height:12px;border-radius:var(--radius-pill);background:linear-gradient(90deg,var(--n-200),var(--n-100),var(--n-200));background-size:200% 100%;animation:sh 1.3s var(--ease-standard) infinite;margin:6px 0;}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media (prefers-reduced-motion: reduce){.skel{animation:none;}}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--text-subtle);}
+.empty svg{width:24px;height:24px;color:var(--border-strong);}
+.empty span{font-size:11px;font-family:var(--font-body);}
+
+/* element set */
+.elements{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;}
+.el-group{flex:1 1 190px;}
+.el-label{font-size:var(--size-micro);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-subtle);margin-bottom:10px;}
+.btn{font-family:var(--font-ui);border:none;border-radius:var(--radius-control);font-weight:600;font-size:13px;cursor:pointer;padding:9px 16px;}
+.btn-primary{background:var(--action-primary-bg);color:var(--action-primary-text);}
+.btn-secondary{background:var(--action-secondary-bg);color:var(--action-secondary-text);border:1px solid var(--action-secondary-border);}
+.tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:3px 9px;border-radius:var(--radius-pill);letter-spacing:0.03em;}
+.tag-pdc{background:#C4E3E8;color:var(--navy-700);} .tag-mlb{background:var(--amber-100);color:var(--amber-700);}
+.toggle{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--radius-pill);overflow:hidden;}
+.toggle .on{background:var(--action-primary-bg);color:var(--action-primary-text);font-size:12px;font-weight:600;padding:6px 14px;}
+.toggle .off{background:var(--surface-card);color:var(--text-subtle);font-size:12px;font-weight:600;padding:6px 14px;}
+.kpi-val{font-size:var(--size-display);font-weight:var(--wt-display);color:var(--text-success);font-variant-numeric:var(--num-tabular);letter-spacing:var(--track-tight);}
+.kpi-lbl{font-size:var(--size-micro);font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle);margin-top:2px;}
+.cta{display:inline-flex;align-items:center;gap:14px;background:var(--accent-backplate);border:1px solid var(--amber-200);border-left:3px solid var(--accent);border-radius:var(--radius-container);padding:12px 16px;}
+.cta svg{width:var(--icon-md);height:var(--icon-md);color:var(--accent-text);}
+.cta-txt{font-size:13px;color:var(--text-heading);} .cta-txt b{font-weight:700;}
+.cta-btn{background:var(--action-primary-bg);color:var(--action-primary-text);border:none;border-radius:var(--radius-control);font-size:12px;font-weight:600;padding:8px 14px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+.cta-btn svg{width:14px;height:14px;}
+.foot{font-family:var(--font-body);font-size:11px;color:var(--text-subtle);text-align:center;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc-title">KitchFix Design Tokens</h1>
+  <p class="doc-sub">v3 - the foundation. Built to the standard the audit holds: <b>perceptual color</b> (OKLCH-generated ramps), <b>accessibility from token zero</b> (every text pair computed against WCAG AA), <b>full category coverage</b>, and an <b>icon contract</b> - on top of the v2 two-tier architecture. The two live toggles (density, dark) prove the system re-themes by remapping the semantic layer alone.</p>
+
+  <div class="whatsnew">
+    <h3>What the audit changed (v2 -&gt; v3)</h3>
+    <ul>
+      <li><b>Color is now generated, not eyeballed.</b> Every ramp built in OKLCH at fixed perceptual-lightness steps - even visual weight, predictable contrast.</li>
+      <li><b>Accessibility is constructed.</b> Every status text color is the <i>computed</i> darkest step that passes AA on its fill (see the Contrast Report). The amber accent fails white-text AA at 3.19, so the system routes around it - <span class="inlinecode">--accent-solid</span> (amber-600, 4.90) is the white-text path.</li>
+      <li><b>Five missing token categories added:</b> motion (duration + easing), focus-ring, border-width, z-index, opacity - plus reduced-motion wired at the token layer.</li>
+      <li><b>Typography is a modular scale</b> (1.2 ratio) with roles that lock size + weight + leading + tracking, and a mandated tabular numeric role.</li>
+      <li><b>Icons are a real pillar:</b> one family (Lucide), size tokens, <span class="inlinecode">currentColor</span>, and a concept-&gt;glyph map.</li>
+      <li><b>Dark mode proven</b> as a semantic-only remap - toggle it below.</li>
+    </ul>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <section>
+    <p class="sect-h">The model</p><p class="sect-t">Two tiers, one rule</p>
+    <p class="sect-note"><b>Components reference semantic tokens, never primitives.</b> Change a primitive and the system shifts coherently; remap a semantic alias and you re-skin (dark / dense / rebrand) with zero component edits.</p>
+    <div class="arch">
+      <div class="arch-col"><span class="badge b-t1">Tier 1</span><h4>Primitives</h4><p>OKLCH ramps + raw scales. Literal.</p><code>--navy-700: #153968</code><br><code>--space-4: 16px</code></div>
+      <div class="arch-arrow">&#8594;</div>
+      <div class="arch-col"><span class="badge b-t2">Tier 2</span><h4>Semantic</h4><p>Intent, points at a primitive. <b>Components use this.</b></p><code>--action-primary-bg &#8594; navy-700</code><br><code>--status-overdue-fg &#8594; red-700</code></div>
+      <div class="arch-arrow">&#8594;</div>
+      <div class="arch-col"><span class="badge" style="background:var(--n-300);color:var(--text-default)">In use</span><h4>Component</h4><p>Reads semantic only. Says <i>why</i>.</p><code>color: var(--text-default)</code><br><code>outline: var(--focus-ring-...)</code></div>
+    </div>
+  </section>
+
+  <!-- PRIMITIVES -->
+  <section>
+    <span class="badge b-t1">Tier 1</span>
+    <p class="sect-h">Foundation</p><p class="sect-t">Primitives - OKLCH ramps</p>
+    <p class="sect-note">Generated in OKLCH at fixed lightness steps, then delivered as hex (no runtime dependency). Brand anchors marked &#9733;. Even perceptual lightness is what makes contrast predictable instead of accidental.</p>
+
+    <div class="grouplabel">Navy &mdash; brand at 700</div>
+    <div class="ramp"><div class="ramp-step" style="background:#F4F7FC;color:#33527D">50</div><div class="ramp-step" style="background:#D1DAE6;color:#33527D">100</div><div class="ramp-step" style="background:#AFBDD1;color:#0A2548">200</div><div class="ramp-step" style="background:#8FA2BC;color:#0A2548">300</div><div class="ramp-step" style="background:#6F87A6;color:#fff">400</div><div class="ramp-step" style="background:#516C92;color:#fff">500</div><div class="ramp-step" style="background:#33527D;color:#fff">600</div><div class="ramp-step" style="background:#153968;color:#fff">700&#9733;</div><div class="ramp-step" style="background:#092B55;color:#fff">800</div><div class="ramp-step" style="background:#011D42;color:#fff">900</div></div>
+    <div class="ramp-cap"><b>700</b> brand/primary &middot; <b>800</b> hover &middot; <b>900</b> deepest &middot; <b>50-200</b> tints, badges, dark-mode accents</div>
+
+    <div class="grouplabel">Amber &mdash; accent at 500</div>
+    <div class="ramp"><div class="ramp-step" style="background:#FFF2E2;color:#8C3A00">50</div><div class="ramp-step" style="background:#FFDABE;color:#8C3A00">100</div><div class="ramp-step" style="background:#F7C299;color:#8C3A00">200</div><div class="ramp-step" style="background:#EEA973;color:#542A01">300</div><div class="ramp-step" style="background:#E4904B;color:#fff">400</div><div class="ramp-step" style="background:#D97706;color:#fff">500&#9733;</div><div class="ramp-step" style="background:#B25800;color:#fff">600</div><div class="ramp-step" style="background:#8C3A00;color:#fff">700</div><div class="ramp-step" style="background:#671C00;color:#fff">800</div><div class="ramp-step" style="background:#440000;color:#fff">900</div></div>
+    <div class="ramp-cap"><b>500</b> accent (dark text) &middot; <b>600</b> white-text path (AA) &middot; <b>700</b> amber-as-text &middot; <b>50</b> CTA wash</div>
+
+    <div class="grouplabel">Green &mdash; success at 500 (entered = 300/400)</div>
+    <div class="ramp"><div class="ramp-step" style="background:#E9FDEC;color:#006515">50</div><div class="ramp-step" style="background:#C6EBCB;color:#006515">100</div><div class="ramp-step" style="background:#A2D9AB;color:#004800">200</div><div class="ramp-step" style="background:#7DC78B;color:#004800">300</div><div class="ramp-step" style="background:#54B56B;color:#fff">400</div><div class="ramp-step" style="background:#16A34A;color:#fff">500&#9733;</div><div class="ramp-step" style="background:#008330;color:#fff">600</div><div class="ramp-step" style="background:#006515;color:#fff">700</div><div class="ramp-step" style="background:#004800;color:#fff">800</div><div class="ramp-step" style="background:#002C00;color:#fff">900</div></div>
+    <div class="ramp-cap"><b>300/400</b> entered cell &middot; <b>500</b> success &middot; <b>600</b> success text/solid (AA) &middot; <b>800</b> entered badge text</div>
+
+    <div class="grouplabel">Red &mdash; danger at 500 (overdue = 200/300)</div>
+    <div class="ramp"><div class="ramp-step" style="background:#FFEDE7;color:#970000">50</div><div class="ramp-step" style="background:#FFCAC1;color:#970000">100</div><div class="ramp-step" style="background:#FFA69B;color:#760000">200</div><div class="ramp-step" style="background:#F88276;color:#560000">300</div><div class="ramp-step" style="background:#EB5B50;color:#fff">400</div><div class="ramp-step" style="background:#DC2626;color:#fff">500&#9733;</div><div class="ramp-step" style="background:#B9000C;color:#fff">600</div><div class="ramp-step" style="background:#970000;color:#fff">700</div><div class="ramp-step" style="background:#760000;color:#fff">800</div><div class="ramp-step" style="background:#560000;color:#fff">900</div></div>
+    <div class="ramp-cap"><b>200/300</b> overdue cell &middot; <b>500</b> danger/destructive &middot; <b>700</b> overdue badge text (AA)</div>
+
+    <div class="grouplabel">Neutral &mdash; warm surfaces, cool ink</div>
+    <div class="ramp"><div class="ramp-step" style="background:#FFFFFF;color:#475569;border-right:1px solid #eee">0</div><div class="ramp-step" style="background:#FAF9F5;color:#475569">50</div><div class="ramp-step" style="background:#F4F2EC;color:#475569">100</div><div class="ramp-step" style="background:#F0EEE7;color:#475569">200</div><div class="ramp-step" style="background:#E5E7EB;color:#475569">300</div><div class="ramp-step" style="background:#D3CFC4;color:#334155">400</div><div class="ramp-step" style="background:#94A3B8;color:#fff">500</div><div class="ramp-step" style="background:#64748B;color:#fff">600</div><div class="ramp-step" style="background:#475569;color:#fff">700</div><div class="ramp-step" style="background:#334155;color:#fff">800</div><div class="ramp-step" style="background:#0A2548;color:#fff">900</div></div>
+    <div class="ramp-cap"><b>0-100</b> surfaces &middot; <b>200-400</b> borders &middot; <b>600-900</b> text. <b>500</b> is UI/placeholder/border only - it fails AA as body text (documented, not used for body).</div>
+
+    <div class="grouplabel">Soft state fills (OKLCH low-chroma, family-derived)</div>
+    <div class="ramp"><div class="ramp-step" style="background:#FCD9A0;color:#8C3A00">needs</div><div class="ramp-step" style="background:#E4AD84;color:#542A01">needs-bd</div><div class="ramp-step" style="background:#E2EFE4;color:#475569">upcoming</div><div class="ramp-step" style="background:#C6D8C8;color:#334155">upcoming-bd</div><div class="ramp-step" style="background:#F1EEE7;color:#475569">off</div><div class="ramp-step" style="background:#DDD7CA;color:#334155">off-bd</div></div>
+    <div class="ramp-cap">Desaturated so a calendar of mixed states stays calm - now derived as low-chroma steps off the amber/green/neutral hues, not strangers.</div>
+  </section>
+
+  <!-- CONTRAST REPORT -->
+  <section>
+    <span class="badge b-new">Computed</span>
+    <p class="sect-h">Accessibility from token zero</p><p class="sect-t">Contrast report - every pair, measured</p>
+    <p class="sect-note">WCAG ratios computed for each text/background pairing. <b>PASS</b> = &ge;4.5 (AA body). <b>UI</b> = 3-4.5 (AA large/non-text only). Status text colors below are the <i>computed darkest passing step</i> - the gate decided them, not taste.</p>
+
+    <div class="grouplabel">Status badge text (on cell fill)</div>
+    <div class="contrast-grid">
+      <div class="cpair"><div class="cswatch" style="background:#7DC78B;color:#004800">Aa</div><div class="cmeta"><div class="cname">entered-fg green-800 / bg</div><div><span class="cratio">5.40</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#FCD9A0;color:#8C3A00">Aa</div><div class="cmeta"><div class="cname">needs-fg amber-700 / bg</div><div><span class="cratio">5.72</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#FFA69B;color:#970000">Aa</div><div class="cmeta"><div class="cname">overdue-fg red-700 / bg</div><div><span class="cratio">4.83</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#E2EFE4;color:#475569">Aa</div><div class="cmeta"><div class="cname">upcoming-fg n-700 / bg</div><div><span class="cratio">6.39</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#F1EEE7;color:#475569">Aa</div><div class="cmeta"><div class="cname">off-fg n-700 / bg</div><div><span class="cratio">6.54</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#FFFFFF;color:#153968;box-shadow:inset 0 0 0 2px #153968">Aa</div><div class="cmeta"><div class="cname">today navy-700 / white</div><div><span class="cratio">11.56</span><span class="cpass">PASS</span></div></div></div>
+    </div>
+
+    <div class="grouplabel">Action &amp; feedback text</div>
+    <div class="contrast-grid">
+      <div class="cpair"><div class="cswatch" style="background:#153968;color:#fff">Aa</div><div class="cmeta"><div class="cname">white / primary navy-700</div><div><span class="cratio">11.56</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#D97706;color:#fff">Aa</div><div class="cmeta"><div class="cname">white / accent amber-500</div><div><span class="cratio">3.19</span><span class="cpass cui">UI ONLY</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#B25800;color:#fff">Aa</div><div class="cmeta"><div class="cname">white / accent-solid amber-600</div><div><span class="cratio">4.90</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#fff;color:#8C3A00;box-shadow:inset 0 0 0 1px #eee">Aa</div><div class="cmeta"><div class="cname">accent-text amber-700 / white</div><div><span class="cratio">7.72</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#DC2626;color:#fff">Aa</div><div class="cmeta"><div class="cname">white / danger red-500</div><div><span class="cratio">4.83</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#FFF2E2;color:#153968">Aa</div><div class="cmeta"><div class="cname">navy-700 / CTA wash amber-50</div><div><span class="cratio">10.48</span><span class="cpass">PASS</span></div></div></div>
+    </div>
+
+    <div class="grouplabel">Body text on surfaces</div>
+    <div class="contrast-grid">
+      <div class="cpair"><div class="cswatch" style="background:#fff;color:#0A2548;box-shadow:inset 0 0 0 1px #eee">Aa</div><div class="cmeta"><div class="cname">text-heading n-900 / card</div><div><span class="cratio">15.3</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#fff;color:#475569;box-shadow:inset 0 0 0 1px #eee">Aa</div><div class="cmeta"><div class="cname">text-default n-700 / card</div><div><span class="cratio">7.58</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#fff;color:#64748B;box-shadow:inset 0 0 0 1px #eee">Aa</div><div class="cmeta"><div class="cname">text-muted n-600 / card</div><div><span class="cratio">4.76</span><span class="cpass">PASS</span></div></div></div>
+      <div class="cpair"><div class="cswatch" style="background:#fff;color:#94A3B8;box-shadow:inset 0 0 0 1px #eee">Aa</div><div class="cmeta"><div class="cname">text-subtle n-500 / card</div><div><span class="cratio">2.56</span><span class="cpass cui">UI ONLY</span></div></div></div>
+    </div>
+  </section>
+
+  <!-- SEMANTIC -->
+  <section>
+    <span class="badge b-t2">Tier 2</span>
+    <p class="sect-h">Consumed layer</p><p class="sect-t">Semantic tokens</p>
+    <p class="sect-note">Each names a job and points at a primitive (in <b style="color:var(--accent-text)">amber</b>). Note the accent split - one token per contrast context, so the wrong (failing) pairing is never reachable.</p>
+
+    <div class="grouplabel">Text</div>
+    <div class="sem-grid">
+      <div class="sem"><div class="sem-chip" style="background:#0A2548"></div><div><div class="sem-name">text-heading</div><div class="sem-ref">&#8594; <b>n-900</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#475569"></div><div><div class="sem-name">text-default</div><div class="sem-ref">&#8594; <b>n-700</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#64748B"></div><div><div class="sem-name">text-muted</div><div class="sem-ref">&#8594; <b>n-600</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#94A3B8"></div><div><div class="sem-name">text-subtle</div><div class="sem-ref">&#8594; <b>n-500</b> &middot; UI only</div></div></div>
+    </div>
+
+    <div class="grouplabel">Action &amp; accent (contrast-split)</div>
+    <div class="sem-grid">
+      <div class="sem"><div class="sem-chip" style="background:#153968"></div><div><div class="sem-name">action-primary-bg</div><div class="sem-ref">&#8594; <b>navy-700</b> + white text</div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#D97706"></div><div><div class="sem-name">accent</div><div class="sem-ref">&#8594; <b>amber-500</b> &middot; dark text/icons</div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#B25800"></div><div><div class="sem-name">accent-solid</div><div class="sem-ref">&#8594; <b>amber-600</b> &middot; white text OK</div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#8C3A00"></div><div><div class="sem-name">accent-text</div><div class="sem-ref">&#8594; <b>amber-700</b> &middot; amber as text</div></div></div>
+    </div>
+
+    <div class="grouplabel">Radius, elevation, focus, motion (by role)</div>
+    <div class="sem-grid">
+      <div class="sem"><div class="sem-chip" style="background:#153968;border-radius:4px"></div><div><div class="sem-name">radius-cell</div><div class="sem-ref">&#8594; <b>rad-4</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#153968;border-radius:10px"></div><div><div class="sem-name">radius-control / container</div><div class="sem-ref">&#8594; <b>rad-10</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#fff;box-shadow:var(--sh-lg);border:1px solid #eee"></div><div><div class="sem-name">elevation-popover</div><div class="sem-ref">&#8594; <b>sh-lg</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#fff;outline:2px solid #153968;outline-offset:-4px"></div><div><div class="sem-name">focus-ring</div><div class="sem-ref">2px &middot; offset 2 &middot; <b>navy-700</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#153968;border-radius:6px"></div><div><div class="sem-name">motion-control</div><div class="sem-ref">120ms &middot; <b>ease-standard</b></div></div></div>
+      <div class="sem"><div class="sem-chip" style="background:#153968;border-radius:6px;opacity:.45"></div><div><div class="sem-name">disabled-opacity</div><div class="sem-ref">&#8594; <b>0.45</b></div></div></div>
+    </div>
+  </section>
+
+  <!-- STATUS FAMILY -->
+  <section>
+    <span class="badge b-t2">Tier 2 &middot; cross-app family</span>
+    <p class="sect-h">Reusable everywhere</p><p class="sect-t">Status as a semantic family</p>
+    <p class="sect-note">Each status carries <b>bg / border / fg (AA) / subtle / strong</b>, defined once, reused across surfaces - cell, badge, row, bar - and available to the People &amp; Vendor portals, not welded to the calendar.</p>
+    <div class="statusboard">
+      <div class="statuscol"><div class="nm" style="color:var(--status-entered-fg)">Entered</div><div class="row"><div class="s-cell" style="background:var(--status-entered-bg);border:1px solid var(--status-entered-bd)"></div><span class="s-badge" style="background:var(--status-entered-subtle);color:var(--status-entered-fg)">Entered</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-entered-strong)"></span>complete</span><span class="s-bar" style="background:var(--status-entered-strong)"></span></div></div>
+      <div class="statuscol"><div class="nm" style="color:var(--status-needs-fg)">Needs</div><div class="row"><div class="s-cell" style="background:var(--status-needs-bg);border:1px solid var(--status-needs-bd)"></div><span class="s-badge" style="background:var(--status-needs-subtle);color:var(--status-needs-fg)">Needs entry</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-needs-strong)"></span>pending</span><span class="s-bar" style="background:var(--status-needs-strong)"></span></div></div>
+      <div class="statuscol"><div class="nm" style="color:var(--status-overdue-fg)">Overdue</div><div class="row"><div class="s-cell" style="background:var(--status-overdue-bg);border:1px solid var(--status-overdue-bd)"></div><span class="s-badge" style="background:var(--status-overdue-subtle);color:var(--status-overdue-fg)">Overdue</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-overdue-strong)"></span>late</span><span class="s-bar" style="background:var(--status-overdue-strong)"></span></div></div>
+      <div class="statuscol"><div class="nm" style="color:var(--status-upcoming-fg)">Upcoming</div><div class="row"><div class="s-cell" style="background:var(--status-upcoming-bg);border:1px solid var(--status-upcoming-bd)"></div><span class="s-badge" style="background:var(--status-upcoming-subtle);color:var(--status-upcoming-fg)">Upcoming</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-upcoming-strong)"></span>scheduled</span><span class="s-bar" style="background:var(--status-upcoming-strong)"></span></div></div>
+      <div class="statuscol"><div class="nm" style="color:var(--status-off-fg)">Off</div><div class="row"><div class="s-cell" style="background:var(--status-off-bg);border:1px solid var(--status-off-bd)"></div><span class="s-badge" style="background:var(--status-off-subtle);color:var(--status-off-fg)">Off-season</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-off-strong)"></span>no service</span><span class="s-bar" style="background:var(--status-off-strong)"></span></div></div>
+      <div class="statuscol"><div class="nm" style="color:var(--status-today-fg)">Today</div><div class="row"><div class="s-cell" style="background:var(--surface-card);border:2px solid var(--status-today-ring)"></div><span class="s-badge" style="background:var(--surface-card);color:var(--status-today-fg);box-shadow:inset 0 0 0 1px var(--status-today-ring)">Today</span><span class="s-rowline"><span class="s-dot" style="background:var(--status-today-ring)"></span>current</span><span class="s-bar" style="background:var(--status-today-ring)"></span></div></div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section>
+    <span class="badge b-t2">Tier 2 &middot; composite</span>
+    <p class="sect-h">~90% of the UI</p><p class="sect-t">Type - modular scale, locked roles</p>
+    <p class="sect-note">A 1.2 (major third) modular scale. Each role locks <b>size + weight + line-height + tracking</b> into one token. Data uses a mandated tabular numeric role so columns align.</p>
+    <div class="scale-vis">
+      <div class="scale-bar" style="height:20px"><span>10</span></div><div class="scale-bar" style="height:24px"><span>12</span></div><div class="scale-bar" style="height:28px"><span>14</span></div><div class="scale-bar" style="height:34px"><span>17</span></div><div class="scale-bar" style="height:40px"><span>20</span></div><div class="scale-bar" style="height:48px"><span>24</span></div><div class="scale-bar" style="height:58px"><span>29</span></div><div class="scale-bar" style="height:70px"><span>35</span></div>
+    </div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:35px;font-weight:800;letter-spacing:-0.02em;line-height:1.1">Display</div><div class="type-meta"><b>35 / 800</b> · Inter · 1.1 · tight</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:29px;font-weight:700;letter-spacing:-0.01em">Heading 1</div><div class="type-meta"><b>29 / 700</b> · Inter · 1.15</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:24px;font-weight:700">Heading 2 - Season Summary</div><div class="type-meta"><b>24 / 700</b> · Inter · 1.2</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:20px;font-weight:700">Heading 3 - card title</div><div class="type-meta"><b>20 / 700</b> · Inter · 1.25</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:17px;font-weight:600">Subhead</div><div class="type-meta"><b>17 / 600</b> · Inter · 1.35</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-body);font-size:14px;font-weight:400">Body - default reading copy, Mulish, ~68ch measure.</div><div class="type-meta"><b>14 / 400</b> · Mulish · 1.5</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">Numeric 1,234 / $710,402 / 48%</div><div class="type-meta"><b>14 / 600</b> · tabular · data role</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:12px;font-weight:600">Caption - field labels</div><div class="type-meta"><b>12 / 600</b> · Inter · 1.3</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase">Eyebrow - TODAY · PERIOD</div><div class="type-meta"><b>12 / 700</b> · Inter · caps</div></div>
+    <div class="type-row"><div class="type-sample" style="font-family:var(--font-ui);font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">Micro - ticks, dense data</div><div class="type-meta"><b>10 / 600</b> · Inter</div></div>
+  </section>
+
+  <!-- ICONS -->
+  <section>
+    <span class="badge b-new">New pillar</span>
+    <p class="sect-h">Cohesion</p><p class="sect-t">Icons - one family, one glyph per meaning</p>
+    <p class="sect-note">Single family (<b>Lucide</b>), sized by <span class="inlinecode">--icon-sm/md/lg</span>, colored by <span class="inlinecode">currentColor</span> so they inherit text color in any context (including dark mode). Below is the controlled concept-&gt;glyph vocabulary - one concept, one glyph, system-wide.</p>
+    <div class="icon-sizes">
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="lbl">sm 16</span></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="lbl">md 20</span></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="lbl">lg 24</span></div>
+    </div>
+    <div class="grouplabel">Concept &rarr; glyph map</div>
+    <div class="icon-grid">
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg><div><div class="icon-meaning">Entered</div><div class="icon-glyph">check-circle</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><div><div class="icon-meaning">Needs entry</div><div class="icon-glyph">pencil</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg><div><div class="icon-meaning">Overdue / alert</div><div class="icon-glyph">alert-triangle</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><div><div class="icon-meaning">Upcoming</div><div class="icon-glyph">clock</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><div><div class="icon-meaning">Off-season</div><div class="icon-glyph">moon</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg><div><div class="icon-meaning">Scheduled</div><div class="icon-glyph">calendar</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><div><div class="icon-meaning">Revenue</div><div class="icon-glyph">dollar-sign</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg><div><div class="icon-meaning">Refresh</div><div class="icon-glyph">refresh-cw</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div><div class="icon-meaning">Admin</div><div class="icon-glyph">lock</div></div></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg><div><div class="icon-meaning">Jump / next</div><div class="icon-glyph">arrow-right</div></div></div>
+    </div>
+    <p class="sect-note" style="margin-top:14px;margin-bottom:0">a11y default: decorative icons get <span class="inlinecode">aria-hidden="true"</span>; meaningful icons get a label; icon-only buttons get an accessible name. Stroke optically nudged to ~1.75 at <span class="inlinecode">--icon-sm</span>.</p>
+  </section>
+
+  <!-- DENSITY -->
+  <section>
+    <span class="badge b-t2">Tier 2 &middot; mode</span>
+    <p class="sect-h">Remap proof 1</p><p class="sect-t">Density mode</p>
+    <p class="sect-note">Comfortable and Compact are the same semantic tokens pointing at different space/height primitives under <span class="inlinecode">[data-density]</span>. <b>Toggle it - the cluster retightens with zero component code.</b></p>
+    <div class="demo-bar">
+      <div class="seg" id="denSeg"><button class="active" data-mode="comfortable">Comfortable</button><button data-mode="compact">Compact</button></div>
+      <span class="den-label" id="denLabel">--control-height 40 · --space-stack 24 · --cell-size 34</span>
+    </div>
+    <div class="demo-frame density-demo" id="densityDemo" data-density="comfortable">
+      <div class="demo-cluster">
+        <button class="dbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Jump to next</button>
+        <button class="dbtn sec">View</button>
+        <span class="toggle"><span class="on">Calendar</span><span class="off">Period</span></span>
+        <span class="dchip"><i></i>as of 6:26 PM</span>
+      </div>
+      <div class="drow">CIN - AZ &middot; June <span class="num">18/30</span></div>
+      <div class="drow">CIN - OH &middot; Homestand 4 <span class="num">6/9</span></div>
+      <div style="margin-top:10px"><div class="el-label">Day cells</div><div class="dcells"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+    </div>
+  </section>
+
+  <!-- DARK -->
+  <section>
+    <span class="badge b-t2">Tier 2 &middot; theme</span>
+    <p class="sect-h">Remap proof 2</p><p class="sect-t">Dark mode - semantic remap only</p>
+    <p class="sect-note">Dark mode remaps the <b>semantic layer alone</b> under <span class="inlinecode">[data-theme="dark"]</span> - primitives untouched, component markup identical. <b>Toggle it - same components, reskinned.</b> This is the acid test passing live.</p>
+    <div class="demo-bar">
+      <div class="seg" id="themeSeg"><button class="active" data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
+      <span class="den-label">remap surfaces + text + borders + status; zero component edits</span>
+    </div>
+    <div class="demo-frame dark-demo" id="darkDemo" data-theme="light">
+      <div class="demo-cluster">
+        <button class="dbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Jump to next</button>
+        <button class="dbtn sec">View</button>
+        <span class="dchip"><i></i>as of 6:26 PM</span>
+      </div>
+      <div class="drow">CIN - AZ &middot; June <span class="num">18/30</span></div>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <span class="s-badge" style="background:var(--status-entered-bg);color:var(--status-entered-fg)">Entered</span>
+        <span class="s-badge" style="background:var(--status-needs-bg);color:var(--status-needs-fg)">Needs entry</span>
+        <span class="s-badge" style="background:var(--status-overdue-bg);color:var(--status-overdue-fg)">Overdue</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATE COVERAGE -->
+  <section>
+    <span class="badge b-new">First-class states</span>
+    <p class="sect-h">Every state designed</p><p class="sect-t">State coverage</p>
+    <p class="sect-note">Default, hover, focus-visible, disabled, loading, and empty - tokenized, not bolted on. The skeleton and empty state are real screens, especially on dense data surfaces.</p>
+    <div class="states">
+      <div class="state-cell"><div class="lbl">Default</div><button class="btnp">Jump to next</button></div>
+      <div class="state-cell"><div class="lbl">Hover</div><button class="btnp hov">Jump to next</button></div>
+      <div class="state-cell"><div class="lbl">Focus-visible</div><button class="btnp foc">Jump to next</button></div>
+      <div class="state-cell"><div class="lbl">Disabled</div><button class="btnp dis">Jump to next</button></div>
+      <div class="state-cell"><div class="lbl">Loading</div><div style="padding:6px 2px"><div class="skel" style="width:90%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:80%"></div></div></div>
+      <div class="state-cell"><div class="lbl">Empty</div><div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg><span>No service this month</span></div></div>
+    </div>
+  </section>
+
+  <!-- ELEMENT SET -->
+  <section>
+    <p class="sect-h">Applied</p><p class="sect-t">The element set (semantic-built)</p>
+    <p class="sect-note">Every element reads only semantic tokens - one vocabulary across shape, type, color, spacing, and now icons. A set, backed by an architecture.</p>
+    <div class="elements">
+      <div class="el-group"><div class="el-label">Buttons</div><button class="btn btn-primary" style="margin-bottom:8px">Primary action</button><br><button class="btn btn-secondary">Secondary</button></div>
+      <div class="el-group"><div class="el-label">Tags &amp; chips</div><span class="tag tag-pdc" style="margin-right:6px">PDC</span><span class="tag tag-mlb">MLB</span><div style="margin-top:10px"><span class="dchip"><i></i>as of 6:26 PM</span></div></div>
+      <div class="el-group"><div class="el-label">Toggle</div><span class="toggle"><span class="on">Calendar</span><span class="off">Period</span></span></div>
+      <div class="el-group"><div class="el-label">KPI (tabular)</div><div><div class="kpi-val">$710K</div><div class="kpi-lbl">Entered YTD</div></div></div>
+    </div>
+    <div style="margin-top:22px">
+      <div class="el-label">Action zone (CTA - placement unchanged, token-built, AA wash)</div>
+      <div class="cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg><span class="cta-txt"><b>5 need entry</b> &middot; 3 overdue</span><button class="cta-btn">Jump to next <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button></div>
+    </div>
+  </section>
+
+  <p class="foot">OKLCH ramps + WCAG ratios computed offline and delivered as static hex - no runtime color or contrast dependency. Density &amp; dark toggles are live; reduced-motion disables the skeleton + transitions. Fonts via Inter / Mulish / JetBrains Mono with system fallback.</p>
+</div>
+
+<script>
+(function(){
+  function segment(segId, apply){
+    var seg=document.getElementById(segId);
+    seg.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click',function(){
+        seg.querySelectorAll('button').forEach(function(x){x.classList.remove('active');});
+        b.classList.add('active');
+        apply(b);
+      });
+    });
+  }
+  var den=document.getElementById('densityDemo'), denLbl=document.getElementById('denLabel');
+  var denCopy={comfortable:'--control-height 40 \u00b7 --space-stack 24 \u00b7 --cell-size 34',
+               compact:'--control-height 32 \u00b7 --space-stack 16 \u00b7 --cell-size 28'};
+  segment('denSeg',function(b){var m=b.getAttribute('data-mode');den.setAttribute('data-density',m);denLbl.textContent=denCopy[m];});
+  var th=document.getElementById('darkDemo');
+  segment('themeSeg',function(b){th.setAttribute('data-theme',b.getAttribute('data-theme'));});
+})();
+</script>
+</body>
+</html>

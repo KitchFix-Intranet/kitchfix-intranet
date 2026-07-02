@@ -4,11 +4,23 @@
 explains the system and is the **rule**: components consume **semantic** tokens only -
 never primitives, never raw hex/px. A raw color or pixel value in a component is a defect.
 
-**Visual style guide:** [`docs/design-tokens.html`](design-tokens.html). Open in any
-browser to see every token as a rendered swatch / sample / spec (color ramps, semantic
-roles, status family, tool accents including the SC family, type scale, spacing, radii,
-elevation, motion, focus ring, density-mode compare, z / opacity / icons). Self-contained;
-regenerate by copying the `:root` block from `src/app/tokens.css`.
+**Visual style guides** (two, complementary):
+- [`docs/design-tokens.html`](design-tokens.html) - the CURRENT token INVENTORY.
+  Every token in `src/app/tokens.css` rendered as a swatch / sample / spec (color
+  ramps, semantic roles, status family, **tool accents including the SC family**,
+  type scale, spacing, radii, elevation, motion, focus ring, density-mode compare,
+  z / opacity / icons). Regenerate by copying `:root` from `src/app/tokens.css`.
+- [`docs/design-tokens-v3.html`](design-tokens-v3.html) - the design-system
+  NARRATIVE from the token audit. Adds the 3-tier architecture diagram, the WCAG
+  Contrast Report table, the icon concept -> glyph vocabulary, the interactive-state
+  pack (default / hover / focus / disabled / loading / empty), and a composite
+  screen demo. v3 predates the SC-redesign token additions - the four `--accent-sc*`
+  variants and the four tool accents (`--accent-ops/-people/-directory/-playbook`)
+  are NOT in v3, but are in current `tokens.css` and are shown in `design-tokens.html`.
+
+Rule of thumb: open the inventory when you need to know if a token exists / what its
+value is / what it looks like; open v3 when you need to understand the SYSTEM (why
+tokens are structured this way, contrast intent, icon vocabulary, state coverage).
 
 ## The model - two tiers, one rule
 - **Tier 1 - Primitives** (`--navy-700`, `--space-4`, `--rad-10`): raw values. Generated,
