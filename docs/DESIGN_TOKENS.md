@@ -4,6 +4,12 @@
 explains the system and is the **rule**: components consume **semantic** tokens only -
 never primitives, never raw hex/px. A raw color or pixel value in a component is a defect.
 
+**Visual style guide:** [`docs/design-tokens.html`](design-tokens.html). Open in any
+browser to see every token as a rendered swatch / sample / spec (color ramps, semantic
+roles, status family, tool accents including the SC family, type scale, spacing, radii,
+elevation, motion, focus ring, density-mode compare, z / opacity / icons). Self-contained;
+regenerate by copying the `:root` block from `src/app/tokens.css`.
+
 ## The model - two tiers, one rule
 - **Tier 1 - Primitives** (`--navy-700`, `--space-4`, `--rad-10`): raw values. Generated,
   not hand-picked. Components NEVER reference these directly.
@@ -35,9 +41,33 @@ amber-700 (5.72), overdue red-700 (4.83), upcoming/off n-700 (6.4+), today navy-
 Status is NOT calendar-only - use it in People, Vendor, dashboards.
 
 ## Tool accents (Tier 3 - per-surface identity)
-`--accent-ops` (amber), `--accent-people` (#7C3AED), `--accent-directory` (#C41E3A),
-`--accent-playbook` (#0F6E56). These carry surface identity; use the `--feedback-danger`
-token (not `--accent-directory`) for actual error states.
+Every module gets one Tier-3 slot for identity:
+`--accent-ops` (amber, `--amber-500`), `--accent-people` (`#7C3AED`),
+`--accent-directory` (`#C41E3A`), `--accent-playbook` (`#0F6E56`). These carry surface
+identity; use the `--feedback-danger` token (not `--accent-directory`) for actual error
+states.
+
+**Service Calendar identity - the `--accent-sc` family.** The SC is a green-themed tool
+(hover borders, focus rings, primary interactive accents, back-links, active/touched
+states). Rather than force the SC surface to conform to the app's navy primary, the SC
+carries its own tool-accent family in four tiers:
+- `--accent-sc` (`#0F6E56`) - primary interactive green (chrome bar today CTA, back-link,
+  focus rings, `.sc-workspace-nav-today`, `.sc-stepper-caption` "done" tag, on-track
+  check). White text on this fill is AA (5.02).
+- `--accent-sc-dark` (`#085041`) - deeper accent (`.sc-workspace-nav-today:hover`,
+  phase timeline title text where applicable). White text still AA.
+- `--accent-sc-subtle` (`#E1F5EE`) - hover backgrounds on subtle interactive elements
+  (spotlight fill under the `--done` mobile card, pill hover backgrounds).
+- `--accent-sc-tint` (`#F0FDF4`) - the softest wash (MiLB bare-strip gradient middle,
+  faint backplates). Nearly-white green.
+Note: `--accent-sc` shares its hex with `--accent-playbook` - same operational-green,
+two surfaces, intentional. Cell-state colors are separate from `--accent-sc`; they come
+from the status family (`--status-entered-*`, `--status-needs-*`, etc.), regardless of
+which tool renders them.
+
+**Rule for the SC:** any interactive-color decision on the SC surface (hover, focus,
+active, "you clicked this") consumes an `--accent-sc*` token, not raw hex. The SC
+overview is the shipped reference for this pattern; the drill-in redesign must match.
 
 ## Type - modular scale (ratio 1.2), roles lock size/weight/leading/tracking
 Fonts: `--font-ui` (Inter) for all screen UI, headings, and body; `--font-mono`

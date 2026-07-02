@@ -311,6 +311,13 @@ polish, so the current work is bringing the DRILL-IN up to the overview's bar -
 tokens, icons, a11y, CSS scoping. This is an alignment lens layered on Stage 3,
 not new structure. Ground truth: `docs/SC_DRILLIN_ALIGNMENT_AUDIT_CC.md`.
 
+**Source of truth for design values (SC and app-wide):**
+- `src/app/tokens.css` - canonical semantic + primitive tokens; the code truth.
+- `docs/DESIGN_TOKENS.md` - the rules doc (two-tier model, semantic-only, add-and-deprecate).
+- `docs/design-tokens.html` - the VISUAL style guide, self-contained; open in a browser to see every token as a rendered sample. The `--accent-sc` family (the SC green identity - `--accent-sc / -dark / -subtle / -tint`) is documented in DESIGN_TOKENS.md and demonstrated in the visual guide's "Tool accents" section.
+
+**What "match the overview" means for the drill-in (for chat-Claude working on part 2):** the OVERVIEW surface (Season shell, Calendar + Period grids, day-square atom, SeasonStepper, PhaseStrip, StateLegend, ChromeBar and their scoped CSS files) is the shipped design-system standard for this module. Every interactive green on the SC surface goes through an `--accent-sc*` token; every state color goes through the `--status-*` family; every surface color through `--surface-*`; every border through `--border-*`; every space through `--space-*` (or its density-aware semantic aliases `--space-stack / --space-card-pad / --space-inline / --control-height / --row-height / --cell-size`); every radius through `--radius-*`; every elevation through `--elevation-*`; every focus ring through `--focus-ring-*`. No raw hex, no raw px, no inline-styled JSX colors. Scoped CSS files per surface, not the shared `ops-sc.css`. Icons via a local `service-calendar/Icons.js` (per §13.1). If any of those rules breaks in the overview, that's overview drift and gets flagged before the drill-in mirrors it. If any of those rules breaks in the drill-in, that's the alignment work.
+
 ### 13.1 Settled facts (ground truth - do not relitigate)
 - **Density is correct in code.** The SC root (`ServiceCalendar.js`) carries
   `data-density="compact"`; the DayDetail + bulk overlays override to
