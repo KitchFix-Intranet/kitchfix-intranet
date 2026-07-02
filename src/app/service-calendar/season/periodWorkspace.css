@@ -339,7 +339,6 @@
 
 /* ───────── TODAY RAIL (folded into the frame, replaces the standalone hero card) ───────── */
 .sc-workspace-frame-today {
-  margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: var(--border-thin) solid var(--border-subtle);
   display: flex;
