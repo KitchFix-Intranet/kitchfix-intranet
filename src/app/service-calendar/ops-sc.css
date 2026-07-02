@@ -181,6 +181,10 @@
   border: var(--border-thin) solid transparent;
 }
 .sc-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.sc-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
 .sc-btn--primary {
   background: var(--accent-sc);
   color: var(--surface-card);
@@ -397,11 +401,17 @@
     padding: var(--space-3) var(--space-4);
   }
 
-  /* Day header on phone: navigation buttons + close are tappable. */
+  /* Day header on phone: navigation buttons + close are tappable at
+     the WCAG 2.5.5 floor. */
   .sc-day-nav-btn, .sc-day-close {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
+
+  /* Base .sc-btn mobile floor: clears the 44px tap target for any
+     .sc-btn outside the .sc-day-actions / .sc-bulk-actions contexts
+     (which already float at 48px). Desktop base stays 40px. */
+  .sc-btn { min-height: 44px; }
 }
 
 /* Cancel: ghost tier - no border at rest so it reads as a tertiary
