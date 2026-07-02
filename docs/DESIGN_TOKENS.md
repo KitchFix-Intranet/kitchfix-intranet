@@ -22,6 +22,11 @@ Rule of thumb: open the inventory when you need to know if a token exists / what
 value is / what it looks like; open v3 when you need to understand the SYSTEM (why
 tokens are structured this way, contrast intent, icon vocabulary, state coverage).
 
+**SC drill-in redesign context:** [`docs/SC_DESIGN_TOKEN_README.md`](SC_DESIGN_TOKEN_README.md)
+is the SC-specific token bible for the drill-in alignment work - operational rules for
+"match the overview," per-surface consumption reference, pre-flight checklist,
+anti-patterns, and the Claude-vs-Kevin decision split.
+
 ## The model - two tiers, one rule
 - **Tier 1 - Primitives** (`--navy-700`, `--space-4`, `--rad-10`): raw values. Generated,
   not hand-picked. Components NEVER reference these directly.
