@@ -168,7 +168,7 @@ The general rule: **lists and queues take density; forms and entry take comforta
 
 ### Migration status
 
-Lucide is **not yet installed**. Current icons are inline SVG (~70 files) plus emoji ad hoc (`WeatherBadge.js`, `NewsFeed.js`, celebrations strip). Migration is **opportunistic**, not sweeping - when a module is being touched, swap its inline SVGs to Lucide as part of that work.
+Lucide is **installed** (`lucide-react` in `package.json`) but **not yet adopted** - as of 2026-07 there are zero Lucide imports in the app; current icons are inline SVG (~70 files) plus emoji ad hoc (`WeatherBadge.js`, `NewsFeed.js`, celebrations strip). Migration is **opportunistic**, not sweeping - when a module is being touched, move its inline SVGs to Lucide, or to a scoped per-module icon file, as part of that work.
 
 ### Emoji policy
 
