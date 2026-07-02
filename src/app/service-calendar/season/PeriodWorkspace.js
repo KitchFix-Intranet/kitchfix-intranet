@@ -362,7 +362,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
 // frame instead of the punitive "0 / 28" with an empty bar.
 function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
-  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--accent-sc)";
+  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)";
 
   // Upcoming-period detection: today is before periodRange.start AND
   // nothing has been entered yet. The whole period is in the future.
