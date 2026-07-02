@@ -363,7 +363,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
 // frame instead of the punitive "0 / 28" with an empty bar.
 function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
-  const progressColor = (m.needsEntry + m.overdue) > 0 ? "#EF9F27" : "#0F6E56";
+  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--accent-sc)";
 
   // Upcoming-period detection: today is before periodRange.start AND
   // nothing has been entered yet. The whole period is in the future.
@@ -447,7 +447,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   const deltaLabel = delta >= 0
     ? `+${fmt$(Math.abs(delta))} ahead`
     : `${fmt$(delta)} to go`;
-  const deltaColor = delta >= 0 ? "#047857" : "#B45309";
+  const deltaColor = delta >= 0 ? "var(--text-success)" : "var(--accent-text)";
 
   return (
     <section className="sc-workspace-frame">

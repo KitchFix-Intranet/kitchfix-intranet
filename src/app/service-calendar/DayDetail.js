@@ -1,9 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
-const GREEN = "#0F6E56";
-const RED = "#dc2626";
-const AMBER = "#EF9F27";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
