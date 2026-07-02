@@ -1,0 +1,367 @@
+/* ══════════════════════════════════════════════════════════════
+   dayDetail.css — Day Input Panel (overlay card).
+   Scoped out of ops-sc.css (2026-07). Loaded alongside ops-sc.css
+   from src/app/service-calendar/page.js. The classes stay global
+   so both the DayDetail overlay AND the bulk-entry overlay in
+   ServiceCalendar.js can consume them - both render .sc-day-*.
+   Byte-identical move: no value changes; tokenization + a11y are
+   separate follow-up commits.
+   ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════
+   DAY INPUT PANEL v3 — overlay card
+   ══════════════════════════════════════ */
+.sc-day {
+  display: flex; flex-direction: column; height: 100%; max-height: 90vh;
+}
+.sc-day--review, .sc-day--success { }
+@keyframes scSlide { from { opacity: 0; } to { opacity: 1; } }
+
+/* Header */
+.sc-day-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); background: var(--surface-card); border-bottom: var(--border-thin) solid var(--surface-sunken); flex-shrink: 0; gap: var(--space-3); }
+.sc-day-header-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sc-day-title { font-size: var(--size-subhead); font-weight: var(--wt-bold); color: var(--text-heading); margin: 0; line-height: var(--lead-tight); }
+.sc-day-account { font-size: var(--size-caption); font-weight: var(--wt-medium); color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-day-nav { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; }
+.sc-day-nav-btn { width: 32px; height: 32px; border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-size: var(--size-h3); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-family: inherit; transition: border-color var(--motion-control), color var(--motion-control); }
+.sc-day-nav-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc); }
+.sc-day-nav-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-day-nav-label { font-size: var(--size-caption); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
+/* Close button: dressed as an icon-only ghost (no border at rest) to
+   sit visually below the nav-btn pair. Becomes a real button on hover
+   so the dismiss action is still legible without competing with the
+   prev/next chevrons at idle. */
+.sc-day-close { width: 32px; height: 32px; border: var(--border-thin) solid transparent; border-radius: var(--radius-control); background: transparent; cursor: pointer; color: var(--text-subtle); display: flex; align-items: center; justify-content: center; transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control); margin-left: var(--space-1); }
+.sc-day-close:hover { border-color: var(--status-overdue-bd); color: var(--feedback-danger); background: var(--status-overdue-subtle); }
+.sc-day-close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Coaching banner */
+.sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid; flex-shrink: 0; }
+/* Coaching-banner tone modifiers - the base rule leaves border-bottom
+   colorless; each modifier supplies bg + border-color + fg from the
+   status family (neutral falls back to surface-sunken / border-default
+   / text-muted). Replaces 12 inline-hex tuples that used to live in
+   DayDetail.js and ServiceCalendar.js. */
+.sc-day-coaching--neutral { background: var(--surface-sunken); border-color: var(--border-default); color: var(--text-muted); }
+.sc-day-coaching--entered { background: var(--status-entered-bg); border-color: var(--status-entered-bd); color: var(--status-entered-fg); }
+.sc-day-coaching--needs   { background: var(--status-needs-bg);   border-color: var(--status-needs-bd);   color: var(--status-needs-fg); }
+.sc-day-coaching--overdue { background: var(--status-overdue-bg); border-color: var(--status-overdue-bd); color: var(--status-overdue-fg); }
+
+/* Overdue (legacy) */
+.sc-day-overdue { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); background: var(--status-overdue-subtle); color: var(--feedback-danger); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid var(--status-overdue-bd); flex-shrink: 0; }
+.sc-day-overdue-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--feedback-danger); color: var(--surface-card); display: flex; align-items: center; justify-content: center; font-size: var(--size-caption); font-weight: var(--wt-display); flex-shrink: 0; }
+
+.sc-day-body { padding: var(--space-3) var(--space-4); overflow-y: auto; flex: 1; }
+
+/* Group card - matches the admin's "Fuller" group treatment
+   (sc-admin-group in ops-sc-admin.css: thin border, container radius,
+   subtle navy-tinted shadow). Both entry surfaces - single-day popup
+   and bulk-entry modal - render through the same .sc-day-group class. */
+.sc-day-group {
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  overflow: hidden;
+  box-shadow: var(--elevation-card);
+  margin-bottom: var(--space-4);
+}
+.sc-day-group--expanded {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+/* Header BAND - light fill + NAVY left-accent (text-link =
+   structural definition layer, matches sc-admin-group-header-band).
+   Replaces the prior 2px green underline which was carrying both
+   structure and action color at once. Group name moves to navy here
+   too so the band reads as the structural container; the green
+   operator-semantic color is preserved on the touched input, the
+   match button, the delta indicators, and the subtotal below. */
+.sc-day-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-page);
+  border-bottom: var(--border-thin) solid var(--border-default);
+  border-left: 3px solid var(--text-link);
+  margin-bottom: 0;
+}
+.sc-day-group-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-link);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.sc-day-group-price {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+}
+.sc-day-group-hint {
+  font-size: var(--size-caption);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+
+/* Service row - sits on white inside the group card. Roomier so the
+   hero input has space. The 0.5px divider stays as a quiet inside-card
+   row separator. */
+.sc-day-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 0.5px solid var(--border-subtle);
+  gap: var(--space-3);
+}
+.sc-day-row:last-of-type { border-bottom: none; }
+.sc-day-row-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sc-day-row-name { font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-heading); }
+.sc-day-row-proj-label { font-size: var(--size-caption); color: var(--text-subtle); }
+.sc-day-row-right { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+
+/* INPUT AS HERO - the operator's primary touch target. Wider, taller,
+   bigger font so the meal-count value is the visual focus of the row.
+   Ghost (untouched) stays dashed/quiet to read as "not yet entered".
+   Touched stays GREEN (accent-sc / accent-sc-dark / accent-sc-tint) -
+   that is the operator-semantic "entered/confirmed" color and must
+   not move to navy. PR2 handles tap targets at narrow widths; here
+   we ensure the desktop base is already >= 44px tall so the floor is
+   met. */
+.sc-day-input {
+  width: 92px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-control);
+  font-size: var(--size-h3);
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
+  text-align: center;
+  background: var(--surface-card);
+  font-family: inherit;
+  font-variant-numeric: var(--num-tabular);
+  transition: border-color var(--motion-control), background var(--motion-control), color var(--motion-control), box-shadow var(--motion-control);
+}
+/* Ghost (resting) state: reads as a fillable INPUT BOX, not a
+   disabled ghost. Was 1.5px dashed - dashed border read as "locked /
+   placeholder field", the opposite of the primary affordance. Solid
+   border + faint fill so the operator instantly sees "these are
+   fields I type into". The projection still shows as placeholder
+   text inside (placeholder-is-projection behavior preserved).
+   Touched state (accent-sc) remains visually distinct. */
+.sc-day-input--ghost {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-heading);
+}
+.sc-day-input--ghost::placeholder {
+  color: var(--text-subtle);
+  font-weight: var(--wt-medium);
+}
+.sc-day-input--touched {
+  border: 1.5px solid var(--accent-sc);
+  color: var(--accent-sc-dark);
+  background: var(--accent-sc-tint);
+}
+.sc-day-input:focus {
+  outline: none;
+  border: 1.5px solid var(--accent-sc);
+  background: var(--surface-card);
+  box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+}
+
+/* Delta - fixed-width inline-block so the slot reserves the same 36px
+   whether the span is empty (untouched row) or carrying a "+15" / "-3" /
+   "match" indicator. Empty span without the explicit display: inline-block
+   was painting with collapsed width in some browser cases, ragging the
+   right edge as operators typed across rows. */
+.sc-day-row-delta { display: inline-block; width: 36px; font-size: var(--size-caption); text-align: right; }
+.sc-day-row-delta--match { color: var(--accent-sc); font-weight: var(--wt-semibold); }
+.sc-day-row-delta--pos { color: var(--accent-sc); font-weight: var(--wt-semibold); }
+.sc-day-row-delta--neg { color: var(--feedback-danger); font-weight: var(--wt-semibold); }
+
+/* Bundle 2 archived-day chip: a service archived as of day.date renders
+   this read-only chip in place of the editable input. Same visible-but-
+   marked discipline as the admin side. Same visual weight as the non-rev
+   tag - operator sees why entry is gone without the row being hidden. */
+.sc-day-row--archived .sc-day-row-name { color: var(--text-subtle); }
+.sc-day-row--archived .sc-day-row-proj-label { color: var(--border-strong); }
+.sc-day-row-archived-chip {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  white-space: nowrap;
+}
+
+/* Per-group match button. PR3 dial-down: no longer a full-width dashed
+   green hero bar. The hero treatment was reading as the primary commit
+   on the day (which it is not - it is a shortcut helper). Now a small
+   right-aligned secondary button so the input rows and footer commit
+   keep their visual weight. FLAGGED: #d1fae5 is a green-100 wash for
+   the rest-border; mapped to status-entered-subtle (closest semantic). */
+.sc-day-match-btn {
+  display: block; width: fit-content; padding: var(--space-1) var(--space-2); margin: var(--space-2) var(--space-4) 6px auto;
+  border: var(--border-thin) solid var(--status-entered-subtle); border-radius: var(--radius-control); background: var(--accent-sc-tint);
+  color: var(--accent-sc-dark); font-size: var(--size-caption); font-weight: var(--wt-semibold); cursor: pointer;
+  font-family: inherit; transition: background var(--motion-control), border-color var(--motion-control); text-align: center;
+}
+.sc-day-match-btn:hover { background: var(--accent-sc-subtle); border-color: var(--accent-sc); }
+.sc-day-match-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Extras button — distinct from notes */
+.sc-day-extras-btn {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
+  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
+  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control);
+}
+.sc-day-extras-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc-dark); background: var(--accent-sc-tint); }
+.sc-day-extras-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--border-default); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: var(--size-body); font-weight: var(--wt-semibold); flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control); }
+.sc-day-extras-btn:hover .sc-day-extras-btn-icon { background: var(--accent-sc); color: var(--surface-card); }
+.sc-day-extras-hide {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
+  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
+  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control);
+  font-family: inherit;
+}
+.sc-day-extras-hide:hover { border-color: var(--text-subtle); color: var(--text-default); }
+.sc-day-extras-hide:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-day-extras-hide .sc-day-extras-btn-icon { background: var(--border-default); color: var(--text-muted); }
+.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: var(--text-subtle); color: var(--surface-card); }
+
+/* Group subtotal */
+.sc-day-group-subtotal { text-align: right; padding: 6px 0 2px; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); }
+
+/* Collapsed inactive group — button style, distinct from notes */
+.sc-day-collapsed-btn {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  padding: var(--space-2) var(--space-3); background: var(--surface-card); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control);
+  cursor: pointer; margin-bottom: 6px; font-size: var(--size-body); color: var(--text-subtle);
+  font-family: inherit; transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
+}
+.sc-day-collapsed-btn:hover { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--accent-sc); }
+.sc-day-collapsed-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-day-collapsed-icon { font-size: var(--size-subhead); font-weight: var(--wt-semibold); }
+
+/* Notes */
+.sc-day-notes { margin-top: var(--space-4); }
+.sc-day-notes-label { display: block; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--track-caps); margin-bottom: 6px; }
+.sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); font-size: var(--size-body); font-family: inherit; color: var(--text-default); background: var(--surface-card); resize: vertical; min-height: 44px; transition: border-color var(--motion-control); }
+.sc-day-notes-input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-color: var(--accent-sc);
+}
+.sc-day-notes-input::placeholder { color: var(--text-subtle); }
+
+/* Footer - sticky at bottom of overlay. Slightly more presence so it
+   reads as a real commit zone. The total-rev stays green (operator
+   semantics: "this is what you have entered/committed"). */
+.sc-day-footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-thin) solid var(--border-default);
+  background: var(--surface-sunken);
+  border-radius: 0 0 var(--radius-container-lg) var(--radius-container-lg);
+  flex-shrink: 0;
+}
+.sc-day-totals {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-3);
+  gap: var(--space-3);
+}
+.sc-day-totals-left {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+/* "Projected" / "Total" label - quiet uppercase tag in front of the
+   meals + revenue so the operator reads "what these numbers represent"
+   before reading the numbers themselves. */
+.sc-day-total-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--text-muted);
+}
+.sc-day-total-meals {
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-day-total-pct { font-size: var(--size-body); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
+.sc-day-total-rev {
+  font-size: var(--size-h2);
+  font-weight: var(--wt-bold);
+  color: var(--accent-sc-dark);
+  font-variant-numeric: var(--num-tabular);
+}
+/* Pre-entry state: nothing the operator has typed yet. Footer numbers
+   are still real (the day's projection), but desaturated so they read
+   as reference, not commitment. As soon as anything is touched the
+   class drops and the full color comes back. */
+.sc-day-totals--projected .sc-day-total-label { color: var(--text-subtle); }
+.sc-day-totals--projected .sc-day-total-meals { color: var(--text-muted); font-weight: var(--wt-medium); }
+.sc-day-totals--projected .sc-day-total-rev { color: var(--text-muted); font-weight: var(--wt-semibold); }
+.sc-day-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ── Review overlay ── */
+.sc-day-review-inner { padding: var(--space-4) var(--space-4); overflow-y: auto; flex: 1; }
+.sc-day-review-header { margin-bottom: var(--space-4); }
+.sc-day-review-title { font-size: var(--size-subhead); font-weight: var(--wt-bold); color: var(--text-heading); margin: 0 0 var(--space-1); }
+.sc-day-review-date { font-size: var(--size-body); color: var(--text-muted); margin: 0; }
+.sc-day-review-body { margin-bottom: var(--space-4); }
+.sc-day-review-group { margin-bottom: var(--space-3); }
+.sc-day-review-group-name { font-size: var(--size-micro); font-weight: var(--wt-bold); color: var(--accent-sc-dark); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 6px; border-bottom: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-1); }
+.sc-day-review-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: var(--size-body); color: var(--text-default); }
+.sc-day-review-val { font-weight: var(--wt-semibold); color: var(--text-heading); }
+.sc-day-review-subtotal { text-align: right; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); padding-top: var(--space-1); }
+.sc-day-review-summary { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) 0; border-top: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-4); }
+.sc-day-review-total-meals { font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-heading); }
+.sc-day-review-total-rev { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); }
+.sc-day-review-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+
+/* ── Success state ── */
+.sc-day-success-inner { padding: 48px var(--space-6); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
+.sc-day-success-check { width: 56px; height: 56px; border-radius: var(--radius-circle); background: var(--accent-sc-subtle); color: var(--accent-sc); display: inline-flex; align-items: center; justify-content: center; font-size: var(--size-h1); font-weight: var(--wt-bold); margin-bottom: var(--space-3); animation: scPop 0.3s ease; }
+@keyframes scPop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.sc-day-success-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); margin: 0 0 6px; }
+.sc-day-success-detail { font-size: var(--size-body); color: var(--text-muted); margin: 0 0 var(--space-5); }
+.sc-day-success-actions { display: flex; gap: var(--space-2); justify-content: center; }

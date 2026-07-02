@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { X, ChevronLeft, ChevronRight } from "./Icons";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -223,22 +224,22 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   const coaching = isFeeAccount
     ? (
         isPrepDay
-          ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: `${homestandContext.dayType} day - enter counts if meals were served.` }
+          ? { tone: "neutral", text: `${homestandContext.dayType} day - enter counts if meals were served.` }
           : isGameDay && status === "entered"
-            ? { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Delivery logged. Edit and re-save if needed." }
+            ? { tone: "entered", text: "Delivery logged. Edit and re-save if needed." }
             : isGameDay && status === "needs-entry"
-              ? { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Game day - enter meal counts." }
+              ? { tone: "needs", text: "Game day - enter meal counts." }
               : isGameDay && status === "overdue"
-                ? { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due game day - enter meal counts now." }
+                ? { tone: "overdue", text: "Past due game day - enter meal counts now." }
                 : isGameDay
-                  ? { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Upcoming game day. Projections shown for reference." }
-                  : { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter meal counts if any were served." }
+                  ? { tone: "neutral", text: "Upcoming game day. Projections shown for reference." }
+                  : { tone: "neutral", text: "Enter meal counts if any were served." }
       )
     : {
-        "needs-entry": { bg: "#fffbeb", border: "#fde68a", color: "#92400e", text: "Enter actual meal counts. Projections shown for reference." },
-        "overdue": { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", text: "Past due - enter actual counts as soon as possible." },
-        "upcoming": { bg: "#f9fafb", border: "#e5e7eb", color: "#6b7280", text: "Enter actual meal counts. Projections shown for reference." },
-        "entered": { bg: "#E1F5EE", border: "#9FE1CB", color: "#085041", text: "Actuals recorded. Edit and re-save if needed." },
+        "needs-entry": { tone: "needs",   text: "Enter actual meal counts. Projections shown for reference." },
+        "overdue":     { tone: "overdue", text: "Past due - enter actual counts as soon as possible." },
+        "upcoming":    { tone: "neutral", text: "Enter actual meal counts. Projections shown for reference." },
+        "entered":     { tone: "entered", text: "Actuals recorded. Edit and re-save if needed." },
       }[status];
 
   function renderServiceRow(svc) {
@@ -357,21 +358,29 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     <div className="sc-day">
       <div className="sc-day-header">
         <div className="sc-day-header-titles">
-          <h3 className="sc-day-title">{formatDate(day.date)}</h3>
+          <h3 className="sc-day-title" id="sc-day-detail-title">{formatDate(day.date)}</h3>
           {accountName && <div className="sc-day-account">{accountName}</div>}
         </div>
         <div className="sc-day-nav">
-          {onPrev && <button className="sc-day-nav-btn" onClick={onPrev}>&#8249;</button>}
+          {onPrev && (
+            <button className="sc-day-nav-btn" onClick={onPrev} aria-label="Previous day">
+              <ChevronLeft size="sm" />
+            </button>
+          )}
           <span className="sc-day-nav-label">Day {dayIndex + 1} of {totalDays}</span>
-          {onNext && <button className="sc-day-nav-btn" onClick={onNext}>&#8250;</button>}
+          {onNext && (
+            <button className="sc-day-nav-btn" onClick={onNext} aria-label="Next day">
+              <ChevronRight size="sm" />
+            </button>
+          )}
           <button className="sc-day-close" onClick={onClose} aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <X size="sm" />
           </button>
         </div>
       </div>
 
       {coaching && (
-        <div className="sc-day-coaching" style={{ background: coaching.bg, borderColor: coaching.border, color: coaching.color }}>
+        <div className={`sc-day-coaching sc-day-coaching--${coaching.tone}`}>
           {coaching.text}
         </div>
       )}

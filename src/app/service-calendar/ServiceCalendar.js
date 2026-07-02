@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DayDetail from "./DayDetail";
+import { X } from "./Icons";
+import { useDialogA11y } from "./useDialogA11y";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
@@ -697,6 +699,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const canPrev = focusIdx > 0; const canNext = focusIdx < dayList.length - 1;
   const navDay = useCallback((dir) => { const ni = focusIdx + dir; if (ni >= 0 && ni < dayList.length) setFocusDay(dayList[ni]); }, [focusIdx, dayList]);
 
+  // Dialog a11y for the two SC overlays. Both share .sc-overlay-card
+  // so they follow the same contract: role/aria-modal/aria-labelledby
+  // on the card, Escape closes, focus moves in on open, focus returns
+  // to the trigger on close, and Tab/Shift+Tab cycle within.
+  const dayOverlayCardRef = useRef(null);
+  const bulkOverlayCardRef = useRef(null);
+  const dayOverlayOpen = Boolean(focusDay && focusDayData && (data?.serviceGroups || periodServiceGroups));
+  const bulkOverlayOpen = Boolean(bulkPanelOpen && data?.serviceGroups);
+  useDialogA11y({ cardRef: dayOverlayCardRef, isOpen: dayOverlayOpen, onClose: () => setFocusDay(null) });
+  useDialogA11y({ cardRef: bulkOverlayCardRef, isOpen: bulkOverlayOpen, onClose: () => setBulkPanelOpen(false) });
+
   const acctObj = accounts.find(a => a.key === selectedAccount);
   const category = acctObj?.category || "";
 
@@ -1034,7 +1047,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           from `data` (a period can span two months). */}
       {focusDay && focusDayData && (data?.serviceGroups || periodServiceGroups) && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setFocusDay(null); }}>
-          <div className="sc-overlay-card" data-density="comfortable">
+          <div
+            ref={dayOverlayCardRef}
+            className="sc-overlay-card"
+            data-density="comfortable"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-day-detail-title"
+            tabIndex={-1}
+          >
             <DayDetail day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
               overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
               onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
@@ -1052,17 +1073,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       {/* Bulk entry overlay */}
       {bulkPanelOpen && data?.serviceGroups && (
         <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkPanelOpen(false); }}>
-          <div className="sc-overlay-card" data-density="comfortable">
+          <div
+            ref={bulkOverlayCardRef}
+            className="sc-overlay-card"
+            data-density="comfortable"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-day-bulk-title"
+            tabIndex={-1}
+          >
             <div className="sc-day">
               <div className="sc-day-header">
                 <div>
-                  <h3 className="sc-day-title">Bulk entry — {bulkSelected.size} days</h3>
+                  <h3 className="sc-day-title" id="sc-day-bulk-title">Bulk entry — {bulkSelected.size} days</h3>
                 </div>
-                <button className="sc-day-close" onClick={() => setBulkPanelOpen(false)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                <button className="sc-day-close" onClick={() => setBulkPanelOpen(false)} aria-label="Close">
+                  <X size="sm" />
                 </button>
               </div>
-              <div className="sc-day-coaching" style={{ background: "#f9fafb", borderColor: "#e5e7eb", color: "#6b7280" }}>
+              <div className="sc-day-coaching sc-day-coaching--neutral">
                 Enter values once, apply to all {bulkSelected.size} selected days.
               </div>
               <div className="sc-day-body">
