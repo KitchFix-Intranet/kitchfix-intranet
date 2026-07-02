@@ -168,6 +168,7 @@ export default function PeriodWorkspace({
           canNext={canNext}
           periodNum={periodNum}
           phaseLabel={phasePrimaryLabel}
+          phaseTint={phasePrimaryMeta}
         />
         <WorkspacePartialBanner failedMonth={partialError.failedMonth} />
         <WorkspaceSkeleton inline />
@@ -186,6 +187,7 @@ export default function PeriodWorkspace({
           canNext={canNext}
           periodNum={periodNum}
           phaseLabel={phasePrimaryLabel}
+          phaseTint={phasePrimaryMeta}
         />
         <div className="sc-workspace-empty">Pick a period from the Season grid.</div>
       </div>
