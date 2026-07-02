@@ -38,6 +38,7 @@ import {
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import StateLegend from "./StateLegend";
+import { ChevronLeft, ChevronRight } from "../Icons";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -302,19 +303,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
             onClick={onClimbToSeason}
             aria-label="Back to Season"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
+            <ChevronLeft size="sm" />
             <span>Season</span>
           </button>
         </li>
@@ -341,7 +330,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
           disabled={!canPrev}
           onClick={onPrevPeriod}
           aria-label="Previous period"
-        >&#8249;</button>
+        ><ChevronLeft size="sm" /></button>
         <button
           type="button"
           className="sc-workspace-nav-today"
@@ -355,7 +344,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
           disabled={!canNext}
           onClick={onNextPeriod}
           aria-label="Next period"
-        >&#8250;</button>
+        ><ChevronRight size="sm" /></button>
       </div>
     </nav>
   );
