@@ -157,8 +157,8 @@
 .sc-workspace-frame {
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
-  padding: 18px 22px;
+  border-radius: var(--radius-container);
+  padding: var(--space-card-pad);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -512,8 +512,8 @@
 .sc-workspace-grid-wrap {
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
-  padding: 14px var(--space-4) 18px;
+  border-radius: var(--radius-container);
+  padding: var(--space-card-pad);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -586,7 +586,7 @@
   font-style: italic;
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container-lg);
+  border-radius: var(--radius-container);
 }
 .sc-workspace-partial {
   display: flex;
