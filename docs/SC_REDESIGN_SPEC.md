@@ -318,10 +318,13 @@ not new structure. Ground truth: `docs/SC_DRILLIN_ALIGNMENT_AUDIT_CC.md`.
   overlays render Comfortable - matching the documented module mode + surface
   override. (This corrects the drill-in audit's note that the root never sets
   density; it does.)
-- **Breakpoints:** SC uses `matchMedia("(min-width: 768px)")` (`useIsDesktop`)
-  as the desktop/mobile layout switch, a 1024/1023 tier for the 4-col vs 3-col
-  grid, plus the app-wide <1024 comfortable-flip. The `>=1024px` comment in
-  `SeasonStepper.js` is stale relative to the 768 layout switch (P2 comment fix).
+- **Breakpoints (two intentional switches, not drift):** `SeasonShell`'s
+  `useIsDesktop` (`matchMedia("(min-width: 768px)")`) drives card-grid layout +
+  interactions; the operational strip `SeasonStepper` switches its own treatment
+  at 1024 (`@media max-width: 1023px`, matching its `>=1024px` comment); the
+  month/period grid steps 4-col >=1024 / 3-col 768-1023. Plus the app-wide <1024
+  comfortable-flip. Each is consistent within its own component - there's no
+  single global switch, and that's intentional.
 - **The overview is the reference.** The drill-in matches the overview's bar:
   components consume semantic tokens only (no raw hex/px), scoped CSS per surface
   (not the shared `ops-sc.css` mega-file), status paired with glyph/label/shape.
