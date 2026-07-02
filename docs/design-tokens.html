@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix Design Tokens</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   tokens.css - INLINED verbatim from src/app/tokens.css.
+   This file is a durable, self-contained visualization of every
+   token; open in a browser to see the palette, type scale,
+   spacing, radii, elevation, motion, focus, density, status
+   family, tool accents (including the SC family), and feedback.
+   If tokens.css changes, regenerate the :root block below by
+   copying from src/app/tokens.css verbatim.
+   ============================================================ */
+:root {
+  /* Navy */
+  --navy-50:#F4F7FC; --navy-100:#D1DAE6; --navy-200:#AFBDD1; --navy-300:#8FA2BC; --navy-400:#6F87A6;
+  --navy-500:#516C92; --navy-600:#33527D; --navy-700:#153968; --navy-800:#092B55; --navy-900:#011D42;
+  /* Amber */
+  --amber-50:#FFF2E2; --amber-100:#FFDABE; --amber-200:#F7C299; --amber-300:#EEA973; --amber-400:#E4904B;
+  --amber-500:#D97706; --amber-600:#B25800; --amber-700:#8C3A00; --amber-800:#671C00; --amber-900:#440000;
+  /* Green */
+  --green-50:#E9FDEC; --green-100:#C6EBCB; --green-200:#A2D9AB; --green-300:#7DC78B; --green-400:#54B56B;
+  --green-500:#16A34A; --green-600:#008330; --green-700:#006515; --green-800:#004800; --green-900:#002C00;
+  /* Red */
+  --red-50:#FFEDE7; --red-100:#FFCAC1; --red-200:#FFA69B; --red-300:#F88276; --red-400:#EB5B50;
+  --red-500:#DC2626; --red-600:#B9000C; --red-700:#970000; --red-800:#760000; --red-900:#560000;
+  /* Neutral - warm to cool */
+  --n-0:#FFFFFF; --n-50:#FAF9F5; --n-100:#F4F2EC; --n-200:#F0EEE7; --n-300:#E5E7EB; --n-400:#D3CFC4;
+  --n-500:#94A3B8; --n-600:#64748B; --n-700:#475569; --n-800:#334155; --n-900:#0A2548;
+  /* Soft state fills */
+  --fill-needs:#FCD9A0; --fill-needs-bd:#E4AD84; --fill-upcoming:#E2EFE4; --fill-upcoming-bd:#C6D8C8;
+  --fill-off:#F1EEE7; --fill-off-bd:#DDD7CA;
+  /* Type */
+  --font-ui:'Inter',-apple-system,system-ui,sans-serif;
+  --font-body:'Inter',-apple-system,system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+  --size-micro:10px; --size-caption:12px; --size-body:14px; --size-subhead:17px; --size-h3:20px;
+  --size-h2:24px; --size-h1:29px; --size-display:35px;
+  --wt-regular:400; --wt-medium:500; --wt-semibold:600; --wt-bold:700; --wt-display:800;
+  --lead-tight:1.1; --lead-snug:1.25; --lead-normal:1.5; --track-tight:-0.01em; --track-caps:0.06em;
+  --num-tabular:tabular-nums;
+  /* Space */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-7:32px; --space-8:40px;
+  /* Radius */
+  --rad-4:4px; --rad-6:6px; --rad-10:10px; --rad-14:14px; --rad-pill:9999px; --rad-circle:50%;
+  /* Border */
+  --border-thin:1px; --border-thick:2px;
+  /* Elevation */
+  --sh-sm:0 1px 2px rgba(15,23,42,0.05);
+  --sh-md:0 4px 12px rgba(15,23,42,0.08);
+  --sh-lg:0 16px 32px rgba(15,23,42,0.12);
+  /* Motion */
+  --duration-fast:120ms; --duration-base:180ms; --duration-slow:280ms;
+  --ease-standard:cubic-bezier(.2,0,0,1);
+  --ease-emphasized:cubic-bezier(.3,0,0,1);
+  --ease-exit:cubic-bezier(.4,0,1,1);
+  /* Z-index */
+  --z-base:0; --z-dropdown:1000; --z-sticky:1100; --z-overlay:1200; --z-popover:1300; --z-toast:1400;
+  /* Opacity */
+  --opacity-disabled:.45; --opacity-muted:.6; --opacity-scrim:.5;
+  /* Icon */
+  --icon-sm:16px; --icon-md:20px; --icon-lg:24px;
+
+  /* SEMANTIC (components consume these) */
+  --text-heading:var(--n-900); --text-strong:var(--n-800); --text-default:var(--n-700); --text-muted:var(--n-600);
+  --text-subtle:var(--n-500); --text-inverse:var(--n-0); --text-link:var(--navy-700);
+  --text-success:var(--green-600); --text-danger:var(--red-500);
+  --surface-page:var(--n-100); --surface-card:var(--n-0); --surface-sunken:var(--n-50); --surface-overlay:var(--n-0);
+  --border-subtle:var(--n-200); --border-default:var(--n-300); --border-strong:var(--n-400);
+  --action-primary-bg:var(--navy-700); --action-primary-bg-hover:var(--navy-800); --action-primary-text:var(--n-0);
+  --action-secondary-bg:var(--n-0); --action-secondary-border:var(--n-400); --action-secondary-text:var(--n-700);
+  --accent:var(--amber-500);
+  --accent-solid:var(--amber-600);
+  --accent-text:var(--amber-700);
+  --accent-backplate:var(--amber-50);
+  --accent-ops:var(--amber-500); --accent-people:#7C3AED; --accent-directory:#C41E3A; --accent-playbook:#0F6E56;
+  --accent-sc:#0F6E56; --accent-sc-dark:#085041; --accent-sc-subtle:#E1F5EE; --accent-sc-tint:#F0FDF4;
+  --status-entered-bg:var(--green-300); --status-entered-bd:var(--green-400); --status-entered-fg:var(--green-800); --status-entered-subtle:var(--green-100); --status-entered-strong:var(--green-500);
+  --status-needs-bg:var(--fill-needs); --status-needs-bd:var(--fill-needs-bd); --status-needs-fg:var(--amber-700); --status-needs-subtle:var(--amber-100); --status-needs-strong:var(--amber-500);
+  --status-overdue-bg:var(--red-200); --status-overdue-bd:var(--red-300); --status-overdue-fg:var(--red-700); --status-overdue-subtle:var(--red-100); --status-overdue-strong:var(--red-500);
+  --status-upcoming-bg:var(--fill-upcoming); --status-upcoming-bd:var(--fill-upcoming-bd); --status-upcoming-fg:var(--n-700); --status-upcoming-subtle:var(--n-100); --status-upcoming-strong:var(--n-500);
+  --status-off-bg:var(--fill-off); --status-off-bd:var(--fill-off-bd); --status-off-fg:var(--n-700); --status-off-subtle:var(--n-50); --status-off-strong:var(--n-400);
+  --status-today-ring:var(--navy-700); --status-today-fg:var(--navy-700);
+  --feedback-success:var(--green-600); --feedback-warning:var(--amber-500); --feedback-danger:var(--red-500); --feedback-info:#2563EB;
+  --feedback-info-subtle:#f0f5ff; --feedback-info-border:#bfdbfe;
+  --radius-cell:var(--rad-4); --radius-control:var(--rad-10); --radius-container:var(--rad-10);
+  --radius-container-lg:var(--rad-14); --radius-pill:var(--rad-pill); --radius-circle:var(--rad-circle);
+  --elevation-card:var(--sh-sm); --elevation-raised:var(--sh-md); --elevation-popover:var(--sh-lg);
+  --focus-ring-width:var(--border-thick); --focus-ring-offset:2px; --focus-ring-color:var(--navy-700);
+  --motion-control:var(--duration-fast) var(--ease-standard);
+  --motion-surface:var(--duration-base) var(--ease-emphasized);
+  --disabled-opacity:var(--opacity-disabled);
+  --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);
+  --control-height:40px; --control-pad-x:var(--space-4); --row-height:48px; --cell-size:34px;
+}
+[data-density="compact"] {
+  --space-stack:var(--space-4); --space-card-pad:var(--space-3); --space-inline:var(--space-2);
+  --control-height:32px; --control-pad-x:var(--space-3); --row-height:40px; --cell-size:28px;
+}
+
+/* ============================================================
+   PAGE STYLES
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  background: var(--surface-page);
+  color: var(--text-default);
+  padding: var(--space-8);
+  line-height: var(--lead-normal);
+}
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.masthead {
+  border-bottom: var(--border-thick) solid var(--text-heading);
+  padding-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+.masthead h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-display);
+  font-weight: var(--wt-display);
+  color: var(--text-heading);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lead-tight);
+}
+.masthead p {
+  margin: 0;
+  font-size: var(--size-subhead);
+  color: var(--text-muted);
+}
+.masthead .meta {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--size-caption);
+  color: var(--text-subtle);
+}
+
+section {
+  margin-bottom: var(--space-8);
+}
+h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-h2);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  letter-spacing: var(--track-tight);
+}
+.section-note {
+  margin: 0 0 var(--space-5);
+  font-size: var(--size-body);
+  color: var(--text-muted);
+  max-width: 800px;
+}
+h3 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: var(--size-caption);
+}
+.card {
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-5);
+}
+
+/* --- ramp swatch --- */
+.ramp {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: var(--space-2);
+}
+.ramp-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ramp-swatch .chip {
+  height: 64px;
+  border-radius: var(--radius-cell);
+  border: var(--border-thin) solid rgba(0,0,0,.06);
+}
+.ramp-swatch .name,
+.ramp-swatch .val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-default);
+  line-height: 1.3;
+}
+.ramp-swatch .val { color: var(--text-subtle); }
+
+/* --- semantic swatch grid --- */
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 768px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+.tok {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.tok .swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-cell);
+  border: var(--border-thin) solid rgba(0,0,0,.06);
+  flex-shrink: 0;
+}
+.tok .body { min-width: 0; }
+.tok .body .name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
+  line-height: 1.3;
+  word-break: break-all;
+}
+.tok .body .val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* --- text swatch (for --text-* tokens on card) --- */
+.text-tok {
+  padding: var(--space-3);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.text-tok .sample {
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-semibold);
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+.text-tok .name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  word-break: break-all;
+}
+
+/* --- action buttons demo --- */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.btn {
+  height: var(--control-height);
+  padding: 0 var(--control-pad-x);
+  border-radius: var(--radius-control);
+  border: var(--border-thin) solid transparent;
+  font-family: inherit;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.btn--primary { background: var(--action-primary-bg); color: var(--action-primary-text); }
+.btn--primary:hover { background: var(--action-primary-bg-hover); }
+.btn--secondary { background: var(--action-secondary-bg); color: var(--action-secondary-text); border-color: var(--action-secondary-border); }
+.btn--accent { background: var(--accent); color: var(--text-heading); }
+.btn--accent-solid { background: var(--accent-solid); color: #fff; }
+.btn--danger { background: var(--feedback-danger); color: #fff; }
+.btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* --- accent split demo --- */
+.accent-family {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 900px) { .accent-family { grid-template-columns: 1fr 1fr; } }
+.acc-tile {
+  padding: var(--space-4);
+  border-radius: var(--radius-container);
+  border: var(--border-thin) solid rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.acc-tile .label { font-weight: var(--wt-bold); font-size: var(--size-body); }
+.acc-tile .name { font-family: var(--font-mono); font-size: 10px; opacity: .9; }
+
+/* --- tool accents --- */
+.tool-accents {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 700px) { .tool-accents { grid-template-columns: 1fr 1fr; } }
+.tool-accent {
+  padding: var(--space-4);
+  border-radius: var(--radius-container);
+  color: #fff;
+  font-weight: var(--wt-bold);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tool-accent .name { font-family: var(--font-mono); font-size: 10px; font-weight: var(--wt-medium); opacity: .95; }
+.tool-accent .val { font-family: var(--font-mono); font-size: 10px; font-weight: var(--wt-medium); opacity: .8; }
+
+/* --- status family: table --- */
+.status-grid {
+  display: grid;
+  grid-template-columns: 120px repeat(5, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+}
+.status-head {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  text-align: center;
+}
+.status-row-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+.status-slot {
+  height: 44px;
+  border-radius: var(--radius-cell);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border: var(--border-thin) solid transparent;
+}
+
+/* --- type scale --- */
+.type-scale { display: flex; flex-direction: column; gap: var(--space-4); }
+.type-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  align-items: baseline;
+  gap: var(--space-5);
+  border-bottom: var(--border-thin) solid var(--border-subtle);
+  padding-bottom: var(--space-4);
+}
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.type-meta .name { color: var(--text-heading); font-weight: var(--wt-semibold); display: block; }
+.type-sample { color: var(--text-heading); }
+
+/* --- space --- */
+.space-scale { display: flex; flex-direction: column; gap: var(--space-2); }
+.space-row {
+  display: grid;
+  grid-template-columns: 140px 60px 1fr;
+  gap: var(--space-4);
+  align-items: center;
+}
+.space-row .name { font-family: var(--font-mono); font-size: 11px; color: var(--text-heading); font-weight: var(--wt-semibold); }
+.space-row .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.space-bar {
+  height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* --- radius --- */
+.radius-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); }
+@media (max-width: 900px) { .radius-grid { grid-template-columns: repeat(3, 1fr); } }
+.rad-tile {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+}
+.rad-box {
+  width: 100%; aspect-ratio: 1; background: var(--navy-700);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-family: var(--font-mono); font-size: 10px;
+}
+.rad-tile .name { font-family: var(--font-mono); font-size: 11px; color: var(--text-heading); font-weight: var(--wt-semibold); text-align: center; }
+.rad-tile .val { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); text-align: center; }
+
+/* --- elevation --- */
+.elevation-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-5); }
+@media (max-width: 800px) { .elevation-grid { grid-template-columns: 1fr; } }
+.elev-tile {
+  aspect-ratio: 3/2;
+  background: var(--surface-card);
+  border-radius: var(--radius-container);
+  padding: var(--space-4);
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.elev-name { font-family: var(--font-mono); font-size: 11px; font-weight: var(--wt-bold); color: var(--text-heading); }
+.elev-val { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); word-break: break-all; }
+
+/* --- motion --- */
+.motion-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+@media (max-width: 700px) { .motion-grid { grid-template-columns: 1fr; } }
+.motion-tile {
+  padding: var(--space-4);
+  border-radius: var(--radius-container);
+  border: var(--border-thin) solid var(--border-default);
+  background: var(--surface-card);
+}
+.motion-tile .name { font-family: var(--font-mono); font-size: 11px; font-weight: var(--wt-bold); color: var(--text-heading); }
+.motion-tile .val { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+.motion-demo {
+  height: 24px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-cell);
+  margin-top: var(--space-3);
+  overflow: hidden;
+  position: relative;
+}
+.motion-bar {
+  width: 30%;
+  height: 100%;
+  background: var(--accent-sc);
+  border-radius: var(--radius-cell);
+  animation: sweep 2.4s infinite;
+}
+@keyframes sweep {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(233%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* --- focus --- */
+.focus-demo {
+  display: inline-block;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  font-weight: var(--wt-semibold);
+  color: var(--text-heading);
+}
+
+/* --- z-index / opacity / icon tables --- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.table th, .table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-thin) solid var(--border-subtle);
+  text-align: left;
+}
+.table th {
+  font-size: 10px;
+  font-weight: var(--wt-bold);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+
+/* --- opacity swatches --- */
+.opacity-row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+.opacity-chip {
+  width: 80px; height: 60px;
+  background: var(--text-heading);
+  border-radius: var(--radius-cell);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* --- density mode compare --- */
+.density-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+@media (max-width: 800px) { .density-compare { grid-template-columns: 1fr; } }
+.density-card {
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-card-pad);
+}
+.density-card h4 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--size-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--text-muted);
+}
+.density-card .row {
+  height: var(--row-height);
+  display: flex; align-items: center; gap: var(--space-inline);
+  border-bottom: var(--border-thin) solid var(--border-subtle);
+  padding: 0 var(--space-inline);
+  font-size: var(--size-body);
+}
+.density-card .cell {
+  width: var(--cell-size); height: var(--cell-size);
+  background: var(--status-entered-bg);
+  border: var(--border-thin) solid var(--status-entered-bd);
+  border-radius: var(--radius-cell);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  color: var(--status-entered-fg);
+}
+.density-card .ctrl {
+  display: inline-flex; align-items: center;
+  height: var(--control-height);
+  padding: 0 var(--control-pad-x);
+  border-radius: var(--radius-control);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+}
+
+/* --- feedback tiles --- */
+.feedback-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+@media (max-width: 800px) { .feedback-grid { grid-template-columns: 1fr 1fr; } }
+.fb-tile {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  color: #fff;
+  font-weight: var(--wt-bold);
+  font-size: var(--size-body);
+}
+.fb-tile .name { display: block; font-family: var(--font-mono); font-size: 10px; font-weight: var(--wt-medium); opacity: .9; margin-top: 2px; }
+
+footer.doc-footer {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: var(--border-thin) solid var(--border-default);
+  font-size: var(--size-caption);
+  color: var(--text-subtle);
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <h1>KitchFix Design Tokens</h1>
+  <p>Visual style guide - tier 1 primitives + tier 2 semantics + density mode.</p>
+  <div class="meta">Source: <code>src/app/tokens.css</code> · docs: <code>docs/DESIGN_TOKENS.md</code> · rule: components consume <b>semantic</b> tokens only.</div>
+</header>
+
+<!-- ============================== -->
+<section>
+  <h2>Color primitives (tier 1)</h2>
+  <p class="section-note">Raw color ramps, OKLCH-generated + AA-verified. Components never reference these directly - they flow up into the semantic tokens below.</p>
+
+  <h3>Navy - brand at 700</h3>
+  <div class="ramp">
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-50)"></div><div class="name">--navy-50</div><div class="val">#F4F7FC</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-100)"></div><div class="name">--navy-100</div><div class="val">#D1DAE6</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-200)"></div><div class="name">--navy-200</div><div class="val">#AFBDD1</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-300)"></div><div class="name">--navy-300</div><div class="val">#8FA2BC</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-400)"></div><div class="name">--navy-400</div><div class="val">#6F87A6</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-500)"></div><div class="name">--navy-500</div><div class="val">#516C92</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-600)"></div><div class="name">--navy-600</div><div class="val">#33527D</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-700)"></div><div class="name">--navy-700 ★</div><div class="val">#153968</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-800)"></div><div class="name">--navy-800</div><div class="val">#092B55</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--navy-900)"></div><div class="name">--navy-900</div><div class="val">#011D42</div></div>
+  </div>
+
+  <h3>Amber - accent at 500</h3>
+  <div class="ramp">
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-50)"></div><div class="name">--amber-50</div><div class="val">#FFF2E2</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-100)"></div><div class="name">--amber-100</div><div class="val">#FFDABE</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-200)"></div><div class="name">--amber-200</div><div class="val">#F7C299</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-300)"></div><div class="name">--amber-300</div><div class="val">#EEA973</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-400)"></div><div class="name">--amber-400</div><div class="val">#E4904B</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-500)"></div><div class="name">--amber-500 ★</div><div class="val">#D97706</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-600)"></div><div class="name">--amber-600</div><div class="val">#B25800</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-700)"></div><div class="name">--amber-700</div><div class="val">#8C3A00</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-800)"></div><div class="name">--amber-800</div><div class="val">#671C00</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--amber-900)"></div><div class="name">--amber-900</div><div class="val">#440000</div></div>
+  </div>
+
+  <h3>Green - success at 500 (entered = 300/400)</h3>
+  <div class="ramp">
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-50)"></div><div class="name">--green-50</div><div class="val">#E9FDEC</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-100)"></div><div class="name">--green-100</div><div class="val">#C6EBCB</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-200)"></div><div class="name">--green-200</div><div class="val">#A2D9AB</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-300)"></div><div class="name">--green-300</div><div class="val">#7DC78B</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-400)"></div><div class="name">--green-400</div><div class="val">#54B56B</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-500)"></div><div class="name">--green-500 ★</div><div class="val">#16A34A</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-600)"></div><div class="name">--green-600</div><div class="val">#008330</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-700)"></div><div class="name">--green-700</div><div class="val">#006515</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-800)"></div><div class="name">--green-800</div><div class="val">#004800</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--green-900)"></div><div class="name">--green-900</div><div class="val">#002C00</div></div>
+  </div>
+
+  <h3>Red - danger at 500 (overdue = 200/300)</h3>
+  <div class="ramp">
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-50)"></div><div class="name">--red-50</div><div class="val">#FFEDE7</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-100)"></div><div class="name">--red-100</div><div class="val">#FFCAC1</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-200)"></div><div class="name">--red-200</div><div class="val">#FFA69B</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-300)"></div><div class="name">--red-300</div><div class="val">#F88276</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-400)"></div><div class="name">--red-400</div><div class="val">#EB5B50</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-500)"></div><div class="name">--red-500 ★</div><div class="val">#DC2626</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-600)"></div><div class="name">--red-600</div><div class="val">#B9000C</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-700)"></div><div class="name">--red-700</div><div class="val">#970000</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-800)"></div><div class="name">--red-800</div><div class="val">#760000</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--red-900)"></div><div class="name">--red-900</div><div class="val">#560000</div></div>
+  </div>
+
+  <h3>Neutral - warm surfaces to cool ink</h3>
+  <div class="ramp">
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-0)"></div><div class="name">--n-0</div><div class="val">#FFFFFF</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-50)"></div><div class="name">--n-50</div><div class="val">#FAF9F5</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-100)"></div><div class="name">--n-100</div><div class="val">#F4F2EC</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-200)"></div><div class="name">--n-200</div><div class="val">#F0EEE7</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-300)"></div><div class="name">--n-300</div><div class="val">#E5E7EB</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-400)"></div><div class="name">--n-400</div><div class="val">#D3CFC4</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-500)"></div><div class="name">--n-500</div><div class="val">#94A3B8</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-600)"></div><div class="name">--n-600</div><div class="val">#64748B</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-700)"></div><div class="name">--n-700</div><div class="val">#475569</div></div>
+    <div class="ramp-swatch"><div class="chip" style="background:var(--n-800)"></div><div class="name">--n-800</div><div class="val">#334155</div></div>
+  </div>
+
+  <h3>Soft state fills</h3>
+  <div class="grid-3">
+    <div class="tok"><div class="swatch" style="background:var(--fill-needs);border-color:var(--fill-needs-bd)"></div><div class="body"><div class="name">--fill-needs</div><div class="val">#FCD9A0 / bd #E4AD84</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--fill-upcoming);border-color:var(--fill-upcoming-bd)"></div><div class="body"><div class="name">--fill-upcoming</div><div class="val">#E2EFE4 / bd #C6D8C8</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--fill-off);border-color:var(--fill-off-bd)"></div><div class="body"><div class="name">--fill-off</div><div class="val">#F1EEE7 / bd #DDD7CA</div></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Text roles (semantic)</h2>
+  <p class="section-note">The color of type by role. <code>--text-subtle</code> is UI/placeholder/border only - it fails AA as body copy; never use it for body.</p>
+  <div class="grid-3">
+    <div class="text-tok"><div class="sample" style="color:var(--text-heading)">The chef opens the calendar.</div><div class="name">--text-heading = n-900</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-strong)">The chef opens the calendar.</div><div class="name">--text-strong = n-800</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-default)">The chef opens the calendar.</div><div class="name">--text-default = n-700</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-muted)">The chef opens the calendar.</div><div class="name">--text-muted = n-600</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-subtle)">The chef opens the calendar.</div><div class="name">--text-subtle = n-500 (UI only)</div></div>
+    <div class="text-tok" style="background:var(--text-heading)"><div class="sample" style="color:var(--text-inverse)">The chef opens the calendar.</div><div class="name" style="color:var(--n-300)">--text-inverse = n-0</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-link)">The chef opens the calendar.</div><div class="name">--text-link = navy-700</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-success)">The chef opens the calendar.</div><div class="name">--text-success = green-600</div></div>
+    <div class="text-tok"><div class="sample" style="color:var(--text-danger)">The chef opens the calendar.</div><div class="name">--text-danger = red-500</div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Surface + border (semantic)</h2>
+  <p class="section-note">The layered canvas. Warm neutrals; overlays sit on <code>--surface-overlay</code>.</p>
+  <div class="grid-3">
+    <div class="tok"><div class="swatch" style="background:var(--surface-page)"></div><div class="body"><div class="name">--surface-page</div><div class="val">n-100 #F4F2EC</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--surface-card);border:1px solid var(--border-default)"></div><div class="body"><div class="name">--surface-card</div><div class="val">n-0 #FFFFFF</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--surface-sunken)"></div><div class="body"><div class="name">--surface-sunken</div><div class="val">n-50 #FAF9F5</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--surface-overlay);border:1px solid var(--border-default)"></div><div class="body"><div class="name">--surface-overlay</div><div class="val">n-0</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--border-subtle)"></div><div class="body"><div class="name">--border-subtle</div><div class="val">n-200</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--border-default)"></div><div class="body"><div class="name">--border-default</div><div class="val">n-300</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--border-strong)"></div><div class="body"><div class="name">--border-strong</div><div class="val">n-400</div></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Action roles</h2>
+  <p class="section-note">Buttons. <code>--focus-ring</code> is applied via <code>:focus-visible</code>; tab through the buttons to see it.</p>
+  <div class="buttons">
+    <button class="btn btn--primary" tabindex="0">Primary action</button>
+    <button class="btn btn--secondary" tabindex="0">Secondary action</button>
+    <button class="btn btn--accent" tabindex="0">Accent (dark text)</button>
+    <button class="btn btn--accent-solid" tabindex="0">Accent-solid (white text)</button>
+    <button class="btn btn--danger" tabindex="0">Feedback-danger</button>
+  </div>
+  <div style="margin-top:var(--space-4);font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">
+    --action-primary-bg = navy-700 · --action-primary-bg-hover = navy-800 · --action-primary-text = n-0<br>
+    --action-secondary-bg = n-0 · --action-secondary-border = n-400 · --action-secondary-text = n-700
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Accent - contrast-split</h2>
+  <p class="section-note">Amber is contrast-split because white text on amber-500 fails AA (3.19). Use <code>--accent-solid</code> when the label must be white, <code>--accent-text</code> when amber IS the text.</p>
+  <div class="accent-family">
+    <div class="acc-tile" style="background:var(--accent);color:var(--text-heading)"><div class="label">--accent</div><div class="name">amber-500 · dark text/icons</div></div>
+    <div class="acc-tile" style="background:var(--accent-solid);color:#fff"><div class="label">--accent-solid</div><div class="name">amber-600 · white text OK</div></div>
+    <div class="acc-tile" style="background:var(--accent-backplate);color:var(--accent-text)"><div class="label">--accent-text on --accent-backplate</div><div class="name">amber-700 · CTA wash</div></div>
+    <div class="acc-tile" style="background:var(--surface-card);color:var(--accent-text);border-color:var(--border-default)"><div class="label">--accent-text on surface</div><div class="name">amber-700 as text</div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Tool accents (tier 3 - per-surface identity)</h2>
+  <p class="section-note">Each module carries its own tier-3 accent so orientation is spatial. Use <code>--feedback-danger</code> for actual error states, not <code>--accent-directory</code>.</p>
+  <div class="tool-accents">
+    <div class="tool-accent" style="background:var(--accent-ops)"><div>Ops</div><div class="name">--accent-ops</div><div class="val">amber-500</div></div>
+    <div class="tool-accent" style="background:var(--accent-people)"><div>People</div><div class="name">--accent-people</div><div class="val">#7C3AED</div></div>
+    <div class="tool-accent" style="background:var(--accent-directory)"><div>Directory</div><div class="name">--accent-directory</div><div class="val">#C41E3A</div></div>
+    <div class="tool-accent" style="background:var(--accent-playbook)"><div>Playbook</div><div class="name">--accent-playbook</div><div class="val">#0F6E56</div></div>
+  </div>
+
+  <h3>SC family (tool-accent + tint tiers)</h3>
+  <div class="tool-accents">
+    <div class="tool-accent" style="background:var(--accent-sc)"><div>--accent-sc</div><div class="val">#0F6E56</div></div>
+    <div class="tool-accent" style="background:var(--accent-sc-dark)"><div>--accent-sc-dark</div><div class="val">#085041</div></div>
+    <div class="tool-accent" style="background:var(--accent-sc-subtle);color:var(--accent-sc-dark)"><div>--accent-sc-subtle</div><div class="val">#E1F5EE</div></div>
+    <div class="tool-accent" style="background:var(--accent-sc-tint);color:var(--accent-sc-dark)"><div>--accent-sc-tint</div><div class="val">#F0FDF4</div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Status family - shared across the app</h2>
+  <p class="section-note">Cell, badge, dot, row, bar - the same five keys. Status is never encoded by color alone; the <code>-fg</code> is the AA-verified darkest step (entered green-800 5.40 · needs amber-700 5.72 · overdue red-700 4.83 · upcoming/off n-700 6.4+).</p>
+  <div class="status-grid">
+    <div></div>
+    <div class="status-head">bg</div>
+    <div class="status-head">bd</div>
+    <div class="status-head">fg (text)</div>
+    <div class="status-head">subtle</div>
+    <div class="status-head">strong</div>
+
+    <div class="status-row-name">entered</div>
+    <div class="status-slot" style="background:var(--status-entered-bg);color:var(--status-entered-fg)">--*-bg</div>
+    <div class="status-slot" style="background:var(--status-entered-bd);color:var(--status-entered-fg)">--*-bd</div>
+    <div class="status-slot" style="background:var(--status-entered-bg);color:var(--status-entered-fg);font-weight:bold">Aa</div>
+    <div class="status-slot" style="background:var(--status-entered-subtle);color:var(--status-entered-fg)">--*-subtle</div>
+    <div class="status-slot" style="background:var(--status-entered-strong);color:#fff">--*-strong</div>
+
+    <div class="status-row-name">needs</div>
+    <div class="status-slot" style="background:var(--status-needs-bg);color:var(--status-needs-fg)">--*-bg</div>
+    <div class="status-slot" style="background:var(--status-needs-bd);color:var(--status-needs-fg)">--*-bd</div>
+    <div class="status-slot" style="background:var(--status-needs-bg);color:var(--status-needs-fg);font-weight:bold">Aa</div>
+    <div class="status-slot" style="background:var(--status-needs-subtle);color:var(--status-needs-fg)">--*-subtle</div>
+    <div class="status-slot" style="background:var(--status-needs-strong);color:#fff">--*-strong</div>
+
+    <div class="status-row-name">overdue</div>
+    <div class="status-slot" style="background:var(--status-overdue-bg);color:var(--status-overdue-fg)">--*-bg</div>
+    <div class="status-slot" style="background:var(--status-overdue-bd);color:var(--status-overdue-fg)">--*-bd</div>
+    <div class="status-slot" style="background:var(--status-overdue-bg);color:var(--status-overdue-fg);font-weight:bold">Aa</div>
+    <div class="status-slot" style="background:var(--status-overdue-subtle);color:var(--status-overdue-fg)">--*-subtle</div>
+    <div class="status-slot" style="background:var(--status-overdue-strong);color:#fff">--*-strong</div>
+
+    <div class="status-row-name">upcoming</div>
+    <div class="status-slot" style="background:var(--status-upcoming-bg);color:var(--status-upcoming-fg)">--*-bg</div>
+    <div class="status-slot" style="background:var(--status-upcoming-bd);color:var(--status-upcoming-fg)">--*-bd</div>
+    <div class="status-slot" style="background:var(--status-upcoming-bg);color:var(--status-upcoming-fg);font-weight:bold">Aa</div>
+    <div class="status-slot" style="background:var(--status-upcoming-subtle);color:var(--status-upcoming-fg)">--*-subtle</div>
+    <div class="status-slot" style="background:var(--status-upcoming-strong);color:#fff">--*-strong</div>
+
+    <div class="status-row-name">off</div>
+    <div class="status-slot" style="background:var(--status-off-bg);color:var(--status-off-fg)">--*-bg</div>
+    <div class="status-slot" style="background:var(--status-off-bd);color:var(--status-off-fg)">--*-bd</div>
+    <div class="status-slot" style="background:var(--status-off-bg);color:var(--status-off-fg);font-weight:bold">Aa</div>
+    <div class="status-slot" style="background:var(--status-off-subtle);color:var(--status-off-fg)">--*-subtle</div>
+    <div class="status-slot" style="background:var(--status-off-strong);color:#fff">--*-strong</div>
+  </div>
+
+  <h3>Today marker</h3>
+  <div class="grid-3">
+    <div class="tok"><div class="swatch" style="background:transparent;border:var(--border-thick) solid var(--status-today-ring)"></div><div class="body"><div class="name">--status-today-ring</div><div class="val">navy-700 · always outermost</div></div></div>
+    <div class="tok"><div class="swatch" style="background:var(--surface-card);color:var(--status-today-fg);border:var(--border-thin) solid var(--border-default);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:bold">Aa</div><div class="body"><div class="name">--status-today-fg</div><div class="val">navy-700 · today text</div></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Feedback</h2>
+  <div class="feedback-grid">
+    <div class="fb-tile" style="background:var(--feedback-success)">Success<span class="name">--feedback-success · green-600</span></div>
+    <div class="fb-tile" style="background:var(--feedback-warning)">Warning<span class="name">--feedback-warning · amber-500</span></div>
+    <div class="fb-tile" style="background:var(--feedback-danger)">Danger<span class="name">--feedback-danger · red-500</span></div>
+    <div class="fb-tile" style="background:var(--feedback-info)">Info<span class="name">--feedback-info · #2563EB</span></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Typography</h2>
+  <p class="section-note">Modular scale (ratio 1.2). Screen UI is Inter (<code>--font-ui</code>); numbers/code are JetBrains Mono (<code>--font-mono</code>). Mulish is print/PDF only.</p>
+  <div class="type-scale card">
+    <div class="type-row">
+      <div class="type-meta"><span class="name">display</span>35 / 800 · h1<br>--size-display · --wt-display</div>
+      <div class="type-sample" style="font-size:var(--size-display);font-weight:var(--wt-display);letter-spacing:var(--track-tight);line-height:var(--lead-tight)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">h1</span>29 / 700<br>--size-h1 · --wt-bold</div>
+      <div class="type-sample" style="font-size:var(--size-h1);font-weight:var(--wt-bold);letter-spacing:var(--track-tight);line-height:var(--lead-tight)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">h2</span>24 / 700<br>--size-h2 · --wt-bold</div>
+      <div class="type-sample" style="font-size:var(--size-h2);font-weight:var(--wt-bold);letter-spacing:var(--track-tight)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">h3</span>20 / 700<br>--size-h3 · --wt-bold</div>
+      <div class="type-sample" style="font-size:var(--size-h3);font-weight:var(--wt-bold)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">subhead</span>17 / 600<br>--size-subhead · --wt-semibold</div>
+      <div class="type-sample" style="font-size:var(--size-subhead);font-weight:var(--wt-semibold)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">body</span>14 / 400<br>--size-body · --wt-regular</div>
+      <div class="type-sample" style="font-size:var(--size-body);font-weight:var(--wt-regular)">The chef opens the calendar and enters 240 meals in seven taps.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">body-strong</span>14 / 600<br>--size-body · --wt-semibold</div>
+      <div class="type-sample" style="font-size:var(--size-body);font-weight:var(--wt-semibold)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">caption</span>12 / 600<br>--size-caption · --wt-semibold</div>
+      <div class="type-sample" style="font-size:var(--size-caption);font-weight:var(--wt-semibold)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">eyebrow</span>12 / 700 caps<br>--size-caption · --wt-bold · --track-caps</div>
+      <div class="type-sample" style="font-size:var(--size-caption);font-weight:var(--wt-bold);text-transform:uppercase;letter-spacing:var(--track-caps)">Now serving</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">micro</span>10 / 600<br>--size-micro · --wt-semibold</div>
+      <div class="type-sample" style="font-size:var(--size-micro);font-weight:var(--wt-semibold)">The chef opens the calendar.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta"><span class="name">mono - tabular</span>--font-mono<br>numeric data</div>
+      <div class="type-sample" style="font-family:var(--font-mono);font-size:var(--size-body);font-variant-numeric:var(--num-tabular)">1,234.00 · 5,678.90 · $1,234</div>
+    </div>
+  </div>
+
+  <h3>Line height + tracking</h3>
+  <div class="grid-3">
+    <div class="tok"><div class="body"><div class="name">--lead-tight</div><div class="val">1.1 · headings</div></div></div>
+    <div class="tok"><div class="body"><div class="name">--lead-snug</div><div class="val">1.25</div></div></div>
+    <div class="tok"><div class="body"><div class="name">--lead-normal</div><div class="val">1.5 · body</div></div></div>
+    <div class="tok"><div class="body"><div class="name">--track-tight</div><div class="val">-0.01em · large heads</div></div></div>
+    <div class="tok"><div class="body"><div class="name">--track-caps</div><div class="val">0.06em · eyebrows</div></div></div>
+    <div class="tok"><div class="body"><div class="name">--num-tabular</div><div class="val">font-variant-numeric</div></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Spacing scale (4px base)</h2>
+  <div class="space-scale card">
+    <div class="space-row"><span class="name">--space-1</span><span class="val">4px</span><div class="space-bar" style="width:4px"></div></div>
+    <div class="space-row"><span class="name">--space-2</span><span class="val">8px</span><div class="space-bar" style="width:8px"></div></div>
+    <div class="space-row"><span class="name">--space-3</span><span class="val">12px</span><div class="space-bar" style="width:12px"></div></div>
+    <div class="space-row"><span class="name">--space-4</span><span class="val">16px</span><div class="space-bar" style="width:16px"></div></div>
+    <div class="space-row"><span class="name">--space-5</span><span class="val">20px</span><div class="space-bar" style="width:20px"></div></div>
+    <div class="space-row"><span class="name">--space-6</span><span class="val">24px</span><div class="space-bar" style="width:24px"></div></div>
+    <div class="space-row"><span class="name">--space-7</span><span class="val">32px</span><div class="space-bar" style="width:32px"></div></div>
+    <div class="space-row"><span class="name">--space-8</span><span class="val">40px</span><div class="space-bar" style="width:40px"></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Radius (6 + the rule)</h2>
+  <p class="section-note">Pills for controls, rounded-rect for containers, square-ish for data cells, circles for avatars/icons/dots.</p>
+  <div class="radius-grid">
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-cell)">4</div><div class="name">--radius-cell</div><div class="val">data cells / swatches</div></div>
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-control)">10</div><div class="name">--radius-control</div><div class="val">buttons / inputs</div></div>
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-container)">10</div><div class="name">--radius-container</div><div class="val">cards</div></div>
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-container-lg)">14</div><div class="name">--radius-container-lg</div><div class="val">hero / modals</div></div>
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-pill)">pill</div><div class="name">--radius-pill</div><div class="val">toggles / chips / tags</div></div>
+    <div class="rad-tile"><div class="rad-box" style="border-radius:var(--radius-circle)">50%</div><div class="name">--radius-circle</div><div class="val">avatars / icons / dots</div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Elevation</h2>
+  <p class="section-note">Three layers - card (resting), raised (hover / active), popover (menu / dialog).</p>
+  <div class="elevation-grid">
+    <div class="elev-tile" style="box-shadow:var(--elevation-card)"><div class="elev-name">--elevation-card</div><div class="elev-val">0 1px 2px rgba(15,23,42,.05)</div></div>
+    <div class="elev-tile" style="box-shadow:var(--elevation-raised)"><div class="elev-name">--elevation-raised</div><div class="elev-val">0 4px 12px rgba(15,23,42,.08)</div></div>
+    <div class="elev-tile" style="box-shadow:var(--elevation-popover)"><div class="elev-name">--elevation-popover</div><div class="elev-val">0 16px 32px rgba(15,23,42,.12)</div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Motion</h2>
+  <p class="section-note">Reduced-motion zeroes duration primitives at the token layer, so components inherit the pause automatically.</p>
+  <div class="motion-grid">
+    <div class="motion-tile"><div class="name">--motion-control</div><div class="val">120ms · ease-standard<br>--duration-fast + --ease-standard</div><div class="motion-demo"><div class="motion-bar" style="animation-duration:.72s"></div></div></div>
+    <div class="motion-tile"><div class="name">--motion-surface</div><div class="val">180ms · ease-emphasized<br>--duration-base + --ease-emphasized</div><div class="motion-demo"><div class="motion-bar" style="animation-duration:1.08s"></div></div></div>
+    <div class="motion-tile"><div class="name">--duration-slow</div><div class="val">280ms<br>--duration-slow</div><div class="motion-demo"><div class="motion-bar" style="animation-duration:1.68s"></div></div></div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Focus ring</h2>
+  <div class="card" style="display:flex;gap:var(--space-6);align-items:center;flex-wrap:wrap">
+    <div class="focus-demo">tabbable · always-visible ring</div>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">
+      --focus-ring-width = 2px · --focus-ring-offset = 2px · --focus-ring-color = navy-700
+    </div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Density mode</h2>
+  <p class="section-note">Semantic spacing tokens remap under <code>[data-density="compact"]</code>. Primitives stay fixed; only these semantics remap.</p>
+  <div class="density-compare">
+    <div class="density-card">
+      <h4>Comfortable (default)</h4>
+      <div class="row"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div><div class="cell">4</div><div class="cell">5</div></div>
+      <div style="height:var(--space-stack)"></div>
+      <div class="ctrl">Save</div>
+      <div style="margin-top:var(--space-3);font-family:var(--font-mono);font-size:10px;color:var(--text-muted)">
+        --space-stack = 24 · --space-card-pad = 16 · --space-inline = 12<br>
+        --control-height = 40 · --row-height = 48 · --cell-size = 34
+      </div>
+    </div>
+    <div class="density-card" data-density="compact">
+      <h4>Compact ([data-density="compact"])</h4>
+      <div class="row"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div><div class="cell">4</div><div class="cell">5</div></div>
+      <div style="height:var(--space-stack)"></div>
+      <div class="ctrl">Save</div>
+      <div style="margin-top:var(--space-3);font-family:var(--font-mono);font-size:10px;color:var(--text-muted)">
+        --space-stack = 16 · --space-card-pad = 12 · --space-inline = 8<br>
+        --control-height = 32 · --row-height = 40 · --cell-size = 28
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== -->
+<section>
+  <h2>Z-index, opacity, icons</h2>
+  <div class="card">
+    <h3>Z-index</h3>
+    <table class="table">
+      <thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td>--z-base</td><td>0</td><td>page baseline</td></tr>
+        <tr><td>--z-dropdown</td><td>1000</td><td>account picker / menu</td></tr>
+        <tr><td>--z-sticky</td><td>1100</td><td>sticky headers</td></tr>
+        <tr><td>--z-overlay</td><td>1200</td><td>modal backdrop</td></tr>
+        <tr><td>--z-popover</td><td>1300</td><td>tooltip / popover</td></tr>
+        <tr><td>--z-toast</td><td>1400</td><td>toast (top of stack)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:var(--space-4)">
+    <h3>Opacity</h3>
+    <div class="opacity-row">
+      <div class="opacity-chip" style="opacity:var(--opacity-disabled)">--opacity-disabled<br>.45</div>
+      <div class="opacity-chip" style="opacity:var(--opacity-muted)">--opacity-muted<br>.6</div>
+      <div class="opacity-chip" style="opacity:var(--opacity-scrim)">--opacity-scrim<br>.5</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:var(--space-4)">
+    <h3>Icon sizes</h3>
+    <div style="display:flex;gap:var(--space-6);align-items:center;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg style="width:var(--icon-sm);height:var(--icon-sm)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <div style="font-family:var(--font-mono);font-size:10px">--icon-sm · 16px</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg style="width:var(--icon-md);height:var(--icon-md)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <div style="font-family:var(--font-mono);font-size:10px">--icon-md · 20px</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg style="width:var(--icon-lg);height:var(--icon-lg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <div style="font-family:var(--font-mono);font-size:10px">--icon-lg · 24px</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-footer">
+  Generated from <code>src/app/tokens.css</code> at HEAD ecb2d42.
+  Rules of the road live in <code>docs/DESIGN_TOKENS.md</code>: components consume tier-2 semantic tokens only. If a component ships raw hex or raw px, that's a defect.
+</footer>
+
+</div>
+</body>
+</html>
