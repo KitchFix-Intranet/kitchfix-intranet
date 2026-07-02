@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { X, ChevronLeft, ChevronRight } from "./Icons";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -361,11 +362,19 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           {accountName && <div className="sc-day-account">{accountName}</div>}
         </div>
         <div className="sc-day-nav">
-          {onPrev && <button className="sc-day-nav-btn" onClick={onPrev}>&#8249;</button>}
+          {onPrev && (
+            <button className="sc-day-nav-btn" onClick={onPrev} aria-label="Previous day">
+              <ChevronLeft size="sm" />
+            </button>
+          )}
           <span className="sc-day-nav-label">Day {dayIndex + 1} of {totalDays}</span>
-          {onNext && <button className="sc-day-nav-btn" onClick={onNext}>&#8250;</button>}
+          {onNext && (
+            <button className="sc-day-nav-btn" onClick={onNext} aria-label="Next day">
+              <ChevronRight size="sm" />
+            </button>
+          )}
           <button className="sc-day-close" onClick={onClose} aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <X size="sm" />
           </button>
         </div>
       </div>
