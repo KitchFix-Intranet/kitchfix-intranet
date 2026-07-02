@@ -297,3 +297,54 @@ Supersedes the 6-stage sequence in SC_REDESIGN_PLAN.md.
 Sequencing logic: atom before layouts; known-good (Calendar) before novel
 (Period); drill source before target; polymorphism mid as the safety net before
 cleanup; removal isolated last so the fallback survives the whole build.
+
+---
+
+## 13. Drill-in design-system alignment (post-overview, 2026-07)
+
+Stages 0-2 (day-square atom, Season shell, Calendar + Period grids) shipped and
+were polished into a clean, token-driven reference (phase/label grammar,
+figures-win card labels, state legend, segmented stepper). The operator-facing
+OVERVIEW is now the design-system standard for the module. Stage 3's screens
+(`PeriodWorkspace.js` + `DayDetail.js`) were built earlier and predate that
+polish, so the current work is bringing the DRILL-IN up to the overview's bar -
+tokens, icons, a11y, CSS scoping. This is an alignment lens layered on Stage 3,
+not new structure. Ground truth: `docs/SC_DRILLIN_ALIGNMENT_AUDIT_CC.md`.
+
+### 13.1 Settled facts (ground truth - do not relitigate)
+- **Density is correct in code.** The SC root (`ServiceCalendar.js`) carries
+  `data-density="compact"`; the DayDetail + bulk overlays override to
+  `data-density="comfortable"`. The main surface renders Density and the entry
+  overlays render Comfortable - matching the documented module mode + surface
+  override. (This corrects the drill-in audit's note that the root never sets
+  density; it does.)
+- **Breakpoints:** SC uses `matchMedia("(min-width: 768px)")` (`useIsDesktop`)
+  as the desktop/mobile layout switch, a 1024/1023 tier for the 4-col vs 3-col
+  grid, plus the app-wide <1024 comfortable-flip. The `>=1024px` comment in
+  `SeasonStepper.js` is stale relative to the 768 layout switch (P2 comment fix).
+- **The overview is the reference.** The drill-in matches the overview's bar:
+  components consume semantic tokens only (no raw hex/px), scoped CSS per surface
+  (not the shared `ops-sc.css` mega-file), status paired with glyph/label/shape.
+- **SC icon target = the v3 concept -> glyph map**, delivered as a LOCAL
+  `service-calendar/Icons.js` hand-rolling the glyphs (NOT a repo-wide Lucide
+  migration; Lucide has zero adoption today). The day-square atom keeps its
+  Unicode status dingbats. Map:
+  Entered -> check-circle · Needs entry -> pencil · Overdue/alert ->
+  alert-triangle · Upcoming -> clock · Off-season -> moon · Scheduled ->
+  calendar · Revenue -> dollar-sign · Refresh -> refresh-cw · Admin -> lock ·
+  Jump/next -> arrow-right. Sizes via `--icon-sm/md/lg`; color via currentColor;
+  decorative icons `aria-hidden`, meaningful ones labelled; stroke ~1.75 at sm.
+
+### 13.2 Drill-in alignment backlog (the design review makes the final calls)
+- PeriodWorkspace color tokenized (#313). DONE.
+- DayDetail coaching banner: the 12 inline-hex values become
+  `.sc-day-coaching--{state}` token-backed modifier classes.
+- DayDetail CSS: scope its `.sc-day-*` block out of the shared `ops-sc.css` into
+  a scoped `dayDetail.css` (mechanical relocation FIRST, tokenize AFTER).
+- SC icon file: create `service-calendar/Icons.js` per 13.1; adopt it in the
+  non-status icon sites (close, chevron, refresh, info, back).
+- DayDetail overlay a11y: add `role="dialog"`, `aria-modal`, Escape-to-close,
+  focus-trap, and return-focus. (Currently thin - only a labelled close button.)
+- The exact coaching-modifier shape, the a11y contract, and the `Icons.js`
+  structure are finalized in the drill-in DESIGN REVIEW (persona format, three
+  directions). This section is the settled base that review builds on.
