@@ -314,7 +314,7 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
             <span
               className="sc-workspace-breadcrumb-phase-chip"
               style={phaseTint ? { background: phaseTint.tint, color: phaseTint.textTint } : undefined}
-            >{phaseLabel}</span>
+            >{phaseTint?.short ?? phaseLabel}</span>
           </li>
         )}
         {periodNum && (
