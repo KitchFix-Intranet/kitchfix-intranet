@@ -446,7 +446,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   const delta = m.actRev - m.projRev;
   const deltaLabel = delta >= 0
     ? `+${fmt$(Math.abs(delta))} ahead`
-    : `${fmt$(delta)} to go`;
+    : `${fmt$(Math.abs(delta))} to go`;
   const deltaColor = delta >= 0 ? "var(--text-success)" : "var(--accent-text)";
 
   return (
