@@ -143,9 +143,10 @@ export default function PeriodWorkspace({
   // Header title
   const periodNum = periodKey ? String(periodKey).replace(/^P/i, "") : "";
   const anchor = periodRange ? humanAnchor(periodRange.start, periodRange.end) : "";
-  const phasePrimaryLabel = phaseAssignment?.primary
-    ? CANONICAL_PHASES[phaseAssignment.primary]?.label
+  const phasePrimaryMeta = phaseAssignment?.primary
+    ? CANONICAL_PHASES[phaseAssignment.primary]
     : null;
+  const phasePrimaryLabel = phasePrimaryMeta?.label ?? null;
   const dateRangeLabel = periodRange
     ? `${fmtDateRange(periodRange.start, periodRange.end)}`
     : "";
@@ -203,6 +204,7 @@ export default function PeriodWorkspace({
         canNext={canNext}
         periodNum={periodNum}
         phaseLabel={phasePrimaryLabel}
+        phaseTint={phasePrimaryMeta}
       />
 
       <StateLegend
@@ -217,7 +219,10 @@ export default function PeriodWorkspace({
           <span className="sc-workspace-title-period">Period {periodNum}</span>
           <span className="sc-workspace-title-anchor">· {anchor}</span>
           {phasePrimaryLabel && (
-            <span className="sc-workspace-title-phase">
+            <span
+              className="sc-workspace-title-phase"
+              style={phasePrimaryMeta ? { background: phasePrimaryMeta.tint, color: phasePrimaryMeta.textTint } : undefined}
+            >
               · {phasePrimaryLabel}
               {phaseAssignment.secondary
                 ? ` (-> ${CANONICAL_PHASES[phaseAssignment.secondary]?.label})`
@@ -286,7 +291,7 @@ export default function PeriodWorkspace({
 // click "Season" climbs up. The Stage 3 climb button is folded into
 // the breadcrumb's "Season" crumb so there's ONE climb path, not two.
 // Stepper (right) handles prev/next/today within the current period.
-function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel }) {
+function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel, phaseTint }) {
   return (
     <nav className="sc-workspace-nav" aria-label="Period navigation">
       <ol className="sc-workspace-breadcrumb">
@@ -316,7 +321,10 @@ function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canP
         {phaseLabel && (
           <li className="sc-workspace-breadcrumb-item sc-workspace-breadcrumb-phase" aria-hidden="true">
             <span className="sc-workspace-breadcrumb-sep">/</span>
-            <span className="sc-workspace-breadcrumb-phase-chip">{phaseLabel}</span>
+            <span
+              className="sc-workspace-breadcrumb-phase-chip"
+              style={phaseTint ? { background: phaseTint.tint, color: phaseTint.textTint } : undefined}
+            >{phaseLabel}</span>
           </li>
         )}
         {periodNum && (

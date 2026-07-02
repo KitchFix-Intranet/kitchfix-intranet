@@ -143,10 +143,8 @@
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent-text);
-  background: var(--status-needs-subtle);
   padding: 3px var(--space-2);
-  border-radius: var(--radius-container-lg);
+  border-radius: var(--radius-pill);
 }
 .sc-workspace-range {
   font-size: var(--size-body);
@@ -672,9 +670,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px var(--space-2);
-  background: var(--status-needs-subtle);
-  color: var(--accent-text);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-pill);
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);
   letter-spacing: 0.04em;
