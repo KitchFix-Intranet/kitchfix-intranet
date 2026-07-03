@@ -103,6 +103,14 @@ export default function DaySquare({
   // interaction
   onClick,
   ariaLabel,
+
+  // Optional focus + role overrides. A grid parent using roving tabindex
+  // (WAI-ARIA grid pattern) supplies role="gridcell" + tabIndex=-1 on all
+  // but one cell so keyboard users tab into the grid ONCE and arrow-key
+  // between cells. When absent, the atom keeps its current button-role
+  // behavior (year-view MonthCard/PeriodCard callers - no regression).
+  tabIndex,
+  role,
 }) {
   const meta = STATUS_META[status] || STATUS_META.off;
   const day = dateNumber != null
@@ -136,8 +144,8 @@ export default function DaySquare({
   return (
     <div
       className={cls}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      role={role ?? (onClick ? "button" : undefined)}
+      tabIndex={tabIndex ?? (onClick ? 0 : undefined)}
       aria-label={computedAriaLabel}
       aria-pressed={isSelected || undefined}
       onClick={onClick}

@@ -373,7 +373,15 @@
   text-align: center;
 }
 .sc-workspace-grid-dow-cell { padding: 0 0 var(--space-1); }
+/* Grid parent is a vertical stack of week rows; each row is a 7-col grid.
+   Nested-row markup is the WAI-ARIA grid pattern (grid > row > gridcell)
+   for the drill-in's roving-tabindex keyboard nav. */
 .sc-workspace-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sc-workspace-grid-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 6px;
@@ -497,12 +505,13 @@
   .sc-workspace-bulk-active { padding: 14px; }
   .sc-workspace-bulk-active-actions { gap: 6px; }
 
-  /* THE DAY LIST - 1-column reflow, atom horizontalized */
+  /* THE DAY LIST - 1-column reflow, atom horizontalized. Rows drop to
+     single-column grids so real-day cells stack; empties hide. Parent
+     stays flex-column so rows still stack in reading order. */
   .sc-workspace-grid-wrap { padding: var(--space-2) var(--space-2) var(--space-3); }
   .sc-workspace-grid-dow { display: none; }
-  .sc-workspace-grid {
+  .sc-workspace-grid-row {
     grid-template-columns: 1fr;
-    gap: 6px;
   }
   /* Hide the empty out-of-period spacers in list mode - they only
      exist for DOW alignment on desktop. */
