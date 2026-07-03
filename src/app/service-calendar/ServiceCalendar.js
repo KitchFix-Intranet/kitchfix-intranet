@@ -1052,10 +1052,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             today={today}
             loading={loading && !periodDays}
             partialError={partialError}
-            onClimbToSeason={handleClimbToSeason}
-            onPrevPeriod={handlePrevPeriod}
-            onNextPeriod={handleNextPeriod}
-            onTodayJump={handleTodayJump}
             onDayClick={(date) => setFocusDay(date)}
             bulkMode={bulkMode}
             onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
