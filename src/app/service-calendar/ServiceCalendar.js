@@ -7,6 +7,7 @@ import { useDialogA11y } from "./useDialogA11y";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
+import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
@@ -822,6 +823,39 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
   }, [isAdminView, router]);
 
+  // PR 3: drill-in nav handlers are lifted here so both the ChromeBar's
+  // PeriodHeaderNav slot and PeriodWorkspace (before Commit 4 strips
+  // its own nav) can share them. Derivations (drillPeriodRange /
+  // canPrevPeriod / canNextPeriod / isCurrentPeriod) live at the same
+  // scope so the header slot can render outside the workspace.
+  const handleClimbToSeason = useCallback(() => {
+    router.push("/service-calendar", { scroll: false });
+    setFocusDay(null);
+    setBulkMode(false);
+    setBulkSelected(new Set());
+  }, [router]);
+  const handlePrevPeriod = useCallback(() => {
+    if (!periodRanges?.length) return;
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx > 0) router.push(`/service-calendar?period=${periodRanges[idx - 1].period}`, { scroll: false });
+  }, [periodRanges, periodKey, router]);
+  const handleNextPeriod = useCallback(() => {
+    if (!periodRanges?.length) return;
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx >= 0 && idx < periodRanges.length - 1) router.push(`/service-calendar?period=${periodRanges[idx + 1].period}`, { scroll: false });
+  }, [periodRanges, periodKey, router]);
+  const handleTodayJump = useCallback(() => {
+    if (!periodRanges?.length) return;
+    const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
+    if (containingToday) router.push(`/service-calendar?period=${containingToday.period}`, { scroll: false });
+  }, [periodRanges, today, router]);
+
+  const drillPeriodRange = periodRanges?.find(r => r.period === periodKey) || null;
+  const drillPeriodIdx = periodRanges?.findIndex(r => r.period === periodKey) ?? -1;
+  const canPrevPeriod = drillPeriodIdx > 0;
+  const canNextPeriod = drillPeriodIdx >= 0 && drillPeriodIdx < (periodRanges?.length ?? 0) - 1;
+  const isCurrentPeriod = !!(drillPeriodRange && today >= drillPeriodRange.start && today <= drillPeriodRange.end);
+
   // Design Batch 2: the chrome bar holds the picker / toggle / Admin
   // (the controls that used to be scattered) and the as-of timestamp.
   // The compressed hero sits below it. Both render in every view
@@ -908,6 +942,26 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         onViewChange={handleSeasonViewChange}
         showToggle={!isAdminView && isYearView}
         showStats={!isAdminView && isYearView}
+        drillNav={isPeriodView ? (
+          <PeriodHeaderNav
+            account={data?.account}
+            year={year}
+            periodKey={periodKey}
+            periodRange={drillPeriodRange}
+            canPrev={canPrevPeriod}
+            canNext={canNextPeriod}
+            onClimbToSeason={handleClimbToSeason}
+            onPrevPeriod={handlePrevPeriod}
+            onNextPeriod={handleNextPeriod}
+          />
+        ) : null}
+        drillNavEnd={isPeriodView ? (
+          <PeriodTodayChip
+            today={today}
+            isCurrentPeriod={isCurrentPeriod}
+            onTodayJump={handleTodayJump}
+          />
+        ) : null}
         todayLabel={yearBannerStats?.todayLabel}
         periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
         weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
@@ -987,7 +1041,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             account={data?.account}
             year={year}
             periodKey={periodKey}
-            periodRange={periodRanges?.find(r => r.period === periodKey) || null}
+            periodRange={drillPeriodRange}
             periodRanges={periodRanges}
             periodDays={periodDays}
             periodMetrics={periodMetrics}
@@ -998,22 +1052,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             today={today}
             loading={loading && !periodDays}
             partialError={partialError}
-            onClimbToSeason={() => { router.push("/service-calendar", { scroll: false }); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); }}
-            onPrevPeriod={() => {
-              if (!periodRanges?.length) return;
-              const idx = periodRanges.findIndex(r => r.period === periodKey);
-              if (idx > 0) router.push(`/service-calendar?period=${periodRanges[idx - 1].period}`, { scroll: false });
-            }}
-            onNextPeriod={() => {
-              if (!periodRanges?.length) return;
-              const idx = periodRanges.findIndex(r => r.period === periodKey);
-              if (idx >= 0 && idx < periodRanges.length - 1) router.push(`/service-calendar?period=${periodRanges[idx + 1].period}`, { scroll: false });
-            }}
-            onTodayJump={() => {
-              if (!periodRanges?.length) return;
-              const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-              if (containingToday) router.push(`/service-calendar?period=${containingToday.period}`, { scroll: false });
-            }}
+            onClimbToSeason={handleClimbToSeason}
+            onPrevPeriod={handlePrevPeriod}
+            onNextPeriod={handleNextPeriod}
+            onTodayJump={handleTodayJump}
             onDayClick={(date) => setFocusDay(date)}
             bulkMode={bulkMode}
             onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
