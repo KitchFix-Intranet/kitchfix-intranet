@@ -50,6 +50,11 @@ export default function ChromeBar({
   totalGameDays = 0,           // fee: total game days
   onJumpToNeeds,               // () => void; jump to first needs-entry day
   onJumpToOverdue,             // () => void; jump to first overdue day
+  // Drill-in slots (filled by PeriodHeaderNav / PeriodTodayChip in the
+  // period workspace). Both render only when truthy - the year view
+  // passes null / undefined and the bar behaves as before.
+  drillNav,
+  drillNavEnd,
   // misc
   className,
 }) {
@@ -60,6 +65,7 @@ export default function ChromeBar({
         {category && (
           <span className={`sc-cat sc-cat--${String(category).toLowerCase()}`}>{category}</span>
         )}
+        {drillNav}
         {showToggle && (
           <div className="sc-chrome-bar-toggle" role="group" aria-label="View by">
             <button
@@ -83,6 +89,7 @@ export default function ChromeBar({
       </div>
 
       <div className="sc-chrome-bar-right">
+        {drillNavEnd}
         {showStats && (
           <ChromeStats
             todayLabel={todayLabel}
