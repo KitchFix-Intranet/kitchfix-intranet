@@ -157,6 +157,64 @@ function throwOnError(error, op) {
   if (error) throw new Error(`[dataStore.sc] ${op}: ${error.message}`);
 }
 
+// Day-status classification shared by the year + month loaders. Was a
+// closure inside loadYearSummaryPostgres, which meant the month payload
+// carried no status field and every drill-in tile fell through to the
+// neutral "off" fill (dayResolvers.js default branch). Extracted with an
+// explicit input contract so both paths derive the same status for the
+// same day.
+//
+//   s   - the per-day state: { date, hasAct, hasProj, anyNonZeroAct,
+//         anyNonZeroProj }. Same shape both loaders reduce their view
+//         rows into.
+//   ctx - the classification context: { today, lockCutoff, billingModel,
+//         hasHomestandData, homestandMap }. today/lockCutoff are Date
+//         objects (today anchor + LOCK_DAYS-back cutoff).
+//
+// Status vocabulary (preserves the legacy heatmap colors):
+//   "no-service"   - actuals present but all zero, OR (per-meal only)
+//                    a day with all-zero projections and no actuals
+//   "entered"      - actuals present (at least one non-zero)
+//   "overdue"      - past date older than LOCK_DAYS, no actuals
+//   "needs-entry"  - past date within LOCK_DAYS, no actuals
+//   "future"       - future date (also the fee "GAME day, no actuals")
+//   "prep"         - fee non-GAME homestand day (PREP/OPEN/CLOSE/CLEAN)
+//   "off-season"   - fee date not in the homestand schedule
+function classifyDayStatus(s, ctx) {
+  const d = new Date(s.date + "T12:00:00");
+  const isPast = d < ctx.today;
+  const isOverdue = d < ctx.lockCutoff;
+
+  // Fee-account branch: homestand-driven classification (4 MLB fee
+  // accounts have homestand rows; STL-FL is flat_fee but has zero
+  // homestand rows so hasHomestandData is false and it falls through to
+  // the per-meal branch).
+  //
+  // Schedule view, not urgency tracker: fee accounts have never had a
+  // requirement to enter actuals, so a past GAME day without actuals is
+  // just an unentered scheduled day - not "needs entry" or "overdue".
+  if (ctx.billingModel === "flat_fee" && ctx.hasHomestandData) {
+    const hs = ctx.homestandMap?.[s.date];
+    if (!hs) return "off-season";              // not in schedule -> invisible
+    if (hs.dayType !== "GAME") return "prep";  // PREP/OPEN/CLOSE/CLEAN
+    if (s.hasAct) return "entered";            // operator logged data
+    return "future";                            // GAME day, no actuals
+  }
+
+  // Per-meal branch (PDC + MiLB + STL-FL).
+  if (s.hasAct && !s.anyNonZeroAct) return "no-service";
+  if (s.hasAct) return "entered";
+  // 2026-06-17 (PR #167): per-meal accounts treat a day with all-zero
+  // projections AND no actuals as "no-service" (planned off-day, nothing
+  // to enter). Applies past AND future so the back half of the season
+  // isn't rendered as scheduled service. flat_fee + hasHomestandData
+  // uses the fee branch above and skips this.
+  if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && !(ctx.billingModel === "flat_fee" && ctx.hasHomestandData)) return "no-service";
+  if (isPast && isOverdue) return "overdue";
+  if (isPast) return "needs-entry";
+  return "future";
+}
+
 // Walk a select query in 1000-row chunks until exhausted. Caller passes a
 // builder fn that returns a fresh PostgREST query each call (so we can
 // re-apply .range per page). The query MUST include a deterministic
@@ -573,24 +631,50 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   const supa = getServiceClient();
   const { first, last } = monthBounds(year, month);
   const today = buildTodayAnchor(opts.clientToday);
+  const lockCutoff = new Date(today);
+  lockCutoff.setDate(lockCutoff.getDate() - LOCK_DAYS);
 
+  // Fetch view rows + billing_model in parallel; classify() below needs
+  // billing_model (per-meal vs flat_fee branch) and, for flat_fee, the
+  // homestand context. Mirrors loadYearSummaryPostgres so the drill-in
+  // grid colors match the overview cell-for-cell.
+  //
   // Fetch with explicit range to bypass the 1000-default ceiling for
   // wider months (PDC accounts with 13 services * 31 days = 403 rows
   // - within default - but TBJ-FL with 21 services * 31 = 651, still
   // under. Paginate anyway so the year-view bug class (PostgREST cap
   // silently dropping rows) can't ever bite this path either.
-  const viewRows = await fetchAllPaginated(
-    supa,
-    (q) => q
-      .from("sc_daily_revenue")
-      .select("*")
-      .eq("account_key", accountKey)
-      .gte("service_date", first)
-      .lte("service_date", last)
-      .order("service_date", { ascending: true })
-      .order("service_id",   { ascending: true }),
-    "loadMonthData.view"
-  );
+  const [viewRows, billingRes] = await Promise.all([
+    fetchAllPaginated(
+      supa,
+      (q) => q
+        .from("sc_daily_revenue")
+        .select("*")
+        .eq("account_key", accountKey)
+        .gte("service_date", first)
+        .lte("service_date", last)
+        .order("service_date", { ascending: true })
+        .order("service_id",   { ascending: true }),
+      "loadMonthData.view"
+    ),
+    supa
+      .from("accounts")
+      .select("billing_model")
+      .eq("team_key", accountKey)
+      .maybeSingle(),
+  ]);
+  throwOnError(billingRes.error, "loadMonthData.billing_model");
+  const billingModel = billingRes.data?.billing_model || null;
+
+  // Homestand context ONLY for fee accounts. STL-FL is flat_fee but has
+  // zero rows; hasHomestandData ends up false and classify() falls back
+  // to the per-meal branch. Same gating as loadYearSummaryPostgres.
+  let homestandMap = {};
+  if (billingModel === "flat_fee") {
+    homestandMap = await loadHomestandContext(accountKey, first, last);
+  }
+  const hasHomestandData = Object.keys(homestandMap).length > 0;
+  const statusCtx = { today, lockCutoff, billingModel, hasHomestandData, homestandMap };
 
   // Bucket rows by date.
   const dayBuckets = new Map();
@@ -627,8 +711,11 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   }
 
   // Build the final day array sorted by date. Compute totals + isPast/
-  // isLocked per day. Revenue totals exclude is_non_revenue services
-  // to match sc_month_summary semantics; counts include everything.
+  // isLocked per day, plus the reduced state (hasAct / anyNonZeroAct /
+  // hasProj / anyNonZeroProj) classifyDayStatus needs so the drill-in
+  // grid can color itself the same way the year-view heatmap does.
+  // Revenue totals exclude is_non_revenue services to match
+  // sc_month_summary semantics; counts include everything.
   const days = [...dayBuckets.values()]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((day) => {
@@ -638,6 +725,9 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
       let projectedRevenue = 0;
       let actualRevenue = 0;
       let hasAnyActuals = false;
+      let anyNonZeroAct = false;
+      let hasProj = false;
+      let anyNonZeroProj = false;
       for (const s of day.services) {
         if (s.projectedCount != null) projectedCount += s.projectedCount;
         if (s.actualCount    != null) actualCount    += s.actualCount;
@@ -646,11 +736,19 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
           if (s.hasActuals) actualRevenue += s.actualRevenue;
         }
         if (s.hasActuals) hasAnyActuals = true;
+        if (s.actualCount != null && Number(s.actualCount) > 0) anyNonZeroAct = true;
+        if (s.hasProjection) hasProj = true;
+        if (s.projectedCount != null && Number(s.projectedCount) > 0) anyNonZeroProj = true;
       }
+      const status = classifyDayStatus(
+        { date: day.date, hasAct: hasAnyActuals, anyNonZeroAct, hasProj, anyNonZeroProj },
+        statusCtx
+      );
       return {
         ...day,
         ...ctx,
         hasAnyActuals,
+        status,
         totals: { projectedCount, actualCount, projectedRevenue, actualRevenue },
       };
     });
@@ -879,61 +977,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     }
   }
 
-  function classify(s) {
-    const d = new Date(s.date + "T12:00:00");
-    const isPast = d < today;
-    const isOverdue = d < lockCutoff;
-
-    // ── Fee-account branch: homestand-driven classification ──
-    // Fires for flat_fee accounts that have a homestand schedule loaded
-    // (the 4 MLB fee accounts: CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V).
-    // STL-FL is flat_fee but has zero homestand rows, so hasHomestandData
-    // is false and it falls through to the per-meal branch.
-    //
-    // Schedule view, not urgency tracker: fee accounts have never had a
-    // requirement to enter actuals, so a past game day without actuals
-    // is just an unentered scheduled day - not "needs entry" or
-    // "overdue". The fee year view is "here's your season at a glance",
-    // not "here's everything you're behind on". Returning "future" for
-    // any non-entered GAME day keeps the heatmap a clean navy schedule
-    // with green highlights where data was entered.
-    if (billingModel === "flat_fee" && hasHomestandData) {
-      const hs = homestandMap[s.date];
-      if (!hs) return "off-season";              // not in schedule -> invisible
-      if (hs.dayType !== "GAME") return "prep";  // PREP/OPEN/CLOSE/CLEAN
-      if (s.hasAct) return "entered";            // operator logged data
-      return "future";                            // GAME day, no actuals - schedule
-    }
-
-    // ── Per-meal branch (unchanged) ──
-    if (s.hasAct && !s.anyNonZeroAct) return "no-service";
-    if (s.hasAct) return "entered";
-    // 2026-06-17 (PR #167): per-meal accounts treat a past day with all-zero
-    // projections AND no actuals as "no-service" (planned off-day, nothing
-    // to enter). Without this branch the day fell through to "needs-entry"
-    // (yellow) or "overdue" (red), surfacing a false alarm the operator
-    // can't act on. flat_fee accounts use the homestand branch above.
-    // Per-meal accounts: any day with projection rows that are ALL zero AND
-    // no actuals = planned off day, regardless of past/future. Without
-    // this, future zero-projection days (Joe entered blank or 0 in the
-    // projections tab) flipped to "future" and rendered as light-green
-    // "upcoming-service" on the year heatmap - operators saw the whole
-    // back half of the season as scheduled service when most of those
-    // days are planned off-days.
-    //
-    // Gate: any account that ISN'T using the homestand-driven schedule
-    // view. flat_fee + hasHomestandData = the 4 MLB fee accounts
-    // (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) - those use the homestand
-    // branch above and skip this. STL-FL is flat_fee but has no
-    // homestand rows; Kevin requires its operators to use actuals so
-    // it gets the per-meal treatment here. Matches the frontend
-    // isFeeAccount gate exactly (data.account.billingModel ===
-    // "flat_fee" && !!data.homestandMap).
-    if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && !(billingModel === "flat_fee" && hasHomestandData)) return "no-service";
-    if (isPast && isOverdue) return "overdue";
-    if (isPast) return "needs-entry";
-    return "future";
-  }
+  const statusCtx = { today, lockCutoff, billingModel, hasHomestandData, homestandMap };
 
   // Bucket day states by month for the response. For fee accounts the
   // homestand fields (homestandId, dayType, opponent) come through so
@@ -945,7 +989,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     if (!daysByMonth.has(monthKey)) daysByMonth.set(monthKey, []);
     const dayEntry = {
       date:        s.date,
-      status:      classify(s),
+      status:      classifyDayStatus(s, statusCtx),
       gameType:    s.gameType || "",
       actualMeals: s.actualMeals || 0,
     };
