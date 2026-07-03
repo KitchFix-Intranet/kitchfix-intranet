@@ -31,14 +31,8 @@ import {
   resolveDayStatus,
   resolveDayKind,
 } from "../dayResolvers";
-import {
-  derivePhaseTimeline,
-  derivePeriodPhase,
-  humanAnchor,
-} from "./phaseDerivation";
-import { CANONICAL_PHASES } from "./phaseCalendar";
 import StateLegend from "./StateLegend";
-import { ChevronLeft, ChevronRight, CheckCircle } from "../Icons";
+import { CheckCircle } from "../Icons";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -64,11 +58,6 @@ export default function PeriodWorkspace({
   today,                    // YYYY-MM-DD string
   loading,
   partialError,
-  // nav handlers
-  onClimbToSeason,
-  onPrevPeriod,
-  onNextPeriod,
-  onTodayJump,
   // day click + bulk
   onDayClick,
   bulkMode,
@@ -87,16 +76,6 @@ export default function PeriodWorkspace({
       hasHomestandSchedule,
     }),
     [account?.billingModel, account?.category, hasHomestandSchedule]
-  );
-
-  const phaseTimeline = useMemo(
-    () => derivePhaseTimeline(account?.key, account?.category, year),
-    [account?.key, account?.category, year]
-  );
-
-  const phaseAssignment = useMemo(
-    () => derivePeriodPhase(periodRange, phaseTimeline),
-    [periodRange, phaseTimeline]
   );
 
   // Detect current period: today's date is in the period's range.
@@ -127,11 +106,6 @@ export default function PeriodWorkspace({
     return [...seen].sort();
   }, [periodDays]);
 
-  // Prev/Next clamp - disable the buttons at the boundaries.
-  const periodIdx = periodRanges?.findIndex(r => r.period === periodKey) ?? -1;
-  const canPrev = periodIdx > 0;
-  const canNext = periodIdx >= 0 && periodIdx < (periodRanges?.length - 1);
-
   // Today's day record (when the current period contains it). Drives
   // the today hero.
   const todayDay = useMemo(
@@ -141,17 +115,6 @@ export default function PeriodWorkspace({
     [isCurrentPeriod, periodDays, today]
   );
 
-  // Header title
-  const periodNum = periodKey ? String(periodKey).replace(/^P/i, "") : "";
-  const anchor = periodRange ? humanAnchor(periodRange.start, periodRange.end) : "";
-  const phasePrimaryMeta = phaseAssignment?.primary
-    ? CANONICAL_PHASES[phaseAssignment.primary]
-    : null;
-  const phasePrimaryLabel = phasePrimaryMeta?.label ?? null;
-  const dateRangeLabel = periodRange
-    ? `${fmtDateRange(periodRange.start, periodRange.end)}`
-    : "";
-
   // ─── Loading / partial / empty branches ──────────────────────
   if (loading && !periodDays && !partialError) {
     return <WorkspaceSkeleton />;
@@ -159,17 +122,6 @@ export default function PeriodWorkspace({
   if (partialError) {
     return (
       <div className="sc-workspace sc-fade-in">
-        <NavRow
-          onClimbToSeason={onClimbToSeason}
-          onPrevPeriod={onPrevPeriod}
-          onNextPeriod={onNextPeriod}
-          onTodayJump={onTodayJump}
-          canPrev={canPrev}
-          canNext={canNext}
-          periodNum={periodNum}
-          phaseLabel={phasePrimaryLabel}
-          phaseTint={phasePrimaryMeta}
-        />
         <WorkspacePartialBanner failedMonth={partialError.failedMonth} />
         <WorkspaceSkeleton inline />
       </div>
@@ -178,17 +130,6 @@ export default function PeriodWorkspace({
   if (!periodRange) {
     return (
       <div className="sc-workspace sc-fade-in">
-        <NavRow
-          onClimbToSeason={onClimbToSeason}
-          onPrevPeriod={onPrevPeriod}
-          onNextPeriod={onNextPeriod}
-          onTodayJump={onTodayJump}
-          canPrev={canPrev}
-          canNext={canNext}
-          periodNum={periodNum}
-          phaseLabel={phasePrimaryLabel}
-          phaseTint={phasePrimaryMeta}
-        />
         <div className="sc-workspace-empty">Pick a period from the Season grid.</div>
       </div>
     );
@@ -198,37 +139,6 @@ export default function PeriodWorkspace({
 
   return (
     <div className="sc-workspace sc-fade-in">
-      <NavRow
-        onClimbToSeason={onClimbToSeason}
-        onPrevPeriod={onPrevPeriod}
-        onNextPeriod={onNextPeriod}
-        onTodayJump={onTodayJump}
-        canPrev={canPrev}
-        canNext={canNext}
-        periodNum={periodNum}
-        phaseLabel={phasePrimaryLabel}
-        phaseTint={phasePrimaryMeta}
-      />
-
-      <header className="sc-workspace-header">
-        <div className="sc-workspace-title">
-          <span className="sc-workspace-title-period">Period {periodNum}</span>
-          <span className="sc-workspace-title-anchor">· {anchor}</span>
-          {phasePrimaryLabel && (
-            <span
-              className="sc-workspace-title-phase"
-              style={phasePrimaryMeta ? { background: phasePrimaryMeta.tint, color: phasePrimaryMeta.textTint } : undefined}
-            >
-              · {phasePrimaryLabel}
-              {phaseAssignment.secondary
-                ? ` (-> ${CANONICAL_PHASES[phaseAssignment.secondary]?.label})`
-                : ""}
-            </span>
-          )}
-        </div>
-        <div className="sc-workspace-range">{dateRangeLabel}</div>
-      </header>
-
       <FinancialFrame
         m={m}
         kind={kind}
@@ -285,69 +195,6 @@ export default function PeriodWorkspace({
         showDayNight={true}
       />
     </div>
-  );
-}
-
-// ─── Nav row ─────────────────────────────────────────────────────
-// The breadcrumb (left) doubles as the climb-to-Season affordance:
-// click "Season" climbs up. The Stage 3 climb button is folded into
-// the breadcrumb's "Season" crumb so there's ONE climb path, not two.
-// Stepper (right) handles prev/next/today within the current period.
-function NavRow({ onClimbToSeason, onPrevPeriod, onNextPeriod, onTodayJump, canPrev, canNext, periodNum, phaseLabel, phaseTint }) {
-  return (
-    <nav className="sc-workspace-nav" aria-label="Period navigation">
-      <ol className="sc-workspace-breadcrumb">
-        <li className="sc-workspace-breadcrumb-item">
-          <button
-            type="button"
-            className="sc-workspace-breadcrumb-link sc-workspace-breadcrumb-link--back"
-            onClick={onClimbToSeason}
-            aria-label="Back to Season"
-          >
-            <ChevronLeft size="sm" />
-            <span>Season</span>
-          </button>
-        </li>
-        {phaseLabel && (
-          <li className="sc-workspace-breadcrumb-item sc-workspace-breadcrumb-phase" aria-hidden="true">
-            <span className="sc-workspace-breadcrumb-sep">/</span>
-            <span
-              className="sc-workspace-breadcrumb-phase-chip"
-              style={phaseTint ? { background: phaseTint.tint, color: phaseTint.textTint } : undefined}
-            >{phaseTint?.short ?? phaseLabel}</span>
-          </li>
-        )}
-        {periodNum && (
-          <li className="sc-workspace-breadcrumb-item" aria-current="page">
-            <span className="sc-workspace-breadcrumb-sep">/</span>
-            <span className="sc-workspace-breadcrumb-current">Period {periodNum}</span>
-          </li>
-        )}
-      </ol>
-      <div className="sc-workspace-nav-step">
-        <button
-          type="button"
-          className="sc-workspace-nav-arrow-btn"
-          disabled={!canPrev}
-          onClick={onPrevPeriod}
-          aria-label="Previous period"
-        ><ChevronLeft size="sm" /></button>
-        <button
-          type="button"
-          className="sc-workspace-nav-today"
-          onClick={onTodayJump}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          className="sc-workspace-nav-arrow-btn"
-          disabled={!canNext}
-          onClick={onNextPeriod}
-          aria-label="Next period"
-        ><ChevronRight size="sm" /></button>
-      </div>
-    </nav>
   );
 }
 
@@ -810,13 +657,6 @@ function WorkspaceSkeleton({ inline = false }) {
 }
 
 // ─── Utilities ──────────────────────────────────────────────────
-function fmtDateRange(startStr, endStr) {
-  const s = new Date(startStr + "T12:00:00");
-  const e = new Date(endStr   + "T12:00:00");
-  const monthShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${monthShort[s.getMonth()]} ${s.getDate()} - ${monthShort[e.getMonth()]} ${e.getDate()}`;
-}
-
 function formatHumanDate(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   const dow = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
