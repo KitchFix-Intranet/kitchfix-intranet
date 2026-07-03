@@ -228,3 +228,62 @@
 @media (max-width: 639px) {
   .sc-chrome-bar-stats { display: none; }
 }
+
+/* ── Drill-in period nav (fills the chrome bar in the workspace) ── */
+.sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.sc-chrome-drill-sep { width: 1px; height: 20px; background: var(--border-default); }
+.sc-chrome-drill-back {
+  display: inline-flex; align-items: center; gap: 3px; padding: 0;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--action-primary-bg);
+}
+.sc-chrome-drill-back:hover { color: var(--accent-sc-dark); }
+.sc-chrome-drill-back:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-control);
+}
+.sc-chrome-drill-step { display: inline-flex; align-items: center; gap: var(--space-2); }
+.sc-chrome-drill-step-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control);
+  background: var(--surface-card); color: var(--text-default); cursor: pointer;
+  transition: background var(--motion-control);
+}
+.sc-chrome-drill-step-btn:hover:not(:disabled) { background: var(--surface-sunken); }
+.sc-chrome-drill-step-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.sc-chrome-drill-step-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+}
+.sc-chrome-drill-period {
+  font-size: var(--size-subhead); font-weight: var(--wt-bold);
+  color: var(--text-heading); letter-spacing: -0.01em;
+}
+.sc-chrome-drill-dot { color: var(--text-subtle); }
+.sc-chrome-drill-range {
+  font-size: var(--size-caption); font-weight: var(--wt-semibold);
+  color: var(--text-muted); font-variant-numeric: var(--num-tabular);
+}
+.sc-chrome-drill-phase {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-default);
+}
+.sc-chrome-drill-phase-dot { width: 9px; height: 9px; border-radius: var(--radius-circle); }
+.sc-chrome-drill-today {
+  display: inline-flex; align-items: center; gap: 6px; padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-control); background: var(--action-primary-bg);
+  color: var(--action-primary-text); border: none; cursor: pointer; font-family: inherit;
+  font-size: var(--size-caption); font-weight: var(--wt-bold); transition: background var(--motion-control);
+}
+.sc-chrome-drill-today:hover { background: var(--action-primary-bg-hover); }
+.sc-chrome-drill-today:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+}
+.sc-chrome-drill-today--here { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .sc-chrome-drill-step-btn, .sc-chrome-drill-today { transition: none; }
+}
+@media (max-width: 767px) {
+  .sc-chrome-drill { gap: var(--space-2); }
+  .sc-chrome-drill-step-btn { width: 32px; height: 32px; }
+  .sc-chrome-drill-today { min-height: 32px; }
+}

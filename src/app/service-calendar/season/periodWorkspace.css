@@ -14,145 +14,6 @@
   gap: var(--space-4);
 }
 
-/* ───────── NAV ROW ───────── */
-.sc-workspace-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-1) 0;
-}
-/* Mobile Overhaul: tighten the NavRow so the breadcrumb + period
-   stepper don't leave a giant empty band above the workspace
-   header. Both rows compress; the climb-to-Season chevron stays
-   visible as a back-affordance, not as a floating "Season" word. */
-@media (max-width: 767px) {
-  .sc-workspace-nav {
-    padding: var(--space-1) 0 0;
-    gap: var(--space-2);
-  }
-}
-.sc-workspace-nav-climb {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px var(--space-3);
-  font-family: inherit;
-  font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
-  color: var(--text-default);
-  background: transparent;
-  border: var(--border-thin) solid transparent;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  transition: background var(--motion-control), border-color var(--motion-control);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-workspace-nav-climb { transition: none; }
-}
-.sc-workspace-nav-climb:hover {
-  background: var(--surface-card);
-  border-color: var(--border-default);
-}
-.sc-workspace-nav-climb:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: var(--focus-ring-offset);
-}
-.sc-workspace-nav-arrow { font-size: var(--size-subhead); }
-
-.sc-workspace-nav-step {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-pill);
-  padding: 3px;
-}
-.sc-workspace-nav-arrow-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  font-size: var(--size-subhead);
-  color: var(--text-default);
-  font-family: inherit;
-}
-.sc-workspace-nav-arrow-btn:hover:not(:disabled) {
-  background: var(--surface-sunken);
-}
-.sc-workspace-nav-arrow-btn:disabled {
-  color: var(--text-subtle);
-  cursor: not-allowed;
-}
-.sc-workspace-nav-arrow-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: 1px;
-}
-.sc-workspace-nav-today {
-  padding: 6px 14px;
-  font-family: inherit;
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  color: var(--accent-sc);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.sc-workspace-nav-today:hover {
-  background: var(--accent-sc-subtle);
-}
-.sc-workspace-nav-today:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: 1px;
-}
-
-/* ───────── HEADER ───────── */
-.sc-workspace-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  padding: 0 var(--space-1);
-}
-.sc-workspace-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.sc-workspace-title-period {
-  font-size: var(--size-h2);
-  font-weight: var(--wt-display);
-  letter-spacing: -0.01em;
-  color: var(--text-heading);
-}
-.sc-workspace-title-anchor {
-  font-size: var(--size-body);
-  font-weight: var(--wt-medium);
-  color: var(--text-muted);
-}
-.sc-workspace-title-phase {
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 3px var(--space-2);
-  border-radius: var(--radius-pill);
-}
-.sc-workspace-range {
-  font-size: var(--size-body);
-  font-weight: var(--wt-medium);
-  color: var(--text-muted);
-  font-variant-numeric: var(--num-tabular);
-}
-
 /* ───────── FINANCIAL FRAME ───────── */
 .sc-workspace-frame {
   background: var(--surface-card);
@@ -596,77 +457,6 @@
 .sc-workspace-skel--dow   { height: 14px; margin-bottom: 6px; }
 .sc-workspace-skel--tile  { height: 96px; }
 
-/* ───────── BREADCRUMB (Stage 4 nav) ───────── */
-.sc-workspace-breadcrumb {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.sc-workspace-breadcrumb-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--size-body);
-  color: var(--text-muted);
-  min-width: 0;
-}
-.sc-workspace-breadcrumb-link {
-  font-family: inherit;
-  font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
-  color: var(--text-link);
-  background: transparent;
-  border: none;
-  padding: var(--space-1) 6px;
-  border-radius: var(--radius-cell);
-  cursor: pointer;
-  transition: background var(--motion-control);
-}
-.sc-workspace-breadcrumb-link--back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 44px;
-}
-.sc-workspace-breadcrumb-link--back svg { flex-shrink: 0; }
-@media (prefers-reduced-motion: reduce) {
-  .sc-workspace-breadcrumb-link { transition: none; }
-}
-.sc-workspace-breadcrumb-link:hover { background: var(--surface-sunken); }
-.sc-workspace-breadcrumb-link:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: var(--focus-ring-offset);
-}
-.sc-workspace-breadcrumb-sep {
-  color: var(--text-subtle);
-  font-size: var(--size-body);
-  font-weight: var(--wt-medium);
-  user-select: none;
-}
-.sc-workspace-breadcrumb-phase-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-.sc-workspace-breadcrumb-current {
-  font-weight: var(--wt-bold);
-  color: var(--text-heading);
-}
-
 /* ───────── MOTION (calm, reduced-motion honored everywhere) ───────── */
 /* Drill transitions use .sc-fade-in (180ms fade-up). Skeletons +
    shimmer respect reduced-motion via their own @media block above.
@@ -690,15 +480,7 @@
 @media (max-width: 767px) {
   .sc-workspace { padding: var(--space-2) var(--space-3) var(--space-7); gap: var(--space-3); }
 
-  /* Nav row stacks if needed; breadcrumb stays on top */
-  .sc-workspace-nav { flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-1) 0; }
-  .sc-workspace-nav-step { align-self: flex-end; }
-  .sc-workspace-nav-arrow-btn { width: 44px; height: 44px; }
-  .sc-workspace-nav-today { padding: 11px var(--space-4); }
-
-  /* Header + frame stack with reduced sizing */
-  .sc-workspace-header { padding: 0 2px; }
-  .sc-workspace-title-period { font-size: var(--size-h2); }
+  /* Frame stacks with reduced sizing */
   .sc-workspace-frame { padding: 14px var(--space-4); }
   .sc-workspace-frame-entered { font-size: var(--size-h1); }
   .sc-workspace-frame--fee,
@@ -762,19 +544,12 @@
 
   /* Week subtotals: tighter wrap on mobile */
   .sc-workspace-weeks { padding: 0 var(--space-1); gap: var(--space-1) var(--space-2); font-size: var(--size-caption); }
-
-  /* Breadcrumb - shrink phase chip + allow wrap */
-  .sc-workspace-breadcrumb { gap: var(--space-1); }
-  .sc-workspace-breadcrumb-phase-chip { max-width: 140px; font-size: var(--size-micro); padding: 2px 6px; }
-  .sc-workspace-breadcrumb-item { font-size: var(--size-caption); }
-  .sc-workspace-breadcrumb-link { font-size: var(--size-body); padding: 6px var(--space-2); min-height: 36px; }
 }
 
 /* ───────── NARROWER PHONES (<= 375) ───────── */
 @media (max-width: 375px) {
   .sc-workspace-frame-entered { font-size: var(--size-h2); }
   .sc-workspace-frame-projected { font-size: var(--size-body); }
-  .sc-workspace-title-period { font-size: var(--size-h3); }
   .sc-workspace-grid .sc-daysq--lg { padding: var(--space-2) var(--space-3); }
   .sc-workspace-grid .sc-daysq-mid { font-size: var(--size-caption); }
 }
