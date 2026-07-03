@@ -248,6 +248,10 @@ function transformDays(orchDays) {
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,
+      // Status is classified in loadMonthDataPostgres using the same
+      // classifyDayStatus() the year loader uses; without this pass-through
+      // the drill-in grid rendered every cell as the neutral off-fill.
+      status:     d.status,
     };
   });
 }
