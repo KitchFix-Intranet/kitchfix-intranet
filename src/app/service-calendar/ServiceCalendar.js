@@ -8,6 +8,7 @@ import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
 import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
+import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
@@ -38,6 +39,50 @@ function monthsBetween(startStr, endStr) {
 
 const CAT_ORDER = { PDC: 1, MLB: 2, MiLB: 3 };
 const CAT_LABELS = { PDC: "Player Development", MLB: "Major League", MiLB: "Minor League" };
+
+// Aggregate the workspace metrics (totals + per-week subtotals) from a
+// days array. Shared by periodMetrics (fiscal period) and monthMetrics
+// (calendar month) so the range-based PeriodWorkspace reads either
+// identically. Revenue comes from day.totals.* (the #257-corrected
+// sc_daily_revenue source - never recomputed client-side).
+function aggregateWorkspaceMetrics(days) {
+  const out = {
+    projMeals: 0, actMeals: 0,
+    projRev: 0, actRev: 0,
+    complete: 0, needsEntry: 0, overdue: 0,
+    total: 0,
+    weeks: {},
+  };
+  if (!days?.length) return out;
+  for (const day of days) {
+    if (day.hasActuals) out.complete++;
+    else if (day.isPast && day.isLocked) out.overdue++;
+    else if (day.isPast) out.needsEntry++;
+    out.projRev += day.totals?.projectedRevenue || 0;
+    if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
+    for (const ci of Object.keys(day.projected || {})) {
+      const pv = day.projected[ci];
+      if (pv != null) out.projMeals += pv;
+      if (day.hasActuals && day.actual?.[ci] != null) out.actMeals += day.actual[ci];
+    }
+    const wk = day.meta?.week || "W?";
+    if (!out.weeks[wk]) out.weeks[wk] = { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0, needsEntry: 0, overdue: 0 };
+    const w = out.weeks[wk];
+    w.total++;
+    w.projRev += day.totals?.projectedRevenue || 0;
+    if (day.hasActuals) {
+      w.complete++;
+      w.actRev += day.totals?.actualRevenue || 0;
+      for (const ci of Object.keys(day.actual || {})) {
+        const av = day.actual[ci];
+        if (av != null) w.actMeals += av;
+      }
+    } else if (day.isPast && day.isLocked) w.overdue++;
+    else if (day.isPast) w.needsEntry++;
+  }
+  out.total = days.length;
+  return out;
+}
 
 function AccountDropdown({ accounts, value, onChange }) {
   const [open, setOpen] = useState(false);
@@ -129,6 +174,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   //   partialError = null | { failedMonth: "2026-07" } for the honest
   //                  partial-data state.
   const [periodKey, setPeriodKey] = useState(null);
+  // Month drill: which calendar month ("YYYY-MM") the user drilled into
+  // from the Calendar overview. Mutually exclusive with periodKey - the
+  // URL sync effect below picks one via the ?period / ?month gate.
+  const [monthKey, setMonthKey] = useState(null);
   const [monthCache, setMonthCache] = useState({});
   const [periodRanges, setPeriodRanges] = useState(null);
   const [partialError, setPartialError] = useState(null);
@@ -155,6 +204,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // when lens=period.
   const isYearView   = !isAdminView && scope === "year"   && (lens === "calendar" || lens === "period");
   const isPeriodView = !isAdminView && scope === "period" && lens === "period";
+  const isMonthView  = !isAdminView && scope === "month"  && lens === "calendar";
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -333,6 +383,35 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lens, selectedAccount, periodKey, periodRanges, reloadKey, today]);
 
+  // Month drill fetch. When the user opens ?month=YYYY-MM, ensure
+  // monthCache[monthKey] is loaded. Deep-links land here cold; drilling
+  // from the Calendar overview may hit the cache from the year-summary
+  // path if that month was already fetched, in which case this is a
+  // no-op. Mirrors the period-months effect shape (functional set,
+  // abort on unmount, partial-error surface).
+  useEffect(() => {
+    if (!isMonthView || !selectedAccount || !monthKey) return;
+    if (monthCache[monthKey]) { setPartialError(null); return; }
+    const controller = new AbortController();
+    setLoading(true);
+    setPartialError(null);
+    fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${monthKey}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => {
+        if (controller.signal.aborted) return;
+        if (d.success) {
+          setMonthCache(prev => ({ ...prev, [monthKey]: d }));
+          setPartialError(null);
+        } else {
+          setPartialError({ failedMonth: monthKey });
+        }
+      })
+      .catch(() => { if (!controller.signal.aborted) setPartialError({ failedMonth: monthKey }); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMonthView, selectedAccount, monthKey, reloadKey, today]);
+
   // PR-B2 periodKey initialization. When entering lens=period and
   // periodRanges arrives, land on the period containing today (or the
   // first period if today is outside the year's coverage). Preserves
@@ -355,17 +434,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   useEffect(() => {
     const view = searchParams?.get("view") || null;
     const period = searchParams?.get("period") || null;
+    const month = searchParams?.get("month") || null;
     if (view === "admin" && isAdmin) {
-      setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null);
+      setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
     } else if (period) {
       // Any non-empty ?period= means "show this period's workspace."
       // The identifier is the bare period number (e.g. "1"), NOT "P1" -
       // the old /^P\d+$/ guard never matched, so drilling changed the
       // URL but never opened the workspace. An unknown value renders the
       // workspace empty state (graceful), so no format regex is needed.
-      setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period);
+      // Precedence: ?period= wins if both ?period= and ?month= present.
+      setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period); setMonthKey(null);
+    } else if (month && /^\d{4}-\d{2}$/.test(month)) {
+      // ?month=YYYY-MM opens the month drill-in. Shape guard prevents
+      // junk values from creating a scope=month state with no valid
+      // month lookup - falls through to the year default instead.
+      setIsAdminView(false); setScope("month"); setLens("calendar"); setPeriodKey(null); setMonthKey(month);
     } else {
-      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null);
+      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
     }
   }, [searchParams, isAdmin]);
 
@@ -378,7 +464,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   useEffect(() => {
     if (floorRedirectDone.current) return;
     if (roleTier !== "floor" || !periodRanges?.length) return;
-    if (searchParams?.get("view") || searchParams?.get("period")) {
+    if (searchParams?.get("view") || searchParams?.get("period") || searchParams?.get("month")) {
       floorRedirectDone.current = true; // explicit URL wins; never redirect later
       return;
     }
@@ -445,41 +531,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // client-side; that drift was the bug that pricing-fix landed).
   const periodMetrics = useMemo(() => {
     if (!periodDays) return null;
-    const out = {
-      projMeals: 0, actMeals: 0,
-      projRev: 0, actRev: 0,
-      complete: 0, needsEntry: 0, overdue: 0,
-      total: 0,
-      weeks: {},
-    };
-    for (const day of periodDays) {
-      if (day.hasActuals) out.complete++;
-      else if (day.isPast && day.isLocked) out.overdue++;
-      else if (day.isPast) out.needsEntry++;
-      out.projRev += day.totals?.projectedRevenue || 0;
-      if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
-      for (const ci of Object.keys(day.projected || {})) {
-        const pv = day.projected[ci];
-        if (pv != null) out.projMeals += pv;
-        if (day.hasActuals && day.actual?.[ci] != null) out.actMeals += day.actual[ci];
-      }
-      const wk = day.meta?.week || "W?";
-      if (!out.weeks[wk]) out.weeks[wk] = { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0, needsEntry: 0, overdue: 0 };
-      const w = out.weeks[wk];
-      w.total++;
-      w.projRev += day.totals?.projectedRevenue || 0;
-      if (day.hasActuals) {
-        w.complete++;
-        w.actRev += day.totals?.actualRevenue || 0;
-        for (const ci of Object.keys(day.actual || {})) {
-          const av = day.actual[ci];
-          if (av != null) w.actMeals += av;
-        }
-      } else if (day.isPast && day.isLocked) w.overdue++;
-      else if (day.isPast) w.needsEntry++;
-    }
-    out.total = periodDays.length;
-    return out;
+    return aggregateWorkspaceMetrics(periodDays);
   }, [periodDays]);
 
   // periodHomestandMap: merge the per-month homestandMap entries across
@@ -506,6 +558,43 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     return merged;
   }, [lens, periodKey, periodRanges, monthCache]);
+
+  // ─── Month drill derivations (parallel to the period ones) ─────
+  // Same range-based inputs PeriodWorkspace consumes; the workspace body
+  // is reused as-is with a calendar-month range instead of a fiscal-
+  // period range.
+  const monthRange = useMemo(() => {
+    if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return null;
+    const [y, m] = monthKey.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return {
+      start: `${monthKey}-01`,
+      end:   `${monthKey}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }, [monthKey]);
+
+  const monthDays = useMemo(() => {
+    if (!isMonthView || !monthKey) return null;
+    const payload = monthCache[monthKey];
+    if (!payload) return null;
+    return payload.days || [];
+  }, [isMonthView, monthKey, monthCache]);
+
+  const monthMetrics = useMemo(() => {
+    if (!monthDays) return null;
+    return aggregateWorkspaceMetrics(monthDays);
+  }, [monthDays]);
+
+  const monthHomestandMap = useMemo(() => {
+    if (!monthKey) return null;
+    return monthCache[monthKey]?.homestandMap || {};
+  }, [monthKey, monthCache]);
+
+  // Unified drill-active days for the DayDetail lookup + day nav. Works
+  // from either scope; whichever memo is populated wins. Exactly one of
+  // periodDays/monthDays is non-null at a time (period/month are
+  // mutually exclusive scopes).
+  const activeDrillDays = periodDays || monthDays || null;
 
   // PR-B2b idle-prefetch. After the current period renders, fetch the
   // calendar months for the PREV and NEXT periods on idle so the
@@ -691,10 +780,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // day-list. dayMap stays as a fallback for the rare case the focused
   // day isn't yet in periodDays (e.g. mid-fetch race).
   const focusDayData = focusDay
-    ? (periodDays?.find(d => d.date === focusDay) || dayMap[focusDay] || null)
+    ? (activeDrillDays?.find(d => d.date === focusDay) || dayMap[focusDay] || null)
     : null;
-  const dayList = periodDays
-    ? periodDays.map(d => d.date)
+  const dayList = activeDrillDays
+    ? activeDrillDays.map(d => d.date)
     : (data?.days?.map(d => d.date) || []);
   const focusIdx = focusDay ? dayList.indexOf(focusDay) : -1;
   const canPrev = focusIdx > 0; const canNext = focusIdx < dayList.length - 1;
@@ -856,6 +945,34 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const canNextPeriod = drillPeriodIdx >= 0 && drillPeriodIdx < (periodRanges?.length ?? 0) - 1;
   const isCurrentPeriod = !!(drillPeriodRange && today >= drillPeriodRange.start && today <= drillPeriodRange.end);
 
+  // Month drill handlers + derived clamps. Month stepper is clamped to
+  // Jan-Dec of the year (Kevin's decision - a month view doesn't cross
+  // years). handleMonthTodayJump routes to today's calendar month.
+  const handlePrevMonth = useCallback(() => {
+    if (!monthKey) return;
+    const m = Number(monthKey.slice(5, 7));
+    const y = monthKey.slice(0, 4);
+    if (m <= 1) return;
+    router.push(`/service-calendar?month=${y}-${String(m - 1).padStart(2, "0")}`, { scroll: false });
+  }, [monthKey, router]);
+  const handleNextMonth = useCallback(() => {
+    if (!monthKey) return;
+    const m = Number(monthKey.slice(5, 7));
+    const y = monthKey.slice(0, 4);
+    if (m >= 12) return;
+    router.push(`/service-calendar?month=${y}-${String(m + 1).padStart(2, "0")}`, { scroll: false });
+  }, [monthKey, router]);
+  const handleMonthTodayJump = useCallback(() => {
+    const mk = today ? today.slice(0, 7) : null;
+    if (!mk) return;
+    router.push(`/service-calendar?month=${mk}`, { scroll: false });
+  }, [today, router]);
+
+  const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
+  const canPrevMonth = drillMonthIdx > 1;
+  const canNextMonth = drillMonthIdx >= 1 && drillMonthIdx < 12;
+  const isCurrentMonth = !!(monthKey && today && today.slice(0, 7) === monthKey);
+
   // Design Batch 2: the chrome bar holds the picker / toggle / Admin
   // (the controls that used to be scattered) and the as-of timestamp.
   // The compressed hero sits below it. Both render in every view
@@ -942,26 +1059,46 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         onViewChange={handleSeasonViewChange}
         showToggle={!isAdminView && isYearView}
         showStats={!isAdminView && isYearView}
-        drillNav={isPeriodView ? (
-          <PeriodHeaderNav
-            account={data?.account}
-            year={year}
-            periodKey={periodKey}
-            periodRange={drillPeriodRange}
-            canPrev={canPrevPeriod}
-            canNext={canNextPeriod}
-            onClimbToSeason={handleClimbToSeason}
-            onPrevPeriod={handlePrevPeriod}
-            onNextPeriod={handleNextPeriod}
-          />
-        ) : null}
-        drillNavEnd={isPeriodView ? (
-          <PeriodTodayChip
-            today={today}
-            isCurrentPeriod={isCurrentPeriod}
-            onTodayJump={handleTodayJump}
-          />
-        ) : null}
+        drillNav={
+          isPeriodView ? (
+            <PeriodHeaderNav
+              account={data?.account}
+              year={year}
+              periodKey={periodKey}
+              periodRange={drillPeriodRange}
+              canPrev={canPrevPeriod}
+              canNext={canNextPeriod}
+              onClimbToSeason={handleClimbToSeason}
+              onPrevPeriod={handlePrevPeriod}
+              onNextPeriod={handleNextPeriod}
+            />
+          ) : isMonthView ? (
+            <MonthHeaderNav
+              monthKey={monthKey}
+              monthRange={monthRange}
+              canPrev={canPrevMonth}
+              canNext={canNextMonth}
+              onClimbToSeason={handleClimbToSeason}
+              onPrevMonth={handlePrevMonth}
+              onNextMonth={handleNextMonth}
+            />
+          ) : null
+        }
+        drillNavEnd={
+          isPeriodView ? (
+            <PeriodTodayChip
+              today={today}
+              isCurrentPeriod={isCurrentPeriod}
+              onTodayJump={handleTodayJump}
+            />
+          ) : isMonthView ? (
+            <PeriodTodayChip
+              today={today}
+              isCurrentPeriod={isCurrentMonth}
+              onTodayJump={handleMonthTodayJump}
+            />
+          ) : null
+        }
         todayLabel={yearBannerStats?.todayLabel}
         periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
         weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
@@ -1008,19 +1145,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
             loading={loading || !data || !yearData}
-            // Calendar month-card drill: jump to the Period workspace
-            // for the period containing the month's midpoint. Spec 6:
-            // a month is just a slice of a period - clicking it drills
-            // DOWN into the operational scope, not sideways into a
-            // deprecated month view. Midpoint heuristic picks the
-            // period that owns the larger share of the month.
+            // Calendar month-card drill: opens the MONTH scope drill-in
+            // (un-deprecates the month view). Prior behavior forwarded
+            // to the containing fiscal period; the two scopes now
+            // coexist - month click opens ?month=, period click opens
+            // ?period= (below).
             onMonthClick={(mi) => {
-              const target = `${year}-${String(mi + 1).padStart(2, "0")}-15`;
-              const containing = periodRanges?.find(r => target >= r.start && target <= r.end);
-              const fallback = periodRanges?.find(r => today >= r.start && today <= r.end) || periodRanges?.[0];
-              const next = containing || fallback;
-              if (!next) return;
-              router.push(`/service-calendar?period=${next.period}`, { scroll: false });
+              const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+              router.push(`/service-calendar?month=${mk}`, { scroll: false });
               setFocusDay(null);
               setBulkMode(false);
             }}
@@ -1051,6 +1183,40 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             homestandMap={periodHomestandMap || homestandMap}
             today={today}
             loading={loading && !periodDays}
+            partialError={partialError}
+            onDayClick={(date) => setFocusDay(date)}
+            bulkMode={bulkMode}
+            onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
+            bulkSelected={bulkSelected}
+            onBulkTileClick={toggleBulkSelect}
+            onBulkOpenPanel={() => setBulkPanelOpen(true)}
+            onBulkConfirmAsProjected={handleBulkConfirm}
+            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
+            saving={saving}
+          />
+        )}
+
+        {/* Month drill: reuses the same range-based PeriodWorkspace body
+            with a calendar-month range (start = mk-01, end = mk-<last>).
+            monthDays / monthMetrics / monthHomestandMap flow from the
+            monthCache directly (single-month payload; no cross-month
+            merge). Header nav swaps to MonthHeaderNav via ChromeBar's
+            drillNav slot above. */}
+        {isMonthView && (
+          <PeriodWorkspace
+            account={data?.account}
+            year={year}
+            periodKey={null}
+            periodRange={monthRange}
+            periodRanges={null}
+            periodDays={monthDays}
+            periodMetrics={monthMetrics}
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            isMilb={isMilb}
+            homestandMap={monthHomestandMap || homestandMap}
+            today={today}
+            loading={loading && !monthDays}
             partialError={partialError}
             onDayClick={(date) => setFocusDay(date)}
             bulkMode={bulkMode}
