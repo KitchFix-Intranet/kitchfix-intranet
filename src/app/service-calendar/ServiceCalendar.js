@@ -463,11 +463,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const floorRedirectDone = useRef(false);
   useEffect(() => {
     if (floorRedirectDone.current) return;
-    if (roleTier !== "floor" || !periodRanges?.length) return;
+    // Latch "explicit URL wins" the FIRST time we see an explicit URL, even
+    // before periodRanges arrives. Otherwise a floor user who cold-refreshes
+    // ?period=N and clicks Season back mid-load has the URL cleared, and
+    // when periodRanges lands the redirect fires and bounces them back
+    // into a period. Intent is "explicit URL wins forever," not "wins only
+    // when all data is ready."
     if (searchParams?.get("view") || searchParams?.get("period") || searchParams?.get("month")) {
-      floorRedirectDone.current = true; // explicit URL wins; never redirect later
+      floorRedirectDone.current = true;
       return;
     }
+    if (roleTier !== "floor" || !periodRanges?.length) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
     const target = containingToday ? containingToday.period : periodRanges[0].period;
     floorRedirectDone.current = true;
@@ -1104,6 +1110,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodRange={drillPeriodRange}
               canPrev={canPrevPeriod}
               canNext={canNextPeriod}
+              isLoading={!periodRanges}
               onClimbToSeason={handleClimbToSeason}
               onPrevPeriod={handlePrevPeriod}
               onNextPeriod={handleNextPeriod}
@@ -1114,6 +1121,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               monthRange={monthRange}
               canPrev={canPrevMonth}
               canNext={canNextMonth}
+              isLoading={!monthRange}
               onClimbToSeason={handleClimbToSeason}
               onPrevMonth={handlePrevMonth}
               onNextMonth={handleNextMonth}

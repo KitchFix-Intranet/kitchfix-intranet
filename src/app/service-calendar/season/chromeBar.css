@@ -287,6 +287,34 @@
 @media (prefers-reduced-motion: reduce) {
   .sc-chrome-drill-step-btn, .sc-chrome-drill-today { transition: none; }
 }
+
+/* Cold-refresh loading affordance: periodRanges takes ~0.4-1s+ to land
+   (auth -> sc-accounts -> sc-year-summary). During that window the stepper
+   is disabled - without a cue it reads as broken. Pulse the arrows on
+   aria-busy + render a skeleton where the range would go, so the operator
+   reads "loading," not "broken." */
+.sc-chrome-drill-step[aria-busy="true"] .sc-chrome-drill-step-btn {
+  animation: sc-drill-step-pulse 1.6s ease-in-out infinite;
+}
+@keyframes sc-drill-step-pulse {
+  0%, 100% { opacity: var(--disabled-opacity); }
+  50%      { opacity: 0.85; }
+}
+.sc-chrome-drill-skel {
+  display: inline-block;
+  width: 78px;
+  height: 10px;
+  vertical-align: middle;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--border-subtle) 50%, var(--surface-sunken) 75%);
+  background-size: 200% 100%;
+  animation: sc-season-shimmer 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-chrome-drill-step[aria-busy="true"] .sc-chrome-drill-step-btn { animation: none; }
+  .sc-chrome-drill-skel { animation: none; background: var(--surface-sunken); }
+}
+
 @media (max-width: 767px) {
   .sc-chrome-drill { gap: var(--space-2); }
   .sc-chrome-drill-step-btn { width: 32px; height: 32px; }

@@ -24,6 +24,10 @@ export default function PeriodHeaderNav({
   onClimbToSeason,
   onPrevPeriod,
   onNextPeriod,
+  isLoading = false,          // periodRanges hasn't landed yet - render a
+                              // loading affordance (skeleton range/phase +
+                              // pulsing disabled arrows) so the operator
+                              // reads "still loading," not "broken."
 }) {
   const phaseTimeline = useMemo(
     () => derivePhaseTimeline(account?.key, account?.category, year),
@@ -55,7 +59,7 @@ export default function PeriodHeaderNav({
         Season
       </button>
       <span className="sc-chrome-drill-sep" aria-hidden="true" />
-      <div className="sc-chrome-drill-step">
+      <div className="sc-chrome-drill-step" aria-busy={isLoading || undefined}>
         <button
           type="button"
           className="sc-chrome-drill-step-btn"
@@ -76,23 +80,32 @@ export default function PeriodHeaderNav({
           <ChevronRight size="sm" />
         </button>
       </div>
-      {range && (
+      {isLoading ? (
         <>
           <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
-          <span className="sc-chrome-drill-range">{range}</span>
+          <span className="sc-chrome-drill-skel" aria-hidden="true" />
         </>
-      )}
-      {phaseMeta && (
+      ) : (
         <>
-          <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
-          <span className="sc-chrome-drill-phase">
-            <span
-              className="sc-chrome-drill-phase-dot"
-              style={{ background: phaseMeta.tint }}
-              aria-hidden="true"
-            />
-            {phaseMeta.label}
-          </span>
+          {range && (
+            <>
+              <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
+              <span className="sc-chrome-drill-range">{range}</span>
+            </>
+          )}
+          {phaseMeta && (
+            <>
+              <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
+              <span className="sc-chrome-drill-phase">
+                <span
+                  className="sc-chrome-drill-phase-dot"
+                  style={{ background: phaseMeta.tint }}
+                  aria-hidden="true"
+                />
+                {phaseMeta.label}
+              </span>
+            </>
+          )}
         </>
       )}
     </div>
