@@ -61,26 +61,41 @@
   font-size: var(--size-body);
   color: var(--text-muted);
 }
-.sc-workspace-frame-numbers {
+/* Per-meal + MiLB frame (PR B): half-height strip. Row 1 is one
+   horizontal band; Row 2 (todaySlot) is a slim full-bleed strip below.
+   Fee/operational variants keep the existing hero/aux layout. */
+.sc-workspace-frame--per-meal {
+  padding: var(--space-3) var(--space-card-pad);
+  gap: 0;
+  overflow: hidden;
+}
+.sc-workspace-frame-band {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
   flex-wrap: wrap;
-  gap: var(--space-4);
+  padding-bottom: var(--space-3);
 }
 .sc-workspace-frame-money {
   display: flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-2);
   flex-wrap: wrap;
   min-width: 0;
 }
 .sc-workspace-frame-entered {
-  font-size: var(--size-display);
+  font-size: var(--size-h1);
   font-weight: var(--wt-display);
   letter-spacing: -0.01em;
   color: var(--text-success);
   font-variant-numeric: var(--num-tabular);
+}
+.sc-workspace-frame-money-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 .sc-workspace-frame-projected {
   font-size: var(--size-body);
@@ -88,26 +103,12 @@
   color: var(--text-muted);
   font-variant-numeric: var(--num-tabular);
 }
-.sc-workspace-frame-delta {
-  font-size: var(--size-body);
-  font-weight: var(--wt-bold);
-  font-variant-numeric: var(--num-tabular);
-}
-.sc-workspace-frame-labels {
-  display: flex;
-  gap: var(--space-6);
-  flex-wrap: wrap;
-  font-size: var(--size-micro);
-  font-weight: var(--wt-bold);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
 .sc-workspace-frame-progress {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin-top: var(--space-1);
+  flex: 1;
+  min-width: 220px;
 }
 .sc-workspace-frame-progress-label {
   font-size: var(--size-caption);
@@ -213,6 +214,17 @@
 .sc-workspace-frame--fee .sc-workspace-frame-today,
 .sc-workspace-frame--operational .sc-workspace-frame-today {
   flex: 1 0 100%;
+}
+/* Per-meal strip Row 2: bleeds the today rail to the card edges as a
+   slim second tier - sunken bg + top divider + own padding. Negative
+   margins pull it past the frame's padding; the frame's overflow:hidden
+   clips the bleed to the border-radius. Fee/operational frames keep the
+   in-padding rail from PR #322 (their variants don't apply --per-meal). */
+.sc-workspace-frame--per-meal .sc-workspace-frame-today {
+  margin: 0 calc(-1 * var(--space-card-pad)) calc(-1 * var(--space-3));
+  padding: var(--space-2) var(--space-card-pad);
+  background: var(--surface-sunken);
+  border-top: var(--border-thin) solid var(--border-subtle);
 }
 .sc-workspace-frame-today-info {
   display: flex;
@@ -493,6 +505,14 @@
   .sc-workspace-frame-entered { font-size: var(--size-h1); }
   .sc-workspace-frame--fee,
   .sc-workspace-frame--operational { gap: var(--space-4); }
+  /* Per-meal strip mobile: keep the horizontal pad tied to the same
+     token the today row's negative margin uses, so the full-bleed math
+     still aligns to the card edges. */
+  .sc-workspace-frame--per-meal { padding: 14px var(--space-4); }
+  .sc-workspace-frame--per-meal .sc-workspace-frame-today {
+    margin: 0 calc(-1 * var(--space-4)) -14px;
+    padding: var(--space-2) var(--space-4);
+  }
 
   /* Today rail - tap target on the CTA at floor-spec */
   .sc-workspace-frame-today { gap: var(--space-2); }
