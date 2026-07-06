@@ -364,4 +364,11 @@
 @keyframes scPop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
 .sc-day-success-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); margin: 0 0 6px; }
 .sc-day-success-detail { font-size: var(--size-body); color: var(--text-muted); margin: 0 0 var(--space-5); }
-.sc-day-success-actions { display: flex; gap: var(--space-2); justify-content: center; }
+.sc-day-success-actions { display: flex; gap: var(--space-2); justify-content: center; align-items: center; }
+.sc-day-success-caughtup {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--text-success);
+}

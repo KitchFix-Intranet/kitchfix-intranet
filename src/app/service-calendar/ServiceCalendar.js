@@ -596,6 +596,42 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // mutually exclusive scopes).
   const activeDrillDays = periodDays || monthDays || null;
 
+  // Drill-in exception queue (overdue + needs-entry, in date order).
+  // Backs the strip's clickable chips AND the DayDetail post-save
+  // iterator ("Next needing entry"). Overdue days are older by
+  // definition, so simple date-sort naturally yields overdue-then-needs.
+  const drillExceptions = useMemo(() => {
+    if (!activeDrillDays?.length) return [];
+    return activeDrillDays
+      .filter(d => d.status === "overdue" || d.status === "needs-entry")
+      .map(d => d.date);
+  }, [activeDrillDays]);
+
+  // Chip jumps: open DayDetail at the OLDEST unentered day of that
+  // status inside the current drill. Deliberately drill-scoped
+  // (activeDrillDays), NOT the year-scoped handleJumpToNeeds/Overdue
+  // above - those would jump out of the current period/month.
+  const handleJumpFirstOverdueInDrill = useCallback(() => {
+    const first = activeDrillDays?.find(d => d.status === "overdue");
+    if (first) setFocusDay(first.date);
+  }, [activeDrillDays]);
+  const handleJumpFirstNeedsInDrill = useCallback(() => {
+    const first = activeDrillDays?.find(d => d.status === "needs-entry");
+    if (first) setFocusDay(first.date);
+  }, [activeDrillDays]);
+
+  // Iterator handler for DayDetail's post-save Next-needing-entry
+  // button. Finds the next exception STRICTLY AFTER the current
+  // focusDay, so the just-saved day (whose status hasn't refetched yet)
+  // is naturally skipped. Returns null when the queue is empty -
+  // DayDetail renders the all-caught-up close in that case.
+  const onNextExceptionHandler = useMemo(() => {
+    if (!focusDay) return null;
+    const nextDate = drillExceptions.find(d => d > focusDay);
+    if (!nextDate) return null;
+    return () => setFocusDay(nextDate);
+  }, [focusDay, drillExceptions]);
+
   // PR-B2b idle-prefetch. After the current period renders, fetch the
   // calendar months for the PREV and NEXT periods on idle so the
   // prev/next period buttons feel instant. Best-effort + silent: a
@@ -1193,6 +1229,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             onBulkConfirmAsProjected={handleBulkConfirm}
             onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
             saving={saving}
+            onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
+            onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
           />
         )}
 
@@ -1228,6 +1266,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             onBulkConfirmAsProjected={handleBulkConfirm}
             onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
             saving={saving}
+            onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
+            onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
           />
         )}
 
@@ -1270,6 +1310,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               accountName={acctObj?.name || ""}
               isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
+              onNextException={onNextExceptionHandler}
               onClose={() => setFocusDay(null)} />
           </div>
         </div>

@@ -26,7 +26,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
+export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
   // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
   // "% of {scope}" readout. Legacy callers (the legacy month/period
   // views) don't pass it and default to "month" - the existing label
@@ -346,7 +346,11 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           <h3 className="sc-day-success-title">Saved!</h3>
           <p className="sc-day-success-detail">{formatDate(day.date)} · {summary.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(summary.revenue)}`}</p>
           <div className="sc-day-success-actions">
-            {onNext && <button className="sc-btn sc-btn--primary" onClick={onNext}>Next day →</button>}
+            {onNextException ? (
+              <button className="sc-btn sc-btn--primary" onClick={onNextException}>Next needing entry →</button>
+            ) : (
+              <span className="sc-day-success-caughtup">✓ All caught up</span>
+            )}
             <button className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
           </div>
         </div>

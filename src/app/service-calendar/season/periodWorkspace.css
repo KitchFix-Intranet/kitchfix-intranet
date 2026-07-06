@@ -118,6 +118,67 @@
 .sc-workspace-frame-progress-label strong { color: var(--text-heading); font-weight: var(--wt-bold); }
 .sc-workspace-frame-progress-pending { color: var(--accent-text); }
 
+/* Exception chips: clickable pills in the per-meal strip's progress label.
+   Each chip jumps DayDetail to the oldest day of its status inside the
+   current drill. Row stays a single line via inline-flex on the wrapper. */
+.sc-workspace-frame-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  flex-wrap: wrap;
+}
+.sc-workspace-frame-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  font-variant-numeric: var(--num-tabular);
+  cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-frame-chip { transition: none; }
+}
+.sc-workspace-frame-chip--overdue {
+  background: var(--status-overdue-bg);
+  border-color: var(--status-overdue-bd);
+  color: var(--status-overdue-fg);
+}
+.sc-workspace-frame-chip--needs {
+  background: var(--status-needs-bg);
+  border-color: var(--status-needs-bd);
+  color: var(--status-needs-fg);
+}
+.sc-workspace-frame-chip:hover { filter: brightness(0.96); }
+.sc-workspace-frame-chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-workspace-frame-chip-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--wt-bold);
+  line-height: 1;
+}
+.sc-workspace-frame-caughtup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: var(--space-2);
+  padding: 2px 8px; /* match .sc-workspace-frame-chip so row height doesn't jump when the last chip clears */
+  border: var(--border-thin) solid transparent;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  color: var(--text-success);
+}
+
 .sc-workspace-progress-bar {
   height: 6px;
   background: var(--surface-sunken);
@@ -252,6 +313,29 @@
   color: var(--accent-text);
 }
 .sc-workspace-frame-today-date { font-weight: var(--wt-bold); color: var(--text-heading); }
+/* PROJECTED pill: marks the today row's projected numbers so they don't
+   read as entered. Sits inline just before the "X meals · ~$Y" (per-meal),
+   the "N meals projected" (fee-no-dollar), or the "vs OPP · N meals
+   projected" (mlb-fee) strings from TodayRail's projection var. */
+.sc-workspace-frame-today-proj {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.sc-workspace-frame-today-proj-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+}
 .sc-workspace-frame-today-done {
   display: inline-flex;
   align-items: center;
