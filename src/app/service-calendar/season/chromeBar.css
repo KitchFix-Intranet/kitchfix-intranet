@@ -233,11 +233,16 @@
 .sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .sc-chrome-drill-sep { width: 1px; height: 20px; background: var(--border-default); }
 .sc-chrome-drill-back {
-  display: inline-flex; align-items: center; gap: 3px; padding: 0;
-  background: none; border: none; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 5px 11px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  cursor: pointer; font-family: inherit;
   font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--action-primary-bg);
+  transition: background var(--motion-control), border-color var(--motion-control);
 }
-.sc-chrome-drill-back:hover { color: var(--accent-sc-dark); }
+.sc-chrome-drill-back:hover { background: var(--surface-sunken); border-color: var(--action-primary-bg); }
 .sc-chrome-drill-back:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-control);
