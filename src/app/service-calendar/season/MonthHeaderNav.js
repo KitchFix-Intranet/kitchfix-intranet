@@ -26,6 +26,9 @@ export default function MonthHeaderNav({
   onClimbToSeason,
   onPrevMonth,
   onNextMonth,
+  isLoading = false, // symmetric with PeriodHeaderNav. In practice monthRange
+                     // derives synchronously from monthKey so the flag rarely
+                     // flips true, but wire it for consistency.
 }) {
   const monthNum = monthKey ? Number(monthKey.slice(5, 7)) : 0;
   const monthLabel = (monthNum >= 1 && monthNum <= 12) ? MONTH_NAMES[monthNum - 1] : "";
@@ -44,7 +47,7 @@ export default function MonthHeaderNav({
         Season
       </button>
       <span className="sc-chrome-drill-sep" aria-hidden="true" />
-      <div className="sc-chrome-drill-step">
+      <div className="sc-chrome-drill-step" aria-busy={isLoading || undefined}>
         <button
           type="button"
           className="sc-chrome-drill-step-btn"
@@ -65,12 +68,17 @@ export default function MonthHeaderNav({
           <ChevronRight size="sm" />
         </button>
       </div>
-      {range && (
+      {isLoading ? (
+        <>
+          <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
+          <span className="sc-chrome-drill-skel" aria-hidden="true" />
+        </>
+      ) : range ? (
         <>
           <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
           <span className="sc-chrome-drill-range">{range}</span>
         </>
-      )}
+      ) : null}
       {/* Phase intentionally omitted - a calendar month spans phases. */}
     </div>
   );
