@@ -102,7 +102,7 @@ export default function PeriodHeaderNav({
                   style={{ background: phaseMeta.tint }}
                   aria-hidden="true"
                 />
-                {phaseMeta.label}
+                {chromePhaseLabel(phaseMeta.label)}
               </span>
             </>
           )}
@@ -161,6 +161,15 @@ function TargetIcon() {
       <circle cx="12" cy="12" r="2" />
     </svg>
   );
+}
+
+// Chrome-only display form of a CANONICAL_PHASES label. Trims trailing
+// " League" / " Training" so the chrome row keeps the drill Today chip
+// pinned without wrapping. Full labels are still used on cards + the
+// phase timeline; `CANONICAL_PHASES[...].label` is not mutated.
+function chromePhaseLabel(label) {
+  if (!label) return "";
+  return label.replace(/ (League|Training)$/, "");
 }
 
 function fmtDateRange(startStr, endStr) {

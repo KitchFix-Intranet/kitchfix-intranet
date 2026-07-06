@@ -125,7 +125,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: var(--space-2);
+  margin-left: auto; /* right-anchor within the band */
   flex-wrap: wrap;
 }
 .sc-workspace-frame-chip {
@@ -171,7 +171,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: var(--space-2);
+  margin-left: auto; /* right-anchor within the band, mirroring the chips */
   padding: 2px 8px; /* match .sc-workspace-frame-chip so row height doesn't jump when the last chip clears */
   border: var(--border-thin) solid transparent;
   font-size: var(--size-caption);
@@ -364,35 +364,38 @@
 @media (prefers-reduced-motion: reduce) {
   .sc-workspace-frame-today-cta { transition: none; }
 }
-
-/* ───────── BULK AFFORDANCE ───────── */
-.sc-workspace-bulk-rest {
-  display: flex;
+/* Actions cluster (Enter actuals + Bulk Update) on the today row's right. */
+.sc-workspace-frame-today-actions {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
-.sc-workspace-bulk-rest-btn {
-  padding: 6px 14px;
+.sc-workspace-frame-today-bulk {
+  padding: var(--space-2) 14px;
   font-family: inherit;
-  font-size: var(--size-caption);
+  font-size: var(--size-body);
   font-weight: var(--wt-semibold);
   color: var(--text-link);
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
 }
-.sc-workspace-bulk-rest-btn:hover { background: var(--surface-sunken); border-color: var(--text-subtle); }
-.sc-workspace-bulk-rest-btn:focus-visible {
+.sc-workspace-frame-today-bulk:hover { background: var(--surface-sunken); border-color: var(--text-subtle); }
+.sc-workspace-frame-today-bulk:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-workspace-bulk-rest-hint {
-  font-size: var(--size-caption);
-  color: var(--text-muted);
-  font-style: italic;
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-frame-today-bulk { transition: none; }
 }
 
+/* ───────── BULK AFFORDANCE ─────────
+   Rest-state trigger is now the Bulk Update button in TodayRail (see
+   .sc-workspace-frame-today-bulk above); this block only holds the
+   active-mode controls. */
 .sc-workspace-bulk-active {
   display: flex;
   align-items: center;
@@ -603,7 +606,7 @@
   .sc-workspace-frame-today-cta { min-height: 48px; padding: var(--space-3) var(--space-5); }
 
   /* Bulk affordance - 48px+ tap targets */
-  .sc-workspace-bulk-rest-btn { padding: var(--space-3) var(--space-4); min-height: 48px; font-size: var(--size-body); }
+  .sc-workspace-frame-today-bulk { min-height: 48px; padding: var(--space-3) var(--space-4); font-size: var(--size-body); }
   .sc-workspace-bulk-btn { padding: 11px 14px; min-height: 44px; }
   .sc-workspace-bulk-cancel { padding: 11px 14px; min-height: 44px; }
   .sc-workspace-bulk-active { padding: 14px; }
