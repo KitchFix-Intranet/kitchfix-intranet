@@ -14,7 +14,11 @@
   border-bottom: var(--border-thin) solid var(--border-default);
   border-top-left-radius: var(--radius-container-lg);
   border-top-right-radius: var(--radius-container-lg);
-  flex-wrap: wrap;
+  /* Pin the row: the drill Today chip must stay right of the drill nav
+     even when the left cluster grows. The range span gives first via
+     ellipsis (see .sc-chrome-drill-range below). Mobile stack re-enables
+     wrap in its @media block. */
+  flex-wrap: nowrap;
 }
 
 .sc-chrome-bar-left,
@@ -23,6 +27,7 @@
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 /* Toggle pill - inherits the look of the legacy sc-season-toggle so
@@ -215,6 +220,10 @@
   .sc-chrome-bar {
     padding: var(--space-3);
     gap: var(--space-2);
+    /* Restore wrap on mobile so the 100%-width left/right stack cleanly
+       (the desktop nowrap pins the drill Today chip; on mobile the two
+       clusters need their own rows). */
+    flex-wrap: wrap;
   }
   .sc-chrome-bar-left,
   .sc-chrome-bar-right {
@@ -230,7 +239,7 @@
 }
 
 /* ── Drill-in period nav (fills the chrome bar in the workspace) ── */
-.sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
 .sc-chrome-drill-sep { width: 1px; height: 20px; background: var(--border-default); }
 .sc-chrome-drill-back {
   display: inline-flex; align-items: center; gap: 3px;
@@ -267,6 +276,14 @@
 .sc-chrome-drill-range {
   font-size: var(--size-caption); font-weight: var(--wt-semibold);
   color: var(--text-muted); font-variant-numeric: var(--num-tabular);
+  /* The compressible give: as the chrome row narrows, the range
+     ellipsises before anything else moves. Stepper already carries
+     "Period N" so a truncated range still reads. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
 }
 .sc-chrome-drill-phase {
   display: inline-flex; align-items: center; gap: 7px;

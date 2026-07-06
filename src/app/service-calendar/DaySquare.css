@@ -288,6 +288,11 @@
   pointer-events: none;
 }
 .sc-daysq--sm .sc-daysq-today-pill { display: none; }
+/* Drill-in (--lg) Option A: pill is redundant with the navy frame + date
+   chip below - hide on --lg too. Effectively the pill never renders
+   (--sm already hides it via the rule above); kept in the atom's JSX for
+   ariaLabel context and future --md sizes. */
+.sc-daysq--lg .sc-daysq-today-pill { display: none; }
 
 /* ── Drill-in polish (lg-only): meals-first value block + softer surface.
    Year-view tiles (--sm) use pickCompactSmall and do NOT get any of these
@@ -331,4 +336,39 @@
 .sc-daysq--lg .sc-daysq-badge {
   background: rgba(255, 255, 255, 0.42);
   border-radius: var(--radius-circle);
+}
+
+/* ── Today cell Option A (drill-in --lg only): bolder navy frame + a
+   filled navy date chip. Replaces the 2px --status-today-ring with a
+   2.5px --action-primary-bg. The selected/focused compositions layer on
+   top the same way the base rules do (today outermost, selected next,
+   focused inset). --sm year view keeps the softer status-today-ring. */
+.sc-daysq--lg.sc-daysq--today {
+  box-shadow: 0 0 0 2.5px var(--action-primary-bg);
+}
+.sc-daysq--lg.sc-daysq--today.sc-daysq--focused {
+  box-shadow: 0 0 0 2.5px var(--action-primary-bg), inset 0 0 0 1.5px var(--accent-sc);
+}
+.sc-daysq--lg.sc-daysq--today.sc-daysq--selected {
+  box-shadow: 0 0 0 2.5px var(--action-primary-bg), 0 0 0 5.5px var(--accent-sc);
+}
+.sc-daysq--lg.sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  box-shadow: 0 0 0 2.5px var(--action-primary-bg), 0 0 0 5.5px var(--accent-sc), inset 0 0 0 1.5px var(--accent-sc);
+}
+.sc-daysq--lg.sc-daysq--today.sc-daysq--interactive:focus-visible {
+  box-shadow: 0 0 0 2.5px var(--action-primary-bg), inset 0 0 0 1.5px var(--accent-sc);
+}
+/* Date lifted into a filled navy rounded-square chip; badge stays
+   top-right (via the parent .sc-daysq-top flex row). */
+.sc-daysq--lg.sc-daysq--today .sc-daysq-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--action-primary-bg);
+  color: var(--surface-card);
+  font-size: var(--size-h3);
+  line-height: 1;
 }

@@ -161,6 +161,7 @@ export default function PeriodWorkspace({
             kind={kind}
             homestandMap={homestandMap}
             onEnterActuals={() => onDayClick?.(todayDay.date)}
+            onBulkUpdate={onBulkModeToggle ? () => onBulkModeToggle(true) : undefined}
           />
         ) : null}
       />
@@ -318,39 +319,39 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
         <div className="sc-workspace-frame-progress">
           <div className="sc-workspace-frame-progress-label">
             <strong>{m.complete}</strong>/{m.total} days entered
-            {exceptionCount > 0 ? (
-              <span className="sc-workspace-frame-chips">
-                {m.overdue > 0 && (
-                  <button
-                    type="button"
-                    className="sc-workspace-frame-chip sc-workspace-frame-chip--overdue"
-                    onClick={onJumpFirstOverdue}
-                    aria-label={`Jump to first of ${m.overdue} overdue days`}
-                  >
-                    <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">!</span>
-                    {m.overdue} overdue
-                  </button>
-                )}
-                {m.needsEntry > 0 && (
-                  <button
-                    type="button"
-                    className="sc-workspace-frame-chip sc-workspace-frame-chip--needs"
-                    onClick={onJumpFirstNeeds}
-                    aria-label={`Jump to first of ${m.needsEntry} days needing entry`}
-                  >
-                    <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">✎</span>
-                    {m.needsEntry} need entry
-                  </button>
-                )}
-              </span>
-            ) : (
-              <span className="sc-workspace-frame-caughtup" aria-live="polite">
-                ✓ All caught up
-              </span>
-            )}
           </div>
           <ProgressLine pct={completionPct} color={progressColor} />
         </div>
+        {exceptionCount > 0 ? (
+          <span className="sc-workspace-frame-chips">
+            {m.overdue > 0 && (
+              <button
+                type="button"
+                className="sc-workspace-frame-chip sc-workspace-frame-chip--overdue"
+                onClick={onJumpFirstOverdue}
+                aria-label={`Jump to first of ${m.overdue} overdue days`}
+              >
+                <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">!</span>
+                {m.overdue} overdue
+              </button>
+            )}
+            {m.needsEntry > 0 && (
+              <button
+                type="button"
+                className="sc-workspace-frame-chip sc-workspace-frame-chip--needs"
+                onClick={onJumpFirstNeeds}
+                aria-label={`Jump to first of ${m.needsEntry} days needing entry`}
+              >
+                <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">✎</span>
+                {m.needsEntry} need entry
+              </button>
+            )}
+          </span>
+        ) : (
+          <span className="sc-workspace-frame-caughtup" aria-live="polite">
+            ✓ All caught up
+          </span>
+        )}
       </div>
       {todaySlot}
     </section>
@@ -376,7 +377,7 @@ function ProgressLine({ pct, color }) {
 // overdue / future / no-service). For already-entered today, a
 // quieter row (TODAY flag + "{dateLabel} entered" + check glyph,
 // no CTA) sits in the same slot.
-function TodayRail({ day, kind, homestandMap, onEnterActuals }) {
+function TodayRail({ day, kind, homestandMap, onEnterActuals, onBulkUpdate }) {
   const dateLabel = formatHumanDate(day.date);
   const needsAction = !day.hasActuals && day.status !== "off-season";
 
@@ -435,13 +436,24 @@ function TodayRail({ day, kind, homestandMap, onEnterActuals }) {
           </span>
         )}
       </div>
-      <button
-        type="button"
-        className="sc-workspace-frame-today-cta"
-        onClick={onEnterActuals}
-      >
-        Enter actuals
-      </button>
+      <div className="sc-workspace-frame-today-actions">
+        <button
+          type="button"
+          className="sc-workspace-frame-today-cta"
+          onClick={onEnterActuals}
+        >
+          Enter actuals
+        </button>
+        {onBulkUpdate && (
+          <button
+            type="button"
+            className="sc-workspace-frame-today-bulk"
+            onClick={onBulkUpdate}
+          >
+            Bulk Update
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -463,20 +475,12 @@ function sumProjectedMeals(day) {
 // gate prevents the tap-to-open vs tap-to-select conflict the brief
 // pre-mortem flagged.
 function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, onOpenPanel, onConfirmAsProjected }) {
-  if (!bulkMode) {
-    return (
-      <div className="sc-workspace-bulk-rest">
-        <button
-          type="button"
-          className="sc-workspace-bulk-rest-btn"
-          onClick={() => onToggle?.(true)}
-        >
-          Select days
-        </button>
-        <span className="sc-workspace-bulk-rest-hint">to enter many at once</span>
-      </div>
-    );
-  }
+  // Rest-state trigger moved into TodayRail as "Bulk Update"; this
+  // component now only renders the active-mode controls (selected count
+  // + panel/confirm/cancel). Note: TodayRail only renders on the current
+  // period, so past-period drill-ins lose the standalone entry into
+  // bulk mode - flagged for follow-up if needed.
+  if (!bulkMode) return null;
   const count = bulkSelected?.size || 0;
   return (
     <div className="sc-workspace-bulk-active" role="region" aria-label="Bulk entry">
