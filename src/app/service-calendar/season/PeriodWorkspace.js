@@ -25,7 +25,7 @@
 // surgical DayDetail change keeps legacy callers working (default
 // scopeLabel="month").
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DaySquare from "../DaySquare";
 import {
   resolveDayStatus,
@@ -483,7 +483,106 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 }
 
 // ─── Day grid (all-weeks, no buttons, no slide) ─────────────────
+// WAI-ARIA grid pattern (https://www.w3.org/WAI/ARIA/apg/patterns/grid/):
+// role="grid" > role="row" > role="gridcell", with roving tabindex so
+// keyboard users tab in ONCE and arrow-key between cells (Left/Right walk
+// real-day cells in reading order skipping placeholders; Up/Down jump one
+// week and clamp; Home/End jump to the first/last real cell in the row).
+// Enter/Space activation still fires the atom's onClick (DaySquare owns
+// that; the atom does not consume arrow keys so they bubble to the grid).
 function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, onDayClick, onBulkTileClick }) {
+  // Chunk the flat cells array into weeks of 7 for the row wrappers.
+  // Null cells stay in place so column alignment holds on desktop; on
+  // mobile they hide (see periodWorkspace.css @media).
+  const rows = useMemo(() => {
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      weeks.push(cells.slice(i, i + 7));
+    }
+    return weeks;
+  }, [cells]);
+
+  // Roving focus target = flat index into `cells`. Initialize to today's
+  // real-day cell when present, else the first real-day cell. Resets on
+  // period change (cells / today swap in a fresh set).
+  const initialFocusIdx = useMemo(() => {
+    if (!cells?.length) return -1;
+    const todayIdx = cells.findIndex(c => c.day && c.day.date === today);
+    if (todayIdx >= 0) return todayIdx;
+    return cells.findIndex(c => c.day);
+  }, [cells, today]);
+
+  const [focusIdx, setFocusIdx] = useState(initialFocusIdx);
+  useEffect(() => { setFocusIdx(initialFocusIdx); }, [initialFocusIdx]);
+
+  // Array of DOM refs to the wrapping cell spans; the focusable div is
+  // the DaySquare (span's firstElementChild). Callback ref pattern -
+  // React 19 handles null on unmount, so stale entries auto-clear.
+  const cellRefs = useRef([]);
+
+  const focusRealCell = (idx) => {
+    setFocusIdx(idx);
+    const span = cellRefs.current[idx];
+    const focusable = span?.firstElementChild;
+    if (focusable && typeof focusable.focus === "function") {
+      focusable.focus();
+    }
+  };
+
+  const scanForRealCell = (fromIdx, step) => {
+    let i = fromIdx + step;
+    while (i >= 0 && i < cells.length) {
+      if (cells[i].day) return i;
+      i += step;
+    }
+    return -1;
+  };
+
+  const handleGridKeyDown = (e) => {
+    if (focusIdx < 0) return;
+    let next = -1;
+    switch (e.key) {
+      case "ArrowRight":
+        next = scanForRealCell(focusIdx, 1);
+        break;
+      case "ArrowLeft":
+        next = scanForRealCell(focusIdx, -1);
+        break;
+      case "ArrowDown": {
+        const target = focusIdx + 7;
+        if (target < cells.length && cells[target]?.day) next = target;
+        break;
+      }
+      case "ArrowUp": {
+        const target = focusIdx - 7;
+        if (target >= 0 && cells[target]?.day) next = target;
+        break;
+      }
+      case "Home": {
+        // First real-day cell in the current row (clamp; do not cross weeks).
+        const start = Math.floor(focusIdx / 7) * 7;
+        for (let i = start; i < start + 7 && i < cells.length; i++) {
+          if (cells[i].day) { next = i; break; }
+        }
+        break;
+      }
+      case "End": {
+        // Last real-day cell in the current row.
+        const start = Math.floor(focusIdx / 7) * 7;
+        for (let i = Math.min(start + 6, cells.length - 1); i >= start; i--) {
+          if (cells[i].day) { next = i; break; }
+        }
+        break;
+      }
+      default:
+        return;
+    }
+    if (next >= 0 && next !== focusIdx) {
+      e.preventDefault();
+      focusRealCell(next);
+    }
+  };
+
   return (
     <div className="sc-workspace-grid-wrap">
       <div className="sc-workspace-grid-dow" aria-hidden="true">
@@ -491,43 +590,61 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
           <span key={d} className="sc-workspace-grid-dow-cell">{d}</span>
         ))}
       </div>
-      <div className="sc-workspace-grid" role="list" aria-label="Days in this period">
-        {cells.map((cell, i) => {
-          if (!cell.day) {
-            return <span key={i} className="sc-workspace-grid-cell sc-workspace-grid-cell-empty" aria-hidden="true" />;
-          }
-          const d = cell.day;
-          const isToday = d.date === today;
-          const status = resolveDayStatus(d.status);
-          const isSelected = bulkMode && bulkSelected?.has(d.date);
-          const content = buildLargeContent(d, kind, homestandMap, isMilb);
-          // Bulk-selectable gate: only future / needs-entry days are
-          // selectable for bulk entry. Entered days + off days have
-          // no editable target; tile click in bulk mode is a no-op
-          // for them.
-          const isBulkSelectable = bulkMode && !d.hasActuals && status !== "off";
-          return (
-            <span key={d.date} className="sc-workspace-grid-cell">
-              <DaySquare
-                date={d.date}
-                status={status}
-                size="lg"
-                kind={kind}
-                content={content}
-                isToday={isToday}
-                isSelected={isSelected}
-                onClick={() => {
-                  if (bulkMode) {
-                    if (isBulkSelectable) onBulkTileClick?.(d.date);
-                    return;
-                  }
-                  onDayClick?.(d.date);
-                }}
-                ariaLabel={`${d.date}, ${status}`}
-              />
-            </span>
-          );
-        })}
+      <div
+        className="sc-workspace-grid"
+        role="grid"
+        aria-label="Days in this period"
+        onKeyDown={handleGridKeyDown}
+      >
+        {rows.map((week, weekIdx) => (
+          <div key={weekIdx} role="row" className="sc-workspace-grid-row">
+            {week.map((cell, colIdx) => {
+              const flatIdx = weekIdx * 7 + colIdx;
+              if (!cell.day) {
+                return <span key={flatIdx} className="sc-workspace-grid-cell sc-workspace-grid-cell-empty" aria-hidden="true" />;
+              }
+              const d = cell.day;
+              const isToday = d.date === today;
+              const status = resolveDayStatus(d.status);
+              const isSelected = bulkMode && bulkSelected?.has(d.date);
+              const content = buildLargeContent(d, kind, homestandMap, isMilb);
+              // Bulk-selectable gate: only future / needs-entry days are
+              // selectable for bulk entry. Entered days + off days have
+              // no editable target; tile click in bulk mode is a no-op
+              // for them.
+              const isBulkSelectable = bulkMode && !d.hasActuals && status !== "off";
+              const isRoving = flatIdx === focusIdx;
+              return (
+                <span
+                  key={d.date}
+                  ref={(el) => { cellRefs.current[flatIdx] = el; }}
+                  className="sc-workspace-grid-cell"
+                >
+                  <DaySquare
+                    date={d.date}
+                    status={status}
+                    size="lg"
+                    kind={kind}
+                    content={content}
+                    isToday={isToday}
+                    isSelected={isSelected}
+                    role="gridcell"
+                    tabIndex={isRoving ? 0 : -1}
+                    onClick={() => {
+                      setFocusIdx(flatIdx);
+                      if (bulkMode) {
+                        if (isBulkSelectable) onBulkTileClick?.(d.date);
+                        return;
+                      }
+                      onDayClick?.(d.date);
+                    }}
+                    ariaLabel={`${d.date}, ${status}`}
+                  />
+                </span>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
