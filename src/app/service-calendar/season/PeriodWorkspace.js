@@ -295,38 +295,31 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
     );
   }
 
-  // Per-meal + MiLB - the financial-clarity hero. Revenue from
-  // periodMetrics ONLY (#257-safe; no client-side recompute).
-  const delta = m.actRev - m.projRev;
-  const deltaLabel = delta >= 0
-    ? `+${fmt$(Math.abs(delta))} ahead`
-    : `${fmt$(Math.abs(delta))} to go`;
-  const deltaColor = delta >= 0 ? "var(--text-success)" : "var(--accent-text)";
-
+  // Per-meal + MiLB - the financial-clarity strip (PR B redesign).
+  // Half-height Option 2: entered $ leads inline with a small "entered"
+  // label + "of $X projected" context, days/pending + progress ride the
+  // same band, todaySlot is a slim full-bleed second tier beneath.
+  // Projection-gap delta ("to go" / "ahead") removed - a projected
+  // target invents a false goal/failure.
   return (
-    <section className="sc-workspace-frame">
-      <div className="sc-workspace-frame-numbers">
+    <section className="sc-workspace-frame sc-workspace-frame--per-meal">
+      <div className="sc-workspace-frame-band">
         <div className="sc-workspace-frame-money">
           <span className="sc-workspace-frame-entered">{fmt$(m.actRev)}</span>
+          <span className="sc-workspace-frame-money-label">entered</span>
           <span className="sc-workspace-frame-projected">of {fmtK(m.projRev)} projected</span>
         </div>
-        <div className="sc-workspace-frame-delta" style={{ color: deltaColor }}>{deltaLabel}</div>
-      </div>
-      <div className="sc-workspace-frame-labels">
-        <span className="sc-workspace-frame-label">Entered</span>
-        <span className="sc-workspace-frame-label">Projected</span>
-        <span />
-      </div>
-      <div className="sc-workspace-frame-progress">
-        <div className="sc-workspace-frame-progress-label">
-          <strong>{m.complete}</strong> / {m.total} days entered
-          {(m.needsEntry > 0 || m.overdue > 0) && (
-            <span className="sc-workspace-frame-progress-pending">
-              {" · "}{m.needsEntry + m.overdue} pending
-            </span>
-          )}
+        <div className="sc-workspace-frame-progress">
+          <div className="sc-workspace-frame-progress-label">
+            <strong>{m.complete}</strong>/{m.total} days entered
+            {(m.needsEntry > 0 || m.overdue > 0) && (
+              <span className="sc-workspace-frame-progress-pending">
+                {" · "}{m.needsEntry + m.overdue} pending
+              </span>
+            )}
+          </div>
+          <ProgressLine pct={completionPct} color={progressColor} />
         </div>
-        <ProgressLine pct={completionPct} color={progressColor} />
       </div>
       {todaySlot}
     </section>
