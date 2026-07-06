@@ -71,6 +71,10 @@ export default function PeriodWorkspace({
   scope = "period",         // "period" | "month" - month drops the week
                             // subtotals (fiscal-week labels collide on a
                             // calendar month spanning two periods).
+  // Exception-chip jumps in the per-meal strip. Both jump to the OLDEST
+  // day of the given status inside the current drill (not year-scoped).
+  onJumpFirstOverdue,
+  onJumpFirstNeeds,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -149,6 +153,8 @@ export default function PeriodWorkspace({
         isFeeAccount={isFeeAccount}
         periodRange={periodRange}
         today={today}
+        onJumpFirstOverdue={onJumpFirstOverdue}
+        onJumpFirstNeeds={onJumpFirstNeeds}
         todaySlot={isCurrentPeriod && todayDay ? (
           <TodayRail
             day={todayDay}
@@ -213,7 +219,7 @@ export default function PeriodWorkspace({
 // period is entirely future / unstarted (no entered days AND today
 // is before the period's start date), render a calm "Upcoming"
 // frame instead of the punitive "0 / 28" with an empty bar.
-function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today, todaySlot }) {
+function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today, todaySlot, onJumpFirstOverdue, onJumpFirstNeeds }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
   const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)";
 
@@ -301,20 +307,45 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   // same band, todaySlot is a slim full-bleed second tier beneath.
   // Projection-gap delta ("to go" / "ahead") removed - a projected
   // target invents a false goal/failure.
+  const exceptionCount = m.overdue + m.needsEntry;
   return (
     <section className="sc-workspace-frame sc-workspace-frame--per-meal">
       <div className="sc-workspace-frame-band">
         <div className="sc-workspace-frame-money">
           <span className="sc-workspace-frame-entered">{fmt$(m.actRev)}</span>
           <span className="sc-workspace-frame-money-label">entered</span>
-          <span className="sc-workspace-frame-projected">of {fmtK(m.projRev)} projected</span>
         </div>
         <div className="sc-workspace-frame-progress">
           <div className="sc-workspace-frame-progress-label">
             <strong>{m.complete}</strong>/{m.total} days entered
-            {(m.needsEntry > 0 || m.overdue > 0) && (
-              <span className="sc-workspace-frame-progress-pending">
-                {" · "}{m.needsEntry + m.overdue} pending
+            {exceptionCount > 0 ? (
+              <span className="sc-workspace-frame-chips">
+                {m.overdue > 0 && (
+                  <button
+                    type="button"
+                    className="sc-workspace-frame-chip sc-workspace-frame-chip--overdue"
+                    onClick={onJumpFirstOverdue}
+                    aria-label={`Jump to first of ${m.overdue} overdue days`}
+                  >
+                    <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">!</span>
+                    {m.overdue} overdue
+                  </button>
+                )}
+                {m.needsEntry > 0 && (
+                  <button
+                    type="button"
+                    className="sc-workspace-frame-chip sc-workspace-frame-chip--needs"
+                    onClick={onJumpFirstNeeds}
+                    aria-label={`Jump to first of ${m.needsEntry} days needing entry`}
+                  >
+                    <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">✎</span>
+                    {m.needsEntry} need entry
+                  </button>
+                )}
+              </span>
+            ) : (
+              <span className="sc-workspace-frame-caughtup" aria-live="polite">
+                ✓ All caught up
               </span>
             )}
           </div>
@@ -397,7 +428,12 @@ function TodayRail({ day, kind, homestandMap, onEnterActuals }) {
           <span className="sc-workspace-frame-today-status">{statusWord}</span>
         )}
         <span className="sc-workspace-frame-today-date">{dateLabel}</span>
-        {projection && <span>{projection}</span>}
+        {projection && (
+          <span className="sc-workspace-frame-today-proj">
+            <span className="sc-workspace-frame-today-proj-pill">Projected</span>
+            {projection}
+          </span>
+        )}
       </div>
       <button
         type="button"
