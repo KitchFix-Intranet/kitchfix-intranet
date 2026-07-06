@@ -1204,6 +1204,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             drillNav slot above. */}
         {isMonthView && (
           <PeriodWorkspace
+            scope="month"
             account={data?.account}
             year={year}
             periodKey={null}

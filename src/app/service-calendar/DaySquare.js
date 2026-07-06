@@ -225,15 +225,29 @@ function renderPerMeal(content, status) {
   const hasRev = revenue != null;
   const hasMeals = meals != null;
   if (!hasRev && !hasMeals) return null;
-  // Future days carry a "~" prefix on the $ to signal projection.
-  // Past-unentered (amber) carry "est." prefix per the prototype.
+  // Off / no-service days (meals null OR zero): a single quiet "No service"
+  // line, replacing the prior dead-air "$0". Kept in the middle slot so the
+  // atom's date + status glyph read the same as elsewhere.
+  if (!meals) {
+    return (
+      <div className="sc-daysq-mid sc-daysq-mid--off">
+        <span className="sc-daysq-mid-noservice">No service</span>
+      </div>
+    );
+  }
+  // Meals-first stacked block (Kevin's Option C). Meal count leads with a
+  // small "meals" unit; revenue sits quietly below with the existing
+  // prefix logic ("~" upcoming, "est. " past-unentered, none entered).
   const revPrefix = status === "upcoming" ? "~" : (isEstimated ? "est. " : "");
   const revClass = "sc-daysq-mid-rev"
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
-    <div className="sc-daysq-mid">
+    <div className="sc-daysq-mid sc-daysq-mid--stack">
+      <span className="sc-daysq-mid-meals">
+        {fmtMeals(meals)}
+        <span className="sc-daysq-mid-meals-unit">meals</span>
+      </span>
       {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
-      {hasMeals && <span className="sc-daysq-mid-meals"> / {fmtMeals(meals)}</span>}
     </div>
   );
 }

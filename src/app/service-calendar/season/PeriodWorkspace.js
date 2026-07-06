@@ -68,6 +68,9 @@ export default function PeriodWorkspace({
   onBulkConfirmAsProjected, // runs handleBulkConfirm (existing)
   onBulkCancel,             // exits bulk mode + clears selection
   saving,
+  scope = "period",         // "period" | "month" - month drops the week
+                            // subtotals (fiscal-week labels collide on a
+                            // calendar month spanning two periods).
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -180,13 +183,15 @@ export default function PeriodWorkspace({
         onBulkTileClick={onBulkTileClick}
       />
 
-      <WeekSubtotals
-        weekLabels={weekLabels}
-        weekMetrics={m.weeks}
-        kind={kind}
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-      />
+      {scope !== "month" && (
+        <WeekSubtotals
+          weekLabels={weekLabels}
+          weekMetrics={m.weeks}
+          kind={kind}
+          hasHomestandSchedule={hasHomestandSchedule}
+          isFeeAccount={isFeeAccount}
+        />
+      )}
 
       <StateLegend
         hasHomestandSchedule={hasHomestandSchedule}

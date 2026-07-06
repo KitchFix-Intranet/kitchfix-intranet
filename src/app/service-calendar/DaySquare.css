@@ -288,3 +288,47 @@
   pointer-events: none;
 }
 .sc-daysq--sm .sc-daysq-today-pill { display: none; }
+
+/* ── Drill-in polish (lg-only): meals-first value block + softer surface.
+   Year-view tiles (--sm) use pickCompactSmall and do NOT get any of these
+   overrides, so the season overview is untouched. ── */
+.sc-daysq--lg .sc-daysq-mid--stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+.sc-daysq--lg .sc-daysq-mid-meals {
+  font-size: 14.5px;
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+}
+.sc-daysq-mid-meals-unit {
+  font-size: 10px;
+  font-weight: var(--wt-semibold);
+  opacity: 0.62;
+  margin-left: 2px;
+}
+.sc-daysq--lg .sc-daysq-mid--stack .sc-daysq-mid-rev {
+  font-size: 10.5px;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+.sc-daysq--lg .sc-daysq-mid--off .sc-daysq-mid-noservice {
+  font-size: 11px;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+.sc-daysq--lg {
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 1px 2px rgba(20, 28, 44, 0.045);
+}
+.sc-daysq--lg .sc-daysq-badge {
+  background: rgba(255, 255, 255, 0.42);
+  border-radius: var(--radius-circle);
+}
