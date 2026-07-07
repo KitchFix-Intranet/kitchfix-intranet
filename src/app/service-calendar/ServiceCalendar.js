@@ -486,15 +486,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     router.replace(`/service-calendar?period=${target}`, { scroll: false });
   }, [roleTier, periodRanges, searchParams, today, router]);
 
-  // PR-B2 save invalidation. When a save fires reloadKey, clear the
-  // monthCache so the period-data effect re-fetches the affected
-  // month(s) on its next run - the period view reflects the save
-  // without needing per-handler invalidation. reloadKey=0 is the
-  // initial value; only clear after a real save bumps it.
-  useEffect(() => {
-    if (reloadKey === 0) return;
-    setMonthCache({});
-  }, [reloadKey]);
+  // Save invalidation: each save handler now drops ONLY the calendar
+  // month(s) it wrote to, surgically. The prior blanket setMonthCache({})
+  // effect fired on every save and (since #332 put monthCache in the
+  // fetch-effect deps) cascaded into refetching every cached month in
+  // parallel - a burst that raced the header nav ("dead right after a
+  // save"). reloadKey stays a real dep on the year-summary + sc-load
+  // effects, so the heatmap + today-month `data` still refresh after a
+  // save without wiping monthCache.
 
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
@@ -730,6 +729,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       const result = await res.json();
       if (result.success) {
         showToast(`Actuals saved for ${day.date}`, "success");
+        // Surgical monthCache invalidation: drop only the month we wrote
+        // to so the drill-in refetches just that month, not the whole
+        // cache (see the note above the dayMap memo).
+        const mk = day.date.slice(0, 7);
+        setMonthCache(prev => {
+          if (!(mk in prev)) return prev;
+          const next = { ...prev }; delete next[mk]; return next;
+        });
         setReloadKey(k => k + 1);
         return result;
       }
@@ -752,8 +759,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
       const result = await res.json();
-      if (result.success) { showToast("Confirmed as projected", "success"); setReloadKey(k => k + 1); }
-      else showToast(result.error || "Save failed", "error");
+      if (result.success) {
+        showToast("Confirmed as projected", "success");
+        // Surgical monthCache invalidation for the single saved month.
+        const mk = day.date.slice(0, 7);
+        setMonthCache(prev => {
+          if (!(mk in prev)) return prev;
+          const next = { ...prev }; delete next[mk]; return next;
+        });
+        setReloadKey(k => k + 1);
+      } else showToast(result.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); } finally { setSaving(false); }
   }, [data, showToast]);
 
@@ -797,6 +812,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setSaving(false);
     showToast(`Saved actuals for ${successCount} of ${bulkSelected.size} days`, "success");
+    // Surgical monthCache invalidation: drop only the months whose days
+    // were in the bulk write. In practice a period spans 1-2 months and
+    // a month drill-in spans 1, so this drops 1-2 keys instead of the
+    // whole cache - the refetch is scoped, and the burst that used to
+    // race the header nav after a save shrinks accordingly.
+    const affected = new Set();
+    for (const dk of bulkSelected) affected.add(dk.slice(0, 7));
+    if (affected.size > 0) {
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affected) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+    }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
   }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast]);
@@ -825,6 +855,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setSaving(false);
     showToast(`Confirmed ${successCount} days as projected`, "success");
+    // Surgical monthCache invalidation: same pattern as handleBulkSave.
+    const affected = new Set();
+    for (const dk of bulkSelected) affected.add(dk.slice(0, 7));
+    if (affected.size > 0) {
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affected) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+    }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
   }, [data, dayMap, activeDrillDays, bulkSelected, showToast]);
