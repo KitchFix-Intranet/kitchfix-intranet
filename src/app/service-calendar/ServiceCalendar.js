@@ -779,7 +779,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setSaving(true);
     let successCount = 0;
     for (const dk of bulkSelected) {
-      const day = dayMap[dk];
+      // Look up the day in the DISPLAYED drill days first; fall back to
+      // dayMap only (dayMap is built from `data.days` which only ever
+      // holds today's calendar month - it doesn't cover a period spanning
+      // a non-today month or a month drill-in on any month other than
+      // today's, and the bulk save silently skipped every selected day
+      // there before this fix). Mirrors the focusDayData lookup below.
+      const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
       try {
         // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
@@ -793,7 +799,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     showToast(`Saved actuals for ${successCount} of ${bulkSelected.size} days`, "success");
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, bulkSelected, bulkValues, showToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast]);
 
   // Bulk confirm as projected for all selected
   const handleBulkConfirm = useCallback(async () => {
@@ -801,7 +807,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setSaving(true);
     let successCount = 0;
     for (const dk of bulkSelected) {
-      const day = dayMap[dk];
+      // Same activeDrillDays-first lookup as handleBulkSave above - see
+      // the note there. dayMap-only was the reason "Confirmed 0 days as
+      // projected" fired on any period/month view whose displayed days
+      // fall outside today's calendar month.
+      const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
       const entries = [];
       for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
@@ -817,7 +827,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     showToast(`Confirmed ${successCount} days as projected`, "success");
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, bulkSelected, showToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, showToast]);
 
   const toggleBulkSelect = useCallback((dk) => {
     setBulkSelected(prev => { const next = new Set(prev); if (next.has(dk)) next.delete(dk); else next.add(dk); return next; });
