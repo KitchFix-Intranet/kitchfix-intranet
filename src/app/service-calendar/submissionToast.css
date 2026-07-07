@@ -1,0 +1,122 @@
+/* SC momentum submission toast - green gradient card with a check that
+   draws in, an amount, a filling period-progress bar, and a
+   {daysEntered} of {totalDays} days this {scope} line. Milestone
+   (complete) variant switches the ground to gold/amber and adds a glow.
+   Scoped out of ops-shared so this stays SC-only.
+   FLAG: mint (bar fill) + amber (milestone) accents are literals here
+   pending a tokenization pass. */
+
+.sc-toast-recorded {
+  min-width: 320px;
+  max-width: 420px;
+  padding: 12px 16px 14px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(158deg, var(--accent-sc), var(--accent-sc-dark));
+  box-shadow: 0 12px 28px rgba(15, 110, 86, 0.28);
+  animation: sc-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+}
+.sc-toast-recorded--milestone {
+  background: linear-gradient(158deg, #B45309, #7C2D12);
+  box-shadow: 0 12px 28px rgba(180, 83, 9, 0.30);
+  animation: sc-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1), sc-toast-glow 1.4s ease-in-out 320ms;
+}
+@keyframes sc-toast-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes sc-toast-glow {
+  0%   { box-shadow: 0 12px 28px rgba(180, 83, 9, 0.30); }
+  50%  { box-shadow: 0 12px 28px rgba(180, 83, 9, 0.55), 0 0 0 4px rgba(217, 119, 6, 0.22); }
+  100% { box-shadow: 0 12px 28px rgba(180, 83, 9, 0.30); }
+}
+
+.sc-toast-recorded__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.sc-toast-recorded__check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.20);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  transform: scale(0.4);
+  opacity: 0;
+  animation: sc-toast-check-pop 320ms 80ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes sc-toast-check-pop {
+  to { transform: scale(1); opacity: 1; }
+}
+.sc-toast-recorded__check svg {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: sc-toast-check-draw 340ms 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes sc-toast-check-draw { to { stroke-dashoffset: 0; } }
+
+.sc-toast-recorded__headline {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+.sc-toast-recorded__amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.sc-toast-recorded__bar {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.20);
+  overflow: hidden;
+}
+.sc-toast-recorded__bar-fill {
+  display: block;
+  height: 100%;
+  background: #7FD3B4;
+  border-radius: 999px;
+  width: 0;
+  animation: sc-toast-bar-fill 720ms 240ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.sc-toast-recorded--milestone .sc-toast-recorded__bar-fill { background: #FBBF24; }
+@keyframes sc-toast-bar-fill { to { width: var(--pct, 0%); } }
+
+.sc-toast-recorded__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+}
+.sc-toast-recorded__pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-toast-recorded,
+  .sc-toast-recorded--milestone,
+  .sc-toast-recorded__check,
+  .sc-toast-recorded__check svg,
+  .sc-toast-recorded__bar-fill { animation: none !important; }
+  .sc-toast-recorded__check { transform: scale(1); opacity: 1; }
+  .sc-toast-recorded__check svg { stroke-dashoffset: 0; }
+  .sc-toast-recorded__bar-fill { width: var(--pct, 0%); }
+}

@@ -716,6 +716,49 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const homestandMap = data?.homestandMap || {};
   const isMilb = data?.account?.category === "MiLB";
 
+  // Momentum toast helpers - the four submission successes below emit a
+  // rich <SubmissionToast /> payload via showToast({ variant:"recorded",
+  // ... }). computeMealsAmount sums a single-day entries array into
+  // { meals, amount } (amount from the sc-8a price_kind='projected'
+  // prices on data.serviceGroups); buildRecordedToast wraps that with
+  // period-progress context (daysEntered = current complete count + the
+  // newly-entered adjustment; scopeWord from the active drill scope).
+  // Errors still route through the plain oh-toast path.
+  const computeMealsAmount = useCallback((entries) => {
+    let meals = 0;
+    let amount = 0;
+    if (entries?.length && data?.serviceGroups) {
+      const priceByCol = {};
+      for (const g of data.serviceGroups) {
+        for (const s of g.services) priceByCol[s.colIndex] = s.price || 0;
+      }
+      for (const e of entries) {
+        const v = Number(e.value) || 0;
+        meals += v;
+        amount += v * (priceByCol[e.colIndex] || 0);
+      }
+    }
+    return { meals, amount };
+  }, [data]);
+
+  const buildRecordedToast = useCallback((opts) => {
+    const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0 } = opts;
+    const currentComplete = activeDrillDays ? activeDrillDays.filter(d => d.hasActuals).length : null;
+    const totalDays = activeDrillDays?.length ?? null;
+    const scopeWord = isPeriodView ? "period" : isMonthView ? "month" : "period";
+    return {
+      variant: "recorded",
+      amount,
+      meals,
+      daysEntered: currentComplete != null ? currentComplete + newlyEntered : null,
+      totalDays,
+      scopeWord,
+      isBulk,
+      bulkDays,
+      isFeeAccount,
+    };
+  }, [activeDrillDays, isPeriodView, isMonthView, isFeeAccount]);
+
   // P0-2: returns the API result ({ success, error? }) so DayDetail's
   // executeSave can gate the success screen on a confirmed write. Empty
   // entries are guarded upstream (DayDetail won't even call onSave).
@@ -729,7 +772,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
       const result = await res.json();
       if (result.success) {
-        showToast(`Actuals saved for ${day.date}`, "success");
+        const { meals, amount } = computeMealsAmount(entries);
+        const newlyEntered = day.hasActuals ? 0 : 1;
+        showToast(buildRecordedToast({ amount, meals, newlyEntered }));
         // Surgical monthCache invalidation: drop only the month we wrote
         // to so the drill-in refetches just that month, not the whole
         // cache (see the note above the dayMap memo).
@@ -749,7 +794,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     } finally {
       setSaving(false);
     }
-  }, [data, showToast]);
+  }, [data, showToast, computeMealsAmount, buildRecordedToast]);
 
   const handleConfirmAsProjected = useCallback(async (day) => {
     if (!data?.account || !data?.serviceGroups) return;
@@ -761,7 +806,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
       const result = await res.json();
       if (result.success) {
-        showToast("Confirmed as projected", "success");
+        const { meals, amount } = computeMealsAmount(entries);
+        const newlyEntered = day.hasActuals ? 0 : 1;
+        showToast(buildRecordedToast({ amount, meals, newlyEntered }));
         // Surgical monthCache invalidation for the single saved month.
         const mk = day.date.slice(0, 7);
         setMonthCache(prev => {
@@ -771,7 +818,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         setReloadKey(k => k + 1);
       } else showToast(result.error || "Save failed", "error");
     } catch { showToast("Network error", "error"); } finally { setSaving(false); }
-  }, [data, showToast]);
+  }, [data, showToast, computeMealsAmount, buildRecordedToast]);
 
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async () => {
@@ -794,6 +841,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setSaving(true);
     let successCount = 0;
+    let newlyEntered = 0;
+    let totalMeals = 0;
+    let totalAmount = 0;
+    // entries are identical across bulk days, so compute meals+amount once.
+    const perDay = computeMealsAmount(entries);
     for (const dk of bulkSelected) {
       // Look up the day in the DISPLAYED drill days first; fall back to
       // dayMap only (dayMap is built from `data.days` which only ever
@@ -808,11 +860,20 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
         const result = await res.json();
-        if (result.success) successCount++;
+        if (result.success) {
+          successCount++;
+          if (!day.hasActuals) newlyEntered++;
+          totalMeals += perDay.meals;
+          totalAmount += perDay.amount;
+        }
       } catch { /* continue */ }
     }
     setSaving(false);
-    showToast(`Saved actuals for ${successCount} of ${bulkSelected.size} days`, "success");
+    if (successCount > 0) {
+      showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
+    } else {
+      showToast(`Saved actuals for 0 of ${bulkSelected.size} days`, "error");
+    }
     // Surgical monthCache invalidation: drop only the months whose days
     // were in the bulk write. In practice a period spans 1-2 months and
     // a month drill-in spans 1, so this drops 1-2 keys instead of the
@@ -830,13 +891,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, computeMealsAmount, buildRecordedToast]);
 
   // Bulk confirm as projected for all selected
   const handleBulkConfirm = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
     setSaving(true);
     let successCount = 0;
+    let newlyEntered = 0;
+    let totalMeals = 0;
+    let totalAmount = 0;
     for (const dk of bulkSelected) {
       // Same activeDrillDays-first lookup as handleBulkSave above - see
       // the note there. dayMap-only was the reason "Confirmed 0 days as
@@ -851,11 +915,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
         const result = await res.json();
-        if (result.success) successCount++;
+        if (result.success) {
+          successCount++;
+          if (!day.hasActuals) newlyEntered++;
+          const per = computeMealsAmount(entries);
+          totalMeals += per.meals;
+          totalAmount += per.amount;
+        }
       } catch { /* continue */ }
     }
     setSaving(false);
-    showToast(`Confirmed ${successCount} days as projected`, "success");
+    if (successCount > 0) {
+      showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
+    } else {
+      showToast("Confirmed 0 days as projected", "error");
+    }
     // Surgical monthCache invalidation: same pattern as handleBulkSave.
     const affected = new Set();
     for (const dk of bulkSelected) affected.add(dk.slice(0, 7));
@@ -869,7 +943,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, showToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, showToast, computeMealsAmount, buildRecordedToast]);
 
   const toggleBulkSelect = useCallback((dk) => {
     setBulkSelected(prev => { const next = new Set(prev); if (next.has(dk)) next.delete(dk); else next.add(dk); return next; });
