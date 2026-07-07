@@ -378,10 +378,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-    // monthCache intentionally NOT in deps - read via functional set
-    // form so this effect doesn't loop when the cache populates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lens, selectedAccount, periodKey, periodRanges, reloadKey, today]);
+    // monthCache IS in deps: the guard `missing.length === 0` self-terminates,
+    // so a fresh closure on cache clear (account switch / reloadKey invalidation)
+    // reliably re-triggers the fetch. Excluding it silently skipped the refetch
+    // when the reset effect cleared monthCache, leaving the drill blank.
+  }, [lens, selectedAccount, periodKey, periodRanges, reloadKey, today, monthCache]);
 
   // Month drill fetch. When the user opens ?month=YYYY-MM, ensure
   // monthCache[monthKey] is loaded. Deep-links land here cold; drilling
@@ -409,8 +410,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       .catch(() => { if (!controller.signal.aborted) setPartialError({ failedMonth: monthKey }); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMonthView, selectedAccount, monthKey, reloadKey, today]);
+    // monthCache IS in deps: the guard `if (monthCache[monthKey]) return`
+    // self-terminates, so a fresh closure on cache clear (account switch /
+    // reloadKey invalidation) reliably re-triggers the fetch. Excluding it
+    // silently skipped the refetch and left the grid blank.
+  }, [isMonthView, selectedAccount, monthKey, reloadKey, today, monthCache]);
 
   // PR-B2 periodKey initialization. When entering lens=period and
   // periodRanges arrives, land on the period containing today (or the
