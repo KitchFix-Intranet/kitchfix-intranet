@@ -312,13 +312,25 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   return (
     <section className="sc-workspace-frame sc-workspace-frame--per-meal">
       <div className="sc-workspace-frame-band">
-        <div className="sc-workspace-frame-money">
-          <span className="sc-workspace-frame-entered">{fmt$(m.actRev)}</span>
-          <span className="sc-workspace-frame-money-label">entered</span>
+        <div className="sc-workspace-frame-stats">
+          <div className="sc-workspace-frame-stat">
+            <span className="sc-workspace-frame-stat-num sc-workspace-frame-stat-num--money">
+              {fmt$(m.actRev)}
+            </span>
+            <span className="sc-workspace-frame-stat-label">Revenue</span>
+          </div>
+          <span className="sc-workspace-frame-stat-divider" aria-hidden="true" />
+          <div className="sc-workspace-frame-stat">
+            <span className="sc-workspace-frame-stat-num">
+              {m.complete}<span className="sc-workspace-frame-stat-num-total">/{m.total}</span>
+            </span>
+            <span className="sc-workspace-frame-stat-label">Days</span>
+          </div>
         </div>
         <div className="sc-workspace-frame-progress">
           <div className="sc-workspace-frame-progress-label">
-            <strong>{m.complete}</strong>/{m.total} days entered
+            <span>Progress</span>
+            <strong style={{ color: progressColor }}>{completionPct}%</strong>
           </div>
           <ProgressLine pct={completionPct} color={progressColor} />
         </div>
