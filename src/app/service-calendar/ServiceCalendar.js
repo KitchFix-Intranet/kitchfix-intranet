@@ -441,6 +441,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     const view = searchParams?.get("view") || null;
     const period = searchParams?.get("period") || null;
     const month = searchParams?.get("month") || null;
+    console.log("[nav-rc] url-sync fired; searchParams-view/period/month:", view, period, month,
+      "window URL:", typeof window !== "undefined" ? window.location.href : "?");
     if (view === "admin" && isAdmin) {
       setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
     } else if (period) {
@@ -966,22 +968,31 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // canPrevPeriod / canNextPeriod / isCurrentPeriod) live at the same
   // scope so the header slot can render outside the workspace.
   const handleClimbToSeason = useCallback(() => {
+    console.log("[nav-rc] climbToSeason clicked; current URL:", typeof window !== "undefined" ? window.location.href : "?");
     router.push("/service-calendar", { scroll: false });
     setFocusDay(null);
     setBulkMode(false);
     setBulkSelected(new Set());
+    if (typeof window !== "undefined") {
+      // Log the URL after a microtask so we can see whether router.push actually changed it.
+      Promise.resolve().then(() => console.log("[nav-rc] climbToSeason post-push URL:", window.location.href));
+      setTimeout(() => console.log("[nav-rc] climbToSeason 100ms URL:", window.location.href), 100);
+    }
   }, [router]);
   const handlePrevPeriod = useCallback(() => {
+    console.log("[nav-rc] prevPeriod clicked; periodRanges?", !!periodRanges?.length, "periodKey:", periodKey);
     if (!periodRanges?.length) return;
     const idx = periodRanges.findIndex(r => r.period === periodKey);
     if (idx > 0) router.push(`/service-calendar?period=${periodRanges[idx - 1].period}`, { scroll: false });
   }, [periodRanges, periodKey, router]);
   const handleNextPeriod = useCallback(() => {
+    console.log("[nav-rc] nextPeriod clicked; periodRanges?", !!periodRanges?.length, "periodKey:", periodKey);
     if (!periodRanges?.length) return;
     const idx = periodRanges.findIndex(r => r.period === periodKey);
     if (idx >= 0 && idx < periodRanges.length - 1) router.push(`/service-calendar?period=${periodRanges[idx + 1].period}`, { scroll: false });
   }, [periodRanges, periodKey, router]);
   const handleTodayJump = useCallback(() => {
+    console.log("[nav-rc] todayJump clicked");
     if (!periodRanges?.length) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
     if (containingToday) router.push(`/service-calendar?period=${containingToday.period}`, { scroll: false });
@@ -997,6 +1008,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // Jan-Dec of the year (Kevin's decision - a month view doesn't cross
   // years). handleMonthTodayJump routes to today's calendar month.
   const handlePrevMonth = useCallback(() => {
+    console.log("[nav-rc] prevMonth clicked; monthKey:", monthKey);
     if (!monthKey) return;
     const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
@@ -1004,6 +1016,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     router.push(`/service-calendar?month=${y}-${String(m - 1).padStart(2, "0")}`, { scroll: false });
   }, [monthKey, router]);
   const handleNextMonth = useCallback(() => {
+    console.log("[nav-rc] nextMonth clicked; monthKey:", monthKey);
     if (!monthKey) return;
     const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
@@ -1011,6 +1024,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     router.push(`/service-calendar?month=${y}-${String(m + 1).padStart(2, "0")}`, { scroll: false });
   }, [monthKey, router]);
   const handleMonthTodayJump = useCallback(() => {
+    console.log("[nav-rc] monthTodayJump clicked");
     const mk = today ? today.slice(0, 7) : null;
     if (!mk) return;
     router.push(`/service-calendar?month=${mk}`, { scroll: false });
