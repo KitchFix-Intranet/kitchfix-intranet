@@ -340,11 +340,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   // PR-B2 period-data effect. Derives the 1-2 calendar months the
   // current period spans and fetches only the missing months in
-  // parallel, merging them into monthCache. Deps are PRIMARY state
+  // parallel, merging them into monthCache. Deps use PRIMARY state
   // (lens / account / periodKey / periodRanges / reloadKey) - NEVER
-  // the derived isPeriodView (would over-fire). monthCache is read
-  // via the functional setMonthCache(prev=>...) form so it doesn't
-  // need to be in deps; if it were the effect would loop.
+  // the derived isPeriodView (would over-fire). monthCache IS in the
+  // deps (fixed in #332): the `missing.length === 0` guard self-
+  // terminates, so a fresh closure on cache clear (account switch /
+  // reloadKey invalidation) reliably re-triggers the fetch instead of
+  // silently skipping via a stale closure.
   useEffect(() => {
     if (lens !== "period" || !selectedAccount || !periodKey || !periodRanges) return;
     const range = periodRanges.find(r => r.period === periodKey);

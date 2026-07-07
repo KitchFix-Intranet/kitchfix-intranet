@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
@@ -106,26 +106,20 @@ export default function ServiceCalendarPage() {
   return (
     <div className="oh-app">
       <div className="oh-bound">
-        {/* Suspense boundary: ServiceCalendar reads useSearchParams(); wrapping
-            it silences Next.js's dynamic-rendering opt-out for the whole
-            route. Hygiene only - does NOT change hydration timing for this
-            "use client" page and does NOT fix the nav-refresh window
-            (the loading affordance in the header does that). */}
-        <Suspense
-          fallback={
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
-              <div className="oh-spinner" />
-              <p style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>Loading Service Calendar...</p>
-            </div>
-          }
-        >
-          <ServiceCalendar
-            showToast={showToast}
-            session={session}
-            heroImage={heroImage}
-            firstName={firstName}
-          />
-        </Suspense>
+        {/* The Suspense wrapper added in #330 was labeled "hygiene only" for
+            useSearchParams(), but in this already-"use client" + useSession
+            (dynamic) page it was unnecessary AND it swallowed URL updates
+            from client-side router.push - the drill-in `‹ Season` /
+            stepper buttons changed the URL but the URL-sync effect never
+            re-ran with the new params, so the view stayed frozen.
+            Rendering ServiceCalendar directly (pre-#330 shape) restores
+            the propagation. */}
+        <ServiceCalendar
+          showToast={showToast}
+          session={session}
+          heroImage={heroImage}
+          firstName={firstName}
+        />
       </div>
       {toast && (
         <div className="oh-toast-container">
