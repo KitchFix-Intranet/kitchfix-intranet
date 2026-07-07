@@ -88,6 +88,7 @@
 .sc-workspace-frame-stat {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .sc-workspace-frame-stat-num {
   font-size: var(--size-h2);
@@ -101,6 +102,19 @@
 .sc-workspace-frame-stat-num-total {
   color: var(--text-subtle);
   font-weight: var(--wt-semibold);
+}
+/* Entered/projected twin amount in a single stat block. The projected
+   half is muted + a smaller weight so entered leads visually while the
+   plan target reads alongside as reference, not competing hero. */
+.sc-workspace-frame-amount-sep {
+  color: var(--text-subtle);
+  font-weight: var(--wt-semibold);
+  margin: 0 var(--space-1);
+}
+.sc-workspace-frame-amount--projected {
+  color: var(--text-muted);
+  font-weight: var(--wt-semibold);
+  font-size: var(--size-subhead);
 }
 .sc-workspace-frame-stat-label {
   font-size: var(--size-micro);
@@ -208,72 +222,9 @@
   .sc-workspace-progress-bar-fill { transition: none; }
 }
 
-/* Fee homestand + operational variants share layout; the hero is
-   the day-completion count and there is no $ language. */
-.sc-workspace-frame--fee,
-.sc-workspace-frame--operational {
-  flex-direction: row;
-  align-items: center;
-  gap: 28px;
-  flex-wrap: wrap;
-}
-.sc-workspace-frame-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sc-workspace-frame-hero-num {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-1);
-  font-size: var(--size-h1);
-  font-weight: var(--wt-display);
-  color: var(--text-heading);
-  font-variant-numeric: var(--num-tabular);
-}
-.sc-workspace-frame-hero-num strong { color: var(--text-success); font-weight: var(--wt-display); }
-.sc-workspace-frame-hero-divisor {
-  font-size: var(--size-h3);
-  font-weight: var(--wt-semibold);
-  color: var(--text-muted);
-}
-.sc-workspace-frame-hero-label {
-  font-size: var(--size-micro);
-  font-weight: var(--wt-bold);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.sc-workspace-frame-aux {
-  display: flex;
-  gap: 22px;
-  flex: 1;
-  flex-wrap: wrap;
-}
-.sc-workspace-frame-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sc-workspace-frame-stat-label {
-  font-size: var(--size-micro);
-  font-weight: var(--wt-bold);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.sc-workspace-frame-stat-value {
-  font-size: var(--size-h3);
-  font-weight: var(--wt-bold);
-  color: var(--text-heading);
-  font-variant-numeric: var(--num-tabular);
-}
-.sc-workspace-frame-stat--warn .sc-workspace-frame-stat-value { color: var(--accent-text); }
-.sc-workspace-frame--fee .sc-workspace-progress-bar,
-.sc-workspace-frame--operational .sc-workspace-progress-bar {
-  width: 100%;
-  flex: 1 0 100%;
-}
+/* Fee/homestand branches merged into the .sc-workspace-frame--per-meal
+   layout above (P8). The row-layout hero/aux CSS that used to live
+   here is dead. */
 
 /* ───────── TODAY RAIL (folded into the frame, replaces the standalone hero card) ───────── */
 .sc-workspace-frame-today {
@@ -284,12 +235,6 @@
   justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
-}
-/* In the row-layout variants the rail must break to its own full-width line,
-   mirroring how the progress bar is forced full width there. */
-.sc-workspace-frame--fee .sc-workspace-frame-today,
-.sc-workspace-frame--operational .sc-workspace-frame-today {
-  flex: 1 0 100%;
 }
 /* Per-meal strip Row 2: bleeds the today rail to the card edges as a
    slim second tier - sunken bg + top divider + own padding. Negative
@@ -523,27 +468,47 @@
   min-height: 96px;
 }
 
-/* ───────── WEEK SUBTOTALS (quiet footnote) ───────── */
+/* ───────── WEEK SUBTOTALS (mini-cards, P4) ─────────
+   Four-column grid of small cards showing full amounts (no fmtK
+   truncation) with a days sub-line. Completed weeks tint a soft
+   green so the eye tracks progress across the strip. */
 .sc-workspace-weeks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+.sc-workspace-weeks-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px var(--space-2);
-  align-items: baseline;
-  padding: 0 var(--space-1);
+  flex-direction: column;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-page);
+}
+.sc-workspace-weeks-item--done {
+  background: var(--surface-success-subtle, #F1F7F3);
+  border-color: var(--border-success-subtle, #D6E7DD);
+}
+.sc-workspace-weeks-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.sc-workspace-weeks-value {
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
+  margin-top: 3px;
+}
+.sc-workspace-weeks-days {
   font-size: var(--size-caption);
   color: var(--text-muted);
   font-variant-numeric: var(--num-tabular);
+  margin-top: 1px;
 }
-.sc-workspace-weeks-item { display: inline-flex; align-items: baseline; gap: var(--space-1); }
-.sc-workspace-weeks-label {
-  font-weight: var(--wt-bold);
-  color: var(--text-heading);
-  font-size: var(--size-caption);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.sc-workspace-weeks-body { color: var(--text-default); }
-.sc-workspace-weeks-sep { color: var(--text-subtle); }
 
 /* ───────── BANNERS + SKELETON ───────── */
 .sc-workspace-empty {
@@ -607,8 +572,6 @@
   /* Frame stacks with reduced sizing */
   .sc-workspace-frame { padding: 14px var(--space-4); }
   .sc-workspace-frame-stat-num { font-size: var(--size-h3); }
-  .sc-workspace-frame--fee,
-  .sc-workspace-frame--operational { gap: var(--space-4); }
   /* Per-meal strip mobile: keep the horizontal pad tied to the same
      token the today row's negative margin uses, so the full-bleed math
      still aligns to the card edges. */
@@ -675,8 +638,9 @@
     margin-left: var(--space-1);
   }
 
-  /* Week subtotals: tighter wrap on mobile */
-  .sc-workspace-weeks { padding: 0 var(--space-1); gap: var(--space-1) var(--space-2); font-size: var(--size-caption); }
+  /* Week mini-cards wrap to 2 columns on mobile so each card keeps
+     enough width to hold the full dollar amount without truncation. */
+  .sc-workspace-weeks { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ───────── NARROWER PHONES (<= 375) ───────── */
