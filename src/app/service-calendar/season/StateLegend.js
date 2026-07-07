@@ -41,14 +41,11 @@ export default function StateLegend({
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
     items.push({ mod: "overdue", icon: "!", label: "Overdue" });
     items.push({ mod: "upcoming", icon: "○", label: "Upcoming" });
-    // Day/night only on the expanded (workspace) legend - the year /
-    // period card tiles don't distinguish day vs night, so the swatches
-    // are noise there. The workspace day grid does distinguish them, so
-    // its legend passes showDayNight.
-    if (showDayNight) {
-      items.push({ mod: "milb-day", icon: "", label: "Day" });
-      items.push({ mod: "milb-night", icon: "", label: "Night" });
-    }
+    // Sun / moon read across both year + drill-in surfaces now that
+    // the tile uses the same glyphs (P6). showDayNight prop is
+    // retained on the signature for compat, but no longer gates.
+    items.push({ mod: "milb-day", icon: "", label: "Day" });
+    items.push({ mod: "milb-night", icon: "", label: "Night" });
   } else {
     items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "needs-entry", icon: "✎", label: "Needs entry" });
@@ -103,13 +100,35 @@ export default function StateLegend({
 }
 
 // Each swatch is a miniature of the atom's fill + glyph for the state.
-// MiLB day / night swatches are pill dots, not status fills.
+// MiLB day / night carry the same sun / moon glyphs used on the tile
+// (P6), so the legend and the tiles read the same language.
 // Today is a navy ring around a neutral tile (the atom's ring chrome).
 function LegendSwatch({ mod, icon }) {
-  if (mod === "milb-day" || mod === "milb-night") {
+  if (mod === "milb-day") {
     return (
-      <span className={`sc-state-legend-swatch sc-state-legend-swatch--${mod}`} aria-hidden="true">
-        <span className="sc-state-legend-pill-dot" />
+      <span className="sc-state-legend-swatch sc-state-legend-swatch--milb-day" aria-hidden="true">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="4.5" fill="currentColor" />
+          <g stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="12" y1="2" x2="12" y2="4" />
+            <line x1="12" y1="20" x2="12" y2="22" />
+            <line x1="2" y1="12" x2="4" y2="12" />
+            <line x1="20" y1="12" x2="22" y2="12" />
+            <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
+            <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
+            <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
+            <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
+          </g>
+        </svg>
+      </span>
+    );
+  }
+  if (mod === "milb-night") {
+    return (
+      <span className="sc-state-legend-swatch sc-state-legend-swatch--milb-night" aria-hidden="true">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
       </span>
     );
   }
