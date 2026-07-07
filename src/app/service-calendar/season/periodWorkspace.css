@@ -459,11 +459,13 @@
   font-size: var(--size-caption);
   font-weight: var(--wt-semibold);
   color: var(--text-muted);
-  background: transparent;
-  border: none;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
   cursor: pointer;
+  transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
 }
-.sc-workspace-bulk-cancel:hover { color: var(--text-heading); }
+.sc-workspace-bulk-cancel:hover { background: var(--surface-sunken); color: var(--text-heading); border-color: var(--text-subtle); }
 
 /* ───────── DAY GRID ───────── */
 .sc-workspace-grid-wrap {
