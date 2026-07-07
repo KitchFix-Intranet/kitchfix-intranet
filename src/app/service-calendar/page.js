@@ -132,7 +132,7 @@ export default function ServiceCalendarPage() {
         />
       </div>
       {toast && (
-        <div className="oh-toast-container">
+        <div className="oh-toast-container oh-toast-container--sc-center">
           {toast.variant === "recorded" ? (
             <SubmissionToast {...toast} />
           ) : (

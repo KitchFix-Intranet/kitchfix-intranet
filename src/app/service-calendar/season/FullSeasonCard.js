@@ -95,7 +95,7 @@ function PerMealSummary({ actualRev, projRev, daysRecorded, totalDays, mealsYTD,
         <Stat label="Days entered" value={`${daysRecorded} / ${totalDays}`} />
         <Stat label="Meals YTD" value={mealsYTD.toLocaleString("en-US")} />
       </div>
-      <CompletionBar pct={completionPct} label={`${completionPct}% of season recorded`} />
+      <CompletionBar pct={completionPct} label={`${completionPct}% recorded`} ariaLabel={`${completionPct}% of season recorded`} />
     </>
   );
 }
@@ -109,7 +109,7 @@ function OperationalSummary({ daysRecorded, totalDays, mealsYTD, completionPct }
         <Stat label="Days entered" value={`${daysRecorded} / ${totalDays}`} hero />
         <Stat label="Meals YTD"    value={mealsYTD.toLocaleString("en-US")} />
       </div>
-      <CompletionBar pct={completionPct} label={`${completionPct}% of season recorded`} />
+      <CompletionBar pct={completionPct} label={`${completionPct}% recorded`} ariaLabel={`${completionPct}% of season recorded`} />
     </>
   );
 }
@@ -129,7 +129,7 @@ function FeeHomestandSummary({ gameDaysEntered, totalGameDays, mealsYTD, feePct 
         <Stat label="Game days entered" value={`${gameDaysEntered} / ${totalGameDays}`} hero />
         <Stat label="Meals YTD"         value={mealsYTD.toLocaleString("en-US")} />
       </div>
-      <CompletionBar pct={feePct} label={`${feePct}% of game days recorded`} />
+      <CompletionBar pct={feePct} label={`${feePct}% recorded`} ariaLabel={`${feePct}% of game days recorded`} />
       <p className="sc-season-fullseason-card-note">
         Contract value will surface here when the fee schedule is wired through.
       </p>
@@ -148,7 +148,7 @@ function Stat({ label, value, tone, hero }) {
   );
 }
 
-function CompletionBar({ pct, label }) {
+function CompletionBar({ pct, label, ariaLabel }) {
   return (
     <div className="sc-season-fullseason-completion">
       <div
@@ -157,7 +157,7 @@ function CompletionBar({ pct, label }) {
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={label}
+        aria-label={ariaLabel || label}
       >
         <div
           className={`sc-season-fullseason-bar-fill ${pct === 100 ? "sc-season-fullseason-bar-fill--complete" : ""}`}

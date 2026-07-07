@@ -785,25 +785,29 @@
   background: var(--surface-card);
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
-  padding: var(--space-4);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
   min-height: 200px;
 }
+/* Capstone header band - soft slate matching the period-card header
+   rhythm (same visual height, pastel weight tone). Sits alongside the
+   period tiles rather than dominating them. */
 .sc-season-fullseason-card-header {
+  background: var(--season-capstone-band);
+  border-bottom: var(--border-thin) solid var(--season-capstone-band-bd);
+  padding: 9px var(--space-5);
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  border-bottom: var(--border-thin) solid var(--surface-sunken);
-  padding-bottom: var(--space-3);
 }
 .sc-season-fullseason-card-eyebrow {
   font-size: var(--size-micro);
   font-weight: var(--wt-bold);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--action-primary-bg);
+  opacity: 0.72;
 }
 .sc-season-fullseason-card-title {
   font-size: var(--size-subhead);
@@ -815,80 +819,91 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  flex: 1;
 }
 .sc-season-fullseason-row {
   display: flex;
   gap: var(--space-6);
   flex-wrap: wrap;
 }
-/* KPI row spreads stats evenly on desktop; wraps on narrow. */
+/* KPI row: divided stat cells, each stat separated by a hairline
+   border. The row balances stats co-equally on desktop; wraps on
+   narrow if the browser can't fit them. */
 .sc-season-fullseason-row--kpi {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-3) var(--space-4);
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-3);
 }
 .sc-season-fullseason-stat {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  min-width: 110px;
+  min-width: 0;
+}
+.sc-season-fullseason-stat + .sc-season-fullseason-stat {
+  border-left: var(--border-thin) solid var(--border-subtle);
+  padding-left: var(--space-4);
 }
 .sc-season-fullseason-stat-label {
   font-size: var(--size-micro);
-  font-weight: var(--wt-semibold);
-  letter-spacing: var(--track-caps);
+  font-weight: var(--wt-bold);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-subtle);
 }
 .sc-season-fullseason-stat-value {
-  font-size: var(--size-body);
-  font-weight: var(--wt-bold);
+  font-size: var(--size-h3);
+  font-weight: var(--wt-display);
   color: var(--text-heading);
   font-variant-numeric: var(--num-tabular);
-}
-.sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value {
-  font-size: var(--size-subhead);
-  font-weight: var(--wt-display);
   letter-spacing: -0.01em;
-  color: var(--text-success);
+  margin-top: 4px;
 }
-.sc-season-fullseason-stat--muted .sc-season-fullseason-stat-value {
-  color: var(--text-subtle);
-  font-weight: var(--wt-semibold);
-}
+/* --hero kept as an alias for --actual so the current callers (which
+   still emit the hero class) keep the green treatment. */
+.sc-season-fullseason-stat--hero .sc-season-fullseason-stat-value,
 .sc-season-fullseason-stat--actual .sc-season-fullseason-stat-value {
   color: var(--text-success);
 }
+.sc-season-fullseason-stat--muted .sc-season-fullseason-stat-value {
+  color: var(--text-muted);
+  font-weight: var(--wt-bold);
+  font-size: var(--size-subhead);
+}
 
-/* Completion bar with an inline label below it.
-   "<pct>% of season recorded" - the rubric's KPI-card "number +
-   label + context" line. */
+/* Completion strip - bar + label on ONE row, per the render. Bar
+   fills the remaining width; the label rides at the right in the
+   operator-green semantic. */
 .sc-season-fullseason-completion {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: var(--space-3);
   margin-top: auto;
 }
 .sc-season-fullseason-bar {
-  height: 6px;
-  background: var(--accent-sc-tint);
+  flex: 1;
+  height: 7px;
   border-radius: var(--radius-pill);
+  background: var(--accent-sc-tint);
   overflow: hidden;
 }
 .sc-season-fullseason-bar-fill {
+  display: block;
   height: 100%;
-  background: var(--status-entered-bg);
+  background: var(--accent-sc);
+  border-radius: var(--radius-pill);
   transition: width var(--motion-surface);
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-fullseason-bar-fill { transition: none; }
 }
-.sc-season-fullseason-bar-fill--complete { background: var(--status-entered-bd); }
+.sc-season-fullseason-bar-fill--complete { background: var(--accent-sc-dark); }
 .sc-season-fullseason-completion-label {
   font-size: var(--size-caption);
-  font-weight: var(--wt-semibold);
-  letter-spacing: 0.02em;
-  color: var(--text-default);
+  font-weight: var(--wt-bold);
+  color: var(--accent-sc-dark);
+  flex-shrink: 0;
   font-variant-numeric: var(--num-tabular);
 }
 
