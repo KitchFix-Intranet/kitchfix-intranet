@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import { X, ChevronLeft, ChevronRight } from "./Icons";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -216,6 +216,72 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
   const revPct = monthRevenue > 0 ? Math.round(footerDisplay.revenue / monthRevenue * 100) : 0;
 
+  // Entry flow refs + progress. Auto-focus the first un-entered ghost
+  // input on open (and on each day-nav) so the operator can start typing
+  // immediately. Enter/mobile-keypad "Next" advances field-to-field;
+  // Enter on the last input focuses the primary footer button (natural
+  // land-on-save). "N of M entered" progress in the sub-header covers
+  // only in-service served services (projection > 0, in service on
+  // day.date); off-today + archived are correctly excluded.
+  const bodyRef = useRef(null);
+  const primaryBtnRef = useRef(null);
+
+  const { enteredCount, totalToEnter } = useMemo(() => {
+    let entered = 0;
+    let total = 0;
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        const proj = day.projected[s.colIndex] ?? 0;
+        if (proj <= 0) continue;
+        total++;
+        if (touched.has(s.colIndex)) entered++;
+      }
+    }
+    return { enteredCount: entered, totalToEnter: total };
+  }, [serviceGroups, day.date, day.projected, touched]);
+
+  // Auto-focus first ghost input on open + on day-nav.
+  useEffect(() => {
+    if (!bodyRef.current) return;
+    const rafId = requestAnimationFrame(() => {
+      const first = bodyRef.current?.querySelector(".sc-day-input--ghost");
+      if (first && typeof first.focus === "function") first.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [day.date]);
+
+  // enterKeyHint: "next" on all inputs, "done" on the last. Set via a
+  // post-render pass so the "last" input tracks whatever the current
+  // render + expanded-extras state produces without threading a
+  // last-column-index prop through renderServiceRow.
+  useLayoutEffect(() => {
+    if (!bodyRef.current) return;
+    const inputs = bodyRef.current.querySelectorAll(".sc-day-input");
+    inputs.forEach((el, i) => {
+      el.setAttribute("enterkeyhint", i === inputs.length - 1 ? "done" : "next");
+    });
+  });
+
+  // Body-level Enter → next input; last input's Enter blurs and focuses
+  // the primary footer button (Save actuals). Delegation via bodyRef so
+  // it stays a single handler regardless of how many inputs render.
+  const handleBodyKeyDown = useCallback((e) => {
+    if (e.key !== "Enter") return;
+    const el = e.target;
+    if (!el?.classList?.contains?.("sc-day-input")) return;
+    e.preventDefault();
+    if (!bodyRef.current) return;
+    const inputs = Array.from(bodyRef.current.querySelectorAll(".sc-day-input"));
+    const idx = inputs.indexOf(el);
+    if (idx >= 0 && idx < inputs.length - 1) {
+      inputs[idx + 1].focus({ preventScroll: true });
+    } else {
+      el.blur();
+      primaryBtnRef.current?.focus({ preventScroll: true });
+    }
+  }, []);
+
   // Coaching banner: fee accounts reframe around delivery + homestand
   // context. Game days vs prep days get different language; revenue
   // urgency is dropped (billing isn't per-meal for these accounts).
@@ -385,11 +451,19 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
       {coaching && (
         <div className={`sc-day-coaching sc-day-coaching--${coaching.tone}`}>
-          {coaching.text}
+          <span className="sc-day-coaching-text">{coaching.text}</span>
+          {totalToEnter > 0 && (
+            <span className="sc-day-progress" aria-live="polite">
+              <span className="sc-day-progress-txt">{enteredCount} of {totalToEnter} entered</span>
+              <span className="sc-day-progress-bar" aria-hidden="true">
+                <i style={{ width: `${(enteredCount / totalToEnter) * 100}%` }} />
+              </span>
+            </span>
+          )}
         </div>
       )}
 
-      <div className="sc-day-body">
+      <div className="sc-day-body" ref={bodyRef} onKeyDown={handleBodyKeyDown}>
         {activeGroups.map(group => {
           // Per-service active/inactive split must consider actuals, not just
           // projections - same actuals-first-class rule applied to the group
@@ -486,7 +560,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               All match projections
             </button>
           )}
-          <button className="sc-btn sc-btn--primary" disabled={!hasTouchedAny || saving} onClick={() => setShowReview("save")}>
+          <button ref={primaryBtnRef} className="sc-btn sc-btn--primary" disabled={!hasTouchedAny || saving} onClick={() => setShowReview("save")}>
             Save actuals
           </button>
           <button className="sc-btn sc-btn--cancel" onClick={onClose}>Cancel</button>
