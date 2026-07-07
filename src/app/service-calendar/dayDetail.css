@@ -170,8 +170,7 @@
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   overflow: hidden;
-  box-shadow: var(--elevation-card);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 .sc-day-group--expanded {
   margin-top: var(--space-2);
@@ -188,7 +187,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-1) var(--space-4);
   background: var(--surface-page);
   border-bottom: var(--border-thin) solid var(--border-default);
   border-left: 3px solid var(--text-link);
@@ -222,7 +221,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   border-bottom: 0.5px solid var(--border-subtle);
   gap: var(--space-3);
 }
@@ -240,11 +239,11 @@
    we ensure the desktop base is already >= 44px tall so the floor is
    met. */
 .sc-day-input {
-  width: 92px;
-  min-height: 44px;
+  width: 72px;
+  min-height: 40px;
   padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-control);
-  font-size: var(--size-h3);
+  font-size: var(--size-subhead);
   font-weight: var(--wt-semibold);
   color: var(--text-heading);
   text-align: center;
@@ -252,6 +251,12 @@
   font-family: inherit;
   font-variant-numeric: var(--num-tabular);
   transition: border-color var(--motion-control), background var(--motion-control), color var(--motion-control), box-shadow var(--motion-control);
+}
+/* Mobile floor: bump the touch target back to the 44px minimum on
+   narrow viewports so the tight desktop rhythm doesn't degrade tap
+   accuracy in the walk-in cooler. */
+@media (max-width: 640px) {
+  .sc-day-input { min-height: 44px; width: 84px; }
 }
 /* Ghost (resting) state: reads as a fillable INPUT BOX, not a
    disabled ghost. Was 1.5px dashed - dashed border read as "locked /
@@ -286,12 +291,12 @@
    "match" indicator. Empty span without the explicit display: inline-block
    was painting with collapsed width in some browser cases, ragging the
    right edge as operators typed across rows. */
-/* Typo-catcher, not a scoreboard. |delta| == 0 = quiet green check;
-   |delta| < 3 = calm neutral (small drift is normal); |delta| >= 3 =
-   amber warning ("did you mean to type that?"). No red - drift is not
-   an error, and treating it that way punished normal entry patterns. */
+/* Typo-catcher, not a scoreboard. Matched rows render an empty slot -
+   the green input already says "entered + on plan". Only misses render
+   an indicator: --minor (calm neutral) for normal drift; --big (amber
+   feedback-warning) for genuine outliers (|d|>=15 or ~50% off plan).
+   No red - drift is not an error. */
 .sc-day-row-delta { display: inline-block; width: 36px; font-size: var(--size-caption); text-align: right; }
-.sc-day-row-delta--match { color: var(--accent-sc); font-weight: var(--wt-semibold); }
 .sc-day-row-delta--minor { color: var(--text-subtle); font-weight: var(--wt-medium); }
 .sc-day-row-delta--big { color: var(--feedback-warning); font-weight: var(--wt-semibold); }
 
@@ -331,35 +336,48 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* Extras button — distinct from notes */
-.sc-day-extras-btn {
-  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
-  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
-  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control);
-}
-.sc-day-extras-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc-dark); background: var(--accent-sc-tint); }
-.sc-day-extras-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
-  outline-offset: var(--focus-ring-offset);
-}
-.sc-day-extras-btn-icon { width: 20px; height: 20px; border-radius: var(--radius-circle); background: var(--border-default); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: var(--size-body); font-weight: var(--wt-semibold); flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control); }
-.sc-day-extras-btn:hover .sc-day-extras-btn-icon { background: var(--accent-sc); color: var(--surface-card); }
+/* Extras affordance - full-width row inside the group card, sealing
+   the bottom of the visible-services stack with a hairline divider.
+   Not a floating pill anymore; reads as "there's more inside this
+   card" rather than "here's a button beside the card". */
+.sc-day-extras-btn,
 .sc-day-extras-hide {
-  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-2) 0 0;
-  border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card);
-  cursor: pointer; font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium); transition: border-color var(--motion-control), color var(--motion-control);
-  font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+  width: 100%; padding: var(--space-2) var(--space-4); margin: 0;
+  border: none; border-top: 0.5px solid var(--border-subtle); border-radius: 0;
+  background: transparent; cursor: pointer; font-family: inherit;
+  font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium);
+  transition: background var(--motion-control), color var(--motion-control);
 }
-.sc-day-extras-hide:hover { border-color: var(--text-subtle); color: var(--text-default); }
+.sc-day-extras-btn:hover,
+.sc-day-extras-hide:hover { background: var(--accent-sc-tint); color: var(--accent-sc-dark); }
+.sc-day-extras-btn:focus-visible,
 .sc-day-extras-hide:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-day-extras-hide .sc-day-extras-btn-icon { background: var(--border-default); color: var(--text-muted); }
-.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: var(--text-subtle); color: var(--surface-card); }
+.sc-day-extras-btn-icon {
+  width: 16px; height: 16px; border-radius: var(--radius-circle);
+  background: var(--border-default); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--size-caption); font-weight: var(--wt-semibold);
+  flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control);
+}
+.sc-day-extras-btn:hover .sc-day-extras-btn-icon,
+.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: var(--accent-sc); color: var(--surface-card); }
 
-/* Group subtotal */
-.sc-day-group-subtotal { text-align: right; padding: 6px 0 2px; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); }
+/* Group subtotal - sealed band closing the card at the bottom.
+   Hairline top-border + surface-page fill so the running total reads
+   as the card's tally, not a floating trailing line. */
+.sc-day-group-subtotal {
+  display: flex; justify-content: flex-end;
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-thin) solid var(--border-default);
+  background: var(--surface-page);
+  font-size: var(--size-caption); font-weight: var(--wt-semibold);
+  color: var(--accent-sc-dark);
+  font-variant-numeric: var(--num-tabular);
+}
 
 /* Collapsed inactive group — button style, distinct from notes */
 .sc-day-collapsed-btn {
@@ -401,28 +419,78 @@
   flex-wrap: wrap;
 }
 
-/* ── Review overlay ── */
-.sc-day-review-inner { padding: var(--space-4) var(--space-4); overflow-y: auto; flex: 1; }
-.sc-day-review-header { margin-bottom: var(--space-4); }
-.sc-day-review-title { font-size: var(--size-subhead); font-weight: var(--wt-bold); color: var(--text-heading); margin: 0 0 var(--space-1); }
-.sc-day-review-date { font-size: var(--size-body); color: var(--text-muted); margin: 0; }
-.sc-day-review-body { margin-bottom: var(--space-4); }
-.sc-day-review-group { margin-bottom: var(--space-3); }
-.sc-day-review-group-name { font-size: var(--size-micro); font-weight: var(--wt-bold); color: var(--accent-sc-dark); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 6px; border-bottom: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-1); }
-.sc-day-review-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: var(--size-body); color: var(--text-default); }
-.sc-day-review-val { font-weight: var(--wt-semibold); color: var(--text-heading); }
-.sc-day-review-subtotal { text-align: right; font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); padding-top: var(--space-1); }
-.sc-day-review-summary { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) 0; border-top: var(--border-thin) solid var(--border-default); margin-bottom: var(--space-4); }
-.sc-day-review-total-meals { font-size: var(--size-body); font-weight: var(--wt-medium); color: var(--text-heading); }
-.sc-day-review-total-rev { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); }
-.sc-day-review-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+/* ── Review overlay ──
+   Reuses the entry-view scoreboard + .sc-day-group / .sc-day-row /
+   .sc-day-group-subtotal so cards and header stay one language across
+   the two panels. Only overrides + review-specific bits live here. */
+.sc-day-review-title2 {
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--scoreboard-text);
+  line-height: var(--lead-tight);
+  letter-spacing: var(--track-tight);
+}
+.sc-day-review-back {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font-family: inherit;
+  font-size: var(--size-caption); font-weight: var(--wt-medium);
+  color: var(--scoreboard-text-muted);
+  background: transparent;
+  border: var(--border-thin) solid rgba(255,255,255,0.25);
+  border-radius: var(--radius-control);
+  padding: 5px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control);
+}
+.sc-day-review-back:hover { border-color: rgba(255,255,255,0.55); color: var(--scoreboard-text); background: rgba(255,255,255,0.06); }
+.sc-day-review-back:focus-visible {
+  outline: var(--focus-ring-width) solid var(--scoreboard-text);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-day-review-row2 { padding: var(--space-2) var(--space-4); }
+.sc-day-review-val2 {
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-bold);
+  color: var(--accent-sc-dark);
+  font-variant-numeric: var(--num-tabular);
+}
 
-/* ── Success state ── */
+/* ── Success state ──
+   Recorded revenue is the hero. Check pops, "Recorded" sits calm above,
+   the amount reads big + green, meals + date live quietly beneath. */
 .sc-day-success-inner { padding: 48px var(--space-6); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
-.sc-day-success-check { width: 56px; height: 56px; border-radius: var(--radius-circle); background: var(--accent-sc-subtle); color: var(--accent-sc); display: inline-flex; align-items: center; justify-content: center; font-size: var(--size-h1); font-weight: var(--wt-bold); margin-bottom: var(--space-3); animation: scPop 0.3s ease; }
+.sc-day-success-check {
+  width: 56px; height: 56px; border-radius: var(--radius-circle);
+  background: var(--accent-sc-subtle); color: var(--accent-sc);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--size-h1); font-weight: var(--wt-bold);
+  margin-bottom: var(--space-3);
+  animation: scPop 0.3s ease;
+}
 @keyframes scPop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
-.sc-day-success-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--accent-sc-dark); margin: 0 0 6px; }
-.sc-day-success-detail { font-size: var(--size-body); color: var(--text-muted); margin: 0 0 var(--space-5); }
+.sc-day-success-title {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  margin: 0 0 var(--space-1);
+}
+.sc-day-success-hero {
+  display: block;
+  font-size: var(--size-h1);
+  font-weight: var(--wt-display);
+  color: var(--text-success);
+  font-variant-numeric: var(--num-tabular);
+  letter-spacing: var(--track-tight);
+  margin: 0 0 var(--space-1);
+}
+.sc-day-success-sub {
+  font-size: var(--size-body);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-5);
+}
 .sc-day-success-actions { display: flex; gap: var(--space-2); justify-content: center; align-items: center; }
 .sc-day-success-caughtup {
   display: inline-flex; align-items: center; gap: var(--space-1);

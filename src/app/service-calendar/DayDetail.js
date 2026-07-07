@@ -313,16 +313,15 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 onChange={e => handleChange(svc.colIndex, e.target.value)} />
               {isTouched && delta !== null && (() => {
                 const mag = Math.abs(delta);
-                // Amber = a genuine outlier / likely slip, NOT normal variance. Actuals
-                // routinely differ from plan (only ~17% land within +/-2), so a flat
-                // threshold lit nearly every row amber. Fire only on a ~50% swing off
-                // plan (or a large absolute), keeping amber rare and meaningful.
+                // Matched rows drop the check - the green input already says
+                // "entered + on plan". Only misses render an indicator. Amber
+                // (--big) is a genuine outlier (~50% swing or abs>=15); everything
+                // else is --minor (calm neutral) so amber stays rare + meaningful.
+                if (mag === 0) return <span className="sc-day-row-delta" />;
                 const isBig = mag >= Math.max(15, Math.round(projVal * 0.5));
-                const cls = mag === 0 ? "sc-day-row-delta--match" : isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
+                const cls = isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
                 return (
-                  <span className={`sc-day-row-delta ${cls}`}>
-                    {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
-                  </span>
+                  <span className={`sc-day-row-delta ${cls}`}>{(delta > 0 ? "+" : "") + delta}</span>
                 );
               })()}
               {!isTouched && <span className="sc-day-row-delta" />}
@@ -339,38 +338,53 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   // ── Review overlay ──
   if (showReview) {
+    const svcCount = serviceGroups.reduce((n, g) => n + g.services.filter(s => touched.has(s.colIndex)).length, 0);
     return (
       <div className="sc-day sc-day--review">
-        <div className="sc-day-review-inner">
-          <div className="sc-day-review-header">
-            <h3 className="sc-day-review-title">Review before saving</h3>
-            <p className="sc-day-review-date">{formatDate(day.date)}</p>
+        <div className="sc-day-scoreboard sc-day-review-board">
+          <div className="sc-day-sb-row1">
+            <div className="sc-day-sb-ctx">
+              <span className="sc-day-review-title2">Review before saving</span>
+              <span className="sc-day-sb-account">{formatDate(day.date)}{accountName ? ` · ${accountName}` : ""}</span>
+            </div>
+            <button className="sc-day-review-back" onClick={() => setShowReview(null)}>‹ Go back</button>
           </div>
-          <div className="sc-day-review-body">
-            {serviceGroups.map(group => {
-              // Review shows ONLY services the chef touched (intentional 0 included).
-              const svcs = group.services.filter(s => touched.has(s.colIndex));
-              if (svcs.length === 0) return null;
-              const gs = {
-                meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
-                revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0),
-              };
-              return (
-                <div key={group.name} className="sc-day-review-group">
-                  <div className="sc-day-review-group-name">{group.name}{!isFeeAccount && ` · ${fmtPrice(group.services[0]?.price || 0)} / meal`}</div>
-                  {svcs.map(s => (
-                    <div key={s.colIndex} className="sc-day-review-row"><span>{s.name}</span><span className="sc-day-review-val">{getVal(s.colIndex)}</span></div>
-                  ))}
-                  <div className="sc-day-review-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
+          <div className="sc-day-sb-line">
+            <div className="sc-day-sb-fig">
+              {!isFeeAccount && <span className="sc-day-sb-amount sc-day-sb-amount--recorded">{fmt$(summary.revenue)}</span>}
+              <span className="sc-day-sb-meals">{summary.meals.toLocaleString()} meals</span>
+            </div>
+            <span className="sc-day-sb-status sc-day-sb-status--entry">{svcCount} {svcCount === 1 ? "service" : "services"}</span>
+          </div>
+        </div>
+        <div className="sc-day-body">
+          {serviceGroups.map(group => {
+            // Review shows ONLY services the chef touched (intentional 0 included).
+            const svcs = group.services.filter(s => touched.has(s.colIndex));
+            if (svcs.length === 0) return null;
+            const gs = {
+              meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
+              revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0),
+            };
+            return (
+              <div key={group.name} className="sc-day-group">
+                <div className="sc-day-group-header">
+                  <span className="sc-day-group-name">{group.name}</span>
+                  {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)} / meal</span>}
                 </div>
-              );
-            })}
-          </div>
-          <div className="sc-day-review-summary">
-            <span className="sc-day-review-total-meals">{summary.meals.toLocaleString()} meals</span>
-            {!isFeeAccount && <span className="sc-day-review-total-rev">{fmt$(summary.revenue)}</span>}
-          </div>
-          <div className="sc-day-review-actions">
+                {svcs.map(s => (
+                  <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
+                    <span className="sc-day-row-name">{s.name}</span>
+                    <span className="sc-day-review-val2">{getVal(s.colIndex)}</span>
+                  </div>
+                ))}
+                <div className="sc-day-group-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="sc-day-footer">
+          <div className="sc-day-actions">
             <button className="sc-btn sc-btn--outline" onClick={() => setShowReview(null)}>Go back</button>
             <button className="sc-btn sc-btn--primary" disabled={saving} onClick={executeSave}>
               {saving ? "Saving..." : "Confirm & save"}
@@ -387,8 +401,15 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
       <div className="sc-day sc-day--success">
         <div className="sc-day-success-inner">
           <div className="sc-day-success-check">✓</div>
-          <h3 className="sc-day-success-title">Saved!</h3>
-          <p className="sc-day-success-detail">{formatDate(day.date)} · {summary.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(summary.revenue)}`}</p>
+          <h3 className="sc-day-success-title">Recorded</h3>
+          {isFeeAccount ? (
+            <span className="sc-day-success-hero">{summary.meals.toLocaleString()} meals</span>
+          ) : (
+            <span className="sc-day-success-hero">{fmt$(summary.revenue)}</span>
+          )}
+          <p className="sc-day-success-sub">
+            {isFeeAccount ? formatDate(day.date) : `${summary.meals.toLocaleString()} meals · ${formatDate(day.date)}`}
+          </p>
           <div className="sc-day-success-actions">
             {onNextException ? (
               <button className="sc-btn sc-btn--primary" onClick={onNextException}>Next needing entry →</button>
