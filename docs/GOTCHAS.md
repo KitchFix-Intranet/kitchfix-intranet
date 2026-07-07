@@ -204,11 +204,13 @@ useEffect(() => {
 
 ## Next.js App Router
 
-### `<Suspense>` around a `useSearchParams()` consumer can freeze client-nav
+### A heavy post-save refetch can race client navigation (nav dead right after a save)
 
-Next.js warns that a client component reading `useSearchParams()` should be wrapped in `<Suspense>`. But wrapping the consumer can stop searchParams from propagating on `router.push()` client navigations — symptom: nav buttons change the URL but the view never updates (a URL-sync effect keyed on `[searchParams]` stops re-running).
+Invalidating the **entire** month cache on save (`setMonthCache({})`) forces every cached month to refetch at once — and because the drill-in fetch effects have `monthCache` in their deps (#332), each write-back re-fires them, producing a burst of (often cancelled) `sc-load` requests. During that burst, `router.push` navigation clicks (`‹ Season`, the period/month stepper) are **intermittently lost** — the header renders and the buttons are enabled, but the click races the churn. Symptom: nav is dead *immediately after a save*, then works after a beat.
 
-**Fix:** for a page that's already `"use client"` and reads `useSession` (dynamically rendered regardless), the boundary is unnecessary AND breaks nav — render the consumer directly. Cost us the whole SC drill-in nav: #330 added the boundary as "hygiene," #333 removed it and the build stayed green (no `useSearchParams` error, because the page is already dynamic).
+**Fix (#338):** scope save-invalidation to only the month(s) actually written, so the refetch is 1-2 months, not the whole cache and its cascade.
+
+**Red herring on record:** a `<Suspense>` boundary around the `useSearchParams()` consumer was blamed for this first (#330 added it as "hygiene," #333 removed it). Removing it was fine — it was unnecessary for a fully-`"use client"` + `useSession` (already-dynamic) page — but it did **not** fix the nav. The cause was always the refetch burst above. Don't re-add the boundary expecting it to matter, and don't re-blame it.
 
 ### A stepper/nav gated on async-loaded data reads as "broken," not "loading"
 
