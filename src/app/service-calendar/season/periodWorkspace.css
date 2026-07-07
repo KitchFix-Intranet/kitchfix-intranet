@@ -76,47 +76,62 @@
   flex-wrap: wrap;
   padding-bottom: var(--space-3);
 }
-.sc-workspace-frame-money {
+/* Row 1 metrics: twin co-equal stat blocks (Revenue + Days) with a
+   vertical divider, then a labeled progress readout. The two stats
+   share `.sc-workspace-frame-stat-num` sizing so neither dominates;
+   only the money variant tints green. */
+.sc-workspace-frame-stats {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-width: 0;
+  align-items: stretch;
+  gap: var(--space-4);
 }
-.sc-workspace-frame-entered {
-  font-size: var(--size-h1);
-  font-weight: var(--wt-display);
+.sc-workspace-frame-stat {
+  display: flex;
+  flex-direction: column;
+}
+.sc-workspace-frame-stat-num {
+  font-size: var(--size-h2);
+  font-weight: var(--wt-bold);
+  line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--text-success);
+  color: var(--text-heading);
   font-variant-numeric: var(--num-tabular);
 }
-.sc-workspace-frame-money-label {
+.sc-workspace-frame-stat-num--money { color: var(--text-success); }
+.sc-workspace-frame-stat-num-total {
+  color: var(--text-subtle);
+  font-weight: var(--wt-semibold);
+}
+.sc-workspace-frame-stat-label {
   font-size: var(--size-micro);
   font-weight: var(--wt-bold);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-subtle);
+  margin-top: 5px;
 }
-.sc-workspace-frame-projected {
-  font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
-  color: var(--text-muted);
-  font-variant-numeric: var(--num-tabular);
+.sc-workspace-frame-stat-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-default);
 }
 .sc-workspace-frame-progress {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
   flex: 1;
-  min-width: 220px;
+  min-width: 160px;
 }
 .sc-workspace-frame-progress-label {
-  font-size: var(--size-caption);
-  color: var(--text-default);
-  font-variant-numeric: var(--num-tabular);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
-.sc-workspace-frame-progress-label strong { color: var(--text-heading); font-weight: var(--wt-bold); }
-.sc-workspace-frame-progress-pending { color: var(--accent-text); }
+.sc-workspace-frame-progress-label strong { font-weight: var(--wt-bold); }
 
 /* Exception chips: clickable pills in the per-meal strip's progress label.
    Each chip jumps DayDetail to the oldest day of its status inside the
@@ -589,7 +604,7 @@
 
   /* Frame stacks with reduced sizing */
   .sc-workspace-frame { padding: 14px var(--space-4); }
-  .sc-workspace-frame-entered { font-size: var(--size-h1); }
+  .sc-workspace-frame-stat-num { font-size: var(--size-h3); }
   .sc-workspace-frame--fee,
   .sc-workspace-frame--operational { gap: var(--space-4); }
   /* Per-meal strip mobile: keep the horizontal pad tied to the same
@@ -664,8 +679,7 @@
 
 /* ───────── NARROWER PHONES (<= 375) ───────── */
 @media (max-width: 375px) {
-  .sc-workspace-frame-entered { font-size: var(--size-h2); }
-  .sc-workspace-frame-projected { font-size: var(--size-body); }
+  .sc-workspace-frame-stat-num { font-size: var(--size-subhead); }
   .sc-workspace-grid .sc-daysq--lg { padding: var(--space-2) var(--space-3); }
   .sc-workspace-grid .sc-daysq-mid { font-size: var(--size-caption); }
 }
