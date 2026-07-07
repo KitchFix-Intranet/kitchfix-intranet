@@ -6,6 +6,16 @@
    FLAG: mint (bar fill) + amber (milestone) accents are literals here
    pending a tokenization pass. */
 
+/* SC-scoped toast recentering: lift the wrapper from the shared
+   top-24px anchor to viewport center so the recorded toast lands over
+   the calendar grid (the grid dominates the viewport below the chrome).
+   Modifier class only - the shared .oh-toast-container base rule stays
+   top-anchored for Ops + every other consumer. */
+.oh-toast-container.oh-toast-container--sc-center {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .sc-toast-recorded {
   min-width: 320px;
   max-width: 420px;

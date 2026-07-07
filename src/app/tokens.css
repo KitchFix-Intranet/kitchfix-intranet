@@ -68,6 +68,8 @@
   /* scoreboard - the DayDetail navy header surface + its inverted text/status palette */
   --scoreboard-bg-start:var(--navy-700); --scoreboard-bg-end:var(--navy-800);
   --scoreboard-text:var(--n-0); --scoreboard-text-muted:var(--navy-100); --scoreboard-text-recorded:var(--mint-300);
+  /* season capstone card header band - soft slate at period-card pastel weight so the capstone sits alongside the tiles instead of dominating */
+  --season-capstone-band:#C9D4E2; --season-capstone-band-bd:#B4C2D4;
   /* accent - contrast-split so the failing white-on-amber pair is unreachable */
   --accent:var(--amber-500);          /* fills with dark text / borders / icons */
   --accent-solid:var(--amber-600);    /* when WHITE text is required (AA) */
