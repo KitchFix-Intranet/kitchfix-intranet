@@ -215,6 +215,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState(new Set());
   const [bulkPanelOpen, setBulkPanelOpen] = useState(false);
+  const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
 
   useEffect(() => {
@@ -969,10 +970,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // to the trigger on close, and Tab/Shift+Tab cycle within.
   const dayOverlayCardRef = useRef(null);
   const bulkOverlayCardRef = useRef(null);
+  const bulkReviewOverlayCardRef = useRef(null);
   const dayOverlayOpen = Boolean(focusDay && focusDayData && (data?.serviceGroups || periodServiceGroups));
   const bulkOverlayOpen = Boolean(bulkPanelOpen && data?.serviceGroups);
+  const bulkReviewOverlayOpen = Boolean(bulkReviewOpen && data?.serviceGroups);
   useDialogA11y({ cardRef: dayOverlayCardRef, isOpen: dayOverlayOpen, onClose: () => setFocusDay(null) });
   useDialogA11y({ cardRef: bulkOverlayCardRef, isOpen: bulkOverlayOpen, onClose: () => setBulkPanelOpen(false) });
+  useDialogA11y({ cardRef: bulkReviewOverlayCardRef, isOpen: bulkReviewOverlayOpen, onClose: () => setBulkReviewOpen(false) });
 
   const acctObj = accounts.find(a => a.key === selectedAccount);
   const category = acctObj?.category || "";
@@ -1366,8 +1370,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             bulkSelected={bulkSelected}
             onBulkTileClick={toggleBulkSelect}
             onBulkOpenPanel={() => setBulkPanelOpen(true)}
+            onBulkReview={() => setBulkReviewOpen(true)}
             onBulkConfirmAsProjected={handleBulkConfirm}
-            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
+            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
             saving={saving}
             onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
             onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
@@ -1403,8 +1408,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             bulkSelected={bulkSelected}
             onBulkTileClick={toggleBulkSelect}
             onBulkOpenPanel={() => setBulkPanelOpen(true)}
+            onBulkReview={() => setBulkReviewOpen(true)}
             onBulkConfirmAsProjected={handleBulkConfirm}
-            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); }}
+            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
             saving={saving}
             onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
             onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
@@ -1530,6 +1536,96 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           </div>
         </div>
       )}
+
+      {/* Bulk review overlay - "All match projections" now routes through
+          a review step (mirrors the DayDetail review styling: navy
+          scoreboard + read-only list + action bar). Confirming here still
+          calls handleBulkConfirm, so the write path is unchanged. */}
+      {bulkReviewOverlayOpen && (() => {
+        const days = [];
+        for (const dk of bulkSelected) {
+          const d = activeDrillDays?.find(x => x.date === dk) || dayMap?.[dk];
+          if (d) days.push(d);
+        }
+        days.sort((a, b) => a.date.localeCompare(b.date));
+        let totMeals = 0;
+        let totRev = 0;
+        for (const d of days) {
+          for (const v of Object.values(d.projected || {})) totMeals += v || 0;
+          totRev += d.totals?.projectedRevenue || 0;
+        }
+        const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+        const fmtDateShort = (iso) => {
+          const [y, m, dd] = iso.split("-").map(Number);
+          return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+        };
+        return (
+          <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkReviewOpen(false); }}>
+            <div
+              ref={bulkReviewOverlayCardRef}
+              className="sc-overlay-card"
+              data-density="comfortable"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sc-bulk-review-title"
+              tabIndex={-1}
+            >
+              <div className="sc-day sc-day--review">
+                <div className="sc-day-scoreboard sc-day-review-board">
+                  <div className="sc-day-sb-row1">
+                    <div className="sc-day-sb-ctx">
+                      <span className="sc-day-review-title2" id="sc-bulk-review-title">
+                        Match projections - {days.length} day{days.length !== 1 ? "s" : ""}
+                      </span>
+                      {acctObj?.name && <span className="sc-day-sb-account">{acctObj.name}</span>}
+                    </div>
+                    <button className="sc-day-review-back" onClick={() => setBulkReviewOpen(false)}>‹ Go back</button>
+                  </div>
+                  <div className="sc-day-sb-line">
+                    <div className="sc-day-sb-fig">
+                      {!isFeeAccount && (
+                        <span className="sc-day-sb-amount sc-day-sb-amount--recorded">{fmt$(totRev)}</span>
+                      )}
+                      <span className="sc-day-sb-meals">{totMeals.toLocaleString()} meals</span>
+                    </div>
+                    <span className="sc-day-sb-status sc-day-sb-status--entry">projected totals</span>
+                  </div>
+                </div>
+                <div className="sc-day-body">
+                  <ul className="sc-bulk-review-list">
+                    {days.map(d => {
+                      let m = 0;
+                      for (const v of Object.values(d.projected || {})) m += v || 0;
+                      const r = d.totals?.projectedRevenue || 0;
+                      return (
+                        <li key={d.date} className="sc-bulk-review-item">
+                          <span className="sc-bulk-review-date">{fmtDateShort(d.date)}</span>
+                          <span className="sc-bulk-review-vals">
+                            <span className="sc-bulk-review-meals">{m.toLocaleString()} meals</span>
+                            {!isFeeAccount && <span className="sc-bulk-review-rev">{fmt$(r)}</span>}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="sc-day-footer">
+                  <div className="sc-day-actions">
+                    <button className="sc-btn sc-btn--outline" onClick={() => setBulkReviewOpen(false)}>Go back</button>
+                    <button
+                      className="sc-btn sc-btn--primary"
+                      disabled={saving}
+                      onClick={() => { setBulkReviewOpen(false); handleBulkConfirm(); }}
+                    >
+                      {saving ? "Saving..." : "Confirm & save"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
     </>

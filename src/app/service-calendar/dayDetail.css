@@ -456,6 +456,55 @@
   font-variant-numeric: var(--num-tabular);
 }
 
+/* Bulk review overlay: shares the .sc-day--review chrome (navy
+   scoreboard + action bar) but the body is a compact list, one row
+   per selected day, instead of clubhouse cards - the count is high
+   (10-30 days), so a list reads faster than card-per-day. */
+.sc-bulk-review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  overflow: hidden;
+  background: var(--surface-card);
+}
+.sc-bulk-review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 0.5px solid var(--border-subtle);
+  font-size: var(--size-body);
+}
+.sc-bulk-review-item:last-child { border-bottom: none; }
+.sc-bulk-review-date {
+  color: var(--text-default);
+  font-weight: var(--wt-medium);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-bulk-review-vals {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-bulk-review-meals {
+  color: var(--text-muted);
+  font-weight: var(--wt-medium);
+}
+.sc-bulk-review-rev {
+  color: var(--accent-sc-dark);
+  font-weight: var(--wt-bold);
+  min-width: 72px;
+  text-align: right;
+}
+
 /* ── Success state ──
    Recorded revenue is the hero. Check pops, "Recorded" sits calm above,
    the amount reads big + green, meals + date live quietly beneath. */

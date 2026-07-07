@@ -64,7 +64,10 @@ export default function PeriodWorkspace({
   bulkSelected,             // Set<dateStr>
   onBulkTileClick,          // (dateStr) => void (toggles selection)
   onBulkOpenPanel,          // opens the existing bulk entry panel
-  onBulkConfirmAsProjected, // runs handleBulkConfirm (existing)
+  onBulkReview,             // opens the "match projections" review overlay
+  onBulkConfirmAsProjected, // runs handleBulkConfirm (kept for compat -
+                            // no longer wired from BulkAffordance; the
+                            // review overlay owns the call now)
   onBulkCancel,             // exits bulk mode + clears selection
   saving,
   scope = "period",         // "period" | "month" - month drops the week
@@ -172,7 +175,7 @@ export default function PeriodWorkspace({
         onToggle={onBulkModeToggle}
         onCancel={onBulkCancel}
         onOpenPanel={onBulkOpenPanel}
-        onConfirmAsProjected={onBulkConfirmAsProjected}
+        onReview={onBulkReview}
       />
 
       <DayGrid
@@ -479,7 +482,7 @@ function sumProjectedMeals(day) {
 // isSelected). Out of bulkMode, tile clicks open DayDetail. The mode
 // gate prevents the tap-to-open vs tap-to-select conflict the brief
 // pre-mortem flagged.
-function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, onOpenPanel, onConfirmAsProjected }) {
+function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, onOpenPanel, onReview }) {
   // Rest-state trigger moved into TodayRail as "Bulk Update"; this
   // component now only renders the active-mode controls (selected count
   // + panel/confirm/cancel). Note: TodayRail only renders on the current
@@ -499,7 +502,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
               type="button"
               className="sc-workspace-bulk-btn sc-workspace-bulk-btn--outline"
               disabled={saving}
-              onClick={onConfirmAsProjected}
+              onClick={onReview}
             >
               {saving ? "Saving..." : "All match projections"}
             </button>

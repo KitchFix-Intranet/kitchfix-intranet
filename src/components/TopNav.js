@@ -413,10 +413,18 @@ export default function TopNav() {
             <div className="kf-topnav-links">
               {navLinks.map(({ href, label, icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                // Same-route Service click resets to the overview (drops
+                // ?period= / ?month= query) while preserving component
+                // state (selectedAccount lives in ServiceCalendar and
+                // survives an intra-route push).
+                const onClick = href === '/service-calendar' && pathname.startsWith('/service-calendar')
+                  ? (e) => { e.preventDefault(); router.push('/service-calendar'); }
+                  : undefined;
                 return (
                   <Link
                     key={href}
                     href={href}
+                    onClick={onClick}
                     className={`kf-topnav-link ${isActive ? 'active' : ''}`}
                   >
                     {icon}
