@@ -3,9 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
+import SubmissionToast from "./season/SubmissionToast";
 import "@/app/ops/css/ops-shared.css";
 import "./ops-sc.css";
 import "./dayDetail.css";
+import "./submissionToast.css";
 
 // Page-level gate. Currently identical to SC_ADMINS - only the two
 // listed emails see the live tool; everyone else gets the Coming Soon
@@ -16,9 +18,17 @@ export default function ServiceCalendarPage() {
   const [heroImage, setHeroImage] = useState("");
   const [toast, setToast] = useState(null);
 
-  const showToast = useCallback((msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+  const showToast = useCallback((msgOrObj, type = "success") => {
+    // Accept a string (plain oh-toast) OR an object payload. The rich
+    // "recorded" variant renders <SubmissionToast /> and gets a longer
+    // auto-dismiss to give the animation + progress line room to read.
+    if (msgOrObj && typeof msgOrObj === "object") {
+      setToast(msgOrObj);
+      setTimeout(() => setToast(null), msgOrObj.variant === "recorded" ? 4500 : 3500);
+    } else {
+      setToast({ msg: String(msgOrObj || ""), type });
+      setTimeout(() => setToast(null), 3500);
+    }
   }, []);
 
   useEffect(() => {
@@ -123,7 +133,11 @@ export default function ServiceCalendarPage() {
       </div>
       {toast && (
         <div className="oh-toast-container">
-          <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>
+          {toast.variant === "recorded" ? (
+            <SubmissionToast {...toast} />
+          ) : (
+            <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>
+          )}
         </div>
       )}
     </div>
