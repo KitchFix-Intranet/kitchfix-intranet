@@ -6,6 +6,7 @@ import { X } from "./Icons";
 import { useDialogA11y } from "./useDialogA11y";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
+import StateLegend from "./season/StateLegend";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
 import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
@@ -1333,6 +1334,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             saving={saving}
             onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
             onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
+          />
+        )}
+
+        {/* Drill-in state legend as a direct child of .sc-body, matching
+            the overview's SeasonShell pattern - the .sc-body >
+            .sc-state-legend rule (stateLegend.css) turns it into a flush
+            bottom band with a hairline top divider and bottom card
+            radii. When rendered inside .sc-workspace it stays the default
+            pill; this placement lets the existing CSS take over. */}
+        {(isPeriodView || isMonthView) && (
+          <StateLegend
+            hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
+            isMilb={isMilb}
+            showDayNight={true}
           />
         )}
 
