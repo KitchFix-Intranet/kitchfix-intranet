@@ -338,6 +338,42 @@
   border-radius: var(--radius-circle);
 }
 
+/* Bulk-select ring restore (--lg): the #327 softer-surface box-shadow
+   on .sc-daysq--lg (same specificity, later in file) silently overrode
+   the single-class .sc-daysq--selected ring. Two-class rules below beat
+   it on specificity so the teal ring renders on drill-in tiles. The
+   today+selected combinations are already covered by the Option A
+   rules above (3-class selectors, higher specificity still). */
+.sc-daysq--lg.sc-daysq--selected {
+  box-shadow: 0 0 0 3px var(--accent-sc), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.sc-daysq--lg.sc-daysq--selected.sc-daysq--focused {
+  box-shadow: 0 0 0 3px var(--accent-sc), inset 0 0 0 1.5px var(--accent-sc);
+}
+
+/* Selection check badge (drill-in only). Replaces the status glyph in
+   the top-right corner while the tile is selected - the glyph render is
+   gated on !isSelected in DaySquare.js. Stays inside the tile bounds so
+   nothing clips it. */
+.sc-daysq-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-circle);
+  background: var(--accent-sc);
+  color: var(--surface-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+.sc-daysq--sm .sc-daysq-check { display: none; }
+
 /* ── Today cell Option A (drill-in --lg only): bolder navy frame + a
    filled navy date chip. Replaces the 2px --status-today-ring with a
    2.5px --action-primary-bg. The selected/focused compositions layer on
