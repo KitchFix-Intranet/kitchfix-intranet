@@ -26,7 +26,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
+export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
   // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
   // "% of {scope}" readout. Legacy callers (the legacy month/period
   // views) don't pass it and default to "month" - the existing label
@@ -370,7 +370,11 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               <div key={group.name} className="sc-day-group">
                 <div className="sc-day-group-header">
                   <span className="sc-day-group-name">{group.name}</span>
-                  {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)} / meal</span>}
+                  {!isFeeAccount && (
+                    <span className="sc-day-group-price">
+                      {accountSegment ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
+                    </span>
+                  )}
                 </div>
                 {svcs.map(s => (
                   <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
@@ -498,7 +502,11 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
             <div key={group.name} className="sc-day-group">
               <div className="sc-day-group-header">
                 <span className="sc-day-group-name">{group.name}</span>
-                {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)} / meal</span>}
+                {!isFeeAccount && (
+                  <span className="sc-day-group-price">
+                    {accountSegment ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
+                  </span>
+                )}
               </div>
 
               {activeSvcs.map(svc => renderServiceRow(svc))}
@@ -506,6 +514,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               {/* Per-group "actuals match" button */}
               {!groupTouched && activeSvcs.length > 0 && (
                 <button className="sc-day-match-btn" onClick={() => fillGroupWithProjections(group)}>
+                  <span className="sc-day-match-btn-icon" aria-hidden="true">⤢</span>
                   Match projections
                 </button>
               )}

@@ -1469,6 +1469,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
               scopeLabel="period"
               accountName={acctObj?.name || ""}
+              accountSegment={acctObj?.category || ""}
               isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
               onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
               onNextException={onNextExceptionHandler}
