@@ -22,6 +22,8 @@
   /* Neutral - warm surfaces to cool ink */
   --n-0:#FFFFFF; --n-50:#FAF9F5; --n-100:#F4F2EC; --n-200:#F0EEE7; --n-300:#E5E7EB; --n-400:#D3CFC4;
   --n-500:#94A3B8; --n-600:#64748B; --n-700:#475569; --n-800:#334155; --n-900:#0A2548;
+  /* Mint - reserved for "recorded" status on the DayDetail scoreboard (mint reads calm-positive on navy) */
+  --mint-300:#7FD3B4;
   /* Soft state fills - low-chroma, family-derived */
   --fill-needs:#FCD9A0; --fill-needs-bd:#E4AD84; --fill-upcoming:#E2EFE4; --fill-upcoming-bd:#C6D8C8;
   --fill-off:#F1EEE7; --fill-off-bd:#DDD7CA;
@@ -63,6 +65,9 @@
   /* action */
   --action-primary-bg:var(--navy-700); --action-primary-bg-hover:var(--navy-800); --action-primary-text:var(--n-0);
   --action-secondary-bg:var(--n-0); --action-secondary-border:var(--n-400); --action-secondary-text:var(--n-700);
+  /* scoreboard - the DayDetail navy header surface + its inverted text/status palette */
+  --scoreboard-bg-start:var(--navy-700); --scoreboard-bg-end:var(--navy-800);
+  --scoreboard-text:var(--n-0); --scoreboard-text-muted:var(--navy-100); --scoreboard-text-recorded:var(--mint-300);
   /* accent - contrast-split so the failing white-on-amber pair is unreachable */
   --accent:var(--amber-500);          /* fills with dark text / borders / icons */
   --accent-solid:var(--amber-600);    /* when WHITE text is required (AA) */

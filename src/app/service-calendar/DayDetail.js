@@ -158,7 +158,6 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     }
     return { meals, revenue: rev };
   }, [serviceGroups, touched, getVal, day.projected, day.date]);
-  const footerLabel = hasTouchedAny ? "Total" : "Projected";
 
   const executeSave = useCallback(async () => {
     // P0-1: ONLY send touched services. Untouched services are preserved
@@ -194,7 +193,6 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
-  const revPct = monthRevenue > 0 ? Math.round(footerDisplay.revenue / monthRevenue * 100) : 0;
 
   // Entry flow refs + progress. Auto-focus the first un-entered ghost
   // input on open (and on each day-nav) so the operator can start typing
@@ -406,41 +404,56 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   return (
     <div className="sc-day">
-      <div className="sc-day-header">
-        <div className="sc-day-header-titles">
-          <h3 className="sc-day-title" id="sc-day-detail-title">{formatDate(day.date)}</h3>
-          {accountName && <div className="sc-day-account">{accountName}</div>}
-        </div>
-        <div className="sc-day-nav">
-          {onPrev && (
-            <button className="sc-day-nav-btn" onClick={onPrev} aria-label="Previous day">
-              <ChevronLeft size="sm" />
+      <div className="sc-day-scoreboard">
+        <div className="sc-day-sb-row1">
+          <div className="sc-day-sb-ctx">
+            <h3 className="sc-day-sb-date" id="sc-day-detail-title">{formatDate(day.date)}</h3>
+            {accountName && <span className="sc-day-sb-account">{accountName}</span>}
+          </div>
+          <div className="sc-day-sb-nav">
+            {onPrev && (
+              <button className="sc-day-nav-btn" onClick={onPrev} aria-label="Previous day">
+                <ChevronLeft size="sm" />
+              </button>
+            )}
+            <span className="sc-day-nav-label">{dayIndex + 1}/{totalDays}</span>
+            {onNext && (
+              <button className="sc-day-nav-btn" onClick={onNext} aria-label="Next day">
+                <ChevronRight size="sm" />
+              </button>
+            )}
+            <button className="sc-day-close" onClick={onClose} aria-label="Close">
+              <X size="sm" />
             </button>
-          )}
-          <span className="sc-day-nav-label">Day {dayIndex + 1} of {totalDays}</span>
-          {onNext && (
-            <button className="sc-day-nav-btn" onClick={onNext} aria-label="Next day">
-              <ChevronRight size="sm" />
-            </button>
-          )}
-          <button className="sc-day-close" onClick={onClose} aria-label="Close">
-            <X size="sm" />
-          </button>
+          </div>
         </div>
-      </div>
-
-      {coaching && (
-        <div className={`sc-day-coaching sc-day-coaching--${coaching.tone}`}>
-          <span className="sc-day-coaching-text">{coaching.text}</span>
-          {totalToEnter > 0 && (
-            <span className="sc-day-progress" aria-live="polite">
-              <span className="sc-day-progress-txt">{enteredCount} of {totalToEnter} entered</span>
-              <span className="sc-day-progress-bar" aria-hidden="true">
-                <i style={{ width: `${(enteredCount / totalToEnter) * 100}%` }} />
+        <div className="sc-day-sb-line">
+          <div className="sc-day-sb-fig">
+            {!isFeeAccount && (
+              <span className={`sc-day-sb-amount sc-day-sb-amount--${hasTouchedAny ? "recorded" : "projected"}`}>
+                {fmt$(footerDisplay.revenue)}
               </span>
+            )}
+            <span className="sc-day-sb-meals">{footerDisplay.meals.toLocaleString()} meals</span>
+          </div>
+          {totalToEnter > 0 && (
+            <span
+              className={`sc-day-sb-status sc-day-sb-status--${enteredCount === totalToEnter ? "recorded" : "entry"}`}
+              aria-live="polite"
+            >
+              {enteredCount === totalToEnter && <span aria-hidden="true">✓</span>}
+              {enteredCount} of {totalToEnter} {enteredCount === totalToEnter ? "recorded" : "entered"}
             </span>
           )}
         </div>
+      </div>
+
+      {/* Coaching stays as a thin subtle line below the scoreboard so
+         account-specific guidance (fee/homestand) survives. Kevin will
+         eyeball whether to hide it on per-meal accounts (may be
+         redundant with the scoreboard status there) in a follow-up. */}
+      {coaching && (
+        <div className="sc-day-coaching-line">{coaching.text}</div>
       )}
 
       <div className="sc-day-body" ref={bodyRef} onKeyDown={handleBodyKeyDown}>
@@ -522,20 +535,13 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
       </div>
 
       <div className="sc-day-footer">
-        <div className={`sc-day-totals${hasTouchedAny ? "" : " sc-day-totals--projected"}`}>
-          <div className="sc-day-totals-left">
-            <span className="sc-day-total-label">{footerLabel}</span>
-            <span className="sc-day-total-meals">{footerDisplay.meals.toLocaleString()} meals</span>
-          </div>
-          {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(footerDisplay.revenue)}</span>}
-        </div>
-<div className="sc-day-actions">
+        <div className="sc-day-actions">
           <button ref={primaryBtnRef} className="sc-btn sc-btn--primary" disabled={!hasTouchedAny || saving} onClick={() => setShowReview("save")}>
             Review &amp; save
           </button>
           <button className="sc-btn sc-btn--cancel" onClick={onClose}>Cancel</button>
         </div>
-              </div>
+      </div>
     </div>
   );
 }
