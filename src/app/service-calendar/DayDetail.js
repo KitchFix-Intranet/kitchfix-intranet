@@ -322,10 +322,8 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
     return (
       <div key={svc.colIndex} className={`sc-day-row${!inService ? " sc-day-row--archived" : ""}`}>
-<div className="sc-day-row-left">
+        <div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
-          {/* Fee accounts: drop the $X/plate label - svc.price is $0 here. */}
-<span className="sc-day-row-proj-label">Projected: {projVal}{isFeeAccount ? "" : ` · ${fmtPrice(svc.price)}`}</span>
         </div>
         <div className="sc-day-row-right">
           {inService ? (
@@ -335,11 +333,15 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 placeholder={String(projVal)}
                 value={editVal}
                 onChange={e => handleChange(svc.colIndex, e.target.value)} />
-              {isTouched && delta !== null && (
-                <span className={`sc-day-row-delta ${delta > 0 ? "sc-day-row-delta--pos" : delta < 0 ? "sc-day-row-delta--neg" : "sc-day-row-delta--match"}`}>
-                  {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
-                </span>
-              )}
+              {isTouched && delta !== null && (() => {
+                const mag = Math.abs(delta);
+                const cls = mag === 0 ? "sc-day-row-delta--match" : mag < 3 ? "sc-day-row-delta--minor" : "sc-day-row-delta--big";
+                return (
+                  <span className={`sc-day-row-delta ${cls}`}>
+                    {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
+                  </span>
+                );
+              })()}
               {!isTouched && <span className="sc-day-row-delta" />}
             </>
           ) : (
@@ -484,7 +486,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
             <div key={group.name} className="sc-day-group">
               <div className="sc-day-group-header">
                 <span className="sc-day-group-name">{group.name}</span>
-                {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}</span>}
+                {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)} / meal</span>}
               </div>
 
               {activeSvcs.map(svc => renderServiceRow(svc))}
@@ -526,10 +528,6 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
               </button>
               {isOpen && (
                 <div className="sc-day-group sc-day-group--expanded">
-                  <div className="sc-day-group-header">
-                    <span className="sc-day-group-name">{group.name}</span>
-                    {!isFeeAccount && <span className="sc-day-group-price">{fmtPrice(group.services[0]?.price || 0)}/plate</span>}
-                  </div>
                   {group.services.map(svc => renderServiceRow(svc))}
                   {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
                 </div>
@@ -550,18 +548,12 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           <div className="sc-day-totals-left">
             <span className="sc-day-total-label">{footerLabel}</span>
             <span className="sc-day-total-meals">{footerDisplay.meals.toLocaleString()} meals</span>
-            {!isFeeAccount && revPct > 0 && <span className="sc-day-total-pct">{revPct}% of {scopeLabel}</span>}
           </div>
           {!isFeeAccount && <span className="sc-day-total-rev">{fmt$(footerDisplay.revenue)}</span>}
         </div>
 <div className="sc-day-actions">
-          {!day.hasActuals && (
-            <button className="sc-btn sc-btn--outline" disabled={saving} onClick={() => setShowReview("confirm-all")}>
-              All match projections
-            </button>
-          )}
           <button ref={primaryBtnRef} className="sc-btn sc-btn--primary" disabled={!hasTouchedAny || saving} onClick={() => setShowReview("save")}>
-            Save actuals
+            Review &amp; save
           </button>
           <button className="sc-btn sc-btn--cancel" onClick={onClose}>Cancel</button>
         </div>
