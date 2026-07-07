@@ -187,7 +187,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: var(--surface-page);
   border-bottom: var(--border-thin) solid var(--border-default);
   border-left: 3px solid var(--text-link);
@@ -196,8 +196,8 @@
 .sc-day-group-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-bold);
   color: var(--text-link);
   text-transform: none;
   letter-spacing: 0;
@@ -318,22 +318,39 @@
   white-space: nowrap;
 }
 
-/* Per-group match button. PR3 dial-down: no longer a full-width dashed
-   green hero bar. The hero treatment was reading as the primary commit
-   on the day (which it is not - it is a shortcut helper). Now a small
-   right-aligned secondary button so the input rows and footer commit
-   keep their visual weight. FLAGGED: #d1fae5 is a green-100 wash for
-   the rest-border; mapped to status-entered-subtle (closest semantic). */
+/* Per-group match button - quiet full-width footer row inside the
+   group card, sharing the grammar with the extras/"show more" row
+   below it (same padding, same hairline top-border, transparent bg
+   rest / accent-sc-tint hover). Sits above the extras row so both
+   full-width rows read as a consistent bottom stack on the card. */
 .sc-day-match-btn {
-  display: block; width: fit-content; padding: var(--space-1) var(--space-2); margin: var(--space-2) var(--space-4) 6px auto;
-  border: var(--border-thin) solid var(--status-entered-subtle); border-radius: var(--radius-control); background: var(--accent-sc-tint);
-  color: var(--accent-sc-dark); font-size: var(--size-caption); font-weight: var(--wt-semibold); cursor: pointer;
-  font-family: inherit; transition: background var(--motion-control), border-color var(--motion-control); text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-top: 0.5px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-sc-dark);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--motion-control), color var(--motion-control);
 }
-.sc-day-match-btn:hover { background: var(--accent-sc-subtle); border-color: var(--accent-sc); }
+.sc-day-match-btn:hover { background: var(--accent-sc-tint); }
 .sc-day-match-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
+}
+.sc-day-match-btn-icon {
+  font-size: var(--size-body);
+  line-height: 1;
+  color: var(--accent-sc);
 }
 
 /* Extras affordance - full-width row inside the group card, sealing
