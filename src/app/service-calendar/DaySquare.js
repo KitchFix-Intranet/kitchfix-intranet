@@ -153,11 +153,15 @@ export default function DaySquare({
     >
       <div className="sc-daysq-top">
         <span className="sc-daysq-date">{day}</span>
-        {meta.icon && (
+        {/* Selection check replaces the status glyph while selected -
+            bulk mode is about picking days, not reading status. */}
+        {isSelected ? (
+          <span className="sc-daysq-check" aria-hidden="true">✓</span>
+        ) : meta.icon ? (
           <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
             {meta.icon}
           </span>
-        )}
+        ) : null}
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
       {isToday && <span className="sc-daysq-today-pill" aria-hidden="true">TODAY</span>}
