@@ -31,7 +31,6 @@ import {
   resolveDayStatus,
   resolveDayKind,
 } from "../dayResolvers";
-import StateLegend from "./StateLegend";
 import { CheckCircle } from "../Icons";
 import "./periodWorkspace.css";
 
@@ -200,12 +199,6 @@ export default function PeriodWorkspace({
         />
       )}
 
-      <StateLegend
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        isMilb={isMilb}
-        showDayNight={true}
-      />
     </div>
   );
 }
