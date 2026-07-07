@@ -41,7 +41,17 @@
 }
 
 /* Coaching banner */
-.sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid; flex-shrink: 0; }
+.sc-day-coaching { padding: var(--space-2) var(--space-4); font-size: var(--size-body); font-weight: var(--wt-medium); border-bottom: var(--border-thin) solid; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.sc-day-coaching-text { flex: 1 1 auto; min-width: 0; }
+/* Entry-flow progress cue: "N of M entered" + slim bar, right-anchored
+   in the coaching sub-header row. Counts only served (proj > 0) rows
+   that are in service on the day; off-today + archived are excluded
+   at the JS layer. */
+.sc-day-progress { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.sc-day-progress-txt { font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--accent-sc-dark); font-variant-numeric: var(--num-tabular); }
+.sc-day-progress-bar { width: 64px; height: 5px; border-radius: var(--radius-pill); background: var(--border-default); overflow: hidden; }
+.sc-day-progress-bar > i { display: block; height: 100%; background: var(--accent-sc); border-radius: var(--radius-pill); transition: width var(--motion-control); }
+@media (prefers-reduced-motion: reduce) { .sc-day-progress-bar > i { transition: none; } }
 /* Coaching-banner tone modifiers - the base rule leaves border-bottom
    colorless; each modifier supplies bg + border-color + fg from the
    status family (neutral falls back to surface-sunken / border-default
