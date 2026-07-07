@@ -35,12 +35,6 @@ import { CheckCircle } from "../Icons";
 import "./periodWorkspace.css";
 
 const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
-const fmtK = (n) => {
-  const v = Number(n) || 0;
-  if (Math.abs(v) >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (Math.abs(v) >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
-  return "$" + Math.round(v);
-};
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -243,53 +237,70 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
     );
   }
 
-  if (hasHomestandSchedule) {
+  // Fee accounts (MLB homestand + STL-FL operational-only) render the
+  // same twin-stat/divider/progress/chips layout as per-meal: one
+  // visual family across account types. Stat contents differ (day-
+  // completion + meal counts, no revenue tint since STL-FL/MLB don't
+  // carry per-meal $) but the shape is identical.
+  if (hasHomestandSchedule || isFeeAccount) {
+    const exceptionCount = m.overdue + m.needsEntry;
+    const daysLabel = hasHomestandSchedule ? "Game days entered" : "Days entered";
     return (
-      <section className="sc-workspace-frame sc-workspace-frame--fee">
-        <div className="sc-workspace-frame-hero">
-          <div className="sc-workspace-frame-hero-num">
-            <strong>{m.complete}</strong> <span className="sc-workspace-frame-hero-divisor">/ {m.total}</span>
-          </div>
-          <div className="sc-workspace-frame-hero-label">Game days entered</div>
-        </div>
-        <div className="sc-workspace-frame-aux">
-          <div className="sc-workspace-frame-stat">
-            <span className="sc-workspace-frame-stat-label">Meals</span>
-            <span className="sc-workspace-frame-stat-value">{m.actMeals.toLocaleString("en-US")}</span>
-          </div>
-        </div>
-        <ProgressLine pct={completionPct} color={progressColor} />
-        {todaySlot}
-      </section>
-    );
-  }
-
-  if (isFeeAccount) {
-    // STL-FL discipline: NO $ tokens. Operational frame: days
-    // entered + meals. Contract-allocation $ data isn't engine-
-    // accessible at the period level yet (deferred per the spec
-    // section 6 note); render the operational truth honestly.
-    return (
-      <section className="sc-workspace-frame sc-workspace-frame--operational">
-        <div className="sc-workspace-frame-hero">
-          <div className="sc-workspace-frame-hero-num">
-            <strong>{m.complete}</strong> <span className="sc-workspace-frame-hero-divisor">/ {m.total}</span>
-          </div>
-          <div className="sc-workspace-frame-hero-label">Days entered</div>
-        </div>
-        <div className="sc-workspace-frame-aux">
-          <div className="sc-workspace-frame-stat">
-            <span className="sc-workspace-frame-stat-label">Meals served</span>
-            <span className="sc-workspace-frame-stat-value">{m.actMeals.toLocaleString("en-US")}</span>
-          </div>
-          {(m.needsEntry + m.overdue) > 0 && (
-            <div className="sc-workspace-frame-stat sc-workspace-frame-stat--warn">
-              <span className="sc-workspace-frame-stat-label">Needs entry</span>
-              <span className="sc-workspace-frame-stat-value">{m.needsEntry + m.overdue}</span>
+      <section className="sc-workspace-frame sc-workspace-frame--per-meal">
+        <div className="sc-workspace-frame-band">
+          <div className="sc-workspace-frame-stats">
+            <div className="sc-workspace-frame-stat">
+              <span className="sc-workspace-frame-stat-num">
+                {m.complete}<span className="sc-workspace-frame-stat-num-total">/{m.total}</span>
+              </span>
+              <span className="sc-workspace-frame-stat-label">{daysLabel}</span>
             </div>
+            <span className="sc-workspace-frame-stat-divider" aria-hidden="true" />
+            <div className="sc-workspace-frame-stat">
+              <span className="sc-workspace-frame-stat-num">
+                {m.actMeals.toLocaleString("en-US")}
+              </span>
+              <span className="sc-workspace-frame-stat-label">Meal counts</span>
+            </div>
+          </div>
+          <div className="sc-workspace-frame-progress">
+            <div className="sc-workspace-frame-progress-label">
+              <span>Progress</span>
+              <strong style={{ color: progressColor }}>{completionPct}%</strong>
+            </div>
+            <ProgressLine pct={completionPct} color={progressColor} />
+          </div>
+          {exceptionCount > 0 ? (
+            <span className="sc-workspace-frame-chips">
+              {m.overdue > 0 && (
+                <button
+                  type="button"
+                  className="sc-workspace-frame-chip sc-workspace-frame-chip--overdue"
+                  onClick={onJumpFirstOverdue}
+                  aria-label={`Jump to first of ${m.overdue} overdue days`}
+                >
+                  <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">!</span>
+                  {m.overdue} overdue
+                </button>
+              )}
+              {m.needsEntry > 0 && (
+                <button
+                  type="button"
+                  className="sc-workspace-frame-chip sc-workspace-frame-chip--needs"
+                  onClick={onJumpFirstNeeds}
+                  aria-label={`Jump to first of ${m.needsEntry} days needing entry`}
+                >
+                  <span className="sc-workspace-frame-chip-glyph" aria-hidden="true">✎</span>
+                  {m.needsEntry} need entry
+                </button>
+              )}
+            </span>
+          ) : (
+            <span className="sc-workspace-frame-caughtup" aria-live="polite">
+              ✓ All caught up
+            </span>
           )}
         </div>
-        <ProgressLine pct={completionPct} color={progressColor} />
         {todaySlot}
       </section>
     );
@@ -309,8 +320,10 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
           <div className="sc-workspace-frame-stat">
             <span className="sc-workspace-frame-stat-num sc-workspace-frame-stat-num--money">
               {fmt$(m.actRev)}
+              <span className="sc-workspace-frame-amount-sep" aria-hidden="true"> / </span>
+              <span className="sc-workspace-frame-amount--projected">{fmt$(m.projRev)}</span>
             </span>
-            <span className="sc-workspace-frame-stat-label">Revenue</span>
+            <span className="sc-workspace-frame-stat-label">Entered · Projected</span>
           </div>
           <span className="sc-workspace-frame-stat-divider" aria-hidden="true" />
           <div className="sc-workspace-frame-stat">
@@ -758,31 +771,23 @@ function WeekSubtotals({ weekLabels, weekMetrics, kind, hasHomestandSchedule, is
   if (!weekLabels?.length) return null;
   return (
     <div className="sc-workspace-weeks" aria-label="Week subtotals">
-      {weekLabels.map((w, i) => {
+      {weekLabels.map((w) => {
         const wm = weekMetrics?.[w] || { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0 };
-        let body;
+        const isDone = wm.total > 0 && wm.complete === wm.total;
+        let value;
         if (hasHomestandSchedule || isFeeAccount) {
-          body = (
-            <>
-              {wm.complete}/{wm.total} entered
-              {wm.actMeals > 0 ? ` · ${wm.actMeals.toLocaleString("en-US")} meals` : ""}
-            </>
-          );
+          value = `${wm.actMeals.toLocaleString("en-US")} meals`;
         } else {
           const rev = wm.actRev > 0 ? wm.actRev : wm.projRev;
           const prefix = wm.actRev > 0 ? "" : "~";
-          body = (
-            <>
-              {prefix}{fmtK(rev)} · {wm.complete}/{wm.total}
-            </>
-          );
+          value = `${prefix}${fmt$(rev)}`;
         }
         return (
-          <span key={w} className="sc-workspace-weeks-item">
+          <div key={w} className={`sc-workspace-weeks-item${isDone ? " sc-workspace-weeks-item--done" : ""}`}>
             <span className="sc-workspace-weeks-label">{w}</span>
-            <span className="sc-workspace-weeks-body">{body}</span>
-            {i < weekLabels.length - 1 && <span className="sc-workspace-weeks-sep">·</span>}
-          </span>
+            <span className="sc-workspace-weeks-value">{value}</span>
+            <span className="sc-workspace-weeks-days">{wm.complete} / {wm.total} days</span>
+          </div>
         );
       })}
     </div>
