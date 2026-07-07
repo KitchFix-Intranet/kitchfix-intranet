@@ -107,22 +107,53 @@
 .sc-daysq-mid-meals { font-weight: var(--wt-medium); color: var(--text-default); }
 .sc-daysq-mid-opponent { font-weight: var(--wt-bold); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-heading); }
 
-/* MiLB day/night pill ---------------------------------------------- */
-.sc-daysq-milb-pill {
+/* MiLB day/night glyph (P6): sun (amber) for day games, moon (navy)
+   for night games. Replaces the prior "Day"/"Night" text pill so the
+   mid-line can carry the meal count without competing for width. The
+   glyph inherits its color via currentColor from the modifier class. */
+.sc-daysq-milb-glyph {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sc-daysq-milb-glyph--day { color: var(--status-needs-strong); }
+.sc-daysq-milb-glyph--night { color: var(--text-link); }
+
+/* MLB fee tile stack (P7): opponent is a navy chip on its own line;
+   the headcount sits below as "N meals" with the count as hero and
+   the unit trailing muted. Scoped to --mlb so the year-view sm tiles
+   (which don't use --mlb) keep their existing opponent text style. */
+.sc-daysq-mid--mlb {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.sc-daysq-mid--mlb .sc-daysq-mid-opponent {
+  display: inline-block;
+  background: rgba(21, 57, 104, 0.09);
+  color: var(--text-link);
+  font-weight: var(--wt-display);
   font-size: var(--size-micro);
-  font-weight: var(--wt-semibold);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-default);
 }
-.sc-daysq-milb-pill-dot {
-  width: 5px; height: 5px; border-radius: var(--radius-circle); flex-shrink: 0; display: inline-block;
+.sc-daysq-mid-headcount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+  font-variant-numeric: var(--num-tabular);
 }
-.sc-daysq-milb-pill--day .sc-daysq-milb-pill-dot { background: var(--status-needs-strong); }
-.sc-daysq-milb-pill--night .sc-daysq-milb-pill-dot { background: var(--text-link); }
+.sc-daysq-mid-unit {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+}
 
 /* ──────────────────────────────────────────────────────────────────
    STATUS FILLS (Design Batch 1: widened entered-vs-upcoming tier)

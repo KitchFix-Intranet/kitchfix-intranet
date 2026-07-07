@@ -113,19 +113,18 @@
   color: var(--status-overdue-fg);
 }
 
-/* MiLB day / night swatches use the pill-dot pattern from the atom. */
+/* MiLB day / night swatches carry the same sun / moon glyph the tile
+   uses (P6). No card fill / border - the glyph is the swatch. */
 .sc-state-legend-swatch--milb-day,
 .sc-state-legend-swatch--milb-night {
-  background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-strong);
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.sc-state-legend-pill-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-circle);
-}
-.sc-state-legend-swatch--milb-day .sc-state-legend-pill-dot   { background: var(--status-needs-strong); }
-.sc-state-legend-swatch--milb-night .sc-state-legend-pill-dot { background: var(--text-link); }
+.sc-state-legend-swatch--milb-day { color: var(--status-needs-strong); }
+.sc-state-legend-swatch--milb-night { color: var(--text-link); }
 
 /* Info button - opens LegendInfoPopup for the fuller detail
    (Design Batch 2). The one-line key stays always visible (rubric
