@@ -192,26 +192,6 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     }
   }, [serviceGroups, touched, getVal, day, onSave]);
 
-  const executeConfirmAll = useCallback(async () => {
-    // User explicitly chose "All match projections" - intent is to apply
-    // the projection value to every service. Send every service, including
-    // those with projection=0 (records "no service occurred" intentionally).
-    // Bundle 2 guard: skip services archived as of day.date.
-    const entries = [];
-    for (const g of serviceGroups) {
-      for (const s of g.services) {
-        if (!isInServiceOnDay(s, day.date)) continue;
-        entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
-      }
-    }
-    // P0-2: same await + success-gate as executeSave.
-    const result = await onSave(day, entries);
-    if (result?.success) {
-      setShowReview(null);
-      setJustSaved(true);
-    }
-  }, [serviceGroups, day, onSave]);
-
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
   const revPct = monthRevenue > 0 ? Math.round(footerDisplay.revenue / monthRevenue * 100) : 0;
@@ -335,7 +315,12 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 onChange={e => handleChange(svc.colIndex, e.target.value)} />
               {isTouched && delta !== null && (() => {
                 const mag = Math.abs(delta);
-                const cls = mag === 0 ? "sc-day-row-delta--match" : mag < 3 ? "sc-day-row-delta--minor" : "sc-day-row-delta--big";
+                // Amber = a genuine outlier / likely slip, NOT normal variance. Actuals
+                // routinely differ from plan (only ~17% land within +/-2), so a flat
+                // threshold lit nearly every row amber. Fire only on a ~50% swing off
+                // plan (or a large absolute), keeping amber rare and meaningful.
+                const isBig = mag >= Math.max(15, Math.round(projVal * 0.5));
+                const cls = mag === 0 ? "sc-day-row-delta--match" : isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
                 return (
                   <span className={`sc-day-row-delta ${cls}`}>
                     {delta === 0 ? "✓" : (delta > 0 ? "+" : "") + delta}
@@ -356,47 +341,40 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
 
   // ── Review overlay ──
   if (showReview) {
-    const isConfirmAll = showReview === "confirm-all";
     return (
       <div className="sc-day sc-day--review">
         <div className="sc-day-review-inner">
           <div className="sc-day-review-header">
-            <h3 className="sc-day-review-title">{isConfirmAll ? "Save all as projected?" : "Review before saving"}</h3>
+            <h3 className="sc-day-review-title">Review before saving</h3>
             <p className="sc-day-review-date">{formatDate(day.date)}</p>
           </div>
           <div className="sc-day-review-body">
             {serviceGroups.map(group => {
-              // P0-1 review surface: regular save shows ONLY services the
-              // chef touched (intentional 0 included). Confirm-all keeps the
-              // "services with projections > 0" filter since that's the
-              // intent of that flow.
-              const svcs = group.services.filter(s => {
-                if (isConfirmAll) return (day.projected[s.colIndex] ?? 0) > 0;
-                return touched.has(s.colIndex);
-              });
+              // Review shows ONLY services the chef touched (intentional 0 included).
+              const svcs = group.services.filter(s => touched.has(s.colIndex));
               if (svcs.length === 0) return null;
-              const gs = isConfirmAll
-                ? { meals: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0), 0), revenue: svcs.reduce((s, sv) => s + (day.projected[sv.colIndex] ?? 0) * sv.price, 0) }
-                : { meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0), revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0) };
+              const gs = {
+                meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
+                revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0),
+              };
               return (
                 <div key={group.name} className="sc-day-review-group">
-                  <div className="sc-day-review-group-name">{group.name}{!isFeeAccount && ` · ${fmtPrice(group.services[0]?.price || 0)}/plate`}</div>
-                  {svcs.map(s => {
-                    const val = isConfirmAll ? (day.projected[s.colIndex] ?? 0) : getVal(s.colIndex);
-                    return <div key={s.colIndex} className="sc-day-review-row"><span>{s.name}</span><span className="sc-day-review-val">{val}</span></div>;
-                  })}
+                  <div className="sc-day-review-group-name">{group.name}{!isFeeAccount && ` · ${fmtPrice(group.services[0]?.price || 0)} / meal`}</div>
+                  {svcs.map(s => (
+                    <div key={s.colIndex} className="sc-day-review-row"><span>{s.name}</span><span className="sc-day-review-val">{getVal(s.colIndex)}</span></div>
+                  ))}
                   <div className="sc-day-review-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
                 </div>
               );
             })}
           </div>
           <div className="sc-day-review-summary">
-            <span className="sc-day-review-total-meals">{isConfirmAll ? serviceGroups.reduce((s, g) => s + g.services.reduce((ss, sv) => ss + (day.projected[sv.colIndex] ?? 0), 0), 0).toLocaleString() : summary.meals.toLocaleString()} meals</span>
-            {!isFeeAccount && <span className="sc-day-review-total-rev">{isConfirmAll ? fmt$(serviceGroups.reduce((s, g) => s + g.services.reduce((ss, sv) => ss + (day.projected[sv.colIndex] ?? 0) * sv.price, 0), 0)) : fmt$(summary.revenue)}</span>}
+            <span className="sc-day-review-total-meals">{summary.meals.toLocaleString()} meals</span>
+            {!isFeeAccount && <span className="sc-day-review-total-rev">{fmt$(summary.revenue)}</span>}
           </div>
           <div className="sc-day-review-actions">
             <button className="sc-btn sc-btn--outline" onClick={() => setShowReview(null)}>Go back</button>
-            <button className="sc-btn sc-btn--primary" disabled={saving} onClick={isConfirmAll ? executeConfirmAll : executeSave}>
+            <button className="sc-btn sc-btn--primary" disabled={saving} onClick={executeSave}>
               {saving ? "Saving..." : "Confirm & save"}
             </button>
           </div>
