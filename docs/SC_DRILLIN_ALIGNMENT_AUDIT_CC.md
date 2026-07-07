@@ -1,5 +1,7 @@
 # SC Drill-in Design Alignment Audit (CC)
 
+> **⚠ SUPERSEDED (2026-07-06):** This audit predates the SC drill-in redesign arc (#321-#333). Notably, the "there is no month view / a month drills into the containing period" claim (~line 198) is **no longer true** - #326 un-deprecated the month view (clicking a month opens `?month=`). Read this as a historical snapshot of pre-#321 state, not current behavior.
+
 **Read against `origin/main` HEAD `ecb2d42`** (Merge PR #312 - SC FL phase calendars). Read-only; no code changes, no build, no commit, no PR.
 
 ## Executive summary

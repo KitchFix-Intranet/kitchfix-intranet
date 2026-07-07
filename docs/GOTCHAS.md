@@ -185,6 +185,37 @@ function Parent({ data }) {
 }
 ```
 
+### A cache-guarded fetch effect needs the cache in its deps
+
+A `useEffect` whose guard reads a cache object but excludes that cache from its dep array reads a **stale closure**. When a sibling effect clears the cache (e.g. on account switch), the guarded effect re-runs with the OLD cache (key still present → skips refetch), then never re-runs when the cache actually clears (not a dep) → blank view.
+
+```javascript
+// WRONG
+useEffect(() => {
+  if (monthCache[monthKey]) return; // reads stale closure
+  fetch(...).then(d => setMonthCache(prev => ({...prev, [monthKey]: d})));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedAccount, monthKey]);   // monthCache deliberately excluded
+```
+
+**Fix:** put the cache in the deps and drop the eslint-disable. The guard self-terminates (empty cache → fetch → populate → guard hits → stop), so no loop. SC account-switch blank, #332.
+
+---
+
+## Next.js App Router
+
+### `<Suspense>` around a `useSearchParams()` consumer can freeze client-nav
+
+Next.js warns that a client component reading `useSearchParams()` should be wrapped in `<Suspense>`. But wrapping the consumer can stop searchParams from propagating on `router.push()` client navigations — symptom: nav buttons change the URL but the view never updates (a URL-sync effect keyed on `[searchParams]` stops re-running).
+
+**Fix:** for a page that's already `"use client"` and reads `useSession` (dynamically rendered regardless), the boundary is unnecessary AND breaks nav — render the consumer directly. Cost us the whole SC drill-in nav: #330 added the boundary as "hygiene," #333 removed it and the build stayed green (no `useSearchParams` error, because the page is already dynamic).
+
+### A stepper/nav gated on async-loaded data reads as "broken," not "loading"
+
+A drill-in stepper disabled on `!periodRanges` (loaded at the end of an auth → account → `sc-year-summary` chain) looks dead on cold refresh — the header paints before the data lands, so the disabled arrows read as broken.
+
+**Fix:** render a loading affordance (skeleton range/phase + `aria-busy` on the stepper wrapper) while the data is pending, so it reads "loading." SC nav-refresh, #330.
+
 ---
 
 ## Tooling & File Operations
