@@ -104,6 +104,15 @@ export default function StateLegend({
 // (P6), so the legend and the tiles read the same language.
 // Today is a navy ring around a neutral tile (the atom's ring chrome).
 function LegendSwatch({ mod, icon }) {
+  if (mod === "upcoming") {
+    // SC-001: swatch mirrors the tile's ring element instead of the
+    // "○" text glyph so the legend and cells share one language.
+    return (
+      <span className="sc-state-legend-swatch sc-state-legend-swatch--upcoming" aria-hidden="true">
+        <span className="sc-state-legend-swatch-ring" />
+      </span>
+    );
+  }
   if (mod === "milb-day") {
     return (
       <span className="sc-state-legend-swatch sc-state-legend-swatch--milb-day" aria-hidden="true">

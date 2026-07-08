@@ -90,7 +90,18 @@
 .sc-state-legend-swatch--entered      { background: var(--status-entered-bg); border-color: var(--status-entered-bd); }
 .sc-state-legend-swatch--needs-entry  { background: var(--status-needs-bg); border-color: var(--status-needs-bd); color: var(--accent-text); }
 .sc-state-legend-swatch--overdue      { background: var(--status-overdue-bg); border-color: var(--status-overdue-bd); color: var(--status-overdue-fg); }
-.sc-state-legend-swatch--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); color: var(--text-muted); }
+.sc-state-legend-swatch--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); }
+/* SC-001: ring element inside the upcoming swatch mirrors the tile's
+   ring badge (2px border, --status-upcoming-fg). Same passing pairing
+   as the tile, so the swatch and cells share one visual. */
+.sc-state-legend-swatch--upcoming .sc-state-legend-swatch-ring {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--status-upcoming-fg);
+  background: transparent;
+  display: inline-block;
+}
 .sc-state-legend-swatch--off          { background: var(--status-off-bg); border-color: var(--status-off-bd); color: var(--text-subtle); }
 .sc-state-legend-swatch--off-season {
   background: var(--status-off-bg);

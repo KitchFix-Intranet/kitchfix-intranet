@@ -35,6 +35,7 @@ export default function PeriodCard({
   hasHomestandSchedule,
   isFeeAccount,
   timeline,                   // derivePhaseTimeline result (the shared spine)
+  loadState = "loaded",       // SC-033: "failed" forces every cell to the failed atom
   onClick,                    // (periodKey) => void
 }) {
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
@@ -121,8 +122,11 @@ export default function PeriodCard({
           if (!cell.day) {
             return <span key={i} className="sc-season-period-card-cell sc-season-period-card-cell-empty" aria-hidden="true" />;
           }
-          const status = resolveDayStatus(cell.day.status);
-          const content = buildCompactContent(cell.day, kind);
+          // SC-033: loadState="failed" forces every in-period cell to the
+          // failed atom regardless of the per-day record. Content is
+          // dropped so the atom renders its dashed shell + ⚠ badge only.
+          const status = loadState === "failed" ? "failed" : resolveDayStatus(cell.day.status);
+          const content = loadState === "failed" ? null : buildCompactContent(cell.day, kind);
           return (
             <span key={cell.day.date} className="sc-season-period-card-cell">
               <DaySquare

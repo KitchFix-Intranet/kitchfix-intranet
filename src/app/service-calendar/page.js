@@ -129,6 +129,7 @@ export default function ServiceCalendarPage() {
           session={session}
           heroImage={heroImage}
           firstName={firstName}
+          isDev={isDev}
         />
       </div>
       {toast && (

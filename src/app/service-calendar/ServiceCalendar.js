@@ -123,7 +123,7 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-export default function ServiceCalendar({ showToast, session, heroImage, firstName }) {
+export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -163,6 +163,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
+  // SC-033: track the year-summary fetch state so a whole-fetch failure
+  // renders the failed atoms on every overview cell instead of silently
+  // stalling on the loading skeleton (the pre-fix behavior).
+  //   "idle"    -> not yet requested (SSR default; no request in flight)
+  //   "loading" -> request in flight; skeleton renders
+  //   "loaded"  -> success; normal render
+  //   "failed"  -> error or !d.success; overview forces failed cells
+  const [yearLoadState, setYearLoadState] = useState("idle");
   const [yearToday, setYearToday] = useState(null);
   // Period lens state.
   //   periodKey   = which period ("P7") the user is viewing.
@@ -328,15 +336,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // reloadKey is in the dep array so a save in the month view also
     // refreshes the year heatmap on next visit; without it, the heatmap
     // showed stale grey dots after data flipped to "entered" in PG.
+    setYearLoadState("loading");
     fetch(`/api/service-calendar?action=sc-year-summary&account=${selectedAccount}&clientToday=${encodeURIComponent(today)}`)
       .then(r => r.json()).then(d => {
-        if (!d.success) return;
+        if (!d.success) { setYearLoadState("failed"); return; }
         setYearData(d.months);
         setYearToday(d.today || null);
         if (d.periodRanges) setPeriodRanges(d.periodRanges);
+        setYearLoadState("loaded");
         // Design Batch 2: stamp the load time once data lands.
         setAsOf(new Date());
-      }).catch(() => {});
+      }).catch(() => { setYearLoadState("failed"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, lens, isAdminView, selectedAccount, reloadKey, today]);
 
@@ -1325,6 +1335,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
             loading={loading || !data || !yearData}
+            loadState={
+              // SC-033: debug hook - dev + ?debug=failed forces the
+              // failed-atom render across the overview so the state is
+              // visually testable without a real fetch failure.
+              (isDev && searchParams?.get("debug") === "failed")
+                ? "failed"
+                : yearLoadState
+            }
             // Calendar month-card drill: opens the MONTH scope drill-in
             // (un-deprecates the month view). Prior behavior forwarded
             // to the containing fiscal period; the two scopes now

@@ -47,6 +47,7 @@ export default function MonthCard({
   isFeeAccount,              // bool - drives footer mode
   isMilb,                    // bool - drives no-service detection on per-meal
   isDesktop = true,          // Bundle 1 D1: force-expanded gate; SSR-safe default
+  loadState = "loaded",      // SC-033: "failed" forces every cell to the failed atom
   onClick,                   // (monthIndex) => void
 }) {
   const monthName = MONTH_NAMES[monthIndex];
@@ -165,7 +166,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -291,14 +292,19 @@ function indexDays(monthSummary) {
   return m;
 }
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind }) {
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded" }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
   const day = daysByDate.get(cell.dateStr);
-  const status = day ? resolveDayStatus(day.status) : "off";
+  // SC-033: loadState="failed" overrides every in-month cell to the
+  // failed atom regardless of whether a per-day record exists. Content
+  // is dropped so the atom renders its dashed shell + ⚠ badge only.
+  const status = loadState === "failed"
+    ? "failed"
+    : (day ? resolveDayStatus(day.status) : "off");
   const isToday = todayDate === cell.dateStr;
-  const content = day ? buildCompactContent(day, kind) : null;
+  const content = loadState === "failed" ? null : (day ? buildCompactContent(day, kind) : null);
   return (
     <DaySquare
       dateNumber={cell.day}
