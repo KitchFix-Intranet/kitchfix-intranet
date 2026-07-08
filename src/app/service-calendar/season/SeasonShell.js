@@ -44,6 +44,7 @@ export default function SeasonShell({
   isFeeAccount,
   isMilb,
   loading,
+  loadState = "loaded",     // SC-033: "loading" | "loaded" | "failed"
   onMonthClick,             // (monthIndex) => void
   // Stage 2 additions:
   periodRanges,             // [{ period, start, end }] from sc-year-summary
@@ -110,7 +111,11 @@ export default function SeasonShell({
   // shift when data lands. Spec section 4 + GOTCHAS skeleton rule.
   // Bundle 1 (Section C1): the StateLegend renders at the BOTTOM of
   // the shell now in both loaded and loading states.
-  if (loading || !yearData) {
+  // SC-033: on a failed year fetch, render the shell with an empty
+  // yearData so the 12 month cards render their bodies + MonthCard
+  // forces every cell to the failed atom via loadState. Skeleton stays
+  // for the true loading branch.
+  if (loadState !== "failed" && (loading || !yearData)) {
     return (
       <>
       <div className="sc-season sc-season-shell sc-fade-in">
@@ -131,6 +136,11 @@ export default function SeasonShell({
       </>
     );
   }
+
+  // In the failed branch, yearData is either the real (partial?) months
+  // array or a synthetic empty [] so MonthCard's null-monthSummary
+  // branch renders empty cells (which loadState then forces to failed).
+  const effectiveYearData = loadState === "failed" ? (yearData || []) : yearData;
 
   return (
     <>
@@ -154,7 +164,7 @@ export default function SeasonShell({
         <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
           {MONTH_SHORT.map((_, monthIndex) => {
             const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-            const monthSummary = yearData.find(m => m.month === monthKey) || null;
+            const monthSummary = effectiveYearData.find(m => m.month === monthKey) || null;
             return (
               <div role="listitem" key={monthIndex}>
                 <MonthCard
@@ -167,6 +177,7 @@ export default function SeasonShell({
                   isFeeAccount={isFeeAccount}
                   isMilb={isMilb}
                   isDesktop={isDesktop}
+                  loadState={loadState}
                   onClick={onMonthClick}
                 />
               </div>
@@ -183,8 +194,9 @@ export default function SeasonShell({
           hasHomestandSchedule={hasHomestandSchedule}
           isFeeAccount={isFeeAccount}
           timeline={phaseTimeline}
-          yearData={yearData}
+          yearData={effectiveYearData}
           yearBannerStats={yearBannerStats}
+          loadState={loadState}
           onPeriodClick={onPeriodClick}
         />
       )}
@@ -231,12 +243,15 @@ function useIsDesktop() {
 function PeriodGrid({
   year, periodRanges, periodBuckets, todayDate, kind,
   hasHomestandSchedule, isFeeAccount, timeline, yearData, yearBannerStats,
+  loadState = "loaded",
   onPeriodClick,
 }) {
   if (!periodRanges?.length) {
     return (
       <div className="sc-season-period-grid-empty">
-        Fiscal period data is loading.
+        {loadState === "failed"
+          ? "Could not load fiscal period data. Refresh to retry."
+          : "Fiscal period data is loading."}
       </div>
     );
   }
@@ -252,6 +267,7 @@ function PeriodGrid({
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
             timeline={timeline}
+            loadState={loadState}
             onClick={onPeriodClick}
           />
         </div>
