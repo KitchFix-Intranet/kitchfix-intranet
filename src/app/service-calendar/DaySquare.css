@@ -214,29 +214,14 @@
   color: var(--accent-text);
 }
 
-/* Per-status badge accents - icon color picks up the saturated hue.
-   The upcoming badge is now a ring element (no text glyph), so the
-   upcoming color rule is gone - see .sc-daysq-badge--ring below. */
+/* Per-status badge accents - icon color picks up the saturated hue */
 .sc-daysq-badge--entered      { color: var(--text-success); }
 .sc-daysq-badge--needs-entry  { color: var(--accent-text); }
 .sc-daysq-badge--overdue      { color: var(--status-overdue-fg); }
+.sc-daysq-badge--upcoming     { color: var(--text-muted); }
 .sc-daysq-badge--off          { color: var(--text-subtle); }
 .sc-daysq-badge--off-season   { color: var(--text-subtle); }
 .sc-daysq-badge--failed       { color: var(--status-overdue-fg); }
-
-/* SC-001: upcoming/scheduled ring - a hollow circle with a 2px border
-   in --status-upcoming-fg (n-700 = #475569). The old text "○" glyph
-   sat at 4.01:1 vs the upcoming-bg fill; the ring uses a darker stroke
-   that passes contrast at both sizes. */
-.sc-daysq-badge--ring {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 2px solid var(--status-upcoming-fg);
-  background: transparent;
-  display: inline-block;
-}
-.sc-daysq--lg .sc-daysq-badge--ring { width: 11px; height: 11px; }
 
 /* Off + off-season fills muted */
 .sc-daysq--off .sc-daysq-mid,

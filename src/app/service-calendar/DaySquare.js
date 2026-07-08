@@ -157,12 +157,6 @@ export default function DaySquare({
             bulk mode is about picking days, not reading status. */}
         {isSelected ? (
           <span className="sc-daysq-check" aria-hidden="true">✓</span>
-        ) : meta.mod === "upcoming" ? (
-          // SC-001: upcoming reads as a ring element (2px border, dark)
-          // instead of the "○" text glyph. The old glyph at --text-muted
-          // sat at 4.01:1 vs upcoming-bg - below AA. The ring uses
-          // --status-upcoming-fg (n-700) for a passing pairing.
-          <span className="sc-daysq-badge sc-daysq-badge--upcoming sc-daysq-badge--ring" aria-hidden="true" />
         ) : meta.icon ? (
           <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
             {meta.icon}

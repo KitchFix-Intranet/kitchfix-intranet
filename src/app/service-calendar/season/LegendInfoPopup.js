@@ -201,15 +201,10 @@ function Section({ title, children }) {
 }
 
 function Row({ mod, label, icon = "", children }) {
-  // SC-001: upcoming renders the same ring element the tile + one-line
-  // legend use, not the "○" text glyph.
-  const glyph = mod === "upcoming"
-    ? <span className="sc-state-legend-swatch-ring" />
-    : icon;
   return (
     <div className="sc-legend-popup-row">
       <span className={`sc-legend-popup-swatch sc-state-legend-swatch--${mod}`} aria-hidden="true">
-        {glyph}
+        {icon}
       </span>
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{label}</dt>
