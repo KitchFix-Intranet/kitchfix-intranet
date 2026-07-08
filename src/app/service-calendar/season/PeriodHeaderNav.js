@@ -96,7 +96,15 @@ export default function PeriodHeaderNav({
           {phaseMeta && (
             <>
               <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
-              <span className="sc-chrome-drill-phase">
+              {/* SC-044: visual label stays abbreviated for width, but
+                  the accessible name + hover title carry the full phase
+                  name so operators / SR users can decode "Complex" as
+                  "Complex League phase". */}
+              <span
+                className="sc-chrome-drill-phase"
+                title={`${phaseMeta.label} phase`}
+                aria-label={`${phaseMeta.label} phase`}
+              >
                 <span
                   className="sc-chrome-drill-phase-dot"
                   style={{ background: phaseMeta.tint }}

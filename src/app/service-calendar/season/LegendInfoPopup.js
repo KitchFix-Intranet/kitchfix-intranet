@@ -164,6 +164,21 @@ export default function LegendInfoPopup({
             )}
           </Section>
 
+          <Section title="Figures">
+            {/* SC-041: key the est./~/bare encoding operators see on
+                the drill-in tiles. Per-meal + MiLB carry $; fee variants
+                get the ~ line only (they encode projected meals, not $). */}
+            {hasHomestandSchedule || isFeeAccount ? (
+              <FigureRow chip="~180 meals" label="Projected" desc="Upcoming day - counts are the plan, no actuals yet." />
+            ) : (
+              <>
+                <FigureRow chip="~$3K" label="Projected" desc="Upcoming day - the figure is the plan, no actuals yet." />
+                <FigureRow chip="est. $3K" label="Estimate" desc="Past day awaiting entry - the figure is the estimate the tile carries until you save actuals." />
+                <FigureRow chip="$3K" label="Entered" desc="Actuals recorded. Bare figure means the number is the operator-recorded truth." />
+              </>
+            )}
+          </Section>
+
           <Section title="Calendar context">
             <Row mod="today" label="Today">
               Today's date carries a navy outer ring.
@@ -197,6 +212,23 @@ function Section({ title, children }) {
       <h3 className="sc-legend-popup-section-title">{title}</h3>
       <dl className="sc-legend-popup-rows">{children}</dl>
     </section>
+  );
+}
+
+// SC-041: text-only row for the Figures section. The "swatch" is the
+// figure notation itself; no color to inherit, no glyph. Same DOM
+// shape as Row so it slots into the popup's dl/row grid.
+function FigureRow({ chip, label, desc }) {
+  return (
+    <div className="sc-legend-popup-row">
+      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--figure" aria-hidden="true">
+        {chip}
+      </span>
+      <div className="sc-legend-popup-row-text">
+        <dt className="sc-legend-popup-row-label">{label}</dt>
+        <dd className="sc-legend-popup-row-desc">{desc}</dd>
+      </div>
+    </div>
   );
 }
 
