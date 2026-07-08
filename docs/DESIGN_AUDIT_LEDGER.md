@@ -40,7 +40,7 @@ popup) + CC read-only investigation (contrast/CVD measured, behaviors verified a
 | SC-026 | 2 | Content | Click affordance: cards hover-only, tiles look tappable but inert (absorbs SC-030) | CC B2; all-devices ruling makes hover-only insufficient | Tap-visible card affordance; tile styling reads display-only | CONFIRMED | OPEN | CC B2 |
 | SC-027 | — | Content | Status vocabulary varies per account | Img 2/4/6 | Intended domain variance | CONFIRMED | WONTFIX | Kevin ruling |
 | SC-028 | — | Content | Fiscal-period deviation | Img 3/5/7 | Domain-justified | CONFIRMED | WONTFIX | Kevin ruling |
-| SC-029 | 1 | Consistency | PHASE TIMELINE (PDC) vs SEASON bar (MiLB) | Img 2 vs 6 | Reconcile or document per-type | CONFIRMED | OPEN | — |
+| SC-029 | 1 | Consistency | PHASE TIMELINE (PDC) vs SEASON bar (MiLB) | Img 2 vs 6 | Data-driven variance - PDC accounts carry phase timeline data (PhaseStrip); MiLB has none, so the plain SEASON bar renders. Documented, not a fork. | CONFIRMED | RESOLVED | Kevin ruling |
 | SC-030 | — | Contrast | Interactive vs static affordance | Merged into SC-026 | — | CONFIRMED | RESOLVED (merged) | — |
 | SC-031 | — | Consistency | Legend variance per account | Img 2/4/6/8 | Intended | CONFIRMED | WONTFIX | Kevin ruling |
 | SC-032 | — | Consistency | MonthCard/PeriodCard near-dupes (~60%), legend dupes | CC A3 | Feeds the codebase-cleanup phase (SC-035) | HYP-CODE | VERIFIED | CC A3 |

@@ -25,7 +25,7 @@ import { CANONICAL_PHASES } from "./phaseCalendar";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export default function PhaseStrip({ accountKey, category, today, year }) {
+export default function PhaseStrip({ accountKey, category, today, year, isLoading = false }) {
   const timeline = derivePhaseTimeline(accountKey, category, year);
   const todayDate = today?.date || null;
   const todayFraction = todayDate ? dayOfYearFraction(todayDate, year) : null;
@@ -69,7 +69,10 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
     : null;
 
   return (
-    <section className={`sc-season-strip${isBare ? " sc-season-strip--bare" : ""}`} aria-label={title}>
+    <section
+      className={`sc-season-strip${isBare ? " sc-season-strip--bare" : ""}${isLoading ? " sc-season-strip--loading" : ""}`}
+      aria-label={isLoading ? "Loading season" : title}
+    >
       {/* Title row: name on the left, today chip on the right.
           Title sits ABOVE the rail (audit P1-2 - the eye reads the
           title before scanning the strip). */}
@@ -77,12 +80,17 @@ export default function PhaseStrip({ accountKey, category, today, year }) {
           ChromeBar stats above already show today's date and the navy
           today line on the rail already marks the position. Removed
           (along with the dead chip CSS) so the title sits clean. */}
-      <header className="sc-season-strip-header">
-        <span className="sc-season-strip-title">{title}</span>
-        {subtitle && (
-          <span className="sc-season-strip-subtitle">{subtitle}</span>
-        )}
-      </header>
+      {/* SC-016: header is suppressed while loading so the initial
+          "SEASON" label does not flip to "PHASE TIMELINE" once the
+          account resolves. The rail alone reads as the skeleton. */}
+      {!isLoading && (
+        <header className="sc-season-strip-header">
+          <span className="sc-season-strip-title">{title}</span>
+          {subtitle && (
+            <span className="sc-season-strip-subtitle">{subtitle}</span>
+          )}
+        </header>
+      )}
 
       {/* Mobile-only compact "current -> next" chip. The full 12-block
           rail clips at phone width; this chip carries the same signal

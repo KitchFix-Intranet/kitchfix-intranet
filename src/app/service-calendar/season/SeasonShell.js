@@ -120,11 +120,11 @@ export default function SeasonShell({
       <>
       <div className="sc-season sc-season-shell sc-fade-in">
         {!hasHomestandSchedule && (
-          <PhaseStrip category={account?.category} today={null} year={year} />
+          <PhaseStrip category={account?.category} today={null} year={year} isLoading />
         )}
         <div className="sc-season-grid sc-season-grid--loading" aria-hidden="true">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="sc-season-month-skeleton" />
+            <MonthSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -234,6 +234,25 @@ function useIsDesktop() {
     return () => mq.removeListener(onChange);
   }, []);
   return isDesktop;
+}
+
+// SC-016: card-shaped skeleton with month-card anatomy - a title bar,
+// a 7-column dot grid (2 rows = 14 dots), and a footer bar. Each part
+// carries its own shimmer via CSS reusing the sc-season-shimmer
+// keyframes (no new animation added). Reduced-motion falls back to
+// flat fills via the existing tokens.css duration override.
+function MonthSkeleton() {
+  return (
+    <div className="sc-season-month-skeleton">
+      <div className="sc-season-month-skeleton-title" />
+      <div className="sc-season-month-skeleton-grid" aria-hidden="true">
+        {Array.from({ length: 14 }).map((_, i) => (
+          <div key={i} className="sc-season-month-skeleton-dot" />
+        ))}
+      </div>
+      <div className="sc-season-month-skeleton-footer" />
+    </div>
+  );
 }
 
 // PeriodGrid - the 4x3 of 13 period-cards + the Full Season summary.
