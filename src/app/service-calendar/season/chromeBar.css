@@ -199,6 +199,9 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+@media (prefers-reduced-motion: reduce) {
+  .sc-chrome-bar-stats-count:active { transform: none; }
+}
 .sc-chrome-bar-stats-count-num {
   font-size: var(--size-caption);
   font-weight: var(--wt-display);
