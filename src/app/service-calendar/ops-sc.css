@@ -55,8 +55,11 @@
   outline: var(--focus-ring-width) solid var(--surface-card);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-034 (2026-07-08): pressed feedback on the hero admin lock. */
+.sc-hero-admin:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-hero-admin { transition: none; }
+  .sc-hero-admin:active { transform: none; }
 }
 
 /* As-of pill relocated from the ChromeBar into the hero's bottom-right

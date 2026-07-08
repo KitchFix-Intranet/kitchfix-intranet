@@ -165,8 +165,11 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-034 (2026-07-08): pressed feedback on the legend info trigger. */
+.sc-state-legend-info:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-state-legend-info { transition: none; }
+  .sc-state-legend-info:active { transform: none; }
 }
 
 /* Cleanup batch: the mobile legend now keeps a COMPACT always-

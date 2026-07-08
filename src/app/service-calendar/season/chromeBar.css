@@ -63,8 +63,11 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-034 (2026-07-08): pressed feedback on click/tap. */
+.sc-chrome-bar-toggle-btn:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-chrome-bar-toggle-btn { transition: none; }
+  .sc-chrome-bar-toggle-btn:active { transform: none; }
 }
 
 /* As-of timestamp pill */
@@ -121,8 +124,11 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: 1px;
 }
+/* SC-034 (2026-07-08): pressed feedback. */
+.sc-chrome-bar-asof-refresh:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-chrome-bar-asof-refresh { transition: none; }
+  .sc-chrome-bar-asof-refresh:active { transform: none; }
 }
 
 /* Chrome stats cluster (Bundle 1 Section B). Today / Period / Week /
@@ -147,7 +153,10 @@
   font-weight: var(--wt-semibold);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
-  color: var(--text-subtle);
+  /* SC-021 (2026-07-08): #64748B on white = 4.76:1 (AA normal).
+     Was --text-subtle #94A3B8 at 2.56:1. Hierarchy preserved: muted
+     label above --text-default value. */
+  color: var(--text-muted);
 }
 .sc-chrome-bar-stats-value {
   font-size: var(--size-caption);
@@ -163,53 +172,63 @@
 }
 
 /* Action signal folded into the chrome (replaces the InfoCard band).
-   Per-meal urgency counts are buttons that jump to the first day of
-   that status; colored via the same status-* fg tokens as the legend
-   and day tiles so the toolbar, key, and grid all agree. */
+   SC-008 (2026-07-08): urgent counts read as PILL BUTTONS now, ranked
+   first in the row, so the primary action wins the hierarchy.
+   Behavior unchanged - each pill still jumps to the first day of its
+   status via onJumpToNeeds / onJumpToOverdue. Colored via the same
+   status-* tokens as the legend and day tiles so toolbar/key/grid
+   agree. */
 .sc-chrome-bar-stats-count {
   display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  background: none;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  font: inherit;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 5px var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  border: var(--border-thin) solid;
   cursor: pointer;
-  text-decoration: underline dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  background: transparent;
+  min-height: 32px;
+  font-family: inherit;
+  transition: background var(--motion-control), transform var(--motion-control);
 }
-.sc-chrome-bar-stats-count:hover { text-decoration-style: solid; }
+.sc-chrome-bar-stats-count:hover { text-decoration: none; }
+.sc-chrome-bar-stats-count:active { transform: translateY(1px); }
 .sc-chrome-bar-stats-count:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
-  border-radius: var(--radius-cell);
 }
 .sc-chrome-bar-stats-count-num {
   font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
+  font-weight: var(--wt-display);
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-chrome-bar-stats-count-label {
-  font-size: var(--size-micro);
-  font-weight: var(--wt-semibold);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.sc-chrome-bar-stats-count--needs   { color: var(--status-needs-fg); }
-.sc-chrome-bar-stats-count--overdue { color: var(--status-overdue-fg); }
-
-/* Fee-account on-track marker (replaces the FeeBand reassurance). */
-.sc-chrome-bar-stats-ontrack {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--size-micro);
-  font-weight: var(--wt-semibold);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--status-entered-fg);
+.sc-chrome-bar-stats-count--needs {
+  color: var(--status-needs-fg);
+  background: var(--status-needs-subtle);
+  border-color: var(--status-needs-bd);
 }
+.sc-chrome-bar-stats-count--needs:hover {
+  background: var(--status-needs-bg);
+}
+.sc-chrome-bar-stats-count--overdue {
+  color: var(--status-overdue-fg);
+  background: var(--status-overdue-subtle);
+  border-color: var(--status-overdue-bd);
+}
+.sc-chrome-bar-stats-count--overdue:hover {
+  background: var(--status-overdue-bg);
+}
+/* SC-025 (2026-07-08): .sc-chrome-bar-stats-ontrack rules removed
+   along with the hardcoded "on track" marker in FeeStat. The marker
+   returns only when a real business rule defines the threshold. */
 
 /* Floor-first wrap. Below 768px, the bar wraps onto two rows: left
    group on top (picker + toggle), right group below (asof + admin).
@@ -256,6 +275,8 @@
   outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-control);
 }
+/* SC-034 (2026-07-08): pressed feedback on the drill controls. */
+.sc-chrome-drill-back:active { transform: translateY(1px); }
 .sc-chrome-drill-step { display: inline-flex; align-items: center; gap: var(--space-2); }
 .sc-chrome-drill-step-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
@@ -268,6 +289,7 @@
 .sc-chrome-drill-step-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
 }
+.sc-chrome-drill-step-btn:active:not(:disabled) { transform: translateY(1px); }
 .sc-chrome-drill-period {
   font-size: var(--size-subhead); font-weight: var(--wt-bold);
   color: var(--text-heading); letter-spacing: -0.01em;
@@ -300,9 +322,13 @@
 .sc-chrome-drill-today:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
 }
+.sc-chrome-drill-today:active:not(.sc-chrome-drill-today--here) { transform: translateY(1px); }
 .sc-chrome-drill-today--here { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   .sc-chrome-drill-step-btn, .sc-chrome-drill-today { transition: none; }
+  .sc-chrome-drill-back:active,
+  .sc-chrome-drill-step-btn:active,
+  .sc-chrome-drill-today:active { transform: none; }
 }
 
 /* Cold-refresh loading affordance: periodRanges takes ~0.4-1s+ to land
