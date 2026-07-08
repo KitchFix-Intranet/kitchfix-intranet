@@ -185,6 +185,12 @@ function Parent({ data }) {
 }
 ```
 
+### The SC toast is per-page, not the shared component
+
+`service-calendar/page.js` renders its own `.oh-toast` / `<SubmissionToast>` via a local `showToast(msgOrObj, type)` provider — it does **not** use `src/components/people/Toast.js`. The rich "recorded" variant is an object payload (`{ variant: "recorded", amount, meals, daysEntered, ... }`); plain toasts are still strings and route through the same `showToast`. Each top-level page owns its own toast provider — Ops has its own too, and their DOM containers are separate.
+
+**Fix:** don't reach for the shared component when adding a new toast on SC. Add to `showToast`'s payload contract and render inside `page.js`. Same shape carries `.oh-toast-container` positioning via a modifier class (SC uses `--sc-center` to sit over the calendar; Ops keeps top-anchored).
+
 ### A cache-guarded fetch effect needs the cache in its deps
 
 A `useEffect` whose guard reads a cache object but excludes that cache from its dep array reads a **stale closure**. When a sibling effect clears the cache (e.g. on account switch), the guarded effect re-runs with the OLD cache (key still present → skips refetch), then never re-runs when the cache actually clears (not a dep) → blank view.
@@ -211,6 +217,12 @@ Invalidating the **entire** month cache on save (`setMonthCache({})`) forces eve
 **Fix (#338):** scope save-invalidation to only the month(s) actually written, so the refetch is 1-2 months, not the whole cache and its cascade.
 
 **Red herring on record:** a `<Suspense>` boundary around the `useSearchParams()` consumer was blamed for this first (#330 added it as "hygiene," #333 removed it). Removing it was fine — it was unnecessary for a fully-`"use client"` + `useSession` (already-dynamic) page — but it did **not** fix the nav. The cause was always the refetch burst above. Don't re-add the boundary expecting it to matter, and don't re-blame it.
+
+### Same-route `router.push` preserves component state
+
+`selectedAccount` on the Service Calendar (and any similar per-page state) survives an intra-route navigation because Next's App Router does **not** unmount the page component when you `router.push` to a same-route URL — it re-runs the effects with the new query but keeps the tree mounted. A drilled-in `?month=2026-08` view can therefore reset to the season overview by simply clearing the query (`router.push('/service-calendar')`); the URL-sync effect lands on the overview and the account persists.
+
+**Fix:** don't lift `selectedAccount` out of the page or add a "restore account after nav" effect. Just clear the query. Wired on the Service TopNav item in #347 — same-route click on `/service-calendar` from a drilled-in view `preventDefault()`s and pushes the bare route.
 
 ### A stepper/nav gated on async-loaded data reads as "broken," not "loading"
 
