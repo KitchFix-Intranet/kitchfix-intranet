@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Section 1 complete (runtime checks pending) · Section 2 fixes IN PROGRESS · 0 sev-4 open**
+**Status: Sections 1-2 fixes complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-035 (cleanup phase)**
 
 ## Section 1 — Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -91,20 +91,20 @@ SC-038 capture (12:07 PM) + CC read-only investigation @ 2e07670.
 
 | ID | Sev | Lens | Finding | Evidence | Fix | Tier | Status | Verified by |
 |----|-----|------|---------|----------|-----|------|--------|-------------|
-| SC-037 | 3 | Consistency | Fee chips contradict tiles/legend; fee chip click is DEAD (handler filters a status fee days never emit) | Img 3/4/7; dataStore:193-202 fold vs SC.js aggregate; jump filter SC.js:629 | RULING SPLIT 2026-07-08: (a) PDC fee = real urgency states end-to-end; (b) MLB homestand = pure schedule view, chips + amber trigger removed | CONFIRMED | OPEN | CC A1 + Chat verify |
-| SC-038 | 3 | Feedback | Chip counts include past no-service days (phantom counts vs grid) | Img 9 + fresh 12:07 capture: 1+1 chips, 0 urgent tiles | Aggregate urgency counters switch to classified status (pipeline unification) | CONFIRMED (capture; data verify in PR) | OPEN | Kevin capture + CC |
-| SC-039 | 3 | States | MiLB renders $0/est. $0 on no-service days (zero-vs-no-service confusable) | Img 5 vs 1; renderMilb lacks per-meal's !meals guard (DaySquare:235 vs :278) | Add the No-service short-circuit to renderMilb | CONFIRMED | OPEN | CC A3 |
-| SC-040 | 3 | Wayfinding | Bulk unreachable on past scopes (self-flagged in code) | PW:499-503 comment; :154 gate | Past-scope slim bulk rail (render approved) | CONFIRMED | OPEN | CC A4 |
-| SC-041 | 2 | Consistency | est./~/bare is a real encoding, unkeyed | DaySquare:245; PW:745 | Keep + key in legend popup (ruling) | CONFIRMED | OPEN | CC A5 |
-| SC-042 | 2 | Consistency | Fee meal projections unmarked; true zero silently dropped | DaySquare:259-276; PW:721-727 | ~ prefix on unentered fee meals; render true 0 on entered days | CONFIRMED | OPEN | CC A6 |
-| SC-043 | 2 | Content | Week denominators count calendar days; no-service weeks read 7/7 or 0/7 | SC.js:70-76; Img 6/7 | Service/game-day denominators + No-service week card (render approved; explicit-zero stays complete per ruling) | CONFIRMED | OPEN | CC A7 + ruling |
-| SC-044 | 1 | Content | Phase token unlabeled + abbreviated ("Complex") | PeriodHeaderNav:99-108, 170-173 | title + aria carry the full phase label | CONFIRMED | OPEN | CC A12 |
-| SC-045 | 1 | Content | "1 meals" (no pluralization) | DaySquare:48 + hardcoded units | Pluralize meal/meals at all unit sites | CONFIRMED | OPEN | CC A10 |
+| SC-037 | 3 | Consistency | Fee chips contradict tiles/legend; fee chip click is DEAD (handler filters a status fee days never emit) | Img 3/4/7; dataStore:193-202 fold vs SC.js aggregate; jump filter SC.js:629 | RULING SPLIT 2026-07-08: (a) PDC fee = real urgency states end-to-end; (b) MLB homestand = pure schedule view, chips + amber trigger removed | CONFIRMED | RESOLVED | CC A1 + Chat verify + #358 |
+| SC-038 | 3 | Feedback | Chip counts include past no-service days (phantom counts vs grid) | Img 9 + fresh 12:07 capture: 1+1 chips, 0 urgent tiles | Aggregate urgency counters switch to classified status (pipeline unification) | CONFIRMED (capture; data verify in PR) | RESOLVED | Kevin capture + CC + #358 |
+| SC-039 | 3 | States | MiLB renders $0/est. $0 on no-service days (zero-vs-no-service confusable) | Img 5 vs 1; renderMilb lacks per-meal's !meals guard (DaySquare:235 vs :278) | Add the No-service short-circuit to renderMilb | CONFIRMED | RESOLVED | CC A3 + #359 |
+| SC-040 | 3 | Wayfinding | Bulk unreachable on past scopes (self-flagged in code) | PW:499-503 comment; :154 gate | Past-scope slim bulk rail (render approved) | CONFIRMED | RESOLVED | CC A4 + #358 |
+| SC-041 | 2 | Consistency | est./~/bare is a real encoding, unkeyed | DaySquare:245; PW:745 | Keep + key in legend popup (ruling) | CONFIRMED | RESOLVED | CC A5 + #359 |
+| SC-042 | 2 | Consistency | Fee meal projections unmarked; true zero silently dropped | DaySquare:259-276; PW:721-727 | ~ prefix on unentered fee meals; render true 0 on entered days | CONFIRMED | RESOLVED | CC A6 + #359 |
+| SC-043 | 2 | Content | Week denominators count calendar days; no-service weeks read 7/7 or 0/7 | SC.js:70-76; Img 6/7 | Service/game-day denominators + No-service week card (render approved; explicit-zero stays complete per ruling) | CONFIRMED | RESOLVED | CC A7 + ruling + #358 |
+| SC-044 | 1 | Content | Phase token unlabeled + abbreviated ("Complex") | PeriodHeaderNav:99-108, 170-173 | title + aria carry the full phase label | CONFIRMED | RESOLVED | CC A12 + #359 |
+| SC-045 | 1 | Content | "1 meals" (no pluralization) | DaySquare:48 + hardcoded units | Pluralize meal/meals at all unit sites | CONFIRMED | RESOLVED | CC A10 + #359 |
 | SC-046 | — | Feedback | Progress-bar color | Threshold-derived (PW:215): amber=pending, green=done | Accepted as-is (ruling); fee amber resolves via SC-037(b) | CONFIRMED | VERIFIED (ruling) | CC A11 + Kevin |
-| SC-047 | 3 | States | Drill failure = infinite skeleton; failed atom unreachable; ?debug=failed overview-only | SC.js:310-320; PW:667 single-arg | Wire loadState through drill scopes + extend the dev hook (SC-033 pattern) | CONFIRMED | OPEN | CC A8 + Chat verify |
+| SC-047 | 3 | States | Drill failure = infinite skeleton; failed atom unreachable; ?debug=failed overview-only | SC.js:310-320; PW:667 single-arg | Wire loadState through drill scopes + extend the dev hook (SC-033 pattern) | CONFIRMED | RESOLVED | CC A8 + Chat verify + #358 |
 | SC-048 | — | Feedback | Band chip interactivity | PW:277-370: buttons; per-meal jump works; fee click dead | RESOLVED (split: works / SC-037 / SC-049) | CONFIRMED | RESOLVED | CC A9 |
-| SC-049 | 2 | Feedback | Drill band chips missed #354's :active fix | pw.css:186-220 | Pressed state + reduced-motion pair | CONFIRMED | OPEN | CC A9 |
-| SC-050 | 1 | Content | MiLB tiles render meals count with no unit | DaySquare:296 | Add the meals unit (with SC-045) | CONFIRMED | OPEN | CC Flags |
+| SC-049 | 2 | Feedback | Drill band chips missed #354's :active fix | pw.css:186-220 | Pressed state + reduced-motion pair | CONFIRMED | RESOLVED | CC A9 + #359 |
+| SC-050 | 1 | Content | MiLB tiles render meals count with no unit | DaySquare:296 | Add the meals unit (with SC-045) | CONFIRMED | RESOLVED | CC Flags + #359 |
 
 Section-1 carry-forwards resolved here: SC-022 fully CLOSED (lg tiles exceed 44px both axes, Img 1-9);
 SC-036 unchanged (drill band chips do NOT hide on mobile per CC B3 - the gap is chrome-cluster-only).
