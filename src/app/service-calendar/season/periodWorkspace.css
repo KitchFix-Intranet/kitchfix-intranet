@@ -265,6 +265,15 @@
   padding: 2px var(--space-2);
   border-radius: var(--radius-cell);
 }
+/* SC-040: past-scope rail treatment. Muted flag + subtle amber tone to
+   read as "attention needed, not urgent-today". */
+.sc-workspace-frame-today--past .sc-workspace-frame-today-flag {
+  background: var(--status-needs-strong);
+  color: var(--surface-card);
+}
+.sc-workspace-frame-today--past .sc-workspace-frame-today-status {
+  color: var(--status-needs-fg);
+}
 .sc-workspace-frame-today-status {
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);
@@ -488,6 +497,19 @@
 .sc-workspace-weeks-item--done {
   background: var(--surface-success-subtle, #F1F7F3);
   border-color: var(--border-success-subtle, #D6E7DD);
+}
+/* SC-043: empty variant - no service / no games. Off-tile tint +
+   italic placeholder text, no counts. */
+.sc-workspace-weeks-item--empty {
+  background: var(--status-off-bg);
+  border-color: var(--status-off-bd);
+}
+.sc-workspace-weeks-empty {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 3px;
 }
 .sc-workspace-weeks-label {
   font-size: var(--size-micro);

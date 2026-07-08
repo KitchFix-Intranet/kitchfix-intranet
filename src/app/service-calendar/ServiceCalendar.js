@@ -51,14 +51,41 @@ function aggregateWorkspaceMetrics(days) {
     projMeals: 0, actMeals: 0,
     projRev: 0, actRev: 0,
     complete: 0, needsEntry: 0, overdue: 0,
+    // SC-043: service/game day counts drive the week-card denominators
+    // + the "No service" / "No games" week variant. Kind-agnostic here;
+    // WeekSubtotals picks which one applies.
+    serviceDays: 0, serviceDaysEntered: 0,
+    gameDays: 0, gameDaysEntered: 0,
     total: 0,
     weeks: {},
   };
   if (!days?.length) return out;
   for (const day of days) {
+    // SC-038: urgency counters read the classified status the tiles +
+    // legend render from, not the raw isPast/isLocked derivation the
+    // aggregate used before. Past no-service days (classifier
+    // "no-service" from all-zero projection rows) no longer inflate.
     if (day.hasActuals) out.complete++;
-    else if (day.isPast && day.isLocked) out.overdue++;
-    else if (day.isPast) out.needsEntry++;
+    if (day.status === "overdue") out.overdue++;
+    else if (day.status === "needs-entry") out.needsEntry++;
+    // SC-043: service-day predicate. Excludes the non-service statuses.
+    // For MLB homestand the classifier emits entered/future so both count;
+    // for per-meal/MiLB/STL-FL, no-service days drop out.
+    const isServiceDay = day.status !== "no-service"
+      && day.status !== "off-season"
+      && day.status !== "prep";
+    if (isServiceDay) {
+      out.serviceDays++;
+      if (day.hasActuals) out.serviceDaysEntered++;
+    }
+    // SC-043: game-day predicate (MLB homestand). meta.gameType is
+    // populated from sc_daily_revenue.game_type for game days;
+    // PREP/OPEN/CLOSE/CLEAN days have no game_type.
+    const isGameDay = !!day.meta?.gameType;
+    if (isGameDay) {
+      out.gameDays++;
+      if (day.hasActuals) out.gameDaysEntered++;
+    }
     out.projRev += day.totals?.projectedRevenue || 0;
     if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
     for (const ci of Object.keys(day.projected || {})) {
@@ -67,10 +94,27 @@ function aggregateWorkspaceMetrics(days) {
       if (day.hasActuals && day.actual?.[ci] != null) out.actMeals += day.actual[ci];
     }
     const wk = day.meta?.week || "W?";
-    if (!out.weeks[wk]) out.weeks[wk] = { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0, needsEntry: 0, overdue: 0 };
+    if (!out.weeks[wk]) {
+      out.weeks[wk] = {
+        actRev: 0, projRev: 0, actMeals: 0,
+        complete: 0, total: 0, needsEntry: 0, overdue: 0,
+        serviceDays: 0, serviceDaysEntered: 0,
+        gameDays: 0, gameDaysEntered: 0,
+      };
+    }
     const w = out.weeks[wk];
     w.total++;
     w.projRev += day.totals?.projectedRevenue || 0;
+    if (day.status === "overdue") w.overdue++;
+    else if (day.status === "needs-entry") w.needsEntry++;
+    if (isServiceDay) {
+      w.serviceDays++;
+      if (day.hasActuals) w.serviceDaysEntered++;
+    }
+    if (isGameDay) {
+      w.gameDays++;
+      if (day.hasActuals) w.gameDaysEntered++;
+    }
     if (day.hasActuals) {
       w.complete++;
       w.actRev += day.totals?.actualRevenue || 0;
@@ -78,8 +122,7 @@ function aggregateWorkspaceMetrics(days) {
         const av = day.actual[ci];
         if (av != null) w.actMeals += av;
       }
-    } else if (day.isPast && day.isLocked) w.overdue++;
-    else if (day.isPast) w.needsEntry++;
+    }
   }
   out.total = days.length;
   return out;
@@ -171,6 +214,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   //   "loaded"  -> success; normal render
   //   "failed"  -> error or !d.success; overview forces failed cells
   const [yearLoadState, setYearLoadState] = useState("idle");
+  // SC-047: mirror the overview loadState pattern for the drill-in
+  // scopes. Month drill is single-fetch; period drill is 1-2 parallel
+  // month fetches - "failed" here means TOTAL failure (all requested
+  // months failed). Partial failure keeps using partialError +
+  // WorkspacePartialBanner.
+  const [drillLoadState, setDrillLoadState] = useState("idle");
   const [yearToday, setYearToday] = useState(null);
   // Period lens state.
   //   periodKey   = which period ("P7") the user is viewing.
@@ -304,6 +353,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setMonthCache({});
     setPeriodRanges(null);
     setPartialError(null);
+    setDrillLoadState("idle");
   }, [selectedAccount]);
 
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
@@ -365,10 +415,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     if (!range) return;
     const monthsNeeded = monthsBetween(range.start, range.end);
     const missing = monthsNeeded.filter(mk => !monthCache[mk]);
-    if (missing.length === 0) { setPartialError(null); return; }
+    if (missing.length === 0) { setPartialError(null); setDrillLoadState("loaded"); return; }
     const controller = new AbortController();
     setLoading(true);
     setPartialError(null);
+    setDrillLoadState("loading");
     Promise.allSettled(missing.map(mk =>
       fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
         .then(r => r.json())
@@ -389,6 +440,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           });
         }
         setPartialError(failed ? { failedMonth: failed } : null);
+        // SC-047: total failure = every requested month failed. Partial
+        // failure keeps the existing partialError banner path; drill
+        // stays "loaded" so cells that DID land render normally.
+        setDrillLoadState(ok.length === 0 ? "failed" : "loaded");
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -406,10 +461,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // abort on unmount, partial-error surface).
   useEffect(() => {
     if (!isMonthView || !selectedAccount || !monthKey) return;
-    if (monthCache[monthKey]) { setPartialError(null); return; }
+    if (monthCache[monthKey]) { setPartialError(null); setDrillLoadState("loaded"); return; }
     const controller = new AbortController();
     setLoading(true);
     setPartialError(null);
+    setDrillLoadState("loading");
     fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${monthKey}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => {
@@ -417,11 +473,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         if (d.success) {
           setMonthCache(prev => ({ ...prev, [monthKey]: d }));
           setPartialError(null);
+          setDrillLoadState("loaded");
         } else {
           setPartialError({ failedMonth: monthKey });
+          setDrillLoadState("failed");
         }
       })
-      .catch(() => { if (!controller.signal.aborted) setPartialError({ failedMonth: monthKey }); })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setPartialError({ failedMonth: monthKey });
+          setDrillLoadState("failed");
+        }
+      })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
     // monthCache IS in deps: the guard `if (monthCache[monthKey]) return`
@@ -1381,6 +1444,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             homestandMap={periodHomestandMap || homestandMap}
             today={today}
             loading={loading && !periodDays}
+            loadState={
+              // SC-047: drill-in debug hook - extends the SC-033 pattern
+              // to period + month scopes so ?debug=failed forces the
+              // dashed atom render on drill-in cells too.
+              (isDev && searchParams?.get("debug") === "failed")
+                ? "failed"
+                : drillLoadState
+            }
             partialError={partialError}
             onDayClick={(date) => setFocusDay(date)}
             bulkMode={bulkMode}

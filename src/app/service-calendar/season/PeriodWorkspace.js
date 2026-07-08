@@ -50,6 +50,7 @@ export default function PeriodWorkspace({
   homestandMap,
   today,                    // YYYY-MM-DD string
   loading,
+  loadState = "loaded",     // SC-047: "loading" | "loaded" | "failed"
   partialError,
   // day click + bulk
   onDayClick,
@@ -91,10 +92,12 @@ export default function PeriodWorkspace({
   // Week-aligned cell grid. ~4-5 rows of 7 cells. Out-of-period
   // slots in the first/last row render as quiet placeholders, NOT
   // through the atom (preserves the atom's "actual day rendering"
-  // contract).
+  // contract). SC-047: when the drill fetch failed and there are no
+  // real days, fabricate in-period stubs so renderCell can force each
+  // to the dashed atom via loadState.
   const cells = useMemo(
-    () => buildWorkspaceWeekGrid(periodRange, periodDays),
-    [periodRange, periodDays]
+    () => buildWorkspaceWeekGrid(periodRange, periodDays, loadState),
+    [periodRange, periodDays, loadState]
   );
 
   // Week labels present in this period (W1-W4 typically). Used for
@@ -119,7 +122,10 @@ export default function PeriodWorkspace({
   );
 
   // ─── Loading / partial / empty branches ──────────────────────
-  if (loading && !periodDays && !partialError) {
+  // SC-047: on total drill failure, skip the loading skeleton and
+  // render the workspace shell; cells resolve to the dashed atom via
+  // the loadState pass-through. Matches the SC-033 overview pattern.
+  if (loading && !periodDays && !partialError && loadState !== "failed") {
     return <WorkspaceSkeleton />;
   }
   if (partialError) {
@@ -159,6 +165,23 @@ export default function PeriodWorkspace({
             onEnterActuals={() => onDayClick?.(todayDay.date)}
             onBulkUpdate={onBulkModeToggle ? () => onBulkModeToggle(true) : undefined}
           />
+        ) : (
+          // SC-040: past-scope drill with unentered days keeps a bulk
+          // entry point. For MLB (schedule view per SC-037b) needsEntry
+          // + overdue are both zero via the pipeline unification, so
+          // the rail auto-hides there - correct per the ruling.
+          !isCurrentPeriod
+            && periodRange?.end
+            && today
+            && today > periodRange.end
+            && (m.needsEntry + m.overdue) > 0
+        ) ? (
+          <PastRail
+            unentered={m.needsEntry + m.overdue}
+            periodRange={periodRange}
+            scope={scope}
+            onBulkUpdate={onBulkModeToggle ? () => onBulkModeToggle(true) : undefined}
+          />
         ) : null}
       />
 
@@ -182,6 +205,7 @@ export default function PeriodWorkspace({
         homestandMap={homestandMap}
         bulkMode={bulkMode}
         bulkSelected={bulkSelected}
+        loadState={loadState}
         onDayClick={onDayClick}
         onBulkTileClick={onBulkTileClick}
       />
@@ -212,7 +236,13 @@ export default function PeriodWorkspace({
 // frame instead of the punitive "0 / 28" with an empty bar.
 function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRange, today, todaySlot, onJumpFirstOverdue, onJumpFirstNeeds }) {
   const completionPct = m.total > 0 ? Math.round(m.complete / m.total * 100) : 0;
-  const progressColor = (m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)";
+  // SC-037(b): homestand accounts are pure schedule view - no amber
+  // trigger, no urgency chips (classifier folds unentered games to
+  // "future" so the counts would be zero anyway; the removal makes
+  // the intent structural, not incidental).
+  const progressColor = hasHomestandSchedule
+    ? "var(--text-success)"
+    : ((m.needsEntry + m.overdue) > 0 ? "var(--status-needs-strong)" : "var(--text-success)");
 
   // Upcoming-period detection: today is before periodRange.start AND
   // nothing has been entered yet. The whole period is in the future.
@@ -245,7 +275,11 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
   // visual family across account types. Stat contents differ (day-
   // completion + meal counts, no revenue tint since STL-FL/MLB don't
   // carry per-meal $) but the shape is identical.
+  // SC-037(b): MLB homestand loses the chips entirely - schedule view,
+  // not urgency tracker. STL-FL keeps them; SC-038's pipeline
+  // unification makes STL-FL's chip counts match its tiles now.
   if (hasHomestandSchedule || isFeeAccount) {
+    const showUrgencyChips = !hasHomestandSchedule;
     const exceptionCount = m.overdue + m.needsEntry;
     const daysLabel = hasHomestandSchedule ? "Game days entered" : "Days entered";
     return (
@@ -273,7 +307,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
             </div>
             <ProgressLine pct={completionPct} color={progressColor} />
           </div>
-          {exceptionCount > 0 ? (
+          {showUrgencyChips && (exceptionCount > 0 ? (
             <span className="sc-workspace-frame-chips">
               {m.overdue > 0 && (
                 <button
@@ -302,7 +336,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
             <span className="sc-workspace-frame-caughtup" aria-live="polite">
               ✓ All caught up
             </span>
-          )}
+          ))}
         </div>
         {todaySlot}
       </section>
@@ -479,6 +513,40 @@ function TodayRail({ day, kind, homestandMap, onEnterActuals, onBulkUpdate }) {
   );
 }
 
+// SC-040: past-scope bulk affordance. Renders in place of TodayRail when
+// the drill scope is entirely past AND unentered days remain (per-meal /
+// MiLB / STL-FL). MLB skips because SC-037(b)'s ruling folds all games
+// to "future" - the unentered count stays 0 there.
+function PastRail({ unentered, periodRange, scope, onBulkUpdate }) {
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const startDt = new Date(periodRange.start + "T12:00:00");
+  const endDt = new Date(periodRange.end + "T12:00:00");
+  const rangeLabel = `${MON[startDt.getMonth()]} ${startDt.getDate()} - ${MON[endDt.getMonth()]} ${endDt.getDate()}`;
+  const flag = scope === "month" ? "PAST MONTH" : "PAST PERIOD";
+  return (
+    <div className="sc-workspace-frame-today sc-workspace-frame-today--past" aria-label={flag}>
+      <div className="sc-workspace-frame-today-info">
+        <span className="sc-workspace-frame-today-flag">{flag}</span>
+        <span className="sc-workspace-frame-today-status">
+          {unentered} {unentered === 1 ? "day" : "days"} unentered
+        </span>
+        <span className="sc-workspace-frame-today-date">{rangeLabel}</span>
+      </div>
+      {onBulkUpdate && (
+        <div className="sc-workspace-frame-today-actions">
+          <button
+            type="button"
+            className="sc-workspace-frame-today-bulk"
+            onClick={onBulkUpdate}
+          >
+            Bulk Update
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function sumProjectedMeals(day) {
   if (!day?.projected) return 0;
   let n = 0;
@@ -549,7 +617,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // week and clamp; Home/End jump to the first/last real cell in the row).
 // Enter/Space activation still fires the atom's onClick (DaySquare owns
 // that; the atom does not consume arrow keys so they bubble to the grid).
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, onDayClick, onBulkTileClick }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -664,9 +732,12 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               }
               const d = cell.day;
               const isToday = d.date === today;
-              const status = resolveDayStatus(d.status);
+              // SC-047: when the drill fetch failed, every in-period
+              // cell resolves to "failed" regardless of raw d.status,
+              // and content drops so the atom renders the dashed shell.
+              const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
-              const content = buildLargeContent(d, kind, homestandMap, isMilb);
+              const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb);
               // Bulk-selectable gate: only future / needs-entry days are
               // selectable for bulk entry. Entered days + off days have
               // no editable target; tile click in bulk mode is a no-op
@@ -770,26 +841,67 @@ function sumActualMeals(day) {
 }
 
 // ─── Week subtotals footnote ────────────────────────────────────
+// SC-043: week cards speak the right denominator for the account kind:
+//   MLB homestand -> "{n} games" + "{entered} / {n} entered"
+//   STL-FL        -> "{meals} meals" + "{entered} / {days} entered"
+//   per-meal/MiLB -> "$X" or "~$X" + "{entered} / {days} entered"
+// A week whose applicable-day count is 0 renders the No service / No
+// games variant (italic label, no counts). Numerator still uses
+// hasActuals; explicit-zero days count as complete per the ruling.
 function WeekSubtotals({ weekLabels, weekMetrics, kind, hasHomestandSchedule, isFeeAccount }) {
   if (!weekLabels?.length) return null;
   return (
     <div className="sc-workspace-weeks" aria-label="Week subtotals">
       {weekLabels.map((w) => {
-        const wm = weekMetrics?.[w] || { actRev: 0, projRev: 0, actMeals: 0, complete: 0, total: 0 };
-        const isDone = wm.total > 0 && wm.complete === wm.total;
+        const wm = weekMetrics?.[w] || {
+          actRev: 0, projRev: 0, actMeals: 0,
+          complete: 0, total: 0,
+          serviceDays: 0, serviceDaysEntered: 0,
+          gameDays: 0, gameDaysEntered: 0,
+        };
+        // Denominator + subline depend on kind. Numerator = *DaysEntered.
+        let denomCount;
+        let denomWord;
+        let enteredCount;
         let value;
-        if (hasHomestandSchedule || isFeeAccount) {
+        let emptyLabel;
+        if (hasHomestandSchedule) {
+          denomCount = wm.gameDays;
+          denomWord = "games";
+          enteredCount = wm.gameDaysEntered;
+          value = `${denomCount} ${denomCount === 1 ? "game" : "games"}`;
+          emptyLabel = "No games";
+        } else if (isFeeAccount) {
+          denomCount = wm.serviceDays;
+          denomWord = "days";
+          enteredCount = wm.serviceDaysEntered;
           value = `${wm.actMeals.toLocaleString("en-US")} meals`;
+          emptyLabel = "No service";
         } else {
+          denomCount = wm.serviceDays;
+          denomWord = "days";
+          enteredCount = wm.serviceDaysEntered;
           const rev = wm.actRev > 0 ? wm.actRev : wm.projRev;
           const prefix = wm.actRev > 0 ? "" : "~";
           value = `${prefix}${fmt$(rev)}`;
+          emptyLabel = "No service";
         }
+        const isEmpty = denomCount === 0;
+        const isDone = !isEmpty && enteredCount === denomCount;
+        const cardClass = "sc-workspace-weeks-item"
+          + (isDone ? " sc-workspace-weeks-item--done" : "")
+          + (isEmpty ? " sc-workspace-weeks-item--empty" : "");
         return (
-          <div key={w} className={`sc-workspace-weeks-item${isDone ? " sc-workspace-weeks-item--done" : ""}`}>
+          <div key={w} className={cardClass}>
             <span className="sc-workspace-weeks-label">{w}</span>
-            <span className="sc-workspace-weeks-value">{value}</span>
-            <span className="sc-workspace-weeks-days">{wm.complete} / {wm.total} days</span>
+            {isEmpty ? (
+              <span className="sc-workspace-weeks-empty">{emptyLabel}</span>
+            ) : (
+              <>
+                <span className="sc-workspace-weeks-value">{value}</span>
+                <span className="sc-workspace-weeks-days">{enteredCount} / {denomCount} entered</span>
+              </>
+            )}
           </div>
         );
       })}
@@ -836,7 +948,7 @@ function formatHumanDate(dateStr) {
 // cells = [{ day | null }]; null cells render as quiet placeholders.
 // Mirrors PeriodCard's pattern but uses the rich periodDays shape
 // (with day.totals etc.) instead of the thin year-summary shape.
-function buildWorkspaceWeekGrid(periodRange, periodDays) {
+function buildWorkspaceWeekGrid(periodRange, periodDays, loadState = "loaded") {
   if (!periodRange) return [];
   const byDate = new Map();
   if (periodDays?.length) for (const d of periodDays) byDate.set(d.date, d);
@@ -856,9 +968,14 @@ function buildWorkspaceWeekGrid(periodRange, periodDays) {
     for (let i = 0; i < 7; i++) {
       const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,"0")}-${String(cursor.getDate()).padStart(2,"0")}`;
       const inPeriod = dateStr >= periodRange.start && dateStr <= periodRange.end;
-      cells.push({
-        day: inPeriod ? (byDate.get(dateStr) || null) : null,
-      });
+      // SC-047: on total failure, fabricate a stub day for in-period
+      // dates when we have no real data so renderCell can force each
+      // cell to the dashed failed atom.
+      const realDay = inPeriod ? byDate.get(dateStr) : null;
+      const stubDay = inPeriod && loadState === "failed" && !realDay
+        ? { date: dateStr, status: null, meta: {} }
+        : null;
+      cells.push({ day: realDay || stubDay || null });
       cursor.setDate(cursor.getDate() + 1);
     }
     week++;
