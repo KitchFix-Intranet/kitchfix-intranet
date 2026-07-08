@@ -246,7 +246,9 @@ function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFe
       {daysEntered}/{totalDays} entered
       {!isFeeAccount && displayRev > 0 && (
         <span className={`sc-season-month-card-summary-rev ${hasActuals ? "sc-season-month-card-summary-rev--actual" : ""}`}>
-          · {fmtK(displayRev)}
+          {/* SC-012: tilde-only in the collapsed row (space is tight
+              vs the expanded footer's "~$X projected"). */}
+          · {hasActuals ? "" : "~"}{fmtK(displayRev)}
         </span>
       )}
       {done && (
@@ -384,6 +386,10 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
   const displayRev = hasActuals
     ? Number(monthSummary.actualRevenue) || 0
     : Number(monthSummary.projectedRevenue) || 0;
+  // SC-012: projected reads unmistakably projected. Entered stays as
+  // fmtK(displayRev) money-green; projected renders as
+  // "~$85K projected" muted (tilde + the word). The value-switch above
+  // is unchanged.
   return (
     <footer className="sc-season-month-card-footer">
       <div className="sc-season-month-card-stats">
@@ -391,7 +397,9 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
           <strong>{daysEntered}</strong>/{totalDays} entered
         </span>
         <span className={`sc-season-month-card-stat-rev ${hasActuals ? "sc-season-month-card-stat-rev--actual" : ""}`}>
-          {displayRev > 0 ? fmtK(displayRev) : "$0"}
+          {displayRev > 0
+            ? (hasActuals ? fmtK(displayRev) : `~${fmtK(displayRev)} projected`)
+            : "$0"}
         </span>
       </div>
       {completionPct > 0 && <ProgressBar pct={completionPct} />}

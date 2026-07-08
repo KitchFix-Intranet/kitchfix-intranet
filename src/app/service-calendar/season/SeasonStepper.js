@@ -170,13 +170,14 @@ function idxLabel(segment, total) {
   return `homestand ${n} of ${total}`;
 }
 
-function ariaLabelForSegment(seg, index, total) {
-  const verb = seg.status === "done" ? "completed" : seg.status === "now" ? "in progress" : "upcoming";
-  const opp = seg.opponents.length > 0 ? seg.opponents.join(" to ") : "opponent to be determined";
+// SC-006 (2026-07-08): every segment button (not just the current
+// focus) carries this label as its accessible name + hover title.
+// Format: "HS3 · Apr 12 to Apr 18 · vs ARI / MIL" - a compact readable
+// line derived from the data the segment already holds, no fetches.
+function ariaLabelForSegment(seg) {
   const range = formatHomestandRange(seg.startDate, seg.endDate);
-  const games = seg.gameCount > 0 ? `, ${seg.gameCount} games` : "";
-  const ord = (index != null && total != null)
-    ? `, ${idxLabel(seg, total)}`
-    : "";
-  return `${seg.homestandId}, ${opp}, ${range}${games}${ord}, ${verb}`;
+  const opp = seg.opponents.length > 0
+    ? `vs ${seg.opponents.join(" / ")}`
+    : "vs opponent TBD";
+  return `${seg.homestandId} · ${range} · ${opp}`;
 }

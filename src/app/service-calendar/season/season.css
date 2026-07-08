@@ -262,17 +262,57 @@
   .sc-season-grid { grid-auto-rows: 1fr; }
 }
 
-/* Loading skeleton. Sized close to the 6-row card height so the
-   load -> loaded transition does not jump. */
+/* SC-016: card-shaped loading skeleton. The outer container reads as
+   a card shell (border, radius, background), and three inner elements
+   carry the shimmer:
+   - title bar (~60% wide) at the top for the month name
+   - a 7-col dot grid (2 rows = 14 dots) for the day-grid preview
+   - a footer bar (~45% wide) for the stats line
+   Height matches the loaded card (min-height 290px) so the swap
+   doesn't jump. Reused sc-season-shimmer keyframes - no new animation.
+   Reduced-motion falls back to flat fill on each inner element. */
 .sc-season-month-skeleton {
-  height: 290px;
+  min-height: 290px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.sc-season-month-skeleton-title,
+.sc-season-month-skeleton-footer,
+.sc-season-month-skeleton-dot {
   background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
   background-size: 200% 100%;
   animation: sc-season-shimmer 1.6s linear infinite;
-  border-radius: var(--radius-container);
+  border-radius: var(--rad-6);
+}
+.sc-season-month-skeleton-title {
+  height: 12px;
+  width: 60%;
+}
+.sc-season-month-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  flex: 1;
+  align-content: start;
+}
+.sc-season-month-skeleton-dot {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-cell);
+}
+.sc-season-month-skeleton-footer {
+  height: 10px;
+  width: 45%;
+  margin-top: auto;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-season-month-skeleton { animation: none; background: var(--border-subtle); }
+  .sc-season-month-skeleton-title,
+  .sc-season-month-skeleton-footer,
+  .sc-season-month-skeleton-dot { animation: none; background: var(--border-subtle); }
 }
 
 /* ───────── MONTH CARD ───────── */
@@ -307,12 +347,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sc-season-month-card { transition: none; }
+  .sc-season-month-card:active { transform: none; }
 }
 .sc-season-month-card:hover {
   box-shadow: var(--elevation-raised);
   border-color: var(--text-subtle);
   transform: translateY(-1px);
 }
+/* SC-034 (cards): pressed feedback on click/tap. Overrides the hover
+   translate so pressing reads as sitting DOWN into the surface. */
+.sc-season-month-card:active { transform: translateY(1px); }
 .sc-season-month-card:focus-visible {
   outline: var(--focus-ring-width) solid var(--status-today-ring);
   outline-offset: var(--focus-ring-offset);
@@ -350,6 +394,8 @@
   cursor: pointer;
   border-radius: var(--radius-cell);
 }
+/* SC-034 (cards): pressed feedback on the collapsed row button. */
+.sc-season-month-card-collapsed-trigger:active { transform: translateY(1px); }
 .sc-season-month-card-collapsed-trigger:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
@@ -422,6 +468,12 @@
   }
 }
 .sc-season-month-card-chevron:hover { background: var(--surface-sunken); color: var(--text-heading); }
+/* SC-034 (cards): pressed feedback on the mobile collapse chevron. */
+.sc-season-month-card-chevron:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-season-month-card-collapsed-trigger:active,
+  .sc-season-month-card-chevron:active { transform: none; }
+}
 .sc-season-month-card-chevron:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
@@ -550,11 +602,17 @@
 .sc-season-month-card-stat-aux {
   color: var(--text-subtle);
 }
+/* SC-012: projected reads muted-semibold (~$85K projected); actual
+   reads green-bold ($39K). Base --text-muted #64748B on the card's
+   --surface-card white ground = 4.76:1 (AA normal). */
 .sc-season-month-card-stat-rev {
   color: var(--text-muted);
   font-weight: var(--wt-semibold);
 }
-.sc-season-month-card-stat-rev--actual { color: var(--text-success); }
+.sc-season-month-card-stat-rev--actual {
+  color: var(--text-success);
+  font-weight: var(--wt-bold);
+}
 
 .sc-season-month-card-bar {
   height: 4px;
@@ -621,12 +679,15 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-season-period-card { transition: none; }
+  .sc-season-period-card:active { transform: none; }
 }
 .sc-season-period-card:hover {
   transform: translateY(-1px);
   box-shadow: var(--elevation-raised);
   border-color: var(--text-subtle);
 }
+/* SC-034 (cards): pressed feedback matching MonthCard. */
+.sc-season-period-card:active { transform: translateY(1px); }
 .sc-season-period-card:focus-visible {
   outline: var(--focus-ring-width) solid var(--status-today-ring);
   outline-offset: var(--focus-ring-offset);
