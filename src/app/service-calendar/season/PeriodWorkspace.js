@@ -791,9 +791,13 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
 
   if (kind === "mlb-fee") {
     const hs = homestandMap?.[day.date];
+    // SC-042: entered days preserve 0 (renders honest "0 meals");
+    // unentered days drop the 0 so prep/off tiles don't read "~0 meals".
+    // isEstimated flags unentered days so renderMlbFee prefixes with ~.
     return {
       opponent: hs?.opponent || null,
-      meals: meals || null,
+      meals: day.hasActuals ? (meals ?? null) : (meals > 0 ? meals : null),
+      isEstimated: !day.hasActuals,
     };
   }
   if (kind === "milb") {

@@ -249,7 +249,8 @@ function renderPerMeal(content, status) {
     <div className="sc-daysq-mid sc-daysq-mid--stack">
       <span className="sc-daysq-mid-meals">
         {fmtMeals(meals)}
-        <span className="sc-daysq-mid-meals-unit">meals</span>
+        {/* SC-045: pluralize meal/meals on the exact-1 case. */}
+        <span className="sc-daysq-mid-meals-unit">{meals === 1 ? "meal" : "meals"}</span>
       </span>
       {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
     </div>
@@ -257,18 +258,25 @@ function renderPerMeal(content, status) {
 }
 
 function renderMlbFee(content) {
-  const { opponent, meals } = content;
+  const { opponent, meals, isEstimated } = content;
   if (!opponent && meals == null) return null;
   // Stacked layout (option A): opponent reads as a navy chip on its own
   // line; the headcount sits beneath as "N meals" with the count as hero
   // and unit as trailing muted small. The old inline "vs OPP / N meals"
   // dropped both surfaces into one line - hard to scan on the grid.
+  //
+  // SC-042: unentered days prefix the meals with "~" so the projection
+  // reads as schedule intent, not recorded actuals. Entered days render
+  // bare - "0 meals" is honest on an entered zero. Same tilde language
+  // as everywhere else (schedule-view, not urgency).
+  // SC-045 + SC-050: pluralize meal/meals; unit was already present here.
+  const mealsPrefix = isEstimated ? "~" : "";
   return (
     <div className="sc-daysq-mid sc-daysq-mid--mlb">
       {opponent && <span className="sc-daysq-mid-opponent">vs {opponent}</span>}
       {meals != null && (
         <span className="sc-daysq-mid-headcount">
-          {fmtMeals(meals)}<span className="sc-daysq-mid-unit">meals</span>
+          {mealsPrefix}{fmtMeals(meals)}<span className="sc-daysq-mid-unit">{meals === 1 ? "meal" : "meals"}</span>
         </span>
       )}
     </div>
@@ -286,6 +294,16 @@ function renderMilb(content, status) {
   const hasRev = revenue != null;
   const hasMeals = meals != null;
   if (!milbPill && !hasRev && !hasMeals) return null;
+  // SC-039: no-service short-circuit matching renderPerMeal:235-241. A
+  // MiLB day with meals null OR zero is a no-service day; renders the
+  // quiet "No service" line instead of the misleading est. $0 / ~$0.
+  if (!meals) {
+    return (
+      <div className="sc-daysq-mid sc-daysq-mid--off">
+        <span className="sc-daysq-mid-noservice">No service</span>
+      </div>
+    );
+  }
   const revPrefix = status === "upcoming" ? "~" : (isEstimated ? "est. " : "");
   const revClass = "sc-daysq-mid-rev"
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
@@ -293,7 +311,14 @@ function renderMilb(content, status) {
     <div className="sc-daysq-mid">
       {milbPill && <MilbPill type={milbPill} />}
       {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
-      {hasMeals && <span className="sc-daysq-mid-meals"> / {fmtMeals(meals)}</span>}
+      {hasMeals && (
+        <span className="sc-daysq-mid-meals">
+          {" / "}{fmtMeals(meals)}
+          {/* SC-045 + SC-050: MiLB gains the meals unit label (was
+              bare number). Pluralization branch below. */}
+          <span className="sc-daysq-mid-meals-unit">{meals === 1 ? "meal" : "meals"}</span>
+        </span>
+      )}
     </div>
   );
 }

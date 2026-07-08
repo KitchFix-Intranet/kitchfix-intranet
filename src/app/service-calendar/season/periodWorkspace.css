@@ -189,6 +189,11 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-049 (2026-07-08): pressed feedback on the drill-band chips. */
+.sc-workspace-frame-chip:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-frame-chip:active { transform: none; }
+}
 .sc-workspace-frame-chip-glyph {
   display: inline-flex;
   align-items: center;
@@ -330,8 +335,11 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-049 (2026-07-08): pressed feedback. */
+.sc-workspace-frame-today-cta:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-workspace-frame-today-cta { transition: none; }
+  .sc-workspace-frame-today-cta:active { transform: none; }
 }
 /* Actions cluster (Enter actuals + Bulk Update) on the today row's right. */
 .sc-workspace-frame-today-actions {
@@ -357,8 +365,13 @@
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
+/* SC-049 (2026-07-08): pressed feedback. Shared class - covers both
+   TodayRail's Bulk Update button and Bundle 1's PastRail Bulk Update
+   button (they use the same selector). */
+.sc-workspace-frame-today-bulk:active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
   .sc-workspace-frame-today-bulk { transition: none; }
+  .sc-workspace-frame-today-bulk:active { transform: none; }
 }
 
 /* ───────── BULK AFFORDANCE ─────────
@@ -407,6 +420,14 @@
   border-color: var(--border-default);
 }
 .sc-workspace-bulk-btn--outline:hover:not(:disabled) { background: var(--surface-sunken); }
+/* SC-049 (2026-07-08): pressed feedback on bulk-mode actions +
+   Cancel. Excludes :disabled so a disabled press does not translate. */
+.sc-workspace-bulk-btn:active:not(:disabled) { transform: translateY(1px); }
+.sc-workspace-bulk-cancel:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-workspace-bulk-btn:active,
+  .sc-workspace-bulk-cancel:active { transform: none; }
+}
 .sc-workspace-bulk-cancel {
   padding: 6px var(--space-3);
   font-family: inherit;
