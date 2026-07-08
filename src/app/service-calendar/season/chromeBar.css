@@ -191,6 +191,11 @@
   background: transparent;
   min-height: 32px;
   font-family: inherit;
+  /* Owner-review 2026-07-08: label copy was wrapping inside the pill
+     at real counts + label lengths. nowrap + no-shrink pins each pill
+     to one line regardless of the count or any future label change. */
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background var(--motion-control), transform var(--motion-control);
 }
 .sc-chrome-bar-stats-count:hover { text-decoration: none; }

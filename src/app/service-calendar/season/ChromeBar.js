@@ -182,7 +182,7 @@ function UrgencyStats({ needsEntry, overdue, onJumpToNeeds, onJumpToOverdue }) {
           aria-label={`Jump to first of ${overdue} overdue days`}
         >
           <span className="sc-chrome-bar-stats-count-num">{overdue}</span>
-          <span className="sc-chrome-bar-stats-count-label">Overdue - enter now</span>
+          <span className="sc-chrome-bar-stats-count-label">Overdue</span>
         </button>
       )}
       {hasNeeds && (
