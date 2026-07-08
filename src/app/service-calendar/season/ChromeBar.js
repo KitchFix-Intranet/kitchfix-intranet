@@ -120,8 +120,23 @@ function ChromeStats({
   isFeeAccount, needsEntry, overdue, gameDaysEntered, totalGameDays,
   onJumpToNeeds, onJumpToOverdue,
 }) {
+  // SC-008 (2026-07-08): urgent chips lead the row so the primary
+  // action wins visual hierarchy. Overdue outranks needs-entry because
+  // it's the harder deadline; both are pill buttons via the CSS below.
+  const hasUrgency = !isFeeAccount && ((overdue || 0) > 0 || (needsEntry || 0) > 0);
   return (
     <div className="sc-chrome-bar-stats" aria-label="Today context">
+      {hasUrgency && (
+        <>
+          <UrgencyStats
+            needsEntry={needsEntry}
+            overdue={overdue}
+            onJumpToNeeds={onJumpToNeeds}
+            onJumpToOverdue={onJumpToOverdue}
+          />
+          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
+        </>
+      )}
       <span className="sc-chrome-bar-stats-segment">
         <span className="sc-chrome-bar-stats-label">Today</span>
         <span className="sc-chrome-bar-stats-value">{todayLabel || "-"}</span>
@@ -140,59 +155,46 @@ function ChromeStats({
           </span>
         </>
       )}
-      {isFeeAccount ? (
+      {isFeeAccount && (
         <FeeStat gameDaysEntered={gameDaysEntered} totalGameDays={totalGameDays} />
-      ) : (
-        <UrgencyStats
-          needsEntry={needsEntry}
-          overdue={overdue}
-          onJumpToNeeds={onJumpToNeeds}
-          onJumpToOverdue={onJumpToOverdue}
-        />
       )}
     </div>
   );
 }
 
-// Per-meal action signal folded into the chrome (replaces the InfoCard
-// ActionBand). Each count is a button that jumps to the first day of
-// that status. Renders nothing when caught up - absence is the
-// all-clear signal (no separate celebration band, per the frame-2
-// CTA decision). Colored via the same status-* fg tokens the legend
-// and day tiles use, so the toolbar, key, and grid all agree.
+// Per-meal action signal folded into the chrome. Each pill jumps to
+// the first day of its status. Renders nothing when caught up -
+// absence is the all-clear signal. Overdue leads because it carries
+// the harder deadline. Colored via the same status-* tokens the
+// legend and day tiles use, so the toolbar, key, and grid all agree.
+// Pill styling + :active pressed feedback live in chromeBar.css.
 function UrgencyStats({ needsEntry, overdue, onJumpToNeeds, onJumpToOverdue }) {
   const hasNeeds = (needsEntry || 0) > 0;
   const hasOverdue = (overdue || 0) > 0;
   if (!hasNeeds && !hasOverdue) return null;
   return (
     <>
-      {hasNeeds && (
-        <>
-          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--needs"
-            onClick={onJumpToNeeds}
-            aria-label={`Jump to first of ${needsEntry} days needing entry`}
-          >
-            <span className="sc-chrome-bar-stats-count-num">{needsEntry}</span>
-            <span className="sc-chrome-bar-stats-count-label">need entry</span>
-          </button>
-        </>
-      )}
       {hasOverdue && (
-        <>
-          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--overdue"
-            onClick={onJumpToOverdue}
-            aria-label={`Jump to first of ${overdue} overdue days`}
-          >
-            <span className="sc-chrome-bar-stats-count-num">{overdue}</span>
-            <span className="sc-chrome-bar-stats-count-label">overdue</span>
-          </button>
-        </>
+        <button
+          type="button"
+          className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--overdue"
+          onClick={onJumpToOverdue}
+          aria-label={`Jump to first of ${overdue} overdue days`}
+        >
+          <span className="sc-chrome-bar-stats-count-num">{overdue}</span>
+          <span className="sc-chrome-bar-stats-count-label">Overdue - enter now</span>
+        </button>
+      )}
+      {hasNeeds && (
+        <button
+          type="button"
+          className="sc-chrome-bar-stats-count sc-chrome-bar-stats-count--needs"
+          onClick={onJumpToNeeds}
+          aria-label={`Jump to first of ${needsEntry} days needing entry`}
+        >
+          <span className="sc-chrome-bar-stats-count-num">{needsEntry}</span>
+          <span className="sc-chrome-bar-stats-count-label">Needs entry</span>
+        </button>
       )}
     </>
   );
@@ -200,27 +202,23 @@ function UrgencyStats({ needsEntry, overdue, onJumpToNeeds, onJumpToOverdue }) {
 
 // Fee-account contract signal folded into the chrome (replaces the
 // InfoCard FeeBand). Shows game-days-recorded when the schedule has
-// game days, plus an on-track marker. Fee accounts carry no per-day
-// urgency, so there are no jump counts here.
+// game days. Fee accounts carry no per-day urgency, so there are no
+// jump counts here.
+//
+// SC-025 (2026-07-08): the "on track" marker was hardcoded - it read
+// as reassuring status regardless of the actual gameDaysEntered ratio
+// (0/81 said "on track" as loudly as 81/81). Removed until a real
+// business rule defines what "on track" means (per-account contract
+// threshold, calendar-position vs entered ratio, etc.).
 function FeeStat({ gameDaysEntered, totalGameDays }) {
   const hasGameDays = (totalGameDays || 0) > 0;
+  if (!hasGameDays) return null;
   return (
     <>
-      {hasGameDays && (
-        <>
-          <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
-          <span className="sc-chrome-bar-stats-segment">
-            <span className="sc-chrome-bar-stats-label">Game days</span>
-            <span className="sc-chrome-bar-stats-value">{gameDaysEntered}/{totalGameDays}</span>
-          </span>
-        </>
-      )}
       <span className="sc-chrome-bar-stats-sep" aria-hidden="true" />
-      <span className="sc-chrome-bar-stats-ontrack">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-        on track
+      <span className="sc-chrome-bar-stats-segment">
+        <span className="sc-chrome-bar-stats-label">Game days</span>
+        <span className="sc-chrome-bar-stats-value">{gameDaysEntered}/{totalGameDays}</span>
       </span>
     </>
   );
