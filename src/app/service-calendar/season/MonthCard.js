@@ -496,6 +496,7 @@ function buildMonthWeeks(year, monthIndex) {
 
 function fmtK(n) {
   const v = Math.round(Number(n) || 0);
+  // $M branch unreachable today; kept for defense against a future multi-account rollup.
   if (Math.abs(v) >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (Math.abs(v) >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
   return "$" + v.toLocaleString("en-US");

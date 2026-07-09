@@ -79,6 +79,12 @@
   --accent-ops:var(--amber-500); --accent-people:#7C3AED; --accent-directory:#C41E3A; --accent-playbook:#0F6E56;
   /* SC tool accent family (the SC green identity) */
   --accent-sc:#0F6E56; --accent-sc-dark:#085041; --accent-sc-subtle:#E1F5EE; --accent-sc-tint:#F0FDF4;
+  /* SC category-identity chips (classification, NOT status - see ops-sc.css :128 note) */
+  --cat-pdc-bg:#eff6ff; --cat-pdc-fg:#1e40af;
+  --cat-mlb-bg:#fef3c7; --cat-mlb-fg:var(--accent-text);
+  --cat-milb-bg:#cffafe; --cat-milb-fg:#155e75;
+  /* SC submission-toast milestone family (celebrate mode: amber gradient + amber bar-fill) */
+  --toast-milestone-start:#B45309; --toast-milestone-end:#7C2D12; --toast-milestone-accent:#FBBF24;
   /* status family - bg / border / fg(AA) / subtle / strong */
   --status-entered-bg:var(--green-300); --status-entered-bd:var(--green-400); --status-entered-fg:var(--green-800); --status-entered-subtle:var(--green-100); --status-entered-strong:var(--green-500);
   --status-needs-bg:var(--fill-needs); --status-needs-bd:var(--fill-needs-bd); --status-needs-fg:var(--amber-700); --status-needs-subtle:var(--amber-100); --status-needs-strong:var(--amber-500);

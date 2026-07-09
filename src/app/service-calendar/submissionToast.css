@@ -3,8 +3,8 @@
    {daysEntered} of {totalDays} days this {scope} line. Milestone
    (complete) variant switches the ground to gold/amber and adds a glow.
    Scoped out of ops-shared so this stays SC-only.
-   FLAG: mint (bar fill) + amber (milestone) accents are literals here
-   pending a tokenization pass. */
+   Accents tokenized in cleanup C2: mint (bar) = --mint-300; milestone
+   gradient + accent = --toast-milestone-{start,end,accent}. */
 
 /* SC-scoped toast recentering: lift the wrapper from the shared
    top-24px anchor to viewport center so the recorded toast lands over
@@ -26,7 +26,7 @@
   max-width: 420px;
   padding: 12px 16px 14px;
   border-radius: 14px;
-  color: #fff;
+  color: var(--n-0);
   background: linear-gradient(158deg, var(--accent-sc), var(--accent-sc-dark));
   box-shadow: 0 12px 28px rgba(15, 110, 86, 0.28);
   animation: sc-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -42,11 +42,11 @@
   width: 100%;
 }
 .sc-toast-recorded:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--n-0);
   outline-offset: 2px;
 }
 .sc-toast-recorded--milestone {
-  background: linear-gradient(158deg, #B45309, #7C2D12);
+  background: linear-gradient(158deg, var(--toast-milestone-start), var(--toast-milestone-end));
   box-shadow: 0 12px 28px rgba(180, 83, 9, 0.30);
   animation: sc-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1), sc-toast-glow 1.4s ease-in-out 320ms;
 }
@@ -75,7 +75,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--n-0);
   flex-shrink: 0;
   transform: scale(0.4);
   opacity: 0;
@@ -116,12 +116,12 @@
 .sc-toast-recorded__bar-fill {
   display: block;
   height: 100%;
-  background: #7FD3B4;
+  background: var(--mint-300);
   border-radius: 999px;
   width: 0;
   animation: sc-toast-bar-fill 720ms 240ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-.sc-toast-recorded--milestone .sc-toast-recorded__bar-fill { background: #FBBF24; }
+.sc-toast-recorded--milestone .sc-toast-recorded__bar-fill { background: var(--toast-milestone-accent); }
 @keyframes sc-toast-bar-fill { to { width: var(--pct, 0%); } }
 
 .sc-toast-recorded__meta {

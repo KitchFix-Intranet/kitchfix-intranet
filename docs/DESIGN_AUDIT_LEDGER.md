@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-035 + candidates (cleanup phase) · cleanup C3 in flight**
+**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), candidates (cleanup phase) · cleanup C2 merged, C1a/C1b next**
 
 ## Section 1 - Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -178,4 +178,4 @@ Source: DesignReviewInteractiveAuditSC (11 items) + Chat evaluation + code verif
 ### Candidates (Round 3)
 - Per-meal zero = no-service vs homestand zero-on-game = entered: deliberate asymmetry (owner ruling
   2026-07-09) documented in-code (`dataStore ~:204`) - GOTCHAS.md entry landed in cleanup C3.
-- sc_day_metadata.day_notes dormant post-migration - retire the column in a future schema tidy.
+- sc_day_metadata.day_notes dormant post-migration - retire the column in a future schema tidy (dead read at dataStore:722 removed in C2; column retirement still future).

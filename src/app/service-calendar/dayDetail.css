@@ -337,12 +337,52 @@
   white-space: nowrap;
 }
 
+/* ── SC tactile family (extracted in cleanup C2) ──
+   Shared elevation + press behavior for the SC-076 Match pill,
+   SC-074/075 extras expander pair, and SC-074 collapsed-off-group
+   row. Rest sits at elevation-card, hover raises to elevation-raised
+   plus a 1px lift, :active presses 1px back. Reduced-motion pair kills
+   the transition and both transforms. Site-specific hover bodies
+   (background, color, border-color) stay local to each rule below.
+   Not adopted: DaySquare tile (no shadow rest); ops-sc hero (press
+   only); extras-band (band press + inner-chip lift is a different
+   shape); season month/period cards (lift from unshadowed rest).
+   Those keep their per-site declarations. */
+.sc-day-match-btn,
+.sc-day-extras-btn,
+.sc-day-extras-hide,
+.sc-day-collapsed-btn { box-shadow: var(--elevation-card); }
+.sc-day-match-btn:hover,
+.sc-day-extras-btn:hover,
+.sc-day-extras-hide:hover,
+.sc-day-collapsed-btn:hover {
+  box-shadow: var(--elevation-raised);
+  transform: translateY(-1px);
+}
+.sc-day-match-btn:active,
+.sc-day-extras-btn:active,
+.sc-day-extras-hide:active,
+.sc-day-collapsed-btn:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-day-match-btn,
+  .sc-day-extras-btn,
+  .sc-day-extras-hide,
+  .sc-day-collapsed-btn { transition: none; }
+  .sc-day-match-btn:hover,
+  .sc-day-extras-btn:hover,
+  .sc-day-extras-hide:hover,
+  .sc-day-collapsed-btn:hover,
+  .sc-day-match-btn:active,
+  .sc-day-extras-btn:active,
+  .sc-day-extras-hide:active,
+  .sc-day-collapsed-btn:active { transform: none; }
+}
+
 /* SC-076 (render H2): Match projections becomes an outline pill CTA
    centered under the group's active services. White ground, 1.5px
-   --accent-sc border, pill radius, small shadow so it lifts off the
-   card. Icon + label in --accent-sc-dark. Hover tints the ground
-   with the sc-tint family; :active pressed; focus-visible ring;
-   reduced-motion pair. Handler unchanged - only the affordance. */
+   --accent-sc border, pill radius. Site-specific hover tint on the
+   ground; focus-visible ring. Tactile lift/press comes from the
+   shared family above. */
 .sc-day-match-btn {
   display: inline-flex;
   align-items: center;
@@ -360,18 +400,12 @@
   font-weight: var(--wt-semibold);
   cursor: pointer;
   font-family: inherit;
-  box-shadow: var(--elevation-card);
   transition: background var(--motion-control),
               color var(--motion-control),
               box-shadow var(--motion-control),
               transform var(--motion-control);
 }
-.sc-day-match-btn:hover {
-  background: var(--accent-sc-tint);
-  box-shadow: var(--elevation-raised);
-  transform: translateY(-1px);
-}
-.sc-day-match-btn:active { transform: translateY(1px); }
+.sc-day-match-btn:hover { background: var(--accent-sc-tint); }
 .sc-day-match-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
@@ -380,11 +414,6 @@
   font-size: var(--size-body);
   line-height: 1;
   color: var(--accent-sc);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-day-match-btn { transition: none; }
-  .sc-day-match-btn:hover,
-  .sc-day-match-btn:active { transform: none; }
 }
 /* .sc-day-match-btn is now inline; the group card needs to switch to
    flex-column so align-self:center on the button works. */
@@ -408,7 +437,6 @@
   border-radius: var(--radius-container);
   background: var(--surface-card); cursor: pointer; font-family: inherit;
   font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium);
-  box-shadow: var(--elevation-card);
   transition: background var(--motion-control),
               color var(--motion-control),
               border-color var(--motion-control),
@@ -420,11 +448,7 @@
   background: var(--surface-card);
   color: var(--text-default);
   border-color: var(--text-subtle);
-  box-shadow: var(--elevation-raised);
-  transform: translateY(-1px);
 }
-.sc-day-extras-btn:active,
-.sc-day-extras-hide:active { transform: translateY(1px); }
 .sc-day-extras-btn:focus-visible,
 .sc-day-extras-hide:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
@@ -445,14 +469,6 @@
   background: var(--surface-card);
   border-color: var(--text-subtle);
   color: var(--text-heading);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-day-extras-btn,
-  .sc-day-extras-hide { transition: none; }
-  .sc-day-extras-btn:hover,
-  .sc-day-extras-hide:hover,
-  .sc-day-extras-btn:active,
-  .sc-day-extras-hide:active { transform: none; }
 }
 
 /* SC-075 (render G1): in-group extras expander as a sub-header band.
@@ -549,7 +565,6 @@
   border-radius: var(--radius-container);
   cursor: pointer; margin-bottom: 6px; font-size: var(--size-body); color: var(--text-muted);
   font-family: inherit;
-  box-shadow: var(--elevation-card);
   transition: background var(--motion-control),
               color var(--motion-control),
               border-color var(--motion-control),
@@ -560,18 +575,10 @@
   background: var(--surface-card);
   color: var(--text-default);
   border-color: var(--text-subtle);
-  box-shadow: var(--elevation-raised);
-  transform: translateY(-1px);
 }
-.sc-day-collapsed-btn:active { transform: translateY(1px); }
 .sc-day-collapsed-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-day-collapsed-btn { transition: none; }
-  .sc-day-collapsed-btn:hover,
-  .sc-day-collapsed-btn:active { transform: none; }
 }
 /* SC-074: collapsed +/- glyph adopts the same bordered-square chip as
    the show-more/hide-extras siblings for visual continuity. */

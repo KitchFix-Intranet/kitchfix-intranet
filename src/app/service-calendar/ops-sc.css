@@ -129,14 +129,12 @@
    overlap any status fill (Design Batch 1, audit CC-8). The prior
    MiLB tag was a green that read as the entered-state green - moved
    to a cyan family that's distinct from every status fill in
-   DaySquare.css. FLAGGED: tag palette hexes are CATEGORY-IDENTITY
-   colors (PDC blue, MLB amber wash, MiLB cyan); they don't map to
-   semantic tokens - left as literals until a tag-identity token
-   family is defined. */
+   DaySquare.css. Tokenized as `--cat-*` in cleanup C2 (identity
+   palette, distinct from status semantics). */
 .sc-cat { font-size: var(--size-micro); font-weight: var(--wt-bold); padding: 3px var(--space-2); border-radius: var(--radius-cell); letter-spacing: 0.5px; }
-.sc-cat--pdc { background: #eff6ff; color: #1e40af; }
-.sc-cat--mlb { background: #fef3c7; color: var(--accent-text); }
-.sc-cat--milb { background: #cffafe; color: #155e75; }
+.sc-cat--pdc { background: var(--cat-pdc-bg); color: var(--cat-pdc-fg); }
+.sc-cat--mlb { background: var(--cat-mlb-bg); color: var(--cat-mlb-fg); }
+.sc-cat--milb { background: var(--cat-milb-bg); color: var(--cat-milb-fg); }
 
 /* ══════════════════════════════════════
    OVERLAY
