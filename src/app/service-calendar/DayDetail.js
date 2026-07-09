@@ -714,6 +714,16 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
         aria-modal="true"
         aria-labelledby="sc-day-discard-title"
         aria-describedby="sc-day-discard-body"
+        // Post-#362 review: Esc dismisses the confirm without discarding
+        // (returns to editing). stopPropagation so useDialogA11y on the
+        // outer day-overlay doesn't also see the Esc and re-invoke the
+        // guard, which would immediately reopen the confirm.
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            setShowDiscardConfirm(false);
+          }
+        }}
       >
         <div className="sc-day-discard-scrim" aria-hidden="true" />
         <div className="sc-day-discard-card">
