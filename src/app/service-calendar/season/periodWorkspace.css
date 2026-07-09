@@ -300,20 +300,6 @@
   color: var(--text-success);
 }
 
-.sc-workspace-progress-bar {
-  height: 6px;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.sc-workspace-progress-bar-fill {
-  height: 100%;
-  transition: width var(--motion-surface);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-workspace-progress-bar-fill { transition: none; }
-}
-
 /* Fee/homestand branches merged into the .sc-workspace-frame--per-meal
    layout above (P8). The row-layout hero/aux CSS that used to live
    here is dead. */

@@ -20,6 +20,8 @@
 // Computed from the SAME year-summary data the cards consume; no
 // new fetch, no engine call.
 
+import ProgressBar from "./ProgressBar";
+
 export default function FullSeasonCard({
   yearData,
   yearBannerStats,
@@ -151,19 +153,12 @@ function Stat({ label, value, tone, hero }) {
 function CompletionBar({ pct, label, ariaLabel }) {
   return (
     <div className="sc-season-fullseason-completion">
-      <div
-        className="sc-season-fullseason-bar"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={ariaLabel || label}
-      >
-        <div
-          className={`sc-season-fullseason-bar-fill ${pct === 100 ? "sc-season-fullseason-bar-fill--complete" : ""}`}
-          style={{ width: pct + "%" }}
-        />
-      </div>
+      <ProgressBar
+        variant="fullseason"
+        pct={pct}
+        complete={pct === 100}
+        ariaLabel={ariaLabel || label}
+      />
       <span className="sc-season-fullseason-completion-label">{label}</span>
     </div>
   );

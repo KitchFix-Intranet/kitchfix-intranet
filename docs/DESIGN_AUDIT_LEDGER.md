@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), candidates (cleanup phase) · cleanup C2 merged, C1a/C1b next**
+**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), candidates (cleanup phase) · cleanup C1a merged, C1b next**
 
 ## Section 1 - Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -46,7 +46,7 @@ popup) + CC read-only investigation (contrast/CVD measured, behaviors verified a
 | SC-032 | - | Consistency | MonthCard/PeriodCard near-dupes (~60%), legend dupes | CC A3 | WONTFIX per owner ruling 2026-07-09: measured code overlap 8.6-10.7% (not the ~60% estimated); parallel implementations ruled legible; visual family already shared via tokens. Survey: docs/audits/SC_CLEANUP_SURVEY_2026-07-09.md §A1. | HYP-CODE | WONTFIX | CC A3 + Kevin ruling |
 | SC-033 | 3 | Feedback | Failed state UNREACHABLE - no consumer passes loadState; no test hook | dayResolvers.js:46-48; MonthCard.js:299, PeriodCard.js:124 single-arg | Wire loadState on overview consumers + add a dev failure hook (?debug=failed) | CONFIRMED (code) | RESOLVED | CC B10 + Chat spot-check + #353 |
 | SC-034 | 2 | Feedback | No :active (pressed) state on any interactive element; :disabled gaps | CC A1 matrix | Add pressed feedback to chrome + cards (all-devices) | CONFIRMED (code) | RESOLVED | CC A1 + #354 (chrome) + #355 (cards) |
-| SC-035 | 1 | Consistency | Duplicated ProgressBar components + sun/moon SVGs across 3 sites | CC A3 + Flags | WONTFIX per owner ruling 2026-07-09: measured code overlap 8.6-10.7% (not the ~60% estimated); parallel implementations ruled legible; visual family already shared via tokens. Survey: docs/audits/SC_CLEANUP_SURVEY_2026-07-09.md §A1. | CONFIRMED (code) | WONTFIX | CC A3 + Kevin ruling |
+| SC-035 | 1 | Consistency | Duplicated ProgressBar components + sun/moon SVGs across 3 sites | CC A3 + Flags | Consolidated in cleanup C1a (glyphs -> Icons.js, ProgressBar -> season/ProgressBar.js). Note: the 2026-07-09 WONTFIX mis-scoped - the 8.6% overlap rationale applied to SC-032's card merge only. | CONFIRMED (code) | RESOLVED | CC A3 + C1a |
 
 ## Fix before ship (open sev 3-4, ranked)
 1. **SC-025 (4)** - remove the fabricated ON TRACK token. *Non-issue condition: none - a hardcoded health assertion cannot be fine.*
@@ -62,7 +62,7 @@ popup) + CC read-only investigation (contrast/CVD measured, behaviors verified a
 - **Bundle 2 - chrome:** SC-025, SC-008, SC-021, SC-034 (chrome)
 - **Bundle 3 - cards/skeleton/wayfinding:** SC-012, SC-016, SC-026, SC-006, SC-034 (cards), SC-029
 - **Runtime (Step 4, post-merge):** SC-014, SC-015, SC-020
-- **Parked:** SC-011 (zoom - separate discussion) · **Cleanup phase:** SC-035 (+ SC-032 residue)
+- **Parked:** SC-011 (zoom - separate discussion) · **Cleanup phase:** SC-035 resolved in C1a; SC-032 WONTFIX per owner ruling
 
 ## Do not touch
 Three-way loading/failed/zero atom structure (wire it, don't redesign it) · roving-tabindex keyboard
@@ -112,7 +112,7 @@ SC-036 unchanged (drill band chips do NOT hide on mobile per CC B3 - the gap is 
 ### Candidates (Section 2)
 - Stale day.isPast across midnight (baked at fetch) feeds chips + bar - runtime someday.
 - Workspace skeleton is a raw grid, not card-anatomy (SC-016 parity) - polish someday.
-- Skeleton hardcodes 28 tiles regardless of period length (28-31) - cosmetic.
+- Skeleton hardcodes 28 tiles regardless of period length (28-31) - RESOLVED in cleanup C1a (derives from periodRange, falls back to 28 when unknown).
 - Partial-vs-total period-failure paths are subtle (PW:118-129) - watch during SC-047 work.
 
 ## Section 3 - Submissions + Confirmations (entry / review / success / toast / bulk) · audited 2026-07-08

@@ -16,6 +16,32 @@
   font-family: inherit;
 }
 
+/* ───────── PROGRESS BAR (shared) ─────────
+   Cleanup C1a consolidation of 4 formerly per-file bar blocks:
+   month/period card bars, full-season capstone bar, and the workspace
+   ProgressLine. All share the same track+fill shape; heights, track/
+   fill colors, and the --complete swap vary per variant.
+   Consumer: season/ProgressBar.js. Toast bar stays separate (different
+   animation anatomy). */
+.sc-progress { border-radius: var(--radius-pill); overflow: hidden; }
+.sc-progress-fill { height: 100%; transition: width var(--motion-surface); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-progress-fill { transition: none; }
+}
+/* line: PeriodWorkspace ProgressLine. Fill color comes from an inline
+   style set by the caller. */
+.sc-progress--line       { height: 6px; background: var(--surface-sunken); }
+/* card: MonthCard + PeriodCard footer bars. --complete swaps to
+   --text-success. */
+.sc-progress--card       { height: 4px; background: var(--border-subtle); }
+.sc-progress-fill--card  { background: var(--status-entered-bg); }
+.sc-progress-fill--card.sc-progress-fill--complete { background: var(--text-success); }
+/* fullseason: FullSeasonCard capstone bar. --complete swaps to
+   --accent-sc-dark (the divergent value that stays a variant override). */
+.sc-progress--fullseason      { flex: 1; height: 7px; background: var(--accent-sc-tint); }
+.sc-progress-fill--fullseason { display: block; background: var(--accent-sc); }
+.sc-progress-fill--fullseason.sc-progress-fill--complete { background: var(--accent-sc-dark); }
+
 /* ───────── BANNER ───────── */
 .sc-season-banner {
   display: flex;
@@ -614,22 +640,6 @@
   font-weight: var(--wt-bold);
 }
 
-.sc-season-month-card-bar {
-  height: 4px;
-  background: var(--border-subtle);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.sc-season-month-card-bar-fill {
-  height: 100%;
-  background: var(--status-entered-bg);
-  transition: width var(--motion-surface);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-month-card-bar-fill { transition: none; }
-}
-.sc-season-month-card-bar-fill--complete { background: var(--text-success); }
-
 /* ══════════════════════════════════════════════════════════════
    STAGE 2: real strip blocks + period-cards + Full Season card
    ══════════════════════════════════════════════════════════════ */
@@ -821,22 +831,6 @@
   color: var(--accent-text);
   font-weight: var(--wt-semibold);
 }
-.sc-season-period-card-bar {
-  height: 4px;
-  background: var(--border-subtle);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.sc-season-period-card-bar-fill {
-  height: 100%;
-  background: var(--status-entered-bg);
-  transition: width var(--motion-surface);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-period-card-bar-fill { transition: none; }
-}
-.sc-season-period-card-bar-fill--complete { background: var(--text-success); }
-
 /* ───────── FULL SEASON SUMMARY CARD (Design Batch 3) ─────────
    Clear white card boundary on the beige page (audit P1-8 bg-clash
    fix). Revenue-forward KPI row + a completion bar with explicit
@@ -942,24 +936,6 @@
   gap: var(--space-3);
   margin-top: auto;
 }
-.sc-season-fullseason-bar {
-  flex: 1;
-  height: 7px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-sc-tint);
-  overflow: hidden;
-}
-.sc-season-fullseason-bar-fill {
-  display: block;
-  height: 100%;
-  background: var(--accent-sc);
-  border-radius: var(--radius-pill);
-  transition: width var(--motion-surface);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-fullseason-bar-fill { transition: none; }
-}
-.sc-season-fullseason-bar-fill--complete { background: var(--accent-sc-dark); }
 .sc-season-fullseason-completion-label {
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);

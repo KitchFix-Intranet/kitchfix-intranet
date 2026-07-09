@@ -31,6 +31,8 @@
 //   fee-no-dollar  N served (NO $, STL-FL discipline)
 
 import "./DaySquare.css";
+import { SunGlyph, MoonGlyph } from "./Icons";
+import { fmt$K, fmtMeals } from "./season/format";
 
 // Number formatting convention (Design Batch 1, audit P2-1).
 //   - Revenue >= $1M: $1.2M
@@ -38,14 +40,7 @@ import "./DaySquare.css";
 //   - Revenue <  $1K: $987
 //   - Meal counts: raw with thousands separator (1,234)
 //   - Compact meal counts (sm tiles): 1.2k for values >= 1,000
-// One convention; one place. KPI/revenue uses K/M; raw counts stay raw.
-const fmt$ = (n) => {
-  const v = Math.round(Number(n) || 0);
-  if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (v >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
-  return "$" + v.toLocaleString("en-US");
-};
-const fmtMeals = (n) => n.toLocaleString("en-US");
+// K/M compactor + meals formatter shared via season/format.js (C1a).
 
 // Compact format for small-size tiles when the count gets long.
 // 1,234 -> "1.2k" so the date isn't visually crowded out.
@@ -261,7 +256,7 @@ function renderPerMeal(content, status) {
         {/* SC-045: pluralize meal/meals on the exact-1 case. */}
         <span className="sc-daysq-mid-meals-unit">{meals === 1 ? "meal" : "meals"}</span>
       </span>
-      {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
+      {hasRev && <span className={revClass}>{revPrefix}{fmt$K(revenue)}</span>}
     </div>
   );
 }
@@ -332,15 +327,15 @@ function renderMilb(content, status) {
       {/* Muted revenue beneath. est./~/bare prefix encoding preserved
           verbatim from the pre-SC-070 line above; it just moves to the
           subordinate slot. */}
-      {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
+      {hasRev && <span className={revClass}>{revPrefix}{fmt$K(revenue)}</span>}
     </div>
   );
 }
 
 function renderFeeNoDollar(content) {
   // STL-FL discipline: no $ tokens. Structural absence enforced by
-  // never importing fmt$ into this branch's logic (we do import it
-  // file-wide, but this function does not call it).
+  // never calling fmt$K into this branch's logic (fmt$K is imported
+  // file-wide via ./season/format, but this function does not call it).
   const { served, meals } = content;
   const n = served != null ? served : meals;
   if (n == null) return null;
@@ -363,25 +358,7 @@ function MilbPill({ type }) {
       role="img"
       aria-label={isDay ? "Day game" : "Night game"}
     >
-      {isDay ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="4.5" fill="currentColor" />
-          <g stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="12" y1="2" x2="12" y2="4" />
-            <line x1="12" y1="20" x2="12" y2="22" />
-            <line x1="2" y1="12" x2="4" y2="12" />
-            <line x1="20" y1="12" x2="22" y2="12" />
-            <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
-            <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
-            <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
-            <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
-          </g>
-        </svg>
-      ) : (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
+      {isDay ? <SunGlyph size={12} /> : <MoonGlyph size={12} />}
     </span>
   );
 }
@@ -406,7 +383,7 @@ function buildAriaLabel({ date, status, isToday, isSelected, content, kind }) {
   if (content) {
     if (content.opponent) parts.push(`vs ${content.opponent}`);
     if (content.milbPill) parts.push(`${content.milbPill} game`);
-    if (kind === "per-meal" && content.revenue != null) parts.push(fmt$(content.revenue));
+    if (kind === "per-meal" && content.revenue != null) parts.push(fmt$K(content.revenue));
     const mealCount = content.served != null ? content.served : content.meals;
     if (mealCount != null) parts.push(`${mealCount} meals`);
   }
