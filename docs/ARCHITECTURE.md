@@ -80,6 +80,24 @@ The boundary:
 
 **Drive is retired as an OPD content source.** The doc-format arc replaced Drive-hosted PDFs with in-app MDX rendering (cover, TOC, print/PDF, the works). `documents.source_drive_id` / `_es` columns and a reader iframe fallback still exist but are scheduled for deletion once the operator-catalog alive-test in `PlaybookClient.js` is unwired from Drive.
 
+### Service Calendar architecture
+
+This section orients; the deep docs hold the detail.
+
+**Two-layer money model.** Per-meal / operational revenue is derived via the effective-dated view `sc_daily_revenue` (LATERAL join across `sc_service_prices` on `service_date`). Contract revenue (annual fees, SF% amounts, flat-fee accounts) lives in `sc_fee_schedule` and is managed via the admin surface. The KPI/dashboard lens reads both as additive P&L lines. Canonical doc: [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md).
+
+**Server-authoritative saved totals.** After a day/bulk save, `sc-submit-day` reads `sc_daily_revenue` AFTER the write via `readSavedDayTotals`, then returns `savedRevenue` and `savedMeals` in the response. Every surface (day-tile total, drill rail, review overlay, submission toast, bulk header) echoes those numbers - one server-computed truth per save. Landed via #361 (SC-051).
+
+**Append-only notes ledger.** Day notes persist to `sc_day_note_entries` (one row per authored note; author derived server-side from the session, never accepted from client input). The `sc-add-note` action appends; DayDetail renders the ledger client-side. The dormant `sc_day_metadata.day_notes` column was backfilled into the ledger with author `"-"` (typographic no-data placeholder) on cutover. Landed via #367 (SC-079); schema is `docs/migrations/sc-9-day-note-entries.sql`.
+
+**Effective-dated price model.** `sc_service_prices` carries a `price_kind` enum (`'projected'` or `'actual'`) plus an `effective_date`. The view LATERAL-joins the newest `service_date <= effective_date` row per (service, date), and falls back on `COALESCE(pr_act.price, pr_proj.price)` when no actual row exists yet. That fallback is why removing the sc-8b double-discounted `'actual'` rows in sc-8c self-healed history via the view. Migrations: `sc-8a` (kind column), `sc-8b` (view + backfill, since superseded), `sc-8c` (double-discount cleanup, 2026-07-09). Detail: [`SC_MONEY_ALIGNMENT_REPORT.md`](SC_MONEY_ALIGNMENT_REPORT.md).
+
+**Classifier asymmetry.** `classifyDayStatus` in `src/lib/dataStore/serviceCalendar.js:~183-216` treats a zero actual count differently by account shape: on per-meal accounts an all-zero save reads as `"no-service"`; on MLB homestand accounts an all-zero save on a GAME day reads as `"entered"` (a recorded rainout). Deliberate per owner ruling 2026-07-09. Full rationale in [`GOTCHAS.md`](GOTCHAS.md) "SC classifier: per-meal zero and homestand zero mean opposite things."
+
+**Debug-hook pattern.** Failed-atom rendering is testable via `?debug=failed` gated on `isDev`, wired in `src/app/service-calendar/ServiceCalendar.js:1509` (overview) + `:1555` (period + month drill scopes). Forces `resolveDayStatus` to return failed for one tile so the failure state can be inspected. This is the canonical pattern for forcing UI states in dev: `isDev && searchParams.get('debug') === '<state>'` + a per-consumer resolver override.
+
+**Schema hygiene note.** `sc_services.deleted_at` is a reserved hard-delete escape hatch - populated by nothing, filtered for defense in ~10 read sites. Live archive uses `active_until` (`sc-6c`, sets a date; NULL = active forever). Do not conflate the two.
+
 ### Cutover control plane
 
 `src/lib/cutover.js` parses two env-var-derived flag sets at module load:

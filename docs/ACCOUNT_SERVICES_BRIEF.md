@@ -50,13 +50,13 @@ Rewritten 2026-07-09 per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). For `actuals_
 
 **Billing model:** `actuals_drive_invoice` (hybrid in reality: flat annual Service Fee plus per-meal Catering Fees). Per-meal volume is the variable component invoiced based on actuals.
 
-**Service fee structure:** 30% of pre-tax annual budget estimate, flat annual. 2023 base = $402,016 (30% of $1,340,056 budget). CPI-adjusted annually per the escalation clause. Per-meal projection price INCLUDES the 30% SF component; actuals tab price is the 70% cost basis. The 30% is "covered by" the annual Service Fee paid separately.
+**Service fee structure:** 30% of pre-tax annual budget estimate, flat annual. 2023 base = $402,016 (30% of $1,340,056 budget). CPI-adjusted annually per the escalation clause. Per-meal projection price is the sticker (pre-SF); actuals tab price is the 70% post-SF invoice rate. The 30% is "covered by" the annual Service Fee paid separately.
 
 **Per-meal projection prices (operative 2026 billing rates):**
 
-| Group | Service | Projection price | Actuals (cost basis) | Notes |
+| Group | Service | Projection price | Actuals (post-SF invoice rate) | Notes |
 |---|---|---|---|---|
-| Major League | Breakfast | $29.01 | $20.31 | 70% cost basis |
+| Major League | Breakfast | $29.01 | $20.31 | 70% post-SF invoice rate |
 | Major League | Lunch | $29.01 | $20.31 | |
 | Major League | Dinner | $29.01 | $20.31 | |
 | Minor League | Breakfast | $18.42 | $12.90 | |
@@ -70,7 +70,7 @@ Rewritten 2026-07-09 per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). For `actuals_
 | Rehab | Lunch | $18.42 | $12.90 | |
 | Rehab | Dinner | $18.42 | $12.90 | |
 
-The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The operative 2026 projection rates above are significantly above either the floor or cap CPI escalation off 2023 base, indicating either a separately negotiated 2026 SOW or a renegotiation outside the 2023 contract document. The operative 2026 pricing document is not in the contracts folder on file (open question).
+The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The operative 2026 projection rates above are significantly above either the floor or cap CPI escalation off 2023 base, indicating either a separately negotiated 2026 SOW or a renegotiation outside the 2023 contract document. The operative 2026 pricing document is not in the contracts folder on file (open question - see [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md) §Open paperwork gaps).
 
 **Payment schedule:**
 - Service Fee: 75% due Feb 1, remaining 25% due Mar 15 each year (per Section IV(B)(1)).

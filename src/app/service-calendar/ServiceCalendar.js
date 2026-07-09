@@ -169,7 +169,7 @@ function AccountDropdown({ accounts, value, onChange }) {
   return (
     <div className="sc-dropdown" ref={ref}>
       <button className="sc-dropdown-trigger" onClick={() => setOpen(!open)}>
-        <span className="sc-dropdown-val">{selected ? `${selected.key} — ${selected.name}` : "Select..."}</span>
+        <span className="sc-dropdown-val">{selected ? `${selected.key} - ${selected.name}` : "Select..."}</span>
         <svg className={`sc-dropdown-arrow ${open ? "sc-dropdown-arrow--open" : ""}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
@@ -180,7 +180,7 @@ function AccountDropdown({ accounts, value, onChange }) {
               {grouped[cat].map(a => (
                 <button key={a.key} className={`sc-dropdown-item ${a.key === value ? "sc-dropdown-item--active" : ""}`}
                   onClick={() => { onChange(a.key); setOpen(false); }}>
-                  <span>{a.key} — {a.name}</span>
+                  <span>{a.key} - {a.name}</span>
                   {a.key === value && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
                 </button>
               ))}

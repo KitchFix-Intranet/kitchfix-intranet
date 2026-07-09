@@ -64,7 +64,7 @@ KitchFix uses Google Workspace OAuth. There is no user table to add to.
 
 ## How to restore a Google Sheet from backup
 
-Daily backups run via `/api/cron/backup-sheets` at 06:00 UTC (01:00 CT). Backups land in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub — Sheet Backups"). Covered: HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS is deliberately skipped (generated data, cell-quota sensitive).
+Daily backups run via `/api/cron/backup-sheets` at 06:00 UTC (01:00 CT). Backups land in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub - Sheet Backups"). Covered: HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS is deliberately skipped (generated data, cell-quota sensitive).
 
 Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is currently unlimited - backups accumulate; pruning is a future sub-cron.
 
