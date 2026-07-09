@@ -630,7 +630,7 @@ export async function loadAllAccountsConfig() {
 //       {
 //         date: "2026-06-01",
 //         isPast, isLocked,
-//         period, weekLabel, eventLabel, gameType, gameTime, dayNotes,
+//         period, weekLabel, eventLabel, gameType, gameTime,
 //         services: [
 //           {
 //             serviceId, serviceName, groupName,
@@ -719,7 +719,6 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         eventLabel:  r.event_label || null,
         gameType:    r.game_type   || null,
         gameTime:    r.game_time   || null,
-        dayNotes:    r.day_notes   || null,
         services: [],
       });
     }

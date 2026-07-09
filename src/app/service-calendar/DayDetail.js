@@ -76,7 +76,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, onAddNote, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {
+function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {
   // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
   // "% of {scope}" readout. Legacy callers (the legacy month/period
   // views) don't pass it and default to "month" - the existing label

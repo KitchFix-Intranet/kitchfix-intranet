@@ -945,38 +945,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
   }, [data, showToast]);
 
-  const handleConfirmAsProjected = useCallback(async (day) => {
-    if (!data?.account || !data?.serviceGroups) return;
-    const entries = []; for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
-    setSaving(true);
-    try {
-      // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
-      const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
-      const result = await res.json();
-      if (!isMountedRef.current) return;
-      if (result.success) {
-        const newlyEntered = day.hasActuals ? 0 : 1;
-        showToast(buildRecordedToast({
-          amount: Number(result.savedRevenue) || 0,
-          meals:  Number(result.savedMeals)   || 0,
-          newlyEntered,
-        }));
-        // Surgical monthCache invalidation for the single saved month.
-        const mk = day.date.slice(0, 7);
-        setMonthCache(prev => {
-          if (!(mk in prev)) return prev;
-          const next = { ...prev }; delete next[mk]; return next;
-        });
-        setReloadKey(k => k + 1);
-      } else showToast(result.error || "Save failed", "error");
-    } catch {
-      if (isMountedRef.current) showToast("Network error", "error");
-    } finally {
-      if (isMountedRef.current) setSaving(false);
-    }
-  }, [data, showToast, buildRecordedToast]);
-
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
@@ -1657,7 +1625,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           >
             <DayDetail ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
               overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
-              onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} onAddNote={handleAddNote} saving={saving}
+              onSave={handleSave} onAddNote={handleAddNote} saving={saving}
               dayIndex={focusIdx} totalDays={dayList.length}
               monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
               scopeLabel="period"
