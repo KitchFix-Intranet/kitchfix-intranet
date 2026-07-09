@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 + Round 2 complete · Owner Round 3 IN PROGRESS · 0 sev-4 open**
+**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-035 + candidates (cleanup phase)**
 
 ## Section 1 — Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -169,13 +169,14 @@ Source: DesignReviewInteractiveAuditSC (11 items) + Chat evaluation + code verif
 
 | ID | Sev | Item | Finding | Fix (approved) | Status | Verified by |
 |----|-----|------|---------|----------------|--------|-------------|
-| SC-075 | 1 | 1 | Extras expander floats groupless | G1 sub-header band inside the group card | OPEN | render G1 |
-| SC-076 | 2 | 2 | Match projections not CTA-obvious | H2 outline pill button per group | OPEN | render H2 |
-| SC-077 | 2 | 3 | MLB lacks Mark-no-service (rainouts) | SC-066 flow extended to homestand accounts | OPEN | ruling |
-| SC-078 | 3 | 4 | Homestand classifier types by schedule, blind to entry - entered non-game days stuck beige (Jun 26 repro) | Entry beats schedule: entered wins on game days (zero incl.) + nonzero non-game days; tiles openable; legend "Entered" | OPEN | Kevin repro + ruling |
-| SC-079 | 3 | 5 | Notes lack authorship/history - no accountability trail | Append-only ledger (I3): sc_day_note_entries table + migration + sc-add-note (server-derived author) + independent Add-note flow + Latest-note in review | OPEN | render I3 + ruling |
+| SC-075 | 1 | 1 | Extras expander floats groupless | G1 sub-header band inside the group card | RESOLVED | render G1 + #367 |
+| SC-076 | 2 | 2 | Match projections not CTA-obvious | H2 outline pill button per group | RESOLVED | render H2 + #367 |
+| SC-077 | 2 | 3 | MLB lacks Mark-no-service (rainouts) | SC-066 flow extended to homestand accounts | RESOLVED | ruling + #367 |
+| SC-078 | 3 | 4 | Homestand classifier types by schedule, blind to entry - entered non-game days stuck beige (Jun 26 repro) | Entry beats schedule: entered wins on game days (zero incl.) + nonzero non-game days; tiles openable; legend "Entered" | RESOLVED | Kevin repro + ruling + #367 |
+| SC-079 | 3 | 5 | Notes lack authorship/history - no accountability trail | Append-only ledger (I3): sc_day_note_entries table + migration + sc-add-note (server-derived author) + independent Add-note flow + Latest-note in review | RESOLVED | render I3 + ruling + #367 |
 
 ### Candidates (Round 3)
 - Per-meal zero = no-service vs homestand zero-on-game = entered: deliberate asymmetry (owner ruling
   2026-07-09) - GOTCHAS.md entry due in the cleanup pass.
 - sc_day_metadata.day_notes dormant post-migration - retire the column in a future schema tidy.
+- Per-meal-zero vs homestand-zero classify asymmetry documented in-code (dataStore ~:204) - promote to GOTCHAS.md in the cleanup pass.
