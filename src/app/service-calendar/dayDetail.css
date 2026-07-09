@@ -376,31 +376,66 @@
    the bottom of the visible-services stack with a hairline divider.
    Not a floating pill anymore; reads as "there's more inside this
    card" rather than "here's a button beside the card". */
+/* SC-074 (render F3): both expander surfaces (show-more / hide-extras
+   AND the collapsed off-group rows below) adopt the elevation family
+   the month/period-card hovers use. White ground, --border-default,
+   small resting shadow, lift on hover, pressed :active, reduced-motion
+   pair. The +/- glyph becomes a bordered square chip (page-tint
+   ground) rather than the old circle. */
 .sc-day-extras-btn,
 .sc-day-extras-hide {
   display: flex; align-items: center; justify-content: center; gap: var(--space-2);
-  width: 100%; padding: var(--space-2) var(--space-4); margin: 0;
-  border: none; border-top: 0.5px solid var(--border-subtle); border-radius: 0;
-  background: transparent; cursor: pointer; font-family: inherit;
+  width: 100%; padding: var(--space-3) var(--space-4); margin: var(--space-2) 0 0;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  background: var(--surface-card); cursor: pointer; font-family: inherit;
   font-size: var(--size-caption); color: var(--text-muted); font-weight: var(--wt-medium);
-  transition: background var(--motion-control), color var(--motion-control);
+  box-shadow: var(--elevation-card);
+  transition: background var(--motion-control),
+              color var(--motion-control),
+              border-color var(--motion-control),
+              box-shadow var(--motion-control),
+              transform var(--motion-control);
 }
 .sc-day-extras-btn:hover,
-.sc-day-extras-hide:hover { background: var(--accent-sc-tint); color: var(--accent-sc-dark); }
+.sc-day-extras-hide:hover {
+  background: var(--surface-card);
+  color: var(--text-default);
+  border-color: var(--text-subtle);
+  box-shadow: var(--elevation-raised);
+  transform: translateY(-1px);
+}
+.sc-day-extras-btn:active,
+.sc-day-extras-hide:active { transform: translateY(1px); }
 .sc-day-extras-btn:focus-visible,
 .sc-day-extras-hide:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-extras-btn-icon {
-  width: 16px; height: 16px; border-radius: var(--radius-circle);
-  background: var(--border-default); color: var(--text-muted);
+  width: 18px; height: 18px; border-radius: var(--rad-4);
+  background: var(--surface-page);
+  border: var(--border-thin) solid var(--border-default);
+  color: var(--text-default);
   display: flex; align-items: center; justify-content: center;
   font-size: var(--size-caption); font-weight: var(--wt-semibold);
-  flex-shrink: 0; transition: background var(--motion-control), color var(--motion-control);
+  flex-shrink: 0;
+  transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
 }
 .sc-day-extras-btn:hover .sc-day-extras-btn-icon,
-.sc-day-extras-hide:hover .sc-day-extras-btn-icon { background: var(--accent-sc); color: var(--surface-card); }
+.sc-day-extras-hide:hover .sc-day-extras-btn-icon {
+  background: var(--surface-card);
+  border-color: var(--text-subtle);
+  color: var(--text-heading);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-day-extras-btn,
+  .sc-day-extras-hide { transition: none; }
+  .sc-day-extras-btn:hover,
+  .sc-day-extras-hide:hover,
+  .sc-day-extras-btn:active,
+  .sc-day-extras-hide:active { transform: none; }
+}
 
 /* Group subtotal - sealed band closing the card at the bottom.
    Hairline top-border + surface-page fill so the running total reads
@@ -415,19 +450,58 @@
   font-variant-numeric: var(--num-tabular);
 }
 
-/* Collapsed inactive group — button style, distinct from notes */
+/* SC-074 (render F3): collapsed off-group row uses the same elevation
+   family as the show-more/hide-extras rows above so both expander
+   surfaces read as tactile cards, not ghost lines. */
 .sc-day-collapsed-btn {
   display: flex; justify-content: space-between; align-items: center; width: 100%;
-  padding: var(--space-2) var(--space-3); background: var(--surface-card); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control);
-  cursor: pointer; margin-bottom: 6px; font-size: var(--size-body); color: var(--text-subtle);
-  font-family: inherit; transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  cursor: pointer; margin-bottom: 6px; font-size: var(--size-body); color: var(--text-muted);
+  font-family: inherit;
+  box-shadow: var(--elevation-card);
+  transition: background var(--motion-control),
+              color var(--motion-control),
+              border-color var(--motion-control),
+              box-shadow var(--motion-control),
+              transform var(--motion-control);
 }
-.sc-day-collapsed-btn:hover { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--accent-sc); }
+.sc-day-collapsed-btn:hover {
+  background: var(--surface-card);
+  color: var(--text-default);
+  border-color: var(--text-subtle);
+  box-shadow: var(--elevation-raised);
+  transform: translateY(-1px);
+}
+.sc-day-collapsed-btn:active { transform: translateY(1px); }
 .sc-day-collapsed-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-day-collapsed-icon { font-size: var(--size-subhead); font-weight: var(--wt-semibold); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-day-collapsed-btn { transition: none; }
+  .sc-day-collapsed-btn:hover,
+  .sc-day-collapsed-btn:active { transform: none; }
+}
+/* SC-074: collapsed +/- glyph adopts the same bordered-square chip as
+   the show-more/hide-extras siblings for visual continuity. */
+.sc-day-collapsed-icon {
+  width: 18px; height: 18px; border-radius: var(--rad-4);
+  background: var(--surface-page);
+  border: var(--border-thin) solid var(--border-default);
+  color: var(--text-default);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--size-caption); font-weight: var(--wt-semibold);
+  flex-shrink: 0;
+  transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
+}
+.sc-day-collapsed-btn:hover .sc-day-collapsed-icon {
+  background: var(--surface-card);
+  border-color: var(--text-subtle);
+  color: var(--text-heading);
+}
 
 /* SC-066 (render B2): Mark-no-service row. Off-tint dashed container
    above DAY NOTES; the button uses the standard .sc-btn--outline
