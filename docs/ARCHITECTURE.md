@@ -98,6 +98,8 @@ This section orients; the deep docs hold the detail.
 
 **Schema hygiene note.** `sc_services.deleted_at` is a reserved hard-delete escape hatch - populated by nothing, filtered for defense in ~10 read sites. Live archive uses `active_until` (`sc-6c`, sets a date; NULL = active forever). Do not conflate the two.
 
+**Operator Excel export.** `GET /api/service-calendar/export` streams a three-sheet xlsx (Summary K1/K2/K3 + Daily detail + Notes) built by `src/lib/export/scWorkbook.js` via exceljs. Session-authenticated (401 JSON otherwise); no admin gate. Money source discipline is inherited: per-day dollars come from `sc_daily_revenue` (effective-dated view), never the catalog. The contract Service Fee from `sc_fee_schedule` is a REFERENCE row on period/month scopes (never summed into scope totals); at year scope the Summary adds an All-in KPI row `actual meal revenue + SF` as an additive P&L reading. Fee shapes (homestand-fee + STL-FL flat_fee) omit dollar columns throughout, including the L tables. A red DRAFT stamp appears while entered days < expected. Server is the sole source of truth for the filename via `Content-Disposition`. See [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md) for the underlying rules.
+
 ### Cutover control plane
 
 `src/lib/cutover.js` parses two env-var-derived flag sets at module load:
