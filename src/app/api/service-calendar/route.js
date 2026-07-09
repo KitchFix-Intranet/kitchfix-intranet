@@ -9,6 +9,8 @@ import {
   loadYearSummary,
   loadHomestandContext,
   saveActuals,
+  saveDayNotes,
+  readSavedDayTotals,
   saveBulkActuals,
   updateServiceConfig,
   submitConfigRequest,
@@ -245,6 +247,11 @@ function transformDays(orchDays) {
       projectedRevenue,
       actualRevenue,
       priceAtDate,
+      // sc_day_metadata.notes surfaced via the sc_daily_revenue view's
+      // day_notes alias (see loadMonthDataPostgres, `dayNotes` bucket
+      // field). DayDetail prefills its notes textarea from this so a
+      // saved note is visible + editable on reopen (SC-053 fix).
+      dayNotes:   d.dayNotes || null,
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,
@@ -569,7 +576,7 @@ export async function POST(request) {
   try {
     // ── sc-submit-day: save actuals for one day ──
     if (action === "sc-submit-day") {
-      const { accountKey, date, entries } = body;
+      const { accountKey, date, entries, dayNotes } = body;
       if (!accountKey || !date || !entries?.length) {
         return NextResponse.json(
           { success: false, error: "Missing required fields" },
@@ -586,7 +593,27 @@ export async function POST(request) {
         actualCount: Number(e.value) || 0,
       }));
       const result = await saveActuals(accountKey, date, touched, email);
-      return NextResponse.json(result);
+
+      // SC-053: day-notes end-to-end. Client sends dayNotes as a string
+      // (may be empty) whenever the textarea was rendered - undefined
+      // means the caller didn't opt into notes (bulk paths). Only the
+      // string form triggers a write.
+      if (typeof dayNotes === "string") {
+        await saveDayNotes(accountKey, date, dayNotes, email);
+      }
+
+      // SC-051: server-authoritative totals. Read the view after the
+      // write so the toast reflects effective-dated prices (same source
+      // as the tile + week card + drill rail), not a client recompute
+      // from the current catalog. Toast rounds to whole dollars via
+      // fmt$; toast component receives the raw sum.
+      const totals = await readSavedDayTotals(accountKey, date);
+
+      return NextResponse.json({
+        ...result,
+        savedRevenue: totals.revenue,
+        savedMeals:   totals.meals,
+      });
     }
 
     // ── sc-bulk-submit: save actuals for multiple days ──
