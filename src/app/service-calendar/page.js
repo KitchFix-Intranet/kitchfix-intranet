@@ -117,7 +117,7 @@ export default function ServiceCalendarPage() {
               <span className="oh-sc-coming-chip">Revenue Tracking</span>
               <span className="oh-sc-coming-chip">All 12 Accounts</span>
             </div>
-            <p className="oh-sc-coming-footer">Check back soon — we&apos;re building something great.</p>
+            <p className="oh-sc-coming-footer">Check back soon - we&apos;re building something great.</p>
           </div>
         </div>
       </div>

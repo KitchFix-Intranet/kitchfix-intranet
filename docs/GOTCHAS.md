@@ -130,7 +130,7 @@ This bug shows up as "the period boundary cron sometimes catches things and some
 
 ### Em-dashes in email subjects break encoding
 
-Subject lines with `-` (em-dash) produce encoding artifacts in some email clients - the recipient sees `=?UTF-8?...` garbage in the subject.
+Subject lines with `—` (em-dash) produce encoding artifacts in some email clients - the recipient sees `=?UTF-8?...` garbage in the subject.
 
 **Fix:** Use a regular hyphen `-` in email subjects. Em-dashes in body content are fine.
 
@@ -187,7 +187,7 @@ function Parent({ data }) {
 
 ### The SC toast is per-page, not the shared component
 
-`service-calendar/page.js` renders its own `.oh-toast` / `<SubmissionToast>` via a local `showToast(msgOrObj, type)` provider — it does **not** use `src/components/people/Toast.js`. The rich "recorded" variant is an object payload (`{ variant: "recorded", amount, meals, daysEntered, ... }`); plain toasts are still strings and route through the same `showToast`. Each top-level page owns its own toast provider — Ops has its own too, and their DOM containers are separate.
+`service-calendar/page.js` renders its own `.oh-toast` / `<SubmissionToast>` via a local `showToast(msgOrObj, type)` provider - it does **not** use `src/components/people/Toast.js`. The rich "recorded" variant is an object payload (`{ variant: "recorded", amount, meals, daysEntered, ... }`); plain toasts are still strings and route through the same `showToast`. Each top-level page owns its own toast provider - Ops has its own too, and their DOM containers are separate.
 
 **Fix:** don't reach for the shared component when adding a new toast on SC. Add to `showToast`'s payload contract and render inside `page.js`. Same shape carries `.oh-toast-container` positioning via a modifier class (SC uses `--sc-center` to sit over the calendar; Ops keeps top-anchored).
 
@@ -212,21 +212,21 @@ useEffect(() => {
 
 ### A heavy post-save refetch can race client navigation (nav dead right after a save)
 
-Invalidating the **entire** month cache on save (`setMonthCache({})`) forces every cached month to refetch at once — and because the drill-in fetch effects have `monthCache` in their deps (#332), each write-back re-fires them, producing a burst of (often cancelled) `sc-load` requests. During that burst, `router.push` navigation clicks (`‹ Season`, the period/month stepper) are **intermittently lost** — the header renders and the buttons are enabled, but the click races the churn. Symptom: nav is dead *immediately after a save*, then works after a beat.
+Invalidating the **entire** month cache on save (`setMonthCache({})`) forces every cached month to refetch at once - and because the drill-in fetch effects have `monthCache` in their deps (#332), each write-back re-fires them, producing a burst of (often cancelled) `sc-load` requests. During that burst, `router.push` navigation clicks (`‹ Season`, the period/month stepper) are **intermittently lost** - the header renders and the buttons are enabled, but the click races the churn. Symptom: nav is dead *immediately after a save*, then works after a beat.
 
 **Fix (#338):** scope save-invalidation to only the month(s) actually written, so the refetch is 1-2 months, not the whole cache and its cascade.
 
-**Red herring on record:** a `<Suspense>` boundary around the `useSearchParams()` consumer was blamed for this first (#330 added it as "hygiene," #333 removed it). Removing it was fine — it was unnecessary for a fully-`"use client"` + `useSession` (already-dynamic) page — but it did **not** fix the nav. The cause was always the refetch burst above. Don't re-add the boundary expecting it to matter, and don't re-blame it.
+**Red herring on record:** a `<Suspense>` boundary around the `useSearchParams()` consumer was blamed for this first (#330 added it as "hygiene," #333 removed it). Removing it was fine - it was unnecessary for a fully-`"use client"` + `useSession` (already-dynamic) page - but it did **not** fix the nav. The cause was always the refetch burst above. Don't re-add the boundary expecting it to matter, and don't re-blame it.
 
 ### Same-route `router.push` preserves component state
 
-`selectedAccount` on the Service Calendar (and any similar per-page state) survives an intra-route navigation because Next's App Router does **not** unmount the page component when you `router.push` to a same-route URL — it re-runs the effects with the new query but keeps the tree mounted. A drilled-in `?month=2026-08` view can therefore reset to the season overview by simply clearing the query (`router.push('/service-calendar')`); the URL-sync effect lands on the overview and the account persists.
+`selectedAccount` on the Service Calendar (and any similar per-page state) survives an intra-route navigation because Next's App Router does **not** unmount the page component when you `router.push` to a same-route URL - it re-runs the effects with the new query but keeps the tree mounted. A drilled-in `?month=2026-08` view can therefore reset to the season overview by simply clearing the query (`router.push('/service-calendar')`); the URL-sync effect lands on the overview and the account persists.
 
-**Fix:** don't lift `selectedAccount` out of the page or add a "restore account after nav" effect. Just clear the query. Wired on the Service TopNav item in #347 — same-route click on `/service-calendar` from a drilled-in view `preventDefault()`s and pushes the bare route.
+**Fix:** don't lift `selectedAccount` out of the page or add a "restore account after nav" effect. Just clear the query. Wired on the Service TopNav item in #347 - same-route click on `/service-calendar` from a drilled-in view `preventDefault()`s and pushes the bare route.
 
 ### A stepper/nav gated on async-loaded data reads as "broken," not "loading"
 
-A drill-in stepper disabled on `!periodRanges` (loaded at the end of an auth → account → `sc-year-summary` chain) looks dead on cold refresh — the header paints before the data lands, so the disabled arrows read as broken.
+A drill-in stepper disabled on `!periodRanges` (loaded at the end of an auth → account → `sc-year-summary` chain) looks dead on cold refresh - the header paints before the data lands, so the disabled arrows read as broken.
 
 **Fix:** render a loading affordance (skeleton range/phase + `aria-busy` on the stepper wrapper) while the data is pending, so it reads "loading." SC nav-refresh, #330.
 
@@ -485,6 +485,39 @@ Flat-fee accounts (STL-FL, the MLB flat-fee accounts) do not compute revenue fro
 
 ### SC role data lives in the `contacts` table, not in code (and not in the empty `users` table)
 Intent-aware / role-based logic should read `contacts.role` (free-text job titles - Executive Chef, Sous Chef, CEO, VP Operations, Regional Director East/West, etc.), NOT the hardcoded `SC_ADMIN_EMAILS` list and NOT the `users` table (which exists but is EMPTY). All 8 hardcoded SC_ADMIN emails match their `contacts.role` exactly. `contacts.role` is free-text, so map known strings to a controlled vocabulary. `user_accounts` is 1-account-per-user (no multi-account rows); a director's "home" account is their `user_accounts` row, and role drives whether they land on that account (floor) or the year overview (leadership).
+
+### SC classifier: per-meal zero and homestand zero mean opposite things
+Per `docs/SC_MONEY_MODEL.md` and owner ruling 2026-07-09, the `classifyDayStatus` function in `src/lib/dataStore/serviceCalendar.js:~183-216` treats a zero actual count differently depending on account shape - a **deliberate asymmetry**.
+
+- **Per-meal accounts** (CIN-AZ / CIN-KY / TBJ-FL / TBJ-NY / TBR-FL PDC / TXR-AZ): all-zero actuals -> status `"no-service"` (planned off day; the classifier can't distinguish this from a Sunday that was never touched, and by ruling both read as beige/complete). Line 205: `if (s.hasAct && !s.anyNonZeroAct) return "no-service";`.
+- **MLB homestand accounts** (CIN-OH / STL-MO / TXR-TX-H/V): all-zero actuals on a GAME day -> status `"entered"` (a zeroed game is a **recorded cancellation** - chef marked the game rained out, and that's operational data worth surfacing as green). Line 199-200: `if (hs.dayType === "GAME") { if (s.hasAct) return "entered"; ... }`.
+
+Both branches were touched by SC-066/077/078 (mark-no-service + entry-aware classifier). The `s.hasAct` check discriminates in both branches; the semantic difference is what a saved zero MEANS on that account shape. Do NOT "harmonize" this - it's the correct model.
+
+### SC uses silent `.catch(() => {})` / `catch {}` in specific tolerable-failure spots - do not extend
+The Service Calendar has SEVEN sites intentionally swallowing errors with `.catch(() => {})`, `.catch(() => null)`, or a bare `catch { /* comment */ }`. Enumerated 2026-07-09:
+
+- `src/app/service-calendar/page.js:60` - hero-image fetch (cosmetic; failure is OK).
+- `src/app/service-calendar/ServiceCalendar.js:792` - month prefetch inner `.catch(() => null)` mapping per-fetch failures to a sentinel so `Promise.allSettled` can filter them out.
+- `src/app/service-calendar/ServiceCalendar.js:806` - month prefetch outer `.catch` (best-effort; the real load fires on click regardless).
+- `src/app/service-calendar/ServiceCalendar.js:809` - `catch { /* ignore */ }` around `cancel(idleId)` in the idle-callback cleanup (env-polyfill guard against a missing `cancelIdleCallback`).
+- `src/app/service-calendar/ServiceCalendar.js:1029` - bulk-write per-day `catch { /* continue */ }` inside the `handleBulkSave` loop (one day failing shouldn't stop the N-1 others; failure surfaces via the successCount toast copy).
+- `src/app/service-calendar/ServiceCalendar.js:1087` - second bulk-write per-day `catch { /* continue */ }` inside `handleBulkConfirm` (same rationale as :1029 for the custom-values path).
+- `src/app/service-calendar/admin/AccountEditor.js:124` - admin config fetch on mount (cosmetic in an already-open modal).
+
+These are **exceptions**, not the pattern. When you add a new fetch to SC, do NOT copy this pattern - the default is "surface the error via `showToast(err, 'error')`." The silent sites are the specific carve-outs above; anything new that catches silently needs a comment explaining why.
+
+### SC migrations in `docs/migrations/*.sql` run at MERGE time (not deploy time), and Vercel does not run them for you
+When a PR carrying a `docs/migrations/*.sql` file merges to main, Vercel builds + deploys the code that references the new table/view. **The SQL does NOT run automatically.** Kevin runs it manually in Supabase Studio.
+
+**The #367 sc-9 incident (2026-07-09):** #367 landed `sc-9-day-note-entries.sql` (create the notes-ledger table) alongside the code that queries it. The code deployed immediately on merge; the SQL was run hours later. Between merge and `sc-9` apply, every SC month-load hit a 500 querying a missing table.
+
+**Rule:** if your PR touches `docs/migrations/*.sql`, EITHER
+- run the SQL in Supabase Studio BEFORE merging (safest); OR
+- add a defensive feature flag / try-catch in the code that reads the new table, so the code degrades gracefully until the SQL runs; OR
+- coordinate with Kevin so he runs the SQL immediately on merge.
+
+The sc-1 silent-gap incident (2026-06-12) is the classic form of this class of failure - see `docs/MIGRATION_PROJECT_CLOSEOUT.md` §E. The sc-9 case is the same pattern in a smaller blast radius.
 
 ---
 
