@@ -421,5 +421,6 @@
    action below the outline (secondary) and primary (commit). Surface
    appears on hover so the click target stays legible. PR3 hierarchy:
    primary > outline > cancel. */
-.sc-btn--cancel { background: transparent; color: var(--text-subtle); border: var(--border-thin) solid transparent; font-weight: var(--wt-medium); }
-.sc-btn--cancel:hover { color: var(--text-muted); background: var(--surface-sunken); border-color: transparent; }
+/* SC-059: rest state was --text-subtle (2.56:1 on white) - now --text-muted (4.76:1). */
+.sc-btn--cancel { background: transparent; color: var(--text-muted); border: var(--border-thin) solid transparent; font-weight: var(--wt-medium); }
+.sc-btn--cancel:hover { color: var(--text-default); background: var(--surface-sunken); border-color: transparent; }

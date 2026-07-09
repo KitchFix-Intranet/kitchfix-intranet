@@ -271,7 +271,9 @@
   color: var(--text-heading);
 }
 .sc-day-input--ghost::placeholder {
-  color: var(--text-subtle);
+  /* SC-059: --text-subtle (#94A3B8) failed 2.43:1 on --surface-sunken.
+     --text-muted (#64748B) measures 4.52:1 - AA-compliant. */
+  color: var(--text-muted);
   font-weight: var(--wt-medium);
 }
 .sc-day-input--touched {
@@ -297,8 +299,13 @@
    feedback-warning) for genuine outliers (|d|>=15 or ~50% off plan).
    No red - drift is not an error. */
 .sc-day-row-delta { display: inline-block; width: 36px; font-size: var(--size-caption); text-align: right; }
-.sc-day-row-delta--minor { color: var(--text-subtle); font-weight: var(--wt-medium); }
-.sc-day-row-delta--big { color: var(--feedback-warning); font-weight: var(--wt-semibold); }
+/* SC-061: delta-minor was --text-subtle (2.56:1 on white); --text-muted
+   measures 4.76:1. delta-big was --feedback-warning #D97706 (3.19:1 at
+   12px, normal-text FAIL); --status-needs-fg #8C3A00 measures 7.72:1 -
+   comfortable AA. Same amber family, deeper enough to pass at caption
+   size. */
+.sc-day-row-delta--minor { color: var(--text-muted); font-weight: var(--wt-medium); }
+.sc-day-row-delta--big { color: var(--status-needs-fg); font-weight: var(--wt-semibold); }
 
 /* Bundle 2 archived-day chip: a service archived as of day.date renders
    this read-only chip in place of the editable input. Same visible-but-
@@ -419,7 +426,7 @@
   outline-offset: var(--focus-ring-offset);
   border-color: var(--accent-sc);
 }
-.sc-day-notes-input::placeholder { color: var(--text-subtle); }
+.sc-day-notes-input::placeholder { color: var(--text-muted); } /* SC-059: 4.76:1 on white */
 
 /* Footer - action bar only. Totals moved into the scoreboard header. */
 .sc-day-footer {
@@ -465,12 +472,55 @@
   outline: var(--focus-ring-width) solid var(--scoreboard-text);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-day-review-row2 { padding: var(--space-2) var(--space-4); }
+/* SC-054: review rows now render the entered value + the delta chip
+   (same threshold + palette as the entry row). Layout is 3-column:
+   name grows, value + chip sit right. Chip slot reserves width even
+   when empty so matched rows don't shift under near-miss rows. */
+.sc-day-review-row2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+}
+.sc-day-review-row2 .sc-day-row-name { flex: 1 1 auto; min-width: 0; }
 .sc-day-review-val2 {
   font-size: var(--size-subhead);
   font-weight: var(--wt-bold);
   color: var(--accent-sc-dark);
   font-variant-numeric: var(--num-tabular);
+  flex-shrink: 0;
+}
+
+/* SC-053 review surface: day-note row lives beneath the group cards.
+   Muted band with a caps label + a quoted body (or the explicit "No
+   note" muted state). Keeps typography aligned with the group
+   subtotal rows above so it reads as part of the same review pass. */
+.sc-day-review-note {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-thin) solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sc-day-review-note-label {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+.sc-day-review-note-body {
+  margin: 0;
+  font-size: var(--size-body);
+  color: var(--text-default);
+  font-style: italic;
+  line-height: var(--lead-normal);
+}
+.sc-day-review-note--empty .sc-day-review-note-body {
+  color: var(--text-muted);
+  font-style: normal;
 }
 
 /* Bulk review overlay: shares the .sc-day--review chrome (navy
@@ -564,4 +614,72 @@
   font-size: var(--size-body);
   font-weight: var(--wt-bold);
   color: var(--text-success);
+}
+
+/* SC-063: discard-confirm dialog. Nested modal that intercepts the
+   close paths (Esc / backdrop / X / Cancel) when the entry has dirty
+   state. Sits above the day overlay via z-index; own scrim inside so
+   the click-outside pattern also lands here. Keep editing is
+   default-focused; Discard is the destructive path and calls the
+   parent's raw onClose without going back through the guard.
+   Reduced-motion: no entrance animation. */
+.sc-day-discard {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.sc-day-discard-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 43, 85, 0.35);
+}
+.sc-day-discard-card {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+  background: var(--surface-card);
+  border-radius: var(--radius-container-lg);
+  padding: var(--space-5);
+  box-shadow: var(--elevation-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.sc-day-discard-title {
+  margin: 0;
+  font-size: var(--size-subhead);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+.sc-day-discard-body {
+  margin: 0;
+  font-size: var(--size-body);
+  color: var(--text-default);
+  line-height: var(--lead-normal);
+}
+.sc-day-discard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.sc-btn--danger {
+  background: var(--feedback-danger);
+  color: var(--text-inverse);
+  border: var(--border-thin) solid var(--feedback-danger);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-btn--danger:hover { background: #b91c1c; border-color: #b91c1c; }
+.sc-btn--danger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--feedback-danger);
+  outline-offset: var(--focus-ring-offset);
 }
