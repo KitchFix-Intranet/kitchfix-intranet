@@ -417,10 +417,22 @@
   .sc-btn { min-height: 44px; }
 }
 
-/* Cancel: ghost tier - no border at rest so it reads as a tertiary
-   action below the outline (secondary) and primary (commit). Surface
-   appears on hover so the click target stays legible. PR3 hierarchy:
-   primary > outline > cancel. */
-/* SC-059: rest state was --text-subtle (2.56:1 on white) - now --text-muted (4.76:1). */
-.sc-btn--cancel { background: transparent; color: var(--text-muted); border: var(--border-thin) solid transparent; font-weight: var(--wt-medium); }
-.sc-btn--cancel:hover { color: var(--text-default); background: var(--surface-sunken); border-color: transparent; }
+/* SC-065: Cancel used to be ghost-text tier (no border rest); owner
+   review flagged it as reading like ghost text next to real buttons.
+   Now a real outline treatment - white ground + --border-default at
+   rest, --surface-sunken fill + darker border on hover. Text color
+   stays AA at both states (--text-muted #64748B on white = 4.76:1;
+   hover --text-default #475569 on --surface-sunken #FAF9F5 measures
+   above 7:1). Applies everywhere the class renders (DayDetail footer,
+   bulk panel, discard/no-service confirm dialogs). */
+.sc-btn--cancel {
+  background: var(--surface-card);
+  color: var(--text-muted);
+  border: var(--border-thin) solid var(--border-default);
+  font-weight: var(--wt-medium);
+}
+.sc-btn--cancel:hover {
+  color: var(--text-default);
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+}

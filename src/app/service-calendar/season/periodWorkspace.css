@@ -124,6 +124,93 @@
   color: var(--text-subtle);
   margin-top: 5px;
 }
+
+/* SC-067 (render C2-modified): stacked entered/of/projected lockup.
+   Grid puts the two figure rows on top of each other so the digits
+   right-align on the "of" separator; the labels row below uses the
+   same column widths so ENTERED / PROJECTED start at the first digit
+   past the $ / ~$ symbols. Tabular numerals + $/~$ locked to a fixed
+   sym column so both rows stay clean. */
+.sc-workspace-lockup {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  row-gap: 4px;
+}
+.sc-workspace-lockup-row {
+  display: grid;
+  grid-template-columns: [sym] auto [num] 1fr;
+  align-items: baseline;
+  column-gap: 2px;
+}
+.sc-workspace-lockup-row--entered {
+  grid-column: 1;
+  color: var(--text-success);
+  font-weight: var(--wt-bold);
+  font-size: var(--size-h2);
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.sc-workspace-lockup-row--projected {
+  grid-column: 3;
+  color: var(--text-muted);
+  font-weight: var(--wt-semibold);
+  font-size: var(--size-subhead);
+  line-height: 1;
+}
+.sc-workspace-lockup-of {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-weight: var(--wt-semibold);
+  font-size: var(--size-caption);
+  letter-spacing: 0.02em;
+  align-self: baseline;
+}
+.sc-workspace-lockup-sym {
+  grid-column: sym;
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-workspace-lockup-num {
+  grid-column: num;
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-workspace-lockup-labels {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: var(--space-3);
+  margin-top: 5px;
+}
+.sc-workspace-lockup-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+/* Labels indent to the first digit past the sym: `$` is roughly 0.6ch
+   at the entered font-size and `~$` is roughly 1.2ch at the projected
+   font-size. Padding-left values verified against the tabular columns
+   in the digit rows above. */
+.sc-workspace-lockup-label--entered {
+  grid-column: 1;
+  padding-left: 0.6em;
+}
+.sc-workspace-lockup-label--projected {
+  grid-column: 3;
+  padding-left: 1.1em;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
 .sc-workspace-frame-stat-divider {
   width: 1px;
   align-self: stretch;

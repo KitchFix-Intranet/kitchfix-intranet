@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
@@ -20,16 +20,37 @@ export default function ServiceCalendarPage() {
 
   const showToast = useCallback((msgOrObj, type = "success") => {
     // Accept a string (plain oh-toast) OR an object payload. The rich
-    // "recorded" variant renders <SubmissionToast /> and gets a longer
-    // auto-dismiss to give the animation + progress line room to read.
+    // "recorded" variant renders <SubmissionToast />; SC-068 aligns its
+    // auto-dismiss with the plain oh-toast timing (3.5s) so a toast
+    // never lingers past the operator's next intent.
     if (msgOrObj && typeof msgOrObj === "object") {
       setToast(msgOrObj);
-      setTimeout(() => setToast(null), msgOrObj.variant === "recorded" ? 4500 : 3500);
+      setTimeout(() => setToast(null), 3500);
     } else {
       setToast({ msg: String(msgOrObj || ""), type });
       setTimeout(() => setToast(null), 3500);
     }
   }, []);
+
+  // SC-068: outside-click dismiss for the recorded toast. Attach a
+  // document-level mousedown while a recorded toast is mounted; any
+  // click whose target is NOT inside the toast card clears the toast.
+  // No preventDefault / stopPropagation - the click still lands on
+  // whatever was under it (opening a tile also dismisses; that's the
+  // intended behavior). Cleanup on unmount + on toast change so we
+  // never stack listeners. Non-recorded toasts skip this path (they
+  // aren't the "sits over the grid for 4.5s and blocks flow" case).
+  const toastCardRef = useRef(null);
+  useEffect(() => {
+    if (!toast || toast.variant !== "recorded") return;
+    const handler = (e) => {
+      if (toastCardRef.current && !toastCardRef.current.contains(e.target)) {
+        setToast(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [toast]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -136,8 +157,12 @@ export default function ServiceCalendarPage() {
         <div className="oh-toast-container oh-toast-container--sc-center">
           {toast.variant === "recorded" ? (
             // SC-060: click-to-dismiss on the toast card. Auto-dismiss
-            // timer above is unchanged (4.5s for recorded).
-            <SubmissionToast {...toast} onDismiss={() => setToast(null)} />
+            // aligned to 3.5s in SC-068 above. toastCardRef wraps the
+            // toast so the outside-click mousedown listener above can
+            // scope "outside" correctly.
+            <div ref={toastCardRef}>
+              <SubmissionToast {...toast} onDismiss={() => setToast(null)} />
+            </div>
           ) : (
             <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>
           )}

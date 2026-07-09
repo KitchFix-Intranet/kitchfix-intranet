@@ -153,6 +153,15 @@ export default function DaySquare({
     >
       <div className="sc-daysq-top">
         <span className="sc-daysq-date">{day}</span>
+        {/* SC-070 (render D): MiLB drill-in tile (lg only) moves the
+            day/night glyph OUT of the mid content and INTO the top
+            row, immediately right of the date. Keeps the mid line
+            free to lead with the meals hero + muted revenue beneath
+            (PDC anatomy). sm overview tiles unchanged - pickCompactSmall
+            handles those and doesn't route through here. */}
+        {size === "lg" && kind === "milb" && content?.milbPill && (
+          <MilbPill type={content.milbPill} />
+        )}
         {/* Selection check replaces the status glyph while selected -
             bulk mode is about picking days, not reading status. */}
         {isSelected ? (
@@ -288,12 +297,15 @@ function renderMilb(content, status) {
   // per docs/SC_BILLING_MODEL_AUDIT.md (CIN-KY: "Per-meal only, two-tier").
   // The two-axis model (spec section 6) composes operational shape
   // (day/night homestand pill) with the financial frame (per-meal $).
-  // Render BOTH the pill AND the $/meals - the pill carries the
-  // operational signal; $/meals carry the financial truth.
-  const { milbPill, meals, revenue, isEstimated } = content;
+  //
+  // SC-070 (render D): the day/night glyph now sits in the tile's top
+  // row (next to the date), so the mid content restructures to PDC
+  // anatomy - meals hero on top, revenue muted beneath. `milbPill` is
+  // consumed by the top row directly and does NOT appear here anymore.
+  const { meals, revenue, isEstimated } = content;
   const hasRev = revenue != null;
   const hasMeals = meals != null;
-  if (!milbPill && !hasRev && !hasMeals) return null;
+  if (!hasRev && !hasMeals) return null;
   // SC-039: no-service short-circuit matching renderPerMeal:235-241. A
   // MiLB day with meals null OR zero is a no-service day; renders the
   // quiet "No service" line instead of the misleading est. $0 / ~$0.
@@ -308,17 +320,19 @@ function renderMilb(content, status) {
   const revClass = "sc-daysq-mid-rev"
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
-    <div className="sc-daysq-mid">
-      {milbPill && <MilbPill type={milbPill} />}
-      {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
+    <div className="sc-daysq-mid sc-daysq-mid--milb">
+      {/* Meals hero - same typography classes per-meal uses so the two
+          per-meal-financial variants read as one family. */}
       {hasMeals && (
-        <span className="sc-daysq-mid-meals">
-          {" / "}{fmtMeals(meals)}
-          {/* SC-045 + SC-050: MiLB gains the meals unit label (was
-              bare number). Pluralization branch below. */}
+        <span className="sc-daysq-mid-meals sc-daysq-mid-meals--hero">
+          {fmtMeals(meals)}{" "}
           <span className="sc-daysq-mid-meals-unit">{meals === 1 ? "meal" : "meals"}</span>
         </span>
       )}
+      {/* Muted revenue beneath. est./~/bare prefix encoding preserved
+          verbatim from the pre-SC-070 line above; it just moves to the
+          subordinate slot. */}
+      {hasRev && <span className={revClass}>{revPrefix}{fmt$(revenue)}</span>}
     </div>
   );
 }

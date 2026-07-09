@@ -358,6 +358,32 @@
   color: var(--text-muted);
   opacity: 0.85;
 }
+
+/* SC-070 (render D): MiLB drill-in tile mid stacks meals hero on top,
+   revenue muted beneath - same anatomy as PDC per-meal (sc-daysq-mid
+   --stack). Uses the meals-hero + subordinate-rev typography already
+   applied to per-meal above; the wrapper stack + explicit rev size fold
+   in here so we don't touch the shared per-meal rules. */
+.sc-daysq--lg .sc-daysq-mid--milb {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+.sc-daysq--lg .sc-daysq-mid--milb .sc-daysq-mid-rev {
+  font-size: 10.5px;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+/* Top-row MiLB glyph: sits inline with the date, small and quiet so the
+   date remains the leftmost read on the tile. Colored via the shared
+   .sc-daysq-milb-glyph--{day|night} rules already applied file-wide. */
+.sc-daysq-top .sc-daysq-milb-glyph {
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+}
 .sc-daysq--lg {
   border-radius: 13px;
   box-shadow:

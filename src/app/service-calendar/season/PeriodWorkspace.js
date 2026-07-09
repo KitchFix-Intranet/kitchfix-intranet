@@ -354,13 +354,30 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
     <section className="sc-workspace-frame sc-workspace-frame--per-meal">
       <div className="sc-workspace-frame-band">
         <div className="sc-workspace-frame-stats">
-          <div className="sc-workspace-frame-stat">
-            <span className="sc-workspace-frame-stat-num sc-workspace-frame-stat-num--money">
-              {fmt$(m.actRev)}
-              <span className="sc-workspace-frame-amount-sep" aria-hidden="true"> / </span>
-              <span className="sc-workspace-frame-amount--projected">{fmt$(m.projRev)}</span>
-            </span>
-            <span className="sc-workspace-frame-stat-label">Entered · Projected</span>
+          {/* SC-067 (render C2-modified): the ENTERED · PROJECTED
+              lockup rebuilds as a stacked pair with the word "of"
+              between the figures. Each figure splits into a symbol
+              span (--sym) + a number span (--num), the label indents
+              to align with the first digit past the $/~$, and the
+              muted "of ~$X" trails the projected side. Fee accounts
+              keep their twin-stat header - this touches per-meal only. */}
+          <div className="sc-workspace-frame-stat sc-workspace-frame-stat--lockup">
+            <div className="sc-workspace-lockup">
+              <div className="sc-workspace-lockup-row sc-workspace-lockup-row--entered">
+                <span className="sc-workspace-lockup-sym">$</span>
+                <span className="sc-workspace-lockup-num">{Math.round(m.actRev).toLocaleString("en-US")}</span>
+              </div>
+              <span className="sc-workspace-lockup-of" aria-hidden="true">of</span>
+              <div className="sc-workspace-lockup-row sc-workspace-lockup-row--projected">
+                <span className="sc-workspace-lockup-sym">~$</span>
+                <span className="sc-workspace-lockup-num">{Math.round(m.projRev).toLocaleString("en-US")}</span>
+              </div>
+            </div>
+            <div className="sc-workspace-lockup-labels" aria-hidden="true">
+              <span className="sc-workspace-lockup-label sc-workspace-lockup-label--entered">Entered</span>
+              <span className="sc-workspace-lockup-label sc-workspace-lockup-label--projected">Projected</span>
+            </div>
+            <span className="sc-workspace-frame-stat-label sr-only">Entered of Projected</span>
           </div>
           <span className="sc-workspace-frame-stat-divider" aria-hidden="true" />
           <div className="sc-workspace-frame-stat">
@@ -880,6 +897,14 @@ function sumActualMeals(day) {
 // games variant (italic label, no counts). Numerator still uses
 // hasActuals; explicit-zero days count as complete per the ruling.
 function WeekSubtotals({ weekLabels, weekMetrics, kind, hasHomestandSchedule, isFeeAccount }) {
+  // SC-073: MLB homestand accounts do not surface week cards - the
+  // schedule cadence + game-day rhythm is already the read; a week
+  // subtotal on top adds visual weight without operator payoff.
+  // Owner ruling 2026-07-09 supersedes the fee-week half of SC-043.
+  // Per-meal / MiLB / STL-FL fee-no-dollar keep theirs unchanged.
+  // Aggregate's gameDays counters stay populated (cheap; the metric
+  // may return in a future dashboard).
+  if (hasHomestandSchedule) return null;
   if (!weekLabels?.length) return null;
   return (
     <div className="sc-workspace-weeks" aria-label="Week subtotals">
