@@ -30,6 +30,7 @@ import DaySquare from "../DaySquare";
 import {
   resolveDayStatus,
   resolveDayKind,
+  isPastDate,
 } from "../dayResolvers";
 import { CheckCircle } from "../Icons";
 import { fmt$ } from "./format";
@@ -854,7 +855,7 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
       milbPill,
       meals: meals || null,
       revenue: rev != null ? rev : null,
-      isEstimated: !day.hasActuals && day.isPast,
+      isEstimated: !day.hasActuals && isPastDate(day.date),
     };
   }
   if (kind === "fee-no-dollar") {
@@ -867,7 +868,7 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
   return {
     revenue: rev != null ? rev : null,
     meals: meals || null,
-    isEstimated: !day.hasActuals && day.isPast,
+    isEstimated: !day.hasActuals && isPastDate(day.date),
   };
 }
 

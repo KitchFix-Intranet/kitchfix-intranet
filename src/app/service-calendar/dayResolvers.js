@@ -43,6 +43,25 @@
 //   "failed"             - data fetch errored, render the failed-load cell
 // A failed or loading day NEVER falls back to a zero render - the rubric's
 // highest-priority tracker check.
+//
+// C1b (Section-2 midnight candidate): the server bakes `day.isPast`
+// at fetch time. A tab left open across midnight then misclassifies
+// today/yesterday - the payload's isPast for yesterday still reads
+// false, and today reads false when it should read true after
+// midnight. Client sites now derive pastness at READ time via
+// isPastDate(day.date) against local midnight. Next interaction or
+// render after midnight self-corrects; no timers/refresh loops.
+// Server payload keeps isPast for its own readers.
+export function isPastDate(iso) {
+  if (!iso) return false;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const today = `${y}-${m}-${d}`;
+  return iso < today; // lexicographic YYYY-MM-DD is date-order
+}
+
 export function resolveDayStatus(serverStatus, loadState) {
   if (loadState === "loading") return "loading";
   if (loadState === "failed")  return "failed";
