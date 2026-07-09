@@ -135,7 +135,9 @@ export default function ServiceCalendarPage() {
       {toast && (
         <div className="oh-toast-container oh-toast-container--sc-center">
           {toast.variant === "recorded" ? (
-            <SubmissionToast {...toast} />
+            // SC-060: click-to-dismiss on the toast card. Auto-dismiss
+            // timer above is unchanged (4.5s for recorded).
+            <SubmissionToast {...toast} onDismiss={() => setToast(null)} />
           ) : (
             <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>
           )}

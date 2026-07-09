@@ -1,15 +1,29 @@
 "use client";
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { X, ChevronLeft, ChevronRight } from "./Icons";
+import { fmt$ } from "./season/format";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-function fmt$(n) { return "$" + Math.round(n).toLocaleString("en-US"); }
 function fmtPrice(n) { return "$" + Number(n).toFixed(2).replace(/\.00$/, ""); }
 function formatDate(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// SC-058: PDC-PDC dedupe. TBJ-FL (and similar) group.name rows in
+// sc_service_groups already end with the segment ("Minor League - PDC"),
+// while the price line composes `{accountSegment} · {price}`. The row
+// then reads "Minor League - PDC · PDC · $11.55/meal". Suppress the
+// prefix when the group name already trails the segment. Cheap
+// case-insensitive endsWith on the two forms the data uses
+// (`- SEGMENT` with hyphen-space, or bare `SEGMENT`).
+function groupNameCarriesSegment(name, segment) {
+  if (!name || !segment) return false;
+  const n = name.trim().toLowerCase();
+  const s = segment.trim().toLowerCase();
+  return n === s || n.endsWith(` - ${s}`) || n.endsWith(` ${s}`) || n.endsWith(`-${s}`);
 }
 
 // In-service predicate: a (service, day) pair is in service iff the service
@@ -26,7 +40,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-export default function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }) {
+function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {
   // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
   // "% of {scope}" readout. Legacy callers (the legacy month/period
   // views) don't pass it and default to "month" - the existing label
@@ -45,6 +59,12 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   const [expandedExtras, setExpandedExtras] = useState(new Set());
   const [showReview, setShowReview] = useState(null);
   const [justSaved, setJustSaved] = useState(false);
+  // SC-063: discard guard state. When dirty AND the operator tries to
+  // close (Esc, backdrop, X, Cancel), show a confirm instead of the
+  // silent-discard the old flow did. Success closes and pristine closes
+  // stay instant - the confirm only intercepts real unsaved work.
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const keepEditingBtnRef = useRef(null);
 
   useEffect(() => {
     const vals = {};
@@ -74,7 +94,51 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     setExpandedExtras(new Set());
     setShowReview(null);
     setJustSaved(false);
-  }, [day.date, serviceGroups, day.actual]);
+    // SC-063: day-nav also drops any lingering discard-confirm state so
+    // the next day's overlay starts clean.
+    setShowDiscardConfirm(false);
+  }, [day.date, serviceGroups, day.actual, day.dayNotes]);
+
+  // SC-063: dirty = any touched service (counts differ from initial
+  // load) OR the notes textarea differs from the saved server value.
+  // justSaved + review states are UI transitions, not user work - a
+  // close from those paths goes straight through.
+  const isDirty = useMemo(() => {
+    if (justSaved) return false;
+    if (touched.size > 0) return true;
+    if ((notes || "") !== (day.dayNotes || "")) return true;
+    return false;
+  }, [justSaved, touched, notes, day.dayNotes]);
+
+  // Imperative handle for ServiceCalendar's guarded onClose. Returns
+  // true when parent may proceed with the close (pristine); false when
+  // this component just opened its own discard-confirm. Discard button
+  // inside the confirm calls onClose directly, bypassing the guard.
+  useImperativeHandle(ref, () => ({
+    requestClose: () => {
+      if (!isDirty) return true;
+      setShowDiscardConfirm(true);
+      return false;
+    },
+  }), [isDirty]);
+
+  // Local close attempt for the X and Cancel buttons (which reach the
+  // parent via onClose without going through useDialogA11y). Same gate.
+  const attemptClose = useCallback(() => {
+    if (isDirty) setShowDiscardConfirm(true);
+    else onClose();
+  }, [isDirty, onClose]);
+
+  // SC-063: focus the safe default (Keep editing) when the confirm
+  // opens so a stray Enter reaffirms editing rather than discarding.
+  useEffect(() => {
+    if (showDiscardConfirm) {
+      const rafId = requestAnimationFrame(() => {
+        keepEditingBtnRef.current?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [showDiscardConfirm]);
 
   const handleChange = useCallback((colIndex, value) => {
     const clean = value.replace(/[^0-9]/g, "");
@@ -360,6 +424,8 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   if (showReview) {
     const svcCount = serviceGroups.reduce((n, g) => n + g.services.filter(s => touched.has(s.colIndex)).length, 0);
     return (
+      <>
+      {showDiscardConfirm && renderDiscardConfirm()}
       <div className="sc-day sc-day--review">
         <div className="sc-day-scoreboard sc-day-review-board">
           <div className="sc-day-sb-row1">
@@ -392,20 +458,50 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                   <span className="sc-day-group-name">{group.name}</span>
                   {!isFeeAccount && (
                     <span className="sc-day-group-price">
-                      {accountSegment ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
+                      {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
                     </span>
                   )}
                 </div>
-                {svcs.map(s => (
-                  <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
-                    <span className="sc-day-row-name">{s.name}</span>
-                    <span className="sc-day-review-val2">{getVal(s.colIndex)}</span>
-                  </div>
-                ))}
+                {svcs.map(s => {
+                  const projVal = day.projected[s.colIndex] ?? 0;
+                  const numVal = getVal(s.colIndex);
+                  const delta = numVal - projVal;
+                  // SC-054: identical thresholds to the entry-row chip
+                  // at line ~315. mag=0 renders no chip (matched row =
+                  // no anomaly). Anything non-zero shows the sign.
+                  const mag = Math.abs(delta);
+                  const isBig = mag > 0 && mag >= Math.max(15, Math.round(projVal * 0.5));
+                  const chipCls = mag === 0 ? null : isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
+                  return (
+                    <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
+                      <span className="sc-day-row-name">{s.name}</span>
+                      <span className="sc-day-review-val2">{numVal}</span>
+                      {chipCls ? (
+                        <span className={`sc-day-row-delta ${chipCls}`}>{(delta > 0 ? "+" : "") + delta}</span>
+                      ) : (
+                        <span className="sc-day-row-delta" />
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="sc-day-group-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
               </div>
             );
           })}
+
+          {/* SC-053 review surface: the day-note the chef typed lives
+              inline below the group list so it enters the review pass.
+              Bundle 1 wired the data end-to-end; this bundle surfaces
+              it. Empty note renders as an explicit muted "No note" so
+              the row's absence-of-note is deliberate + auditable. */}
+          <div className={`sc-day-review-note${notes.trim() ? "" : " sc-day-review-note--empty"}`}>
+            <span className="sc-day-review-note-label">Day note</span>
+            {notes.trim() ? (
+              <blockquote className="sc-day-review-note-body">&ldquo;{notes.trim()}&rdquo;</blockquote>
+            ) : (
+              <span className="sc-day-review-note-body">No note</span>
+            )}
+          </div>
         </div>
         <div className="sc-day-footer">
           <div className="sc-day-actions">
@@ -416,6 +512,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -467,7 +564,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 <ChevronRight size="sm" />
               </button>
             )}
-            <button className="sc-day-close" onClick={onClose} aria-label="Close">
+            <button className="sc-day-close" onClick={attemptClose} aria-label="Close">
               <X size="sm" />
             </button>
           </div>
@@ -528,7 +625,7 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
                 <span className="sc-day-group-name">{group.name}</span>
                 {!isFeeAccount && (
                   <span className="sc-day-group-price">
-                    {accountSegment ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
+                    {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
                   </span>
                 )}
               </div>
@@ -593,9 +690,56 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
           <button ref={primaryBtnRef} className="sc-btn sc-btn--primary" disabled={!hasTouchedAny || saving} onClick={() => setShowReview("save")}>
             Review &amp; save
           </button>
-          <button className="sc-btn sc-btn--cancel" onClick={onClose}>Cancel</button>
+          <button className="sc-btn sc-btn--cancel" onClick={attemptClose}>Cancel</button>
         </div>
       </div>
+      {showDiscardConfirm && renderDiscardConfirm()}
     </div>
   );
+
+  // ── SC-063: discard-confirm dialog ──
+  //
+  // Inline nested modal that intercepts Esc/backdrop/X/Cancel closes
+  // when the entry has dirty state. Rendered as a portal-style overlay
+  // absolutely positioned over the parent .sc-overlay-card. Keep
+  // editing is the default-focused safe action; Discard is the
+  // destructive one and fires the RAW parent onClose (bypassing the
+  // guard). Reduced-motion note: no entrance animation - the confirm
+  // is a decision surface, not a hero moment.
+  function renderDiscardConfirm() {
+    return (
+      <div
+        className="sc-day-discard"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="sc-day-discard-title"
+        aria-describedby="sc-day-discard-body"
+      >
+        <div className="sc-day-discard-scrim" aria-hidden="true" />
+        <div className="sc-day-discard-card">
+          <h3 id="sc-day-discard-title" className="sc-day-discard-title">Discard unsaved entries?</h3>
+          <p id="sc-day-discard-body" className="sc-day-discard-body">
+            {`The counts${(notes || "").trim() ? " and note" : ""} you typed for ${formatDate(day.date)} haven't been saved. Discarding closes this day without writing.`}
+          </p>
+          <div className="sc-day-discard-actions">
+            <button
+              ref={keepEditingBtnRef}
+              className="sc-btn sc-btn--primary"
+              onClick={() => setShowDiscardConfirm(false)}
+            >
+              Keep editing
+            </button>
+            <button
+              className="sc-btn sc-btn--danger"
+              onClick={() => { setShowDiscardConfirm(false); onClose(); }}
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
+
+export default forwardRef(DayDetail);

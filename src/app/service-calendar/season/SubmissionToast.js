@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { pickHeadline } from "./submissionMessages";
-
-const fmt$ = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { fmt$ } from "./format";
 
 export default function SubmissionToast({
   amount,
@@ -12,6 +11,7 @@ export default function SubmissionToast({
   isBulk = false,
   bulkDays = 0,
   isFeeAccount = false,
+  onDismiss,
 }) {
   // Pick headline once on mount so a re-render doesn't reroll it. Parent
   // unmounts + remounts on the next submission, so each toast gets one.
@@ -21,11 +21,20 @@ export default function SubmissionToast({
   const isMilestone = headline.milestone === "complete";
   const showAmount = !isFeeAccount && Number.isFinite(amount);
 
+  // SC-060: whole-card click-to-dismiss. Rendered as a <button> so
+  // Enter/Space also dismiss and focus-visible produces a real outline
+  // for keyboard users. role="status" + aria-live="polite" preserved
+  // via aria attributes so SR users still hear the announcement (the
+  // native button role does not override an explicit role attribute).
   return (
-    <div
+    <button
+      type="button"
       className={`sc-toast-recorded${isMilestone ? " sc-toast-recorded--milestone" : ""}`}
       role="status"
       aria-live="polite"
+      aria-label="Dismiss submission toast"
+      title="Click to dismiss"
+      onClick={onDismiss}
     >
       <div className="sc-toast-recorded__head">
         <span className="sc-toast-recorded__check" aria-hidden="true">
@@ -34,6 +43,8 @@ export default function SubmissionToast({
           </svg>
         </span>
         <span className="sc-toast-recorded__headline">{headline.text}</span>
+        {/* SC-057: whole dollars (was ".XX" cents on a surface where every
+            other dollar reading is whole). fmt$ default is decimals=0. */}
         {showAmount && <span className="sc-toast-recorded__amount">{fmt$(amount)}</span>}
       </div>
       {hasProgress && (
@@ -47,6 +58,6 @@ export default function SubmissionToast({
           </div>
         </>
       )}
-    </div>
+    </button>
   );
 }
