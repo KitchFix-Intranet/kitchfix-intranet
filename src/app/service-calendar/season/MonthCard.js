@@ -30,6 +30,8 @@ import { useState } from "react";
 import DaySquare from "../DaySquare";
 import { resolveDayStatus, buildCompactContent } from "../dayResolvers";
 import { mlbMonthPhaseLabel } from "./mlbSeasonPhase";
+import { fmt$K } from "./format";
+import ProgressBar from "./ProgressBar";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -248,7 +250,7 @@ function CollapsedSummary({ monthSummary, monthState, hasHomestandSchedule, isFe
         <span className={`sc-season-month-card-summary-rev ${hasActuals ? "sc-season-month-card-summary-rev--actual" : ""}`}>
           {/* SC-012: tilde-only in the collapsed row (space is tight
               vs the expanded footer's "~$X projected"). */}
-          · {hasActuals ? "" : "~"}{fmtK(displayRev)}
+          · {hasActuals ? "" : "~"}{fmt$K(displayRev)}
         </span>
       )}
       {done && (
@@ -366,7 +368,7 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
             {hsCount} {hsCount === 1 ? "homestand" : "homestands"}
           </span>
         </div>
-        {feePct > 0 && <ProgressBar pct={feePct} />}
+        {feePct > 0 && <ProgressBar pct={feePct} complete={feePct === 100} />}
       </footer>
     );
   }
@@ -378,7 +380,7 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
             <strong>{daysEntered}</strong>/{totalDays} entered
           </span>
         </div>
-        {completionPct > 0 && <ProgressBar pct={completionPct} />}
+        {completionPct > 0 && <ProgressBar pct={completionPct} complete={completionPct === 100} />}
       </footer>
     );
   }
@@ -387,7 +389,7 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
     ? Number(monthSummary.actualRevenue) || 0
     : Number(monthSummary.projectedRevenue) || 0;
   // SC-012: projected reads unmistakably projected. Entered stays as
-  // fmtK(displayRev) money-green; projected renders as
+  // fmt$K(displayRev) money-green; projected renders as
   // "~$85K projected" muted (tilde + the word). The value-switch above
   // is unchanged.
   return (
@@ -398,25 +400,15 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
         </span>
         <span className={`sc-season-month-card-stat-rev ${hasActuals ? "sc-season-month-card-stat-rev--actual" : ""}`}>
           {displayRev > 0
-            ? (hasActuals ? fmtK(displayRev) : `~${fmtK(displayRev)} projected`)
+            ? (hasActuals ? fmt$K(displayRev) : `~${fmt$K(displayRev)} projected`)
             : "$0"}
         </span>
       </div>
-      {completionPct > 0 && <ProgressBar pct={completionPct} />}
+      {completionPct > 0 && <ProgressBar pct={completionPct} complete={completionPct === 100} />}
     </footer>
   );
 }
 
-function ProgressBar({ pct }) {
-  return (
-    <div className="sc-season-month-card-bar" aria-hidden="true">
-      <div
-        className={`sc-season-month-card-bar-fill ${pct === 100 ? "sc-season-month-card-bar-fill--complete" : ""}`}
-        style={{ width: pct + "%" }}
-      />
-    </div>
-  );
-}
 
 // Collapse default per the brief:
 //   completed -> collapsed
@@ -494,10 +486,3 @@ function buildMonthWeeks(year, monthIndex) {
   return weeks;
 }
 
-function fmtK(n) {
-  const v = Math.round(Number(n) || 0);
-  // $M branch unreachable today; kept for defense against a future multi-account rollup.
-  if (Math.abs(v) >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (Math.abs(v) >= 1_000)     return "$" + Math.round(v / 1_000) + "K";
-  return "$" + v.toLocaleString("en-US");
-}

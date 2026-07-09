@@ -16,6 +16,8 @@
 //   - prefers-reduced-motion drops the fade
 
 import { useEffect, useRef } from "react";
+import { SunGlyph, MoonGlyph } from "../Icons";
+import { getLegendItems, MILB_DAY_NIGHT } from "./legendItems";
 import "./legendInfoPopup.css";
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -102,67 +104,19 @@ export default function LegendInfoPopup({
 
         <div className="sc-legend-popup-body">
           <Section title={accountSectionTitle(hasHomestandSchedule, isFeeAccount, isMilb)}>
-            {hasHomestandSchedule ? (
-              <>
-                <Row mod="entered" label="Entered">
-                  Actuals recorded. Includes game days (any recorded meal count, zero counts as a
-                  cancelled game) and non-game days where meals were served.
-                </Row>
-                <Row mod="upcoming" label="Scheduled game day">
-                  An upcoming game on the homestand schedule.
-                </Row>
-                <Row mod="off" label="Non Game day">
-                  Prep, open, close, or off-day between homestands.
-                </Row>
-              </>
-            ) : isFeeAccount ? (
-              <>
-                <Row mod="entered" label="Entered">
-                  Service confirmed - actuals recorded.
-                </Row>
-                <Row mod="needs-entry" label="Needs entry" icon="✎">
-                  Past day with no actuals yet - action required.
-                </Row>
-                <Row mod="overdue" label="Overdue" icon="!">
-                  Past entry deadline - escalated action.
-                </Row>
-                <Row mod="upcoming" label="Upcoming" icon="○">
-                  Future service day; nothing required yet.
-                </Row>
-              </>
-            ) : isMilb ? (
-              <>
-                <Row mod="entered" label="Entered">
-                  Service confirmed - actuals recorded.
-                </Row>
-                <Row mod="needs-entry" label="Needs entry" icon="✎">
-                  Past day with no actuals yet.
-                </Row>
-                <Row mod="overdue" label="Overdue" icon="!">
-                  Past entry deadline - escalated.
-                </Row>
-                <Row mod="upcoming" label="Upcoming" icon="○">
-                  Future service day.
-                </Row>
-                <MilbRow type="day" label="Day game" />
-                <MilbRow type="night" label="Night game" />
-              </>
-            ) : (
-              <>
-                <Row mod="entered" label="Entered">
-                  Actuals recorded.
-                </Row>
-                <Row mod="needs-entry" label="Needs entry" icon="✎">
-                  Past day with no actuals yet - action required.
-                </Row>
-                <Row mod="overdue" label="Overdue" icon="!">
-                  Past entry deadline - escalated.
-                </Row>
-                <Row mod="upcoming" label="Upcoming" icon="○">
-                  Future service day; nothing required yet.
-                </Row>
-              </>
-            )}
+            {getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }).map(it => (
+              <Row
+                key={it.mod}
+                mod={it.mod}
+                label={it.labelLong || it.label}
+                icon={it.icon}
+              >
+                {it.description}
+              </Row>
+            ))}
+            {isMilb && !hasHomestandSchedule && !isFeeAccount && MILB_DAY_NIGHT.map(it => (
+              <MilbRow key={it.mod} type={it.type} label={it.labelLong} />
+            ))}
           </Section>
 
           <Section title="Figures">
@@ -251,25 +205,7 @@ function MilbRow({ type, label }) {
   return (
     <div className="sc-legend-popup-row">
       <span className={`sc-legend-popup-swatch sc-state-legend-swatch--milb-${type}`} aria-hidden="true">
-        {type === "day" ? (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="4.5" fill="currentColor" />
-            <g stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="12" y1="2" x2="12" y2="4" />
-              <line x1="12" y1="20" x2="12" y2="22" />
-              <line x1="2" y1="12" x2="4" y2="12" />
-              <line x1="20" y1="12" x2="22" y2="12" />
-              <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
-              <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
-              <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
-              <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
-            </g>
-          </svg>
-        ) : (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
-        )}
+        {type === "day" ? <SunGlyph size={12} /> : <MoonGlyph size={12} />}
       </span>
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{label}</dt>

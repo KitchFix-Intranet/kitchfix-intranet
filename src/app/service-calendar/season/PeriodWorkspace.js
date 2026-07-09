@@ -32,9 +32,9 @@ import {
   resolveDayKind,
 } from "../dayResolvers";
 import { CheckCircle } from "../Icons";
+import { fmt$ } from "./format";
+import ProgressBar from "./ProgressBar";
 import "./periodWorkspace.css";
-
-const fmt$ = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -126,13 +126,13 @@ export default function PeriodWorkspace({
   // render the workspace shell; cells resolve to the dashed atom via
   // the loadState pass-through. Matches the SC-033 overview pattern.
   if (loading && !periodDays && !partialError && loadState !== "failed") {
-    return <WorkspaceSkeleton />;
+    return <WorkspaceSkeleton tileCount={skeletonTileCount(periodRange)} />;
   }
   if (partialError) {
     return (
       <div className="sc-workspace sc-fade-in">
         <WorkspacePartialBanner failedMonth={partialError.failedMonth} />
-        <WorkspaceSkeleton inline />
+        <WorkspaceSkeleton inline tileCount={skeletonTileCount(periodRange)} />
       </div>
     );
   }
@@ -431,14 +431,7 @@ function FinancialFrame({ m, kind, hasHomestandSchedule, isFeeAccount, periodRan
 }
 
 function ProgressLine({ pct, color }) {
-  return (
-    <div className="sc-workspace-progress-bar" aria-hidden="true">
-      <div
-        className="sc-workspace-progress-bar-fill"
-        style={{ width: pct + "%", background: color }}
-      />
-    </div>
-  );
+  return <ProgressBar variant="line" pct={pct} color={color} />;
 }
 
 // ─── Today rail ──────────────────────────────────────────────────
@@ -975,7 +968,25 @@ function WorkspacePartialBanner({ failedMonth }) {
   );
 }
 
-function WorkspaceSkeleton({ inline = false }) {
+// Derive the skeleton tile count from the active periodRange when
+// possible; falls back to 28 when periodRange is not yet known
+// (matches the pre-C1a literal). Same week-aligned math as
+// buildWorkspaceWeekGrid so the skeleton grid matches the real grid
+// row count on 28/29/30/31/35-day periods.
+function skeletonTileCount(periodRange) {
+  if (!periodRange?.start || !periodRange?.end) return 28;
+  const start = new Date(periodRange.start + "T12:00:00");
+  const end   = new Date(periodRange.end   + "T12:00:00");
+  const startDow = start.getDay();
+  const daysBeforeMonday = startDow === 0 ? 6 : startDow - 1;
+  const gridStart = new Date(start);
+  gridStart.setDate(gridStart.getDate() - daysBeforeMonday);
+  const totalDays = Math.floor((end - gridStart) / 86400000) + 1;
+  const weeks = Math.ceil(totalDays / 7);
+  return weeks * 7;
+}
+
+function WorkspaceSkeleton({ inline = false, tileCount = 28 }) {
   return (
     <div className={`sc-workspace ${inline ? "" : "sc-fade-in"}`} aria-hidden="true">
       <div className="sc-workspace-skel sc-workspace-skel--frame" />
@@ -983,7 +994,7 @@ function WorkspaceSkeleton({ inline = false }) {
       <div className="sc-workspace-grid-wrap">
         <div className="sc-workspace-skel sc-workspace-skel--dow" />
         <div className="sc-workspace-grid">
-          {Array.from({ length: 28 }).map((_, i) => (
+          {Array.from({ length: tileCount }).map((_, i) => (
             <div key={i} className="sc-workspace-skel sc-workspace-skel--tile" />
           ))}
         </div>

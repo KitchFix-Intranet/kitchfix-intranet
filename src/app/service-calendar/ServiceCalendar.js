@@ -11,7 +11,7 @@ import ChromeBar, { AsOf } from "./season/ChromeBar";
 import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
-import { fmt$ } from "./season/format";
+import { fmt$, fmtDateShort } from "./season/format";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles } from "./computeInitialView";
@@ -1732,10 +1732,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           for (const v of Object.values(d.projected || {})) totMeals += v || 0;
           totRev += Math.round(Number(d.totals?.projectedRevenue) || 0);
         }
-        const fmtDateShort = (iso) => {
-          const [y, m, dd] = iso.split("-").map(Number);
-          return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-        };
         return (
           <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkReviewOpen(false); }}>
             <div
@@ -1845,10 +1841,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         for (const d of days) totRev += Math.round(perDayRev(d));
         const totMeals = totalMealsPerDay * days.length;
 
-        const fmtDateShort = (iso) => {
-          const [y, m, dd] = iso.split("-").map(Number);
-          return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-        };
         return (
           <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkCustomReviewOpen(false); }}>
             <div

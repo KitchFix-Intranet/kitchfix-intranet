@@ -26,6 +26,7 @@ import {
 } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import { mlbPeriodPhaseLabel } from "./mlbSeasonPhase";
+import ProgressBar from "./ProgressBar";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -193,7 +194,7 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
             {homestands.size} {homestands.size === 1 ? "homestand" : "homestands"}
           </span>
         </div>
-        {feePct > 0 && <ProgressBar pct={feePct} />}
+        {feePct > 0 && <ProgressBar pct={feePct} complete={feePct === 100} />}
       </footer>
     );
   }
@@ -211,7 +212,7 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
             </span>
           )}
         </div>
-        {completionPct > 0 && <ProgressBar pct={completionPct} />}
+        {completionPct > 0 && <ProgressBar pct={completionPct} complete={completionPct === 100} />}
       </footer>
     );
   }
@@ -226,21 +227,11 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
           {totalMeals > 0 ? `${totalMeals.toLocaleString("en-US")} meals` : "0 meals"}
         </span>
       </div>
-      {completionPct > 0 && <ProgressBar pct={completionPct} />}
+      {completionPct > 0 && <ProgressBar pct={completionPct} complete={completionPct === 100} />}
     </footer>
   );
 }
 
-function ProgressBar({ pct }) {
-  return (
-    <div className="sc-season-period-card-bar" aria-hidden="true">
-      <div
-        className={`sc-season-period-card-bar-fill ${pct === 100 ? "sc-season-period-card-bar-fill--complete" : ""}`}
-        style={{ width: pct + "%" }}
-      />
-    </div>
-  );
-}
 
 // "Offseason" detection per kind. For PDC fee + per-meal: zero meals
 // across the period AND no future days (all upcoming/off). For
