@@ -11,15 +11,26 @@ export default function SubmissionToast({
   isBulk = false,
   bulkDays = 0,
   isFeeAccount = false,
+  noService = false,
   onDismiss,
 }) {
   // Pick headline once on mount so a re-render doesn't reroll it. Parent
   // unmounts + remounts on the next submission, so each toast gets one.
-  const [headline] = useState(() => pickHeadline({ daysEntered, totalDays, isBulk, bulkDays }));
+  // SC-066: mark-no-service overrides the clubhouse rotator with a
+  // literal headline (no milestone treatment - the amber gold glow
+  // doesn't fit a cancelled-service submission).
+  const [headline] = useState(() =>
+    noService
+      ? { text: "No service recorded", milestone: null }
+      : pickHeadline({ daysEntered, totalDays, isBulk, bulkDays })
+  );
   const hasProgress = Number.isFinite(daysEntered) && Number.isFinite(totalDays) && totalDays > 0;
   const pct = hasProgress ? Math.min(100, Math.round((daysEntered / totalDays) * 100)) : 0;
   const isMilestone = headline.milestone === "complete";
-  const showAmount = !isFeeAccount && Number.isFinite(amount);
+  // Money line drops on no-service submits (amount is 0 by definition;
+  // showing "$0" next to "No service recorded" is redundant + reads
+  // wrong on a per-meal-day card).
+  const showAmount = !noService && !isFeeAccount && Number.isFinite(amount);
 
   // SC-060: whole-card click-to-dismiss. Rendered as a <button> so
   // Enter/Space also dismiss and focus-visible produces a real outline

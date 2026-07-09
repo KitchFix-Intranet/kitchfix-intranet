@@ -26,6 +26,29 @@ function groupNameCarriesSegment(name, segment) {
   return n === s || n.endsWith(` - ${s}`) || n.endsWith(` ${s}`) || n.endsWith(`-${s}`);
 }
 
+// SC-064: single source of truth for the delta-chip meaning. Was
+// duplicated in the entry row (~:395) and the review row (~:468) with
+// slight drift. Direction carries the meaning; magnitude survives as
+// weight only. Red is not on the table (blame connotation).
+//   under  (value < proj) : amber, "-N"
+//   over   (value > proj) : green, "+N"
+//   match  (value === proj) : green bold, "✓"
+// The "strong" weight kicks in on genuine outliers (|d| >= max(15,
+// round(proj*0.5))) for under + over so the CVD-safe direction cue
+// picks up an emphasis when the miss is big. Sign is always rendered.
+function deltaChip(numVal, projVal) {
+  const delta = numVal - projVal;
+  if (delta === 0) {
+    return { text: "✓", cls: "sc-day-row-delta--match sc-day-row-delta--strong" };
+  }
+  const mag = Math.abs(delta);
+  const isStrong = mag >= Math.max(15, Math.round(projVal * 0.5));
+  const dirCls = delta > 0 ? "sc-day-row-delta--over" : "sc-day-row-delta--under";
+  const weightCls = isStrong ? " sc-day-row-delta--strong" : "";
+  const sign = delta > 0 ? "+" : "−"; // U+2212 minus sign for typographic sanity
+  return { text: `${sign}${mag}`, cls: `${dirCls}${weightCls}` };
+}
+
 // In-service predicate: a (service, day) pair is in service iff the service
 // has no archive date OR the day is on or before its archive date. Mirrors
 // the sc_daily_revenue view's catalog JOIN (sc-6b) exactly. Used to gate
@@ -65,6 +88,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   // stay instant - the confirm only intercepts real unsaved work.
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const keepEditingBtnRef = useRef(null);
+  // SC-066: Mark-no-service flow. showNoServiceConfirm gates the small
+  // confirm dialog; the write itself goes through the normal onSave
+  // path with all in-service services set to 0 and a note appended.
+  const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
+  const nsCancelBtnRef = useRef(null);
 
   useEffect(() => {
     const vals = {};
@@ -97,6 +125,8 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     // SC-063: day-nav also drops any lingering discard-confirm state so
     // the next day's overlay starts clean.
     setShowDiscardConfirm(false);
+    // SC-066: same for the no-service confirm.
+    setShowNoServiceConfirm(false);
   }, [day.date, serviceGroups, day.actual, day.dayNotes]);
 
   // SC-063: dirty = any touched service (counts differ from initial
@@ -143,8 +173,24 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   const handleChange = useCallback((colIndex, value) => {
     const clean = value.replace(/[^0-9]/g, "");
     setEditValues(prev => ({ ...prev, [colIndex]: clean }));
-    setTouched(prev => { const n = new Set(prev); n.add(colIndex); return n; });
-  }, []);
+    // SC-071: clearing an input on a service with no prior saved actual
+    // restores the ghost/untouched state. Same predicate the init effect
+    // uses: day.actual[colIndex] != null means "we had a saved value on
+    // page load", touched should stay so the operator can re-enter or
+    // reconfirm; day.actual[colIndex] == null means "this was ghost from
+    // the start", clearing should return it there. This also drops the
+    // dirty-guard over-trigger on type-then-delete for previously-empty
+    // rows (partially retires the Section-3 candidate).
+    setTouched(prev => {
+      const n = new Set(prev);
+      if (clean === "" && day.actual[colIndex] == null) {
+        n.delete(colIndex);
+      } else {
+        n.add(colIndex);
+      }
+      return n;
+    });
+  }, [day.actual]);
 
   const toggleGroup = useCallback((name) => {
     setExpandedGroups(prev => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; });
@@ -153,6 +199,47 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   const toggleExtras = useCallback((name) => {
     setExpandedExtras(prev => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   }, []);
+
+  // SC-066: mark-no-service handler. Zero-writes every in-service
+  // service via the normal save path and appends the audit note to
+  // any typed note (preserved on its own line above). Ships `noService:
+  // true` in the opts so the toast picks the "No service recorded"
+  // headline override + drops the money line. Clears the confirm
+  // dialog before the save so the operator sees the success state
+  // (justSaved) without an intermediate flash.
+  const executeMarkNoService = useCallback(async () => {
+    const entries = [];
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        entries.push({ colIndex: s.colIndex, value: 0 });
+      }
+    }
+    if (entries.length === 0) {
+      setShowNoServiceConfirm(false);
+      return;
+    }
+    const auditNote = "Service cancelled - marked no service";
+    const trimmed = (notes || "").trim();
+    const combinedNotes = trimmed ? `${trimmed}\n${auditNote}` : auditNote;
+    setShowNoServiceConfirm(false);
+    const result = await onSave(day, entries, combinedNotes, { noService: true });
+    if (result?.success) {
+      setJustSaved(true);
+    }
+  }, [serviceGroups, day, notes, onSave]);
+
+  // Focus the safe default (Cancel) when the no-service confirm opens
+  // so a stray Enter reaffirms the entry state rather than firing the
+  // primary destructive-ish write.
+  useEffect(() => {
+    if (showNoServiceConfirm) {
+      const rafId = requestAnimationFrame(() => {
+        nsCancelBtnRef.current?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [showNoServiceConfirm]);
 
   // "Actuals match projections" for a specific group. Skips services
   // archived as of day.date so the helper cannot retroactively populate
@@ -217,27 +304,63 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   // running total instead of "0 meals" before the first keystroke. Save
   // path still uses getVal/summary - this calc never reaches the wire.
   //
-  // SC-052: prices come from day.priceAtDate[colIndex] - the effective-
-  // dated per-day price the sc_daily_revenue view uses (via LATERAL
-  // pick against sc_service_prices). This is the SAME source the tile
-  // rail + week card + drill-in read. Reading the current catalog price
-  // (data.serviceGroups[s].price) here was the $2,708/$2,709 rail-vs-
-  // modal drift: same math, different price snapshot. Falls back to
-  // s.price only if priceAtDate is missing (edge case - a service that
-  // has no history row for the day; the view won't emit it either).
-  const footerDisplay = useMemo(() => {
+  // SC-052 / SC-072: prices come from day.priceAtDate[colIndex] - the
+  // effective-dated per-day price the sc_daily_revenue view uses (via
+  // LATERAL pick against sc_service_prices). This is the SAME source
+  // the tile rail + week card + drill-in read.
+  //
+  // SC-072 (render E-a): the scoreboard hero is entered-only from the
+  // first entry onward. Untouched services contribute NOTHING to the
+  // hero even before save - reading them into the total was the
+  // "blends entered + projections and looks like recorded actuals"
+  // behavior owner review rejected. The static full-day projection is
+  // rendered separately as a subordinate phrase after the meals span.
+  //
+  // 0-state (nothing touched): both hero + projection collapse to the
+  // same effective-dated projection sum so the scoreboard reads
+  // "~$X · ~N meals" (the #361 behavior). First keystroke: hero starts
+  // tracking touched services only; projection phrase appears + stays
+  // static.
+  //
+  // "Entered" here matches the touched set. touched is seeded from
+  // day.actual on mount, so a service with a prior saved actual is
+  // already touched + already contributes; a service with a projection
+  // but no actual is untouched + excluded from the hero.
+  const enteredTotals = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
       for (const s of g.services) {
         if (!isInServiceOnDay(s, day.date)) continue;
-        const v = touched.has(s.colIndex) ? getVal(s.colIndex) : (day.projected[s.colIndex] ?? 0);
+        if (!touched.has(s.colIndex)) continue;
+        const editVal = editValues[s.colIndex];
+        if (editVal === "" || editVal === undefined) continue;  // SC-071
+        const v = Number(editVal);
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
         rev += v * price;
       }
     }
     return { meals, revenue: rev };
-  }, [serviceGroups, touched, getVal, day.projected, day.date, day.priceAtDate]);
+  }, [serviceGroups, touched, editValues, day.priceAtDate, day.date]);
+
+  // Static full-day projection - what the day would book if every
+  // in-service service reported its projection. Effective-dated per
+  // service so it matches day.totals.projectedRevenue (the view's
+  // per-service sum). Used for the 0-state hero AND the enterned-state
+  // subordinate phrase.
+  const dayProjection = useMemo(() => {
+    let meals = 0, rev = 0;
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        const v = day.projected[s.colIndex] ?? 0;
+        const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
+        meals += v;
+        rev += v * price;
+      }
+    }
+    return { meals, revenue: rev };
+  }, [serviceGroups, day.projected, day.priceAtDate, day.date]);
 
   const executeSave = useCallback(async () => {
     // P0-1: ONLY send touched services. Untouched services are preserved
@@ -374,13 +497,22 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     const projVal = day.projected[svc.colIndex] ?? 0;
     const editVal = editValues[svc.colIndex] ?? "";
     const isTouched = touched.has(svc.colIndex);
-    const numVal = isTouched ? (editVal !== "" ? Number(editVal) : 0) : 0;
-    const delta = isTouched ? numVal - projVal : null;
+    // SC-071: guard on the RAW editVal before coercion. A cleared input
+    // (editVal === "") must render no chip - the old flow was Number("")
+    // -> 0, which computed a phantom "-projVal" delta. Even if touched
+    // is still set (mid-clear), the ghost state wins.
+    const isEmpty = editVal === "";
     // Bundle 2: services archived as of day.date render a read-only chip
     // instead of an editable input. Same visible-but-marked discipline as
     // the admin side (archived = visible, archived = unenterable).
     const inService = isInServiceOnDay(svc, day.date);
     const archiveDate = !inService ? String(svc.activeUntil).slice(0, 10) : null;
+
+    let chip = null;
+    if (inService && isTouched && !isEmpty) {
+      const numVal = Number(editVal);
+      chip = deltaChip(numVal, projVal);
+    }
 
     return (
       <div key={svc.colIndex} className={`sc-day-row${!inService ? " sc-day-row--archived" : ""}`}>
@@ -391,24 +523,15 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
           {inService ? (
             <>
               <input type="text" inputMode="numeric" pattern="[0-9]*"
-                className={`sc-day-input ${isTouched ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
+                className={`sc-day-input ${isTouched && !isEmpty ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
                 placeholder={String(projVal)}
                 value={editVal}
                 onChange={e => handleChange(svc.colIndex, e.target.value)} />
-              {isTouched && delta !== null && (() => {
-                const mag = Math.abs(delta);
-                // Matched rows drop the check - the green input already says
-                // "entered + on plan". Only misses render an indicator. Amber
-                // (--big) is a genuine outlier (~50% swing or abs>=15); everything
-                // else is --minor (calm neutral) so amber stays rare + meaningful.
-                if (mag === 0) return <span className="sc-day-row-delta" />;
-                const isBig = mag >= Math.max(15, Math.round(projVal * 0.5));
-                const cls = isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
-                return (
-                  <span className={`sc-day-row-delta ${cls}`}>{(delta > 0 ? "+" : "") + delta}</span>
-                );
-              })()}
-              {!isTouched && <span className="sc-day-row-delta" />}
+              {chip ? (
+                <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+              ) : (
+                <span className="sc-day-row-delta" />
+              )}
             </>
           ) : (
             <span className="sc-day-row-archived-chip" title={`Archived as of ${archiveDate}`}>
@@ -426,6 +549,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     return (
       <>
       {showDiscardConfirm && renderDiscardConfirm()}
+      {showNoServiceConfirm && renderNoServiceConfirm()}
       <div className="sc-day sc-day--review">
         <div className="sc-day-scoreboard sc-day-review-board">
           <div className="sc-day-sb-row1">
@@ -465,22 +589,15 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
                 {svcs.map(s => {
                   const projVal = day.projected[s.colIndex] ?? 0;
                   const numVal = getVal(s.colIndex);
-                  const delta = numVal - projVal;
-                  // SC-054: identical thresholds to the entry-row chip
-                  // at line ~315. mag=0 renders no chip (matched row =
-                  // no anomaly). Anything non-zero shows the sign.
-                  const mag = Math.abs(delta);
-                  const isBig = mag > 0 && mag >= Math.max(15, Math.round(projVal * 0.5));
-                  const chipCls = mag === 0 ? null : isBig ? "sc-day-row-delta--big" : "sc-day-row-delta--minor";
+                  // SC-064: review adopts the same helper as entry so
+                  // the direction/weight semantics stay identical
+                  // across the confirm step.
+                  const chip = deltaChip(numVal, projVal);
                   return (
                     <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
                       <span className="sc-day-row-name">{s.name}</span>
                       <span className="sc-day-review-val2">{numVal}</span>
-                      {chipCls ? (
-                        <span className={`sc-day-row-delta ${chipCls}`}>{(delta > 0 ? "+" : "") + delta}</span>
-                      ) : (
-                        <span className="sc-day-row-delta" />
-                      )}
+                      <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
                     </div>
                   );
                 })}
@@ -571,16 +688,34 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
         </div>
         <div className="sc-day-sb-line">
           <div className="sc-day-sb-fig">
-            {!isFeeAccount && (
-              // SC-052: prefix `~` while nothing is entered so the number
-              // itself reads as a forecast, not a saved total. Drops on
-              // the first keystroke - matches the same `~` semantics the
-              // tile rail uses for projected revenue.
-              <span className={`sc-day-sb-amount sc-day-sb-amount--${hasTouchedAny ? "recorded" : "projected"}`}>
-                {enteredCount === 0 ? "~" : ""}{fmt$(footerDisplay.revenue)}
-              </span>
-            )}
-            <span className="sc-day-sb-meals">{footerDisplay.meals.toLocaleString()} meals</span>
+            {(() => {
+              // SC-072 (render E-a):
+              //   0-state: hero = day projection, both $ and meals
+              //     carry `~`, "projected" class.
+              //   entered: hero = entered-only sum (touched services);
+              //     no `~`, "recorded" class. A subordinate muted phrase
+              //     appears after the meals span: "· ~$X day projection".
+              // The status counter "N of M entered" is untouched below.
+              const hasEntered = enteredCount >= 1;
+              const hero = hasEntered ? enteredTotals : dayProjection;
+              const amountCls = hasEntered ? "recorded" : "projected";
+              const prefix = hasEntered ? "" : "~";
+              return (
+                <>
+                  {!isFeeAccount && (
+                    <span className={`sc-day-sb-amount sc-day-sb-amount--${amountCls}`}>
+                      {prefix}{fmt$(hero.revenue)}
+                    </span>
+                  )}
+                  <span className="sc-day-sb-meals">{prefix}{hero.meals.toLocaleString()} meals</span>
+                  {hasEntered && !isFeeAccount && (
+                    <span className="sc-day-sb-day-projection">
+                      · ~{fmt$(dayProjection.revenue)} day projection
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
           {totalToEnter > 0 && (
             <span
@@ -678,6 +813,33 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
           );
         })}
 
+        {/* SC-066 (render B2): Mark-no-service row for the client-
+            cancelled-service case. Non-homestand accounts only (MLB
+            homestand is schedule-driven, no operator-marked cancels).
+            Renders only when there are projections AND the day isn't
+            already handled (entered/no-service/off-season/prep). Sits
+            above DAY NOTES so the confirm decision reads next to the
+            note the operator might have already started. */}
+        {(() => {
+          const isMlbHomestand = isFeeAccount && !!homestandContext?.dayType;
+          const dayHandled = status === "entered" || status === "no-service" || status === "off-season" || status === "prep";
+          if (isMlbHomestand || dayHandled) return null;
+          if (dayProjection.meals <= 0) return null;
+          return (
+            <div className="sc-day-noservice-row">
+              <span className="sc-day-noservice-copy">Client cancelled service for this day?</span>
+              <button
+                type="button"
+                className="sc-btn sc-btn--outline sc-day-noservice-btn"
+                onClick={() => setShowNoServiceConfirm(true)}
+                disabled={saving}
+              >
+                Mark no service
+              </button>
+            </div>
+          );
+        })()}
+
         <div className="sc-day-notes">
           <label className="sc-day-notes-label">Day notes (optional)</label>
           <textarea className="sc-day-notes-input" placeholder="Rain delay, added dinner, etc."
@@ -694,6 +856,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
         </div>
       </div>
       {showDiscardConfirm && renderDiscardConfirm()}
+      {showNoServiceConfirm && renderNoServiceConfirm()}
     </div>
   );
 
@@ -744,6 +907,54 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
               onClick={() => { setShowDiscardConfirm(false); onClose(); }}
             >
               Discard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // SC-066 confirm: small alertdialog. Cancel default-focused (safe);
+  // primary "Mark no service" runs the write. Esc dismisses without
+  // firing the write; stopPropagation so useDialogA11y's outer keydown
+  // doesn't cascade the parent close guard.
+  function renderNoServiceConfirm() {
+    return (
+      <div
+        className="sc-day-discard"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="sc-day-noservice-title"
+        aria-describedby="sc-day-noservice-body"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            setShowNoServiceConfirm(false);
+          }
+        }}
+      >
+        <div className="sc-day-discard-scrim" aria-hidden="true" />
+        <div className="sc-day-discard-card">
+          <h3 id="sc-day-noservice-title" className="sc-day-discard-title">
+            Mark {formatDate(day.date)} as no service?
+          </h3>
+          <p id="sc-day-noservice-body" className="sc-day-discard-body">
+            All services record 0 for this day and it counts as complete. A note is added for the record.
+          </p>
+          <div className="sc-day-discard-actions">
+            <button
+              ref={nsCancelBtnRef}
+              className="sc-btn sc-btn--outline"
+              onClick={() => setShowNoServiceConfirm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="sc-btn sc-btn--primary"
+              onClick={executeMarkNoService}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Mark no service"}
             </button>
           </div>
         </div>
