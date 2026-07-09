@@ -11,6 +11,19 @@ function formatDate(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
+// SC-079: note-ledger timestamp format. Server returns ISO strings;
+// render in the operator's local timezone with the "Jul 9 · 10:05 AM"
+// shape the render pack specifies. Falls back to the raw string if the
+// value can't be parsed.
+function formatEntryStamp(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const monthShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dateStr = `${monthShort[d.getMonth()]} ${d.getDate()}`;
+  const timeStr = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${dateStr} · ${timeStr}`;
+}
 
 // SC-058: PDC-PDC dedupe. TBJ-FL (and similar) group.name rows in
 // sc_service_groups already end with the segment ("Minor League - PDC"),
@@ -63,7 +76,7 @@ function isInServiceOnDay(svc, dayDate) {
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }
 
-function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {
+function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected, onAddNote, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {
   // PR-SC-Redesign Stage 3: `scopeLabel` lets the caller relabel the
   // "% of {scope}" readout. Legacy callers (the legacy month/period
   // views) don't pass it and default to "month" - the existing label
@@ -74,10 +87,15 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
-  // SC-053: prefill from day.dayNotes (server round-trip via the
-  // sc_daily_revenue view -> transformDays). Reopens surface a
-  // previously-saved note instead of a blank textarea.
-  const [notes, setNotes] = useState(day.dayNotes || "");
+  // SC-079: notes moved off the singleton dayNotes column onto the
+  // append-only ledger (sc_day_note_entries via sc-9). The textarea
+  // is now a DRAFT for the next entry, not a persisted field, and the
+  // "Add note" button below posts it via sc-add-note. Local mirror of
+  // day.noteEntries lets us prepend optimistically without waiting on
+  // a refetch.
+  const [notes, setNotes] = useState("");
+  const [noteEntries, setNoteEntries] = useState(day.noteEntries || []);
+  const [isPostingNote, setIsPostingNote] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [expandedExtras, setExpandedExtras] = useState(new Set());
   const [showReview, setShowReview] = useState(null);
@@ -114,10 +132,12 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     }
     setEditValues(vals);
     setTouched(t);
-    // Reset notes to the day's saved value on day-nav (SC-053), NOT to
-    // empty string - navigating between days must not silently drop a
-    // saved note.
-    setNotes(day.dayNotes || "");
+    // SC-079: on day-nav, the note draft resets to empty (drafts belong
+    // to the current day only) and the local ledger mirror rehydrates
+    // from the new day's payload. Prior saved history persists in
+    // day.noteEntries; nothing needs preserving in local state.
+    setNotes("");
+    setNoteEntries(day.noteEntries || []);
     setExpandedGroups(new Set());
     setExpandedExtras(new Set());
     setShowReview(null);
@@ -127,7 +147,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     setShowDiscardConfirm(false);
     // SC-066: same for the no-service confirm.
     setShowNoServiceConfirm(false);
-  }, [day.date, serviceGroups, day.actual, day.dayNotes]);
+  }, [day.date, serviceGroups, day.actual, day.noteEntries]);
 
   // SC-063: dirty = any touched service (counts differ from initial
   // load) OR the notes textarea differs from the saved server value.
@@ -136,9 +156,14 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
   const isDirty = useMemo(() => {
     if (justSaved) return false;
     if (touched.size > 0) return true;
-    if ((notes || "") !== (day.dayNotes || "")) return true;
+    // SC-079: the note draft counts dirty if it has any non-whitespace
+    // content. It compares against EMPTY (not against a persisted
+    // day.dayNotes anymore) because notes moved to append-only ledger
+    // entries. A typed-but-not-posted draft trips the discard guard so
+    // the operator doesn't silently lose work.
+    if ((notes || "").trim().length > 0) return true;
     return false;
-  }, [justSaved, touched, notes, day.dayNotes]);
+  }, [justSaved, touched, notes]);
 
   // Imperative handle for ServiceCalendar's guarded onClose. Returns
   // true when parent may proceed with the close (pristine); false when
@@ -219,15 +244,39 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
       setShowNoServiceConfirm(false);
       return;
     }
-    const auditNote = "Service cancelled - marked no service";
+    // SC-079: audit note posts as a ledger entry via the same server
+    // action - server derives author from the session. Any note draft
+    // the operator typed is preserved in-line here so it also lands as
+    // context alongside the audit literal (both go into the same
+    // sc-submit-day request via auditNote so ordering is deterministic).
     const trimmed = (notes || "").trim();
-    const combinedNotes = trimmed ? `${trimmed}\n${auditNote}` : auditNote;
+    const literal = "Service cancelled - marked no service";
+    const auditNote = trimmed ? `${trimmed}\n${literal}` : literal;
     setShowNoServiceConfirm(false);
-    const result = await onSave(day, entries, combinedNotes, { noService: true });
+    const result = await onSave(day, entries, { noService: true, auditNote });
     if (result?.success) {
       setJustSaved(true);
+      setNotes("");
     }
   }, [serviceGroups, day, notes, onSave]);
+
+  // SC-079: post one authored entry against sc-add-note, prepend to
+  // the local ledger optimistically on success, clear the draft.
+  const handleAddNote = useCallback(async () => {
+    const trimmed = (notes || "").trim();
+    if (!trimmed || isPostingNote) return;
+    if (!onAddNote) return;
+    setIsPostingNote(true);
+    try {
+      const res = await onAddNote(day, trimmed);
+      if (res?.success && res.entry) {
+        setNoteEntries((prev) => [res.entry, ...prev]);
+        setNotes("");
+      }
+    } finally {
+      setIsPostingNote(false);
+    }
+  }, [notes, day, onAddNote, isPostingNote]);
 
   // Focus the safe default (Cancel) when the no-service confirm opens
   // so a stray Enter reaffirms the entry state rather than firing the
@@ -388,15 +437,16 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
     // request fails (toast shown by handleSave), keep the review modal
     // open so the chef can retry without losing what they typed.
     //
-    // SC-053: notes travel with the save payload. Bulk paths pass
-    // undefined for dayNotes (they have no notes UI), so the server
-    // treats "no dayNotes key" as "don't touch metadata".
-    const result = await onSave(day, entries, notes);
+    // SC-079: notes no longer travel with the save payload. Adding a
+    // note is now an independent action via handleAddNote/sc-add-note.
+    // If the operator has a draft in the textarea, they were told to
+    // click "Add note" first (or the discard guard traps a close).
+    const result = await onSave(day, entries);
     if (result?.success) {
       setShowReview(null);
       setJustSaved(true);
     }
-  }, [serviceGroups, touched, getVal, day, onSave, notes]);
+  }, [serviceGroups, touched, getVal, day, onSave]);
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
@@ -611,14 +661,33 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
               Bundle 1 wired the data end-to-end; this bundle surfaces
               it. Empty note renders as an explicit muted "No note" so
               the row's absence-of-note is deliberate + auditable. */}
-          <div className={`sc-day-review-note${notes.trim() ? "" : " sc-day-review-note--empty"}`}>
-            <span className="sc-day-review-note-label">Day note</span>
-            {notes.trim() ? (
-              <blockquote className="sc-day-review-note-body">&ldquo;{notes.trim()}&rdquo;</blockquote>
-            ) : (
-              <span className="sc-day-review-note-body">No note</span>
-            )}
-          </div>
+          {/* SC-079: review surfaces the LATEST authored note (newest
+              first from the ledger + author/time context) rather than
+              echoing an unposted textarea draft. Empty ledger renders
+              the muted "No notes" state so the row's absence is
+              deliberate. */}
+          {(() => {
+            const latest = noteEntries[0];
+            const emptyCls = latest ? "" : " sc-day-review-note--empty";
+            return (
+              <div className={`sc-day-review-note${emptyCls}`}>
+                <span className="sc-day-review-note-label">Latest note</span>
+                {latest ? (
+                  <blockquote className="sc-day-review-note-body">
+                    &ldquo;{latest.note}&rdquo;
+                    <span className="sc-day-review-note-meta">
+                      {" — "}
+                      <strong>{latest.author || "—"}</strong>
+                      {" · "}
+                      {formatEntryStamp(latest.createdAt)}
+                    </span>
+                  </blockquote>
+                ) : (
+                  <span className="sc-day-review-note-body">No notes</span>
+                )}
+              </div>
+            );
+          })()}
         </div>
         <div className="sc-day-footer">
           <div className="sc-day-actions">
@@ -770,24 +839,34 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
               {/* Per-group "actuals match" button */}
               {!groupTouched && activeSvcs.length > 0 && (
                 <button className="sc-day-match-btn" onClick={() => fillGroupWithProjections(group)}>
-                  <span className="sc-day-match-btn-icon" aria-hidden="true">⤢</span>
+                  <span className="sc-day-match-btn-icon" aria-hidden="true">↗</span>
                   Match projections
                 </button>
               )}
 
-              {inactiveSvcs.length > 0 && !extrasOpen && (
-                <button type="button" className="sc-day-extras-btn" onClick={() => toggleExtras(group.name)}>
-                  <span className="sc-day-extras-btn-icon">+</span>
-                  <span>{inactiveSvcs.length} more {inactiveSvcs.length === 1 ? "service" : "services"}</span>
+              {/* SC-075 (render G1): in-group extras expander becomes a
+                  page-tint sub-header band inside the card. The whole
+                  band is the toggle button (aria-expanded announces
+                  state); the +/- glyph on the right is the F3 bordered
+                  chip. Expanded: rows render beneath within the same
+                  card. Off-group rows keep their #366 F3 treatment - this
+                  only touches the in-group expander. */}
+              {inactiveSvcs.length > 0 && (
+                <button
+                  type="button"
+                  className="sc-day-extras-band"
+                  onClick={() => toggleExtras(group.name)}
+                  aria-expanded={extrasOpen}
+                >
+                  <span className="sc-day-extras-band-label">
+                    More services <span className="sc-day-extras-band-count">· {inactiveSvcs.length}</span>
+                  </span>
+                  <span className="sc-day-extras-band-chip" aria-hidden="true">
+                    {extrasOpen ? "−" : "+"}
+                  </span>
                 </button>
               )}
               {extrasOpen && inactiveSvcs.map(svc => renderServiceRow(svc))}
-              {extrasOpen && (
-                <button type="button" className="sc-day-extras-hide" onClick={() => toggleExtras(group.name)}>
-                  <span className="sc-day-extras-btn-icon">−</span>
-                  <span>Hide extras</span>
-                </button>
-              )}
 
               {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
             </div>
@@ -821,10 +900,21 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
             above DAY NOTES so the confirm decision reads next to the
             note the operator might have already started. */}
         {(() => {
+          // SC-077: SC-066 flow now available on MLB homestand accounts
+          // too (rainout use case). Gate splits per billing model:
+          //   - per-meal / MiLB / STL-FL: need day.projected to have
+          //     something (no meals = no service to cancel).
+          //   - MLB homestand: need the day to be a scheduled game
+          //     (non-game days already read as prep on the schedule).
+          // dayHandled short-circuits both paths - if the classifier
+          // already labeled the day complete, no button.
           const isMlbHomestand = isFeeAccount && !!homestandContext?.dayType;
           const dayHandled = status === "entered" || status === "no-service" || status === "off-season" || status === "prep";
-          if (isMlbHomestand || dayHandled) return null;
-          if (dayProjection.meals <= 0) return null;
+          if (dayHandled) return null;
+          const hasScheduledService = isMlbHomestand
+            ? homestandContext?.dayType === "GAME"
+            : dayProjection.meals > 0;
+          if (!hasScheduledService) return null;
           return (
             <div className="sc-day-noservice-row">
               <span className="sc-day-noservice-copy">Client cancelled service for this day?</span>
@@ -840,10 +930,49 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onConfirmAsProjected
           );
         })()}
 
+        {/* SC-079 (render I3): notes become a per-day append-only
+            ledger. Textarea is a DRAFT for the next entry; Add note
+            button posts it via sc-add-note (server-derived author),
+            prepends to the ledger optimistically, clears the draft.
+            Ledger container beneath: bordered, rows scroll past ~4
+            entries, empty state hides the container. */}
         <div className="sc-day-notes">
-          <label className="sc-day-notes-label">Day notes (optional)</label>
-          <textarea className="sc-day-notes-input" placeholder="Rain delay, added dinner, etc."
-            value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+          <label className="sc-day-notes-label" htmlFor="sc-day-note-draft">
+            Add a note
+          </label>
+          <textarea
+            id="sc-day-note-draft"
+            className="sc-day-notes-input"
+            placeholder="Rain delay, added dinner, etc."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+          />
+          <div className="sc-day-notes-actions">
+            <button
+              type="button"
+              className="sc-btn sc-btn--outline sc-day-notes-add"
+              onClick={handleAddNote}
+              disabled={!notes.trim() || isPostingNote}
+            >
+              {isPostingNote ? "Adding..." : "Add note"}
+            </button>
+          </div>
+
+          {noteEntries.length > 0 && (
+            <ul className="sc-day-note-ledger" aria-label="Note history">
+              {noteEntries.map((e, i) => (
+                <li key={e.id || `${e.createdAt}-${i}`} className="sc-day-note-entry">
+                  <span className="sc-day-note-entry-body">{e.note}</span>
+                  <span className="sc-day-note-entry-meta">
+                    <strong>{e.author || "—"}</strong>
+                    {" · "}
+                    {formatEntryStamp(e.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

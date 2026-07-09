@@ -28,7 +28,10 @@ export default function StateLegend({
   // taxonomy lives in the popup behind the info button.
   const items = [];
   if (hasHomestandSchedule) {
-    items.push({ mod: "entered", icon: "", label: "Game day entered" });
+    // SC-078: homestand classifier now credits any entered day
+    // (game or non-game with recorded meals) - the legend collapses
+    // to "Entered" so the one-line key stops implying game-only.
+    items.push({ mod: "entered", icon: "", label: "Entered" });
     items.push({ mod: "upcoming", icon: "○", label: "Scheduled" });
     items.push({ mod: "off", icon: "", label: "Non Game day" });
   } else if (isFeeAccount) {

@@ -872,19 +872,20 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // executeSave can gate the success screen on a confirmed write. Empty
   // entries are guarded upstream (DayDetail won't even call onSave).
   //
-  // SC-053: dayNotes travels as a third arg (DayDetail passes its notes
-  // textarea value). Bulk paths omit it - server treats "no key" as
-  // "don't touch metadata".
+  // SC-079: dayNotes retired from the save path. Regular saves just
+  // send { entries }; mark-no-service passes opts.auditNote so the
+  // server posts a ledger entry alongside the actuals write. Author
+  // is derived server-side from the session in both cases.
   // SC-051: toast reads amount/meals from response (savedRevenue,
   // savedMeals), not a client recompute.
-  const handleSave = useCallback(async (day, entries, dayNotes, opts = {}) => {
+  const handleSave = useCallback(async (day, entries, opts = {}) => {
     if (!data?.account) return { success: false, error: "No account loaded" };
     setSaving(true);
     try {
       // spreadsheetId + sheetRow were leftover from the Sheets-era route;
       // the PG route ignores them. Dropped to keep the payload honest.
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, dayNotes }) });
+        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote }) });
       const result = await res.json();
       if (!isMountedRef.current) return result;
       if (result.success) {
@@ -918,6 +919,31 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       if (isMountedRef.current) setSaving(false);
     }
   }, [data, showToast, buildRecordedToast]);
+
+  // SC-079: POST one authored note entry to sc-add-note. DayDetail
+  // owns the draft + local ledger; this just moves it over the wire.
+  // Server derives author from the session - never accepts a client
+  // value. Returns { success, entry } so the child can prepend
+  // optimistically. Errors surface a plain oh-toast.
+  const handleAddNote = useCallback(async (day, note) => {
+    if (!data?.account) return { success: false, error: "No account loaded" };
+    try {
+      const res = await fetch("/api/service-calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sc-add-note", account: data.account.key, date: day.date, note }),
+      });
+      const result = await res.json();
+      if (!isMountedRef.current) return result;
+      if (!result.success) {
+        showToast(result.error || "Failed to add note", "error");
+      }
+      return result;
+    } catch {
+      if (isMountedRef.current) showToast("Network error", "error");
+      return { success: false, error: "Network error" };
+    }
+  }, [data, showToast]);
 
   const handleConfirmAsProjected = useCallback(async (day) => {
     if (!data?.account || !data?.serviceGroups) return;
@@ -1631,7 +1657,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           >
             <DayDetail ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
               overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
-              onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} saving={saving}
+              onSave={handleSave} onConfirmAsProjected={handleConfirmAsProjected} onAddNote={handleAddNote} saving={saving}
               dayIndex={focusIdx} totalDays={dayList.length}
               monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
               scopeLabel="period"

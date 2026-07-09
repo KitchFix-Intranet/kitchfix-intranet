@@ -104,8 +104,9 @@ export default function LegendInfoPopup({
           <Section title={accountSectionTitle(hasHomestandSchedule, isFeeAccount, isMilb)}>
             {hasHomestandSchedule ? (
               <>
-                <Row mod="entered" label="Game day entered">
-                  Game-day actuals recorded. Schedule-driven account.
+                <Row mod="entered" label="Entered">
+                  Actuals recorded. Includes game days (any recorded meal count, zero counts as a
+                  cancelled game) and non-game days where meals were served.
                 </Row>
                 <Row mod="upcoming" label="Scheduled game day">
                   An upcoming game on the homestand schedule.

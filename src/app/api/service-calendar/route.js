@@ -9,7 +9,7 @@ import {
   loadYearSummary,
   loadHomestandContext,
   saveActuals,
-  saveDayNotes,
+  addDayNoteEntry,
   readSavedDayTotals,
   saveBulkActuals,
   updateServiceConfig,
@@ -247,11 +247,17 @@ function transformDays(orchDays) {
       projectedRevenue,
       actualRevenue,
       priceAtDate,
-      // sc_day_metadata.notes surfaced via the sc_daily_revenue view's
-      // day_notes alias (see loadMonthDataPostgres, `dayNotes` bucket
-      // field). DayDetail prefills its notes textarea from this so a
-      // saved note is visible + editable on reopen (SC-053 fix).
-      dayNotes:   d.dayNotes || null,
+      // SC-079: per-day authored note ledger (newest first). Replaces
+      // the singleton dayNotes field from #361 - authors, timestamps,
+      // and history now travel with each day. Empty array when the day
+      // has no notes so the UI can render the empty state without a
+      // null-check. Backfilled entries carry author=null (rendered as
+      // em-dash in the ledger).
+      noteEntries: (d.noteEntries || []).map((e) => ({
+        note:      e.note,
+        author:    e.author,
+        createdAt: e.createdAt,
+      })),
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,
@@ -576,7 +582,7 @@ export async function POST(request) {
   try {
     // ── sc-submit-day: save actuals for one day ──
     if (action === "sc-submit-day") {
-      const { accountKey, date, entries, dayNotes } = body;
+      const { accountKey, date, entries, auditNote } = body;
       if (!accountKey || !date || !entries?.length) {
         return NextResponse.json(
           { success: false, error: "Missing required fields" },
@@ -594,12 +600,14 @@ export async function POST(request) {
       }));
       const result = await saveActuals(accountKey, date, touched, email);
 
-      // SC-053: day-notes end-to-end. Client sends dayNotes as a string
-      // (may be empty) whenever the textarea was rendered - undefined
-      // means the caller didn't opt into notes (bulk paths). Only the
-      // string form triggers a write.
-      if (typeof dayNotes === "string") {
-        await saveDayNotes(accountKey, date, dayNotes, email);
+      // SC-079: notes moved off the save path (#361's dayNotes upsert
+      // retired). The mark-no-service flow still needs to leave a
+      // trail, so it posts its literal via the same ledger table as
+      // sc-add-note. Author derives from the session - the client
+      // cannot spoof it. Regular saves omit auditNote entirely.
+      if (typeof auditNote === "string" && auditNote.trim().length > 0) {
+        const author = session.user?.name || session.user?.email || "";
+        await addDayNoteEntry(accountKey, date, auditNote, author);
       }
 
       // SC-051: server-authoritative totals. Read the view after the
@@ -614,6 +622,23 @@ export async function POST(request) {
         savedRevenue: totals.revenue,
         savedMeals:   totals.meals,
       });
+    }
+
+    // ── sc-add-note: append one authored entry to the day's ledger ──
+    // SC-079. Author is derived from the session; the client cannot
+    // supply it. Returns the created entry so the UI can prepend
+    // optimistically. Body: { account, date, note }.
+    if (action === "sc-add-note") {
+      const { account, date, note } = body;
+      if (!account || !date || typeof note !== "string" || note.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: "account, date, and non-empty note required" },
+          { status: 400 }
+        );
+      }
+      const author = session.user?.name || session.user?.email || "";
+      const result = await addDayNoteEntry(account, date, note, author);
+      return NextResponse.json(result);
     }
 
     // ── sc-bulk-submit: save actuals for multiple days ──
