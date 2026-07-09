@@ -1,5 +1,15 @@
 # Service Calendar Spreadsheet -> Postgres Mapping
 
+> **Money-model claims in this doc are SUPERSEDED by [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md)
+> (2026-07-09 alignment).** The 2026-06-15 ruling that "the canonical `sc_service_prices`
+> entry should be the projection-tab price (the bill rate)" - see line 66-area comment
+> below - was correct-at-authoring against the sheet-era model, but became stale on
+> 2026-06-16 when Kevin ran an out-of-band SQL correction (per Price Review v3, Joe-
+> reviewed) moving `sc_service_prices` to the actuals-tab post-SF invoice rate. That is
+> the current authoritative value. See SC_MONEY_MODEL.md §(a) + §(b) for the settled
+> model and `SC_MONEY_ALIGNMENT_REPORT.md` Part 4 for the timeline. This doc remains
+> authoritative for sheet layout, column indexes, and tab structure.
+
 Review doc for the sc-1 Service Calendar import. Inspected 11 .xlsx files at
 `/Users/kevinfietek/Documents/Claude /Service Calendars/` (note the trailing
 space in the parent folder name). One section per `account_key`, sorted
@@ -63,7 +73,7 @@ only.
 
 | Column | Group Name | Service Name | Price | is_tax_free | is_flat_fee | Notes |
 |---|---|---|---|---|---|---|
-| F | Major League | Breakfast | 29.00888 | false | false | Projections price. Actuals tab carries a different (lower) cost basis price of 20.306216; the canonical sc_service_prices entry should be 29.00888 (the bill rate). |
+| F | Major League | Breakfast | 29.00888 | false | false | Projections-tab price = sticker rate = reference / planning only. Actuals-tab price ($20.31 for CIN-AZ MLB Breakfast) = post-SF invoice rate = what's billed per meal. **Note (2026-06-16): the "canonical `sc_service_prices` entry should be 29.00888" ruling below was SUPERSEDED by Price Review v3.** Today's canonical entry is $20.31 (post-SF invoice rate); see [SC_MONEY_MODEL.md](SC_MONEY_MODEL.md). The original text of this cell is retained above for archaeological reference; the historical mapping (column F -> 29.00888) still identifies the correct SHEET cell to read during a fresh import, but the value stored in PG post-correction is the actuals-tab rate. |
 | H | Major League | Lunch | 29.00888 | false | false | same dual-price pattern |
 | J | Major League | Dinner | 29.00888 | false | false | |
 | L | Minor League | Breakfast | 18.42147 | false | false | distinct service from MLB Breakfast |

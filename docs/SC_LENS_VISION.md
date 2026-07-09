@@ -3,10 +3,13 @@
 **Status:** Vision / pre-build. This is the north-star design and staged plan for the next major evolution of the Service Calendar (SC). It is the boss-facing artifact and the document CC builds toward across staged PRs. Reference docs (cited inline) hold the build-critical detail; this doc holds the strategy.
 
 **Companion docs:**
+- `SC_MONEY_MODEL.md` - the canonical money model. Wins conflicts on any pricing / invoicing / KPI question.
 - `SC_PDC_PHASES.md` - the recorded PDC phase calendars + canonical vocabulary (source data for the Phase lens)
 - `SC_KPI_PUSH_CONTRACT.md` - what the SC owes the KPI dashboard (the revenue-band push)
 - `SC_BILLING_MODEL_AUDIT.md` - per-account billing mechanics (updated with resolutions from this work)
 - `GOTCHAS.md` - hard-won traps (updated with phase-source and price-discount lessons)
+
+The money-model text in §5.1 - §5.2 below (three-line revenue breakdown; per-account SF% + flat-SF + flat_fee mechanics) is CORRECT and agrees with `SC_MONEY_MODEL.md`; that doc is the go-forward reference where language differs.
 
 ---
 

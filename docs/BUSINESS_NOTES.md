@@ -29,10 +29,10 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 - **MLB (Major League Clubhouse)** - the kitchen inside the stadium for the home team during the regular season. Roughly 60-75 people eating the same three meals every game day. Predictable and consistent.
 - **MiLB (Minor League)** - like MLB but for the farm-system affiliates. Smaller operations, smaller rosters, shorter seasons.
 
-**How billing works** - every account is one of two billing models:
+**How billing works** - every account is one of two billing models. Money-model authority: [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md).
 
-- **Per-Meal Accounts (6): CIN-AZ, TXR-AZ, TBJ-FL, TBR-FL, TBJ-NY, CIN-KY.** You count the meals, we bill the client for what you counted. Counts multiplied by the per-plate price calculate the invoice (e.g. 75 lunches at $18.42 = $1,381.50). **The actuals ARE the billing data - if they aren't entered, we don't bill.**
-- **Fee Accounts (5): STL-FL, STL-MO, CIN-OH, TXR-TX-H, TXR-TX-V.** The client pays a set amount regardless of counts. Service-calendar projections are for operational planning (food prep, staffing) only; the bill does not change based on the numbers entered.
+- **Per-Meal Accounts (6): CIN-AZ, TXR-AZ, TBJ-FL, TBR-FL, TBJ-NY, CIN-KY.** You count the meals, we bill the client for what you counted. Counts multiplied by the **post-SF invoice rate** calculate the per-meal invoice line (e.g. 75 CIN-AZ MiLB lunches × $12.90 = $967.50). Note the rate depends on account shape: for SF% accounts (CIN-AZ 30%, TXR-AZ 20%, TBR-FL MiLB 25%) the post-SF rate is `sticker × (1 - SF%)` and the Service Fee is billed SEPARATELY as a flat annual amount; for flat-SF (TBJ-FL) and no-SF (CIN-KY, TBJ-NY) the post-SF rate equals the sticker. The rate that lives in `sc_service_prices` per Price Review v3 (2026-06-16) IS the post-SF invoice rate. Older text in this doc used $18.42 (sticker) as the CIN-AZ MiLB Lunch billing rate - that was wrong; corrected 2026-07-09. **The actuals ARE the billing data - if they aren't entered, we don't bill.**
+- **Fee Accounts (5): STL-FL, STL-MO, CIN-OH, TXR-TX-H, TXR-TX-V.** The client pays a set amount regardless of counts. Service-calendar projections are for operational planning (food prep, staffing) only; the bill does not change based on the numbers entered. The fee lives in `sc_fee_schedule`.
 
 > Note: the billing model is not yet encoded as an account flag in the system - it lives here as operational reference. Surfacing it in the data model / UI (so per-meal vs fee accounts can be treated differently where counts are entered) is a separate, unscoped thread.
 

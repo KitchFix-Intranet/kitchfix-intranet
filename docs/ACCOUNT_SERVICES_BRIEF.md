@@ -1,5 +1,13 @@
 # KitchFix Account Services Brief
 
+> **Money-model claims in this doc are SUPERSEDED by [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md)
+> (2026-07-09 alignment).** This brief remains authoritative for per-account services,
+> contract dates, and business-context detail; on any question of which price is billed,
+> how service fees interact with per-meal, or how the KPI lens is computed, defer to
+> SC_MONEY_MODEL.md. Line 33 below has been rewritten to match the settled model; older
+> sections may still reflect the pre-2026-06-16 framing and will be trued up per-section
+> in a follow-up.
+
 Source-of-truth reference for how every KitchFix account's billing, pricing, service fees, and service calendar work. This brief is the canonical mental model for the Director of Operations (Kevin), VP Operations (Joe), site leads, and future Claude instances touching the billing module, service calendar tool, or finance stack. Last updated 2026-06-16.
 
 Sourcing: this doc folds together the executed-contract analysis in `docs/SC_CONTRACT_BILLING_SUMMARY.md`, the per-account spreadsheet layout in `docs/SC_SPREADSHEET_MAPPING.md`, and the projection-vs-actuals price audit in `docs/SC_PRICE_COMPARISON.md`, with Kevin's curated 2026-06-16 source-of-truth context overlaid on top and ABR 2025 inputs (`ABR Deeper Dive - 2025.pdf`, `ABR 2025 OneSheeter.xlsx`) cross-referenced. Where ABR data disagrees with the canonical context, the contradiction is flagged inline with `[CONTRADICTION - confirm with Kevin]`.
@@ -30,7 +38,9 @@ On top of the per-meal vs flat-fee split sit three other dimensions that have to
 
 ### Pricing model in one line
 
-For `actuals_drive_invoice` accounts, the **PROJECTION tab price** is the billing rate that gets multiplied by meal counts on the invoice. The actuals tab price is a cost-basis tracking number for internal margin reporting. For percentage-based service-fee accounts (CIN - AZ, TXR - AZ, TBR - FL MiLB), the projection price already includes the SF component and the actuals tab price equals projection x (1 - SF%). For flat-SF accounts and zero-SF accounts, the projection and actuals prices are identical because the SF does not reduce the per-meal rate. For `flat_fee` accounts, prices are $0 in Postgres because billing equals the contractual fee.
+Rewritten 2026-07-09 per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). For `actuals_drive_invoice` accounts, the per-meal invoice line item equals `actual_count × post-SF invoice rate`. That "post-SF invoice rate" is what lives in Postgres today (per Price Review v3, 2026-06-16, Joe-reviewed): for percentage-based service-fee accounts (CIN - AZ 30%, TXR - AZ 20%, TBR - FL MiLB 25%), it equals `sticker × (1 - SF%)` and the SF is billed SEPARATELY as a flat annual amount on its own schedule (never rolled into the per-meal invoice). For flat-SF accounts (TBJ - FL) and zero-SF accounts (CIN - KY, TBJ - NY), the post-SF invoice rate equals the sticker - there is no per-meal discount. The workbook projection-tab price (sticker) is a historical planning/budget number only; it is NOT what appears on the client's invoice. For `flat_fee` accounts, per-meal prices are $0 in Postgres because billing equals the contractual fee - the calendar tracks meal counts for planning, and the fee lives in `sc_fee_schedule`.
+
+(The former version of this paragraph, which named the projection-tab price as the billing rate, was wrong for SF% accounts - contradicted by the workbook actuals-tab formulas, the contract bible §Resolved line 87, the KPI push contract, GOTCHAS, and Kevin's Price Review v3. Corrected in the 2026-07-09 alignment.)
 
 ## Per-account deep dive
 
