@@ -21,6 +21,7 @@
     "@kitchfix-intranet/shared": "^1.0.1",
     "@sentry/nextjs": "10.53.1",
     "@supabase/supabase-js": "^2.106.2",
+    "exceljs": "^4.4.0",
     "google-auth-library": "10.5.0",
     "googleapis": "171.4.0",
     "lucide-react": "1.14.0",
