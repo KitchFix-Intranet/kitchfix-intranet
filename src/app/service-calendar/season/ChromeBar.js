@@ -55,6 +55,10 @@ export default function ChromeBar({
   // passes null / undefined and the bar behaves as before.
   drillNav,
   drillNavEnd,
+  // Optional export CTA slot (render J2). Renders inside the right
+  // cluster, positioned immediately LEFT of the Today chip in both
+  // overview and drill scopes. Parent supplies <ExportControl ... />.
+  exportControl,
   // misc
   className,
 }) {
@@ -89,6 +93,7 @@ export default function ChromeBar({
       </div>
 
       <div className="sc-chrome-bar-right">
+        {exportControl}
         {drillNavEnd}
         {showStats && (
           <ChromeStats

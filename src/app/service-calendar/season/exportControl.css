@@ -1,0 +1,157 @@
+/* ════════════════════════════════════════════════════════════════
+   ExportControl (render J2) - chrome-right icon-only square + menu
+   32px bordered square, download glyph. Sits immediately left of the
+   Today chip in the ChromeStats block.
+   ════════════════════════════════════════════════════════════════ */
+
+.sc-export {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sc-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-cell);
+  color: var(--text-default);
+  cursor: pointer;
+  transition: background var(--motion-control),
+              color var(--motion-control),
+              border-color var(--motion-control);
+}
+.sc-export-btn:hover {
+  background: var(--accent-sc-tint);
+  border-color: var(--accent-sc);
+  color: var(--accent-sc-dark);
+}
+.sc-export-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: 1px;
+}
+.sc-export-btn:active { transform: translateY(1px); }
+.sc-export-btn:disabled {
+  cursor: default;
+  opacity: var(--opacity-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-export-btn { transition: none; }
+  .sc-export-btn:active { transform: none; }
+}
+
+/* Busy state: swap the icon for a small spinner. Reduced-motion
+   pair replaces the spin with a static dot so the animation never
+   plays. */
+.sc-export-btn--busy {
+  cursor: progress;
+}
+.sc-export-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent-sc-subtle);
+  border-top-color: var(--accent-sc);
+  border-radius: var(--radius-circle);
+  animation: sc-export-spin 640ms linear infinite;
+}
+@keyframes sc-export-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-export-spinner {
+    animation: none;
+    border-top-color: var(--accent-sc);
+    border-color: var(--accent-sc);
+    background: var(--accent-sc);
+  }
+}
+
+/* Menu (render J1 anatomy): opens below the button, right-aligned so
+   long option text does not clip the viewport on mobile. Anchors to
+   the right edge of the trigger square so the two menu items align
+   under the download glyph. */
+.sc-export-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  min-width: 260px;
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  box-shadow: var(--elevation-popover);
+  padding: var(--space-1);
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: sc-export-menu-in var(--duration-base) var(--ease-emphasized);
+}
+@keyframes sc-export-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0);     }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-export-menu { animation: none; }
+}
+
+.sc-export-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-control);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--motion-control), color var(--motion-control);
+}
+.sc-export-menu-item:hover,
+.sc-export-menu-item:focus-visible {
+  background: var(--accent-sc-tint);
+  outline: none;
+}
+.sc-export-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--accent-sc);
+}
+.sc-export-menu-item:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sc-export-menu-item { transition: none; }
+  .sc-export-menu-item:active { transform: none; }
+}
+.sc-export-menu-item-label {
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  color: var(--text-default);
+}
+.sc-export-menu-item-sub {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Reserved a11y helper for the busy-state SR announcement. */
+.sc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -8,6 +8,7 @@ import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import StateLegend from "./season/StateLegend";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
+import ExportControl from "./season/ExportControl";
 import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
@@ -1423,6 +1424,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         onViewChange={handleSeasonViewChange}
         showToggle={!isAdminView && isYearView}
         showStats={!isAdminView && isYearView}
+        exportControl={!isAdminView && selectedAccount ? (
+          <ExportControl
+            scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
+            year={year}
+            periodKey={isPeriodView ? periodKey : null}
+            monthKey={isMonthView ? monthKey : null}
+            accountKey={selectedAccount}
+            showToast={showToast}
+          />
+        ) : null}
         drillNav={
           isPeriodView ? (
             <PeriodHeaderNav
