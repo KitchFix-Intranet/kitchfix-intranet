@@ -66,7 +66,22 @@ function aggregateWorkspaceMetrics(days) {
     // legend render from, not the raw isPast/isLocked derivation the
     // aggregate used before. Past no-service days (classifier
     // "no-service" from all-zero projection rows) no longer inflate.
-    if (day.hasActuals) out.complete++;
+    //
+    // SC-066 step 0 (2026-07-09): "complete" widens to include the
+    // no-service classification. Two paths land on that status:
+    //   (case 1) all-zero projection + never saved - the classifier's
+    //            planned-off Sunday case (per-meal only). hasActuals=
+    //            false because nothing was written, but the operator
+    //            has nothing to do; the beige tile reads "done".
+    //   (case 2) actuals present but ALL zero (Mark-no-service / an
+    //            operator zero-write). hasActuals=true because a row
+    //            exists per service, tile also beige.
+    // Both are visually indistinguishable + operationally "handled"; the
+    // counter now agrees. Fee accounts don't emit "no-service" so
+    // widening is a no-op for MLB homestand + STL-FL when it falls
+    // through to the fee path.
+    const isDayComplete = day.hasActuals || day.status === "no-service";
+    if (isDayComplete) out.complete++;
     if (day.status === "overdue") out.overdue++;
     else if (day.status === "needs-entry") out.needsEntry++;
     // SC-043: service-day predicate. Excludes the non-service statuses.
@@ -77,7 +92,9 @@ function aggregateWorkspaceMetrics(days) {
       && day.status !== "prep";
     if (isServiceDay) {
       out.serviceDays++;
-      if (day.hasActuals) out.serviceDaysEntered++;
+      // Step-0 widening also applies to serviceDaysEntered so the fee
+      // "days entered" chip agrees with the per-meal "days" tile.
+      if (isDayComplete) out.serviceDaysEntered++;
     }
     // SC-043: game-day predicate (MLB homestand). meta.gameType is
     // populated from sc_daily_revenue.game_type for game days;
@@ -85,7 +102,9 @@ function aggregateWorkspaceMetrics(days) {
     const isGameDay = !!day.meta?.gameType;
     if (isGameDay) {
       out.gameDays++;
-      if (day.hasActuals) out.gameDaysEntered++;
+      // MLB homestand path: no "no-service" status is emitted, so
+      // isDayComplete on a game day collapses to day.hasActuals.
+      if (isDayComplete) out.gameDaysEntered++;
     }
     out.projRev += day.totals?.projectedRevenue || 0;
     if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
@@ -110,14 +129,20 @@ function aggregateWorkspaceMetrics(days) {
     else if (day.status === "needs-entry") w.needsEntry++;
     if (isServiceDay) {
       w.serviceDays++;
-      if (day.hasActuals) w.serviceDaysEntered++;
+      if (isDayComplete) w.serviceDaysEntered++;
     }
     if (isGameDay) {
       w.gameDays++;
-      if (day.hasActuals) w.gameDaysEntered++;
+      if (isDayComplete) w.gameDaysEntered++;
     }
+    // Step-0 (SC-066): w.complete tracks the same widened predicate as
+    // the period aggregate above so week-card counts don't disagree
+    // with the period header for the same range.
+    if (isDayComplete) w.complete++;
+    // Revenue/meals accumulators STAY gated on hasActuals: a case-1
+    // no-service Sunday has no actual_revenue to sum, and inflating
+    // actMeals with a projection-derived zero is a no-op anyway.
     if (day.hasActuals) {
-      w.complete++;
       w.actRev += day.totals?.actualRevenue || 0;
       for (const ci of Object.keys(day.actual || {})) {
         const av = day.actual[ci];
@@ -817,8 +842,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   useEffect(() => () => { isMountedRef.current = false; }, []);
 
   const buildRecordedToast = useCallback((opts) => {
-    const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0 } = opts;
-    const currentComplete = activeDrillDays ? activeDrillDays.filter(d => d.hasActuals).length : null;
+    const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0, noService = false } = opts;
+    // Step-0 (SC-066): mirror aggregateWorkspaceMetrics's widened
+     // "complete" predicate so the toast progress bar agrees with the
+    // header the operator just read.
+    const currentComplete = activeDrillDays
+      ? activeDrillDays.filter(d => d.hasActuals || d.status === "no-service").length
+      : null;
     const totalDays = activeDrillDays?.length ?? null;
     const scopeWord = isPeriodView ? "period" : isMonthView ? "month" : "period";
     return {
@@ -831,6 +861,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       isBulk,
       bulkDays,
       isFeeAccount,
+      // SC-066: SubmissionToast reads this to override the headline to
+      // "No service recorded" and drop the money line (which would be
+      // $0 - visually confusing on a per-meal day).
+      noService,
     };
   }, [activeDrillDays, isPeriodView, isMonthView, isFeeAccount]);
 
@@ -843,7 +877,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // "don't touch metadata".
   // SC-051: toast reads amount/meals from response (savedRevenue,
   // savedMeals), not a client recompute.
-  const handleSave = useCallback(async (day, entries, dayNotes) => {
+  const handleSave = useCallback(async (day, entries, dayNotes, opts = {}) => {
     if (!data?.account) return { success: false, error: "No account loaded" };
     setSaving(true);
     try {
@@ -859,6 +893,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           amount: Number(result.savedRevenue) || 0,
           meals:  Number(result.savedMeals)   || 0,
           newlyEntered,
+          // SC-066: mark-no-service flag flows through so the toast
+          // reads "No service recorded" instead of "0 meals / $0".
+          noService: !!opts.noService,
         }));
         // Surgical monthCache invalidation: drop only the month we wrote
         // to so the drill-in refetches just that month, not the whole

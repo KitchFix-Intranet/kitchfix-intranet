@@ -128,6 +128,16 @@
   color: var(--scoreboard-text-muted);
   font-variant-numeric: var(--num-tabular);
 }
+/* SC-072 (render E-a): subordinate day-projection phrase that trails
+   the meals span once the operator has entered anything. Muted against
+   the navy scoreboard so the entered-only hero remains the primary
+   read. Wraps below on narrow viewports (natural inline flow). */
+.sc-day-sb-day-projection {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--scoreboard-text-muted);
+  font-variant-numeric: var(--num-tabular);
+}
 .sc-day-sb-status {
   display: inline-flex;
   align-items: center;
@@ -293,19 +303,21 @@
    "match" indicator. Empty span without the explicit display: inline-block
    was painting with collapsed width in some browser cases, ragging the
    right edge as operators typed across rows. */
-/* Typo-catcher, not a scoreboard. Matched rows render an empty slot -
-   the green input already says "entered + on plan". Only misses render
-   an indicator: --minor (calm neutral) for normal drift; --big (amber
-   feedback-warning) for genuine outliers (|d|>=15 or ~50% off plan).
-   No red - drift is not an error. */
+/* SC-064: direction carries the meaning; magnitude is weight only.
+   Was: --minor (neutral) / --big (amber outlier), no match indicator.
+   Now: --under (amber, value < proj) / --over (green, value > proj) /
+        --match (green bold ✓, value === proj). --strong adds bold on
+   genuine outliers (|d| >= max(15, round(proj*0.5))). All computed
+   against white at 12px caption size:
+     --status-needs-fg  #8C3A00 = 7.72:1  (under)
+     --text-success     #008330 = 4.90:1  (over + match)
+   Red rejected (blame connotation); amber-under is CVD-safe alongside
+   the two greens via the sign glyph. */
 .sc-day-row-delta { display: inline-block; width: 36px; font-size: var(--size-caption); text-align: right; }
-/* SC-061: delta-minor was --text-subtle (2.56:1 on white); --text-muted
-   measures 4.76:1. delta-big was --feedback-warning #D97706 (3.19:1 at
-   12px, normal-text FAIL); --status-needs-fg #8C3A00 measures 7.72:1 -
-   comfortable AA. Same amber family, deeper enough to pass at caption
-   size. */
-.sc-day-row-delta--minor { color: var(--text-muted); font-weight: var(--wt-medium); }
-.sc-day-row-delta--big { color: var(--status-needs-fg); font-weight: var(--wt-semibold); }
+.sc-day-row-delta--under { color: var(--status-needs-fg); font-weight: var(--wt-medium); }
+.sc-day-row-delta--over  { color: var(--text-success);    font-weight: var(--wt-medium); }
+.sc-day-row-delta--match { color: var(--text-success);    font-weight: var(--wt-bold);   }
+.sc-day-row-delta--strong { font-weight: var(--wt-bold); }
 
 /* Bundle 2 archived-day chip: a service archived as of day.date renders
    this read-only chip in place of the editable input. Same visible-but-
@@ -416,6 +428,32 @@
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-collapsed-icon { font-size: var(--size-subhead); font-weight: var(--wt-semibold); }
+
+/* SC-066 (render B2): Mark-no-service row. Off-tint dashed container
+   above DAY NOTES; the button uses the standard .sc-btn--outline
+   family so it reads as a real interactive affordance, not ghost text.
+   Row is only rendered for non-homestand accounts on days that still
+   have work to do (see DayDetail conditional). */
+.sc-day-noservice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-4);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-container);
+  background: var(--surface-sunken);
+  flex-wrap: wrap;
+}
+.sc-day-noservice-copy {
+  font-size: var(--size-body);
+  color: var(--text-default);
+  font-weight: var(--wt-medium);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sc-day-noservice-btn { flex-shrink: 0; }
 
 /* Notes */
 .sc-day-notes { margin-top: var(--space-4); }

@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 fixes complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-035 + section candidates (cleanup phase)**
+**Status: Sections 1-3 complete · Owner Review Round 2 fixes IN PROGRESS · 0 sev-4 open**
 
 ## Section 1 — Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -143,3 +143,24 @@ investigation @ 406e55c (money trace, guards, a11y inventory, measured ratios).
 - Remaining CC Flags (13) recorded in the investigation report - triage in the cleanup phase.
 - Dirty guard over-triggers when retyping identical values (touched = typed-this-session, not
   differs-from-initial) - conservative in the safe direction, accepted (post-merge review note).
+  Round 2 partial-retire: type-then-delete on a previously-empty row now correctly removes touched
+  (SC-071), so the phantom-dirty case narrows to actual retype-to-same-value.
+
+## Owner Review Round 2 — interactive audit (Kevin, 2026-07-08 PDF) · specced 2026-07-09
+
+Source: DesignReviewInteractiveAuditSC (11 items) + Chat evaluation + code verification + render pack
+(SC_owner_round2_renders.html) approvals: A-amber, B2, C2-modified, D, E-a, F3.
+
+| ID | Sev | Item | Finding | Fix (approved) | Status | Verified by |
+|----|-----|------|---------|----------------|--------|-------------|
+| SC-064 | 2 | 1 | Delta chips: direction should carry meaning; red rejected (blame connotation) | under=amber / over=green / match=green ✓; magnitude→weight only; signs always (CVD-safe) | OPEN | render A + ruling |
+| SC-065 | 1 | 2 | Cancel reads as ghost text | Outline-button styling across the modal family | OPEN | ruling |
+| SC-066 | 3 | 3 | No first-class way to complete a client-cancelled day; zeros read ambiguous + progress showed 29/30 | "Mark no service" row (B2) + confirm + zero-write via normal save + auto-note + counts complete; 29/30 root-caused in step 0 | OPEN | render B2 + ruling |
+| SC-067 | 2 | 4 | ENTERED·PROJECTED lockup reads clunky | C2-modified: stacked pair, "of" separator, labels indent to first digit (past $/~) | OPEN | render C2 + ruling |
+| SC-068 | 1 | 5 | Toast lingers too long; can't be forced away | 3.5s recorded duration + outside-click dismiss (click passes through) | OPEN | ruling |
+| SC-069 | 3 | 6 | Bulk unreachable when caught up; future-confirmed numbers can't be revised in bulk | Bulk Update unconditional on TodayRail; "Edit today" label when entered; gate widened to entered FUTURE days only | OPEN | ruling + interpretation |
+| SC-070 | 2 | 7 | MiLB tiles inconsistent with PDC anatomy | Meals hero + muted revenue + sun/moon top-left of date (render D) | OPEN | render D |
+| SC-071 | 2 | 8 | Cleared input computes Number("")=0 → phantom −proj delta | Empty-guard before coercion + touched removal on clear (no prior actual) | OPEN | Chat verify (code) |
+| SC-072 | 3 | 9 | Header blends entered + projections mid-entry, reads as recorded actuals | E-a: entered-only hero from first entry + subordinate "~$X day projection"; 0-state unchanged | OPEN | render E-a + ruling |
+| SC-073 | 1 | 10 | MLB week cards don't serve operators | WeekSubtotals removed for homestand accounts (supersedes SC-043's fee-week half, owner ruling) | OPEN | ruling |
+| SC-074 | 2 | 11 | Collapsed groups + expanders read as ghost elements | F3 elevation family: card shadow, hover lift, pressed state, both surfaces | OPEN | render F3 |

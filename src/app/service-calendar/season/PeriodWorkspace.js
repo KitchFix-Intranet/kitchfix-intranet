@@ -437,6 +437,11 @@ function TodayRail({ day, kind, homestandMap, onEnterActuals, onBulkUpdate }) {
   const needsAction = !day.hasActuals && day.status !== "off-season";
 
   if (!needsAction) {
+    // SC-069: even when today is already entered, the operator may
+    // want to revise or bulk-update forward-looking days. Primary CTA
+    // becomes "Edit today" (reuses onEnterActuals - already reopens
+    // the day in edit mode), and Bulk Update stays present so a
+    // fully-caught-up current period isn't a dead end.
     return (
       <div className="sc-workspace-frame-today" aria-label="Today">
         <div className="sc-workspace-frame-today-info">
@@ -445,6 +450,24 @@ function TodayRail({ day, kind, homestandMap, onEnterActuals, onBulkUpdate }) {
             <CheckCircle size="sm" />
             {dateLabel} entered
           </span>
+        </div>
+        <div className="sc-workspace-frame-today-actions">
+          <button
+            type="button"
+            className="sc-workspace-frame-today-cta"
+            onClick={onEnterActuals}
+          >
+            Edit today
+          </button>
+          {onBulkUpdate && (
+            <button
+              type="button"
+              className="sc-workspace-frame-today-bulk"
+              onClick={onBulkUpdate}
+            >
+              Bulk Update
+            </button>
+          )}
         </div>
       </div>
     );
@@ -738,11 +761,15 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
               const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb);
-              // Bulk-selectable gate: only future / needs-entry days are
-              // selectable for bulk entry. Entered days + off days have
-              // no editable target; tile click in bulk mode is a no-op
-              // for them.
-              const isBulkSelectable = bulkMode && !d.hasActuals && status !== "off";
+              // Bulk-selectable gate: needs-entry / overdue / future
+              // days are always selectable. SC-069 widens the gate to
+              // also allow ENTERED FUTURE days so a fully-caught-up
+              // current period isn't a dead end - operators can
+              // revise forward projections in bulk. Past entered days
+              // stay LOCKED (bulk cannot stomp confirmed history).
+              // Off days ("off-season" / "prep") never selectable.
+              const isEnteredFuture = d.hasActuals && d.date > today;
+              const isBulkSelectable = bulkMode && status !== "off" && (!d.hasActuals || isEnteredFuture);
               const isRoving = flatIdx === focusIdx;
               return (
                 <span
