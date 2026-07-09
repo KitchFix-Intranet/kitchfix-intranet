@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 complete · Owner Review Round 2 fixes IN PROGRESS · 0 sev-4 open**
+**Status: Sections 1-3 + Round 2 complete · Owner Round 3 IN PROGRESS · 0 sev-4 open**
 
 ## Section 1 — Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -153,14 +153,29 @@ Source: DesignReviewInteractiveAuditSC (11 items) + Chat evaluation + code verif
 
 | ID | Sev | Item | Finding | Fix (approved) | Status | Verified by |
 |----|-----|------|---------|----------------|--------|-------------|
-| SC-064 | 2 | 1 | Delta chips: direction should carry meaning; red rejected (blame connotation) | under=amber / over=green / match=green ✓; magnitude→weight only; signs always (CVD-safe) | OPEN | render A + ruling |
-| SC-065 | 1 | 2 | Cancel reads as ghost text | Outline-button styling across the modal family | OPEN | ruling |
-| SC-066 | 3 | 3 | No first-class way to complete a client-cancelled day; zeros read ambiguous + progress showed 29/30 | "Mark no service" row (B2) + confirm + zero-write via normal save + auto-note + counts complete; 29/30 root-caused in step 0 | OPEN | render B2 + ruling |
-| SC-067 | 2 | 4 | ENTERED·PROJECTED lockup reads clunky | C2-modified: stacked pair, "of" separator, labels indent to first digit (past $/~) | OPEN | render C2 + ruling |
-| SC-068 | 1 | 5 | Toast lingers too long; can't be forced away | 3.5s recorded duration + outside-click dismiss (click passes through) | OPEN | ruling |
-| SC-069 | 3 | 6 | Bulk unreachable when caught up; future-confirmed numbers can't be revised in bulk | Bulk Update unconditional on TodayRail; "Edit today" label when entered; gate widened to entered FUTURE days only | OPEN | ruling + interpretation |
-| SC-070 | 2 | 7 | MiLB tiles inconsistent with PDC anatomy | Meals hero + muted revenue + sun/moon top-left of date (render D) | OPEN | render D |
-| SC-071 | 2 | 8 | Cleared input computes Number("")=0 → phantom −proj delta | Empty-guard before coercion + touched removal on clear (no prior actual) | OPEN | Chat verify (code) |
-| SC-072 | 3 | 9 | Header blends entered + projections mid-entry, reads as recorded actuals | E-a: entered-only hero from first entry + subordinate "~$X day projection"; 0-state unchanged | OPEN | render E-a + ruling |
-| SC-073 | 1 | 10 | MLB week cards don't serve operators | WeekSubtotals removed for homestand accounts (supersedes SC-043's fee-week half, owner ruling) | OPEN | ruling |
-| SC-074 | 2 | 11 | Collapsed groups + expanders read as ghost elements | F3 elevation family: card shadow, hover lift, pressed state, both surfaces | OPEN | render F3 |
+| SC-064 | 2 | 1 | Delta chips: direction should carry meaning; red rejected (blame connotation) | under=amber / over=green / match=green ✓; magnitude→weight only; signs always (CVD-safe) | RESOLVED | render A + ruling + #365 |
+| SC-065 | 1 | 2 | Cancel reads as ghost text | Outline-button styling across the modal family | RESOLVED | ruling + #366 |
+| SC-066 | 3 | 3 | No first-class way to complete a client-cancelled day; zeros read ambiguous + progress showed 29/30 | "Mark no service" row (B2) + confirm + zero-write via normal save + auto-note + counts complete; 29/30 root-caused in step 0 | RESOLVED | render B2 + ruling + #365 |
+| SC-067 | 2 | 4 | ENTERED·PROJECTED lockup reads clunky | C2-modified: stacked pair, "of" separator, labels indent to first digit (past $/~) | RESOLVED | render C2 + ruling + #366 |
+| SC-068 | 1 | 5 | Toast lingers too long; can't be forced away | 3.5s recorded duration + outside-click dismiss (click passes through) | RESOLVED | ruling + #366 |
+| SC-069 | 3 | 6 | Bulk unreachable when caught up; future-confirmed numbers can't be revised in bulk | Bulk Update unconditional on TodayRail; "Edit today" label when entered; gate widened to entered FUTURE days only | RESOLVED | ruling + interpretation + #365 |
+| SC-070 | 2 | 7 | MiLB tiles inconsistent with PDC anatomy | Meals hero + muted revenue + sun/moon top-left of date (render D) | RESOLVED | render D + #366 |
+| SC-071 | 2 | 8 | Cleared input computes Number("")=0 → phantom −proj delta | Empty-guard before coercion + touched removal on clear (no prior actual) | RESOLVED | Chat verify (code) + #365 |
+| SC-072 | 3 | 9 | Header blends entered + projections mid-entry, reads as recorded actuals | E-a: entered-only hero from first entry + subordinate "~$X day projection"; 0-state unchanged | RESOLVED | render E-a + ruling + #365 |
+| SC-073 | 1 | 10 | MLB week cards don't serve operators | WeekSubtotals removed for homestand accounts (supersedes SC-043's fee-week half, owner ruling) | RESOLVED | ruling + #366 |
+| SC-074 | 2 | 11 | Collapsed groups + expanders read as ghost elements | F3 elevation family: card shadow, hover lift, pressed state, both surfaces | RESOLVED | render F3 + #366 |
+
+## Owner Review Round 3 (2026-07-09) · renders G1 / H2 / I3 approved
+
+| ID | Sev | Item | Finding | Fix (approved) | Status | Verified by |
+|----|-----|------|---------|----------------|--------|-------------|
+| SC-075 | 1 | 1 | Extras expander floats groupless | G1 sub-header band inside the group card | OPEN | render G1 |
+| SC-076 | 2 | 2 | Match projections not CTA-obvious | H2 outline pill button per group | OPEN | render H2 |
+| SC-077 | 2 | 3 | MLB lacks Mark-no-service (rainouts) | SC-066 flow extended to homestand accounts | OPEN | ruling |
+| SC-078 | 3 | 4 | Homestand classifier types by schedule, blind to entry - entered non-game days stuck beige (Jun 26 repro) | Entry beats schedule: entered wins on game days (zero incl.) + nonzero non-game days; tiles openable; legend "Entered" | OPEN | Kevin repro + ruling |
+| SC-079 | 3 | 5 | Notes lack authorship/history - no accountability trail | Append-only ledger (I3): sc_day_note_entries table + migration + sc-add-note (server-derived author) + independent Add-note flow + Latest-note in review | OPEN | render I3 + ruling |
+
+### Candidates (Round 3)
+- Per-meal zero = no-service vs homestand zero-on-game = entered: deliberate asymmetry (owner ruling
+  2026-07-09) - GOTCHAS.md entry due in the cleanup pass.
+- sc_day_metadata.day_notes dormant post-migration - retire the column in a future schema tidy.

@@ -65,7 +65,8 @@ const SC_TABLES = {
   prices:       "sc_service_prices",
   projections:  "sc_daily_projections",
   actuals:      "sc_daily_actuals",
-  metadata:     "sc_day_metadata",
+  metadata:     "sc_day_metadata",     // SC-079: notes column DORMANT post-Round 3
+  noteEntries:  "sc_day_note_entries", // SC-079: append-only day-note ledger (sc-9 migration)
   changelog:    "sc_config_changelog",
   feeSchedule:  "sc_fee_schedule",
 };
@@ -193,12 +194,31 @@ function classifyDayStatus(s, ctx) {
   // Schedule view, not urgency tracker: fee accounts have never had a
   // requirement to enter actuals, so a past GAME day without actuals is
   // just an unentered scheduled day - not "needs entry" or "overdue".
+  //
+  // SC-078 (owner ruling 2026-07-09): entry beats schedule. The pre-
+  // Round-3 shape returned "prep" for any non-game day the moment the
+  // schedule said so, ignoring hasAct - so an entered non-game day
+  // (Jun 26 repro: 10 meals recorded) stayed beige. Fixed by checking
+  // hasAct BEFORE the dayType filter on non-game days.
+  //
+  // Deliberate asymmetry vs per-meal (worth a GOTCHAS entry - flagged
+  // as a Round-3 candidate). Per-meal all-zero saved actuals classify
+  // as "no-service" (planned off day). Homestand game-day + hasAct
+  // (INCLUDING all-zero) classifies as "entered" (a zeroed game = a
+  // recorded cancellation, still a tracked event). Per Kevin's ruling:
+  // the operator's action wins over the schedule's suggestion.
   if (ctx.billingModel === "flat_fee" && ctx.hasHomestandData) {
     const hs = ctx.homestandMap?.[s.date];
     if (!hs) return "off-season";              // not in schedule -> invisible
-    if (hs.dayType !== "GAME") return "prep";  // PREP/OPEN/CLOSE/CLEAN
-    if (s.hasAct) return "entered";            // operator logged data
-    return "future";                            // GAME day, no actuals
+    if (hs.dayType === "GAME") {
+      if (s.hasAct) return "entered";           // game day recorded (zero incl.)
+      return "future";                            // GAME day, no actuals
+    }
+    // Non-game day (PREP / OPEN / CLOSE / CLEAN): entry wins if the
+    // operator actually recorded a non-zero meal count. All-zero on a
+    // non-game day OR no actuals stays "prep" (schedule-driven default).
+    if (s.hasAct && s.anyNonZeroAct) return "entered";
+    return "prep";
   }
 
   // Per-meal branch (PDC + MiLB + STL-FL).
@@ -644,7 +664,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   // - within default - but TBJ-FL with 21 services * 31 = 651, still
   // under. Paginate anyway so the year-view bug class (PostgREST cap
   // silently dropping rows) can't ever bite this path either.
-  const [viewRows, billingRes] = await Promise.all([
+  const [viewRows, billingRes, noteEntriesByDate] = await Promise.all([
     fetchAllPaginated(
       supa,
       (q) => q
@@ -662,6 +682,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
       .select("billing_model")
       .eq("team_key", accountKey)
       .maybeSingle(),
+    // SC-079: one batched query for the whole month range. Returns a
+    // Map keyed by service_date, values are per-day arrays already
+    // ordered newest-first inside each bucket.
+    readNoteEntriesForRange(accountKey, first, last),
   ]);
   throwOnError(billingRes.error, "loadMonthData.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
@@ -750,6 +774,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         hasAnyActuals,
         status,
         totals: { projectedCount, actualCount, projectedRevenue, actualRevenue },
+        // SC-079: per-day ledger, newest first. [] when the day has no
+        // entries so the client can render the empty container without
+        // a null-check.
+        noteEntries: noteEntriesByDate.get(day.date) || [],
       };
     });
 
@@ -1209,53 +1237,76 @@ export async function saveActuals(accountKey, serviceDate, entries, email) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// saveDayNotes - upsert sc_day_metadata.notes for one (account, day)
+// SC-079: append-only day-note ledger
 // ═══════════════════════════════════════════════════════════════
 //
-// Two-step (UPDATE then INSERT if no rows affected) because the row's
-// other columns (period, week_label, event_label, game_type, game_time)
-// are populated by an unrelated seed path. A PostgREST .upsert() with
-// the unique constraint as onConflict would DO UPDATE SET on every
-// supplied column - not supplying those context columns AND supplying
-// notes triggers PostgREST's "columns must match" behavior for the
-// insert row, while a plain UPDATE leaves untouched columns alone.
+// The pre-Round-3 shape upserted a single-column TEXT `notes` on
+// sc_day_metadata that got overwritten on every save. Owner review
+// flagged the accountability gap (no author, no history). This ships
+// an append-only entry table (see sc-9-day-note-entries.sql) that the
+// UI reads as a per-day ledger, newest first.
 //
-// notes: empty string -> stored as NULL so downstream SQL joins don't
-// have to treat "" and NULL as equivalent.
-export async function saveDayNotes(accountKey, serviceDate, notes, email) {
+// author is server-derived from the session on INSERT - never accept
+// a client-supplied author. The saveDayNotes function from #361 is
+// replaced by addDayNoteEntry (single entry per call) plus a batched
+// month reader.
+
+// addDayNoteEntry - one authored entry against sc_day_note_entries.
+// Returns the inserted row so the client can prepend optimistically.
+export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
   const supa = getServiceClient();
-  const now = new Date().toISOString();
-  const cleanNotes =
-    typeof notes === "string" && notes.trim().length > 0 ? notes : null;
-
-  const updRes = await supa
-    .from(SC_TABLES.metadata)
-    .update({ notes: cleanNotes, updated_by: email, updated_at: now })
-    .eq("account_key",  accountKey)
-    .eq("service_date", serviceDate)
-    .select("id");
-  throwOnError(updRes.error, "saveDayNotes.update");
-
-  if ((updRes.data?.length ?? 0) > 0) {
-    return { success: true, written: 1 };
+  const trimmed = typeof note === "string" ? note.trim() : "";
+  if (!trimmed) {
+    return { success: false, error: "note required" };
   }
-
-  // No prior metadata row for this (account, date) - insert a new one
-  // populated with just the notes payload. created_by is NOT NULL per
-  // the schema; the seed path fills the context columns later if the
-  // day gets a projection.
-  const insRes = await supa
-    .from(SC_TABLES.metadata)
+  const { data, error } = await supa
+    .from(SC_TABLES.noteEntries)
     .insert({
       account_key:  accountKey,
       service_date: serviceDate,
-      notes:        cleanNotes,
-      created_by:   email,
-      updated_by:   email,
-      updated_at:   now,
+      note:         trimmed,
+      author:       author || null,
+    })
+    .select("id, note, author, created_at")
+    .single();
+  throwOnError(error, "addDayNoteEntry.insert");
+  return {
+    success: true,
+    entry: {
+      id:        data.id,
+      note:      data.note,
+      author:    data.author,
+      createdAt: data.created_at,
+    },
+  };
+}
+
+// readNoteEntriesForRange - one query for a whole month range, keyed
+// by service_date so the month loader can attach per-day arrays in a
+// single pass. Ordered by (service_date, created_at DESC) so the
+// per-day arrays land newest-first inside each bucket without a
+// second sort.
+export async function readNoteEntriesForRange(accountKey, first, last) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from(SC_TABLES.noteEntries)
+    .select("service_date, note, author, created_at")
+    .eq("account_key", accountKey)
+    .gte("service_date", first)
+    .lte("service_date", last)
+    .order("service_date", { ascending: true })
+    .order("created_at",   { ascending: false });
+  throwOnError(error, "readNoteEntriesForRange");
+  const byDate = new Map();
+  for (const r of data || []) {
+    if (!byDate.has(r.service_date)) byDate.set(r.service_date, []);
+    byDate.get(r.service_date).push({
+      note:      r.note,
+      author:    r.author,
+      createdAt: r.created_at,
     });
-  throwOnError(insRes.error, "saveDayNotes.insert");
-  return { success: true, written: 1 };
+  }
+  return byDate;
 }
 
 

@@ -337,31 +337,41 @@
   white-space: nowrap;
 }
 
-/* Per-group match button - quiet full-width footer row inside the
-   group card, sharing the grammar with the extras/"show more" row
-   below it (same padding, same hairline top-border, transparent bg
-   rest / accent-sc-tint hover). Sits above the extras row so both
-   full-width rows read as a consistent bottom stack on the card. */
+/* SC-076 (render H2): Match projections becomes an outline pill CTA
+   centered under the group's active services. White ground, 1.5px
+   --accent-sc border, pill radius, small shadow so it lifts off the
+   card. Icon + label in --accent-sc-dark. Hover tints the ground
+   with the sc-tint family; :active pressed; focus-visible ring;
+   reduced-motion pair. Handler unchanged - only the affordance. */
 .sc-day-match-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  border-top: 0.5px solid var(--border-subtle);
-  border-radius: 0;
-  background: transparent;
+  gap: 6px;
+  width: auto;
+  align-self: center;
+  margin: var(--space-3) auto var(--space-2);
+  padding: 6px var(--space-3);
+  border: 1.5px solid var(--accent-sc);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
   color: var(--accent-sc-dark);
   font-size: var(--size-caption);
   font-weight: var(--wt-semibold);
   cursor: pointer;
   font-family: inherit;
-  transition: background var(--motion-control), color var(--motion-control);
+  box-shadow: var(--elevation-card);
+  transition: background var(--motion-control),
+              color var(--motion-control),
+              box-shadow var(--motion-control),
+              transform var(--motion-control);
 }
-.sc-day-match-btn:hover { background: var(--accent-sc-tint); }
+.sc-day-match-btn:hover {
+  background: var(--accent-sc-tint);
+  box-shadow: var(--elevation-raised);
+  transform: translateY(-1px);
+}
+.sc-day-match-btn:active { transform: translateY(1px); }
 .sc-day-match-btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--accent-sc);
   outline-offset: var(--focus-ring-offset);
@@ -371,6 +381,14 @@
   line-height: 1;
   color: var(--accent-sc);
 }
+@media (prefers-reduced-motion: reduce) {
+  .sc-day-match-btn { transition: none; }
+  .sc-day-match-btn:hover,
+  .sc-day-match-btn:active { transform: none; }
+}
+/* .sc-day-match-btn is now inline; the group card needs to switch to
+   flex-column so align-self:center on the button works. */
+.sc-day-group { display: flex; flex-direction: column; }
 
 /* Extras affordance - full-width row inside the group card, sealing
    the bottom of the visible-services stack with a hairline divider.
@@ -435,6 +453,76 @@
   .sc-day-extras-hide:hover,
   .sc-day-extras-btn:active,
   .sc-day-extras-hide:active { transform: none; }
+}
+
+/* SC-075 (render G1): in-group extras expander as a sub-header band.
+   Page-tint ground with a hairline top border seals it to the group
+   card, the caps label sits on the left, and the +/- chip on the
+   right adopts the F3 bordered-square language for continuity with
+   the off-group siblings. Whole band is the button - aria-expanded
+   carries the state. Hover deepens the ground; :active pressed;
+   reduced-motion pair. */
+.sc-day-extras-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  margin: 0;
+  border: none;
+  border-top: var(--border-thin) solid var(--border-default);
+  border-radius: 0;
+  background: var(--surface-page);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--size-caption);
+  text-align: left;
+  color: var(--text-muted);
+  transition: background var(--motion-control), color var(--motion-control);
+}
+.sc-day-extras-band:hover {
+  background: var(--surface-sunken);
+  color: var(--text-default);
+}
+.sc-day-extras-band:active { transform: translateY(1px); }
+.sc-day-extras-band:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline-offset: -2px;
+}
+.sc-day-extras-band-label {
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+.sc-day-extras-band-count {
+  font-weight: var(--wt-semibold);
+  color: var(--text-muted);
+}
+.sc-day-extras-band-chip {
+  width: 22px; height: 22px;
+  border-radius: var(--rad-4);
+  background: var(--surface-card);
+  border: var(--border-thin) solid var(--border-default);
+  color: var(--text-default);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--size-body);
+  font-weight: var(--wt-semibold);
+  transition: background var(--motion-control),
+              border-color var(--motion-control),
+              color var(--motion-control),
+              transform var(--motion-control);
+}
+.sc-day-extras-band:hover .sc-day-extras-band-chip {
+  border-color: var(--text-subtle);
+  color: var(--text-heading);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-day-extras-band { transition: none; }
+  .sc-day-extras-band:active { transform: none; }
+  .sc-day-extras-band-chip { transition: none; }
+  .sc-day-extras-band:hover .sc-day-extras-band-chip { transform: none; }
 }
 
 /* Group subtotal - sealed band closing the card at the bottom.
@@ -539,6 +627,76 @@
   border-color: var(--accent-sc);
 }
 .sc-day-notes-input::placeholder { color: var(--text-muted); } /* SC-059: 4.76:1 on white */
+
+/* SC-079 (render I3): Add-note action row + append-only ledger.
+   Textarea + button on top; below, a bordered container listing prior
+   entries newest first. Empty state hides the container (renderer
+   conditional). Rows scroll internally past ~4 entries to keep the
+   modal height stable across days with heavy note history. */
+.sc-day-notes-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+.sc-day-notes-add {
+  min-height: 36px;
+  padding: 6px var(--space-3);
+  font-size: var(--size-caption);
+}
+.sc-day-note-ledger {
+  margin-top: var(--space-3);
+  padding: 0;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-container);
+  background: var(--surface-card);
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.sc-day-note-entry {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-thin) solid var(--border-subtle);
+  font-size: var(--size-body);
+  color: var(--text-default);
+}
+.sc-day-note-entry:last-child { border-bottom: none; }
+.sc-day-note-entry-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.sc-day-note-entry-meta {
+  flex-shrink: 0;
+  font-size: var(--size-caption);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
+  text-align: right;
+}
+.sc-day-note-entry-meta strong {
+  color: var(--text-default);
+  font-weight: var(--wt-semibold);
+}
+
+/* SC-079: review-note surface picks up an author/time meta line
+   trailing the quoted body. Uses the same subordinate typography as
+   the ledger meta above so the two reads feel like one voice. */
+.sc-day-review-note-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
+  font-style: normal;
+}
+.sc-day-review-note-meta strong {
+  color: var(--text-default);
+  font-weight: var(--wt-semibold);
+}
 
 /* Footer - action bar only. Totals moved into the scoreboard header. */
 .sc-day-footer {
