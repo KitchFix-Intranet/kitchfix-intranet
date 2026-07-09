@@ -37,7 +37,10 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
-  const [notes, setNotes] = useState("");
+  // SC-053: prefill from day.dayNotes (server round-trip via the
+  // sc_daily_revenue view -> transformDays). Reopens surface a
+  // previously-saved note instead of a blank textarea.
+  const [notes, setNotes] = useState(day.dayNotes || "");
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [expandedExtras, setExpandedExtras] = useState(new Set());
   const [showReview, setShowReview] = useState(null);
@@ -63,7 +66,10 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     }
     setEditValues(vals);
     setTouched(t);
-    setNotes("");
+    // Reset notes to the day's saved value on day-nav (SC-053), NOT to
+    // empty string - navigating between days must not silently drop a
+    // saved note.
+    setNotes(day.dayNotes || "");
     setExpandedGroups(new Set());
     setExpandedExtras(new Set());
     setShowReview(null);
@@ -146,18 +152,28 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
   // and entered for touched ones, so the operator always sees a real
   // running total instead of "0 meals" before the first keystroke. Save
   // path still uses getVal/summary - this calc never reaches the wire.
+  //
+  // SC-052: prices come from day.priceAtDate[colIndex] - the effective-
+  // dated per-day price the sc_daily_revenue view uses (via LATERAL
+  // pick against sc_service_prices). This is the SAME source the tile
+  // rail + week card + drill-in read. Reading the current catalog price
+  // (data.serviceGroups[s].price) here was the $2,708/$2,709 rail-vs-
+  // modal drift: same math, different price snapshot. Falls back to
+  // s.price only if priceAtDate is missing (edge case - a service that
+  // has no history row for the day; the view won't emit it either).
   const footerDisplay = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
       for (const s of g.services) {
         if (!isInServiceOnDay(s, day.date)) continue;
         const v = touched.has(s.colIndex) ? getVal(s.colIndex) : (day.projected[s.colIndex] ?? 0);
+        const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
-        rev += v * s.price;
+        rev += v * price;
       }
     }
     return { meals, revenue: rev };
-  }, [serviceGroups, touched, getVal, day.projected, day.date]);
+  }, [serviceGroups, touched, getVal, day.projected, day.date, day.priceAtDate]);
 
   const executeSave = useCallback(async () => {
     // P0-1: ONLY send touched services. Untouched services are preserved
@@ -184,12 +200,16 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
     // P0-2: await the save before showing the success screen. If the
     // request fails (toast shown by handleSave), keep the review modal
     // open so the chef can retry without losing what they typed.
-    const result = await onSave(day, entries);
+    //
+    // SC-053: notes travel with the save payload. Bulk paths pass
+    // undefined for dayNotes (they have no notes UI), so the server
+    // treats "no dayNotes key" as "don't touch metadata".
+    const result = await onSave(day, entries, notes);
     if (result?.success) {
       setShowReview(null);
       setJustSaved(true);
     }
-  }, [serviceGroups, touched, getVal, day, onSave]);
+  }, [serviceGroups, touched, getVal, day, onSave, notes]);
 
   const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
   const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
@@ -455,8 +475,12 @@ export default function DayDetail({ day, serviceGroups, overrides, onSave, onCon
         <div className="sc-day-sb-line">
           <div className="sc-day-sb-fig">
             {!isFeeAccount && (
+              // SC-052: prefix `~` while nothing is entered so the number
+              // itself reads as a forecast, not a saved total. Drops on
+              // the first keystroke - matches the same `~` semantics the
+              // tile rail uses for projected revenue.
               <span className={`sc-day-sb-amount sc-day-sb-amount--${hasTouchedAny ? "recorded" : "projected"}`}>
-                {fmt$(footerDisplay.revenue)}
+                {enteredCount === 0 ? "~" : ""}{fmt$(footerDisplay.revenue)}
               </span>
             )}
             <span className="sc-day-sb-meals">{footerDisplay.meals.toLocaleString()} meals</span>

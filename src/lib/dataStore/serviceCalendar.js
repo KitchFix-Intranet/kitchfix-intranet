@@ -1209,6 +1209,86 @@ export async function saveActuals(accountKey, serviceDate, entries, email) {
 
 
 // ═══════════════════════════════════════════════════════════════
+// saveDayNotes - upsert sc_day_metadata.notes for one (account, day)
+// ═══════════════════════════════════════════════════════════════
+//
+// Two-step (UPDATE then INSERT if no rows affected) because the row's
+// other columns (period, week_label, event_label, game_type, game_time)
+// are populated by an unrelated seed path. A PostgREST .upsert() with
+// the unique constraint as onConflict would DO UPDATE SET on every
+// supplied column - not supplying those context columns AND supplying
+// notes triggers PostgREST's "columns must match" behavior for the
+// insert row, while a plain UPDATE leaves untouched columns alone.
+//
+// notes: empty string -> stored as NULL so downstream SQL joins don't
+// have to treat "" and NULL as equivalent.
+export async function saveDayNotes(accountKey, serviceDate, notes, email) {
+  const supa = getServiceClient();
+  const now = new Date().toISOString();
+  const cleanNotes =
+    typeof notes === "string" && notes.trim().length > 0 ? notes : null;
+
+  const updRes = await supa
+    .from(SC_TABLES.metadata)
+    .update({ notes: cleanNotes, updated_by: email, updated_at: now })
+    .eq("account_key",  accountKey)
+    .eq("service_date", serviceDate)
+    .select("id");
+  throwOnError(updRes.error, "saveDayNotes.update");
+
+  if ((updRes.data?.length ?? 0) > 0) {
+    return { success: true, written: 1 };
+  }
+
+  // No prior metadata row for this (account, date) - insert a new one
+  // populated with just the notes payload. created_by is NOT NULL per
+  // the schema; the seed path fills the context columns later if the
+  // day gets a projection.
+  const insRes = await supa
+    .from(SC_TABLES.metadata)
+    .insert({
+      account_key:  accountKey,
+      service_date: serviceDate,
+      notes:        cleanNotes,
+      created_by:   email,
+      updated_by:   email,
+      updated_at:   now,
+    });
+  throwOnError(insRes.error, "saveDayNotes.insert");
+  return { success: true, written: 1 };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// readSavedDayTotals - post-write revenue + meals for one (account, day)
+// ═══════════════════════════════════════════════════════════════
+//
+// Reads sc_daily_revenue AFTER the write so the toast displays what
+// actual_revenue will show on the next month reload. Effective-dated
+// prices (view's LATERAL join on sc_service_prices) - same source as
+// the day tile + week card + drill rail. Non-revenue services excluded
+// from the revenue sum (matches loadMonthDataPostgres line 734-737 +
+// sc_month_summary semantics); counts include everything.
+export async function readSavedDayTotals(accountKey, serviceDate) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("sc_daily_revenue")
+    .select("actual_count, actual_revenue, is_non_revenue, has_actuals")
+    .eq("account_key",  accountKey)
+    .eq("service_date", serviceDate);
+  throwOnError(error, "readSavedDayTotals");
+  let meals = 0;
+  let revenue = 0;
+  for (const r of data || []) {
+    if (!r.has_actuals) continue;
+    meals += Number(r.actual_count) || 0;
+    if (!r.is_non_revenue) revenue += Number(r.actual_revenue) || 0;
+  }
+  return { meals, revenue };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // saveBulkActuals
 // ═══════════════════════════════════════════════════════════════
 //
