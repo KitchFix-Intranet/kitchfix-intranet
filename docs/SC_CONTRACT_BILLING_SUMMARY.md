@@ -1,4 +1,13 @@
 # Service Calendar - Contract Billing Summary
+
+> **Money-model authority note (2026-07-09):** the settled money model lives in
+> [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). This doc remains authoritative on
+> contract language, per-account contract extractions, dates, and clause detail.
+> The "Resolved Billing Decisions" section below is CORRECT as written and
+> agrees with SC_MONEY_MODEL.md; where the language "70% cost basis" appears
+> below, read "post-SF invoice rate" per the Q5 rename. On any money-model
+> conflict, SC_MONEY_MODEL.md wins.
+
 <!-- ═══════════════════════════════════════════════════════════════════
      RESOLVED BILLING DECISIONS - CONTRACT BIBLE
      Authoritative decision record. Locked 2026-06-18 (Kevin + Chat-Claude,
@@ -12,7 +21,8 @@
 
 Locked 2026-06-18 from executed contracts. These supersede any earlier
 contradiction in this document, in SC_BILLING_MODEL_AUDIT.md, or in prior chat
-notes.
+notes. Money-model language ("cost basis" -> "post-SF invoice rate") harmonized
+per SC_MONEY_MODEL.md 2026-07-09; the underlying decisions are unchanged.
 
 ## The architecture: two kinds of revenue, one control surface
 
@@ -84,7 +94,7 @@ service-fee amount. Accepted.
 
 | Account | Service fee (annual) | Escalator | Per-meal relationship |
 |---|---|---|---|
-| **CIN - AZ** | $402,016 (2023 base, = 30% of budget estimate) | CPI-U Food Away from Home, Oct base, floor 2% / cap 5% | **The 30% service fee is why per-meal is billed at the 70% cost basis.** $29.01 MLB x 0.70 = $20.31; $18.42 MiLB x 0.70 = $12.90. The "$29.01 vs $20.31 gap" is NOT a missing amendment - it is this mechanic. (Confirm no separate amendment exists; conversion-to-flat-fee conversation ongoing per ABR 2025, not executed.) |
+| **CIN - AZ** | $402,016 (2023 base, = 30% of budget estimate) | CPI-U Food Away from Home, Oct base, floor 2% / cap 5% | **The 30% service fee is why per-meal is billed at the post-SF invoice rate (70% of sticker).** $29.01 MLB x 0.70 = $20.31; $18.42 MiLB x 0.70 = $12.90. The "$29.01 vs $20.31 gap" is NOT a missing amendment - it is this mechanic. (Confirm no separate amendment exists; conversion-to-flat-fee conversation ongoing per ABR 2025, not executed.) Note (Q5 rename 2026-07-09): older text called $20.31 the "cost basis"; that's misleading - it's the per-meal invoice line, not COGS. Use "post-SF invoice rate" per SC_MONEY_MODEL.md. |
 | **TBJ - FL** | $452,812/yr | CPI Food Away from Home, one increase per year, Provider notice by Jan 31 | Service fee does NOT discount per-meal - both revenue streams run at full rate in parallel. **MFN/favored-pricing clause** (see open items). |
 | **TBR - FL (MiLB)** | $382,448 (2024 one-time front-load: $200K on signing + $182,448 by Feb 1 2024) | 75% of CPI Food Away from Home, Nov-to-Nov | MiLB per-meal rates carry a 25% discount "during the Term" to amortize the fee. **Renewal status for 2026 unconfirmed** (see open items). |
 
@@ -113,7 +123,7 @@ No fee-schedule entry.
 ## Open items (flagged, not blocking Bundle 1)
 
 1. **TBJ - NY (Buffalo Bisons)** - no contract in the package. Per-meal projection ($27.34) is assumption-only. Need a contract or written confirmation of the operating model.
-2. **CIN - AZ operative 2026 pricing** - the $20.31/$12.90 stored prices are the 70%-of-budget cost basis under the 30% service-fee mechanic. Confirm no separate 2026 amendment exists beyond the 2023 contract + that mechanic.
+2. **CIN - AZ operative 2026 pricing** - the $20.31/$12.90 stored prices are the post-SF invoice rate (sticker x 0.70 under the 30% service-fee mechanic). Confirm no separate 2026 amendment exists beyond the 2023 contract + that mechanic. Paperwork gap: Price Review v3 (2026-06-16, Joe-reviewed) confirms the operative sticker rates ($29.01 / $18.42), but the SOW/amendment that CPI-escalated from the 2023 base ($17.88 / $11.35) to these numbers is not in the contracts folder. Tracked in SC_MONEY_MODEL.md §Open paperwork gaps.
 3. **MFN / favored-pricing clause (TBJ - FL)** - any per-meal discount given to another account for equivalent-or-lower volume could entitle TBJ-FL to that lower rate. The admin pricing editor has NO awareness of this today. A cross-account MFN warning is a future enhancement, not Bundle 1.
 4. **TXR - AZ 2026 SOW** - missing from the package. 2026 deposit amount and new services (Continental Breakfast, MLB Dinner, Extra Protein) are not contractually sourced.
 5. **TBR - FL MiLB service-fee renewal** - the $382,448 was a 2024 one-time front-load; whether it recurs in 2026 is unconfirmed.

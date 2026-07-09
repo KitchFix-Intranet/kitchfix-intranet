@@ -343,11 +343,17 @@ async function loadAccountConfigPostgres(accountKey) {
   const priceByServiceId = new Map();   // service_id -> { price, sinceDate }
   const upcomingByServiceId = new Map(); // service_id -> { price, effectiveDate }
   if (serviceIds.length > 0) {
-    // price_kind = 'projected' selects the planning/sticker price.
-    // The 'actual' kind (sc-8b backfill) is the contracted/billing
-    // price consumed only by sc_daily_revenue's actuals lateral; the
-    // account-config response is the planning surface (admin editor +
-    // chef's per-row hint in DayDetail), so it must read projected.
+    // price_kind = 'projected' selects the post-SF invoice rate per
+    // docs/SC_MONEY_MODEL.md (Price Review v3, 2026-06-16). The column
+    // name is legacy - what these rows hold is what appears on the
+    // client's per-meal invoice, not a "sticker" or "planning" rate.
+    // The 'actual' kind was written by sc-8b's backfill and REMOVED
+    // by sc-8c on 2026-07-09 (it double-discounted; see sc-8c header).
+    // The view's COALESCE(pr_act, pr_proj) fallback now prices actuals
+    // at the projected row = the post-SF invoice rate. Kept the
+    // .eq("price_kind","projected") filter to make the intent explicit
+    // and defend against a future third kind (e.g., 'sticker') being
+    // added without this call site being reviewed.
     const { data: priceRows, error: priceErr } = await supa
       .from(SC_TABLES.prices)
       .select("service_id, price, effective_date")
@@ -492,7 +498,9 @@ async function loadAllAccountsConfigPostgres() {
   const lastPricedByAccount = new Map();
   if (serviceIds.length > 0) {
     // price_kind = 'projected': mirror the per-account loader's
-    // semantic (planning price, not actual/billing price).
+    // semantic. Per docs/SC_MONEY_MODEL.md, 'projected' rows hold the
+    // post-SF invoice rate (Price Review v3, 2026-06-16), so this is
+    // the number that shows on admin surfaces + chef surfaces alike.
     const { data: priceRows, error: priceErr } = await supa
       .from(SC_TABLES.prices)
       .select("service_id, price, effective_date")

@@ -1,4 +1,31 @@
 -- ═══════════════════════════════════════════════════════════════════
+-- SUPERSEDED 2026-07-09 by sc-8c-remove-double-discounted-actuals.sql.
+--
+-- The BACKFILL half of this migration (the INSERT block below)
+-- assumed sc_service_prices 'projected' rows still held the workbook
+-- sticker price. That assumption was already stale when this migration
+-- ran on 2026-06-24: Kevin's out-of-band SQL correction on 2026-06-16
+-- had moved 'projected' rows to the post-SF invoice rate (per Price
+-- Review v3, Joe-reviewed). The x factor here then applied a SECOND
+-- SF discount, landing 'actual' rows at ~49% (CIN-AZ), 64% (TXR-AZ),
+-- 56% (TBR-FL MiLB) of sticker instead of the intended 70%/80%/75%.
+-- Every entered CIN-AZ day since this migration read ~30% too low on
+-- actual_revenue.
+--
+-- sc-8c deletes the DATA half (all rows this INSERT wrote). The VIEW
+-- half of this migration - the two-LATERAL price join in
+-- sc_daily_revenue - is CORRECT infrastructure and stays. Under sc-8c,
+-- the view's COALESCE(pr_act.price, pr_proj.price) falls back to
+-- pr_proj (post-SF invoice rate) for every account, which is the
+-- intended math.
+--
+-- Root-cause GOTCHAS: "shifted-input backfill trap" and "out-of-band
+-- Supabase corrections need same-day capture." See docs/GOTCHAS.md.
+-- Timeline: docs/SC_MONEY_ALIGNMENT_REPORT.md Part 4. Model authority:
+-- docs/SC_MONEY_MODEL.md.
+-- ═══════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════
 -- sc-8b-actual-prices-and-view.sql
 -- Service Calendar - pricing-fix step 2 (data backfill + view recreate)
 --

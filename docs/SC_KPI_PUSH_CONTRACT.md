@@ -1,6 +1,8 @@
 # SC -> KPI Dashboard Push Contract
 
-**Status:** Spec / pre-build. Defines what the Service Calendar owes the KPI dashboard. The KPI dashboard itself is a separate future project; this doc is the contract it consumes. Strategy context in `SC_LENS_VISION.md`; revenue-model detail in `SC_BILLING_MODEL_AUDIT.md`.
+**Status:** Spec / pre-build. Defines what the Service Calendar owes the KPI dashboard. The KPI dashboard itself is a separate future project; this doc is the contract it consumes. **Money-model authority: [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md).** Strategy context in `SC_LENS_VISION.md`; revenue-model detail in `SC_BILLING_MODEL_AUDIT.md`.
+
+Note (2026-07-09): the §"Critical: actuals use the contracted rate" text below is CORRECT and describes the intended math. It assumed the pre-sc-8b state where `sc_service_prices` `'projected'` held sticker prices and `'actual'` held the contracted rate. In practice, since 2026-06-16, `'projected'` holds the post-SF invoice rate directly (Kevin's out-of-band correction). Post-sc-8c (see `docs/migrations/sc-8c-remove-double-discounted-actuals.sql`), the `'actual'` rows are removed and the view's COALESCE fallback prices actuals at `'projected'` = the post-SF invoice rate = the correct P&L 2400.1 Meal Service line. The KPI push math below lands correctly once sc-8c is applied.
 
 ---
 

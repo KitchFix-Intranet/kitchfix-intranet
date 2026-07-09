@@ -1,0 +1,161 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- sc-8c-remove-double-discounted-actuals.sql
+-- Service Calendar - money-model alignment fix (data-only)
+--
+-- ═══════════════════════════════════════════════════════════════════
+-- WHY THIS MIGRATION EXISTS - the story
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- On 2026-06-16 Kevin ran a manual SQL correction against
+-- sc_service_prices to move the CIN-AZ / TXR-AZ / TBR-FL MiLB rows
+-- from the workbook projection-tab price (the sticker / KPI rate)
+-- to the workbook actuals-tab price (the post-SF invoice rate).
+-- Reason: the calendar UI reads these rows to price both projected
+-- and entered revenue, and per Price Review v3 (Joe-reviewed, that
+-- same week) the invoice rate is what belongs on the operator surface.
+-- The seed script comment at scripts/_seed_sc_from_xlsx.mjs:440-450
+-- captures the incident.
+--
+-- On 2026-06-24 sc-8b landed. Its INSERT built 'actual'-kind rows as
+-- projected × factor (0.70 for CIN-AZ, 0.80 for TXR-AZ, 0.75 for
+-- TBR-FL Minor League), assuming the projected rows still held the
+-- sticker price - the pre-2026-06-16 assumption. They did not.
+-- sc-8b applied the SF discount a SECOND time.
+--
+-- Result: today's sc_service_prices carries 'actual' rows at roughly
+-- 49% (CIN-AZ), 64% (TXR-AZ), 56% (TBR-FL MiLB) of the sticker
+-- rate, not the intended 70% / 80% / 75%. The view's actual_revenue
+-- is understated by exactly the SF factor for those three accounts,
+-- so an entered CIN-AZ day reads ~30% below the true per-meal invoice.
+-- Every other account is unaffected (their 'projected' rows already
+-- carry the invoice rate, no 'actual' rows exist, and the view's
+-- COALESCE(pr_act.price, pr_proj.price) falls back to projected).
+--
+-- Detail + numbers: docs/SC_REVENUE_LENSES_MEMO.md (workbook + PG
+-- audit) and docs/SC_MONEY_ALIGNMENT_REPORT.md Part 4 (timeline).
+--
+-- ═══════════════════════════════════════════════════════════════════
+-- WHAT THIS MIGRATION DOES
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Deletes exactly the rows sc-8b inserted (identified by
+-- price_kind = 'actual' AND created_by = 'sc-8b-backfill'). This is
+-- sc-8b's own documented rollback (see sc-8b lines 108-115) promoted
+-- to a proper migration.
+--
+-- After the delete, the view's COALESCE(pr_act.price, pr_proj.price)
+-- reads pr_proj.price for every service on those three accounts.
+-- Because Kevin's 2026-06-16 correction already moved 'projected' to
+-- the post-SF invoice rate, actual_revenue for entered days lands at
+-- the correct per-meal invoice figure ($2,401-class on the CIN-AZ
+-- sample day, not $1,680-class - see verification block below).
+--
+-- The price_kind infrastructure stays. sc-8a's column + sc-8b's view
+-- with two LATERAL joins is correct architecture; only sc-8b's DATA
+-- half is wrong. If we ever restore sticker prices as a first-class
+-- lens (per Q2 in the alignment report), we do it with a new
+-- migration that inserts 'sticker'-kind rows against workbook
+-- values, not by re-running sc-8b's flawed backfill.
+--
+-- ═══════════════════════════════════════════════════════════════════
+-- REVERSIBILITY
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- To reverse: re-run sc-8b's INSERT block (lines 123-182 in that file).
+-- The upsert path is ON CONFLICT DO NOTHING, so re-running is safe;
+-- the same rows will land again. Not recommended - the rows are still
+-- wrong.
+--
+-- ═══════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────
+-- PRE-VERIFY: expected shape of the rows about to be deleted.
+--
+-- Run this BEFORE the BEGIN below to confirm you're about to touch the
+-- right rows. Expected: 24 rows on CIN-AZ, 18 on TXR-AZ, 11 on
+-- TBR-FL (per the CSV Kevin pasted 2026-07-09). All rows are
+-- price_kind = 'actual' AND created_by = 'sc-8b-backfill'.
+--
+--   SELECT s.account_key, g.group_name, s.service_name,
+--          p.price, p.effective_date
+--   FROM sc_service_prices p
+--   JOIN sc_services s        ON s.id = p.service_id
+--   JOIN sc_service_groups g  ON g.id = s.group_id
+--   WHERE p.price_kind = 'actual'
+--     AND p.created_by = 'sc-8b-backfill'
+--   ORDER BY s.account_key, g.group_name, s.service_name, p.effective_date;
+--
+--   -- Row count sanity:
+--   SELECT s.account_key, count(*) AS n
+--   FROM sc_service_prices p
+--   JOIN sc_services s ON s.id = p.service_id
+--   WHERE p.price_kind = 'actual' AND p.created_by = 'sc-8b-backfill'
+--   GROUP BY s.account_key
+--   ORDER BY s.account_key;
+--   -- Expected:
+--   --   CIN - AZ   24
+--   --   TBR - FL   11
+--   --   TXR - AZ   18
+--   -- Grand total 53. If a different count appears, STOP and audit
+--   -- before running the DELETE - it means new backfill rows exist
+--   -- that this migration didn't anticipate.
+-- ─────────────────────────────────────────────────────────────────────
+
+
+BEGIN;
+
+-- ─────────────────────────────────────────────────────────────────────
+-- The delete.
+--
+-- created_by = 'sc-8b-backfill' is the unique marker sc-8b writes.
+-- price_kind = 'actual' is redundant here (only sc-8b writes actual
+-- rows) but included as a belt-and-suspenders guard against a future
+-- process using the same marker.
+-- ─────────────────────────────────────────────────────────────────────
+DELETE FROM sc_service_prices
+ WHERE price_kind = 'actual'
+   AND created_by = 'sc-8b-backfill';
+-- Expected DELETE 53 (CIN-AZ 24 + TBR-FL 11 + TXR-AZ 18).
+
+COMMIT;
+
+
+-- ─────────────────────────────────────────────────────────────────────
+-- POST-VERIFY: after commit, run these to confirm the fix landed.
+--
+-- 1. No more sc-8b backfill rows should exist:
+--
+--   SELECT count(*)
+--   FROM sc_service_prices
+--   WHERE price_kind = 'actual' AND created_by = 'sc-8b-backfill';
+--   -- Expected: 0
+--
+-- 2. Sample-day sanity on CIN-AZ. Pick any entered CIN-AZ day; the
+--    view's actual_revenue should now equal the per-meal invoice
+--    figure at ~$12.90/MiLB and $20.31/MLB rates, NOT the
+--    double-discounted $9.03 / $14.22 rates.
+--
+--    For the alignment-report sample (100 MiLB Lunch + 50 MLB Lunch
+--    + 15 Continental Plus in a single day), the ledger should read:
+--      100 x $12.90 + 50 x $20.31 + 15 x $6.36 = ~$2,401
+--    NOT the double-discounted:
+--      100 x $9.03  + 50 x $14.22 + 15 x $4.45 = ~$1,680
+--
+--    Query for any real entered day on CIN-AZ:
+--
+--   SELECT service_date,
+--          sum(actual_count)   AS meals,
+--          sum(actual_revenue) AS rev
+--   FROM sc_daily_revenue
+--   WHERE account_key = 'CIN - AZ'
+--     AND has_actuals
+--   GROUP BY service_date
+--   ORDER BY service_date DESC
+--   LIMIT 5;
+--   -- Compare per-meal average (rev / meals) to the invoice rate for
+--   -- the mix of services entered that day. It should be close to
+--   -- $12-20 (post-SF), never $9-14 (double-discounted).
+--
+-- 3. TXR-AZ + TBR-FL MiLB spot-check same shape (80% not 64%; 75% not
+--    56%). Every other account is unaffected.
+-- ─────────────────────────────────────────────────────────────────────
