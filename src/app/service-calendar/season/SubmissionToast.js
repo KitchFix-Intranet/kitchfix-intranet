@@ -34,19 +34,25 @@ export default function SubmissionToast({
 
   // SC-060: whole-card click-to-dismiss. Rendered as a <button> so
   // Enter/Space also dismiss and focus-visible produces a real outline
-  // for keyboard users. role="status" + aria-live="polite" preserved
-  // via aria attributes so SR users still hear the announcement (the
-  // native button role does not override an explicit role attribute).
-  // Post-#362 review: NO aria-label - it would override the button's
-  // content (headline + amount) as the accessible name, and the whole
-  // point of the live-region announce is that headline + amount. Title
-  // + cursor + focus outline still telegraph the dismiss affordance.
+  // for keyboard users. Title + cursor + focus outline telegraph the
+  // dismiss affordance.
+  //
+  // C1b (F11): the live region is CONDITIONAL to avoid double-announce.
+  //   single-day save (isBulk = false): DayDetail's success screen
+  //     carries role="status" + aria-live="polite"; toast stays silent
+  //     to the screen reader.
+  //   bulk save (isBulk = true): no success screen exists, so the toast
+  //     itself gets role="status" + aria-live="polite" and announces the
+  //     recorded totals.
+  // Never both.
+  const liveRegionProps = isBulk
+    ? { role: "status", "aria-live": "polite" }
+    : {};
   return (
     <button
       type="button"
       className={`sc-toast-recorded${isMilestone ? " sc-toast-recorded--milestone" : ""}`}
-      role="status"
-      aria-live="polite"
+      {...liveRegionProps}
       title="Click to dismiss"
       onClick={onDismiss}
     >

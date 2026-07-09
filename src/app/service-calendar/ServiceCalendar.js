@@ -838,8 +838,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // fire setToast on an unmounted parent. Each save handler bails out
   // of the post-fetch work if isMountedRef.current is false. The
   // double-click guard (disabled={saving}) stays unchanged.
+  //
+  // C1b (F4): plus a Set of live AbortControllers so unmount aborts
+  // any fetch that is still on the wire. Day-nav within the DayDetail
+  // modal does NOT abort - a save in flight for day A must complete
+  // even if the operator pages to day B; the server write is the
+  // point. Only page unmount triggers the abort loop below.
   const isMountedRef = useRef(true);
-  useEffect(() => () => { isMountedRef.current = false; }, []);
+  const inFlightControllersRef = useRef(new Set());
+  useEffect(() => () => {
+    isMountedRef.current = false;
+    for (const c of inFlightControllersRef.current) {
+      try { c.abort(); } catch { /* ignore */ }
+    }
+    inFlightControllersRef.current.clear();
+  }, []);
 
   const buildRecordedToast = useCallback((opts) => {
     const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0, noService = false } = opts;
@@ -881,11 +894,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const handleSave = useCallback(async (day, entries, opts = {}) => {
     if (!data?.account) return { success: false, error: "No account loaded" };
     setSaving(true);
+    // C1b (F4): AbortController joins the tracked set so page unmount
+    // aborts in flight. Removed on completion in finally.
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
     try {
       // spreadsheetId + sheetRow were leftover from the Sheets-era route;
       // the PG route ignores them. Dropped to keep the payload honest.
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote }) });
+        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote }),
+        signal: controller.signal });
       const result = await res.json();
       if (!isMountedRef.current) return result;
       if (result.success) {
@@ -911,11 +929,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       }
       showToast(result.error || "Save failed", "error");
       return result;
-    } catch {
+    } catch (err) {
+      // C1b (F4): user navigated away mid-save; mount-ref already
+      // suppresses state writes, no toast needed.
+      if (err?.name === "AbortError") return { success: false, error: "aborted" };
       if (!isMountedRef.current) return { success: false, error: "Network error" };
       showToast("Network error", "error");
       return { success: false, error: "Network error" };
     } finally {
+      inFlightControllersRef.current.delete(controller);
       if (isMountedRef.current) setSaving(false);
     }
   }, [data, showToast, buildRecordedToast]);
@@ -927,11 +949,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // optimistically. Errors surface a plain oh-toast.
   const handleAddNote = useCallback(async (day, note) => {
     if (!data?.account) return { success: false, error: "No account loaded" };
+    // C1b (F4): AbortController joins the tracked set (see handleSave).
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
     try {
       const res = await fetch("/api/service-calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-add-note", account: data.account.key, date: day.date, note }),
+        signal: controller.signal,
       });
       const result = await res.json();
       if (!isMountedRef.current) return result;
@@ -939,9 +965,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         showToast(result.error || "Failed to add note", "error");
       }
       return result;
-    } catch {
+    } catch (err) {
+      // C1b (F4): silent on abort (unmount-triggered only).
+      if (err?.name === "AbortError") return { success: false, error: "aborted" };
       if (isMountedRef.current) showToast("Network error", "error");
       return { success: false, error: "Network error" };
+    } finally {
+      inFlightControllersRef.current.delete(controller);
     }
   }, [data, showToast]);
 
@@ -983,10 +1013,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // there before this fix). Mirrors the focusDayData lookup below.
       const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
+      // C1b (F4): one controller per per-day fetch; the loop shares
+      // the tracked Set with handleSave so page unmount aborts any
+      // in-flight day. Silent on AbortError (mount-ref suppresses the
+      // trailing showToast anyway).
+      const controller = new AbortController();
+      inFlightControllersRef.current.add(controller);
       try {
         // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
+          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }),
+          signal: controller.signal });
         const result = await res.json();
         if (result.success) {
           successCount++;
@@ -994,7 +1031,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           totalMeals  += Number(result.savedMeals)   || 0;
           totalAmount += Number(result.savedRevenue) || 0;
         }
-      } catch { /* continue */ }
+      } catch (err) { if (err?.name === "AbortError") break; /* else: continue */ } finally { inFlightControllersRef.current.delete(controller); }
     }
     if (!isMountedRef.current) return;
     setSaving(false);
@@ -1041,10 +1078,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       if (!day) continue;
       const entries = [];
       for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
+      // C1b (F4): same per-day AbortController pattern as handleBulkSave.
+      const controller = new AbortController();
+      inFlightControllersRef.current.add(controller);
       try {
         // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
         const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }) });
+          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }),
+          signal: controller.signal });
         const result = await res.json();
         if (result.success) {
           successCount++;
@@ -1052,7 +1093,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           totalMeals  += Number(result.savedMeals)   || 0;
           totalAmount += Number(result.savedRevenue) || 0;
         }
-      } catch { /* continue */ }
+      } catch (err) { if (err?.name === "AbortError") break; /* else: continue */ } finally { inFlightControllersRef.current.delete(controller); }
     }
     if (!isMountedRef.current) return;
     setSaving(false);

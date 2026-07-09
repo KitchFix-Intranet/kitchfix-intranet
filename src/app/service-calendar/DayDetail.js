@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { X, ChevronLeft, ChevronRight } from "./Icons";
 import { fmt$ } from "./season/format";
+import { isPastDate } from "./dayResolvers";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -86,6 +87,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // the audit-flagged monthRevenue trap (spec 11.3).
   // Values: "" = untouched (ghost), "0" = explicitly zero, "123" = entered
   const [editValues, setEditValues] = useState({});
+  // C1b: initialValues snapshot seeded alongside editValues (mount +
+  // day-nav) so isDirty can be a VALUE comparison. `touched` survives
+  // for its render duties (delta chips, entered-only hero, review
+  // filter, wire payload) - only the dirty guard's definition changes.
+  const [initialValues, setInitialValues] = useState({});
   const [touched, setTouched] = useState(new Set()); // track which inputs user has interacted with
   // SC-079: notes moved off the singleton dayNotes column onto the
   // append-only ledger (sc_day_note_entries via sc-9). The textarea
@@ -111,6 +117,12 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // path with all in-service services set to 0 and a note appended.
   const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
   const nsCancelBtnRef = useRef(null);
+  // C1b (F10): focus placement on view transitions. Refs point at each
+  // view's primary action. The effect below moves focus on the
+  // corresponding transition.
+  const reviewConfirmBtnRef = useRef(null);
+  const successPrimaryBtnRef = useRef(null);
+  const prevViewRef = useRef({ showReview: null, justSaved: false });
 
   useEffect(() => {
     const vals = {};
@@ -131,6 +143,10 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       }
     }
     setEditValues(vals);
+    // C1b: snapshot at the SAME moment editValues seeds, from the SAME
+    // source. Mutated only by the same effect on day-nav/re-seed;
+    // handleChange / fillGroupWithProjections write to editValues only.
+    setInitialValues(vals);
     setTouched(t);
     // SC-079: on day-nav, the note draft resets to empty (drafts belong
     // to the current day only) and the local ledger mirror rehydrates
@@ -149,21 +165,25 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     setShowNoServiceConfirm(false);
   }, [day.date, serviceGroups, day.actual, day.noteEntries]);
 
-  // SC-063: dirty = any touched service (counts differ from initial
-  // load) OR the notes textarea differs from the saved server value.
+  // SC-063 + C1b: dirty = any editValues entry differs from its
+  // initialValues counterpart OR the notes draft is non-empty.
+  // Retyping the same value or typing-then-reverting reads clean now
+  // (was: `touched.size > 0` which fired on any interaction).
   // justSaved + review states are UI transitions, not user work - a
   // close from those paths goes straight through.
   const isDirty = useMemo(() => {
     if (justSaved) return false;
-    if (touched.size > 0) return true;
     // SC-079: the note draft counts dirty if it has any non-whitespace
     // content. It compares against EMPTY (not against a persisted
     // day.dayNotes anymore) because notes moved to append-only ledger
     // entries. A typed-but-not-posted draft trips the discard guard so
     // the operator doesn't silently lose work.
     if ((notes || "").trim().length > 0) return true;
+    for (const ci of Object.keys(editValues)) {
+      if ((editValues[ci] ?? "") !== (initialValues[ci] ?? "")) return true;
+    }
     return false;
-  }, [justSaved, touched, notes]);
+  }, [justSaved, editValues, initialValues, notes]);
 
   // Imperative handle for ServiceCalendar's guarded onClose. Returns
   // true when parent may proceed with the close (pristine); false when
@@ -289,6 +309,27 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       return () => cancelAnimationFrame(rafId);
     }
   }, [showNoServiceConfirm]);
+
+  // C1b (F10): focus placement on DayDetail view transitions.
+  //   entry -> review opens  : focus Confirm & save
+  //   review -> back to entry: focus Review & save (entry primary)
+  //   save success           : focus success screen primary (Next / Close)
+  // Uses a prev-view ref so a fresh mount does not steal focus (initial
+  // focus lives with the dialog's own trap).
+  useEffect(() => {
+    const prev = prevViewRef.current;
+    const enteredReview  = !!showReview && !prev.showReview && !justSaved;
+    const backToEntry    = !showReview && !!prev.showReview && !justSaved;
+    const enteredSuccess = justSaved && !prev.justSaved;
+    prevViewRef.current = { showReview, justSaved };
+    if (!enteredReview && !backToEntry && !enteredSuccess) return;
+    const rafId = requestAnimationFrame(() => {
+      if (enteredSuccess) successPrimaryBtnRef.current?.focus({ preventScroll: true });
+      else if (enteredReview) reviewConfirmBtnRef.current?.focus({ preventScroll: true });
+      else if (backToEntry) primaryBtnRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [showReview, justSaved]);
 
   // "Actuals match projections" for a specific group. Skips services
   // archived as of day.date so the helper cannot retroactively populate
@@ -448,8 +489,13 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     }
   }, [serviceGroups, touched, getVal, day, onSave]);
 
-  const isOverdue = day.isPast && day.isLocked && !day.hasActuals;
-  const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : day.isPast ? "needs-entry" : "upcoming";
+  // C1b: derive pastness at read time so a tab open across midnight
+  // no longer misclassifies today/yesterday. Server payload's isPast
+  // is deliberately ignored client-side. isLocked stays as-is (it
+  // decays on a slower N-day cadence; separate concern).
+  const dayIsPast = isPastDate(day.date);
+  const isOverdue = dayIsPast && day.isLocked && !day.hasActuals;
+  const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming";
 
   // Entry flow refs + progress. Auto-focus the first un-entered ghost
   // input on open (and on each day-nav) so the operator can start typing
@@ -692,7 +738,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         <div className="sc-day-footer">
           <div className="sc-day-actions">
             <button className="sc-btn sc-btn--outline" onClick={() => setShowReview(null)}>Go back</button>
-            <button className="sc-btn sc-btn--primary" disabled={saving} onClick={executeSave}>
+            <button ref={reviewConfirmBtnRef} className="sc-btn sc-btn--primary" disabled={saving} onClick={executeSave}>
               {saving ? "Saving..." : "Confirm & save"}
             </button>
           </div>
@@ -703,9 +749,14 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   }
 
   // ── Success state ──
+  // C1b (F11): role="status" + aria-live="polite" so the recorded
+  // totals announce to screen readers when the success screen mounts.
+  // SubmissionToast dropped its own live region in the same bundle to
+  // avoid double-announce on single-day saves; bulk saves (no success
+  // screen) still surface visually through the toast.
   if (justSaved) {
     return (
-      <div className="sc-day sc-day--success">
+      <div className="sc-day sc-day--success" role="status" aria-live="polite">
         <div className="sc-day-success-inner">
           <div className="sc-day-success-check">✓</div>
           <h3 className="sc-day-success-title">Recorded</h3>
@@ -719,11 +770,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
           </p>
           <div className="sc-day-success-actions">
             {onNextException ? (
-              <button className="sc-btn sc-btn--primary" onClick={onNextException}>Next needing entry →</button>
+              <button ref={successPrimaryBtnRef} className="sc-btn sc-btn--primary" onClick={onNextException}>Next needing entry →</button>
             ) : (
               <span className="sc-day-success-caughtup">✓ All caught up</span>
             )}
-            <button className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
+            <button ref={onNextException ? undefined : successPrimaryBtnRef} className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>

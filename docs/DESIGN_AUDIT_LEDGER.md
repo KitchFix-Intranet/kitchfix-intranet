@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-3 + Owner Rounds 2-3 complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), candidates (cleanup phase) · cleanup C1a merged, C1b next**
+**Status: Sections 1-3 + Owner Rounds 2-3 + cleanup phase (C3/C2/C1a/C1b) COMPLETE pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-016-parity + partial-fail path (deferred by ruling)**
 
 ## Section 1 - Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -110,7 +110,7 @@ Section-1 carry-forwards resolved here: SC-022 fully CLOSED (lg tiles exceed 44p
 SC-036 unchanged (drill band chips do NOT hide on mobile per CC B3 - the gap is chrome-cluster-only).
 
 ### Candidates (Section 2)
-- Stale day.isPast across midnight (baked at fetch) feeds chips + bar - runtime someday.
+- Stale day.isPast across midnight (baked at fetch) feeds chips + bar - RESOLVED in cleanup C1b (client-derived reads resolved via isPastDate - DayDetail status + isEstimated; grid tile statuses remain fetch-classified server-side, so an idle tab's chips self-correct on next refetch - accepted residual per review 2026-07-09).
 - Workspace skeleton is a raw grid, not card-anatomy (SC-016 parity) - polish someday.
 - Skeleton hardcodes 28 tiles regardless of period length (28-31) - RESOLVED in cleanup C1a (derives from periodRange, falls back to 28 when unknown).
 - Partial-vs-total period-failure paths are subtle (PW:118-129) - watch during SC-047 work.
@@ -140,11 +140,9 @@ investigation @ 406e55c (money trace, guards, a11y inventory, measured ratios).
 ### Candidates (Section 3)
 - Three independent fmt$ implementations - consolidate (Bundle 2 takes it).
 - Em-dash in UI literal at ServiceCalendar.js:~1585 ("Bulk entry — {N} days") - hyphen per repo rule (Bundle 2).
-- Remaining CC Flags (15 actual; harvested 2026-07-09 - 12 retired by #361/#362/#366/#368, 3 survive: F4 AbortController, F10 focus placement, F11 success-screen role=status - queued to cleanup C1b alongside the stale-isPast-midnight item. Source: docs/audits/SC_SECTION3_INVESTIGATION_2026-07-08.md).
+- Remaining CC Flags (15 actual; harvested 2026-07-09 - 12 retired by #361/#362/#366/#368, 3 survive: F4 AbortController, F10 focus placement, F11 success-screen role=status - queued to cleanup C1b alongside the stale-isPast-midnight item. Source: docs/audits/SC_SECTION3_INVESTIGATION_2026-07-08.md). F4/F10/F11 RESOLVED in C1b.
 - Dirty guard over-triggers when retyping identical values (touched = typed-this-session, not
-  differs-from-initial) - conservative in the safe direction, accepted (post-merge review note).
-  Round 2 partial-retire: type-then-delete on a previously-empty row now correctly removes touched
-  (SC-071), so the phantom-dirty case narrows to actual retype-to-same-value.
+  differs-from-initial) - RESOLVED in cleanup C1b (initialValues snapshot; touched retained for render duties).
 
 ## Owner Review Round 2 - interactive audit (Kevin, 2026-07-08 PDF) · specced 2026-07-09
 
