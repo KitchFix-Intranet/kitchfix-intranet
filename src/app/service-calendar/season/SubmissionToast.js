@@ -26,13 +26,16 @@ export default function SubmissionToast({
   // for keyboard users. role="status" + aria-live="polite" preserved
   // via aria attributes so SR users still hear the announcement (the
   // native button role does not override an explicit role attribute).
+  // Post-#362 review: NO aria-label - it would override the button's
+  // content (headline + amount) as the accessible name, and the whole
+  // point of the live-region announce is that headline + amount. Title
+  // + cursor + focus outline still telegraph the dismiss affordance.
   return (
     <button
       type="button"
       className={`sc-toast-recorded${isMilestone ? " sc-toast-recorded--milestone" : ""}`}
       role="status"
       aria-live="polite"
-      aria-label="Dismiss submission toast"
       title="Click to dismiss"
       onClick={onDismiss}
     >

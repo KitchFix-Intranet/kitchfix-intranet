@@ -3,7 +3,7 @@
 > Fix-phase contract. Findings referenced by ID only. Statuses: OPEN → IN PROGRESS → RESOLVED →
 > VERIFIED, plus WONTFIX (reason required). New issues during fixes go to Candidates, never the table.
 
-**Status: Sections 1-2 complete · Section 3 fixes IN PROGRESS · 1 sev-4 open (SC-053, fix in flight)**
+**Status: Sections 1-3 fixes complete pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-035 + section candidates (cleanup phase)**
 
 ## Section 1 — Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
@@ -123,21 +123,23 @@ investigation @ 406e55c (money trace, guards, a11y inventory, measured ratios).
 
 | ID | Sev | Lens | Finding | Evidence | Fix | Tier | Status | Verified by |
 |----|-----|------|---------|----------|-----|------|--------|-------------|
-| SC-051 | 3 | Feedback | Four totals, three sources for one save: row-vs-header rounding artifact + toast recomputes from CURRENT catalog vs effective-dated elsewhere; server returns no total to echo | Img 8 ($21,490 vs 6x$3,582 vs $21,483.00 toast); CC A1 trace | RULING: server computes + returns saved revenue (effective-dated); review/toast echo; header = sum of displayed rows | CONFIRMED | OPEN | CC A1 + Chat verify |
-| SC-052 | 2 | Consistency | Modal header projection unmarked + silently flips to actuals; $2,708/$2,709 rail drift = same price-source fork | Img 1 vs rail; CC A6 | ~ prefix until first entry + effective-dated source | CONFIRMED | OPEN | CC A6 |
-| SC-053 | 4 | Feedback | Day notes BLACK-HOLED: textarea wired to nothing - typed notes silently discarded while toast confirms success; day_notes column read but never written | DayDetail:40,560-563 (onChange only); CC A4 + Chat verify | RULING: wire end-to-end (payload + upsert + reopen prefill + review row) | CONFIRMED | OPEN | CC A4 + Chat verify |
-| SC-054 | 2 | Hierarchy | Review strips the delta chips entry showed - anomaly signal dropped at the confirm step | Img 2 vs 4; projections in scope per CC A5 | Carry delta chips into review rows (render approved) | CONFIRMED | OPEN | CC A5 |
-| SC-055 | 2 | Feedback | Double-click guard PRESENT (disabled=saving, all 4 buttons); abort/unmount guard ABSENT - mid-flight close still toasts | CC A2 | Mounted-ref/abort guard on save handlers | CONFIRMED (split) | OPEN | CC A2 |
+| SC-051 | 3 | Feedback | Four totals, three sources for one save: row-vs-header rounding artifact + toast recomputes from CURRENT catalog vs effective-dated elsewhere; server returns no total to echo | Img 8 ($21,490 vs 6x$3,582 vs $21,483.00 toast); CC A1 trace | RULING: server computes + returns saved revenue (effective-dated); review/toast echo; header = sum of displayed rows | CONFIRMED | RESOLVED | CC A1 + Chat verify + #361 |
+| SC-052 | 2 | Consistency | Modal header projection unmarked + silently flips to actuals; $2,708/$2,709 rail drift = same price-source fork | Img 1 vs rail; CC A6 | ~ prefix until first entry + effective-dated source | CONFIRMED | RESOLVED | CC A6 + #361 |
+| SC-053 | 4 | Feedback | Day notes BLACK-HOLED: textarea wired to nothing - typed notes silently discarded while toast confirms success; day_notes column read but never written | DayDetail:40,560-563 (onChange only); CC A4 + Chat verify | RULING: wire end-to-end (payload + upsert + reopen prefill + review row) | CONFIRMED | RESOLVED | CC A4 + Chat verify + #361 |
+| SC-054 | 2 | Hierarchy | Review strips the delta chips entry showed - anomaly signal dropped at the confirm step | Img 2 vs 4; projections in scope per CC A5 | Carry delta chips into review rows (render approved) | CONFIRMED | RESOLVED | CC A5 + #362 |
+| SC-055 | 2 | Feedback | Double-click guard PRESENT (disabled=saving, all 4 buttons); abort/unmount guard ABSENT - mid-flight close still toasts | CC A2 | Mounted-ref/abort guard on save handlers | CONFIRMED (split) | RESOLVED | CC A2 + #361 |
 | SC-056 | — | States | Empty-save gate | Triple gate verified: disabled button + executeSave guard + server 400 | None | CONFIRMED | VERIFIED (non-issue) | CC A3 |
-| SC-057 | 1 | Consistency | Toasts show cents on a whole-dollar surface | Img 5/9 | Whole dollars (server echo formatted) | CONFIRMED | OPEN | — |
-| SC-058 | 1 | Content | "Minor League - PDC · PDC · $11.55/meal" - segment prefix collides with group names carrying the segment | Img 6; CC A9 (both sources) | Render-side dedupe: suppress prefix when group name ends with the segment | CONFIRMED | OPEN | CC A9 |
-| SC-059 | 2 | A11y | Ghost-input placeholder 2.43:1; projection vanishes on type | Img 1/6; CC A7 measured | RULING: minimal - darken placeholder token to pass (delta chip covers post-entry recall) | CONFIRMED | OPEN | CC A7 + ruling |
-| SC-060 | 2 | A11y/Feedback | Toast not dismissable + container lacks pointer-events:none (~420x100 dead zone over the grid for 4.5s); trap/aria otherwise solid | CC A8 + Chat verify | pointer-events:none on container + click-to-dismiss on card | CONFIRMED | OPEN | CC A8 |
-| SC-061 | 2 | A11y | Delta amber #D97706 at 12px = 3.19:1 + --text-subtle fails at 3 sites | CC A7 table | Darken delta + placeholder/cancel tokens to pass | CONFIRMED | OPEN | CC A7 |
-| SC-062 | 3 | Consistency | "Enter custom values" writes N days directly with NO review while Match-projections has one - asymmetric ceremony on a bulk money write | CC A10 | RULING: add the review step (reuses bulk-review anatomy, render approved) | CONFIRMED | OPEN | CC A10 |
-| SC-063 | 3 | Feedback | Esc/backdrop-click silently discard mid-entry - no unsaved-changes guard; keyboard flow makes stray Esc easy | CC A8 + Chat verify (onClose unguarded) | Dirty guard: confirm dialog on Esc/backdrop/Cancel when entries or note typed (render approved) | CONFIRMED | OPEN | CC A8 + Chat verify |
+| SC-057 | 1 | Consistency | Toasts show cents on a whole-dollar surface | Img 5/9 | Whole dollars (server echo formatted) | CONFIRMED | RESOLVED | #362 |
+| SC-058 | 1 | Content | "Minor League - PDC · PDC · $11.55/meal" - segment prefix collides with group names carrying the segment | Img 6; CC A9 (both sources) | Render-side dedupe: suppress prefix when group name ends with the segment | CONFIRMED | RESOLVED | CC A9 + #362 |
+| SC-059 | 2 | A11y | Ghost-input placeholder 2.43:1; projection vanishes on type | Img 1/6; CC A7 measured | RULING: minimal - darken placeholder token to pass (delta chip covers post-entry recall) | CONFIRMED | RESOLVED | CC A7 + ruling + #362 |
+| SC-060 | 2 | A11y/Feedback | Toast not dismissable + container lacks pointer-events:none (~420x100 dead zone over the grid for 4.5s); trap/aria otherwise solid | CC A8 + Chat verify | pointer-events:none on container + click-to-dismiss on card | CONFIRMED | RESOLVED | CC A8 + #362 |
+| SC-061 | 2 | A11y | Delta amber #D97706 at 12px = 3.19:1 + --text-subtle fails at 3 sites | CC A7 table | Darken delta + placeholder/cancel tokens to pass | CONFIRMED | RESOLVED | CC A7 + #362 |
+| SC-062 | 3 | Consistency | "Enter custom values" writes N days directly with NO review while Match-projections has one - asymmetric ceremony on a bulk money write | CC A10 | RULING: add the review step (reuses bulk-review anatomy, render approved) | CONFIRMED | RESOLVED | CC A10 + #362 |
+| SC-063 | 3 | Feedback | Esc/backdrop-click silently discard mid-entry - no unsaved-changes guard; keyboard flow makes stray Esc easy | CC A8 + Chat verify (onClose unguarded) | Dirty guard: confirm dialog on Esc/backdrop/Cancel when entries or note typed (render approved) | CONFIRMED | RESOLVED | CC A8 + Chat verify + #362 |
 
 ### Candidates (Section 3)
 - Three independent fmt$ implementations - consolidate (Bundle 2 takes it).
 - Em-dash in UI literal at ServiceCalendar.js:~1585 ("Bulk entry — {N} days") - hyphen per repo rule (Bundle 2).
 - Remaining CC Flags (13) recorded in the investigation report - triage in the cleanup phase.
+- Dirty guard over-triggers when retyping identical values (touched = typed-this-session, not
+  differs-from-initial) - conservative in the safe direction, accepted (post-merge review note).
