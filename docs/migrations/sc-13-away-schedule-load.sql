@@ -1,49 +1,60 @@
 -- ═══════════════════════════════════════════════════════════════════
--- sc-13-away-schedule-load.sql
--- Service Calendar - load AWAY games + add game_pk stable identity.
+-- sc-13-away-schedule-load.sql (revised 2026-07-10: folds in sc-14)
+-- Service Calendar - MLB Stats API as single source of truth for the
+-- schedule. Load AWAY games, delete PREP/OPEN/CLOSE scaffolding, add
+-- game_pk stable identity.
 --
--- Landing site for the "complete schedule in Postgres" architectural
--- decision. sc-12 seeded the HOME slate under PDF-as-truth; sc-13
--- adds the ROAD slate under MLB-Stats-API-as-truth (see
--- docs/audits/SC_13_MLB_API_FEASIBILITY_2026-07-10.md - the API's
--- home slate reconciled row-for-row against sc-12, validating both
--- sources independently).
+-- Trust model (locked, 2026-07-10):
+--   The calendar's schedule layer = home games + away games +
+--   exhibitions. Nothing else. PREP/OPEN/CLOSE were internal
+--   scaffolding, not baseball facts; they are deleted here. Any
+--   actuals or projections recorded on those dates were test data
+--   per Kevin's ruling and are deleted alongside (test-data-only
+--   sweep - no ops-domain preservation needed; SC-078 concern void).
 --
--- Scope:
---   1. Expand day_type CHECK to include 'AWAY' (schema first, load
---      second - same ordering lesson as sc-12 EXHIBITION).
---   2. Relax homestand_id to NULLABLE - away games belong to no
---      homestand.
---   3. Add game_pk BIGINT column (nullable). Partial UNIQUE index on
---      (account_key, game_pk) WHERE game_pk IS NOT NULL - lets a
---      future live-sync idempotent-upsert by MLB game identity per
---      the schema review's stable-key recommendation.
---   4. INSERT ~324 AWAY rows (81 per account, 4 accounts, TXR H/V
---      mirror per Q-d). Data extracted from MLB Stats API via
---      scripts/_extract_sc_13_away_schedule.mjs; block embedded below.
---   5. Backfill game_pk on existing HOME (day_type='GAME') rows so
---      the whole 162-per-account regular-season slate has stable
---      identity. HOME rows' day_type / opponent are NOT touched -
---      sc-12 reconciled those and they stay authoritative.
---   6. COMMENT ON TABLE noting the semantic drift (table name is now
---      a mild misnomer; rename deferred).
+-- The sc-14 review (docs/audits/SC_14_PREP_OPEN_CLOSE_REMOVAL_REVIEW
+-- _2026-07-10.md) established the dependency analysis and recommended
+-- Option C: fold the delete into a single migration with the AWAY
+-- load. This file IS that fold. The 35 AWAY-vs-PREP/CLOSE conflicts
+-- flagged in the earlier sc-13 draft dissolve automatically since
+-- the PREP/CLOSE rows are deleted before the AWAY inserts.
 --
--- What this migration does NOT do (per the schema review):
---   - Rename sc_homestand_schedule. Deferred.
---   - Add road_trip_id. Deferred until a product need appears.
---   - Add FK on account_key -> accounts.team_key. Worth doing but
---     scope-separate.
---   - Refactor sc_daily_projections to key on game_pk. Meal counts
---     belong to the kitchen shift, not the game.
---   - Load 2025 or earlier seasons. Historical backfill is a
---     separate Kevin call.
+-- Ordered steps (single BEGIN/COMMIT):
+--   1. day_type CHECK: add 'AWAY'. Keep PREP/OPEN/CLOSE/CLEAN in the
+--      CHECK domain (restore flexibility; the values just have no
+--      rows post-apply).
+--   2. homestand_id: DROP NOT NULL (away games have none).
+--   3. game_pk column + partial UNIQUE index (per schema review's
+--      stable-key recommendation for phase-2 live-sync).
+--   4. COMMENT ON TABLE (documents the new semantics + retired
+--      scaffolding).
+--   5. DELETE actuals + projections attached to PREP/OPEN/CLOSE/CLEAN
+--      dates for the 4 MLB accounts (Kevin ruled: test data only,
+--      unconditional delete).
+--   6. DELETE schedule rows themselves (PREP/OPEN/CLOSE/CLEAN).
+--   7. INSERT 324 AWAY rows. ON CONFLICT DO NOTHING (post-DELETE
+--      there are no conflicts left; the guard is defensive).
+--   8. Backfill game_pk on existing HOME (day_type='GAME') rows via
+--      temp table + guarded UPDATE.
 --
--- Data-quality flag: the extraction script surfaced 35 AWAY-vs-
--- existing-row conflicts across the 4 accounts (mostly PREP, some
--- CLOSE at season end). The ON CONFLICT WHERE clause preserves the
--- existing row (safe default). Kevin's PR body enumerates each
--- conflict; decision on whether to reclassify PREP -> AWAY is a
--- follow-up call, not this migration.
+-- Notes are NOT deleted. sc_day_note_entries is append-only per SC-079
+-- and any test-note ledger rows persist as historical entries (no
+-- visible tile now, still queryable).
+-- sc_daily_actuals_history is NOT deleted. The trigger doesn't fire
+-- on DELETE, and history's actual_id is intentionally not a FK
+-- (per sc-1 comment "row may outlive a hard-deleted actual"), so
+-- history rows persist as audit trail.
+--
+-- Pre-apply capture (RUN THIS FIRST in Studio and save the CSV as
+-- docs/audits/sc-13-pre-delete-snapshot-YYYYMMDD.csv for evidence):
+--
+-- SELECT account_key, service_date, day_of_week, day_type,
+--        opponent, homestand_id
+--   FROM sc_homestand_schedule
+--  WHERE account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+--    AND day_type IN ('PREP','OPEN','CLOSE','CLEAN')
+--  ORDER BY account_key, service_date;
+-- -- Expected ~84 rows.
 --
 -- Apply order:
 --   - Paste + run in Supabase Studio (repo convention: migrations
@@ -52,9 +63,21 @@
 --   - Verify with the probe block at the bottom (commented; uncomment
 --     to execute).
 --
+-- What this migration does NOT do (per the schema review):
+--   - Rename sc_homestand_schedule. Deferred.
+--   - Shrink the day_type CHECK domain. Retained for restore flex.
+--   - Add road_trip_id. Deferred until a product need appears.
+--   - Add FK on account_key -> accounts.team_key. Worth doing;
+--     scope-separate.
+--   - Refactor sc_daily_projections to key on game_pk. Meal counts
+--     belong to the kitchen shift, not the game.
+--   - Load 2025 or earlier seasons. Historical backfill is a
+--     separate call.
+--
 -- References:
 --   - Schema decision:      docs/audits/SC_13_SCHEMA_REVIEW_2026-07-10.md
 --   - API feasibility:      docs/audits/SC_13_MLB_API_FEASIBILITY_2026-07-10.md
+--   - sc-14 removal review: docs/audits/SC_14_PREP_OPEN_CLOSE_REMOVAL_REVIEW_2026-07-10.md
 --   - sc-12 prior work:     docs/migrations/sc-12-mlb-schedule-reconciliation.sql
 --   - PR #386 EXH pattern:  b6b6d0b (the reader-side pattern this PR extends)
 -- ═══════════════════════════════════════════════════════════════════
@@ -110,20 +133,64 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sc_homestand_schedule_account_game_pk
 
 -- ─── 4. COMMENT ON TABLE ───────────────────────────────────────────
 -- Documents the semantic drift: table was named for homestands, now
--- stores AWAY rows too. Rename deferred to its own dedicated PR per
--- the schema review. Comment surfaces the naming lie to any future
--- reader who lands on the DDL cold.
+-- stores AWAY rows too and no longer stores PREP/OPEN/CLOSE
+-- scaffolding. Rename deferred to its own dedicated PR per the
+-- schema review.
 COMMENT ON TABLE sc_homestand_schedule IS
-  'Per-(account, date) schedule shape for the 4 MLB fee accounts. '
-  'Historically homestand-only (name reflects that); post-sc-13 also '
-  'stores AWAY rows (day_type=AWAY, homestand_id NULL). Rename '
-  'pending its own dedicated PR when a broader restructure is scoped. '
-  'day_type domain: GAME|PREP|OPEN|CLOSE|CLEAN|EXHIBITION|AWAY. '
-  'game_pk is MLB Stats API''s stable per-game identifier (nullable '
-  'for non-game rows: PREP/OPEN/CLOSE/CLEAN).';
+  'Per-(account, date) MLB schedule for the 4 MLB fee accounts. '
+  'Post-sc-13: MLB Stats API is the single source of truth. '
+  'Rows are HOME games (day_type=GAME), AWAY games (day_type=AWAY, '
+  'homestand_id NULL), and TXR spring-training exhibitions '
+  '(day_type=EXHIBITION). '
+  'day_type CHECK still allows PREP|OPEN|CLOSE|CLEAN for restore '
+  'flexibility, but sc-13 deleted all such rows as internal '
+  'scaffolding. game_pk is MLB Stats API''s stable per-game '
+  'identifier (nullable). Rename to sc_schedule pending a separate PR.';
 
 
--- ─── 5. AWAY inserts + HOME game_pk backfill ───────────────────────
+-- ─── 5. DELETE test-only data on PREP/OPEN/CLOSE/CLEAN dates ───────
+-- Kevin's ruling (2026-07-10, folding sc-14 into this migration):
+-- PREP/OPEN/CLOSE were internal scaffolding, not baseball facts. Any
+-- actuals or projections recorded on those dates were test data with
+-- no ops-domain meaning. Delete unconditionally.
+--
+-- Order within this step:
+--   (a) actuals attached to the doomed dates
+--   (b) projections attached to the doomed dates
+--   (c) the schedule rows themselves
+--
+-- Deleting attachments FIRST means the delete-schedule step at (c)
+-- cannot leave orphaned actuals/projections. If (c) is somehow
+-- rolled back inside the transaction (should not happen - single
+-- BEGIN/COMMIT and no branching), the actuals/projections delete
+-- rolls back with it.
+--
+-- The 4-account IN-clause + day_type IN-clause is idempotent: on a
+-- second run, the doomed rows are already gone so the subselects
+-- return zero rows and the DELETEs are no-ops.
+
+DELETE FROM sc_daily_actuals
+ WHERE (account_key, service_date) IN (
+   SELECT account_key, service_date
+     FROM sc_homestand_schedule
+    WHERE account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+      AND day_type IN ('PREP','OPEN','CLOSE','CLEAN')
+ );
+
+DELETE FROM sc_daily_projections
+ WHERE (account_key, service_date) IN (
+   SELECT account_key, service_date
+     FROM sc_homestand_schedule
+    WHERE account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+      AND day_type IN ('PREP','OPEN','CLOSE','CLEAN')
+ );
+
+DELETE FROM sc_homestand_schedule
+ WHERE account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+   AND day_type IN ('PREP','OPEN','CLOSE','CLEAN');
+
+
+-- ─── 6. AWAY inserts + HOME game_pk backfill ───────────────────────
 
 -- ── (1) AWAY inserts ──────────────────────────────────────────────
 INSERT INTO sc_homestand_schedule
@@ -453,19 +520,18 @@ VALUES
   ('TXR - TX - V', '2026-09-25', 'Friday', 'AWAY', 'MIN', NULL, 823652),
   ('TXR - TX - V', '2026-09-26', 'Saturday', 'AWAY', 'MIN', NULL, 823653),
   ('TXR - TX - V', '2026-09-27', 'Sunday', 'AWAY', 'MIN', NULL, 823650)
-ON CONFLICT (account_key, service_date) DO UPDATE
-  SET day_type    = EXCLUDED.day_type,
-      opponent    = EXCLUDED.opponent,
-      game_pk     = EXCLUDED.game_pk,
-      day_of_week = EXCLUDED.day_of_week
-  WHERE sc_homestand_schedule.day_type = 'AWAY';
--- ON CONFLICT strategy:
---   Non-AWAY existing rows (GAME/PREP/OPEN/CLOSE/EXHIBITION) are PRESERVED
---   because the WHERE clause on the UPDATE only fires when target row is
---   already AWAY. A same-date collision against an existing PREP/CLOSE row
---   is a NO-OP (existing row wins). Kevin's PR body enumerates the ~35
---   PREP/CLOSE conflicts flagged for his review.
---   Re-running the migration self-heals AWAY-vs-AWAY (updates opponent / game_pk).
+ON CONFLICT (account_key, service_date) DO NOTHING;
+-- ON CONFLICT strategy (post sc-14 fold):
+--   The step-5 DELETE already removed every PREP/CLOSE date that
+--   previously collided with an AWAY insert. Zero conflicts expected
+--   under normal operation. DO NOTHING is a defensive guard: on a
+--   re-run, existing AWAY rows are preserved as-is (no self-update
+--   needed because AWAY rows never mutate: gamePk/opponent are stable
+--   in the plan-of-record snapshot the extractor derives from the API).
+--   If a future re-run needs to update AWAY rows (e.g. MLB revised the
+--   season), regenerate the block via
+--   scripts/_extract_sc_13_away_schedule.mjs and swap the clause to
+--   DO UPDATE ... WHERE day_type='AWAY' for that run.
 
 -- ── (2) HOME game_pk backfill ─────────────────────────────────────
 -- Populates game_pk on existing HOME (day_type='GAME') rows only.
@@ -833,16 +899,15 @@ COMMIT;
 --  GROUP BY account_key, day_type
 --  ORDER BY account_key, day_type;
 --
--- Expected (may differ by 1-3 in PREP if the AWAY-vs-PREP conflicts
--- resolved differently than expected - see PR body for enumeration):
---   CIN - OH     GAME=81, PREP=20, OPEN=2, CLOSE=2, AWAY=72
---                (72 = 81 API-away minus 9 conflicts that no-op'd)
---   STL - MO     GAME=81, PREP=16, OPEN=2, CLOSE=2, AWAY=75
---                (75 = 81 minus 6 conflicts)
---   TXR - TX - H GAME=81, PREP=17, OPEN=1, CLOSE=2, EXHIBITION=2, AWAY=71
---                (71 = 81 minus 10 conflicts)
---   TXR - TX - V GAME=81, PREP=17, OPEN=1, CLOSE=2, EXHIBITION=2, AWAY=71
---                (mirror of H)
+-- Expected (post revised sc-13 with PREP/OPEN/CLOSE deleted):
+--   CIN - OH     GAME=81, AWAY=81                       (162 total)
+--   STL - MO     GAME=81, AWAY=81                       (162 total)
+--   TXR - TX - H GAME=81, AWAY=81, EXHIBITION=2         (164 total)
+--   TXR - TX - V GAME=81, AWAY=81, EXHIBITION=2         (164 total)
+--
+-- Explicit non-expectation: zero PREP, zero OPEN, zero CLOSE, zero
+-- CLEAN. If any of those row counts are nonzero, the DELETE in step 5
+-- failed silently (should not happen - investigate immediately).
 --
 --
 -- Probe B: HOME game_pk backfill landed on every GAME row
@@ -905,3 +970,37 @@ COMMIT;
 --
 -- Expected: zero rows (the partial unique index prevents dupes, but
 -- worth confirming empirically post-load).
+--
+--
+-- Probe F: no orphaned actuals/projections on now-non-existent dates.
+-- Every (account_key, service_date) in sc_daily_actuals /
+-- sc_daily_projections must correspond to a row in
+-- sc_homestand_schedule (for the 4 MLB accounts). Post-step-5 delete
+-- there should be zero orphans.
+--
+-- WITH orphan_actuals AS (
+--   SELECT DISTINCT a.account_key, a.service_date
+--     FROM sc_daily_actuals a
+--     LEFT JOIN sc_homestand_schedule s
+--       ON s.account_key  = a.account_key
+--      AND s.service_date = a.service_date
+--    WHERE a.account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+--      AND s.id IS NULL
+-- ),
+-- orphan_proj AS (
+--   SELECT DISTINCT p.account_key, p.service_date
+--     FROM sc_daily_projections p
+--     LEFT JOIN sc_homestand_schedule s
+--       ON s.account_key  = p.account_key
+--      AND s.service_date = p.service_date
+--    WHERE p.account_key IN ('CIN - OH','STL - MO','TXR - TX - H','TXR - TX - V')
+--      AND s.id IS NULL
+-- )
+-- SELECT 'actuals' AS kind, * FROM orphan_actuals
+-- UNION ALL
+-- SELECT 'projections', * FROM orphan_proj
+-- ORDER BY kind, account_key, service_date;
+--
+-- Expected: zero rows. If any surface, step 5's IN-subselect missed
+-- something (should not happen - the subselect matches the same
+-- day_type predicate the schedule DELETE uses).

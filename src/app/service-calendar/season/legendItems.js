@@ -35,7 +35,11 @@ const HOMESTAND = [
     mod: "off",
     icon: "",
     label: "Non Game day",
-    description: "Prep, open, close, or off-day between homestands.",
+    // sc-13 (2026-07-10): PREP/OPEN/CLOSE rows retired - the schedule
+    // now tracks games only. This state rarely surfaces on the MLB
+    // homestand view; kept for the CLEAN-day case + any manually-
+    // authored non-game row (the day_type CHECK still allows them).
+    description: "Day between games with no scheduled service.",
   },
   // sc-12 (2026-07-10): TXR spring-training exhibitions (vs KC).
   // Display-only tile - billed as separate catering outside the
