@@ -1133,7 +1133,14 @@ function buildChangesSheet(workbook, ctx, history) {
   // rowsByBucket iteration preserves insertion order = scope newest first
   // (loadHistory already sorts DESC on date + changed_at).
   for (const bucket of rowsByBucket.values()) {
-    const allZero = bucket.entries.length > 0 && bucket.entries.every(e => Number(e.new_count) === 0);
+    // A true mark-no-service writes ALL in-service services in one
+    // batch, so bucket.entries.length > 1 is the required signature.
+    // A lone zero (a single-service correction from N -> 0) is a plain
+    // edit and must render as `Service, N, 0`, not as the system
+    // "all services / Marked no service" phrasing. Mirrors the same
+    // guard in DayDetail's mergeActivity so the sheet and the UI agree
+    // on when a batch collapses.
+    const allZero = bucket.entries.length > 1 && bucket.entries.every(e => Number(e.new_count) === 0);
     if (allZero) {
       const rowIx = sheet.addRow([
         toDate(bucket.date),

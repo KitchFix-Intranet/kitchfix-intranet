@@ -67,7 +67,14 @@ function mergeActivity(noteEntries, historyEntries) {
     buckets.get(key).entries.push(h);
   }
   for (const [bucketKey, bucket] of buckets.entries()) {
-    const allZero = bucket.entries.length > 0 && bucket.entries.every(e => Number(e.newValue) === 0);
+    // A true mark-no-service writes ALL in-service services in one
+    // batch, so bucket.entries.length > 1 is the required signature.
+    // A lone zero (a single-service correction from N -> 0) is a plain
+    // edit and must render as `Service N -> 0`, not as the system
+    // "Marked no service" phrasing. The theoretical single-service-day
+    // edge (a day with exactly one service that gets marked no-service)
+    // falls through to the normal EDIT row - still truthful.
+    const allZero = bucket.entries.length > 1 && bucket.entries.every(e => Number(e.newValue) === 0);
     if (allZero) {
       rows.push({
         type: "edit",
