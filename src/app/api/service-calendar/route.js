@@ -593,7 +593,7 @@ export async function POST(request) {
   try {
     // ── sc-submit-day: save actuals for one day ──
     if (action === "sc-submit-day") {
-      const { accountKey, date, entries, auditNote } = body;
+      const { accountKey, date, entries, auditNote, rideNote } = body;
       if (!accountKey || !date || !entries?.length) {
         return NextResponse.json(
           { success: false, error: "Missing required fields" },
@@ -621,6 +621,27 @@ export async function POST(request) {
         await addDayNoteEntry(accountKey, date, auditNote, author);
       }
 
+      // P2 (item 2, 2026-07-10): ride-along authored note. Ordered
+      // AFTER save success so a failed save never leaves an orphan
+      // note attached to unrecorded actuals. Author derives from the
+      // session - the client cannot spoof it, matching sc-add-note.
+      // A post-save append failure surfaces as noteFailed:true so the
+      // client shows an honest partial toast ("Saved - note couldn't
+      // post, use Add note") and preserves the draft. Bulk endpoints
+      // do NOT accept rideNote (v1 fence - see sc-bulk-submit below).
+      let noteFailed = false;
+      const trimmedRide = typeof rideNote === "string" ? rideNote.trim() : "";
+      if (trimmedRide.length > 0) {
+        try {
+          const author = session.user?.name || session.user?.email || "";
+          await addDayNoteEntry(accountKey, date, trimmedRide, author);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("[sc-submit-day] rideNote append after successful save:", err);
+          noteFailed = true;
+        }
+      }
+
       // SC-051: server-authoritative totals. Read the view after the
       // write so the toast reflects effective-dated prices (same source
       // as the tile + week card + drill rail), not a client recompute
@@ -632,6 +653,7 @@ export async function POST(request) {
         ...result,
         savedRevenue: totals.revenue,
         savedMeals:   totals.meals,
+        ...(noteFailed ? { noteFailed: true } : {}),
       });
     }
 
@@ -662,6 +684,12 @@ export async function POST(request) {
         );
       }
       // entries: [{ colIndex: '<service-uuid>', date: 'YYYY-MM-DD', value: number }]
+      // P2 (item 2) fence, v1: rideNote is NOT accepted here. A single
+      // note attached to a bulk write would land on all touched days
+      // with the same author + timestamp, blurring which day it was
+      // meant for. Per-day ride notes for bulk are out of scope for
+      // this iteration - operators post standalone notes via the
+      // DayDetail composer per day.
       const touched = entries.map((e) => ({
         serviceId:   e.colIndex,
         serviceDate: e.date,

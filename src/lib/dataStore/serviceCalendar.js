@@ -938,6 +938,14 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   }
   const hasHomestandData = Object.keys(homestandMap).length > 0;
 
+  // P2 (item 3, R3, 2026-07-10): dates with at least one authored NOTE
+  // entry in the year. Feeds the DaySquare bubble on sm tiles (year
+  // grid + PeriodCard rail) - lg drill-in tiles already have
+  // day.noteEntries via loadMonth, so this is the parity path for the
+  // overview surfaces. NOTE-only per Kevin's Q-b ruling; history rows
+  // (from sc_daily_actuals_history) never count here.
+  const noteDates = await readNoteDatesInRange(accountKey, first, last);
+
   const daysRows = await fetchAllPaginated(
     supa,
     (q) => q
@@ -1034,6 +1042,10 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       status:      classifyDayStatus(s, statusCtx),
       gameType:    s.gameType || "",
       actualMeals: s.actualMeals || 0,
+      // P2 (item 3): NOTE-only note indicator. Boolean rather than
+      // count so the payload stays compact - the tile only needs
+      // "has any" for the bubble render.
+      hasNoteEntries: noteDates.has(s.date),
     };
     const hs = homestandMap[s.date];
     if (hs) {
@@ -1351,6 +1363,37 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
     });
   }
   return byDate;
+}
+
+// P2 (item 3, R3, 2026-07-10): dates-only lookup used by the year-
+// summary loader to flag which days carry at least one NOTE entry
+// for the DaySquare bubble on overview + PeriodCard sm tiles.
+// Cheaper than readNoteEntriesForRange (no body/author/timestamp
+// payload; PostgREST returns just service_date, dedup on the client).
+//
+// Paginated via fetchAllPaginated because PostgREST caps a bare
+// .select() at its configured max-rows (1000 by default) and a
+// silent truncation would drop bubble signals for later dates in
+// an active year - the same failure class the daysRows loader
+// upstream (~:949) already handles. Order by service_date so the
+// pagination cursor is deterministic; the Set dedup below collapses
+// multi-note-same-date rows unchanged.
+export async function readNoteDatesInRange(accountKey, first, last) {
+  const supa = getServiceClient();
+  const rows = await fetchAllPaginated(
+    supa,
+    (q) => q
+      .from(SC_TABLES.noteEntries)
+      .select("service_date")
+      .eq("account_key", accountKey)
+      .gte("service_date", first)
+      .lte("service_date", last)
+      .order("service_date", { ascending: true }),
+    "readNoteDatesInRange"
+  );
+  const set = new Set();
+  for (const r of rows) set.add(r.service_date);
+  return set;
 }
 
 // readNoteEntriesForRange - one query for a whole month range, keyed

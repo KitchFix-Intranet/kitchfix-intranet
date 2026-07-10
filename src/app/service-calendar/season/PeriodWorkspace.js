@@ -832,6 +832,11 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     }}
                     ariaLabel={`${d.date}, ${status}`}
                     isSyncing={syncingDates?.has(d.date) || false}
+                    // P2 (item 3, R3): the drill-in day payload carries
+                    // noteEntries directly (see loadMonth in the
+                    // orchestrator). NOTE-only signal - history rows
+                    // are excluded per Kevin's Q-b ruling.
+                    hasNote={(d.noteEntries?.length || 0) > 0}
                   />
                 </span>
               );

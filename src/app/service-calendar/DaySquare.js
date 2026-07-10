@@ -31,7 +31,7 @@
 //   fee-no-dollar  N served (NO $, STL-FL discipline)
 
 import "./DaySquare.css";
-import { SunGlyph, MoonGlyph } from "./Icons";
+import { SunGlyph, MoonGlyph, MessageSquare } from "./Icons";
 import { fmt$K, fmtMeals } from "./season/format";
 
 // Number formatting convention (Design Batch 1, audit P2-1).
@@ -114,6 +114,15 @@ export default function DaySquare({
   // in-flight story. Reduced-motion pair in DaySquare.css kills the
   // spinner animation.
   isSyncing = false,
+
+  // P2 (item 3, R3, 2026-07-10): the day has at least one authored
+  // NOTE entry (`day.noteEntries.length > 0` at the caller). Renders
+  // a chat-bubble outline glyph in the top-right corner slot next to
+  // the status badge; ~50% opacity so it reads as a content signal
+  // without competing with the state signal. History/EDIT rows are
+  // deliberately NOT counted here - the indicator is NOTES-only per
+  // Kevin's Q-b ruling. aria-label picks up "· has notes".
+  hasNote = false,
 }) {
   const meta = STATUS_META[status] || STATUS_META.off;
   const day = dateNumber != null
@@ -138,7 +147,12 @@ export default function DaySquare({
     onClick && "sc-daysq--interactive",
   ].filter(Boolean).join(" ");
 
-  const computedAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
+  const baseAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
+  // P2 (item 3, R3): append "· has notes" when the day carries a
+  // NOTE ledger entry so the aria-label mirrors the visual signal
+  // whether the caller passes a custom label or falls back to the
+  // built one.
+  const computedAriaLabel = hasNote ? `${baseAriaLabel} · has notes` : baseAriaLabel;
 
   const handleKeyDown = onClick
     ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } }
@@ -165,15 +179,24 @@ export default function DaySquare({
         {size === "lg" && kind === "milb" && content?.milbPill && (
           <MilbPill type={content.milbPill} />
         )}
-        {/* Selection check replaces the status glyph while selected -
-            bulk mode is about picking days, not reading status. */}
-        {isSelected ? (
-          <span className="sc-daysq-check" aria-hidden="true">✓</span>
-        ) : meta.icon ? (
-          <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
-            {meta.icon}
-          </span>
-        ) : null}
+        {/* P2 (item 3, R3): trailing cluster housing the note-indicator
+            bubble + the status badge (or selection check). Wrapped so
+            both children sit against the top-right corner; the outer
+            flex on .sc-daysq-top keeps the date on the left and this
+            cluster on the right. The bubble reads at ~50% opacity via
+            the CSS so it defers to the state signal. On sm tiles both
+            children fit at 11px + 9px; verified in a build - no drop
+            to a corner dot needed. */}
+        <span className="sc-daysq-top-right">
+          {hasNote && <NoteBubble />}
+          {isSelected ? (
+            <span className="sc-daysq-check" aria-hidden="true">✓</span>
+          ) : meta.icon ? (
+            <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
+              {meta.icon}
+            </span>
+          ) : null}
+        </span>
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
       {isToday && <span className="sc-daysq-today-pill" aria-hidden="true">TODAY</span>}
@@ -357,6 +380,18 @@ function renderFeeNoDollar(content) {
     <div className="sc-daysq-mid">
       <span className="sc-daysq-mid-meals">{fmtMeals(n)} served</span>
     </div>
+  );
+}
+
+// P2 (item 3, R3): the DaySquare note indicator. 11px chat-bubble
+// outline glyph from the SC icon set. Kept aria-hidden - the parent's
+// aria-label already picks up the "· has notes" suffix so the signal
+// is announced once, not twice. Opacity handled via CSS.
+function NoteBubble() {
+  return (
+    <span className="sc-daysq-notebubble" aria-hidden="true">
+      <MessageSquare size="11px" />
+    </span>
   );
 }
 

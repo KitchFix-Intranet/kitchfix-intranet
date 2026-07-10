@@ -138,6 +138,16 @@ export const Download = (props) => (
     <line x1="12" x2="12" y1="15" y2="3" />
   </Icon>
 );
+// P2 (item 3, R3, 2026-07-10): chat-bubble outline for the DaySquare
+// note indicator and the legend row. Same stroke discipline as the
+// rest of the SC icon set. Consumers pass a raw size string (11px on
+// tiles, 12px in the legend) so it never inherits an inflated icon
+// scale.
+export const MessageSquare = (props) => (
+  <Icon {...props}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </Icon>
+);
 
 // ── MiLB day/night glyphs ──────────────────────────────────────
 // Standalone, NOT wrapped by <Icon> because their fill semantics

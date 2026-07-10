@@ -87,6 +87,27 @@
   justify-content: space-between;
   align-items: center;
 }
+/* P2 (item 3, R3): trailing cluster on the top row that houses the
+   note-indicator bubble (when present) alongside the status badge or
+   selection check. Keeps both children pinned to the top-right corner
+   with a hair-thin gap so the bubble sits inboard of the badge. */
+.sc-daysq-top-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* P2 (item 3, R3): note-indicator bubble - 11px chat glyph at ~50%
+   opacity so it defers to the status signal. Same currentColor as
+   the tile text, so it picks up the state fill's ink automatically.
+   The MessageSquare SVG carries its own dimensions; this wrapper is
+   just an inline-flex anchor for alignment. */
+.sc-daysq-notebubble {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  opacity: 0.5;
+  line-height: 1;
+}
 .sc-daysq-date {
   font-weight: var(--wt-bold);
   font-variant-numeric: var(--num-tabular);

@@ -140,6 +140,10 @@ export default function PeriodCard({
                 isToday={cell.day.date === todayDate}
                 ariaLabel={`${cell.day.date}, ${status}`}
                 isSyncing={syncingDates?.has(cell.day.date) || false}
+                // P2 (item 3, R3): year-summary carries hasNoteEntries
+                // (see loadYearSummary + readNoteDatesInRange). NOTE-only
+                // per Kevin's Q-b ruling; history rows never count here.
+                hasNote={!!cell.day.hasNoteEntries}
               />
             </span>
           );

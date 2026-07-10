@@ -123,6 +123,21 @@ const PER_MEAL = [
   },
 ];
 
+// P2 (item 3, R3, 2026-07-10): shared entry for the DaySquare note
+// indicator - the chat-bubble outline that renders on days carrying
+// at least one authored NOTE ledger entry. Not a status, so it lives
+// alongside MILB_DAY_NIGHT as an orthogonal-signal entry rather than
+// inside the per-shape status arrays. LegendInfoPopup consumes it in
+// the "Calendar context" section (same place TODAY lives). StateLegend
+// does NOT append it to the compact strip - the strip is status-only.
+export const NOTE_INDICATOR = {
+  mod: "notebubble",
+  label: "Has notes",
+  labelLong: "Has notes",
+  description:
+    "The day carries at least one authored note in its Activity ledger. The bubble reads at half opacity so it defers to the state signal.",
+};
+
 // MiLB day/night entries. Sun/moon icons come from Icons.js via the
 // consumer components. StateLegend appends both to the strip; the
 // popup renders them via MilbRow.
