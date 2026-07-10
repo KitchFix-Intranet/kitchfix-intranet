@@ -1370,17 +1370,29 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
 // for the DaySquare bubble on overview + PeriodCard sm tiles.
 // Cheaper than readNoteEntriesForRange (no body/author/timestamp
 // payload; PostgREST returns just service_date, dedup on the client).
+//
+// Paginated via fetchAllPaginated because PostgREST caps a bare
+// .select() at its configured max-rows (1000 by default) and a
+// silent truncation would drop bubble signals for later dates in
+// an active year - the same failure class the daysRows loader
+// upstream (~:949) already handles. Order by service_date so the
+// pagination cursor is deterministic; the Set dedup below collapses
+// multi-note-same-date rows unchanged.
 export async function readNoteDatesInRange(accountKey, first, last) {
   const supa = getServiceClient();
-  const { data, error } = await supa
-    .from(SC_TABLES.noteEntries)
-    .select("service_date")
-    .eq("account_key", accountKey)
-    .gte("service_date", first)
-    .lte("service_date", last);
-  throwOnError(error, "readNoteDatesInRange");
+  const rows = await fetchAllPaginated(
+    supa,
+    (q) => q
+      .from(SC_TABLES.noteEntries)
+      .select("service_date")
+      .eq("account_key", accountKey)
+      .gte("service_date", first)
+      .lte("service_date", last)
+      .order("service_date", { ascending: true }),
+    "readNoteDatesInRange"
+  );
   const set = new Set();
-  for (const r of data || []) set.add(r.service_date);
+  for (const r of rows) set.add(r.service_date);
   return set;
 }
 

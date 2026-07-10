@@ -1028,9 +1028,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         let json = null;
         try { json = await res.json(); } catch { /* fallthrough */ }
         if (res.ok && json?.success) {
+          // P2 (item 2 amend, 2026-07-10): actuals landed - dequeue
+          // as-is (requeueing would double-save on the next replay).
+          // The note is a separate concern: if the post-save append
+          // failed on replay, mirror the foreground path's honest
+          // partial toast. Foreground already handles noteFailed in
+          // handleSave's success branch; the queue driver replaying
+          // under network recovery cleared the draft at queued-close
+          // (see executeSave setNotes("")), so a silent dequeue here
+          // would eat the failure with no path back to the operator.
+          // SC-079 class: a note failing after successful actuals
+          // must never be silent.
           scDequeue(key);
           if (isMountedRef.current) {
             refreshSyncing();
+            if (json.noteFailed) {
+              showToast(`Saved ${entry.date} - its note couldn't post, re-add it from the day`, "error");
+            }
             const mk = entry.date.slice(0, 7);
             setMonthCache(prev => {
               if (!(mk in prev)) return prev;
