@@ -136,6 +136,15 @@
   font-weight: var(--wt-bold);
   letter-spacing: var(--track-tight);
 }
+/* P2 (item 3, R3): note-indicator swatch in the Calendar context
+   section. Muted ink (matches the ~50% opacity read on the tile).
+   Plain surface background and thin border so it reads as a swatch
+   frame around the chat glyph, not a colored status chip. */
+.sc-legend-popup-swatch--notebubble {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
 
 .sc-legend-popup-row-text {
   min-width: 0;

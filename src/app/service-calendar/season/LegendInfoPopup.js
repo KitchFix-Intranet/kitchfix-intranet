@@ -16,8 +16,8 @@
 //   - prefers-reduced-motion drops the fade
 
 import { useEffect, useRef } from "react";
-import { SunGlyph, MoonGlyph } from "../Icons";
-import { getLegendItems, MILB_DAY_NIGHT } from "./legendItems";
+import { SunGlyph, MoonGlyph, MessageSquare } from "../Icons";
+import { getLegendItems, MILB_DAY_NIGHT, NOTE_INDICATOR } from "./legendItems";
 import "./legendInfoPopup.css";
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -138,6 +138,12 @@ export default function LegendInfoPopup({
             <Row mod="today" label="Today">
               Today's date carries a navy outer ring.
             </Row>
+            {/* P2 (item 3, R3): note-indicator row - the chat-bubble
+                glyph the DaySquare renders on days with authored notes
+                in the ledger. Rendered here (Calendar context) rather
+                than in an account-shape status list because the signal
+                is orthogonal to status. */}
+            <NoteRow />
           </Section>
 
           <Section title="Data states">
@@ -196,6 +202,25 @@ function Row({ mod, label, icon = "", children }) {
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{label}</dt>
         <dd className="sc-legend-popup-row-desc">{children}</dd>
+      </div>
+    </div>
+  );
+}
+
+// P2 (item 3, R3): note-indicator row for LegendInfoPopup. Same row
+// shape as the account-shape state rows so the popup's list grid
+// stays consistent. Swatch renders the same 12px MessageSquare glyph
+// the tile carries (11px + ~50% opacity, but the legend swatch reads
+// at full opacity so the shape is unambiguous).
+function NoteRow() {
+  return (
+    <div className="sc-legend-popup-row">
+      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--notebubble" aria-hidden="true">
+        <MessageSquare size="12px" />
+      </span>
+      <div className="sc-legend-popup-row-text">
+        <dt className="sc-legend-popup-row-label">{NOTE_INDICATOR.labelLong}</dt>
+        <dd className="sc-legend-popup-row-desc">{NOTE_INDICATOR.description}</dd>
       </div>
     </div>
   );

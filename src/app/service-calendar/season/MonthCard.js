@@ -329,6 +329,10 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       isToday={isToday}
       ariaLabel={`${cell.dateStr}, ${status}`}
       isSyncing={syncingDates?.has(cell.dateStr) || false}
+      // P2 (item 3, R3): year-summary carries hasNoteEntries per day
+      // (set by loadYearSummary via readNoteDatesInRange). Boolean is
+      // pre-derived NOTE-only per Kevin's Q-b ruling.
+      hasNote={!!day?.hasNoteEntries}
     />
   );
 }
