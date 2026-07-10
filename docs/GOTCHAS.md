@@ -174,6 +174,19 @@ A `useMemo` / `useCallback` / `useEffect` dep array that references a `useState`
 - Any hotfix touching `ServiceCalendar.js` requires a dev-server browser load as evidence, not just a passing build. State this explicitly in the PR body.
 - The runtime-proof spec is now the guard - keep it green whenever this file changes.
 
+### Extracted-function free variables are the same runtime-only class
+
+Same failure family as the TDZ entry above: `next build` cannot catch it, CI stays green if no spec exercises the render path, and both a per-file grep and a type check look clean. The difference is that the reference lives in an EXTRACTED function - a module-level sibling of the component whose props it renders - and the "usage" and the "prop declaration" are in the same file but in different scopes.
+
+Pattern: a prop added to a component and a usage added to a module-level inner function in the same file look complete when you grep. A per-file grep for `syncingDates` shows both the prop and the usage, seemingly wired. Only executing the render depth catches that the inner function's parameter list never received the prop, and the reference at the usage site is a free variable that throws `ReferenceError: <name> is not defined` the moment that render depth executes.
+
+**Incident:** F3 save-queue DayGrid (#378, surfaced 2026-07-10). `PeriodWorkspace.js` added `syncingDates` to its component prop list (:79) and used it inside the DayGrid callsite (:834), but the `DayGrid` module-level sibling function's own destructure at :658 never received it. Every real-day cell crashed on first render of the drill-in. Masked until #382 unmasked it (the earlier TDZ killed the route before any drill was reachable), then surfaced on the first month click after #382 merged. Fix in `fix/sc-daygrid-syncing-thread` adds the prop to DayGrid's destructure + passes it at the parent callsite, and extends the guard spec past first render to include a MonthCard drill click that asserts `.sc-workspace-grid-row` appears with zero `ReferenceError` accumulated.
+
+**Rules:**
+- The guard spec must exercise every render depth a change touches. First render was never sufficient - the drill click is now part of the guard.
+- When a prop is threaded to a component that renders sibling/extracted functions in the same file, trace it into each extracted function's own parameter list. Per-file grep for the identifier is necessary but not sufficient - the compilation is clean and the crash only appears at render.
+- Route intercept stubs that mock a payload MUST include at least one entry that reaches the render path in question. An all-empty / all-ghost stub silently sails past the live bug and the guard spec is a lie. State the "must include a REAL day" requirement in a comment inside the spec so it can't be simplified into uselessness later.
+
 ### Never define a function component inside another component's render body
 
 ```javascript
