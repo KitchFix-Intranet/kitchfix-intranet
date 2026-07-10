@@ -991,8 +991,34 @@ function buildByOpponentBlock(sheet, startRow, ctx) {
 }
 
 // Year scope: BY MONTH rollup from sc_month_summary.
+//
+// P1 item 4 (2026-07-10): "days entered" column now uses the widened
+// classifier rule (per-meal: hasActuals || isNoService; homestand game
+// days: hasActuals) instead of sc_month_summary.days_with_actuals. The
+// SQL FILTER-WHERE-has_actuals rule missed per-meal `no-service` days
+// classified from all-zero-projections + no actuals; the widened count
+// matches computeCompletion + MonthCard + PeriodCard + the app's
+// aggregateWorkspaceMetrics.
 function buildByMonthBlock(sheet, startRow, ctx) {
-  const { yearSummary, shape, homestandMap } = ctx;
+  const { yearSummary, shape, homestandMap, perDay } = ctx;
+  // Precompute per-month widened counts from perDay so we don't re-scan
+  // once per row below.
+  const enteredByMonth = new Map(); // "YYYY-MM" -> number
+  if (shape === "homestand-fee") {
+    for (const bucket of perDay.values()) {
+      if (bucket.dayType !== "GAME") continue;
+      if (!bucket.hasActuals) continue;
+      const mk = bucket.date.slice(0, 7);
+      enteredByMonth.set(mk, (enteredByMonth.get(mk) || 0) + 1);
+    }
+  } else {
+    for (const bucket of perDay.values()) {
+      if (!(bucket.services.length > 0 && bucket.anyNonZeroProj)) continue;
+      if (!(bucket.hasActuals || bucket.isNoService)) continue;
+      const mk = bucket.date.slice(0, 7);
+      enteredByMonth.set(mk, (enteredByMonth.get(mk) || 0) + 1);
+    }
+  }
   let row = startRow;
   sectionHeader(sheet, row, "BY MONTH"); row++;
   const withDollars = shape === "per-meal";
@@ -1010,7 +1036,8 @@ function buildByMonthBlock(sheet, startRow, ctx) {
       sheet.getCell(`C${row}`).font = { color: { argb: MONEY_GREEN } };
       sheet.getCell(`D${row}`).value = m.projectedMeals; sheet.getCell(`D${row}`).numFmt = COUNT_FMT;
       sheet.getCell(`E${row}`).value = m.actualMeals;    sheet.getCell(`E${row}`).numFmt = COUNT_FMT;
-      sheet.getCell(`F${row}`).value = m.daysWithActuals; sheet.getCell(`F${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`F${row}`).value = enteredByMonth.get(m.month) || 0;
+      sheet.getCell(`F${row}`).numFmt = COUNT_FMT;
     } else {
       // Fee shape: count game days in the month from homestandMap.
       let gameDays = 0;
@@ -1018,7 +1045,8 @@ function buildByMonthBlock(sheet, startRow, ctx) {
         if (date.slice(0, 7) === m.month && homestandMap[date].dayType === "GAME") gameDays++;
       }
       sheet.getCell(`B${row}`).value = m.actualMeals; sheet.getCell(`B${row}`).numFmt = COUNT_FMT;
-      sheet.getCell(`C${row}`).value = m.daysWithActuals; sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`C${row}`).value = enteredByMonth.get(m.month) || 0;
+      sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
       sheet.getCell(`D${row}`).value = gameDays; sheet.getCell(`D${row}`).numFmt = COUNT_FMT;
     }
     row++;

@@ -1059,7 +1059,13 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       for (const d of days) {
         if (d.dayType === "GAME") {
           gameDays++;
-          if (d.status === "entered") gameDaysEntered++;
+          // P1 item 4 (2026-07-10): unified completeness rule across
+          // every surface - `entered` OR `no-service`. Homestand-game
+          // days classify as `entered` on any actuals write (SC-078),
+          // so the widening is defensive here (no live count change)
+          // but keeps this predicate identical to the workspace's
+          // aggregateWorkspaceMetrics and MonthCard/PeriodCard readers.
+          if (d.status === "entered" || d.status === "no-service") gameDaysEntered++;
         } else if (d.dayType) {
           prepDays++;
         }

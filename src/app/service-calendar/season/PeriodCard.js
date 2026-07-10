@@ -176,14 +176,19 @@ export default function PeriodCard({
 function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
   if (!days?.length) return null;
   const totalDays = days.length;
-  const entered = days.filter(d => d.status === "entered").length;
+  // P1 item 4 (2026-07-10): unified completeness rule (`entered`
+  // OR `no-service`) so the card matches the workspace + export.
+  const entered = days.filter(d => d.status === "entered" || d.status === "no-service").length;
   const needsAttention = days.filter(d => d.status === "needs-entry" || d.status === "overdue").length;
   const totalMeals = days.reduce((sum, d) => sum + (Number(d.actualMeals) || 0), 0);
   const completionPct = totalDays > 0 ? Math.round(entered / totalDays * 100) : 0;
 
   if (hasHomestandSchedule) {
     const gameDays = days.filter(d => d.dayType === "GAME").length;
-    const gameDaysEntered = days.filter(d => d.dayType === "GAME" && d.status === "entered").length;
+    // P1 item 4: defensively widen (homestand game-day + hasAct returns
+    // `entered` per SC-078; no live count change but the predicate stays
+    // identical to the shared rule).
+    const gameDaysEntered = days.filter(d => d.dayType === "GAME" && (d.status === "entered" || d.status === "no-service")).length;
     const homestands = new Set(days.map(d => d.homestandId).filter(Boolean));
     const feePct = gameDays > 0 ? Math.round(gameDaysEntered / gameDays * 100) : 0;
     return (
