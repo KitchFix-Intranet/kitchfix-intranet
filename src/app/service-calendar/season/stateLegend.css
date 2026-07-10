@@ -138,6 +138,19 @@
   line-height: 1;
 }
 
+/* sc-13 (2026-07-10): away swatch renders the plane glyph inline
+   (StateLegend.js LegendSwatch injects PlaneGlyph for mod=away).
+   Standard card surface + muted text color so the currentColor plane
+   picks up the muted hue. */
+.sc-state-legend-swatch--away {
+  background: var(--surface-card);
+  border-color: var(--border-strong);
+  color: var(--text-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* MiLB day / night swatches carry the same sun / moon glyph the tile
    uses (P6). No card fill / border - the glyph is the swatch. */
 .sc-state-legend-swatch--milb-day,

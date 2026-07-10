@@ -216,6 +216,12 @@ function classifyDayStatus(s, ctx) {
     // clickable, no actuals expected). Excluded from the X/30 counter
     // downstream via the existing dayType === "GAME" filter.
     if (hs.dayType === "EXHIBITION") return "exhibition";
+    // sc-13 (2026-07-10): AWAY days - team is on the road, no service
+    // to enter. Distinct atom status so the tile renders the muted
+    // date + hollow @OPP tag + plane glyph. Not clickable. Excluded
+    // from the X/30 counter downstream via the existing dayType === "GAME"
+    // filter and from every rollup surface EXHIBITION was excluded from.
+    if (hs.dayType === "AWAY") return "away";
     if (hs.dayType === "GAME") {
       if (s.hasAct) return "entered";           // game day recorded (zero incl.)
       return "future";                            // GAME day, no actuals
@@ -1080,7 +1086,11 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
         // the prep-day and homestand-id accumulation so March for TXR
         // still reads as Spring Training (noService), and month cards
         // never surface "1 homestand" for an EXH-only month.
-        if (d.dayType === "EXHIBITION") continue;
+        // sc-13 (2026-07-10): AWAY rows are display-only (team on the
+        // road). Same exclusion - never inflates the "N homestand(s)"
+        // footer or the prep count. homestand_id is NULL for AWAY so
+        // the Set add below is defensive.
+        if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
         if (d.dayType === "GAME") {
           gameDays++;
           // P1 item 4 (2026-07-10): unified completeness rule across

@@ -76,6 +76,7 @@ export function resolveDayStatus(serverStatus, loadState) {
     case "off-season":    return "off-season";
     case "prep":          return "off";
     case "exhibition":    return "exhibition";
+    case "away":          return "away";
     default:              return "off";
   }
 }

@@ -35,7 +35,11 @@ const HOMESTAND = [
     mod: "off",
     icon: "",
     label: "Non Game day",
-    description: "Prep, open, close, or off-day between homestands.",
+    // sc-13 (2026-07-10): PREP/OPEN/CLOSE rows retired - the schedule
+    // now tracks games only. This state rarely surfaces on the MLB
+    // homestand view; kept for the CLEAN-day case + any manually-
+    // authored non-game row (the day_type CHECK still allows them).
+    description: "Day between games with no scheduled service.",
   },
   // sc-12 (2026-07-10): TXR spring-training exhibitions (vs KC).
   // Display-only tile - billed as separate catering outside the
@@ -48,6 +52,18 @@ const HOMESTAND = [
     labelLong: "Exhibition",
     description:
       "Spring-training exhibition. Billed as separate catering outside the contract. Display-only - excluded from the game-days-entered counter and not clickable.",
+  },
+  // sc-13 (2026-07-10): away games - team is on the road, no service.
+  // Display-only tile - carries date + opponent for planning context,
+  // but excluded from the game-days-entered counter and not clickable.
+  // The plane glyph top-right is the primary shape signal.
+  {
+    mod: "away",
+    icon: "",
+    label: "Away",
+    labelLong: "Away game",
+    description:
+      "Team is on the road; no service happens at the home clubhouse. Display-only - excluded from the game-days-entered counter and not clickable. Plane glyph top-right is the state signal.",
   },
 ];
 

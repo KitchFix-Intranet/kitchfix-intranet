@@ -15,7 +15,7 @@
 
 import { useRef, useState } from "react";
 import LegendInfoPopup from "./LegendInfoPopup";
-import { SunGlyph, MoonGlyph } from "../Icons";
+import { SunGlyph, MoonGlyph, PlaneGlyph } from "../Icons";
 import { getLegendItems, MILB_DAY_NIGHT } from "./legendItems";
 import "./stateLegend.css";
 
@@ -103,6 +103,16 @@ function LegendSwatch({ mod, icon }) {
     return (
       <span className="sc-state-legend-swatch sc-state-legend-swatch--milb-night" aria-hidden="true">
         <MoonGlyph size={10} />
+      </span>
+    );
+  }
+  // sc-13 (2026-07-10): AWAY swatch carries the plane glyph the atom
+  // renders top-right on the tile, so the legend and the cell read the
+  // same shape at a glance (colorblind-safe alongside the muted hue).
+  if (mod === "away") {
+    return (
+      <span className="sc-state-legend-swatch sc-state-legend-swatch--away" aria-hidden="true">
+        <PlaneGlyph size={10} />
       </span>
     );
   }

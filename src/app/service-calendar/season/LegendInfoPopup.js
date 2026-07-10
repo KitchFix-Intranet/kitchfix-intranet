@@ -16,7 +16,7 @@
 //   - prefers-reduced-motion drops the fade
 
 import { useEffect, useRef } from "react";
-import { SunGlyph, MoonGlyph, MessageSquare } from "../Icons";
+import { SunGlyph, MoonGlyph, MessageSquare, PlaneGlyph } from "../Icons";
 import { getLegendItems, MILB_DAY_NIGHT, NOTE_INDICATOR } from "./legendItems";
 import "./legendInfoPopup.css";
 
@@ -194,10 +194,13 @@ function FigureRow({ chip, label, desc }) {
 }
 
 function Row({ mod, label, icon = "", children }) {
+  // sc-13 (2026-07-10): AWAY swatch renders the plane glyph inside the
+  // swatch so the popup + strip + tile all read the same shape.
+  const swatchContent = mod === "away" ? <PlaneGlyph size={12} /> : icon;
   return (
     <div className="sc-legend-popup-row">
       <span className={`sc-legend-popup-swatch sc-state-legend-swatch--${mod}`} aria-hidden="true">
-        {icon}
+        {swatchContent}
       </span>
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{label}</dt>
