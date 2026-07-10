@@ -74,6 +74,7 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
     homestandMap,
     feeRow,
     yearSummary,
+    phaseRows,
   ] = await Promise.all([
     loadViewRows(supa, accountKey, range.first, range.last),
     loadCatalog(supa, accountKey),
@@ -92,6 +93,15 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
     scope === "year"
       ? loadYearRollups(supa, accountKey, Number(year))
       : Promise.resolve(null),
+    // F6 (2026-07-10): sc_phase_calendar rows for the account. BY PHASE
+    // is a year-scope block only, so we skip the query for period/month
+    // exports. Missing table / zero rows / query error -> empty array,
+    // and the export degrades gracefully to pre-F6 (see loadPhaseCalendar
+    // swallow-and-log below - Kevin runs sc-11 at merge, so a signed-in
+    // preview against pre-migration prod is a real state).
+    scope === "year"
+      ? loadPhaseCalendar(supa, accountKey)
+      : Promise.resolve([]),
   ]);
 
   const hasHomestandData = Object.keys(homestandMap).length > 0;
@@ -121,6 +131,7 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
     feeRow,
     yearSummary,
     completion,
+    phaseRows,
   };
 
   const workbook = new ExcelJS.Workbook();
@@ -400,6 +411,30 @@ async function loadYearRollups(supa, accountKey, year) {
   return { months, periodByDate };
 }
 
+// F6 (2026-07-10): sc_phase_calendar rows for the account, sorted by
+// start_date. Empty array is a valid answer (non-PDC accounts, PDC
+// accounts with no seeded phases, or the pre-migration state where the
+// table doesn't exist yet). We swallow the error and log rather than
+// throw so a signed-in preview against pre-migration prod still exports
+// - only the BY PHASE block is missing.
+async function loadPhaseCalendar(supa, accountKey) {
+  const { data, error } = await supa
+    .from("sc_phase_calendar")
+    .select("phase, start_date, end_date")
+    .eq("account_key", accountKey)
+    .order("start_date", { ascending: true });
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.warn(`[scWorkbook] loadPhaseCalendar (${accountKey}): ${error.message}`);
+    return [];
+  }
+  return (data || []).map((r) => ({
+    phase:     String(r.phase || ""),
+    startDate: String(r.start_date),
+    endDate:   String(r.end_date),
+  }));
+}
+
 // ── Index the view rows ─────────────────────────────────────────────
 // perDay: Map<date, {
 //   date, period, weekLabel, gameType, gameTime,
@@ -555,6 +590,11 @@ function buildSummarySheet(workbook, ctx, notes) {
     row = buildWeekdayAveragesBlock(sheet, row, ctx);
     row = buildServicePerformanceBlock(sheet, row, ctx);
     if (ctx.scope === "year") {
+      // F6 (2026-07-10): BY PHASE lands between SERVICE PERFORMANCE and
+      // BY PERIOD. Emits nothing when phaseRows is empty (non-PDC
+      // accounts, unseeded PDC accounts, pre-migration state) so the
+      // export stays byte-identical to pre-F6 for those cases.
+      row = buildByPhaseBlock(sheet, row, ctx);
       row = buildByPeriodBlock(sheet, row, ctx);
       row = buildByMonthBlock(sheet, row, ctx);
     }
@@ -570,6 +610,10 @@ function buildSummarySheet(workbook, ctx, notes) {
     // per-meal / MiLB account. Counts only, no dollars.
     if (shape === "homestand-fee") row = buildByOpponentBlock(sheet, row, ctx);
     if (ctx.scope === "year") {
+      // F6 (2026-07-10): BY PHASE on fee shapes too - STL-FL is a
+      // phase-seeded PDC account. buildByPhaseBlock suppresses dollar
+      // columns automatically when shape !== "per-meal".
+      row = buildByPhaseBlock(sheet, row, ctx);
       row = buildByPeriodBlock(sheet, row, ctx);
       row = buildByMonthBlock(sheet, row, ctx);
     }
@@ -908,6 +952,49 @@ function buildServicePerformanceBlock(sheet, startRow, ctx) {
     sheet.getCell(`E${row}`).font = { color: { argb: delta >= 0 ? DELTA_OVER : DELTA_UNDER }, bold: true };
     sheet.getCell(`F${row}`).value = agg.days;
     sheet.getCell(`F${row}`).numFmt = COUNT_FMT;
+    row++;
+  }
+  return row + 1;
+}
+
+// F6 (2026-07-10): Year scope + PDC accounts only. BY PHASE rollup
+// keyed by the seeded sc_phase_calendar rows for the account. Dollars
+// come from the same perDay index everything else aggregates from -
+// no second money path, no independent DB read (loadPhaseCalendar only
+// pulls phase/start_date/end_date). Attribution is a date-range join:
+// each day whose service_date falls in [start, end] contributes to that
+// phase's totals. Non-PDC accounts + PDC accounts with an unseeded
+// calendar produce an empty phaseRows array; the caller skips this
+// function entirely so the export stays byte-identical to pre-F6.
+function buildByPhaseBlock(sheet, startRow, ctx) {
+  const { perDay, phaseRows, shape } = ctx;
+  if (!phaseRows || phaseRows.length === 0) return startRow;
+  let row = startRow;
+  sectionHeader(sheet, row, "BY PHASE"); row++;
+  const withDollars = shape === "per-meal";
+  const cols = withDollars
+    ? ["Phase", "Dates", "Projected $", "Actual $", "Meals"]
+    : ["Phase", "Dates", "Meals"];
+  tableHeader(sheet, row, cols); row++;
+  for (const p of phaseRows) {
+    let proj = 0, act = 0, meals = 0;
+    for (const d of perDay.values()) {
+      if (d.date >= p.startDate && d.date <= p.endDate) {
+        proj  += d.projectedRevenue;
+        act   += d.actualRevenue;
+        meals += d.actualMeals || d.projectedMeals || 0;
+      }
+    }
+    sheet.getCell(`A${row}`).value = p.phase;
+    sheet.getCell(`B${row}`).value = `${p.startDate} to ${p.endDate}`;
+    if (withDollars) {
+      sheet.getCell(`C${row}`).value = proj;  sheet.getCell(`C${row}`).numFmt = MONEY_FMT;
+      sheet.getCell(`D${row}`).value = act;   sheet.getCell(`D${row}`).numFmt = MONEY_FMT;
+      sheet.getCell(`D${row}`).font = { color: { argb: MONEY_GREEN } };
+      sheet.getCell(`E${row}`).value = meals; sheet.getCell(`E${row}`).numFmt = COUNT_FMT;
+    } else {
+      sheet.getCell(`C${row}`).value = meals; sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
+    }
     row++;
   }
   return row + 1;
