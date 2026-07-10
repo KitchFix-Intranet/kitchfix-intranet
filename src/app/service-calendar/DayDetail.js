@@ -356,10 +356,29 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     setShowNoServiceConfirm(false);
     const result = await onSave(day, entries, { noService: true, auditNote });
     if (result?.success) {
-      setJustSaved(true);
-      setNotes("");
+      if (result.queued) {
+        // F3: same close-cleanly-to-grid semantic as the executeSave
+        // path - the badge is the truthful signal for a queued write.
+        // Draft guard: the auto-note here (`auditNote`) is the audit
+        // trail, NOT the operator's draft. Empty-draft => clean close
+        // (setNotes("") is the standard reset). Non-empty draft => route
+        // through discard-confirm and DO NOT reset the draft; the
+        // operator either keeps editing or explicitly discards. P2
+        // scope will fold notes into the save payload; until then the
+        // guarded path is the honest one.
+        const hasDraft = (notes || "").trim().length > 0;
+        if (hasDraft) {
+          setShowDiscardConfirm(true);
+        } else {
+          setNotes("");
+          onClose?.();
+        }
+      } else {
+        setJustSaved(true);
+        setNotes("");
+      }
     }
-  }, [serviceGroups, day, notes, onSave]);
+  }, [serviceGroups, day, notes, onSave, onClose]);
 
   // SC-079: post one authored entry against sc-add-note, prepend to
   // the local ledger optimistically on success, clear the draft.
@@ -566,9 +585,29 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     const result = await onSave(day, entries);
     if (result?.success) {
       setShowReview(null);
-      setJustSaved(true);
+      if (result.queued) {
+        // F3: the save is captured locally but the server has NOT echoed
+        // yet (network fail). Skip the success screen (which would show
+        // uncomfirmed totals), and close the modal so the operator lands
+        // back on the grid where the tile SYNCING badge tells the story
+        // truthfully. No error surfaces here - the queue driver will
+        // retry silently, and only a REJECTED replay (server 4xx/5xx on
+        // retry) surfaces via toast.
+        //
+        // Draft guard: the counts ARE captured (in the queue) but a typed,
+        // unposted note is NOT (F3 scope excludes notes). Route non-empty
+        // drafts through the same discard-confirm the X/backdrop use so a
+        // typed note isn't silently eaten. P2 will carry the draft in the
+        // save payload; until then a queued close must not silently eat
+        // a typed note.
+        const hasDraft = (notes || "").trim().length > 0;
+        if (hasDraft) setShowDiscardConfirm(true);
+        else onClose?.();
+      } else {
+        setJustSaved(true);
+      }
     }
-  }, [serviceGroups, touched, getVal, day, onSave]);
+  }, [serviceGroups, touched, getVal, day, onSave, onClose, notes]);
 
   // C1b: derive pastness at read time so a tab open across midnight
   // no longer misclassifies today/yesterday. Server payload's isPast

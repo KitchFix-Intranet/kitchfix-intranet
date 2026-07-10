@@ -53,6 +53,10 @@ export default function SeasonShell({
   // moved to the ChromeBar, so the shell no longer carries jump props.
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
   onViewChange,             // (next) => void
+  // F3: Set<string> of "YYYY-MM-DD" dates whose save is currently
+  // queued locally. Threaded down to MonthCard + PeriodCard so their
+  // DaySquare cells overlay the SYNCING badge on the right dates.
+  syncingDates,
 }) {
   // Calendar | Period view state. Design Batch 2 lifts this to the
   // orchestrator's chrome bar so the toggle lives in the chrome with
@@ -179,6 +183,7 @@ export default function SeasonShell({
                   isDesktop={isDesktop}
                   loadState={loadState}
                   onClick={onMonthClick}
+                  syncingDates={syncingDates}
                 />
               </div>
             );
@@ -198,6 +203,7 @@ export default function SeasonShell({
           yearBannerStats={yearBannerStats}
           loadState={loadState}
           onPeriodClick={onPeriodClick}
+          syncingDates={syncingDates}
         />
       )}
       </div>
@@ -264,6 +270,7 @@ function PeriodGrid({
   hasHomestandSchedule, isFeeAccount, timeline, yearData, yearBannerStats,
   loadState = "loaded",
   onPeriodClick,
+  syncingDates,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -288,6 +295,7 @@ function PeriodGrid({
             timeline={timeline}
             loadState={loadState}
             onClick={onPeriodClick}
+            syncingDates={syncingDates}
           />
         </div>
       ))}

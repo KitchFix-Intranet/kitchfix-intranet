@@ -106,6 +106,14 @@ export default function DaySquare({
   // behavior (year-view MonthCard/PeriodCard callers - no regression).
   tabIndex,
   role,
+
+  // F3 (N1 render): the save for this date is queued locally and the
+  // driver is retrying it against the server. Overlays a SYNCING badge
+  // on top of whatever status the tile is showing - the underlying
+  // status stays TRUTHFUL until the server echoes; the badge tells the
+  // in-flight story. Reduced-motion pair in DaySquare.css kills the
+  // spinner animation.
+  isSyncing = false,
 }) {
   const meta = STATUS_META[status] || STATUS_META.off;
   const day = dateNumber != null
@@ -169,6 +177,12 @@ export default function DaySquare({
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
       {isToday && <span className="sc-daysq-today-pill" aria-hidden="true">TODAY</span>}
+      {isSyncing && (
+        <span className="sc-daysq-syncing" aria-label="Save syncing">
+          <span className="sc-daysq-syncing-spinner" aria-hidden="true" />
+          <span className="sc-daysq-syncing-label">SYNCING</span>
+        </span>
+      )}
     </div>
   );
 }

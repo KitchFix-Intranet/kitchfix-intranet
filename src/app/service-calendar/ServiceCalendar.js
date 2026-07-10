@@ -16,6 +16,18 @@ import { fmt$, fmtDateShort } from "./season/format";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
+import {
+  queueKey as scQueueKey,
+  getAll as scGetAll,
+  getEntry as scGetEntry,
+  enqueue as scEnqueue,
+  dequeue as scDequeue,
+  bumpAttempts as scBumpAttempts,
+  acquireLock as scAcquireLock,
+  releaseLock as scReleaseLock,
+  nextDelayMs as scNextDelayMs,
+  isNetworkError as scIsNetworkError,
+} from "./saveQueue";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -635,6 +647,20 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // save without wiping monthCache.
 
   const dayMap = useMemo(() => { const m = {}; if (data?.days) data.days.forEach(d => { m[d.date] = d; }); return m; }, [data]);
+
+  // F3: filter the full syncing set down to just the current account
+  // for tile rendering. syncingKeys carries entries across ALL accounts
+  // (the driver needs the full set); syncingDates is the per-account
+  // subset the DaySquare consumers ask about ("is THIS date syncing?").
+  const syncingDates = useMemo(() => {
+    if (!selectedAccount) return new Set();
+    const prefix = selectedAccount + "|";
+    const out = new Set();
+    for (const k of syncingKeys) {
+      if (k.startsWith(prefix)) out.add(k.slice(prefix.length));
+    }
+    return out;
+  }, [syncingKeys, selectedAccount]);
   const priceLookup = useMemo(() => { const p = {}; if (data?.serviceGroups) data.serviceGroups.forEach(g => g.services.forEach(s => { p[s.colIndex] = s.price; })); return p; }, [data]);
 
   // PR-B2 periodDays: merge the 1-2 needed calendar months from
@@ -885,6 +911,177 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     inFlightControllersRef.current.clear();
   }, []);
 
+  // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
+  // for entries currently pending replay across ALL accounts (the driver
+  // needs the full set; the tile UI filters below to just the current
+  // account). refreshSyncing() reads the localStorage-backed queue -
+  // called after every enqueue/dequeue and on the storage event so
+  // sibling tabs stay in sync too.
+  const [syncingKeys, setSyncingKeys] = useState(() => new Set());
+  const refreshSyncing = useCallback(() => {
+    setSyncingKeys(new Set(scGetAll().map(e => scQueueKey(e.accountKey, e.date))));
+  }, []);
+  // F3: the driver exposes a scheduler via ref so a fresh handleSave
+  // enqueue can kick a retry immediately without waiting on the driver
+  // effect to re-run. Ref is populated by the useEffect below (mount).
+  const scheduleReplayRef = useRef(null);
+  const kickReplay = useCallback((key) => {
+    scheduleReplayRef.current?.(key);
+  }, []);
+
+  // F3: retry driver. One useEffect owns the timer map, the online +
+  // storage listeners, and the beforeunload guard. Rebound whenever the
+  // driver needs stale-free closures - syncingKeys is a proxy for
+  // "queue changed"; refreshSyncing captures the setState function.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Mount-time refresh so state agrees with the localStorage truth
+    // before the first render paints stale.
+    refreshSyncing();
+
+    const timers = new Map(); // key -> timeoutId
+    let cancelled = false;
+
+    const tryReplay = async (key) => {
+      if (cancelled) return;
+      const entry = scGetEntry(key);
+      if (!entry) return;
+      if (!scAcquireLock(key)) return; // another tab is on it
+      try {
+        const res = await fetch("/api/service-calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sc-submit-day",
+            accountKey: entry.accountKey,
+            date: entry.date,
+            entries: entry.entries,
+            auditNote: entry.auditNote || undefined,
+          }),
+        });
+        // Server responded. Distinguish success vs known-bad payload:
+        //   success       -> dequeue + monthCache invalidate + refresh
+        //   non-success   -> dequeue + one visible toast (this is a
+        //                    data-loss event; the badge alone would be
+        //                    a silent drop). Kevin's N1 no-page-indicator
+        //                    rule applies to the normal queued-in-flight
+        //                    state; a REJECTED replay is exceptional.
+        let json = null;
+        try { json = await res.json(); } catch { /* fallthrough */ }
+        if (res.ok && json?.success) {
+          scDequeue(key);
+          if (isMountedRef.current) {
+            refreshSyncing();
+            const mk = entry.date.slice(0, 7);
+            setMonthCache(prev => {
+              if (!(mk in prev)) return prev;
+              const next = { ...prev }; delete next[mk]; return next;
+            });
+            setReloadKey(k => k + 1);
+          }
+        } else {
+          scDequeue(key);
+          if (isMountedRef.current) {
+            refreshSyncing();
+            showToast(`A queued save for ${entry.date} was rejected on retry`, "error");
+          }
+        }
+      } catch (err) {
+        // Network-class replay failure - bump attempts and reschedule
+        // with the next backoff step. AbortError should not happen here
+        // (no controller passed) but keep the guard for symmetry.
+        if (err?.name === "AbortError") { scReleaseLock(key); return; }
+        scBumpAttempts(key);
+        scReleaseLock(key);
+        const bumped = scGetEntry(key);
+        if (bumped && isMountedRef.current) {
+          scheduleNext(bumped);
+        }
+      } finally {
+        // Success path already dequeued; failure path released above.
+        // Belt-and-suspenders release for any other exit.
+        const still = scGetEntry(key);
+        if (still?.lockedAt) scReleaseLock(key);
+      }
+    };
+
+    const scheduleNext = (entry) => {
+      const key = scQueueKey(entry.accountKey, entry.date);
+      const delay = scNextDelayMs(entry.attempts || 0);
+      if (timers.has(key)) clearTimeout(timers.get(key));
+      const id = setTimeout(() => tryReplay(key), delay);
+      timers.set(key, id);
+    };
+
+    // Kick every queued entry on driver mount - covers page reload with
+    // items still in the queue AND the second-tab-opens case.
+    for (const entry of scGetAll()) scheduleNext(entry);
+
+    const onOnline = () => {
+      // Immediate attempts on network return. Clear existing timers so
+      // we do not double-fire when the backoff timeout also lands.
+      for (const [k, id] of timers) { clearTimeout(id); timers.delete(k); }
+      for (const entry of scGetAll()) tryReplay(scQueueKey(entry.accountKey, entry.date));
+    };
+
+    const onStorage = (e) => {
+      if (e.key !== "kf_sc_save_queue_v1") return;
+      // Sibling tab wrote the queue. Refresh local state so the badge
+      // reflects the sibling's enqueue/dequeue AND schedule replays for
+      // any entries the sibling added (the driver only auto-schedules
+      // its own kicks + the mount pass; sibling-added entries would
+      // otherwise wait for the next online event or refresh).
+      if (isMountedRef.current) refreshSyncing();
+      for (const entry of scGetAll()) {
+        const key = scQueueKey(entry.accountKey, entry.date);
+        if (!timers.has(key)) scheduleNext(entry);
+      }
+    };
+
+    const onBeforeUnload = (e) => {
+      const anyQueued = scGetAll().length > 0;
+      if (!anyQueued) return;
+      // Browser shows its native "leave / stay" prompt; the specific
+      // message string is ignored on modern browsers but the returnValue
+      // is what triggers the dialog.
+      e.preventDefault();
+      e.returnValue = "A save is still syncing.";
+      return "A save is still syncing.";
+    };
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    // Expose scheduleNext so handleSave's post-enqueue kick fires a
+    // fresh retry timer without waiting on this effect to rebind.
+    // Assignment must sit BEFORE the return cleanup - the previous
+    // version put it after and it was silently dead code, so the
+    // classic "network fails while navigator.onLine stays true"
+    // (server unreachable / DNS / captive-portal-style dead route)
+    // never retried until the tab reloaded.
+    scheduleReplayRef.current = (key) => {
+      const entry = scGetEntry(key);
+      if (entry) scheduleNext(entry);
+    };
+
+    return () => {
+      cancelled = true;
+      for (const id of timers.values()) clearTimeout(id);
+      timers.clear();
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      scheduleReplayRef.current = null;
+    };
+    // Run-once by design. The scheduler ref covers same-tab enqueues;
+    // the storage listener covers sibling-tab enqueues; the online
+    // listener covers network return. Closures over showToast +
+    // setMonthCache + setReloadKey are stable (useState setters + a
+    // callback with a stable identity).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const buildRecordedToast = useCallback((opts) => {
     const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0, noService = false } = opts;
     // Step-0 (SC-066): mirror aggregateWorkspaceMetrics's widened
@@ -964,6 +1161,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // C1b (F4): user navigated away mid-save; mount-ref already
       // suppresses state writes, no toast needed.
       if (err?.name === "AbortError") return { success: false, error: "aborted" };
+      // F3: NETWORK-CLASS failure -> queue for replay. Server 4xx/5xx
+      // with a valid JSON body never lands in this catch (that's the
+      // `if (!result.success)` branch above), so anything here is a
+      // fetch-level rejection - offline / DNS / TLS / reset. The N1
+      // ruling: no toast, no page-level indicator, just the tile badge.
+      if (scIsNetworkError(err)) {
+        scEnqueue({ accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote });
+        if (isMountedRef.current) {
+          refreshSyncing();
+          kickReplay(scQueueKey(data.account.key, day.date));
+        }
+        return { success: true, queued: true };
+      }
       if (!isMountedRef.current) return { success: false, error: "Network error" };
       showToast("Network error", "error");
       return { success: false, error: "Network error" };
@@ -971,7 +1181,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       inFlightControllersRef.current.delete(controller);
       if (isMountedRef.current) setSaving(false);
     }
-  }, [data, showToast, buildRecordedToast]);
+  }, [data, showToast, buildRecordedToast, refreshSyncing, kickReplay]);
 
   // SC-079: POST one authored note entry to sc-add-note. DayDetail
   // owns the draft + local ledger; this just moves it over the wire.
@@ -1030,6 +1240,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     let newlyEntered = 0;
     let totalMeals = 0;
     let totalAmount = 0;
+    // F3: track queued-per-network-fail so the trailing bulk toast can
+    // stay silent when the operator's work IS captured (locally). Mixed
+    // batches (some server-confirmed, some queued) still fire the
+    // "Saved N days" success toast on the confirmed subset only - honest.
+    let queuedCount = 0;
     // SC-051: server returns per-day savedRevenue + savedMeals read from
     // sc_daily_revenue (effective-dated). Bulk toast = sum of the
     // per-day response values. The old computeMealsAmount recompute was
@@ -1062,13 +1277,30 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           totalMeals  += Number(result.savedMeals)   || 0;
           totalAmount += Number(result.savedRevenue) || 0;
         }
-      } catch (err) { if (err?.name === "AbortError") break; /* else: continue */ } finally { inFlightControllersRef.current.delete(controller); }
+      } catch (err) {
+        if (err?.name === "AbortError") break;
+        // F3: per-day network failure enqueues that day and CONTINUES
+        // the loop. Server-side rejections stay silent per-day (existing
+        // catch behavior) so the trailing toast can honestly report the
+        // server-confirmed count. Queued days surface via the tile badge.
+        if (scIsNetworkError(err)) {
+          scEnqueue({ accountKey: data.account.key, date: day.date, entries });
+          queuedCount++;
+        }
+        /* else: continue */
+      } finally { inFlightControllersRef.current.delete(controller); }
     }
     if (!isMountedRef.current) return;
     setSaving(false);
+    if (queuedCount > 0) refreshSyncing();
     if (successCount > 0) {
       showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
-    } else {
+    } else if (queuedCount === 0) {
+      // Pure failure (no successes, nothing queued). Only fires when the
+      // server actually rejected every day - a "0 of M" error toast is
+      // honest here. If queuedCount > 0, we skip the error toast: the
+      // work IS captured (locally), and the grid's SYNCING badges will
+      // report the truth without a page-level indicator.
       showToast(`Saved actuals for 0 of ${bulkSelected.size} days`, "error");
     }
     // Surgical monthCache invalidation: drop only the months whose days
@@ -1088,7 +1320,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast, refreshSyncing]);
 
   // Bulk confirm as projected for all selected
   const handleBulkConfirm = useCallback(async () => {
@@ -1098,6 +1330,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     let newlyEntered = 0;
     let totalMeals = 0;
     let totalAmount = 0;
+    // F3: mirrors handleBulkSave's queued-count discriminator.
+    let queuedCount = 0;
     // SC-051: same server-echo pattern as handleBulkSave. Per-day
     // savedRevenue/savedMeals sum into the bulk toast.
     for (const dk of bulkSelected) {
@@ -1124,13 +1358,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           totalMeals  += Number(result.savedMeals)   || 0;
           totalAmount += Number(result.savedRevenue) || 0;
         }
-      } catch (err) { if (err?.name === "AbortError") break; /* else: continue */ } finally { inFlightControllersRef.current.delete(controller); }
+      } catch (err) {
+        if (err?.name === "AbortError") break;
+        if (scIsNetworkError(err)) {
+          scEnqueue({ accountKey: data.account.key, date: day.date, entries });
+          queuedCount++;
+        }
+        /* else: continue */
+      } finally { inFlightControllersRef.current.delete(controller); }
     }
     if (!isMountedRef.current) return;
     setSaving(false);
+    if (queuedCount > 0) refreshSyncing();
     if (successCount > 0) {
       showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
-    } else {
+    } else if (queuedCount === 0) {
+      // Same rationale as handleBulkSave: skip the "0 of M" error toast
+      // when at least one day queued locally.
       showToast("Confirmed 0 days as projected", "error");
     }
     // Surgical monthCache invalidation: same pattern as handleBulkSave.
@@ -1146,7 +1390,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, showToast, buildRecordedToast]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, showToast, buildRecordedToast, refreshSyncing]);
 
   const toggleBulkSelect = useCallback((dk) => {
     setBulkSelected(prev => { const next = new Set(prev); if (next.has(dk)) next.delete(dk); else next.add(dk); return next; });
@@ -1579,6 +1823,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             // bar, so the season shell no longer carries jump props).
             view={seasonView}
             onViewChange={handleSeasonViewChange}
+            syncingDates={syncingDates}
           />
         )}
 
@@ -1619,6 +1864,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             saving={saving}
             onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
             onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
+            syncingDates={syncingDates}
           />
         )}
 
@@ -1657,6 +1903,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             saving={saving}
             onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
             onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
+            syncingDates={syncingDates}
           />
         )}
 

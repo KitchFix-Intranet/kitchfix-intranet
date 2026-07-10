@@ -73,6 +73,10 @@ export default function PeriodWorkspace({
   // day of the given status inside the current drill (not year-scoped).
   onJumpFirstOverdue,
   onJumpFirstNeeds,
+  // F3: Set<YYYY-MM-DD> of dates whose sc-submit-day is queued locally
+  // in the current account; each matching cell overlays a SYNCING badge
+  // on the DaySquare below.
+  syncingDates,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -807,6 +811,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                       onDayClick?.(d.date);
                     }}
                     ariaLabel={`${d.date}, ${status}`}
+                    isSyncing={syncingDates?.has(d.date) || false}
                   />
                 </span>
               );
