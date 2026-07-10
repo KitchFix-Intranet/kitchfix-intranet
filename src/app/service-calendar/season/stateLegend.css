@@ -113,6 +113,31 @@
   color: var(--status-overdue-fg);
 }
 
+/* sc-12 (2026-07-10): exhibition swatch mirrors the DaySquare cell -
+   cream fill with a copper corner ribbon glyph. The ribbon is drawn
+   via ::after so the swatch element itself stays empty (icon="" in
+   legendItems) and screen-readers only announce the parent label. */
+.sc-state-legend-swatch--exhibition {
+  background: var(--n-100);
+  border-color: var(--n-400);
+  position: relative;
+  overflow: hidden;
+}
+.sc-state-legend-swatch--exhibition::after {
+  content: "EXH";
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--amber-600);
+  color: var(--n-0);
+  font-size: 6px;
+  font-weight: var(--wt-display);
+  letter-spacing: 0.04em;
+  padding: 1px 2px;
+  border-bottom-left-radius: 3px;
+  line-height: 1;
+}
+
 /* MiLB day / night swatches carry the same sun / moon glyph the tile
    uses (P6). No card fill / border - the glyph is the swatch. */
 .sc-state-legend-swatch--milb-day,

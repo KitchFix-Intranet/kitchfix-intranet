@@ -77,6 +77,11 @@ const STATUS_META = {
   "off-season":  { mod: "off-season",    icon: "" },
   loading:       { mod: "loading",       icon: "" },
   failed:        { mod: "failed",        icon: "⚠" },
+  // sc-12 (2026-07-10): exhibition (TXR Spring Training vs KC) - display
+  // only, not clickable, excluded from X/30 counter. The copper "EXH"
+  // corner ribbon carries the state signal (no top-right status badge);
+  // the cream fill + sage opponent tag are the polymorphic content.
+  exhibition:    { mod: "exhibition",    icon: "" },
 };
 
 export default function DaySquare({
@@ -134,6 +139,12 @@ export default function DaySquare({
   // multiple values gracefully degrades to nothing).
   const middleLine = renderMiddleLine(size, kind, content, status);
 
+  // sc-12: exhibition is a display-only state - the tile never renders
+  // as interactive even if a caller accidentally passes an onClick, and
+  // the click handler below refuses activation. This keeps the "no
+  // service to enter" contract tight regardless of the call-site.
+  const isExhibition = status === "exhibition";
+
   // Compose the className chain. The order of overlay modifiers
   // doesn't matter to CSS (each draws its own box-shadow track) but
   // we list them deterministically for diff readability.
@@ -144,7 +155,7 @@ export default function DaySquare({
     isToday && "sc-daysq--today",
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
-    onClick && "sc-daysq--interactive",
+    onClick && !isExhibition && "sc-daysq--interactive",
   ].filter(Boolean).join(" ");
 
   const baseAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
@@ -154,18 +165,22 @@ export default function DaySquare({
   // built one.
   const computedAriaLabel = hasNote ? `${baseAriaLabel} · has notes` : baseAriaLabel;
 
-  const handleKeyDown = onClick
-    ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } }
+  // sc-12: exhibition tiles absorb any click without firing the
+  // caller's onClick, so DisplayContract holds even when a bulk-grid
+  // caller wires the handler uniformly.
+  const activeOnClick = isExhibition ? undefined : onClick;
+  const handleKeyDown = activeOnClick
+    ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activeOnClick(e); } }
     : undefined;
 
   return (
     <div
       className={cls}
-      role={role ?? (onClick ? "button" : undefined)}
-      tabIndex={tabIndex ?? (onClick ? 0 : undefined)}
+      role={role ?? (activeOnClick ? "button" : undefined)}
+      tabIndex={tabIndex ?? (activeOnClick ? 0 : undefined)}
       aria-label={computedAriaLabel}
       aria-pressed={isSelected || undefined}
-      onClick={onClick}
+      onClick={activeOnClick}
       onKeyDown={handleKeyDown}
     >
       <div className="sc-daysq-top">
@@ -200,6 +215,15 @@ export default function DaySquare({
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
       {isToday && <span className="sc-daysq-today-pill" aria-hidden="true">TODAY</span>}
+      {/* sc-12: copper "EXH" corner ribbon carries the exhibition state
+          as a shape signal (colorblind-safe) alongside the cream fill.
+          Rendered here as an absolute-positioned peer of the top row
+          so it composes cleanly with the note bubble + today/selected
+          rings without a badge-slot collision. The bottom-left rounded
+          corner clips into the tile per the brief. */}
+      {isExhibition && (
+        <span className="sc-daysq-exh-ribbon" aria-hidden="true">EXH</span>
+      )}
       {isSyncing && (
         <span className="sc-daysq-syncing" aria-label="Save syncing">
           <span className="sc-daysq-syncing-spinner" aria-hidden="true" />
@@ -219,6 +243,14 @@ export default function DaySquare({
 function renderMiddleLine(size, kind, content, status) {
   if (!content) return null;
   const sm = size === "sm";
+
+  // sc-12: exhibition owns its own middle-line layout so the sage
+  // opponent tag reads distinctly from the navy `mlb-fee` chip on
+  // regular home games. Meals render only when a projection was
+  // seeded (exhibition rows are typically un-projected today).
+  if (status === "exhibition") {
+    return renderExhibition(content, sm);
+  }
 
   // Small tiles: a single tight line (or nothing). The grid context
   // is dense; resist the urge to cram.
@@ -241,6 +273,28 @@ function renderMiddleLine(size, kind, content, status) {
     default:
       return null;
   }
+}
+
+// sc-12: exhibition mid layout. Sage `vs KC` tag on top; `~N meals`
+// muted beneath ONLY when a projection is present. At sm size the tag
+// alone reads on the year-grid without the meals line.
+function renderExhibition(content, sm) {
+  const { opponent, meals } = content;
+  if (!opponent && meals == null) return null;
+  return (
+    <div className="sc-daysq-mid sc-daysq-mid--exh">
+      {opponent && (
+        <span className="sc-daysq-mid-opponent sc-daysq-mid-opponent--exh">
+          vs {opponent}
+        </span>
+      )}
+      {!sm && meals != null && meals > 0 && (
+        <span className="sc-daysq-mid-headcount sc-daysq-mid-headcount--exh">
+          ~{fmtMeals(meals)}<span className="sc-daysq-mid-unit">{meals === 1 ? "meal" : "meals"}</span>
+        </span>
+      )}
+    </div>
+  );
 }
 
 // Small-size content. Single line, prioritized for the grid context.
@@ -449,6 +503,7 @@ function statusPhrase(status) {
     case "off":          return "off";
     case "loading":      return "loading";
     case "failed":       return "failed to load";
+    case "exhibition":   return "exhibition, no service to enter";
     default:             return status.replace("-", " ");
   }
 }

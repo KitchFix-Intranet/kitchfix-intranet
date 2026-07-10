@@ -812,7 +812,13 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // stay LOCKED (bulk cannot stomp confirmed history).
               // Off days ("off-season" / "prep") never selectable.
               const isEnteredFuture = d.hasActuals && d.date > today;
-              const isBulkSelectable = bulkMode && status !== "off" && (!d.hasActuals || isEnteredFuture);
+              // sc-12: exhibition tiles are display-only. Bulk-select
+              // must skip them; onClick is also gated in the atom, but
+              // dropping the handler here removes the button role at
+              // the source and keeps keyboard/roving-tabindex semantics
+              // clean (no gridcell that pretends to be actionable).
+              const isExhibition = status === "exhibition";
+              const isBulkSelectable = bulkMode && status !== "off" && !isExhibition && (!d.hasActuals || isEnteredFuture);
               const isRoving = flatIdx === focusIdx;
               return (
                 <span
@@ -830,7 +836,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     isSelected={isSelected}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
-                    onClick={() => {
+                    onClick={isExhibition ? undefined : () => {
                       setFocusIdx(flatIdx);
                       if (bulkMode) {
                         if (isBulkSelectable) onBulkTileClick?.(d.date);

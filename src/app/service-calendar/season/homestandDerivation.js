@@ -49,6 +49,11 @@ export function deriveHomestandSegments(yearData, todayDate) {
     if (!month?.days) continue;
     for (const d of month.days) {
       if (!d.homestandId) continue;
+      // sc-12 (2026-07-10): EXHIBITION rows (TXR spring training) carry
+      // an EXH-prefixed homestand id and are billed outside the contract.
+      // Skip so the SeasonStepper doesn't emit a fake "spring training"
+      // segment alongside the real regular-season homestands.
+      if (d.dayType === "EXHIBITION") continue;
       let bucket = buckets.get(d.homestandId);
       if (!bucket) {
         bucket = {

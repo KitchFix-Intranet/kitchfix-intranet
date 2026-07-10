@@ -37,6 +37,18 @@ const HOMESTAND = [
     label: "Non Game day",
     description: "Prep, open, close, or off-day between homestands.",
   },
+  // sc-12 (2026-07-10): TXR spring-training exhibitions (vs KC).
+  // Display-only tile - billed as separate catering outside the
+  // contract, so it does NOT count toward the game-days-entered
+  // progress bar and cannot be clicked to enter actuals.
+  {
+    mod: "exhibition",
+    icon: "",
+    label: "EXH",
+    labelLong: "Exhibition",
+    description:
+      "Spring-training exhibition. Billed as separate catering outside the contract. Display-only - excluded from the game-days-entered counter and not clickable.",
+  },
 ];
 
 const FEE = [

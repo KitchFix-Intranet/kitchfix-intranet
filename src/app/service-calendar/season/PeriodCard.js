@@ -193,7 +193,10 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
     // `entered` per SC-078; no live count change but the predicate stays
     // identical to the shared rule).
     const gameDaysEntered = days.filter(d => d.dayType === "GAME" && (d.status === "entered" || d.status === "no-service")).length;
-    const homestands = new Set(days.map(d => d.homestandId).filter(Boolean));
+    // sc-12 (2026-07-10): exclude EXHIBITION homestands (TXR spring
+    // training vs KC, homestand_id="EXH1") so an EXH-only period
+    // doesn't misleadingly count as a homestand.
+    const homestands = new Set(days.filter(d => d.dayType !== "EXHIBITION").map(d => d.homestandId).filter(Boolean));
     const feePct = gameDays > 0 ? Math.round(gameDaysEntered / gameDays * 100) : 0;
     return (
       <footer className="sc-season-period-card-footer">
@@ -333,6 +336,9 @@ function deriveHomestandSubtitle(days) {
   const byHs = new Map();
   for (const d of days) {
     if (!d.homestandId) continue;
+    // sc-12: exhibition homestands (EXH1) are outside the regular-
+    // season slate; the subtitle should read as if they weren't there.
+    if (d.dayType === "EXHIBITION") continue;
     let bucket = byHs.get(d.homestandId);
     if (!bucket) {
       bucket = { opponents: [], opponentSet: new Set() };

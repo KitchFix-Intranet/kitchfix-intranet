@@ -210,6 +210,12 @@ function classifyDayStatus(s, ctx) {
   if (ctx.billingModel === "flat_fee" && ctx.hasHomestandData) {
     const hs = ctx.homestandMap?.[s.date];
     if (!hs) return "off-season";              // not in schedule -> invisible
+    // sc-12 (2026-07-10): EXHIBITION days are billed as separate catering
+    // outside the contract. Distinct atom status so the tile can render
+    // the cream + copper "EXH" ribbon and stay display-only (not
+    // clickable, no actuals expected). Excluded from the X/30 counter
+    // downstream via the existing dayType === "GAME" filter.
+    if (hs.dayType === "EXHIBITION") return "exhibition";
     if (hs.dayType === "GAME") {
       if (s.hasAct) return "entered";           // game day recorded (zero incl.)
       return "future";                            // GAME day, no actuals
@@ -1069,6 +1075,12 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       let gameDays = 0, gameDaysEntered = 0, prepDays = 0;
       const homestandIds = new Set();
       for (const d of days) {
+        // sc-12 (2026-07-10): EXHIBITION rows are billed outside the
+        // contract and must not inflate the month rollups. Skip before
+        // the prep-day and homestand-id accumulation so March for TXR
+        // still reads as Spring Training (noService), and month cards
+        // never surface "1 homestand" for an EXH-only month.
+        if (d.dayType === "EXHIBITION") continue;
         if (d.dayType === "GAME") {
           gameDays++;
           // P1 item 4 (2026-07-10): unified completeness rule across
