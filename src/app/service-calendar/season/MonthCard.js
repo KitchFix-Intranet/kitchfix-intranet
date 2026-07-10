@@ -80,7 +80,16 @@ export default function MonthCard({
   const handleDrill = () => onClick?.(monthIndex);
 
   const totalDays = Number(monthSummary?.totalDays) || 0;
-  const daysEntered = Number(monthSummary?.daysWithActuals) || 0;
+  // P1 item 4 (2026-07-10): unified completeness rule everywhere.
+  // sc_month_summary.days_with_actuals (the SQL FILTER-WHERE-has_actuals
+  // rule) misses per-meal `no-service` days that classify from
+  // all-zero-projections + no actuals (no sc_daily_actuals row exists,
+  // so the SQL predicate is FALSE, but the classifier says the day is
+  // handled). Compute client-side from the shipped day statuses so this
+  // reader matches aggregateWorkspaceMetrics + the export DRAFT stamp
+  // predicate. Also collapses a live symptom on CIN-OH June where the
+  // drill counted 30/30 and this card counted 29/30.
+  const daysEntered = countCompleteDays(monthSummary?.days);
   const isComplete = totalDays > 0 && daysEntered === totalDays;
   const monthState = noService
     ? "off"
@@ -351,7 +360,8 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
   // "0/X game days". No progress bar at 0%, so the framing stays calm
   // without being inconsistent with sibling cards.
   const totalDays = Number(monthSummary.totalDays) || 0;
-  const daysEntered = Number(monthSummary.daysWithActuals) || 0;
+  // P1 item 4: same widened rule as the expanded footer.
+  const daysEntered = countCompleteDays(monthSummary.days);
   const completionPct = totalDays > 0 ? Math.round(daysEntered / totalDays * 100) : 0;
 
   if (hasHomestandSchedule) {
@@ -486,5 +496,17 @@ function buildMonthWeeks(year, monthIndex) {
     weeks.push(row);
   }
   return weeks;
+}
+
+// P1 item 4 (2026-07-10): the one completeness rule. `entered` OR
+// `no-service` — the classifier's widened predicate matches the
+// workspace's aggregateWorkspaceMetrics and the export DRAFT stamp
+// (per-meal branch). Used by MonthCard's collapsed + expanded footers
+// and by yearBannerStats' per-meal aggregate in ServiceCalendar.js.
+export function countCompleteDays(days) {
+  if (!Array.isArray(days)) return 0;
+  let n = 0;
+  for (const d of days) if (d?.status === "entered" || d?.status === "no-service") n++;
+  return n;
 }
 

@@ -613,14 +613,33 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // CIN-AZ fallback they don't own.
   const floorRedirectDone = useRef(false);
   useEffect(() => {
+    // P1 item 5 (2026-07-10): fresh-landing on top-nav Service Calendar.
+    // #347 wired the TopNav Service Calendar item so a same-route click
+    // pushes the bare `/service-calendar` route. F2 then added the
+    // floor-redirect latch below to prevent bouncing a floor user back
+    // to a period after they clicked Season. The two combined regressed
+    // fresh-landing: the latch is per-mount, same-route nav does NOT
+    // remount, and a top-nav click from inside a drill hits a clean URL
+    // but the latch stays true so the landing never re-fires.
+    //
+    // Fix: detect the clean-URL transition and clear the latch on it.
+    // The URL-sync effect above ALREADY resets scope/lens on a clean
+    // URL; the landing re-runs here so a floor user lands fresh on
+    // their period every top-nav click, and leadership stays on Season
+    // (landing.landOnCurrentPeriod is false).
+    //
+    // Deep links (`?period=P7`, `?month=YYYY-MM`, `?view=admin`) still
+    // win: the URL isn't clean, latch stays true, no bounce.
+    const isCleanUrl = !searchParams?.get("view") && !searchParams?.get("period") && !searchParams?.get("month");
+    if (isCleanUrl) floorRedirectDone.current = false;
+
     if (floorRedirectDone.current) return;
     // Latch "explicit URL wins" the FIRST time we see an explicit URL, even
     // before periodRanges arrives. Otherwise a floor user who cold-refreshes
     // ?period=N and clicks Season back mid-load has the URL cleared, and
     // when periodRanges lands the redirect fires and bounces them back
-    // into a period. Intent is "explicit URL wins forever," not "wins only
-    // when all data is ready."
-    if (searchParams?.get("view") || searchParams?.get("period") || searchParams?.get("month")) {
+    // into a period.
+    if (!isCleanUrl) {
       floorRedirectDone.current = true;
       return;
     }
@@ -1468,18 +1487,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     //   not the orchestrator shape. (First version of this loop read the
     //   orchestrator names and rendered "169 of 0 days recorded".)
     for (const m of yearData) {
-      daysRecorded += m.daysWithActuals || 0;
+      // P1 item 4 (2026-07-10): use the widened classifier rule
+      // (`entered` OR `no-service`) instead of the SQL narrow
+      // `days_with_actuals`. Same predicate MonthCard + PeriodCard +
+      // export use, so the FullSeasonCard hero (`daysRecorded / totalDays`)
+      // agrees with every other surface.
+      if (m.days) {
+        for (const d of m.days) {
+          if (d.status === "entered" || d.status === "no-service") daysRecorded++;
+          if (d.status === "needs-entry") needsEntry++;
+          else if (d.status === "overdue") overdue++;
+        }
+      }
       totalDays += m.totalDays || 0;
       mealsYTD += m.actualCovers || 0;
       if (m.homestandSummary) {
         gameDaysEntered += m.homestandSummary.gameDaysEntered || 0;
         totalGameDays += m.homestandSummary.gameDays || 0;
-      }
-      if (m.days) {
-        for (const d of m.days) {
-          if (d.status === "needs-entry") needsEntry++;
-          else if (d.status === "overdue") overdue++;
-        }
       }
     }
     const now = new Date();
