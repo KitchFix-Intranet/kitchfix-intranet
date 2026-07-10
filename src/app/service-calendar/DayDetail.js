@@ -192,6 +192,18 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // stay instant - the confirm only intercepts real unsaved work.
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const keepEditingBtnRef = useRef(null);
+  // P2 (item 2, R2a): the "+ Add a note without saving" link subordinates
+  // the standalone-note flow. Collapsed by default now that the ride-
+  // along composer is the primary path. Expanded state exposes the same
+  // Add note action against the shared `notes` draft (no second textarea
+  // - it would just mirror the ride-along field above and confuse the
+  // operator). Same post path (sc-add-note via onAddNote/handleAddNote)
+  // and same optimistic-prepend semantics as before.
+  const [showStandaloneNote, setShowStandaloneNote] = useState(false);
+  // P2 (item 2): ref on the ride-along textarea so review overlay's
+  // Edit button can pop the operator back to the entry with focus on
+  // the note field, ready to keep typing.
+  const rideNoteRef = useRef(null);
   // SC-066: Mark-no-service flow. showNoServiceConfirm gates the small
   // confirm dialog; the write itself goes through the normal onSave
   // path with all in-service services set to 0 and a note appended.
@@ -244,6 +256,10 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     setShowDiscardConfirm(false);
     // SC-066: same for the no-service confirm.
     setShowNoServiceConfirm(false);
+    // P2 (item 2): collapse the standalone-note affordance on day-nav
+    // so the next day starts with the ride-along as the sole visible
+    // note surface (the default posture).
+    setShowStandaloneNote(false);
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // SC-063 + C1b: dirty = any editValues entry differs from its
@@ -382,6 +398,10 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
 
   // SC-079: post one authored entry against sc-add-note, prepend to
   // the local ledger optimistically on success, clear the draft.
+  // P2 (item 2, R2a): also collapses the standalone-note panel once
+  // the post lands - the panel is a per-intent affordance, not a
+  // persistent surface, so a successful send returns the operator to
+  // the ride-along default posture.
   const handleAddNote = useCallback(async () => {
     const trimmed = (notes || "").trim();
     if (!trimmed || isPostingNote) return;
@@ -392,6 +412,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       if (res?.success && res.entry) {
         setNoteEntries((prev) => [res.entry, ...prev]);
         setNotes("");
+        setShowStandaloneNote(false);
       }
     } finally {
       setIsPostingNote(false);
@@ -578,11 +599,16 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     // request fails (toast shown by handleSave), keep the review modal
     // open so the chef can retry without losing what they typed.
     //
-    // SC-079: notes no longer travel with the save payload. Adding a
-    // note is now an independent action via handleAddNote/sc-add-note.
-    // If the operator has a draft in the textarea, they were told to
-    // click "Add note" first (or the discard guard traps a close).
-    const result = await onSave(day, entries);
+    // P2 (item 2, 2026-07-10): the note draft now rides the save via
+    // opts.rideNote. Server appends it via addDayNoteEntry AFTER the
+    // actuals write succeeds; a post-save note failure surfaces as
+    // result.noteFailed (the partial-success case) and the parent's
+    // handleSave shows the honest "Saved - note couldn't post, use Add
+    // note" toast. On clean success we drop the draft here so the entry
+    // screen resets to a pristine state.
+    const trimmedDraft = (notes || "").trim();
+    const rideNote = trimmedDraft.length > 0 ? trimmedDraft : undefined;
+    const result = await onSave(day, entries, { rideNote });
     if (result?.success) {
       setShowReview(null);
       if (result.queued) {
@@ -594,17 +620,28 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         // retry silently, and only a REJECTED replay (server 4xx/5xx on
         // retry) surfaces via toast.
         //
-        // Draft guard: the counts ARE captured (in the queue) but a typed,
-        // unposted note is NOT (F3 scope excludes notes). Route non-empty
-        // drafts through the same discard-confirm the X/backdrop use so a
-        // typed note isn't silently eaten. P2 will carry the draft in the
-        // save payload; until then a queued close must not silently eat
-        // a typed note.
-        const hasDraft = (notes || "").trim().length > 0;
-        if (hasDraft) setShowDiscardConfirm(true);
-        else onClose?.();
+        // P2 (item 2): rideNote joins the queued payload alongside the
+        // entries (see saveQueue.enqueue). Clean-close now clears the
+        // draft too - the note is in the queue, not lost. This retires
+        // the F3-era hasDraft => discard-confirm carve-out.
+        setNotes("");
+        onClose?.();
+      } else if (result.noteFailed) {
+        // P2 (item 2): partial-success. Save landed, note append
+        // failed. Keep the draft so the operator can retry the note
+        // via the standalone Add note flow. Skip the success screen
+        // and close - the partial toast (raised by handleSave) is the
+        // signal; the ledger will reflect the save on next refetch.
+        onClose?.();
       } else {
         setJustSaved(true);
+        // Clean-success: draft is committed as a ledger entry via the
+        // ride-along path. Clear locally; refetch will hydrate it into
+        // noteEntries. Optimistic prepend deliberately skipped here -
+        // the server holds the authoritative timestamp + author, and
+        // the natural refresh path (handleSave -> setReloadKey) lands
+        // in ~a tick either way.
+        setNotes("");
       }
     }
   }, [serviceGroups, touched, getVal, day, onSave, onClose, notes]);
@@ -822,39 +859,47 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             );
           })}
 
-          {/* SC-053 review surface: the day-note the chef typed lives
-              inline below the group list so it enters the review pass.
-              Bundle 1 wired the data end-to-end; this bundle surfaces
-              it. Empty note renders as an explicit muted "No note" so
-              the row's absence-of-note is deliberate + auditable. */}
-          {/* SC-079: review surfaces the LATEST authored note (newest
-              first from the ledger + author/time context) rather than
-              echoing an unposted textarea draft. Empty ledger renders
-              the muted "No notes" state so the row's absence is
-              deliberate.
-              F1 (M2): this surface stays NOTES-only. Its semantic is
-              "the operator's last authored explanation before this
-              save" - not an audit slice. Actuals edit history lives in
-              the Activity ledger below and never appears here. */}
+          {/* P2 (item 2, R2a, 2026-07-10): the review overlay now shows
+              what the operator is ADDING to this day (the ride-along
+              note), not a historical echo. The prior "Latest note"
+              block (SC-053 review surface, then the SC-079 rewrite that
+              read the last authored entry) is gone - reading history
+              here confused the pass with adding intent. Present only
+              when a draft exists; absent otherwise (no empty-state row).
+              Edit returns to the entry with focus on the ride-along
+              textarea; Remove clears the draft in-place so the operator
+              can Confirm & save without the note riding along. */}
           {(() => {
-            const latest = noteEntries[0];
-            const emptyCls = latest ? "" : " sc-day-review-note--empty";
+            const draft = (notes || "").trim();
+            if (!draft) return null;
             return (
-              <div className={`sc-day-review-note${emptyCls}`}>
-                <span className="sc-day-review-note-label">Latest note</span>
-                {latest ? (
-                  <blockquote className="sc-day-review-note-body">
-                    &ldquo;{latest.note}&rdquo;
-                    <span className="sc-day-review-note-meta">
-                      {" — "}
-                      <strong>{latest.author || "—"}</strong>
-                      {" · "}
-                      {formatEntryStamp(latest.createdAt)}
-                    </span>
-                  </blockquote>
-                ) : (
-                  <span className="sc-day-review-note-body">No notes</span>
-                )}
+              <div className="sc-day-review-ride">
+                <span className="sc-day-review-ride-label">Note riding this save</span>
+                <blockquote className="sc-day-review-ride-body">
+                  &ldquo;{draft}&rdquo;
+                </blockquote>
+                <div className="sc-day-review-ride-actions">
+                  <button
+                    type="button"
+                    className="sc-btn sc-btn--outline sc-day-review-ride-btn"
+                    onClick={() => {
+                      setShowReview(null);
+                      // rAF so the Edit click's blur unwinds before we
+                      // yank focus into the textarea (avoids the scroll
+                      // jump some browsers do on immediate focus).
+                      requestAnimationFrame(() => rideNoteRef.current?.focus({ preventScroll: false }));
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="sc-btn sc-btn--outline sc-day-review-ride-btn"
+                    onClick={() => setNotes("")}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             );
           })()}
@@ -1105,17 +1150,23 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
           );
         })()}
 
-        {/* SC-079 (render I3): notes become a per-day append-only
-            ledger. Textarea is a DRAFT for the next entry; Add note
-            button posts it via sc-add-note (server-derived author),
-            prepends to the ledger optimistically, clears the draft.
-            Ledger container beneath: bordered, rows scroll past ~4
-            entries, empty state hides the container. */}
+        {/* P2 (item 2, R2a, 2026-07-10): the primary note composer is
+            now the RIDE-ALONG - a note that saves with the operator's
+            actuals submission and lands as a NOTE ledger entry (with
+            server-derived author) alongside the actuals write. Same
+            `notes` state as before, so the C1b dirty guard still
+            catches an unposted draft (see the isDirty memo). The old
+            "Add note" button next to this textarea moved BELOW the
+            action bar as a quiet + Add a note without saving link
+            (subordinated affordance). The Activity ledger below stays
+            here as the day's per-day feed. */}
         <div className="sc-day-notes">
           <label className="sc-day-notes-label" htmlFor="sc-day-note-draft">
-            Add a note
+            Note for this save
+            <span className="sc-day-notes-optional"> (optional)</span>
           </label>
           <textarea
+            ref={rideNoteRef}
             id="sc-day-note-draft"
             className="sc-day-notes-input"
             placeholder="Rain delay, added dinner, etc."
@@ -1123,16 +1174,9 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
           />
-          <div className="sc-day-notes-actions">
-            <button
-              type="button"
-              className="sc-btn sc-btn--outline sc-day-notes-add"
-              onClick={handleAddNote}
-              disabled={!notes.trim() || isPostingNote}
-            >
-              {isPostingNote ? "Adding..." : "Add note"}
-            </button>
-          </div>
+          <p className="sc-day-notes-hint">
+            Saves with your submission. It will appear in this day&apos;s Activity.
+          </p>
 
           {/* F1 (M2): the ledger becomes the unified Activity view -
               notes + actuals edit history merged newest-first with a
@@ -1143,8 +1187,8 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               writing 0 collapse to a single system row "Marked no service
               (all services 0)"; anything else renders individually. The
               add-note input above stays a NOTES-only surface (a new note
-              prepends as a NOTE row); the review overlay's Latest note
-              remains NOTES-only for semantic clarity. */}
+              prepends as a NOTE row); the P2 review overlay's NOTE
+              RIDING THIS SAVE block is drafts-only for semantic clarity. */}
           {(noteEntries.length > 0 || historyEntries.length > 0) && (
             <div className="sc-day-activity">
               <div className="sc-day-activity-band">
@@ -1193,6 +1237,48 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             Review &amp; save
           </button>
           <button className="sc-btn sc-btn--cancel" onClick={attemptClose}>Cancel</button>
+        </div>
+        {/* P2 (item 2, R2a): the standalone add-note affordance sits
+            here as a quiet, subordinated link. Ride-along IS the
+            default composer above; posting a note without saving is
+            the edge case. Uses the SAME `notes` draft so a typed
+            ride-along note is one click away from becoming a
+            standalone entry (same server post path as before - the
+            handleAddNote wire, sc-add-note, optimistic prepend). */}
+        <div className="sc-day-standalone-note">
+          {showStandaloneNote ? (
+            <div className="sc-day-standalone-note-panel">
+              <p className="sc-day-standalone-note-copy">
+                Posts your current draft as a standalone note without
+                saving actuals.
+              </p>
+              <div className="sc-day-standalone-note-actions">
+                <button
+                  type="button"
+                  className="sc-btn sc-btn--outline sc-day-notes-add"
+                  onClick={handleAddNote}
+                  disabled={!notes.trim() || isPostingNote}
+                >
+                  {isPostingNote ? "Adding..." : "Add note"}
+                </button>
+                <button
+                  type="button"
+                  className="sc-btn sc-btn--link sc-day-standalone-note-cancel"
+                  onClick={() => setShowStandaloneNote(false)}
+                >
+                  Never mind
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="sc-btn sc-btn--link sc-day-standalone-note-toggle"
+              onClick={() => setShowStandaloneNote(true)}
+            >
+              + Add a note without saving
+            </button>
+          )}
         </div>
       </div>
       {showDiscardConfirm && renderDiscardConfirm()}

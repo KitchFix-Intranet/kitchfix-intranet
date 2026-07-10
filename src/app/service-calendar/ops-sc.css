@@ -203,6 +203,24 @@
   border: var(--border-thin) solid var(--accent-sc);
 }
 .sc-btn--outline:hover:not(:disabled) { background: var(--accent-sc-subtle); }
+/* P2 (item 2, R2a): quiet text-link style for the subordinated
+   "+ Add a note without saving" affordance and its "Never mind"
+   dismiss. Not a shape control - reads as tertiary next to the
+   primary Review & save. */
+.sc-btn--link {
+  background: transparent;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-link);
+  font-weight: var(--wt-semibold);
+  min-height: 0;
+}
+.sc-btn--link:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-sc-dark);
+  text-decoration: underline;
+}
+.sc-btn--link:disabled { color: var(--text-muted); }
 
 /* Corporate-only Admin link in the SC header. Brand navy family
    matching the SC today ring + the page wash, not generic Tailwind
