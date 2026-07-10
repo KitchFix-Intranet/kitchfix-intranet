@@ -966,6 +966,13 @@ function buildServicePerformanceBlock(sheet, startRow, ctx) {
 // phase's totals. Non-PDC accounts + PDC accounts with an unseeded
 // calendar produce an empty phaseRows array; the caller skips this
 // function entirely so the export stays byte-identical to pre-F6.
+//
+// P2 rider (owner ruling b, 2026-07-10): meals split into a symmetric
+// Proj meals + Actual meals pair. The F6 hybrid single-column ("actual
+// || projected fallback") mixed semantics inside one column, so no
+// column summed to a headline total. The pair reads honestly for
+// partial phases (both counts land) and foots to the year TOTAL
+// MEALS projected / entered headlines.
 function buildByPhaseBlock(sheet, startRow, ctx) {
   const { perDay, phaseRows, shape } = ctx;
   if (!phaseRows || phaseRows.length === 0) return startRow;
@@ -973,27 +980,30 @@ function buildByPhaseBlock(sheet, startRow, ctx) {
   sectionHeader(sheet, row, "BY PHASE"); row++;
   const withDollars = shape === "per-meal";
   const cols = withDollars
-    ? ["Phase", "Dates", "Projected $", "Actual $", "Meals"]
-    : ["Phase", "Dates", "Meals"];
+    ? ["Phase", "Dates", "Projected $", "Actual $", "Proj meals", "Actual meals"]
+    : ["Phase", "Dates", "Proj meals", "Actual meals"];
   tableHeader(sheet, row, cols); row++;
   for (const p of phaseRows) {
-    let proj = 0, act = 0, meals = 0;
+    let proj = 0, act = 0, projMeals = 0, actMeals = 0;
     for (const d of perDay.values()) {
       if (d.date >= p.startDate && d.date <= p.endDate) {
-        proj  += d.projectedRevenue;
-        act   += d.actualRevenue;
-        meals += d.actualMeals || d.projectedMeals || 0;
+        proj      += d.projectedRevenue;
+        act       += d.actualRevenue;
+        projMeals += d.projectedMeals || 0;
+        actMeals  += d.actualMeals    || 0;
       }
     }
     sheet.getCell(`A${row}`).value = p.phase;
     sheet.getCell(`B${row}`).value = `${p.startDate} to ${p.endDate}`;
     if (withDollars) {
-      sheet.getCell(`C${row}`).value = proj;  sheet.getCell(`C${row}`).numFmt = MONEY_FMT;
-      sheet.getCell(`D${row}`).value = act;   sheet.getCell(`D${row}`).numFmt = MONEY_FMT;
+      sheet.getCell(`C${row}`).value = proj;      sheet.getCell(`C${row}`).numFmt = MONEY_FMT;
+      sheet.getCell(`D${row}`).value = act;       sheet.getCell(`D${row}`).numFmt = MONEY_FMT;
       sheet.getCell(`D${row}`).font = { color: { argb: MONEY_GREEN } };
-      sheet.getCell(`E${row}`).value = meals; sheet.getCell(`E${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`E${row}`).value = projMeals; sheet.getCell(`E${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`F${row}`).value = actMeals;  sheet.getCell(`F${row}`).numFmt = COUNT_FMT;
     } else {
-      sheet.getCell(`C${row}`).value = meals; sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`C${row}`).value = projMeals; sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
+      sheet.getCell(`D${row}`).value = actMeals;  sheet.getCell(`D${row}`).numFmt = COUNT_FMT;
     }
     row++;
   }
