@@ -76,12 +76,16 @@ function writeRaw(map) {
 // ── Keys + entries ───────────────────────────────────────────────────
 // Entry shape:
 //   {
-//     accountKey, date, entries, auditNote?,
+//     accountKey, date, entries, auditNote?, rideNote?,
 //     queuedAt: ISO8601, attempts: number,
 //     lockedAt?: ISO8601   // multi-tab in-flight guard
 //   }
 // Key = `${accountKey}|${date}`. Re-save of the same day REPLACES the
 // existing entry (last-write-wins inside the queue).
+// P2 (item 2, 2026-07-10): rideNote joins the persisted payload so a
+// queued replay carries the operator's ride-along note through to the
+// server without losing it - DayDetail can clean-close on a queued
+// save instead of routing the draft through discard-confirm.
 
 export function queueKey(accountKey, date) {
   return `${accountKey}|${date}`;
@@ -101,7 +105,7 @@ export function getEntry(key) {
   return map[key] || null;
 }
 
-export function enqueue({ accountKey, date, entries, auditNote }) {
+export function enqueue({ accountKey, date, entries, auditNote, rideNote }) {
   if (!accountKey || !date || !Array.isArray(entries)) return;
   const map = readRaw();
   const key = queueKey(accountKey, date);
@@ -110,6 +114,7 @@ export function enqueue({ accountKey, date, entries, auditNote }) {
     date,
     entries,
     auditNote: auditNote || null,
+    rideNote:  rideNote  || null,
     queuedAt: new Date().toISOString(),
     attempts: 0,
     lockedAt: null,

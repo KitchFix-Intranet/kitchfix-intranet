@@ -1010,6 +1010,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             date: entry.date,
             entries: entry.entries,
             auditNote: entry.auditNote || undefined,
+            // P2 item 2: replay carries the operator's ride note along
+            // with the actuals write. If the post-save note append
+            // fails on replay, the server surfaces noteFailed:true;
+            // the queue treats the save itself as successful (dequeue)
+            // because the actuals landed - the note is a follow-up.
+            rideNote: entry.rideNote || undefined,
           }),
         });
         // Server responded. Distinguish success vs known-bad payload:
@@ -1183,20 +1189,31 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // spreadsheetId + sheetRow were leftover from the Sheets-era route;
       // the PG route ignores them. Dropped to keep the payload honest.
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote }),
+        // P2 item 2: rideNote flows through to the server, which
+        // appends it via addDayNoteEntry AFTER the actuals save
+        // succeeds. Server author-derives from the session.
+        body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote, rideNote: opts.rideNote }),
         signal: controller.signal });
       const result = await res.json();
       if (!isMountedRef.current) return result;
       if (result.success) {
         const newlyEntered = day.hasActuals ? 0 : 1;
-        showToast(buildRecordedToast({
-          amount: Number(result.savedRevenue) || 0,
-          meals:  Number(result.savedMeals)   || 0,
-          newlyEntered,
-          // SC-066: mark-no-service flag flows through so the toast
-          // reads "No service recorded" instead of "0 meals / $0".
-          noService: !!opts.noService,
-        }));
+        // P2 item 2: partial-success case. Save landed but the ride
+        // note append failed post-save. Show the honest partial toast
+        // instead of the recorded success - never a clean success when
+        // the note the operator asked us to attach didn't post.
+        if (result.noteFailed) {
+          showToast("Saved - note couldn't post, use Add note", "error");
+        } else {
+          showToast(buildRecordedToast({
+            amount: Number(result.savedRevenue) || 0,
+            meals:  Number(result.savedMeals)   || 0,
+            newlyEntered,
+            // SC-066: mark-no-service flag flows through so the toast
+            // reads "No service recorded" instead of "0 meals / $0".
+            noService: !!opts.noService,
+          }));
+        }
         // Surgical monthCache invalidation: drop only the month we wrote
         // to so the drill-in refetches just that month, not the whole
         // cache (see the note above the dayMap memo).
@@ -1220,7 +1237,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // fetch-level rejection - offline / DNS / TLS / reset. The N1
       // ruling: no toast, no page-level indicator, just the tile badge.
       if (scIsNetworkError(err)) {
-        scEnqueue({ accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote });
+        // P2 item 2: rideNote joins the queue payload alongside
+        // auditNote so a queued replay carries the operator's note
+        // through and DayDetail can clean-close instead of routing
+        // through the discard-confirm-on-queued-close carve-out.
+        scEnqueue({ accountKey: data.account.key, date: day.date, entries, auditNote: opts.auditNote, rideNote: opts.rideNote });
         if (isMountedRef.current) {
           refreshSyncing();
           kickReplay(scQueueKey(data.account.key, day.date));
