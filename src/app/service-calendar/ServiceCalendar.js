@@ -613,33 +613,54 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // CIN-AZ fallback they don't own.
   const floorRedirectDone = useRef(false);
   useEffect(() => {
-    // P1 item 5 (2026-07-10): fresh-landing on top-nav Service Calendar.
-    // #347 wired the TopNav Service Calendar item so a same-route click
-    // pushes the bare `/service-calendar` route. F2 then added the
-    // floor-redirect latch below to prevent bouncing a floor user back
-    // to a period after they clicked Season. The two combined regressed
-    // fresh-landing: the latch is per-mount, same-route nav does NOT
-    // remount, and a top-nav click from inside a drill hits a clean URL
-    // but the latch stays true so the landing never re-fires.
+    // P1.1 (2026-07-10): fresh-landing intent is signaled by TopNav via
+    // `?reset=1`, not by the URL being clean.
     //
-    // Fix: detect the clean-URL transition and clear the latch on it.
-    // The URL-sync effect above ALREADY resets scope/lens on a clean
-    // URL; the landing re-runs here so a floor user lands fresh on
-    // their period every top-nav click, and leadership stays on Season
-    // (landing.landOnCurrentPeriod is false).
+    // Why: the top-nav Service Calendar click AND the in-app `<- Season`
+    // button both push the identical clean `/service-calendar` URL.
+    // Two DIFFERENT intents, same URL shape: (1) "land fresh - re-run
+    // the F2 landing" vs (2) "show me the overview and stay here".
+    // P1 #379's unconditional clean-URL latch-clear bounced floor+home
+    // users back into their period on (2). The pre-#347 latch comment
+    // at :637-640 describes exactly this bounce - the P1 clear
+    // reintroduced it.
     //
-    // Deep links (`?period=P7`, `?month=YYYY-MM`, `?view=admin`) still
-    // win: the URL isn't clean, latch stays true, no bounce.
-    const isCleanUrl = !searchParams?.get("view") && !searchParams?.get("period") && !searchParams?.get("month");
-    if (isCleanUrl) floorRedirectDone.current = false;
+    // Discriminator: the ONLY honest signal is an explicit marker. The
+    // TopNav intercept now pushes `?reset=1`; the Season button + every
+    // other clean-URL path stay as before. We read the marker here,
+    // clear the latch, then router.replace-strip it so the URL after
+    // this pass is a plain `/service-calendar` (URL-sync + downstream
+    // consumers see the same clean URL they saw before). `reset` is
+    // transient - it must NOT count as an explicit deep-link in the
+    // latch-on-explicit-URL branch below.
+    //
+    // Behaviors after this fix:
+    //   - Leadership, drilled -> top-nav -> `?reset=1` -> stripped ->
+    //     landing.landOnCurrentPeriod is FALSE -> Season overview. (Kevin's
+    //     original P1 symptom, still fixed.)
+    //   - Floor+home, drilled -> `<- Season` button -> plain URL, no
+    //     marker -> latch stays true, landing skipped -> stays on Season.
+    //     (The regression - fixed.)
+    //   - Floor+home -> top-nav -> `?reset=1` -> stripped -> landing
+    //     re-fires -> router.replace(?period=...) -> their period + today.
+    //     (F2 semantic preserved.)
+    //   - Deep links (`?period=P7`, `?month=YYYY-MM`, `?view=admin`) ->
+    //     latch, no bounce. (Unchanged; the exclude-`reset` guard below
+    //     matters here.)
+    //   - Cold load, clean URL -> landing fires once. (Unchanged.)
+    if (searchParams?.get("reset")) {
+      floorRedirectDone.current = false;
+      router.replace("/service-calendar", { scroll: false });
+      return;
+    }
 
     if (floorRedirectDone.current) return;
-    // Latch "explicit URL wins" the FIRST time we see an explicit URL, even
-    // before periodRanges arrives. Otherwise a floor user who cold-refreshes
-    // ?period=N and clicks Season back mid-load has the URL cleared, and
-    // when periodRanges lands the redirect fires and bounces them back
-    // into a period.
-    if (!isCleanUrl) {
+    // Latch "explicit URL wins" the FIRST time we see an explicit URL,
+    // even before periodRanges arrives. `reset` is transient (stripped
+    // above) - it must NOT trip this latch.
+    const hasExplicitScope =
+      searchParams?.get("view") || searchParams?.get("period") || searchParams?.get("month");
+    if (hasExplicitScope) {
       floorRedirectDone.current = true;
       return;
     }

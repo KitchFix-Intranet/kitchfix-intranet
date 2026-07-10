@@ -413,12 +413,21 @@ export default function TopNav() {
             <div className="kf-topnav-links">
               {navLinks.map(({ href, label, icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
-                // Same-route Service click resets to the overview (drops
-                // ?period= / ?month= query) while preserving component
-                // state (selectedAccount lives in ServiceCalendar and
-                // survives an intra-route push).
+                // Same-route Service click emits an EXPLICIT fresh-landing
+                // intent via `?reset=1`. Distinguishes top-nav click from
+                // the in-app `<- Season` button, which pushes the bare
+                // `/service-calendar` path (the "show me the overview"
+                // intent). Both URLs would otherwise be identical, so
+                // P1 #379's unconditional clean-URL latch-clear bounced
+                // floor+home users out of Season back into their period
+                // on the Season click. ServiceCalendar's landing effect
+                // reads the marker, clears the floor-redirect latch, then
+                // router.replace-strips it - so the URL after the pass
+                // is the same clean `/service-calendar` as before.
+                // First-visit clicks from other routes keep the plain
+                // href; mount landing already handles fresh sessions.
                 const onClick = href === '/service-calendar' && pathname.startsWith('/service-calendar')
-                  ? (e) => { e.preventDefault(); router.push('/service-calendar'); }
+                  ? (e) => { e.preventDefault(); router.push('/service-calendar?reset=1'); }
                   : undefined;
                 return (
                   <Link
