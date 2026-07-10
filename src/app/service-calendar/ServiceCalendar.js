@@ -15,7 +15,7 @@ import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
-import { tierFromRoles } from "./computeInitialView";
+import { tierFromRoles, computeInitialView } from "./computeInitialView";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -230,6 +230,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [lens, setLens]   = useState("calendar");
   const [isAdminView, setIsAdminView] = useState(false);
   const [roleTier, setRoleTier] = useState("unknown");
+  // F2: raw contacts.role strings kept alongside the derived tier so
+  // computeInitialView can be called with the multi-role-aware `roles`
+  // input (floor-wins tiebreaker) rather than a pre-collapsed string.
+  const [rawRoles, setRawRoles] = useState([]);
+  // F2: hasHomeAccount = user_accounts.account exists AND is in the
+  // sorted account list the dropdown carries. Gates the floor-tier
+  // Period-workspace redirect - a floor role without a home account
+  // lands on the Season overview instead of the CIN-AZ fallback.
+  const [hasHomeAccount, setHasHomeAccount] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
   const [yearData, setYearData] = useState(null);
@@ -346,6 +355,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         // scope/lens/periodKey/isAdminView here. We only capture the
         // role tier, used by the floor-default landing redirect.
         setRoleTier(tierFromRoles(d.roles || []));
+        setRawRoles(d.roles || []);
+        // F2 (R-A ruling 2026-07-09): hasHomeAccount is TRUE only when
+        // user_accounts.account resolves to a live account in the
+        // dropdown list. A stale mapping (row points at an unimported
+        // account) or a missing row both resolve to FALSE, which
+        // demotes a floor user's landing from the Period workspace to
+        // the Season overview. Same in-list guard the account fallback
+        // above uses so the two decisions cannot disagree.
+        setHasHomeAccount(!!(d.defaultAccount && sorted.some(a => a.key === d.defaultAccount)));
         // landOnCurrentPeriod handled by the periodRanges-init effect
         // below: when a floor role lands and periodRanges arrives,
         // periodKey gets set to the period containing today. The
@@ -575,6 +593,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // periodRanges is ready, and only while the URL is still clean - a
   // deep-link or any navigation takes precedence. Replace (not push) so
   // the default does not sit in the back-stack behind first paint.
+  //
+  // F2: the "should I redirect" decision is delegated to
+  // computeInitialView so the ROLE_TIERS map + the hasHomeAccount gate
+  // stay in one place. A floor role WITHOUT a resolved home account now
+  // stays on the Season overview instead of being force-landed on the
+  // CIN-AZ fallback they don't own.
   const floorRedirectDone = useRef(false);
   useEffect(() => {
     if (floorRedirectDone.current) return;
@@ -588,12 +612,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       floorRedirectDone.current = true;
       return;
     }
-    if (roleTier !== "floor" || !periodRanges?.length) return;
+    if (!periodRanges?.length) return;
+    const landing = computeInitialView({
+      urlView: null, urlPeriod: null, isAdmin,
+      roles: rawRoles,          // raw contacts.role strings; helper resolves tier via floor-wins
+      hasHomeAccount,
+    });
+    if (!landing.landOnCurrentPeriod) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
     const target = containingToday ? containingToday.period : periodRanges[0].period;
     floorRedirectDone.current = true;
     router.replace(`/service-calendar?period=${target}`, { scroll: false });
-  }, [roleTier, periodRanges, searchParams, today, router]);
+  }, [rawRoles, hasHomeAccount, isAdmin, periodRanges, searchParams, today, router]);
 
   // Save invalidation: each save handler now drops ONLY the calendar
   // month(s) it wrote to, surgically. The prior blanket setMonthCache({})

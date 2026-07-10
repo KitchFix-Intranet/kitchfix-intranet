@@ -101,7 +101,19 @@ function pickRepresentativeRole(roles) {
   return roles[0];
 }
 
-export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, roles = null }) {
+// F2 (R-A ruling 2026-07-09): the floor -> workspace redirect now
+// REQUIRES a resolved home account from user_accounts. A floor-tier
+// user with NO user_accounts row falls through to the Season overview
+// (the picker) rather than being force-landed on the CIN-AZ fallback
+// they don't own. hasHomeAccount is the new signal - true only when a
+// user_accounts.account exists AND is present in the account list the
+// dropdown carries (guards against a mapping pointing at an unimported
+// account; see the account-fallback comment in ServiceCalendar.js).
+//
+// URL account/scope still wins over the landing computation (branches 1
+// and 2 below); the account switcher is orthogonal - flipping accounts
+// after landing does not re-run this helper.
+export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, roles = null, hasHomeAccount = false }) {
   // 1) admin URL wins (explicit user intent + isAdmin gate)
   if (urlView === "admin" && isAdmin) {
     return {
@@ -118,24 +130,28 @@ export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, r
       landOnCurrentPeriod: false,
     };
   }
-  // 3) floor tier -> workspace at the current period.
+  // 3) floor tier + resolved home account -> workspace at current period.
   //    Resolve tier from either `roles` (multi-role aware) or `role`
   //    (single - kept for backward compat with the Stage 4 signature).
   //    Floor-wins applies on `roles`; single-role uses the same map.
   //    periodKey is null at mount; the existing periodRanges-init
   //    effect (B2a) sets periodKey to the period containing today
   //    when landOnCurrentPeriod is true.
+  //    F2: gated on hasHomeAccount so a floor role without a user_accounts
+  //    row falls to the Season overview instead of the CIN-AZ fallback.
   const tier = Array.isArray(roles)
     ? tierFromRoles(roles)
     : roleTier(role);
-  if (tier === "floor") {
+  if (tier === "floor" && hasHomeAccount) {
     return {
       scope: "period", lens: "period",
       isAdminView: false, periodKey: null,
       landOnCurrentPeriod: true,
     };
   }
-  // 4) leadership / unknown -> Season overview (today's default)
+  // 4) leadership / unknown / floor-without-home -> Season overview
+  //    (today's default; the picker + account dropdown drive the
+  //    operator to their preferred surface).
   return {
     scope: "year", lens: "calendar",
     isAdminView: false, periodKey: null,

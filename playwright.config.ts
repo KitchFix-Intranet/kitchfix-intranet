@@ -12,6 +12,15 @@ export default defineConfig({
   timeout: 30_000,
   forbidOnly: !!process.env.CI,
   reporter: [['list'], ['html', { open: 'never' }]],
+  // F2 rider: two parallel workers racing the prod ops bootstrap
+  // flaked card-detail on 2026-07-09 (session isolation on the shared
+  // storageState didn't prevent one worker's account-switch from
+  // stepping on another's cached card fetch). A 4-test smoke gate
+  // trades roughly 30s of wall-clock for determinism; the guarantee
+  // "green means the code works" is worth more than the throughput.
+  // Revisit once tests have their own storageStates or the app is
+  // fully idempotent under concurrent bootstrap.
+  workers: 1,
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
