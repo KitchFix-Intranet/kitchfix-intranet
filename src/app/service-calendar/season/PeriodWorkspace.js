@@ -213,6 +213,7 @@ export default function PeriodWorkspace({
         loadState={loadState}
         onDayClick={onDayClick}
         onBulkTileClick={onBulkTileClick}
+        syncingDates={syncingDates}
       />
 
       {scope !== "month" && (
@@ -655,7 +656,14 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // week and clamp; Home/End jump to the first/last real cell in the row).
 // Enter/Space activation still fires the atom's onClick (DaySquare owns
 // that; the atom does not consume arrow keys so they bubble to the grid).
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick }) {
+// syncingDates is threaded from PeriodWorkspace through the callsite
+// above; the :834 consumer below was a free variable from F3 (#378)
+// until this hotfix, crashing every REAL-day cell with
+// `ReferenceError: syncingDates is not defined` the moment a drill
+// tried to render. Masked until #382 killed the earlier TDZ crash
+// upstream of any drill mount, then surfaced on the first month
+// click after that landed.
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
