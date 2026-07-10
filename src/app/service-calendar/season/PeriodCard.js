@@ -38,6 +38,7 @@ export default function PeriodCard({
   timeline,                   // derivePhaseTimeline result (the shared spine)
   loadState = "loaded",       // SC-033: "failed" forces every cell to the failed atom
   onClick,                    // (periodKey) => void
+  syncingDates,               // F3: Set<YYYY-MM-DD> for current account
 }) {
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
   // derive a homestand-based subtitle from the bucketed days (every
@@ -138,6 +139,7 @@ export default function PeriodCard({
                 content={content}
                 isToday={cell.day.date === todayDate}
                 ariaLabel={`${cell.day.date}, ${status}`}
+                isSyncing={syncingDates?.has(cell.day.date) || false}
               />
             </span>
           );

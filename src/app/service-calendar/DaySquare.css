@@ -325,6 +325,62 @@
    ariaLabel context and future --md sizes. */
 .sc-daysq--lg .sc-daysq-today-pill { display: none; }
 
+/* F3 (N1 render): the SYNCING badge overlays the top-right of the tile
+   whenever the operator's save for this day is queued in localStorage
+   and the driver is retrying. Sits in the amber needs-attention family
+   so it reads "action pending" without claiming the entry succeeded.
+   Underlying tile status stays truthful - the badge is additive, never
+   a fill swap. Small at overview scale, comfortable at drill-in scale.
+   Reduced-motion pair kills the spinner rotation. */
+.sc-daysq-syncing {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  border: var(--border-thin) solid var(--status-needs-bd);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: 0.05em;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+.sc-daysq-syncing-spinner {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-circle);
+  border: 1.5px solid var(--status-needs-subtle);
+  border-top-color: var(--status-needs-strong);
+  animation: sc-daysq-syncing-spin 720ms linear infinite;
+}
+@keyframes sc-daysq-syncing-spin {
+  to { transform: rotate(360deg); }
+}
+.sc-daysq--sm .sc-daysq-syncing-label { display: none; }
+.sc-daysq--sm .sc-daysq-syncing {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.sc-daysq--sm .sc-daysq-syncing-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-daysq-syncing-spinner {
+    animation: none;
+    border-color: var(--status-needs-strong);
+    background: var(--status-needs-strong);
+  }
+}
+
 /* ── Drill-in polish (lg-only): meals-first value block + softer surface.
    Year-view tiles (--sm) use pickCompactSmall and do NOT get any of these
    overrides, so the season overview is untouched. ── */

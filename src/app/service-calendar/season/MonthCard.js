@@ -51,6 +51,7 @@ export default function MonthCard({
   isDesktop = true,          // Bundle 1 D1: force-expanded gate; SSR-safe default
   loadState = "loaded",      // SC-033: "failed" forces every cell to the failed atom
   onClick,                   // (monthIndex) => void
+  syncingDates,              // F3: Set<YYYY-MM-DD> for the current account; overlays SYNCING badge on matching tiles
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -168,7 +169,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -296,7 +297,7 @@ function indexDays(monthSummary) {
   return m;
 }
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded" }) {
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
@@ -318,6 +319,7 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       content={content}
       isToday={isToday}
       ariaLabel={`${cell.dateStr}, ${status}`}
+      isSyncing={syncingDates?.has(cell.dateStr) || false}
     />
   );
 }
