@@ -161,6 +161,19 @@ A single Claude OCR call can take 5–15 seconds. Don't freeze the UI. Use skele
 
 ## React & Components
 
+### Hook declaration order is a runtime-only failure class
+
+A `useMemo` / `useCallback` / `useEffect` dep array that references a `useState` (or any `const`) declared later in the same component throws `ReferenceError: Cannot access '<name>' before initialization` on first render. Deps are evaluated during render in source order, and `const` bindings are in the temporal dead zone until their declaration line executes.
+
+`next build` cannot catch this - client components are compiled at build but not executed. CI stays green if no Playwright spec loads the affected route. Type checks are silent for the same reason: it's a runtime access-before-init, not a static type error.
+
+**Incident:** F3 save-queue (#378, 2026-07-10). `syncingDates` useMemo at ~:695 read `syncingKeys` in its dep array, but `const [syncingKeys, setSyncingKeys] = useState(...)` sat at ~:906. The route (`/service-calendar`) was down across three merges behind the Coming Soon gate before Kevin caught it in browser. Fix in `fix/sc-f3-tdz-hook-order` hoists the F3 state block to the main state section and adds a Playwright spec (`tests/sc-tdz-hotfix.spec.ts`) that intercepts `/api/auth/session` + the SC data actions so the ServiceCalendar body actually executes.
+
+**Rules:**
+- New hooks declare above first use. When inserting a hook, scan the component for existing references and place the declaration above all of them.
+- Any hotfix touching `ServiceCalendar.js` requires a dev-server browser load as evidence, not just a passing build. State this explicitly in the PR body.
+- The runtime-proof spec is now the guard - keep it green whenever this file changes.
+
 ### Never define a function component inside another component's render body
 
 ```javascript
