@@ -70,6 +70,7 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
     viewRows,
     catalog,
     notes,
+    history,
     homestandMap,
     feeRow,
     yearSummary,
@@ -77,6 +78,11 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
     loadViewRows(supa, accountKey, range.first, range.last),
     loadCatalog(supa, accountKey),
     loadNotes(supa, accountKey, range.first, range.last),
+    // F1 (L4): raw sc_daily_actuals_history rows in scope, newest first.
+    // Service name resolution comes from the catalog fetch above (all
+    // account services, no active/deleted filter so archived services
+    // still render their name in the audit sheet).
+    loadHistory(supa, accountKey, range.first, range.last),
     accountInfo.billingModel === "flat_fee"
       ? loadHomestand(supa, accountKey, range.first, range.last)
       : Promise.resolve({}),
@@ -125,6 +131,11 @@ export async function buildScWorkbook({ accountKey, scope, year, period, month, 
   buildSummarySheet(workbook, ctx, notes);
   buildDailyDetailSheet(workbook, ctx);
   buildNotesSheet(workbook, ctx, notes);
+  // F1 (L4): the fourth sheet is the actuals-history audit trail.
+  // Counts only - no dollars anywhere on this sheet. Populated from
+  // the sc_daily_actuals_history rows returned by loadHistory + a
+  // catalog lookup for the service name.
+  buildChangesSheet(workbook, ctx, history);
 
   const filename = buildFilename(accountKey, range.shortLabel, generatedAt);
   return { workbook, filename };
@@ -278,6 +289,33 @@ async function loadNotes(supa, accountKey, first, last) {
     author: r.author, // null on backfilled entries; display as "-"
     createdAt: r.created_at,
   }));
+}
+
+// F1 (L4): actuals-edit history rows in scope, newest first. Paginated
+// like the view fetch so a heavy edit history (year scope on an active
+// account) can't be silently truncated at PostgREST's 1000-row cap.
+async function loadHistory(supa, accountKey, first, last) {
+  const PAGE = 1000;
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supa
+      .from("sc_daily_actuals_history")
+      .select("service_date, service_id, old_count, new_count, changed_by, changed_at")
+      .eq("account_key", accountKey)
+      .gte("service_date", first)
+      .lte("service_date", last)
+      .order("service_date", { ascending: false })
+      .order("changed_at",   { ascending: false })
+      .order("service_id",   { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`[scWorkbook] loadHistory: ${error.message}`);
+    if (!data?.length) break;
+    for (const r of data) rows.push(r);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return rows;
 }
 
 async function loadHomestand(supa, accountKey, first, last) {
@@ -513,6 +551,10 @@ function buildSummarySheet(workbook, ctx, notes) {
     if (ctx.scope !== "year") row = buildByWeekBlock(sheet, row, ctx);
     row = buildWeekdayAveragesBlock(sheet, row, ctx);
     row = buildServicePerformanceBlock(sheet, row, ctx);
+    // F1 (L5): homestand accounts only - the opponent rollup. Absent
+    // entirely on STL-FL (flat-fee, no homestand data) and every
+    // per-meal / MiLB account. Counts only, no dollars.
+    if (shape === "homestand-fee") row = buildByOpponentBlock(sheet, row, ctx);
     if (ctx.scope === "year") {
       row = buildByPeriodBlock(sheet, row, ctx);
       row = buildByMonthBlock(sheet, row, ctx);
@@ -885,6 +927,36 @@ function buildByPeriodBlock(sheet, startRow, ctx) {
   return row + 1;
 }
 
+// L5: BY OPPONENT rollup - homestand-fee accounts only. One row per
+// distinct opponent in scope, sorted by meals entered DESC. Game days
+// = "entered / scheduled" pair inside one cell (counts only, no
+// dollars). Non-homestand shapes never call this.
+function buildByOpponentBlock(sheet, startRow, ctx) {
+  const { perDay } = ctx;
+  let row = startRow;
+  sectionHeader(sheet, row, "BY OPPONENT"); row++;
+  tableHeader(sheet, row, ["Opponent", "Game days (entered/scheduled)", "Meals entered"]); row++;
+  const perOpp = new Map();
+  for (const d of perDay.values()) {
+    if (d.dayType !== "GAME") continue;
+    const key = (d.opponent && String(d.opponent).trim()) || "(unspecified)";
+    let agg = perOpp.get(key);
+    if (!agg) { agg = { opponent: key, scheduled: 0, entered: 0, meals: 0 }; perOpp.set(key, agg); }
+    agg.scheduled++;
+    if (d.hasActuals) agg.entered++;
+    agg.meals += d.actualMeals || 0;
+  }
+  const sorted = [...perOpp.values()].sort((a, b) => b.meals - a.meals || a.opponent.localeCompare(b.opponent));
+  for (const o of sorted) {
+    sheet.getCell(`A${row}`).value = o.opponent;
+    sheet.getCell(`B${row}`).value = `${o.entered} / ${o.scheduled}`;
+    sheet.getCell(`C${row}`).value = o.meals;
+    sheet.getCell(`C${row}`).numFmt = COUNT_FMT;
+    row++;
+  }
+  return row + 1;
+}
+
 // Year scope: BY MONTH rollup from sc_month_summary.
 function buildByMonthBlock(sheet, startRow, ctx) {
   const { yearSummary, shape, homestandMap } = ctx;
@@ -1009,6 +1081,91 @@ function buildNotesSheet(workbook, ctx, notes) {
     if (n.author != null && n.createdAt) rowIx.getCell(4).numFmt = TIMESTAMP_FMT;
     if (n.author == null) rowIx.getCell(4).font = { italic: true, color: { argb: MUTED_INK } };
     rowIx.getCell(2).alignment = { wrapText: true, vertical: "top" };
+  }
+}
+
+// ── Sheet 4: Changes (F1 L4) ─────────────────────────────────────────
+// Actuals-edit audit trail for the scope. Counts only - no dollar
+// columns anywhere on this sheet. Consecutive same-timestamp EDITs
+// that ALL write 0 collapse to a single system row with "all services"
+// in the Service column and the "Marked no service (all services 0)"
+// From -> To phrasing, matching the mark-no-service semantic used by
+// the M2 Activity ledger in DayDetail. Ordering: scope newest first.
+
+function buildChangesSheet(workbook, ctx, history) {
+  const sheet = workbook.addWorksheet("Changes", { views: [{ state: "frozen", ySplit: 1 }] });
+  sheet.columns = [
+    { header: "Date",    width: 14 },
+    { header: "Service", width: 30 },
+    { header: "From",    width: 10 },
+    { header: "To",      width: 10 },
+    { header: "By",      width: 24 },
+    { header: "Logged",  width: 22 },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  const { catalog } = ctx;
+  const svcNameById = new Map();
+  for (const g of catalog.groups) for (const s of g.services) svcNameById.set(s.id, s.name);
+  // Also merge in any service that has history but is archived out of
+  // the current active catalog (loadCatalog filters deleted_at IS NULL;
+  // history rows may reference hard-archived services that dropped out).
+  // We fall back to a marker string in that case.
+
+  // Bucket the history rows by (date, changed_at truncated to second)
+  // for the mark-no-service collapse. Preserves per-batch ordering.
+  const rowsByBucket = new Map();
+  for (const h of history || []) {
+    const t = new Date(h.changed_at);
+    if (!Number.isNaN(t.getTime())) t.setMilliseconds(0);
+    const bucketKey = `${h.service_date}|${Number.isNaN(t.getTime()) ? h.changed_at : t.toISOString()}`;
+    if (!rowsByBucket.has(bucketKey)) {
+      rowsByBucket.set(bucketKey, {
+        date: h.service_date,
+        changedAt: h.changed_at,
+        author: h.changed_by || null,
+        entries: [],
+      });
+    }
+    rowsByBucket.get(bucketKey).entries.push(h);
+  }
+
+  // rowsByBucket iteration preserves insertion order = scope newest first
+  // (loadHistory already sorts DESC on date + changed_at).
+  for (const bucket of rowsByBucket.values()) {
+    const allZero = bucket.entries.length > 0 && bucket.entries.every(e => Number(e.new_count) === 0);
+    if (allZero) {
+      const rowIx = sheet.addRow([
+        toDate(bucket.date),
+        "all services",
+        "-",
+        "Marked no service (all services 0)",
+        bucket.author == null ? "—" : bucket.author,
+        bucket.changedAt ? new Date(bucket.changedAt) : null,
+      ]);
+      rowIx.getCell(1).numFmt = DATE_FMT;
+      if (bucket.changedAt) rowIx.getCell(6).numFmt = TIMESTAMP_FMT;
+      rowIx.getCell(2).font = { italic: true, color: { argb: MUTED_INK } };
+      rowIx.getCell(4).font = { italic: true, color: { argb: MUTED_INK } };
+      if (bucket.author == null) rowIx.getCell(5).font = { italic: true, color: { argb: MUTED_INK } };
+    } else {
+      for (const e of bucket.entries) {
+        const svcName = svcNameById.get(e.service_id) || "(archived service)";
+        const rowIx = sheet.addRow([
+          toDate(e.service_date),
+          svcName,
+          Number(e.old_count),
+          Number(e.new_count),
+          e.changed_by == null ? "—" : e.changed_by,
+          e.changed_at ? new Date(e.changed_at) : null,
+        ]);
+        rowIx.getCell(1).numFmt = DATE_FMT;
+        rowIx.getCell(3).numFmt = COUNT_FMT;
+        rowIx.getCell(4).numFmt = COUNT_FMT;
+        if (e.changed_at) rowIx.getCell(6).numFmt = TIMESTAMP_FMT;
+        if (e.changed_by == null) rowIx.getCell(5).font = { italic: true, color: { argb: MUTED_INK } };
+      }
+    }
   }
 }
 
