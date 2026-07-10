@@ -292,6 +292,33 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
+  // for entries currently pending replay across ALL accounts (the driver
+  // needs the full set; the tile UI filters below to just the current
+  // account). refreshSyncing() reads the localStorage-backed queue -
+  // called after every enqueue/dequeue and on the storage event so
+  // sibling tabs stay in sync too.
+  //
+  // Hoisted to the main state section 2026-07-10 (fix/sc-f3-tdz-hook-order):
+  // consumers appear earlier in the render body (syncingDates useMemo,
+  // the driver useEffect, the three save handlers). Declaring the state
+  // here keeps declaration < first-use for every consumer, which JS
+  // requires - `const` is TDZ, referring to it before this line throws
+  // ReferenceError at first render. `next build` cannot catch this
+  // (client components aren't executed at build). Any new F3-adjacent
+  // hook goes below this block, not above it.
+  const [syncingKeys, setSyncingKeys] = useState(() => new Set());
+  const refreshSyncing = useCallback(() => {
+    setSyncingKeys(new Set(scGetAll().map(e => scQueueKey(e.accountKey, e.date))));
+  }, []);
+  // F3: the driver exposes a scheduler via ref so a fresh handleSave
+  // enqueue can kick a retry immediately without waiting on the driver
+  // effect to re-run. Ref is populated by the useEffect below (mount).
+  const scheduleReplayRef = useRef(null);
+  const kickReplay = useCallback((key) => {
+    scheduleReplayRef.current?.(key);
+  }, []);
+
   // Design Batch 2: data-freshness timestamp. Tracks when the year
   // summary (the SC's primary data anchor) last landed. Rendered as
   // "as of <time>" in the chrome bar (rubric Part 3 data-freshness).
@@ -951,28 +978,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     inFlightControllersRef.current.clear();
   }, []);
 
-  // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
-  // for entries currently pending replay across ALL accounts (the driver
-  // needs the full set; the tile UI filters below to just the current
-  // account). refreshSyncing() reads the localStorage-backed queue -
-  // called after every enqueue/dequeue and on the storage event so
-  // sibling tabs stay in sync too.
-  const [syncingKeys, setSyncingKeys] = useState(() => new Set());
-  const refreshSyncing = useCallback(() => {
-    setSyncingKeys(new Set(scGetAll().map(e => scQueueKey(e.accountKey, e.date))));
-  }, []);
-  // F3: the driver exposes a scheduler via ref so a fresh handleSave
-  // enqueue can kick a retry immediately without waiting on the driver
-  // effect to re-run. Ref is populated by the useEffect below (mount).
-  const scheduleReplayRef = useRef(null);
-  const kickReplay = useCallback((key) => {
-    scheduleReplayRef.current?.(key);
-  }, []);
-
   // F3: retry driver. One useEffect owns the timer map, the online +
   // storage listeners, and the beforeunload guard. Rebound whenever the
   // driver needs stale-free closures - syncingKeys is a proxy for
   // "queue changed"; refreshSyncing captures the setState function.
+  // (State declarations for syncingKeys / refreshSyncing / kickReplay /
+  // scheduleReplayRef live in the main state section - hoisted 2026-07-10
+  // fix/sc-f3-tdz-hook-order to keep declaration < first-use for the
+  // syncingDates memo at ~:695.)
   useEffect(() => {
     if (typeof window === "undefined") return;
     // Mount-time refresh so state agrees with the localStorage truth
