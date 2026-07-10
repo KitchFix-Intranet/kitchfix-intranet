@@ -53,7 +53,12 @@ export function deriveHomestandSegments(yearData, todayDate) {
       // an EXH-prefixed homestand id and are billed outside the contract.
       // Skip so the SeasonStepper doesn't emit a fake "spring training"
       // segment alongside the real regular-season homestands.
-      if (d.dayType === "EXHIBITION") continue;
+      // sc-13 (2026-07-10): AWAY rows carry homestand_id=NULL (relaxed
+      // from NOT NULL in that migration), so the `!d.homestandId` guard
+      // above already excludes them. Defensive AWAY check listed for
+      // reader clarity (also robust to any future AWAY row that some
+      // seed process accidentally attaches a homestand id to).
+      if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
       let bucket = buckets.get(d.homestandId);
       if (!bucket) {
         bucket = {

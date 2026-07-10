@@ -817,8 +817,11 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // dropping the handler here removes the button role at
               // the source and keeps keyboard/roving-tabindex semantics
               // clean (no gridcell that pretends to be actionable).
+              // sc-13: away tiles share the display-only contract.
               const isExhibition = status === "exhibition";
-              const isBulkSelectable = bulkMode && status !== "off" && !isExhibition && (!d.hasActuals || isEnteredFuture);
+              const isAway = status === "away";
+              const isDisplayOnly = isExhibition || isAway;
+              const isBulkSelectable = bulkMode && status !== "off" && !isDisplayOnly && (!d.hasActuals || isEnteredFuture);
               const isRoving = flatIdx === focusIdx;
               return (
                 <span
@@ -836,7 +839,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     isSelected={isSelected}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
-                    onClick={isExhibition ? undefined : () => {
+                    onClick={isDisplayOnly ? undefined : () => {
                       setFocusIdx(flatIdx);
                       if (bulkMode) {
                         if (isBulkSelectable) onBulkTileClick?.(d.date);

@@ -196,7 +196,10 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
     // sc-12 (2026-07-10): exclude EXHIBITION homestands (TXR spring
     // training vs KC, homestand_id="EXH1") so an EXH-only period
     // doesn't misleadingly count as a homestand.
-    const homestands = new Set(days.filter(d => d.dayType !== "EXHIBITION").map(d => d.homestandId).filter(Boolean));
+    // sc-13 (2026-07-10): AWAY rows carry homestand_id=NULL, so the
+    // `.filter(Boolean)` at the end already excludes them. The
+    // dayType filter is explicit for reader clarity.
+    const homestands = new Set(days.filter(d => d.dayType !== "EXHIBITION" && d.dayType !== "AWAY").map(d => d.homestandId).filter(Boolean));
     const feePct = gameDays > 0 ? Math.round(gameDaysEntered / gameDays * 100) : 0;
     return (
       <footer className="sc-season-period-card-footer">
@@ -338,7 +341,10 @@ function deriveHomestandSubtitle(days) {
     if (!d.homestandId) continue;
     // sc-12: exhibition homestands (EXH1) are outside the regular-
     // season slate; the subtitle should read as if they weren't there.
-    if (d.dayType === "EXHIBITION") continue;
+    // sc-13: AWAY rows carry homestand_id=NULL and are already excluded
+    // by the `!d.homestandId` guard above; defensive skip for reader
+    // clarity in case a future seed pass attaches an id.
+    if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
     let bucket = byHs.get(d.homestandId);
     if (!bucket) {
       bucket = { opponents: [], opponentSet: new Set() };

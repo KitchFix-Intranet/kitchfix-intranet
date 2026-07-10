@@ -181,3 +181,16 @@ export function MoonGlyph({ size = 12 }) {
     </svg>
   );
 }
+
+// sc-13 (2026-07-10): plane glyph for the AWAY tile - "team on the road."
+// Standalone shape like SunGlyph/MoonGlyph so we can size it independently
+// at 13px on tiles and 12px in the legend. Filled with currentColor so it
+// picks up the muted grey via CSS. Path is Lucide-shaped (Tabler-family
+// paper-plane silhouette rotated diagonal).
+export function PlaneGlyph({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M21.71 2.29a1 1 0 0 0-1.05-.23L2.66 9.06a1 1 0 0 0 .11 1.89l7.34 2.06 2.06 7.34a1 1 0 0 0 .96.72 1 1 0 0 0 .93-.62l7-18a1 1 0 0 0-.35-1.16z" />
+    </svg>
+  );
+}

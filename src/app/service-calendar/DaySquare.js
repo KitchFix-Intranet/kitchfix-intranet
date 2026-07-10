@@ -31,7 +31,7 @@
 //   fee-no-dollar  N served (NO $, STL-FL discipline)
 
 import "./DaySquare.css";
-import { SunGlyph, MoonGlyph, MessageSquare } from "./Icons";
+import { SunGlyph, MoonGlyph, MessageSquare, PlaneGlyph } from "./Icons";
 import { fmt$K, fmtMeals } from "./season/format";
 
 // Number formatting convention (Design Batch 1, audit P2-1).
@@ -82,6 +82,13 @@ const STATUS_META = {
   // corner ribbon carries the state signal (no top-right status badge);
   // the cream fill + sage opponent tag are the polymorphic content.
   exhibition:    { mod: "exhibition",    icon: "" },
+  // sc-13 (2026-07-10): away (team on the road, no service to enter) -
+  // display only, not clickable, excluded from X/30 counter. The plane
+  // glyph top-right is the state signal (a shape, colorblind-safe);
+  // the muted date + hollow @OPP tag + "no service" line are the
+  // polymorphic content. No badge in the top-right slot (the plane
+  // glyph lives there).
+  away:          { mod: "away",          icon: "" },
 };
 
 export default function DaySquare({
@@ -143,7 +150,12 @@ export default function DaySquare({
   // as interactive even if a caller accidentally passes an onClick, and
   // the click handler below refuses activation. This keeps the "no
   // service to enter" contract tight regardless of the call-site.
+  // sc-13: away shares the display-only contract - the team is on the
+  // road and no service happens; the same non-interactive gate covers
+  // both states.
   const isExhibition = status === "exhibition";
+  const isAway = status === "away";
+  const isDisplayOnly = isExhibition || isAway;
 
   // Compose the className chain. The order of overlay modifiers
   // doesn't matter to CSS (each draws its own box-shadow track) but
@@ -155,7 +167,7 @@ export default function DaySquare({
     isToday && "sc-daysq--today",
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
-    onClick && !isExhibition && "sc-daysq--interactive",
+    onClick && !isDisplayOnly && "sc-daysq--interactive",
   ].filter(Boolean).join(" ");
 
   const baseAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
@@ -167,8 +179,8 @@ export default function DaySquare({
 
   // sc-12: exhibition tiles absorb any click without firing the
   // caller's onClick, so DisplayContract holds even when a bulk-grid
-  // caller wires the handler uniformly.
-  const activeOnClick = isExhibition ? undefined : onClick;
+  // caller wires the handler uniformly. sc-13 widens to away.
+  const activeOnClick = isDisplayOnly ? undefined : onClick;
   const handleKeyDown = activeOnClick
     ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activeOnClick(e); } }
     : undefined;
@@ -224,6 +236,16 @@ export default function DaySquare({
       {isExhibition && (
         <span className="sc-daysq-exh-ribbon" aria-hidden="true">EXH</span>
       )}
+      {/* sc-13: plane glyph carries the AWAY state as a shape signal
+          (colorblind-safe) alongside the muted fill. Same top-right
+          absolute-positioned slot as the EXH ribbon (mutually
+          exclusive - no collision). Muted colour via the parent
+          `.sc-daysq--away` scope so it stays quiet on the tile. */}
+      {isAway && (
+        <span className="sc-daysq-away-glyph" aria-hidden="true">
+          <PlaneGlyph size={13} />
+        </span>
+      )}
       {isSyncing && (
         <span className="sc-daysq-syncing" aria-label="Save syncing">
           <span className="sc-daysq-syncing-spinner" aria-hidden="true" />
@@ -250,6 +272,13 @@ function renderMiddleLine(size, kind, content, status) {
   // seeded (exhibition rows are typically un-projected today).
   if (status === "exhibition") {
     return renderExhibition(content, sm);
+  }
+  // sc-13: away owns its own middle-line layout - hollow `@ OPP` tag
+  // (transparent fill, hairline border) reads distinct from the sage
+  // filled EXH tag AND the navy filled home tag. `no service` muted
+  // line beneath signals no actuals expected.
+  if (status === "away") {
+    return renderAway(content, sm);
   }
 
   // Small tiles: a single tight line (or nothing). The grid context
@@ -291,6 +320,28 @@ function renderExhibition(content, sm) {
       {!sm && meals != null && meals > 0 && (
         <span className="sc-daysq-mid-headcount sc-daysq-mid-headcount--exh">
           ~{fmtMeals(meals)}<span className="sc-daysq-mid-unit">{meals === 1 ? "meal" : "meals"}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// sc-13: away mid layout. Hollow `@ OPP` tag on top (transparent fill,
+// hairline border - visually distinct from home's filled navy chip and
+// EXH's filled sage chip). `no service` muted beneath, but only at lg
+// size - on sm year-grid tiles the tag alone is enough context and the
+// dense grid can't afford a second line.
+function renderAway(content, sm) {
+  const { opponent } = content;
+  if (!opponent) return null;
+  return (
+    <div className="sc-daysq-mid sc-daysq-mid--away">
+      <span className="sc-daysq-mid-opponent sc-daysq-mid-opponent--away">
+        @ {opponent}
+      </span>
+      {!sm && (
+        <span className="sc-daysq-mid-noservice sc-daysq-mid-noservice--away">
+          no service
         </span>
       )}
     </div>
@@ -484,7 +535,9 @@ function buildAriaLabel({ date, status, isToday, isSelected, content, kind }) {
   if (isSelected) parts.push("selected");
   parts.push(statusPhrase(status));
   if (content) {
-    if (content.opponent) parts.push(`vs ${content.opponent}`);
+    // sc-13: away days read as "@ OPP" (matches the visual hollow tag);
+    // all other states use the "vs OPP" home-context reading.
+    if (content.opponent) parts.push(status === "away" ? `at ${content.opponent}` : `vs ${content.opponent}`);
     if (content.milbPill) parts.push(`${content.milbPill} game`);
     if (kind === "per-meal" && content.revenue != null) parts.push(fmt$K(content.revenue));
     const mealCount = content.served != null ? content.served : content.meals;
@@ -504,6 +557,7 @@ function statusPhrase(status) {
     case "loading":      return "loading";
     case "failed":       return "failed to load";
     case "exhibition":   return "exhibition, no service to enter";
+    case "away":         return "away game, no service to enter";
     default:             return status.replace("-", " ");
   }
 }

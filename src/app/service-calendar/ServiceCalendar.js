@@ -103,10 +103,14 @@ function aggregateWorkspaceMetrics(days) {
     // sc-12 (2026-07-10): exhibition is billed outside the contract - it
     // is NOT a service day for rollup purposes, so the week/period
     // subtotals don't inflate their serviceDays denominator.
+    // sc-13 (2026-07-10): away days - team is on the road - are also
+    // not a service day; same exclusion so the road-trip weeks don't
+    // inflate the serviceDays denominator.
     const isServiceDay = day.status !== "no-service"
       && day.status !== "off-season"
       && day.status !== "prep"
-      && day.status !== "exhibition";
+      && day.status !== "exhibition"
+      && day.status !== "away";
     if (isServiceDay) {
       out.serviceDays++;
       // Step-0 widening also applies to serviceDaysEntered so the fee

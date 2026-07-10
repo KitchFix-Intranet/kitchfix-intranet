@@ -49,6 +49,18 @@ const HOMESTAND = [
     description:
       "Spring-training exhibition. Billed as separate catering outside the contract. Display-only - excluded from the game-days-entered counter and not clickable.",
   },
+  // sc-13 (2026-07-10): away games - team is on the road, no service.
+  // Display-only tile - carries date + opponent for planning context,
+  // but excluded from the game-days-entered counter and not clickable.
+  // The plane glyph top-right is the primary shape signal.
+  {
+    mod: "away",
+    icon: "",
+    label: "Away",
+    labelLong: "Away game",
+    description:
+      "Team is on the road; no service happens at the home clubhouse. Display-only - excluded from the game-days-entered counter and not clickable. Plane glyph top-right is the state signal.",
+  },
 ];
 
 const FEE = [
