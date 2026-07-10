@@ -765,6 +765,26 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
           <div key={weekIdx} role="row" className="sc-workspace-grid-row">
             {week.map((cell, colIdx) => {
               const flatIdx = weekIdx * 7 + colIdx;
+              if (cell.ghost) {
+                // P1 item 6 (render R4b): in-period date with no
+                // metadata row. Inert (aria-hidden + no onClick),
+                // excluded from roving (cell.day is null, scan helpers
+                // skip it), never renders content or overlays.
+                const dayNumber = Number(cell.ghostDate.slice(8, 10));
+                return (
+                  <span
+                    key={flatIdx}
+                    className="sc-workspace-grid-cell"
+                    aria-hidden="true"
+                  >
+                    <span className="sc-daysq sc-daysq--lg sc-daysq--ghost">
+                      <span className="sc-daysq-top">
+                        <span className="sc-daysq-date">{dayNumber}</span>
+                      </span>
+                    </span>
+                  </span>
+                );
+              }
               if (!cell.day) {
                 return <span key={flatIdx} className="sc-workspace-grid-cell sc-workspace-grid-cell-empty" aria-hidden="true" />;
               }
@@ -1048,7 +1068,17 @@ function buildWorkspaceWeekGrid(periodRange, periodDays, loadState = "loaded") {
       const stubDay = inPeriod && loadState === "failed" && !realDay
         ? { date: dateStr, status: null, meta: {} }
         : null;
-      cells.push({ day: realDay || stubDay || null });
+      // P1 item 6 (render R4b, 2026-07-10): in-period calendar dates
+      // that carry no metadata row (no projection, no actual, no
+      // sc_day_metadata) and are NOT the failed-state fabrication
+      // render as GHOST tiles: white ground + 1px dashed border +
+      // muted numeral, inert to keyboard + counts. Marker only; the
+      // roving-tabindex helpers still use `cell.day` (null for ghosts)
+      // so ghosts are naturally skipped there. The render branch
+      // detects `cell.ghost` before falling through to the out-of-
+      // period empty span.
+      const ghostDate = inPeriod && !realDay && !stubDay ? dateStr : null;
+      cells.push({ day: realDay || stubDay || null, ghost: !!ghostDate, ghostDate });
       cursor.setDate(cursor.getDate() + 1);
     }
     week++;

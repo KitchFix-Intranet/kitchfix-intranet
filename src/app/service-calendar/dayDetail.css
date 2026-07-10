@@ -471,13 +471,20 @@
   color: var(--text-heading);
 }
 
-/* SC-075 (render G1): in-group extras expander as a sub-header band.
-   Page-tint ground with a hairline top border seals it to the group
-   card, the caps label sits on the left, and the +/- chip on the
-   right adopts the F3 bordered-square language for continuity with
-   the off-group siblings. Whole band is the button - aria-expanded
-   carries the state. Hover deepens the ground; :active pressed;
-   reduced-motion pair. */
+/* SC-075 (render G1) + P1 item 1 (render R1a-navy, 2026-07-10): in-group
+   extras expander as a sub-header band, restyled to read as the
+   sc-day-group-header's structural sibling. White ground so the band
+   sits inside the group card as a peer of the header rather than a
+   sunken belt; 3px left navy accent using the SAME --text-link the
+   header uses so the two share one alignment line; 1px top + bottom
+   hairlines seal it top and bottom (was top-only page-tint). Hover
+   tint moves down one step (--surface-page instead of the previous
+   --surface-sunken) so the interaction reads on white without
+   overshooting; label color moves up to --text-default. The +/- chip
+   at right keeps its F3 bordered-square language; the whole band is
+   the button (aria-expanded carries the state). Focus-visible ring,
+   :active pressed, and reduced-motion pair unchanged - the C2 tactile
+   family on sibling buttons is untouched. */
 .sc-day-extras-band {
   display: flex;
   align-items: center;
@@ -488,8 +495,10 @@
   margin: 0;
   border: none;
   border-top: var(--border-thin) solid var(--border-default);
+  border-bottom: var(--border-thin) solid var(--border-default);
+  border-left: 3px solid var(--text-link);
   border-radius: 0;
-  background: var(--surface-page);
+  background: var(--surface-card);
   cursor: pointer;
   font-family: inherit;
   font-size: var(--size-caption);
@@ -498,7 +507,7 @@
   transition: background var(--motion-control), color var(--motion-control);
 }
 .sc-day-extras-band:hover {
-  background: var(--surface-sunken);
+  background: var(--surface-page);
   color: var(--text-default);
 }
 .sc-day-extras-band:active { transform: translateY(1px); }

@@ -57,6 +57,30 @@
   font-size: var(--size-body);
 }
 
+/* P1 item 6 (render R4b, 2026-07-10): ghost tile for in-period
+   calendar dates without a metadata row. White ground, 1px dashed
+   subtle border, muted date numeral, nothing else. Inert - the tile
+   carries no interactive class, no onClick, no aria-label; the parent
+   span is aria-hidden, the workspace grid's roving-tabindex helpers
+   skip it (cell.day is null). Never emits status fills, badges, or
+   TODAY pill overrides. Sized to match sc-daysq--lg so the grid rows
+   don't jog when a ghost neighbours a real cell.
+   Workspace scope only - the year-overview cards synthesize full
+   calendar grids and don't need this. */
+.sc-daysq--ghost {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border: var(--border-thin) dashed var(--border-subtle);
+  border-radius: var(--radius-cell);
+  box-shadow: none;
+  cursor: default;
+}
+.sc-daysq--ghost .sc-daysq-date {
+  color: var(--text-subtle);
+  font-weight: var(--wt-medium);
+}
+
 /* Top row (date + badge) -------------------------------------------- */
 .sc-daysq-top {
   display: flex;
