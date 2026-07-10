@@ -26,6 +26,81 @@ function formatEntryStamp(iso) {
   return `${dateStr} · ${timeStr}`;
 }
 
+// F1 (M2): merge NOTE ledger + actuals EDIT history into one
+// chronological Activity feed (newest first) for the DayDetail M2
+// rendering. Consecutive same-timestamp EDITs that ALL write 0 collapse
+// into a single "Marked no service" system row - matches the mark-no-
+// service flow's server-side signature (all in-service services set to
+// 0 in the same batch). Anything else renders individually per row.
+//
+// noteEntries: [{ note, author, createdAt }]  (server order: newest first)
+// historyEntries: [{ serviceId, serviceName, oldValue, newValue, author, changedAt }]
+//   (server order: newest first)
+//
+// Return shape:
+//   [{ type: "note"|"edit", timestamp, author, key, ...body }]
+//   where body varies:
+//     note      -> { note }
+//     edit      -> { serviceName, oldValue, newValue }
+//     edit sys  -> { systemPhrasing: true }  (all-zero batch)
+function mergeActivity(noteEntries, historyEntries) {
+  const rows = [];
+  for (const n of (noteEntries || [])) {
+    rows.push({
+      type: "note",
+      timestamp: n.createdAt,
+      author: n.author,
+      key: `n:${n.createdAt}`,
+      note: n.note,
+    });
+  }
+  // Bucket history by changedAt truncated to the second. The trigger
+  // fires per-service inside one upsert, so within-batch rows share
+  // changedAt to millisecond precision; the second-truncation gives a
+  // little slop for ~1s network jitter.
+  const buckets = new Map();
+  for (const h of (historyEntries || [])) {
+    const t = new Date(h.changedAt);
+    if (!Number.isNaN(t.getTime())) t.setMilliseconds(0);
+    const key = Number.isNaN(t.getTime()) ? String(h.changedAt) : t.toISOString();
+    if (!buckets.has(key)) buckets.set(key, { author: h.author, changedAt: h.changedAt, entries: [] });
+    buckets.get(key).entries.push(h);
+  }
+  for (const [bucketKey, bucket] of buckets.entries()) {
+    // A true mark-no-service writes ALL in-service services in one
+    // batch, so bucket.entries.length > 1 is the required signature.
+    // A lone zero (a single-service correction from N -> 0) is a plain
+    // edit and must render as `Service N -> 0`, not as the system
+    // "Marked no service" phrasing. The theoretical single-service-day
+    // edge (a day with exactly one service that gets marked no-service)
+    // falls through to the normal EDIT row - still truthful.
+    const allZero = bucket.entries.length > 1 && bucket.entries.every(e => Number(e.newValue) === 0);
+    if (allZero) {
+      rows.push({
+        type: "edit",
+        systemPhrasing: true,
+        timestamp: bucket.changedAt,
+        author: bucket.author,
+        key: `edit-sys:${bucketKey}`,
+      });
+    } else {
+      for (const e of bucket.entries) {
+        rows.push({
+          type: "edit",
+          timestamp: e.changedAt,
+          author: e.author,
+          key: `edit:${bucketKey}:${e.serviceId}`,
+          serviceName: e.serviceName,
+          oldValue: e.oldValue,
+          newValue: e.newValue,
+        });
+      }
+    }
+  }
+  rows.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+  return rows;
+}
+
 // SC-058: PDC-PDC dedupe. TBJ-FL (and similar) group.name rows in
 // sc_service_groups already end with the segment ("Minor League - PDC"),
 // while the price line composes `{accountSegment} · {price}`. The row
@@ -101,6 +176,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // a refetch.
   const [notes, setNotes] = useState("");
   const [noteEntries, setNoteEntries] = useState(day.noteEntries || []);
+  // F1 (M2): actuals-edit history read at the same moment as the notes.
+  // Day-nav reseeds both. Add-note prepends optimistically only into
+  // noteEntries; history rehydrates naturally on the next month refetch
+  // triggered by a successful save.
+  const [historyEntries, setHistoryEntries] = useState(day.historyEntries || []);
   const [isPostingNote, setIsPostingNote] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [expandedExtras, setExpandedExtras] = useState(new Set());
@@ -154,6 +234,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     // day.noteEntries; nothing needs preserving in local state.
     setNotes("");
     setNoteEntries(day.noteEntries || []);
+    setHistoryEntries(day.historyEntries || []);
     setExpandedGroups(new Set());
     setExpandedExtras(new Set());
     setShowReview(null);
@@ -163,7 +244,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     setShowDiscardConfirm(false);
     // SC-066: same for the no-service confirm.
     setShowNoServiceConfirm(false);
-  }, [day.date, serviceGroups, day.actual, day.noteEntries]);
+  }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // SC-063 + C1b: dirty = any editValues entry differs from its
   // initialValues counterpart OR the notes draft is non-empty.
@@ -711,7 +792,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               first from the ledger + author/time context) rather than
               echoing an unposted textarea draft. Empty ledger renders
               the muted "No notes" state so the row's absence is
-              deliberate. */}
+              deliberate.
+              F1 (M2): this surface stays NOTES-only. Its semantic is
+              "the operator's last authored explanation before this
+              save" - not an audit slice. Actuals edit history lives in
+              the Activity ledger below and never appears here. */}
           {(() => {
             const latest = noteEntries[0];
             const emptyCls = latest ? "" : " sc-day-review-note--empty";
@@ -1010,19 +1095,55 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             </button>
           </div>
 
-          {noteEntries.length > 0 && (
-            <ul className="sc-day-note-ledger" aria-label="Note history">
-              {noteEntries.map((e, i) => (
-                <li key={e.id || `${e.createdAt}-${i}`} className="sc-day-note-entry">
-                  <span className="sc-day-note-entry-body">{e.note}</span>
-                  <span className="sc-day-note-entry-meta">
-                    <strong>{e.author || "—"}</strong>
-                    {" · "}
-                    {formatEntryStamp(e.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {/* F1 (M2): the ledger becomes the unified Activity view -
+              notes + actuals edit history merged newest-first with a
+              type chip per row. NOTE rows are the append-only sc_day_note
+              ledger unchanged. EDIT rows come from sc_daily_actuals_history
+              via the trigger (BEFORE UPDATE only; first-writes produce no
+              EDIT row by design). Consecutive same-timestamp EDITs all
+              writing 0 collapse to a single system row "Marked no service
+              (all services 0)"; anything else renders individually. The
+              add-note input above stays a NOTES-only surface (a new note
+              prepends as a NOTE row); the review overlay's Latest note
+              remains NOTES-only for semantic clarity. */}
+          {(noteEntries.length > 0 || historyEntries.length > 0) && (
+            <div className="sc-day-activity">
+              <div className="sc-day-activity-band">
+                <span className="sc-day-activity-band-label">Activity</span>
+                <span className="sc-day-activity-band-count">
+                  · {noteEntries.length + historyEntries.length}
+                </span>
+              </div>
+              <ul className="sc-day-activity-list" aria-label="Activity ledger">
+                {mergeActivity(noteEntries, historyEntries).map((row, i) => (
+                  <li key={row.key || `${row.timestamp}-${i}`} className={`sc-day-activity-item sc-day-activity-item--${row.type}`}>
+                    <span className={`sc-day-activity-chip sc-day-activity-chip--${row.type}`}>
+                      {row.type === "note" ? "NOTE" : "EDIT"}
+                    </span>
+                    <div className="sc-day-activity-body">
+                      {row.type === "note" ? (
+                        <span className="sc-day-activity-note">{row.note}</span>
+                      ) : row.systemPhrasing ? (
+                        <span className="sc-day-activity-system">Marked no service (all services 0)</span>
+                      ) : (
+                        <span className="sc-day-activity-edit">
+                          <strong className="sc-day-activity-svc">{row.serviceName}</strong>
+                          {" "}
+                          <span className="sc-day-activity-old">{row.oldValue}</span>
+                          {" → "}
+                          <strong className="sc-day-activity-new">{row.newValue}</strong>
+                        </span>
+                      )}
+                    </div>
+                    <span className="sc-day-activity-meta">
+                      <strong>{row.author || "—"}</strong>
+                      {" · "}
+                      {formatEntryStamp(row.timestamp)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </div>
