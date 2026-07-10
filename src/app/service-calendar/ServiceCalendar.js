@@ -100,9 +100,13 @@ function aggregateWorkspaceMetrics(days) {
     // SC-043: service-day predicate. Excludes the non-service statuses.
     // For MLB homestand the classifier emits entered/future so both count;
     // for per-meal/MiLB/STL-FL, no-service days drop out.
+    // sc-12 (2026-07-10): exhibition is billed outside the contract - it
+    // is NOT a service day for rollup purposes, so the week/period
+    // subtotals don't inflate their serviceDays denominator.
     const isServiceDay = day.status !== "no-service"
       && day.status !== "off-season"
-      && day.status !== "prep";
+      && day.status !== "prep"
+      && day.status !== "exhibition";
     if (isServiceDay) {
       out.serviceDays++;
       // Step-0 widening also applies to serviceDaysEntered so the fee
