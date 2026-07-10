@@ -672,7 +672,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   // - within default - but TBJ-FL with 21 services * 31 = 651, still
   // under. Paginate anyway so the year-view bug class (PostgREST cap
   // silently dropping rows) can't ever bite this path either.
-  const [viewRows, billingRes, noteEntriesByDate] = await Promise.all([
+  const [viewRows, billingRes, noteEntriesByDate, historyEntriesByDate] = await Promise.all([
     fetchAllPaginated(
       supa,
       (q) => q
@@ -694,6 +694,9 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
     // Map keyed by service_date, values are per-day arrays already
     // ordered newest-first inside each bucket.
     readNoteEntriesForRange(accountKey, first, last),
+    // F1 (M2): the actuals-history feed powering the Activity ledger's
+    // EDIT rows. Same batched-by-range pattern as noteEntries.
+    readHistoryEntriesForRange(accountKey, first, last),
   ]);
   throwOnError(billingRes.error, "loadMonthData.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
@@ -785,6 +788,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         // entries so the client can render the empty container without
         // a null-check.
         noteEntries: noteEntriesByDate.get(day.date) || [],
+        // F1 (M2): actuals-edit history, newest first. Empty array when
+        // the day has no historical UPDATEs (fresh saves do NOT populate
+        // this by trigger design - see readHistoryEntriesForRange).
+        historyEntries: historyEntriesByDate.get(day.date) || [],
       };
     });
 
@@ -1286,6 +1293,58 @@ export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
       createdAt: data.created_at,
     },
   };
+}
+
+// readHistoryEntriesForRange - one query for a whole month range,
+// keyed by service_date so the month loader can attach per-day arrays
+// in a single pass. Ordered by (service_date, changed_at DESC) so the
+// per-day arrays land newest-first inside each bucket without a
+// second sort. Service name resolution comes from a parallel
+// sc_services fetch (no deleted_at filter - archived/hard-deleted
+// services still surface their name in the audit trail).
+//
+// Coverage: the sc_daily_actuals_audit trigger fires only on UPDATE
+// (WHEN old_count IS DISTINCT FROM new_count). First INSERTs produce
+// NO history row by design; the originating sc_daily_actuals row
+// carries created_by + created_at + initial actual_count instead.
+// See sc-1-service-calendar-schema.sql:263-268.
+export async function readHistoryEntriesForRange(accountKey, first, last) {
+  const supa = getServiceClient();
+  const [historyRows, servicesRes] = await Promise.all([
+    fetchAllPaginated(
+      supa,
+      (q) => q
+        .from("sc_daily_actuals_history")
+        .select("service_date, service_id, old_count, new_count, changed_by, changed_at")
+        .eq("account_key", accountKey)
+        .gte("service_date", first)
+        .lte("service_date", last)
+        .order("service_date", { ascending: true })
+        .order("changed_at",   { ascending: false })
+        .order("service_id",   { ascending: true }),
+      "readHistoryEntriesForRange.history"
+    ),
+    supa
+      .from("sc_services")
+      .select("id, service_name")
+      .eq("account_key", accountKey),
+  ]);
+  throwOnError(servicesRes.error, "readHistoryEntriesForRange.services");
+  const svcNameById = new Map();
+  for (const s of servicesRes.data || []) svcNameById.set(s.id, s.service_name);
+  const byDate = new Map();
+  for (const r of historyRows || []) {
+    if (!byDate.has(r.service_date)) byDate.set(r.service_date, []);
+    byDate.get(r.service_date).push({
+      serviceId:   r.service_id,
+      serviceName: svcNameById.get(r.service_id) || "(archived service)",
+      oldValue:    Number(r.old_count),
+      newValue:    Number(r.new_count),
+      author:      r.changed_by || null,
+      changedAt:   r.changed_at,
+    });
+  }
+  return byDate;
 }
 
 // readNoteEntriesForRange - one query for a whole month range, keyed

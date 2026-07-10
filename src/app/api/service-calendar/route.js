@@ -258,6 +258,17 @@ function transformDays(orchDays) {
         author:    e.author,
         createdAt: e.createdAt,
       })),
+      // F1 (M2): actuals-edit history per day, newest first. Same
+      // pass-through pattern as noteEntries. Author null on legacy /
+      // seed rows; UI renders as em-dash.
+      historyEntries: (d.historyEntries || []).map((h) => ({
+        serviceId:   h.serviceId,
+        serviceName: h.serviceName,
+        oldValue:    h.oldValue,
+        newValue:    h.newValue,
+        author:      h.author,
+        changedAt:   h.changedAt,
+      })),
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,

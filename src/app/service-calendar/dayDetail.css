@@ -650,18 +650,52 @@
   padding: 6px var(--space-3);
   font-size: var(--size-caption);
 }
-.sc-day-note-ledger {
+/* F1 (M2 render): the notes ledger becomes the unified Activity view.
+   Same bordered container + max-height + overflow as the pre-F1 ledger
+   (so scroll + empty-hide behavior mirrors the prior UX), plus:
+   - a G1-style band header "Activity · N" seals the top of the box
+   - each row leads with a small type chip (NOTE / EDIT) that reads at
+     a glance without weight-flipping the body
+   - EDIT bodies compose {Service} {old struckthrough} → {new bold},
+     collapsing all-zero-in-one-batch EDIT groups to a single
+     "Marked no service" system row per the mark-no-service semantic. */
+.sc-day-activity {
   margin-top: var(--space-3);
-  padding: 0;
   border: var(--border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   background: var(--surface-card);
+  overflow: hidden;
+}
+.sc-day-activity-band {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  background: var(--surface-page);
+  border-bottom: var(--border-thin) solid var(--border-subtle);
+  font-size: var(--size-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+.sc-day-activity-band-label {
+  font-weight: var(--wt-bold);
+  color: var(--text-muted);
+}
+.sc-day-activity-band-count {
+  font-weight: var(--wt-semibold);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-day-activity-list {
   list-style: none;
-  max-height: 180px;
+  padding: 0;
+  margin: 0;
+  max-height: 220px;
   overflow-y: auto;
 }
-.sc-day-note-entry {
-  display: flex;
+.sc-day-activity-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -669,21 +703,66 @@
   font-size: var(--size-body);
   color: var(--text-default);
 }
-.sc-day-note-entry:last-child { border-bottom: none; }
-.sc-day-note-entry-body {
-  flex: 1 1 auto;
+.sc-day-activity-item:last-child { border-bottom: none; }
+
+/* Type chips - NOTE is the sc-tint family (same green wash the
+   Match-projections pill uses so notes read as author-authored
+   content). EDIT is the sunken outline (system-of-record affordance). */
+.sc-day-activity-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--size-micro);
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  min-width: 42px;
+  flex-shrink: 0;
+}
+.sc-day-activity-chip--note {
+  background: var(--accent-sc-tint);
+  color: var(--accent-sc-dark);
+  border: var(--border-thin) solid var(--accent-sc-subtle);
+}
+.sc-day-activity-chip--edit {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: var(--border-thin) solid var(--border-default);
+}
+.sc-day-activity-body {
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
-.sc-day-note-entry-meta {
+.sc-day-activity-svc {
+  font-weight: var(--wt-semibold);
+  color: var(--text-default);
+}
+.sc-day-activity-old {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-day-activity-new {
+  color: var(--text-default);
+  font-weight: var(--wt-bold);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-day-activity-system {
+  font-style: italic;
+  color: var(--text-muted);
+}
+.sc-day-activity-meta {
   flex-shrink: 0;
   font-size: var(--size-caption);
   color: var(--text-muted);
   font-variant-numeric: var(--num-tabular);
   text-align: right;
+  white-space: nowrap;
 }
-.sc-day-note-entry-meta strong {
+.sc-day-activity-meta strong {
   color: var(--text-default);
   font-weight: var(--wt-semibold);
 }
