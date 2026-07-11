@@ -165,6 +165,52 @@
 .sc-daysq-milb-glyph--day { color: var(--status-needs-strong); }
 .sc-daysq-milb-glyph--night { color: var(--text-link); }
 
+/* Ghost day/night pill (2026-07-11): lg-only, top-right corner
+   (rightmost of the .sc-daysq-top-right cluster, outboard of the
+   status badge). Transparent fill + hairline colored border - Option
+   B "restrained" per Kevin's review, kept subordinate to the
+   game-day green border (PR #392) and the opponent chip.
+   Day = amber outline+text; night = indigo outline+text.
+   Aligned baseline-ish with the badge via inline-flex + tiny padding.
+   Font-size tuned to sit right below the date's h3 without dominating. */
+.sc-daysq-dn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 4px;
+  border-radius: var(--radius-pill);
+  border: var(--border-thin) solid currentColor;
+  background: transparent;
+  font-size: var(--size-micro);
+  font-weight: var(--wt-semibold);
+  line-height: 1;
+  font-variant-numeric: var(--num-tabular);
+  letter-spacing: 0;
+  flex-shrink: 0;
+}
+.sc-daysq-dn-pill-glyph {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+}
+.sc-daysq-dn-pill-time {
+  color: inherit;
+}
+/* Day = amber. Reuses --status-needs-strong (amber-500) so the pill
+   family matches the existing MiLB sun color. */
+.sc-daysq-dn-pill--day {
+  color: var(--status-needs-strong);
+}
+/* Night = indigo. Uses --text-link (navy-700) to match the existing
+   MiLB moon color and keeps the pill in-brand for MLB (navy family). */
+.sc-daysq-dn-pill--night {
+  color: var(--text-link);
+}
+/* sm: the pill is not rendered at all (see DaySquare.js gate on
+   size === "lg"). This defensive rule hides any stray sm-rendered
+   pill in case a future caller forgets the gate. */
+.sc-daysq--sm .sc-daysq-dn-pill { display: none; }
+
 /* MLB fee tile stack (P7): opponent is a navy chip on its own line;
    the headcount sits below as "N meals" with the count as hero and
    the unit trailing muted. Scoped to --mlb so the year-view sm tiles
