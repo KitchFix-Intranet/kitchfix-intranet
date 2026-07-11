@@ -55,6 +55,32 @@ function monthsBetween(startStr, endStr) {
 const CAT_ORDER = { PDC: 1, MLB: 2, MiLB: 3 };
 const CAT_LABELS = { PDC: "Player Development", MLB: "Major League", MiLB: "Minor League" };
 
+// 2026-07-11 (nav rehydration, redo after the #399/#400 revert cycle):
+// URL builder for every state->URL push. Params emitted in insertion
+// order; falsy values omitted so the URL stays clean.
+//
+// Unlike the earlier #399 attempt, this helper is ONLY used on the
+// WRITE side. Reads split into two effects (see below):
+//   - Mount-time init: reads `?account=` ONCE at first paint. Deps [].
+//   - URL-sync effect: reads view/period/month only. Deps
+//     [searchParams, isAdmin] - the pre-#399 shape. Does NOT read
+//     or write selectedAccount, so it cannot re-fire on its own
+//     writes.
+// The AccountDropdown moves state DIRECTLY via setSelectedAccount
+// and pushes the URL in parallel (see wiring near line ~1740). The
+// URL-sync re-fire that follows the push sees no scope/lens/etc
+// change and no-ops. This is the unidirectional flow that #399
+// tried and failed to achieve.
+function buildScUrl({ account, period, month, view } = {}) {
+  const params = new URLSearchParams();
+  if (view)    params.set("view", view);
+  if (account) params.set("account", account);
+  if (period)  params.set("period", period);
+  if (month)   params.set("month", month);
+  const qs = params.toString();
+  return qs ? `/service-calendar?${qs}` : "/service-calendar";
+}
+
 // Aggregate the workspace metrics (totals + per-week subtotals) from a
 // days array. Shared by periodMetrics (fiscal period) and monthMetrics
 // (calendar month) so the range-based PeriodWorkspace reads either
@@ -372,15 +398,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         if (!d.success || !d.accounts?.length) return;
         const sorted = d.accounts.sort((a, b) => (CAT_ORDER[a.category]||9) - (CAT_ORDER[b.category]||9) || a.key.localeCompare(b.key));
         setAccounts(sorted);
-        // Account-selection fallback chain:
-        //   1. user's mapped account (defaultAccount from user_accounts)
-        //   2. CIN-AZ (corp/admin/unmapped operator default)
-        //   3. first account in the sorted list
+        // Account-selection fallback chain (2026-07-11 refactor: URL now
+        // wins so a hard refresh at /?account=TXR-TX-H&period=P1 lands on
+        // TXR-TX-H, not the user's default):
+        //   1. `?account=` in the URL (if it maps to a loaded account)
+        //   2. user's mapped account (defaultAccount from user_accounts)
+        //   3. CIN-AZ (corp/admin/unmapped operator default)
+        //   4. first account in the sorted list
         // The match-against-list check guards against a mapping pointing
         // at an account that isn't currently imported (e.g. CORP rows
         // from the contacts seed; CORP has no sc_services so it's not in
         // the dropdown).
-        const fallbacks = [d.defaultAccount, "CIN - AZ"].filter(Boolean);
+        //
+        // This is the ONLY place URL->selectedAccount hydration happens.
+        // It runs ONCE per mount (the effect's deps are [showToast],
+        // captured stable). No self-refire is possible because
+        // selectedAccount is only WRITTEN here, never read as a dep.
+        const urlAccount = searchParams?.get("account") || null;
+        const fallbacks = [urlAccount, d.defaultAccount, "CIN - AZ"].filter(Boolean);
         let initial = sorted[0].key;
         for (const f of fallbacks) {
           if (sorted.find(a => a.key === f)) { initial = f; break; }
@@ -604,13 +639,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setPeriodKey(containingToday ? containingToday.period : periodRanges[0].period);
   }, [lens, periodRanges, periodKey, today]);
 
-  // URL is the single source of truth for the routed view. Any URL
-  // change - mount, in-app push, or browser back/forward - derives the
-  // view state from it. ONE-WAY: handlers push the URL; this reads it;
-  // state never writes back, so there is no sync loop. Replaces the old
-  // isAdminView->URL and periodKey->URL replace effects, which never
-  // built a back-stack. Redundant sets are no-ops (React bails when the
-  // value is unchanged).
+  // URL-sync effect for the ROUTED VIEW ONLY (view/period/month). Any
+  // URL change - mount, in-app push, browser back/forward - derives
+  // view state from the URL. Redundant sets are no-ops (React bails
+  // when primitives are unchanged).
+  //
+  // 2026-07-11 nav-rehydration redo (post-#399 revert): this effect
+  // DELIBERATELY does not read or write `selectedAccount`. Account
+  // hydration lives in the accounts-init fetch below (runs once per
+  // mount, reads `?account=` from the initial URL). The dropdown moves
+  // selectedAccount DIRECTLY via setSelectedAccount and pushes the URL
+  // in parallel - the URL-sync re-fire that follows the push touches
+  // only view/period/month, sees no scope change, no-ops.
+  //
+  // Deps stay at [searchParams, isAdmin] - the pre-#399 shape - so
+  // the effect cannot re-fire in response to its own writes. Adding
+  // selectedAccount or accounts to these deps is exactly what caused
+  // the self-refire loop in #399.
   useEffect(() => {
     const view = searchParams?.get("view") || null;
     const period = searchParams?.get("period") || null;
@@ -685,7 +730,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     //   - Cold load, clean URL -> landing fires once. (Unchanged.)
     if (searchParams?.get("reset")) {
       floorRedirectDone.current = false;
-      router.replace("/service-calendar", { scroll: false });
+      // Preserve `?account=` across the reset strip so a Top-nav click
+      // while on a non-default account keeps that account (dropping the
+      // drill scope is enough, no need to also bounce to CIN-AZ).
+      router.replace(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
       return;
     }
 
@@ -709,8 +757,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
     const target = containingToday ? containingToday.period : periodRanges[0].period;
     floorRedirectDone.current = true;
-    router.replace(`/service-calendar?period=${target}`, { scroll: false });
-  }, [rawRoles, hasHomeAccount, isAdmin, periodRanges, searchParams, today, router]);
+    router.replace(buildScUrl({ account: selectedAccount || undefined, period: target }), { scroll: false });
+  }, [rawRoles, hasHomeAccount, isAdmin, periodRanges, searchParams, today, router, selectedAccount]);
 
   // Save invalidation: each save handler now drops ONLY the calendar
   // month(s) it wrote to, surgically. The prior blanket setMonthCache({})
@@ -1620,10 +1668,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const jumpToDay = useCallback((t) => {
     if (!t) return;
     if (t.period) {
-      router.push(`/service-calendar?period=${t.period}`, { scroll: false });
+      router.push(buildScUrl({ account: selectedAccount || undefined, period: t.period }), { scroll: false });
     }
     setFocusDay(t.date);
-  }, [router]);
+  }, [router, selectedAccount]);
   const handleJumpToNeeds = useCallback(() => jumpToDay(jumpTargets.needs), [jumpToDay, jumpTargets]);
   const handleJumpToOverdue = useCallback(() => jumpToDay(jumpTargets.overdue), [jumpToDay, jumpTargets]);
 
@@ -1644,13 +1692,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   const handleAdminToggle = useCallback(() => {
     if (isAdminView) {
-      router.push("/service-calendar", { scroll: false });
+      router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
     } else {
-      router.push("/service-calendar?view=admin", { scroll: false });
+      // Admin panel is global; account stays on the URL so exiting
+      // admin lands back on the same account.
+      router.push(buildScUrl({ account: selectedAccount || undefined, view: "admin" }), { scroll: false });
       setFocusDay(null);
       setBulkMode(false);
     }
-  }, [isAdminView, router]);
+  }, [isAdminView, router, selectedAccount]);
 
   // PR 3: drill-in nav handlers are lifted here so both the ChromeBar's
   // PeriodHeaderNav slot and PeriodWorkspace (before Commit 4 strips
@@ -1658,26 +1708,26 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // canPrevPeriod / canNextPeriod / isCurrentPeriod) live at the same
   // scope so the header slot can render outside the workspace.
   const handleClimbToSeason = useCallback(() => {
-    router.push("/service-calendar", { scroll: false });
+    router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
     setFocusDay(null);
     setBulkMode(false);
     setBulkSelected(new Set());
-  }, [router]);
+  }, [router, selectedAccount]);
   const handlePrevPeriod = useCallback(() => {
     if (!periodRanges?.length) return;
     const idx = periodRanges.findIndex(r => r.period === periodKey);
-    if (idx > 0) router.push(`/service-calendar?period=${periodRanges[idx - 1].period}`, { scroll: false });
-  }, [periodRanges, periodKey, router]);
+    if (idx > 0) router.push(buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx - 1].period }), { scroll: false });
+  }, [periodRanges, periodKey, router, selectedAccount]);
   const handleNextPeriod = useCallback(() => {
     if (!periodRanges?.length) return;
     const idx = periodRanges.findIndex(r => r.period === periodKey);
-    if (idx >= 0 && idx < periodRanges.length - 1) router.push(`/service-calendar?period=${periodRanges[idx + 1].period}`, { scroll: false });
-  }, [periodRanges, periodKey, router]);
+    if (idx >= 0 && idx < periodRanges.length - 1) router.push(buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx + 1].period }), { scroll: false });
+  }, [periodRanges, periodKey, router, selectedAccount]);
   const handleTodayJump = useCallback(() => {
     if (!periodRanges?.length) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-    if (containingToday) router.push(`/service-calendar?period=${containingToday.period}`, { scroll: false });
-  }, [periodRanges, today, router]);
+    if (containingToday) router.push(buildScUrl({ account: selectedAccount || undefined, period: containingToday.period }), { scroll: false });
+  }, [periodRanges, today, router, selectedAccount]);
 
   const drillPeriodRange = periodRanges?.find(r => r.period === periodKey) || null;
   const drillPeriodIdx = periodRanges?.findIndex(r => r.period === periodKey) ?? -1;
@@ -1693,20 +1743,20 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
     if (m <= 1) return;
-    router.push(`/service-calendar?month=${y}-${String(m - 1).padStart(2, "0")}`, { scroll: false });
-  }, [monthKey, router]);
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m - 1).padStart(2, "0")}` }), { scroll: false });
+  }, [monthKey, router, selectedAccount]);
   const handleNextMonth = useCallback(() => {
     if (!monthKey) return;
     const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
     if (m >= 12) return;
-    router.push(`/service-calendar?month=${y}-${String(m + 1).padStart(2, "0")}`, { scroll: false });
-  }, [monthKey, router]);
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m + 1).padStart(2, "0")}` }), { scroll: false });
+  }, [monthKey, router, selectedAccount]);
   const handleMonthTodayJump = useCallback(() => {
     const mk = today ? today.slice(0, 7) : null;
     if (!mk) return;
-    router.push(`/service-calendar?month=${mk}`, { scroll: false });
-  }, [today, router]);
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+  }, [today, router, selectedAccount]);
 
   const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
   const canPrevMonth = drillMonthIdx > 1;
@@ -1737,7 +1787,30 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       )}
     </div>
   ) : (
-    <AccountDropdown accounts={accounts} value={selectedAccount} onChange={setSelectedAccount} />
+    <AccountDropdown
+      accounts={accounts}
+      value={selectedAccount}
+      onChange={(next) => {
+        // 2026-07-11 nav-rehydration redo (dual-push): state moves
+        // DIRECTLY here (no round-trip through the URL) AND the URL
+        // persists in parallel. This is what fixes the #399 dropdown
+        // regression:
+        //   - setSelectedAccount runs synchronously with the click ->
+        //     the click "sticks" no matter what the URL-sync effect
+        //     does downstream.
+        //   - router.push updates the URL for refresh/sharing.
+        //   - The URL-sync effect that fires from the router.push
+        //     reads view/period/month only. It does NOT touch
+        //     selectedAccount, so it cannot revert our setState.
+        setSelectedAccount(next);
+        router.push(buildScUrl({
+          account: next || undefined,
+          period: isPeriodView ? periodKey : undefined,
+          month: isMonthView ? monthKey : undefined,
+          view: isAdminView ? "admin" : undefined,
+        }), { scroll: false });
+      }}
+    />
   );
 
   return (
@@ -1912,13 +1985,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             // ?period= (below).
             onMonthClick={(mi) => {
               const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
-              router.push(`/service-calendar?month=${mk}`, { scroll: false });
+              router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
               setFocusDay(null);
               setBulkMode(false);
             }}
             periodRanges={periodRanges}
             onPeriodClick={(periodLabel) => {
-              router.push(`/service-calendar?period=${periodLabel}`, { scroll: false });
+              router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
             }}
             // Lifted view toggle (the action signal moved to the chrome
             // bar, so the season shell no longer carries jump props).
