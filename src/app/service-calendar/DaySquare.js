@@ -220,9 +220,10 @@ export default function DaySquare({
               {meta.icon}
             </span>
           ) : null}
-          {size === "lg" && content?.dayNight && (
-            <DayNightPill type={content.dayNight} timeText={content.pillTime} />
-          )}
+          {/* 2026-07-11 layout move: day/night pill was here; it now
+              lives in the mid-content stack directly below the
+              opponent chip (see renderMlbFee / renderMilb). The corner
+              cluster returns to [note bubble] [status badge]. */}
         </span>
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
@@ -408,12 +409,17 @@ function renderPerMeal(content, status) {
 }
 
 function renderMlbFee(content) {
-  const { opponent, meals, isEstimated } = content;
-  if (!opponent && meals == null) return null;
+  const { opponent, meals, isEstimated, dayNight, pillTime } = content;
+  if (!opponent && meals == null && !dayNight) return null;
   // Stacked layout (option A): opponent reads as a navy chip on its own
   // line; the headcount sits beneath as "N meals" with the count as hero
   // and unit as trailing muted small. The old inline "vs OPP / N meals"
   // dropped both surfaces into one line - hard to scan on the grid.
+  //
+  // 2026-07-11 layout move: day/night pill moved OUT of the top-right
+  // corner cluster and INTO the mid-content stack, directly below the
+  // opponent chip. Reads top-to-bottom: [vs OPP] / [pill] / [N meals].
+  // Left-aligned under the opponent chip via flex-start on the container.
   //
   // SC-042: unentered days prefix the meals with "~" so the projection
   // reads as schedule intent, not recorded actuals. Entered days render
@@ -424,6 +430,9 @@ function renderMlbFee(content) {
   return (
     <div className="sc-daysq-mid sc-daysq-mid--mlb">
       {opponent && <span className="sc-daysq-mid-opponent">vs {opponent}</span>}
+      {dayNight && (
+        <DayNightPill type={dayNight} timeText={pillTime} />
+      )}
       {meals != null && (
         <span className="sc-daysq-mid-headcount">
           {mealsPrefix}{fmtMeals(meals)}<span className="sc-daysq-mid-unit">{meals === 1 ? "meal" : "meals"}</span>
@@ -437,19 +446,23 @@ function renderMilb(content, status) {
   // MiLB polymorphism (Stage 5 hardening): MiLB is per-meal financially
   // per docs/SC_BILLING_MODEL_AUDIT.md (CIN-KY: "Per-meal only, two-tier").
   // The two-axis model (spec section 6) composes operational shape
-  // (day/night homestand pill) with the financial frame (per-meal $).
+  // (day/night pill) with the financial frame (per-meal $).
   //
-  // SC-070 (render D): the day/night glyph now sits in the tile's top
-  // row (next to the date), so the mid content restructures to PDC
-  // anatomy - meals hero on top, revenue muted beneath. `milbPill` is
-  // consumed by the top row directly and does NOT appear here anymore.
-  const { meals, revenue, isEstimated } = content;
+  // 2026-07-11 layout move: the day/night glyph, then pill, then now
+  // full ghost pill was in the top-right; it now lives in the mid
+  // stack at the top slot (MiLB has no opponent chip - the pill takes
+  // the top spot before the meals hero). MLB fee's stack reads
+  // [opp] [pill] [meals]; MiLB's reads [pill] [meals] [rev] - one
+  // language, adapted to each kind's existing slots.
+  const { meals, revenue, isEstimated, dayNight, pillTime } = content;
   const hasRev = revenue != null;
   const hasMeals = meals != null;
-  if (!hasRev && !hasMeals) return null;
+  if (!hasRev && !hasMeals && !dayNight) return null;
   // SC-039: no-service short-circuit matching renderPerMeal:235-241. A
   // MiLB day with meals null OR zero is a no-service day; renders the
   // quiet "No service" line instead of the misleading est. $0 / ~$0.
+  // Pill is intentionally NOT rendered on a no-service tile (the
+  // "we're not serving" signal wins over the day/night context).
   if (!meals) {
     return (
       <div className="sc-daysq-mid sc-daysq-mid--off">
@@ -462,6 +475,9 @@ function renderMilb(content, status) {
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
     <div className="sc-daysq-mid sc-daysq-mid--milb">
+      {dayNight && (
+        <DayNightPill type={dayNight} timeText={pillTime} />
+      )}
       {/* Meals hero - same typography classes per-meal uses so the two
           per-meal-financial variants read as one family. */}
       {hasMeals && (

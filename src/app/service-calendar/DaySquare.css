@@ -165,22 +165,30 @@
 .sc-daysq-milb-glyph--day { color: var(--status-needs-strong); }
 .sc-daysq-milb-glyph--night { color: var(--text-link); }
 
-/* Ghost day/night pill (2026-07-11): lg-only, top-right corner
-   (rightmost of the .sc-daysq-top-right cluster, outboard of the
-   status badge). Transparent fill + hairline colored border - Option
-   B "restrained" per Kevin's review, kept subordinate to the
-   game-day green border (PR #392) and the opponent chip.
-   Day = amber outline+text; night = indigo outline+text.
-   Aligned baseline-ish with the badge via inline-flex + tiny padding.
-   Font-size tuned to sit right below the date's h3 without dominating. */
+/* Day/night pill (2026-07-11 restyle): lg-only, now lives in the
+   mid-content stack directly below the opponent chip (mlb-fee) or
+   at the top of the MiLB mid stack. Was previously in the top-right
+   corner cluster; moved to fix crowding + contrast issues (amber
+   text on the green game-day fill failed contrast).
+   Kept subordinate to the game-day green border (PR #392) and the
+   opponent chip - same --size-micro tabular size.
+
+   Fill treatment (2026-07-11 color pass): filled, not ghost. Puts
+   the text on its own light ground instead of fighting the green
+   game-day fill. Day + night both filled so the pair reads as one
+   family. Option B (lighter filled pair) per Kevin's approval.
+
+   Left-aligned under the opponent chip via align-self: flex-start
+   (the parent .sc-daysq-mid--mlb / --milb is already flex-column
+   with align-items: flex-start; align-self is defensive). */
 .sc-daysq-dn-pill {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 5px 1px 4px;
+  padding: 1px 6px 1px 5px;
   border-radius: var(--radius-pill);
-  border: var(--border-thin) solid currentColor;
-  background: transparent;
+  border: var(--border-thin) solid transparent;
   font-size: var(--size-micro);
   font-weight: var(--wt-semibold);
   line-height: 1;
@@ -196,19 +204,33 @@
 .sc-daysq-dn-pill-time {
   color: inherit;
 }
-/* Day = amber. Reuses --status-needs-strong (amber-500) so the pill
-   family matches the existing MiLB sun color. */
+/* Day (filled, pale amber). Kevin's spec: bg #FEF3C7 / border #FCD34D /
+   text #92400E. Mapping:
+   - bg    = var(--cat-mlb-bg) - already #fef3c7 (exact match).
+   - text  = var(--accent-text) = var(--amber-700) = #8C3A00 (delta
+            5 hex points from the spec's #92400E; same family, close
+            enough to preserve the token discipline over hardcoding).
+   - border = #FCD34D hardcoded (no token in the amber ramp
+             matches - the closest --amber-300 is #EEA973, a warmer
+             orange). Flagged as a promotable candidate. */
 .sc-daysq-dn-pill--day {
-  color: var(--status-needs-strong);
+  background: var(--cat-mlb-bg);
+  border-color: #FCD34D;          /* c-amber 300 - promotable */
+  color: var(--accent-text);
 }
-/* Night = indigo. Uses --text-link (navy-700) to match the existing
-   MiLB moon color and keeps the pill in-brand for MLB (navy family). */
+/* Night (filled, pale indigo). Kevin's spec: bg #E0E7FF / border
+   #A5B4FC / text #3730A3. All three hardcoded - the repo has no
+   indigo ramp (navy tokens are brand-blue, not indigo). Flagged as
+   promotable candidates for a future --indigo-* ramp. */
 .sc-daysq-dn-pill--night {
-  color: var(--text-link);
+  background: #E0E7FF;            /* c-indigo 100 - promotable */
+  border-color: #A5B4FC;          /* c-indigo 300 - promotable */
+  color: #3730A3;                 /* c-indigo 800 - promotable */
 }
-/* sm: the pill is not rendered at all (see DaySquare.js gate on
-   size === "lg"). This defensive rule hides any stray sm-rendered
-   pill in case a future caller forgets the gate. */
+/* sm: the pill is not rendered at all - dayNight is stripped from
+   the sm compact bag at the source (see dayResolvers.buildCompactContent).
+   This defensive rule hides any stray sm-rendered pill in case a
+   future caller forgets the gate. */
 .sc-daysq--sm .sc-daysq-dn-pill { display: none; }
 
 /* MLB fee tile stack (P7): opponent is a navy chip on its own line;
