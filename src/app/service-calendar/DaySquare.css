@@ -215,10 +215,18 @@
    Loading + failed cells render distinctly so a fetch in flight or
    a fetch error never silently shows as zero (audit non-negotiable #2).
    ────────────────────────────────────────────────────────────────── */
-.sc-daysq--entered      { background: var(--status-entered-bg); border-color: var(--status-entered-bd); }
+/* Game-day border (2026-07-11): entered + upcoming carry a defined
+   1.5px green border on both sm and lg so game days assert themselves
+   against the quieter away (c-teal 50) and off-day fills. Kevin's
+   ruling: "are we serving?" is the primary kitchen-planning signal,
+   so game days are the visually strongest state. Uses the green ramp
+   tokens directly (--green-500 for scheduled, --green-700 for entered)
+   rather than the softer --status-*-bd values, which read as
+   near-invisible at the 28px overview density. */
+.sc-daysq--entered      { background: var(--status-entered-bg); border: 1.5px solid var(--green-700); }
 .sc-daysq--needs-entry  { background: var(--status-needs-bg); border-color: var(--status-needs-bd); }
 .sc-daysq--overdue      { background: var(--status-overdue-bg); border-color: var(--status-overdue-bd); }
-.sc-daysq--upcoming     { background: var(--status-upcoming-bg); border-color: var(--status-upcoming-bd); }
+.sc-daysq--upcoming     { background: var(--status-upcoming-bg); border: 1.5px solid var(--green-500); }
 .sc-daysq--off          { background: var(--status-off-bg); border-color: var(--status-off-bd); color: var(--text-muted); }
 
 /* Off-season: flat neutral fill - reads as "nothing scheduled."
