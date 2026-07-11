@@ -27,6 +27,7 @@ import {
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import { mlbPeriodPhaseLabel } from "./mlbSeasonPhase";
 import ProgressBar from "./ProgressBar";
+import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -179,20 +180,25 @@ export default function PeriodCard({
 
 function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
   if (!days?.length) return null;
-  const totalDays = days.length;
-  // P1 item 4 (2026-07-10): unified completeness rule (`entered`
-  // OR `no-service`) so the card matches the workspace + export.
-  const entered = days.filter(d => d.status === "entered" || d.status === "no-service").length;
+  // Kevin's ruling 2026-07-11: both numerator and denominator count
+  // ACTIONABLE days only. See season/dayPredicates.js for the full
+  // spec + supersession of the earlier P1 item 4 rule (which widened
+  // "entered" to include no-service in the numerator - Kevin now
+  // wants no-service excluded from BOTH sides, so a Sunday drops out
+  // of the ratio entirely).
+  const totalDays = countActionableDays(days);
+  const entered = countEnteredActionable(days);
   const needsAttention = days.filter(d => d.status === "needs-entry" || d.status === "overdue").length;
   const totalMeals = days.reduce((sum, d) => sum + (Number(d.actualMeals) || 0), 0);
   const completionPct = totalDays > 0 ? Math.round(entered / totalDays * 100) : 0;
 
   if (hasHomestandSchedule) {
     const gameDays = days.filter(d => d.dayType === "GAME").length;
-    // P1 item 4: defensively widen (homestand game-day + hasAct returns
-    // `entered` per SC-078; no live count change but the predicate stays
-    // identical to the shared rule).
-    const gameDaysEntered = days.filter(d => d.dayType === "GAME" && (d.status === "entered" || d.status === "no-service")).length;
+    // Homestand GAME days aren't affected by the no-service superseding
+    // ruling above - fee accounts don't emit no-service on game days.
+    // Predicate narrowed here for consistency with the actionable-day
+    // predicate rather than the old widened rule.
+    const gameDaysEntered = days.filter(d => d.dayType === "GAME" && d.status === "entered").length;
     // sc-12 (2026-07-10): exclude EXHIBITION homestands (TXR spring
     // training vs KC, homestand_id="EXH1") so an EXH-only period
     // doesn't misleadingly count as a homestand.

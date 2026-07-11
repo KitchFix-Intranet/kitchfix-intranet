@@ -32,6 +32,7 @@ import { resolveDayStatus, buildCompactContent } from "../dayResolvers";
 import { mlbMonthPhaseLabel } from "./mlbSeasonPhase";
 import { fmt$K } from "./format";
 import ProgressBar from "./ProgressBar";
+import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -79,17 +80,18 @@ export default function MonthCard({
   const handleCollapse = () => setUserExpanded(false);
   const handleDrill = () => onClick?.(monthIndex);
 
-  const totalDays = Number(monthSummary?.totalDays) || 0;
-  // P1 item 4 (2026-07-10): unified completeness rule everywhere.
-  // sc_month_summary.days_with_actuals (the SQL FILTER-WHERE-has_actuals
-  // rule) misses per-meal `no-service` days that classify from
-  // all-zero-projections + no actuals (no sc_daily_actuals row exists,
-  // so the SQL predicate is FALSE, but the classifier says the day is
-  // handled). Compute client-side from the shipped day statuses so this
-  // reader matches aggregateWorkspaceMetrics + the export DRAFT stamp
-  // predicate. Also collapses a live symptom on CIN-OH June where the
-  // drill counted 30/30 and this card counted 29/30.
-  const daysEntered = countCompleteDays(monthSummary?.days);
+  // Kevin's ruling 2026-07-11: BOTH counters are actionable-only.
+  // See season/dayPredicates.js for the ruling + supersession of the
+  // P1 item 4 widened predicate. Denominator was previously the
+  // server-side monthSummary.totalDays (all days in the month); the
+  // client now derives it from the shipped day statuses so away /
+  // no-service / exhibition / off-season / prep drop out of both
+  // sides. A December off-season card, or an untouched future
+  // per-meal month with all-zero projections, both cleanly land on
+  // "0 of 0" - the totalDays === 0 guard below routes those to the
+  // off-treatment / neutral bar.
+  const daysEntered = countEnteredActionable(monthSummary?.days);
+  const totalDays = countActionableDays(monthSummary?.days);
   const isComplete = totalDays > 0 && daysEntered === totalDays;
   const monthState = noService
     ? "off"
@@ -363,9 +365,11 @@ function MonthCardFooter({ monthSummary, monthIndex, hasHomestandSchedule, isFee
   // fee branch prints "0/X entered", and the homestand branch prints
   // "0/X game days". No progress bar at 0%, so the framing stays calm
   // without being inconsistent with sibling cards.
-  const totalDays = Number(monthSummary.totalDays) || 0;
-  // P1 item 4: same widened rule as the expanded footer.
-  const daysEntered = countCompleteDays(monthSummary.days);
+  // Actionable-only counts (Kevin's ruling 2026-07-11) - see
+  // season/dayPredicates.js. Away / no-service / exhibition / off-
+  // season / prep drop out of BOTH sides.
+  const daysEntered = countEnteredActionable(monthSummary.days);
+  const totalDays = countActionableDays(monthSummary.days);
   const completionPct = totalDays > 0 ? Math.round(daysEntered / totalDays * 100) : 0;
 
   if (hasHomestandSchedule) {
