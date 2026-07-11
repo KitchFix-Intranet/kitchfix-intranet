@@ -81,27 +81,6 @@ function buildScUrl({ account, period, month, view } = {}) {
   return qs ? `/service-calendar?${qs}` : "/service-calendar";
 }
 
-// NAV-INSTRUMENTATION:strip-before-merge
-// Central tagged logger for the nav-subsystem audit. Prints every push/replace
-// with the site name + target URL + the current URL right before the call.
-// Strip both this helper and every call in Phase 4.
-function scNavLog(site, target) {
-  if (typeof window === "undefined") return;
-  const currentUrl = window.location.pathname + window.location.search;
-  // eslint-disable-next-line no-console
-  console.info(`[SC-NAV push] site=${site} target=${target} from=${currentUrl}`);
-}
-function scNavEffectLog(name, details) {
-  if (typeof window === "undefined") return;
-  // eslint-disable-next-line no-console
-  console.info(`[SC-NAV effect] ${name}`, details);
-}
-function scNavHandlerLog(name, details) {
-  if (typeof window === "undefined") return;
-  // eslint-disable-next-line no-console
-  console.info(`[SC-NAV handler] ${name}`, details);
-}
-
 // Aggregate the workspace metrics (totals + per-week subtotals) from a
 // days array. Shared by periodMetrics (fiscal period) and monthMetrics
 // (calendar month) so the range-based PeriodWorkspace reads either
@@ -441,8 +420,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         for (const f of fallbacks) {
           if (sorted.find(a => a.key === f)) { initial = f; break; }
         }
-        // NAV-INSTRUMENTATION:strip-before-merge
-        scNavEffectLog("accounts-init", { urlAccount, defaultAccount: d.defaultAccount, fallbacks, initial, sortedCount: sorted.length });
         setSelectedAccount(initial);
         // Mount default: routed through computeInitialView() so the
         // role-conditional landing (floor -> Period workspace at the
@@ -656,19 +633,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // an existing periodKey if it's still valid (so prev/next nav
   // doesn't get clobbered by a periodRanges refresh).
   useEffect(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    if (lens !== "period" || !periodRanges?.length) {
-      scNavEffectLog("periodKey-init", { branch: "skip", lens, periodRangesLen: periodRanges?.length ?? 0 });
-      return;
-    }
-    if (periodKey && periodRanges.some(r => r.period === periodKey)) {
-      scNavEffectLog("periodKey-init", { branch: "already-valid", periodKey, periodRangesKeys: periodRanges.map(r => r.period) });
-      return;
-    }
+    if (lens !== "period" || !periodRanges?.length) return;
+    if (periodKey && periodRanges.some(r => r.period === periodKey)) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-    const target = containingToday ? containingToday.period : periodRanges[0].period;
-    scNavEffectLog("periodKey-init", { branch: "OVERWRITE", from: periodKey, to: target, reason: containingToday ? "containing-today" : "fallback-first", periodRangesKeys: periodRanges.map(r => r.period) });
-    setPeriodKey(target);
+    setPeriodKey(containingToday ? containingToday.period : periodRanges[0].period);
   }, [lens, periodRanges, periodKey, today]);
 
   // URL-sync effect for the ROUTED VIEW ONLY (view/period/month). Any
@@ -692,13 +660,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     const view = searchParams?.get("view") || null;
     const period = searchParams?.get("period") || null;
     const month = searchParams?.get("month") || null;
-    // NAV-INSTRUMENTATION:strip-before-merge
-    let branch;
     if (view === "admin" && isAdmin) {
-      branch = "admin";
       setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
     } else if (period) {
-      branch = "period";
       // Any non-empty ?period= means "show this period's workspace."
       // The identifier is the bare period number (e.g. "1"), NOT "P1" -
       // the old /^P\d+$/ guard never matched, so drilling changed the
@@ -707,17 +671,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // Precedence: ?period= wins if both ?period= and ?month= present.
       setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period); setMonthKey(null);
     } else if (month && /^\d{4}-\d{2}$/.test(month)) {
-      branch = "month";
       // ?month=YYYY-MM opens the month drill-in. Shape guard prevents
       // junk values from creating a scope=month state with no valid
       // month lookup - falls through to the year default instead.
       setIsAdminView(false); setScope("month"); setLens("calendar"); setPeriodKey(null); setMonthKey(month);
     } else {
-      branch = "year-default";
       setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
     }
-    // NAV-INSTRUMENTATION:strip-before-merge
-    scNavEffectLog("url-sync", { branch, view, period, month, isAdmin, searchParamsStr: String(searchParams) });
   }, [searchParams, isAdmin]);
 
   // Floor-role default landing (preserved behavior): a floor user with a
@@ -773,19 +733,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // Preserve `?account=` across the reset strip so a Top-nav click
       // while on a non-default account keeps that account (dropping the
       // drill scope is enough, no need to also bounce to CIN-AZ).
-      // NAV-INSTRUMENTATION:strip-before-merge
-      scNavEffectLog("F2-landing", { branch: "reset-strip", latchBefore: true, latchAfter: false });
-      const target = buildScUrl({ account: selectedAccount || undefined });
-      scNavLog("F2/reset-strip", target);
-      router.replace(target, { scroll: false });
+      router.replace(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
       return;
     }
 
-    if (floorRedirectDone.current) {
-      // NAV-INSTRUMENTATION:strip-before-merge
-      scNavEffectLog("F2-landing", { branch: "latched-noop", latch: true });
-      return;
-    }
+    if (floorRedirectDone.current) return;
     // Latch "explicit URL wins" the FIRST time we see an explicit URL,
     // even before periodRanges arrives. `reset` is transient (stripped
     // above) - it must NOT trip this latch.
@@ -793,33 +745,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       searchParams?.get("view") || searchParams?.get("period") || searchParams?.get("month");
     if (hasExplicitScope) {
       floorRedirectDone.current = true;
-      // NAV-INSTRUMENTATION:strip-before-merge
-      scNavEffectLog("F2-landing", { branch: "latch-on-explicit", hasExplicitScope, view: searchParams?.get("view"), period: searchParams?.get("period"), month: searchParams?.get("month") });
       return;
     }
-    if (!periodRanges?.length) {
-      // NAV-INSTRUMENTATION:strip-before-merge
-      scNavEffectLog("F2-landing", { branch: "wait-for-periodRanges" });
-      return;
-    }
+    if (!periodRanges?.length) return;
     const landing = computeInitialView({
       urlView: null, urlPeriod: null, isAdmin,
       roles: rawRoles,          // raw contacts.role strings; helper resolves tier via floor-wins
       hasHomeAccount,
     });
-    if (!landing.landOnCurrentPeriod) {
-      // NAV-INSTRUMENTATION:strip-before-merge
-      scNavEffectLog("F2-landing", { branch: "no-floor-landing", landing, roles: rawRoles, hasHomeAccount, isAdmin });
-      return;
-    }
+    if (!landing.landOnCurrentPeriod) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-    const targetPeriod = containingToday ? containingToday.period : periodRanges[0].period;
+    const target = containingToday ? containingToday.period : periodRanges[0].period;
     floorRedirectDone.current = true;
-    // NAV-INSTRUMENTATION:strip-before-merge
-    scNavEffectLog("F2-landing", { branch: "floor-land", targetPeriod, latchAfter: true });
-    const targetUrl = buildScUrl({ account: selectedAccount || undefined, period: targetPeriod });
-    scNavLog("F2/floor-land", targetUrl);
-    router.replace(targetUrl, { scroll: false });
+    router.replace(buildScUrl({ account: selectedAccount || undefined, period: target }), { scroll: false });
   }, [rawRoles, hasHomeAccount, isAdmin, periodRanges, searchParams, today, router, selectedAccount]);
 
   // Save invalidation: each save handler now drops ONLY the calendar
@@ -1728,13 +1666,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   }, [yearData, periodRanges]);
 
   const jumpToDay = useCallback((t) => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    scNavHandlerLog("jumpToDay", { hasTarget: !!t, target: t, pushReached: !!(t && t.period) });
     if (!t) return;
     if (t.period) {
-      const target = buildScUrl({ account: selectedAccount || undefined, period: t.period });
-      scNavLog("jumpToDay", target);
-      router.push(target, { scroll: false });
+      router.push(buildScUrl({ account: selectedAccount || undefined, period: t.period }), { scroll: false });
     }
     setFocusDay(t.date);
   }, [router, selectedAccount]);
@@ -1757,18 +1691,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   }, []);
 
   const handleAdminToggle = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    scNavHandlerLog("adminToggle", { isAdminView, branch: isAdminView ? "off" : "on" });
     if (isAdminView) {
-      const target = buildScUrl({ account: selectedAccount || undefined });
-      scNavLog("adminToggle/off", target);
-      router.push(target, { scroll: false });
+      router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
     } else {
       // Admin panel is global; account stays on the URL so exiting
       // admin lands back on the same account.
-      const target = buildScUrl({ account: selectedAccount || undefined, view: "admin" });
-      scNavLog("adminToggle/on", target);
-      router.push(target, { scroll: false });
+      router.push(buildScUrl({ account: selectedAccount || undefined, view: "admin" }), { scroll: false });
       setFocusDay(null);
       setBulkMode(false);
     }
@@ -1780,47 +1708,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // canPrevPeriod / canNextPeriod / isCurrentPeriod) live at the same
   // scope so the header slot can render outside the workspace.
   const handleClimbToSeason = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    scNavHandlerLog("climbToSeason", { selectedAccount, guards: "none" });
-    const target = buildScUrl({ account: selectedAccount || undefined });
-    scNavLog("climbToSeason", target);
-    router.push(target, { scroll: false });
+    router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false });
     setFocusDay(null);
     setBulkMode(false);
     setBulkSelected(new Set());
   }, [router, selectedAccount]);
   const handlePrevPeriod = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    const idx = periodRanges?.findIndex(r => r.period === periodKey) ?? -1;
-    scNavHandlerLog("prevPeriod", { periodRangesLen: periodRanges?.length ?? 0, periodKey, idx, canPrev: idx > 0, periodRangesKeys: periodRanges?.map(r => r.period) });
     if (!periodRanges?.length) return;
-    if (idx > 0) {
-      const target = buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx - 1].period });
-      scNavLog("prevPeriod", target);
-      router.push(target, { scroll: false });
-    }
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx > 0) router.push(buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx - 1].period }), { scroll: false });
   }, [periodRanges, periodKey, router, selectedAccount]);
   const handleNextPeriod = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    const idx = periodRanges?.findIndex(r => r.period === periodKey) ?? -1;
-    scNavHandlerLog("nextPeriod", { periodRangesLen: periodRanges?.length ?? 0, periodKey, idx, canNext: idx >= 0 && idx < (periodRanges?.length ?? 0) - 1, periodRangesKeys: periodRanges?.map(r => r.period) });
     if (!periodRanges?.length) return;
-    if (idx >= 0 && idx < periodRanges.length - 1) {
-      const target = buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx + 1].period });
-      scNavLog("nextPeriod", target);
-      router.push(target, { scroll: false });
-    }
+    const idx = periodRanges.findIndex(r => r.period === periodKey);
+    if (idx >= 0 && idx < periodRanges.length - 1) router.push(buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx + 1].period }), { scroll: false });
   }, [periodRanges, periodKey, router, selectedAccount]);
   const handleTodayJump = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    const containingToday = periodRanges?.find(r => today >= r.start && today <= r.end);
-    scNavHandlerLog("todayJump/period", { periodRangesLen: periodRanges?.length ?? 0, today, hasContaining: !!containingToday, target: containingToday?.period });
     if (!periodRanges?.length) return;
-    if (containingToday) {
-      const target = buildScUrl({ account: selectedAccount || undefined, period: containingToday.period });
-      scNavLog("todayJump/period", target);
-      router.push(target, { scroll: false });
-    }
+    const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
+    if (containingToday) router.push(buildScUrl({ account: selectedAccount || undefined, period: containingToday.period }), { scroll: false });
   }, [periodRanges, today, router, selectedAccount]);
 
   const drillPeriodRange = periodRanges?.find(r => r.period === periodKey) || null;
@@ -1833,35 +1739,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // Jan-Dec of the year (Kevin's decision - a month view doesn't cross
   // years). handleMonthTodayJump routes to today's calendar month.
   const handlePrevMonth = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    const m = monthKey ? Number(monthKey.slice(5, 7)) : null;
-    scNavHandlerLog("prevMonth", { monthKey, m, canPrev: !!(monthKey && m > 1) });
     if (!monthKey) return;
+    const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
     if (m <= 1) return;
-    const target = buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m - 1).padStart(2, "0")}` });
-    scNavLog("prevMonth", target);
-    router.push(target, { scroll: false });
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m - 1).padStart(2, "0")}` }), { scroll: false });
   }, [monthKey, router, selectedAccount]);
   const handleNextMonth = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
-    const m = monthKey ? Number(monthKey.slice(5, 7)) : null;
-    scNavHandlerLog("nextMonth", { monthKey, m, canNext: !!(monthKey && m < 12) });
     if (!monthKey) return;
+    const m = Number(monthKey.slice(5, 7));
     const y = monthKey.slice(0, 4);
     if (m >= 12) return;
-    const target = buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m + 1).padStart(2, "0")}` });
-    scNavLog("nextMonth", target);
-    router.push(target, { scroll: false });
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: `${y}-${String(m + 1).padStart(2, "0")}` }), { scroll: false });
   }, [monthKey, router, selectedAccount]);
   const handleMonthTodayJump = useCallback(() => {
-    // NAV-INSTRUMENTATION:strip-before-merge
     const mk = today ? today.slice(0, 7) : null;
-    scNavHandlerLog("todayJump/month", { today, mk });
     if (!mk) return;
-    const target = buildScUrl({ account: selectedAccount || undefined, month: mk });
-    scNavLog("todayJump/month", target);
-    router.push(target, { scroll: false });
+    router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
   }, [today, router, selectedAccount]);
 
   const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
@@ -1908,17 +1802,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         //   - The URL-sync effect that fires from the router.push
         //     reads view/period/month only. It does NOT touch
         //     selectedAccount, so it cannot revert our setState.
-        // NAV-INSTRUMENTATION:strip-before-merge
-        scNavHandlerLog("dropdown", { prev: selectedAccount, next, isPeriodView, isMonthView, isAdminView, periodKey, monthKey });
         setSelectedAccount(next);
-        const target = buildScUrl({
+        router.push(buildScUrl({
           account: next || undefined,
           period: isPeriodView ? periodKey : undefined,
           month: isMonthView ? monthKey : undefined,
           view: isAdminView ? "admin" : undefined,
-        });
-        scNavLog("dropdown", target);
-        router.push(target, { scroll: false });
+        }), { scroll: false });
       }}
     />
   );
@@ -2095,21 +1985,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             // ?period= (below).
             onMonthClick={(mi) => {
               const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
-              // NAV-INSTRUMENTATION:strip-before-merge
-              scNavHandlerLog("seasonDrill/month", { mi, mk });
-              const target = buildScUrl({ account: selectedAccount || undefined, month: mk });
-              scNavLog("seasonDrill/month", target);
-              router.push(target, { scroll: false });
+              router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
               setFocusDay(null);
               setBulkMode(false);
             }}
             periodRanges={periodRanges}
             onPeriodClick={(periodLabel) => {
-              // NAV-INSTRUMENTATION:strip-before-merge
-              scNavHandlerLog("seasonDrill/period", { periodLabel });
-              const target = buildScUrl({ account: selectedAccount || undefined, period: periodLabel });
-              scNavLog("seasonDrill/period", target);
-              router.push(target, { scroll: false });
+              router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
             }}
             // Lifted view toggle (the action signal moved to the chrome
             // bar, so the season shell no longer carries jump props).
