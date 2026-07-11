@@ -140,12 +140,14 @@
 
 /* sc-13 (2026-07-10): away swatch renders the plane glyph inline
    (StateLegend.js LegendSwatch injects PlaneGlyph for mod=away).
-   Standard card surface + muted text color so the currentColor plane
-   picks up the muted hue. */
+   Restyle 2026-07-10: teal fill matches the tile (--accent-sc-subtle
+   for the fill, hardcoded c-teal 100 for the border, c-teal 200 for
+   the glyph via currentColor). Legend is not size-constrained so it
+   always shows the plane - unlike the sm tile which drops it. */
 .sc-state-legend-swatch--away {
-  background: var(--surface-card);
-  border-color: var(--border-strong);
-  color: var(--text-subtle);
+  background: var(--accent-sc-subtle);      /* c-teal 50 */
+  border-color: #9FE1CB;                    /* c-teal 100 - promotable */
+  color: #5DCAA5;                           /* c-teal 200 - promotable */
   display: inline-flex;
   align-items: center;
   justify-content: center;
