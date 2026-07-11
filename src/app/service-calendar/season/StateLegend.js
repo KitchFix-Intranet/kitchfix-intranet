@@ -32,12 +32,12 @@ export default function StateLegend({
   const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }).map(it => ({
     mod: it.mod, icon: it.icon, label: it.label,
   }));
-  if (isMilb && !hasHomestandSchedule && !isFeeAccount) {
-    // Sun / moon read across both year + drill-in surfaces now that
-    // the tile uses the same glyphs (P6). showDayNight prop is
-    // retained on the signature for compat, but no longer gates.
-    // Guard mirrors the pre-C1a if/else-if branching (isMilb was
-    // only reached when neither hasHomestand nor isFeeAccount).
+  // sc-15 (2026-07-11): widen the day/night legend gate to MLB fee
+  // accounts too. MLB home cells now carry the same sun/moon glyph
+  // as MiLB (backfilled from MLB Stats API dayNight into
+  // sc_homestand_schedule.day_night), so both account shapes need
+  // the day/night pair in the compact strip.
+  if (hasHomestandSchedule || (isMilb && !isFeeAccount)) {
     items.push(...MILB_DAY_NIGHT.map(it => ({ mod: it.mod, icon: "", label: it.label })));
   }
   // Universal trailer. Off-season dropped from the line - it's now flat

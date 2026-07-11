@@ -888,7 +888,7 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from("sc_homestand_schedule")
-    .select("service_date, homestand_id, day_type, opponent")
+    .select("service_date, homestand_id, day_type, opponent, day_night")
     .eq("account_key", accountKey)
     .gte("service_date", firstDate)
     .lte("service_date", lastDate)
@@ -901,6 +901,11 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
       homestandId: r.homestand_id,
       dayType:     r.day_type,
       opponent:    r.opponent || "",
+      // sc-15 (2026-07-11): day/night classification for HOME games,
+      // sourced from MLB Stats API dayNight field at backfill time.
+      // Nullable - AWAY and EXHIBITION rows carry null. Drives the
+      // sun/moon glyph on MLB home cells, matching MiLB's vocabulary.
+      dayNight:    r.day_night || null,
     };
   }
   return map;
@@ -1064,6 +1069,9 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       dayEntry.homestandId = hs.homestandId;
       dayEntry.dayType     = hs.dayType;
       dayEntry.opponent    = hs.opponent;
+      // sc-15 (2026-07-11): dayNight passes through so the render
+      // path can drive the sun/moon glyph without a second DB call.
+      dayEntry.dayNight    = hs.dayNight;
     }
     daysByMonth.get(monthKey).push(dayEntry);
   }

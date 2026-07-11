@@ -113,8 +113,16 @@ export function buildCompactContent(day, kind) {
   if (!day) return null;
   const meals = Number(day.actualMeals) || 0;
   switch (kind) {
-    case "mlb-fee":
-      return day.opponent ? { opponent: day.opponent } : null;
+    case "mlb-fee": {
+      if (!day.opponent && !day.dayNight) return null;
+      const bag = { opponent: day.opponent || null };
+      // sc-15 (2026-07-11): day/night drives the top-row sun/moon
+      // glyph on MLB home cells (matches MiLB pattern). Only HOME
+      // GAME rows have day.dayNight set - AWAY / EXHIBITION carry
+      // null and no glyph renders.
+      if (day.dayNight) bag.dayNight = day.dayNight;
+      return bag;
+    }
     case "milb": {
       const g = (day.gameType || "").toLowerCase();
       const milbPill = g.includes("day") ? "day"
