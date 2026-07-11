@@ -266,7 +266,13 @@
 }
 
 /* ── Drill-in period nav (fills the chrome bar in the workspace) ── */
-.sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
+/* Design review 2026-07-11 (Kevin): the drill row wraps to two rows
+   at double-digit periods ("Period 13" + full range + phase). Ruling:
+   ONE ROW always. Enforce nowrap here; the DATE-RANGE segment already
+   carries the compressible give (ellipsis + flex-shrink:1 below), so
+   it truncates before anything else wraps. Stepper still reads
+   "Period N" when the range collapses to an ellipsis. */
+.sc-chrome-drill { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: nowrap; min-width: 0; }
 .sc-chrome-drill-sep { width: 1px; height: 20px; background: var(--border-default); }
 .sc-chrome-drill-back {
   display: inline-flex; align-items: center; gap: 3px;

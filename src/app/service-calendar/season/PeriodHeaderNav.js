@@ -121,11 +121,19 @@ export default function PeriodHeaderNav({
 }
 
 export function PeriodTodayChip({ today, isCurrentPeriod, onTodayJump }) {
-  const label = today ? formatHumanDate(today) : "";
+  // Design review 2026-07-11 (Kevin): the pill reads "Today" only.
+  // The date range already lives to the left in the header, so the
+  // "· {date}" trailer was carrying redundant information at the
+  // expense of horizontal space at Period 13 + long ranges. Applies
+  // to both PERIOD and MONTH drill-in headers (this same component
+  // is threaded from both ServiceCalendar.js sites - see :1914,
+  // :1920 - so one edit covers both views). `today` param retained
+  // for the aria-label narrative and future re-widening if the
+  // ChromeBar reflows around it.
   const content = (
     <>
       <TargetIcon />
-      Today · {label}
+      Today
     </>
   );
   if (isCurrentPeriod) {
@@ -138,12 +146,13 @@ export function PeriodTodayChip({ today, isCurrentPeriod, onTodayJump }) {
       </span>
     );
   }
+  const ariaLabel = today ? `Jump to ${formatHumanDate(today)}` : "Jump to today";
   return (
     <button
       type="button"
       className="sc-chrome-drill-today"
       onClick={onTodayJump}
-      aria-label="Jump to current period"
+      aria-label={ariaLabel}
     >
       {content}
     </button>
