@@ -237,11 +237,14 @@ export default function DaySquare({
         <span className="sc-daysq-exh-ribbon" aria-hidden="true">EXH</span>
       )}
       {/* sc-13: plane glyph carries the AWAY state as a shape signal
-          (colorblind-safe) alongside the muted fill. Same top-right
-          absolute-positioned slot as the EXH ribbon (mutually
-          exclusive - no collision). Muted colour via the parent
-          `.sc-daysq--away` scope so it stays quiet on the tile. */}
-      {isAway && (
+          alongside the teal fill (colorblind-safe on lg tiles).
+          Restyle 2026-07-10: gated to size !== "sm" per Kevin's ruling.
+          The dense year-grid overview crowds at that size, so small
+          tiles carry the state by teal fill alone (matches the
+          `renderAway` !sm gate on the "no service" line). Full-size
+          tiles keep the plane. Same top-right absolute-positioned
+          slot as the EXH ribbon (mutually exclusive - no collision). */}
+      {isAway && size !== "sm" && (
         <span className="sc-daysq-away-glyph" aria-hidden="true">
           <PlaneGlyph size={13} />
         </span>

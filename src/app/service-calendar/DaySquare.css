@@ -340,28 +340,35 @@
   padding: 3px 6px 3px 6px;
 }
 
-/* sc-13 (2026-07-10): AWAY - team on the road, no service. Standard
-   card surface (matches the calendar's resting fill) with a MUTED
-   date number and text - the desaturation is the primary hue signal,
-   the plane glyph top-right is the shape signal (colorblind-safe).
-   Display-only: cursor:default; the --interactive class is suppressed
-   in DaySquare.js the same way it's suppressed for exhibition. */
+/* sc-13 (2026-07-10): AWAY - team on the road, no service.
+   Restyle 2026-07-10: very-light teal fill (SC accent family). Away
+   now reads as a real thing (a road game) distinct from a blank
+   off-day, while staying quieter than the saturated game-day green.
+   Uses the SC accent tokens directly where they map (--accent-sc-*
+   IS the teal ramp: subtle=50 for fill, base=600 for date/text).
+   Two mid-ramp values (100 / 200) don't have tokens yet and are
+   hardcoded per the brief - candidates for promotion to
+   --accent-sc-100 / --accent-sc-200 in a future tokens pass.
+   Plane glyph top-right on lg tiles only (gated in DaySquare.js);
+   small overview tiles carry the state by teal fill alone (Kevin's
+   ruling - dense overview reads scannably; primary detail is on the
+   big tiles). Display-only: cursor:default. */
 .sc-daysq--away {
-  background: var(--surface-card);
-  border-color: var(--border-default);
-  color: var(--text-muted);
+  background: var(--accent-sc-subtle);      /* c-teal 50 */
+  border-color: #9FE1CB;                    /* c-teal 100 - promotable */
+  color: var(--accent-sc);                  /* c-teal 600 */
   cursor: default;
 }
 .sc-daysq--away .sc-daysq-date {
-  color: var(--text-subtle);
+  color: var(--accent-sc);                  /* c-teal 600 - muted but teal-tinted, not grey */
   font-weight: var(--wt-medium);
 }
-.sc-daysq--away .sc-daysq-mid { color: var(--text-subtle); }
+.sc-daysq--away .sc-daysq-mid { color: var(--accent-sc); }
 
-/* Hollow @OPP tag - transparent fill + hairline border reads as an
-   attenuated echo of the home game's filled chip and the sage EXH
-   chip. Same typography family so the three chip variants read as
-   one language at different volumes. */
+/* Hollow @OPP tag - transparent fill + teal-tinted hairline border.
+   Reads as an attenuated echo of the home game's filled chip and the
+   sage EXH chip. Same typography family so the three chip variants
+   read as one language at different volumes. */
 .sc-daysq-mid--away {
   flex-direction: column;
   align-items: flex-start;
@@ -370,8 +377,8 @@
 .sc-daysq-mid-opponent--away {
   display: inline-block;
   background: transparent;
-  color: var(--text-subtle);
-  border: var(--border-thin) solid var(--border-strong);
+  color: var(--accent-sc);                  /* c-teal 600 */
+  border: var(--border-thin) solid #5DCAA5; /* c-teal 200 - promotable */
   font-weight: var(--wt-semibold);
   font-size: var(--size-micro);
   padding: 1px 6px;
@@ -381,13 +388,14 @@
 }
 .sc-daysq-mid-noservice--away {
   font-size: var(--size-micro);
-  color: var(--text-subtle);
+  color: #5DCAA5;                           /* c-teal 200 - promotable */
   font-style: italic;
 }
 
-/* Plane glyph top-right. Absolute-positioned like the EXH ribbon so
-   it composes with today/selected rings + note bubble without a
-   badge-slot collision. Muted color inherited from parent scope. */
+/* Plane glyph top-right (lg tiles only - see DaySquare.js gate).
+   Absolute-positioned like the EXH ribbon so it composes with
+   today/selected rings + note bubble without a badge-slot collision.
+   Uses c-teal 200 so it stays quiet on the c-teal 50 tile fill. */
 .sc-daysq-away-glyph {
   position: absolute;
   top: 4px;
@@ -395,14 +403,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-subtle);
+  color: #5DCAA5;                           /* c-teal 200 - promotable */
   line-height: 1;
   pointer-events: none;
   z-index: 2;
-}
-.sc-daysq--sm .sc-daysq-away-glyph {
-  top: 3px;
-  right: 3px;
 }
 
 /* Failed: hide middle line entirely - never render a number on a
