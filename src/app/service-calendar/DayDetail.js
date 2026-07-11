@@ -192,14 +192,16 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // stay instant - the confirm only intercepts real unsaved work.
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const keepEditingBtnRef = useRef(null);
-  // P2 (item 2, R2a): the "+ Add a note without saving" link subordinates
-  // the standalone-note flow. Collapsed by default now that the ride-
-  // along composer is the primary path. Expanded state exposes the same
-  // Add note action against the shared `notes` draft (no second textarea
-  // - it would just mirror the ride-along field above and confuse the
-  // operator). Same post path (sc-add-note via onAddNote/handleAddNote)
-  // and same optimistic-prepend semantics as before.
-  const [showStandaloneNote, setShowStandaloneNote] = useState(false);
+  // P2.1 (2026-07-11): decoupled draft for the always-on Activity band
+  // composer. Independent from the ride-along `notes` state - the two
+  // inputs post to different targets (ride goes with the actuals submit;
+  // this posts directly to the notes ledger). See isDirty below - it
+  // ORs across both drafts so a typed-but-unposted note in either input
+  // trips the discard guard (no silent black-hole).
+  const [standaloneDraft, setStandaloneDraft] = useState("");
+  // Composer input ref - after a successful post we KEEP FOCUS here so
+  // consecutive notes flow without re-clicking. See handleAddNote below.
+  const standaloneInputRef = useRef(null);
   // P2 (item 2): ref on the ride-along textarea so review overlay's
   // Edit button can pop the operator back to the entry with focus on
   // the note field, ready to keep typing.
@@ -256,10 +258,9 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     setShowDiscardConfirm(false);
     // SC-066: same for the no-service confirm.
     setShowNoServiceConfirm(false);
-    // P2 (item 2): collapse the standalone-note affordance on day-nav
-    // so the next day starts with the ride-along as the sole visible
-    // note surface (the default posture).
-    setShowStandaloneNote(false);
+    // P2.1 (2026-07-11): the always-on Activity composer draft is
+    // per-day, same as `notes`. Day-nav clears both.
+    setStandaloneDraft("");
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // SC-063 + C1b: dirty = any editValues entry differs from its
@@ -270,17 +271,24 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // close from those paths goes straight through.
   const isDirty = useMemo(() => {
     if (justSaved) return false;
-    // SC-079: the note draft counts dirty if it has any non-whitespace
-    // content. It compares against EMPTY (not against a persisted
-    // day.dayNotes anymore) because notes moved to append-only ledger
-    // entries. A typed-but-not-posted draft trips the discard guard so
-    // the operator doesn't silently lose work.
+    // SC-079: the ride-along note draft counts dirty if it has any
+    // non-whitespace content. It compares against EMPTY (not against a
+    // persisted day.dayNotes anymore) because notes moved to append-
+    // only ledger entries. A typed-but-not-posted draft trips the
+    // discard guard so the operator doesn't silently lose work.
     if ((notes || "").trim().length > 0) return true;
+    // P2.1 (2026-07-11): the Activity composer draft is a SEPARATE
+    // typed-but-unposted input. Without this branch it would be a
+    // silent black hole - Kevin's engineering flag. OR with `notes`
+    // so the COMBINED case (both drafts non-empty) fires ONE confirm,
+    // not two stacked prompts (renderDiscardConfirm renders once
+    // regardless of which branch tripped the memo).
+    if ((standaloneDraft || "").trim().length > 0) return true;
     for (const ci of Object.keys(editValues)) {
       if ((editValues[ci] ?? "") !== (initialValues[ci] ?? "")) return true;
     }
     return false;
-  }, [justSaved, editValues, initialValues, notes]);
+  }, [justSaved, editValues, initialValues, notes, standaloneDraft]);
 
   // Imperative handle for ServiceCalendar's guarded onClose. Returns
   // true when parent may proceed with the close (pristine); false when
@@ -398,12 +406,13 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
 
   // SC-079: post one authored entry against sc-add-note, prepend to
   // the local ledger optimistically on success, clear the draft.
-  // P2 (item 2, R2a): also collapses the standalone-note panel once
-  // the post lands - the panel is a per-intent affordance, not a
-  // persistent surface, so a successful send returns the operator to
-  // the ride-along default posture.
+  // P2.1 (2026-07-11): reads the decoupled `standaloneDraft` (Activity
+  // composer input), not the ride-along `notes`. The two inputs are
+  // independent drafts serving independent post targets. After a
+  // successful post we RETAIN focus in the composer input so
+  // consecutive notes flow without re-clicking the field.
   const handleAddNote = useCallback(async () => {
-    const trimmed = (notes || "").trim();
+    const trimmed = (standaloneDraft || "").trim();
     if (!trimmed || isPostingNote) return;
     if (!onAddNote) return;
     setIsPostingNote(true);
@@ -411,13 +420,19 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       const res = await onAddNote(day, trimmed);
       if (res?.success && res.entry) {
         setNoteEntries((prev) => [res.entry, ...prev]);
-        setNotes("");
-        setShowStandaloneNote(false);
+        setStandaloneDraft("");
+        // Retain focus for consecutive posts. requestAnimationFrame
+        // waits for React's re-render (composer input isn't disabled
+        // long enough to lose focus, but the ref may be stale if the
+        // list above re-orders synchronously).
+        requestAnimationFrame(() => {
+          standaloneInputRef.current?.focus({ preventScroll: true });
+        });
       }
     } finally {
       setIsPostingNote(false);
     }
-  }, [notes, day, onAddNote, isPostingNote]);
+  }, [standaloneDraft, day, onAddNote, isPostingNote]);
 
   // Focus the safe default (Cancel) when the no-service confirm opens
   // so a stray Enter reaffirms the entry state rather than firing the
@@ -1150,19 +1165,17 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
           );
         })()}
 
-        {/* P2 (item 2, R2a, 2026-07-10): the primary note composer is
-            now the RIDE-ALONG - a note that saves with the operator's
-            actuals submission and lands as a NOTE ledger entry (with
-            server-derived author) alongside the actuals write. Same
-            `notes` state as before, so the C1b dirty guard still
-            catches an unposted draft (see the isDirty memo). The old
-            "Add note" button next to this textarea moved BELOW the
-            action bar as a quiet + Add a note without saving link
-            (subordinated affordance). The Activity ledger below stays
-            here as the day's per-day feed. */}
+        {/* Ride-along note draft. Saves with the operator's actuals
+            submission (`rideNote` in the sc-submit-day payload) and
+            lands as a NOTE ledger entry (server-derived author) after
+            the actuals write. Same `notes` state; C1b dirty guard
+            still catches an unposted draft (see isDirty).
+            P2.1 (2026-07-11): label + hint sharpened so this input
+            is unambiguously distinct from the always-on Activity
+            composer below. */}
         <div className="sc-day-notes">
           <label className="sc-day-notes-label" htmlFor="sc-day-note-draft">
-            Note for this save
+            Add a note to this submission
             <span className="sc-day-notes-optional"> (optional)</span>
           </label>
           <textarea
@@ -1175,28 +1188,66 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             rows={2}
           />
           <p className="sc-day-notes-hint">
-            Saves with your submission. It will appear in this day&apos;s Activity.
+            Saves with your counts when you submit.
           </p>
 
-          {/* F1 (M2): the ledger becomes the unified Activity view -
+          {/* F1 (M2): the ledger is the unified Activity view -
               notes + actuals edit history merged newest-first with a
-              type chip per row. NOTE rows are the append-only sc_day_note
-              ledger unchanged. EDIT rows come from sc_daily_actuals_history
-              via the trigger (BEFORE UPDATE only; first-writes produce no
-              EDIT row by design). Consecutive same-timestamp EDITs all
-              writing 0 collapse to a single system row "Marked no service
-              (all services 0)"; anything else renders individually. The
-              add-note input above stays a NOTES-only surface (a new note
-              prepends as a NOTE row); the P2 review overlay's NOTE
-              RIDING THIS SAVE block is drafts-only for semantic clarity. */}
-          {(noteEntries.length > 0 || historyEntries.length > 0) && (
-            <div className="sc-day-activity">
-              <div className="sc-day-activity-band">
-                <span className="sc-day-activity-band-label">Activity</span>
-                <span className="sc-day-activity-band-count">
-                  · {noteEntries.length + historyEntries.length}
-                </span>
-              </div>
+              type chip per row. NOTE rows come from the append-only
+              sc_day_note_entries ledger. EDIT rows come from
+              sc_daily_actuals_history via the trigger. Same-timestamp
+              zero-EDIT bundles collapse to a "Marked no service" system row.
+
+              P2.1 (2026-07-11): the band is ALWAYS rendered (was
+              gated on ledger non-empty). Header carries `ACTIVITY · N`.
+              An always-on composer input sits pinned at the top of
+              the band body - post one entry against sc-add-note
+              WITHOUT the actuals submission. When the merged ledger
+              is empty, an "empty row" replaces the list; the first
+              posted entry displaces it. */}
+          <div className="sc-day-activity">
+            <div className="sc-day-activity-band">
+              <span className="sc-day-activity-band-label">Activity</span>
+              <span className="sc-day-activity-band-count">
+                · {noteEntries.length + historyEntries.length}
+              </span>
+            </div>
+
+            {/* Always-on composer: decoupled draft, decoupled Post pill.
+                Enter posts (single-line input). After post: input clears
+                and KEEPS FOCUS so consecutive notes flow. The `Post`
+                pill disables when the trimmed draft is empty. */}
+            <div className="sc-day-activity-composer">
+              <input
+                ref={standaloneInputRef}
+                type="text"
+                className="sc-day-activity-composer-input"
+                placeholder="Add a note..."
+                aria-label="Log a note now, without submitting counts"
+                value={standaloneDraft}
+                onChange={(e) => setStandaloneDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (standaloneDraft.trim() && !isPostingNote) handleAddNote();
+                  }
+                }}
+                disabled={isPostingNote}
+              />
+              <button
+                type="button"
+                className="sc-btn sc-day-activity-composer-post"
+                onClick={handleAddNote}
+                disabled={!standaloneDraft.trim() || isPostingNote}
+              >
+                {isPostingNote ? "..." : "Post"}
+              </button>
+            </div>
+            <p className="sc-day-activity-composer-hint">
+              Posts to Activity now &mdash; no submission needed.
+            </p>
+
+            {(noteEntries.length > 0 || historyEntries.length > 0) ? (
               <ul className="sc-day-activity-list" aria-label="Activity ledger">
                 {mergeActivity(noteEntries, historyEntries).map((row, i) => (
                   <li key={row.key || `${row.timestamp}-${i}`} className={`sc-day-activity-item sc-day-activity-item--${row.type}`}>
@@ -1226,8 +1277,12 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="sc-day-activity-empty">
+                No activity yet &mdash; post a note above, or submit counts.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1238,48 +1293,10 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
           </button>
           <button className="sc-btn sc-btn--cancel" onClick={attemptClose}>Cancel</button>
         </div>
-        {/* P2 (item 2, R2a): the standalone add-note affordance sits
-            here as a quiet, subordinated link. Ride-along IS the
-            default composer above; posting a note without saving is
-            the edge case. Uses the SAME `notes` draft so a typed
-            ride-along note is one click away from becoming a
-            standalone entry (same server post path as before - the
-            handleAddNote wire, sc-add-note, optimistic prepend). */}
-        <div className="sc-day-standalone-note">
-          {showStandaloneNote ? (
-            <div className="sc-day-standalone-note-panel">
-              <p className="sc-day-standalone-note-copy">
-                Posts your current draft as a standalone note without
-                saving actuals.
-              </p>
-              <div className="sc-day-standalone-note-actions">
-                <button
-                  type="button"
-                  className="sc-btn sc-btn--outline sc-day-notes-add"
-                  onClick={handleAddNote}
-                  disabled={!notes.trim() || isPostingNote}
-                >
-                  {isPostingNote ? "Adding..." : "Add note"}
-                </button>
-                <button
-                  type="button"
-                  className="sc-btn sc-btn--link sc-day-standalone-note-cancel"
-                  onClick={() => setShowStandaloneNote(false)}
-                >
-                  Never mind
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="sc-btn sc-btn--link sc-day-standalone-note-toggle"
-              onClick={() => setShowStandaloneNote(true)}
-            >
-              + Add a note without saving
-            </button>
-          )}
-        </div>
+        {/* P2.1 (2026-07-11): the footer "+ Add a note without saving"
+            link is retired. The always-on Activity composer above
+            (post-immediately, no submit) takes over that role, so the
+            subordinated footer affordance is redundant. */}
       </div>
       {showDiscardConfirm && renderDiscardConfirm()}
       {showNoServiceConfirm && renderNoServiceConfirm()}
