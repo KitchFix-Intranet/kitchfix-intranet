@@ -211,19 +211,25 @@ export default function DaySquare({
             games; AWAY / EXHIBITION carry null dayNight/pillTime and
             no pill renders. Coexists with the status badge (both
             visible side by side). */}
+        {/* Sm overview cleanup (2026-07-11): sm tiles carry state by
+            fill + border ONLY. All four status/note glyphs are gated
+            off on sm - status circle (upcoming ○), status marks (! ⚠ ✎),
+            selection check, and note bubble. Aria label still picks up
+            "has notes" for screen-reader parity (screen readers need
+            the signal even when the visual is hidden).
+            DELIBERATE TRADEOFF: note presence is no longer visible on
+            the overview - only on drill-down. Overview = scan color;
+            drill-down = detail. Do NOT restore the sm note bubble as
+            a "bugfix" - it is intentionally stripped. */}
         <span className="sc-daysq-top-right">
-          {hasNote && <NoteBubble />}
-          {isSelected ? (
+          {size !== "sm" && hasNote && <NoteBubble />}
+          {size !== "sm" && (isSelected ? (
             <span className="sc-daysq-check" aria-hidden="true">✓</span>
           ) : meta.icon ? (
             <span className={`sc-daysq-badge sc-daysq-badge--${meta.mod}`} aria-hidden="true">
               {meta.icon}
             </span>
-          ) : null}
-          {/* 2026-07-11 layout move: day/night pill was here; it now
-              lives in the mid-content stack directly below the
-              opponent chip (see renderMlbFee / renderMilb). The corner
-              cluster returns to [note bubble] [status badge]. */}
+          ) : null)}
         </span>
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
