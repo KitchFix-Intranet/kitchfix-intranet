@@ -197,34 +197,20 @@ export default function DaySquare({
     >
       <div className="sc-daysq-top">
         <span className="sc-daysq-date">{day}</span>
-        {/* SC-070 (render D): MiLB drill-in tile (lg only) moves the
-            day/night glyph OUT of the mid content and INTO the top
-            row, immediately right of the date. Keeps the mid line
-            free to lead with the meals hero + muted revenue beneath
-            (PDC anatomy). sm overview tiles unchanged - pickCompactSmall
-            handles those and doesn't route through here. */}
-        {size === "lg" && kind === "milb" && content?.milbPill && (
-          <MilbPill type={content.milbPill} />
-        )}
-        {/* sc-15 (2026-07-11): MLB home cells get the same sun/moon
-            glyph as MiLB, in the top row next to the date, at BOTH
-            sizes (mlb-fee sm mid-slot is already occupied by the
-            opponent chip; the glyph lives in the top row instead).
-            Only HOME GAME rows have content.dayNight; AWAY /
-            EXHIBITION carry null and no glyph renders. Reuses the
-            MilbPill component + shared .sc-daysq-milb-glyph CSS so
-            MLB and MiLB read as one visual language. */}
-        {kind === "mlb-fee" && content?.dayNight && (
-          <MilbPill type={content.dayNight} />
-        )}
         {/* P2 (item 3, R3): trailing cluster housing the note-indicator
-            bubble + the status badge (or selection check). Wrapped so
-            both children sit against the top-right corner; the outer
-            flex on .sc-daysq-top keeps the date on the left and this
-            cluster on the right. The bubble reads at ~50% opacity via
-            the CSS so it defers to the state signal. On sm tiles both
-            children fit at 11px + 9px; verified in a build - no drop
-            to a corner dot needed. */}
+            bubble + the status badge (or selection check) + the ghost
+            day/night pill (rightmost, outboard of the status badge).
+            Outer flex on .sc-daysq-top keeps the date on the left and
+            this cluster on the right. Reading order left-to-right:
+            [note bubble] [status badge] [pill] - pill outermost.
+
+            Day/night pill (2026-07-11): replaces the earlier bare
+            top-row glyph for both MiLB (SC-070) and MLB fee (sc-15).
+            lg only - dropped on sm to match the sc-13 away plane
+            gate. Renders `[glyph] [venue-local time]` for HOME
+            games; AWAY / EXHIBITION carry null dayNight/pillTime and
+            no pill renders. Coexists with the status badge (both
+            visible side by side). */}
         <span className="sc-daysq-top-right">
           {hasNote && <NoteBubble />}
           {isSelected ? (
@@ -234,6 +220,9 @@ export default function DaySquare({
               {meta.icon}
             </span>
           ) : null}
+          {size === "lg" && content?.dayNight && (
+            <DayNightPill type={content.dayNight} timeText={content.pillTime} />
+          )}
         </span>
       </div>
       {status !== "loading" && status !== "failed" && middleLine}
@@ -371,9 +360,10 @@ function pickCompactSmall(kind, content, status) {
   if (kind === "mlb-fee" && content.opponent) {
     return <span className="sc-daysq-mid-opponent">{content.opponent}</span>;
   }
-  if (kind === "milb" && content.milbPill) {
-    return <MilbPill type={content.milbPill} />;
-  }
+  // Day/night glyph on sm MiLB tiles retired 2026-07-11 as part of the
+  // ghost-pill migration. Both MLB fee and MiLB drop the glyph at sm
+  // (matches the sc-13 away-plane gate). If the mid slot has other
+  // useful content it renders below; otherwise the tile is date-only.
   if (kind === "per-meal" && content.revenue != null) {
     return <span className="sc-daysq-mid-rev">{fmtCompactRevenue(content.revenue)}</span>;
   }
@@ -519,6 +509,10 @@ function MilbPill({ type }) {
   // Replaces the prior "Day"/"Night" text pill so the mid-line can carry
   // the meal count without competing for width. Colored via CSS on the
   // .sc-daysq-milb-glyph--{type} scope.
+  //
+  // Retired from tile-render on 2026-07-11 (see DayNightPill below).
+  // Component retained because the StateLegend + LegendInfoPopup swatches
+  // still render the bare glyph inline (legend doesn't need the time).
   const isDay = type === "day";
   return (
     <span
@@ -527,6 +521,36 @@ function MilbPill({ type }) {
       aria-label={isDay ? "Day game" : "Night game"}
     >
       {isDay ? <SunGlyph size={12} /> : <MoonGlyph size={12} />}
+    </span>
+  );
+}
+
+// Ghost day/night pill (2026-07-11): replaces the bare sun/moon glyph
+// on lg tiles for both MLB fee and MiLB. Renders `[glyph] [time]` with
+// a hairline colored border and transparent fill (Option B - restrained
+// so it doesn't compete with the game-day green border or the opponent
+// chip). Amber for day, indigo for night. Time comes pre-formatted from
+// gameTimeFormat.js (venue-local, no am/pm, "ET"/"CT" abbrev on MLB).
+// Time is optional - when absent, renders glyph alone (defensive:
+// scheduled games whose time hasn't been backfilled still surface a
+// day/night cue without an empty pill).
+function DayNightPill({ type, timeText }) {
+  const isDay = type === "day";
+  const label = timeText
+    ? `${isDay ? "Day" : "Night"} game, ${timeText}`
+    : `${isDay ? "Day" : "Night"} game`;
+  return (
+    <span
+      className={`sc-daysq-dn-pill sc-daysq-dn-pill--${type}`}
+      role="img"
+      aria-label={label}
+    >
+      <span className="sc-daysq-dn-pill-glyph" aria-hidden="true">
+        {isDay ? <SunGlyph size={11} /> : <MoonGlyph size={11} />}
+      </span>
+      {timeText && (
+        <span className="sc-daysq-dn-pill-time">{timeText}</span>
+      )}
     </span>
   );
 }
@@ -552,10 +576,16 @@ function buildAriaLabel({ date, status, isToday, isSelected, content, kind }) {
     // sc-13: away days read as "@ OPP" (matches the visual hollow tag);
     // all other states use the "vs OPP" home-context reading.
     if (content.opponent) parts.push(status === "away" ? `at ${content.opponent}` : `vs ${content.opponent}`);
-    if (content.milbPill) parts.push(`${content.milbPill} game`);
-    // sc-15 (2026-07-11): MLB home day/night in aria - mirrors the
-    // MiLB reading so screen readers get the same signal from either.
-    if (content.dayNight) parts.push(`${content.dayNight} game`);
+    // Ghost pill (2026-07-11): unified day/night reading. content.dayNight
+    // is set on both MLB fee (from sc_homestand_schedule.day_night) and
+    // MiLB (from gameType substring). Fall back to content.milbPill if
+    // dayNight isn't set (defensive - some codepaths still emit milbPill
+    // only). If pillTime is present, append the venue-local time for
+    // screen-reader parity with the visible pill.
+    const dn = content.dayNight || content.milbPill;
+    if (dn) {
+      parts.push(content.pillTime ? `${dn} game, ${content.pillTime}` : `${dn} game`);
+    }
     if (kind === "per-meal" && content.revenue != null) parts.push(fmt$K(content.revenue));
     const mealCount = content.served != null ? content.served : content.meals;
     if (mealCount != null) parts.push(`${mealCount} meals`);

@@ -35,6 +35,7 @@ import {
 import { CheckCircle } from "../Icons";
 import { fmt$ } from "./format";
 import ProgressBar from "./ProgressBar";
+import { formatMlbHomeGameTime, formatMilbHomeGameTime } from "../gameTimeFormat";
 import "./periodWorkspace.css";
 
 export default function PeriodWorkspace({
@@ -208,6 +209,7 @@ export default function PeriodWorkspace({
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
         homestandMap={homestandMap}
+        accountKey={account?.key}
         bulkMode={bulkMode}
         bulkSelected={bulkSelected}
         loadState={loadState}
@@ -663,7 +665,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -803,7 +805,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // and content drops so the atom renders the dashed shell.
               const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
-              const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb);
+              const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb, accountKey);
               // Bulk-selectable gate: needs-entry / overdue / future
               // days are always selectable. SC-069 widens the gate to
               // also allow ENTERED FUTURE days so a fully-caught-up
@@ -869,7 +871,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
 // per-day record (post-B2a periodDays) has day.totals, day.projected,
 // day.actual, day.meta.week, day.gameType, day.hasActuals - richer
 // than year-summary's day shape, so we render real $ and meals.
-function buildLargeContent(day, kind, homestandMap, isMilb) {
+function buildLargeContent(day, kind, homestandMap, isMilb, accountKey) {
   const projMeals = sumProjectedMeals(day);
   const actMeals = day.hasActuals ? sumActualMeals(day) : 0;
   const meals = day.hasActuals ? actMeals : projMeals;
@@ -884,9 +886,13 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
       meals: day.hasActuals ? (meals ?? null) : (meals > 0 ? meals : null),
       isEstimated: !day.hasActuals,
       // sc-15 (2026-07-11): day/night from sc_homestand_schedule.day_night
-      // (populated for HOME GAME rows). Drives the top-row sun/moon glyph.
-      // Null for AWAY / EXHIBITION - no glyph on those tiles.
+      // (populated for HOME GAME rows). Drives the ghost pill on lg tiles.
+      // Null for AWAY / EXHIBITION - no pill on those tiles.
       dayNight: hs?.dayNight || null,
+      // Ghost pill (2026-07-11): pre-format the venue-local time here so
+      // the atom stays presentation-only. "1:10 ET" / "7:05 CT" per the
+      // account's home-park timezone map. Null when no MLB game_time.
+      pillTime: formatMlbHomeGameTime(hs?.gameTime, accountKey),
     };
   }
   if (kind === "milb") {
@@ -896,14 +902,24 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
     // CIN-KY is "Per-meal only, two-tier". Without revenue here,
     // the workspace day-tile would silently drop $ for MiLB.
     const g = (day.gameType || day.meta?.gameType || "").toLowerCase();
-    const milbPill = g.includes("day") ? "day"
+    const dayNight = g.includes("day") ? "day"
                   : g.includes("night") ? "night"
                   : null;
     const rev = day.hasActuals
       ? day.totals?.actualRevenue
       : day.totals?.projectedRevenue;
     return {
-      milbPill,
+      // Ghost pill (2026-07-11): MiLB uses `dayNight` now (parity with
+      // MLB fee) - the pill render on lg reads this alongside pillTime.
+      // `milbPill` retained for backward-compat with any sm-scope reader
+      // (year-grid pickCompactSmall gate).
+      milbPill: dayNight,
+      dayNight,
+      // MiLB game_time is TEXT (manually entered) on sc_day_metadata,
+      // surfaced on the drill-in day payload as day.gameTime. Already in
+      // venue-local per convention; cleaned by formatMilbHomeGameTime
+      // (strips AM/PM tokens - the glyph disambiguates).
+      pillTime: formatMilbHomeGameTime(day.gameTime || day.meta?.gameTime),
       meals: meals || null,
       revenue: rev != null ? rev : null,
       isEstimated: !day.hasActuals && isPastDate(day.date),
