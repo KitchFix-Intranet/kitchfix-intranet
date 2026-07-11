@@ -114,21 +114,24 @@ export function buildCompactContent(day, kind) {
   const meals = Number(day.actualMeals) || 0;
   switch (kind) {
     case "mlb-fee": {
-      if (!day.opponent && !day.dayNight) return null;
-      const bag = { opponent: day.opponent || null };
-      // sc-15 (2026-07-11): day/night drives the top-row sun/moon
-      // glyph on MLB home cells (matches MiLB pattern). Only HOME
-      // GAME rows have day.dayNight set - AWAY / EXHIBITION carry
-      // null and no glyph renders.
-      if (day.dayNight) bag.dayNight = day.dayNight;
-      return bag;
+      // 2026-07-11 fix: strip dayNight from the sm content bag entirely.
+      // The lg pill's atom-level `size === "lg"` render gate was already
+      // correct, but keeping dayNight on the sm bag left a data path
+      // that any current or future sm-scope reader (renderMiddleLine,
+      // pickCompactSmall, buildAriaLabel, a downstream hook) could
+      // pick up and re-emit as a glyph. Sm tiles are date + opponent
+      // only - no day/night signal at all, per Kevin's ruling.
+      return day.opponent ? { opponent: day.opponent } : null;
     }
     case "milb": {
-      const g = (day.gameType || "").toLowerCase();
-      const milbPill = g.includes("day") ? "day"
-                    : g.includes("night") ? "night"
-                    : null;
-      return milbPill ? { milbPill } : null;
+      // 2026-07-11 fix: MiLB sm tiles no longer emit a day/night pill
+      // in the compact bag. The sun/moon on sm was retired as part of
+      // the ghost-pill migration (matches sc-13 away-plane sm-drop).
+      // At sm, MiLB carries date + status only - year-summary doesn't
+      // ship a per-day compact indicator for MiLB other than the
+      // (now-removed) day/night pill. Returning null keeps the sm
+      // middle line empty (date-only tile), which is the intent.
+      return null;
     }
     case "fee-no-dollar":
       return meals > 0 ? { served: meals } : null;
