@@ -186,6 +186,13 @@ function classifyDayStatus(s, ctx) {
   const isPast = d < ctx.today;
   const isOverdue = d < ctx.lockCutoff;
 
+  // sc-16 (2026-07-11): lift the schedule-row lookup so both branches
+  // can consult it. Fee accounts have always used hs for their branch
+  // logic; per-meal accounts now use it to short-circuit AWAY days for
+  // Louisville / Buffalo (the two per-meal accounts with schedule
+  // data). Other per-meal accounts have no hs and skip the check.
+  const hs = ctx.homestandMap?.[s.date];
+
   // Fee-account branch: homestand-driven classification (4 MLB fee
   // accounts have homestand rows; STL-FL is flat_fee but has zero
   // homestand rows so hasHomestandData is false and it falls through to
@@ -208,7 +215,6 @@ function classifyDayStatus(s, ctx) {
   // recorded cancellation, still a tracked event). Per Kevin's ruling:
   // the operator's action wins over the schedule's suggestion.
   if (ctx.billingModel === "flat_fee" && ctx.hasHomestandData) {
-    const hs = ctx.homestandMap?.[s.date];
     if (!hs) return "off-season";              // not in schedule -> invisible
     // sc-12 (2026-07-10): EXHIBITION days are billed as separate catering
     // outside the contract. Distinct atom status so the tile can render
@@ -234,6 +240,14 @@ function classifyDayStatus(s, ctx) {
   }
 
   // Per-meal branch (PDC + MiLB + STL-FL).
+  // sc-16 (2026-07-11): schedule-having per-meal accounts
+  // (Louisville / Buffalo) short-circuit to "away" when the schedule
+  // says the team is on the road. Team-on-the-road wins over any
+  // stale projections or actuals - the AWAY tile is display-only,
+  // teal fill, hollow @OPP chip (matches the fee branch's AWAY
+  // handling). All other per-meal accounts have no hs and the check
+  // is a no-op.
+  if (hs?.dayType === "AWAY") return "away";
   if (s.hasAct && !s.anyNonZeroAct) return "no-service";
   if (s.hasAct) return "entered";
   // 2026-06-17 (PR #167): per-meal accounts treat a day with all-zero
@@ -472,7 +486,7 @@ async function loadAllAccountsConfigPostgres() {
   const [accountsRes, groupsRes, servicesRes, logRes] = await Promise.all([
     supa
       .from("accounts")
-      .select("team_key, name, level, billing_model")
+      .select("team_key, name, level, billing_model, has_homestand_schedule")
       .eq("active", true)
       .neq("team_key", "CORP")
       .order("team_key", { ascending: true }),
@@ -612,6 +626,7 @@ async function loadAllAccountsConfigPostgres() {
       name:          a.name || a.team_key,
       level:         a.level || null,
       billingModel:  a.billing_model || null,
+      hasHomestandSchedule: !!a.has_homestand_schedule,
       groups:        groupsByAccount.get(a.team_key) || [],
       services:     (servicesByAccount.get(a.team_key) || []).sort((x, y) => x.sortOrder - y.sortOrder),
       lastUpdatedAt,
@@ -699,7 +714,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
     ),
     supa
       .from("accounts")
-      .select("billing_model")
+      .select("billing_model, has_homestand_schedule")
       .eq("team_key", accountKey)
       .maybeSingle(),
     // SC-079: one batched query for the whole month range. Returns a
@@ -712,12 +727,15 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   ]);
   throwOnError(billingRes.error, "loadMonthData.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
+  const hasHomestandScheduleFlag = !!billingRes.data?.has_homestand_schedule;
 
-  // Homestand context ONLY for fee accounts. STL-FL is flat_fee but has
-  // zero rows; hasHomestandData ends up false and classify() falls back
-  // to the per-meal branch. Same gating as loadYearSummaryPostgres.
+  // sc-16 (2026-07-11): schedule presence is now a data-driven flag on
+  // accounts, not a billing_model proxy. Gate the loadHomestandContext
+  // fetch on has_homestand_schedule. The 4 MLB fee accounts + the 2
+  // AAA clubs (Louisville / Buffalo) fetch; STL-FL (flat_fee, no
+  // schedule) skips the query cleanly.
   let homestandMap = {};
-  if (billingModel === "flat_fee") {
+  if (hasHomestandScheduleFlag) {
     homestandMap = await loadHomestandContext(accountKey, first, last);
   }
   const hasHomestandData = Object.keys(homestandMap).length > 0;
@@ -888,7 +906,7 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from("sc_homestand_schedule")
-    .select("service_date, homestand_id, day_type, opponent, day_night, game_time")
+    .select("service_date, homestand_id, day_type, opponent, day_night, game_time, is_doubleheader")
     .eq("account_key", accountKey)
     .gte("service_date", firstDate)
     .lte("service_date", lastDate)
@@ -910,6 +928,10 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
       // to venue-local at render time by gameTimeFormat.js. Nullable -
       // AWAY / EXHIBITION rows keep null and no time renders.
       gameTime:    r.game_time || null,
+      // sc-16 (2026-07-11): doubleheader compression flag. Drives a
+      // small "DH" affix on the opponent chip when true. Defaults to
+      // false on rows that predate sc-16 or aren't loader-owned.
+      isDoubleheader: !!r.is_doubleheader,
     };
   }
   return map;
@@ -941,20 +963,22 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   // past day with all-zero projections + no actuals means "planned off-
   // day, nothing to enter") from flat_fee accounts (which use homestand-
   // driven classification - see homestand branch in classify() below).
+  // sc-16 (2026-07-11): schedule-presence is now a separate flag; read
+  // it in the same query.
   const billingRes = await supa
     .from("accounts")
-    .select("billing_model")
+    .select("billing_model, has_homestand_schedule")
     .eq("team_key", accountKey)
     .maybeSingle();
   throwOnError(billingRes.error, "loadYearSummary.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
+  const hasHomestandScheduleFlag = !!billingRes.data?.has_homestand_schedule;
 
-  // Fetch homestand data ONLY for fee accounts. Per-meal accounts never
-  // touch sc_homestand_schedule (no data exists for them) so we save the
-  // query. STL-FL is flat_fee but has zero homestand rows; homestandMap
-  // is empty for it and classify() falls back to the per-meal path.
+  // sc-16 (2026-07-11): gate on the flag rather than the billing model
+  // proxy. Louisville / Buffalo pick up schedule context here even
+  // though their billing_model = 'actuals_drive_invoice'.
   let homestandMap = {};
-  if (billingModel === "flat_fee") {
+  if (hasHomestandScheduleFlag) {
     homestandMap = await loadHomestandContext(accountKey, first, last);
   }
   const hasHomestandData = Object.keys(homestandMap).length > 0;
@@ -1079,6 +1103,9 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       // Ghost pill (2026-07-11): raw UTC first-pitch. Formatted to
       // venue-local by the render path via gameTimeFormat.js.
       dayEntry.gameTime    = hs.gameTime;
+      // sc-16 (2026-07-11): DH affix flag passes through so the
+      // renderer can decorate the opponent chip.
+      dayEntry.isDoubleheader = hs.isDoubleheader;
     }
     daysByMonth.get(monthKey).push(dayEntry);
   }

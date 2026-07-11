@@ -25,6 +25,11 @@ const ACCOUNT_HOME_TZ = {
   "STL - MO":     { tz: "America/Chicago",  abbrev: "CT" }, // Busch Stadium
   "TXR - TX - H": { tz: "America/Chicago",  abbrev: "CT" }, // Globe Life Field
   "TXR - TX - V": { tz: "America/Chicago",  abbrev: "CT" }, // Globe Life Field
+  // sc-16 (2026-07-11): MiLB AAA parity. Louisville + Buffalo both sit in
+  // the ET label year-round per Kevin's ruling. The venue tz is what the
+  // Intl formatter converts UTC into; the abbrev is presentational.
+  "CIN - KY":     { tz: "America/New_York", abbrev: "ET" }, // Louisville Slugger Field
+  "TBJ - NY":     { tz: "America/New_York", abbrev: "ET" }, // Sahlen Field
 };
 
 // Format an MLB HOME game_time (ISO TIMESTAMPTZ from PG) as

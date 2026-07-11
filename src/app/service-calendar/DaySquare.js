@@ -364,7 +364,10 @@ function renderAway(content, sm) {
 // milb:        day/night pill (no number)
 // fee-no-dollar: meals
 function pickCompactSmall(kind, content, status) {
-  if (kind === "mlb-fee" && content.opponent) {
+  // sc-16 (2026-07-11): MiLB with schedule joins mlb-fee in showing the
+  // opponent chip on sm year-grid tiles. Other MiLB accounts have no
+  // opponent field and fall through to the meals/revenue branches.
+  if ((kind === "mlb-fee" || kind === "milb") && content.opponent) {
     return <span className="sc-daysq-mid-opponent">{content.opponent}</span>;
   }
   // Day/night glyph on sm MiLB tiles retired 2026-07-11 as part of the
@@ -415,7 +418,7 @@ function renderPerMeal(content, status) {
 }
 
 function renderMlbFee(content) {
-  const { opponent, meals, isEstimated, dayNight, pillTime } = content;
+  const { opponent, meals, isEstimated, dayNight, pillTime, isDoubleheader } = content;
   if (!opponent && meals == null && !dayNight) return null;
   // Stacked layout (option A): opponent reads as a navy chip on its own
   // line; the headcount sits beneath as "N meals" with the count as hero
@@ -435,7 +438,11 @@ function renderMlbFee(content) {
   const mealsPrefix = isEstimated ? "~" : "";
   return (
     <div className="sc-daysq-mid sc-daysq-mid--mlb">
-      {opponent && <span className="sc-daysq-mid-opponent">vs {opponent}</span>}
+      {opponent && (
+        <span className="sc-daysq-mid-opponent">
+          vs {opponent}{isDoubleheader ? " · DH" : ""}
+        </span>
+      )}
       {dayNight && (
         <DayNightPill type={dayNight} timeText={pillTime} />
       )}
@@ -460,16 +467,22 @@ function renderMilb(content, status) {
   // the top spot before the meals hero). MLB fee's stack reads
   // [opp] [pill] [meals]; MiLB's reads [pill] [meals] [rev] - one
   // language, adapted to each kind's existing slots.
-  const { meals, revenue, isEstimated, dayNight, pillTime } = content;
+  const { opponent, meals, revenue, isEstimated, dayNight, pillTime, isDoubleheader } = content;
   const hasRev = revenue != null;
   const hasMeals = meals != null;
-  if (!hasRev && !hasMeals && !dayNight) return null;
+  if (!opponent && !hasRev && !hasMeals && !dayNight) return null;
   // SC-039: no-service short-circuit matching renderPerMeal:235-241. A
   // MiLB day with meals null OR zero is a no-service day; renders the
   // quiet "No service" line instead of the misleading est. $0 / ~$0.
   // Pill is intentionally NOT rendered on a no-service tile (the
   // "we're not serving" signal wins over the day/night context).
-  if (!meals) {
+  //
+  // sc-16 (2026-07-11): guard the short-circuit on !opponent. MiLB with
+  // schedule (Louisville/Buffalo) on a future GAME day may have
+  // meals=null before projections are entered - the schedule already
+  // says "game day"; "No service" would misread. Show the opponent +
+  // pill instead, and omit the meals + revenue lines below.
+  if (!meals && !opponent) {
     return (
       <div className="sc-daysq-mid sc-daysq-mid--off">
         <span className="sc-daysq-mid-noservice">No service</span>
@@ -481,6 +494,16 @@ function renderMilb(content, status) {
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
     <div className="sc-daysq-mid sc-daysq-mid--milb">
+      {/* sc-16 (2026-07-11): MiLB with schedule (Louisville/Buffalo) picks
+          up the opponent chip on lg GAME tiles, ordered above the pill
+          per the MLB-fee stack. Other MiLB accounts have no opponent set
+          on the day bag and this row disappears. Same DH affix as
+          renderMlbFee when the schedule row flags a doubleheader. */}
+      {opponent && (
+        <span className="sc-daysq-mid-opponent">
+          vs {opponent}{isDoubleheader ? " · DH" : ""}
+        </span>
+      )}
       {dayNight && (
         <DayNightPill type={dayNight} timeText={pillTime} />
       )}
