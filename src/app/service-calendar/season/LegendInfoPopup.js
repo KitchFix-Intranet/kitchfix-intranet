@@ -182,9 +182,14 @@ function Section({ title, children }) {
 // SC-041: text-only row for the Figures section. The "swatch" is the
 // figure notation itself; no color to inherit, no glyph. Same DOM
 // shape as Row so it slots into the popup's dl/row grid.
+// Design review 2026-07-11 (Kevin): the shared .sc-legend-popup-row
+// grid-template gave every row a 28px first column, but the figure
+// swatch demands 68px+ - text was clipped and the FIGURES rows read
+// as empty. Adding --figure modifier widens the first column just
+// for this row shape; every other legend row is unaffected.
 function FigureRow({ chip, label, desc }) {
   return (
-    <div className="sc-legend-popup-row">
+    <div className="sc-legend-popup-row sc-legend-popup-row--figure">
       <span className="sc-legend-popup-swatch sc-legend-popup-swatch--figure" aria-hidden="true">
         {chip}
       </span>

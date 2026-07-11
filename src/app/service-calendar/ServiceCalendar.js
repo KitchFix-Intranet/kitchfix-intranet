@@ -13,6 +13,7 @@ import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
+import { isActionableDay } from "./season/dayPredicates";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
@@ -101,26 +102,31 @@ function aggregateWorkspaceMetrics(days) {
   };
   if (!days?.length) return out;
   for (const day of days) {
-    // SC-038: urgency counters read the classified status the tiles +
-    // legend render from, not the raw isPast/isLocked derivation the
-    // aggregate used before. Past no-service days (classifier
-    // "no-service" from all-zero projection rows) no longer inflate.
-    //
-    // SC-066 step 0 (2026-07-09): "complete" widens to include the
-    // no-service classification. Two paths land on that status:
-    //   (case 1) all-zero projection + never saved - the classifier's
-    //            planned-off Sunday case (per-meal only). hasActuals=
-    //            false because nothing was written, but the operator
-    //            has nothing to do; the beige tile reads "done".
-    //   (case 2) actuals present but ALL zero (Mark-no-service / an
-    //            operator zero-write). hasActuals=true because a row
-    //            exists per service, tile also beige.
-    // Both are visually indistinguishable + operationally "handled"; the
-    // counter now agrees. Fee accounts don't emit "no-service" so
-    // widening is a no-op for MLB homestand + STL-FL when it falls
-    // through to the fee path.
+    // Kevin's ruling 2026-07-11 (superseding SC-066 step 0's widened
+    // "complete" predicate): the "X of Y entered" numerator counts
+    // ONLY actionable days with recorded actuals. A no-service day
+    // (auto or manual) drops out of BOTH numerator and denominator
+    // (see out.total assignment at end + isServiceDay derivation
+    // below). See season/dayPredicates.js for the full rule.
+    // `hasActuals` remains the readable signal for the completion
+    // color pass because status="entered" IS the classifier's
+    // hasActuals verdict for actionable service days.
+    const isDayEntered = day.status === "entered";
+    // isActionableTotal drives out.total (the denominator). Same
+    // predicate as isActionableDay() in dayPredicates.js; kept inline
+    // here so the week aggregate and the period aggregate stay in
+    // lockstep without a second helper import.
+    const isActionableTotal = day.status !== "no-service"
+      && day.status !== "off-season"
+      && day.status !== "prep"
+      && day.status !== "exhibition"
+      && day.status !== "away";
+    if (isDayEntered) out.complete++;
+    if (isActionableTotal) out.total++;
+    // isDayComplete retained locally for the fee/game-day paths below
+    // (SC-066's "hasActuals || no-service" still describes the tile
+    // color state; only the "X of Y entered" ratio has changed).
     const isDayComplete = day.hasActuals || day.status === "no-service";
-    if (isDayComplete) out.complete++;
     if (day.status === "overdue") out.overdue++;
     else if (day.status === "needs-entry") out.needsEntry++;
     // SC-043: service-day predicate. Excludes the non-service statuses.
@@ -170,7 +176,10 @@ function aggregateWorkspaceMetrics(days) {
       };
     }
     const w = out.weeks[wk];
-    w.total++;
+    // Kevin's ruling 2026-07-11: weeks track actionable-only counts
+    // too so the week-card counter agrees with the period counter
+    // for the same range. w.total = actionable days in this week.
+    if (isActionableTotal) w.total++;
     w.projRev += day.totals?.projectedRevenue || 0;
     if (day.status === "overdue") w.overdue++;
     else if (day.status === "needs-entry") w.needsEntry++;
@@ -182,10 +191,11 @@ function aggregateWorkspaceMetrics(days) {
       w.gameDays++;
       if (isDayComplete) w.gameDaysEntered++;
     }
-    // Step-0 (SC-066): w.complete tracks the same widened predicate as
-    // the period aggregate above so week-card counts don't disagree
-    // with the period header for the same range.
-    if (isDayComplete) w.complete++;
+    // Kevin's ruling 2026-07-11: week's `complete` follows the
+    // actionable-and-entered numerator too (superseding SC-066's
+    // widened predicate). No-service days are excluded from BOTH
+    // sides of the week ratio, matching the period ratio.
+    if (isDayEntered) w.complete++;
     // Revenue/meals accumulators STAY gated on hasActuals: a case-1
     // no-service Sunday has no actual_revenue to sum, and inflating
     // actMeals with a projection-derived zero is a no-op anyway.
@@ -197,7 +207,10 @@ function aggregateWorkspaceMetrics(days) {
       }
     }
   }
-  out.total = days.length;
+  // out.total is accumulated per-day above via isActionableTotal
+  // (Kevin's ruling 2026-07-11). Prior version set out.total =
+  // days.length here, which inflated the denominator with away /
+  // no-service / exhibition / off-season / prep days.
   return out;
 }
 
@@ -1606,25 +1619,22 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     if (!yearData) return null;
     let daysRecorded = 0, totalDays = 0, needsEntry = 0, overdue = 0, mealsYTD = 0;
     let gameDaysEntered = 0, totalGameDays = 0;
-    // NOTE: route.js re-keys the orchestrator output before responding:
-    //   totalServiceDays -> totalDays, totalActualMeals -> actualCovers,
-    //   totalProjectedMeals -> projectedCovers. Read the response shape,
-    //   not the orchestrator shape. (First version of this loop read the
-    //   orchestrator names and rendered "169 of 0 days recorded".)
+    // Kevin's ruling 2026-07-11: BOTH the numerator (daysRecorded) and
+    // denominator (totalDays) count actionable days only. See
+    // season/dayPredicates.js for the full spec + supersession of
+    // P1 item 4 (which widened the numerator to include no-service).
+    // The FullSeasonCard hero (`daysRecorded / totalDays`) now agrees
+    // with MonthCard + PeriodCard on the actionable-day math -
+    // away / no-service / exhibition / off-season / prep drop out.
     for (const m of yearData) {
-      // P1 item 4 (2026-07-10): use the widened classifier rule
-      // (`entered` OR `no-service`) instead of the SQL narrow
-      // `days_with_actuals`. Same predicate MonthCard + PeriodCard +
-      // export use, so the FullSeasonCard hero (`daysRecorded / totalDays`)
-      // agrees with every other surface.
       if (m.days) {
         for (const d of m.days) {
-          if (d.status === "entered" || d.status === "no-service") daysRecorded++;
+          if (d.status === "entered") daysRecorded++;
           if (d.status === "needs-entry") needsEntry++;
           else if (d.status === "overdue") overdue++;
+          if (isActionableDay(d)) totalDays++;
         }
       }
-      totalDays += m.totalDays || 0;
       mealsYTD += m.actualCovers || 0;
       if (m.homestandSummary) {
         gameDaysEntered += m.homestandSummary.gameDaysEntered || 0;

@@ -764,13 +764,23 @@
   box-shadow: 0 0 0 2.5px var(--action-primary-bg), inset 0 0 0 1.5px var(--accent-sc);
 }
 /* Date lifted into a filled navy rounded-square chip; badge stays
-   top-right (via the parent .sc-daysq-top flex row). */
+   top-right (via the parent .sc-daysq-top flex row).
+   Design review 2026-07-11 (Kevin): keep rounded-square geometry,
+   FIXED height, min-width = height so a 1-digit date renders a
+   perfect square (visually unchanged from before). At 2-digit dates
+   ("11", "23"), horizontal padding lets the chip widen into a short
+   pill instead of cramming the numeral. Not a circle - the corner
+   radius stays at 8px. Modest overall size bump (26 -> 28) keeps the
+   chip clear of the note bubble / top-right badge slot. tabular-nums
+   inherits from .sc-daysq-date above so 11 and 23 render on the same
+   glyph-width grid. */
 .sc-daysq--lg.sc-daysq--today .sc-daysq-date {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
   border-radius: 8px;
   background: var(--action-primary-bg);
   color: var(--surface-card);
