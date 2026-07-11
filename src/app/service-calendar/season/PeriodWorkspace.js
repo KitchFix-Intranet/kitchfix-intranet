@@ -893,10 +893,6 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey) {
       // the atom stays presentation-only. "1:10 ET" / "7:05 CT" per the
       // account's home-park timezone map. Null when no MLB game_time.
       pillTime: formatMlbHomeGameTime(hs?.gameTime, accountKey),
-      // sc-16 (2026-07-11): DH affix pass-through. MLB fee accounts don't
-      // have any DH rows today (defaults false); the mlb-fee render
-      // decorates the opponent chip when the flag is true.
-      isDoubleheader: !!hs?.isDoubleheader,
     };
   }
   if (kind === "milb") {
@@ -905,38 +901,25 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey) {
     // financial truth). docs/SC_BILLING_MODEL_AUDIT.md confirms
     // CIN-KY is "Per-meal only, two-tier". Without revenue here,
     // the workspace day-tile would silently drop $ for MiLB.
-    //
-    // sc-16 (2026-07-11): source precedence for schedule-having MiLB
-    // accounts (Louisville/Buffalo). When homestandMap has an hs row
-    // for this date, the schedule wins:
-    //   opponent          <- hs.opponent (NEW field on the milb bag)
-    //   dayNight          <- hs.dayNight   (over parsed gameType text)
-    //   pillTime          <- MLB-style formatter from hs.gameTime (UTC)
-    //   isDoubleheader    <- hs.isDoubleheader
-    // Other MiLB accounts (no hs) fall through to the sc_day_metadata
-    // path unchanged.
-    const hs = homestandMap?.[day.date];
     const g = (day.gameType || day.meta?.gameType || "").toLowerCase();
-    const parsedDayNight = g.includes("day") ? "day"
-                        : g.includes("night") ? "night"
-                        : null;
-    const dayNight = hs?.dayNight || parsedDayNight;
-    const pillTime = hs?.gameTime
-      ? formatMlbHomeGameTime(hs.gameTime, accountKey)
-      : formatMilbHomeGameTime(day.gameTime || day.meta?.gameTime);
+    const dayNight = g.includes("day") ? "day"
+                  : g.includes("night") ? "night"
+                  : null;
     const rev = day.hasActuals
       ? day.totals?.actualRevenue
       : day.totals?.projectedRevenue;
     return {
-      opponent: hs?.opponent || null,
-      isDoubleheader: !!hs?.isDoubleheader,
       // Ghost pill (2026-07-11): MiLB uses `dayNight` now (parity with
       // MLB fee) - the pill render on lg reads this alongside pillTime.
       // `milbPill` retained for backward-compat with any sm-scope reader
       // (year-grid pickCompactSmall gate).
       milbPill: dayNight,
       dayNight,
-      pillTime,
+      // MiLB game_time is TEXT (manually entered) on sc_day_metadata,
+      // surfaced on the drill-in day payload as day.gameTime. Already in
+      // venue-local per convention; cleaned by formatMilbHomeGameTime
+      // (strips AM/PM tokens - the glyph disambiguates).
+      pillTime: formatMilbHomeGameTime(day.gameTime || day.meta?.gameTime),
       meals: meals || null,
       revenue: rev != null ? rev : null,
       isEstimated: !day.hasActuals && isPastDate(day.date),

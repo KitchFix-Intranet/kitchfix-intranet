@@ -95,12 +95,7 @@ export function resolveDayStatus(serverStatus, loadState) {
 // it falls into fee-no-dollar via that gate even though billing_model
 // agrees with the 4 MLB fees.
 export function resolveDayKind({ billingModel, category, hasHomestandSchedule }) {
-  // sc-16 (2026-07-11): MiLB AAA accounts (Louisville/Buffalo) get
-  // hasHomestandSchedule=true but stay per-meal financially. Gate the
-  // mlb-fee (no-$) render on flat_fee as well as schedule presence so
-  // MiLB with schedule falls through to the milb branch (per-meal $
-  // preserved, schedule context additive).
-  if (hasHomestandSchedule && billingModel === "flat_fee") return "mlb-fee";
+  if (hasHomestandSchedule) return "mlb-fee";
   if (billingModel === "flat_fee") return "fee-no-dollar"; // STL-FL path
   if (category === "MiLB") return "milb";
   return "per-meal";
@@ -132,12 +127,11 @@ export function buildCompactContent(day, kind) {
       // 2026-07-11 fix: MiLB sm tiles no longer emit a day/night pill
       // in the compact bag. The sun/moon on sm was retired as part of
       // the ghost-pill migration (matches sc-13 away-plane sm-drop).
-      // sc-16 (2026-07-11): MiLB with schedule (Louisville/Buffalo)
-      // surfaces the opponent chip on sm (matches mlb-fee compact bag).
-      // Other MiLB accounts have no opponent field on year-summary days
-      // and stay date-only. Day/night pill still stripped from sm per
-      // the polish pass.
-      return day.opponent ? { opponent: day.opponent } : null;
+      // At sm, MiLB carries date + status only - year-summary doesn't
+      // ship a per-day compact indicator for MiLB other than the
+      // (now-removed) day/night pill. Returning null keeps the sm
+      // middle line empty (date-only tile), which is the intent.
+      return null;
     }
     case "fee-no-dollar":
       return meals > 0 ? { served: meals } : null;
