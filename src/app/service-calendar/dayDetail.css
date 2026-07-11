@@ -706,12 +706,101 @@
   color: var(--text-muted);
   font-variant-numeric: var(--num-tabular);
 }
+/* P2.1 (2026-07-11): always-on composer pinned at the top of the
+   Activity band body, above the entry list. Pill-shaped input + inline
+   pill Post button. Focus ring uses the SC accent so the composer
+   inherits the tool's identity. Wraps gracefully at narrow widths
+   (Post drops below the input rather than clipping). */
+.sc-day-activity-composer {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-3) 6px var(--space-3);
+  background: var(--surface-card);
+}
+.sc-day-activity-composer-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 8px 14px;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-default);
+  font-size: var(--size-body);
+  font-family: inherit;
+  line-height: 1.3;
+  transition: border-color var(--motion-control), box-shadow var(--motion-control);
+}
+.sc-day-activity-composer-input::placeholder {
+  color: var(--text-subtle);
+  font-style: italic;
+}
+.sc-day-activity-composer-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-sc);
+  box-shadow: 0 0 0 2px var(--accent-sc-subtle);
+}
+.sc-day-activity-composer-input:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.sc-day-activity-composer-post {
+  flex-shrink: 0;
+  padding: 7px var(--space-4);
+  min-height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-sc);
+  color: var(--text-inverse);
+  border: var(--border-thin) solid var(--accent-sc);
+  font-weight: var(--wt-semibold);
+  font-size: var(--size-body);
+  cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-day-activity-composer-post:hover:not(:disabled) {
+  background: var(--accent-sc-dark);
+  border-color: var(--accent-sc-dark);
+}
+.sc-day-activity-composer-post:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-subtle);
+  border-color: var(--border-default);
+  cursor: not-allowed;
+}
+/* One-line helper that makes the "posts immediately" behavior explicit
+   in normal reading order. Sits directly below the composer so a
+   first-time user can distinguish this input from the ride-along
+   field above by microcopy, not just placement. */
+.sc-day-activity-composer-hint {
+  margin: 0 var(--space-3) var(--space-2) var(--space-3);
+  font-size: var(--size-micro);
+  color: var(--text-muted);
+  line-height: var(--lead-normal);
+}
+/* Empty state: shown only while the merged ledger is empty. The
+   first posted entry replaces this row. Muted italic to read as
+   guidance, not content. Copy points at the composer above -
+   deliberately, per the P2.1 spec: describe the input the user is
+   looking at, not the ride-along/submit paths. */
+.sc-day-activity-empty {
+  margin: 0;
+  padding: var(--space-3);
+  border-top: var(--border-thin) solid var(--border-subtle);
+  font-size: var(--size-caption);
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
 .sc-day-activity-list {
   list-style: none;
   padding: 0;
   margin: 0;
   max-height: 220px;
   overflow-y: auto;
+  border-top: var(--border-thin) solid var(--border-subtle);
 }
 .sc-day-activity-item {
   display: grid;
@@ -892,43 +981,11 @@
   font-size: var(--size-caption);
 }
 
-/* P2 (item 2, R2a): subordinated "+ Add a note without saving" link
-   below the action bar. Collapsed by default; expanded state shows
-   the Add note button + a "Never mind" dismiss. Ride-along above is
-   the primary composer; this is the edge case (post a note without
-   saving actuals). Same shared `notes` draft state - either affordance
-   posts the same string via a different wire. */
-.sc-day-standalone-note {
-  margin-top: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.sc-day-standalone-note-toggle {
-  font-size: var(--size-caption);
-}
-.sc-day-standalone-note-panel {
-  width: 100%;
-  padding: var(--space-3);
-  border: var(--border-thin) solid var(--border-subtle);
-  border-radius: var(--radius-container);
-  background: var(--surface-page);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.sc-day-standalone-note-copy {
-  margin: 0;
-  font-size: var(--size-micro);
-  color: var(--text-muted);
-  line-height: var(--lead-normal);
-}
-.sc-day-standalone-note-actions {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  flex-wrap: wrap;
-}
+/* P2.1 (2026-07-11): .sc-day-standalone-note family retired - the
+   footer "+ Add a note without saving" link is gone. The always-on
+   Activity composer above takes its place; styles for that composer
+   live in the .sc-day-activity-composer block (near the Activity
+   band above). */
 
 /* Bulk review overlay: shares the .sc-day--review chrome (navy
    scoreboard + action bar) but the body is a compact list, one row
