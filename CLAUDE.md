@@ -43,6 +43,8 @@ The close-out + status docs are canonical for current state. ARCHITECTURE.md is 
 
 **Branch-and-PR for everything.** No direct commits to main. Feature branch → push → Vercel preview → PR → review the diff → merge. CI runs on every PR (once it's set up in Phase 1).
 
+**Migration-gated PRs open as DRAFT.** If a PR's code reads or writes any schema object (column, table, view, function, RLS policy) that is created or altered by a not-yet-applied migration, the PR opens as a **draft** with a checklist item `☐ sc-XX migration applied in Studio (Kevin confirms)`. The PR is marked ready-for-review ONLY after Kevin confirms the migration is applied in Studio and the verify probes pass. Rationale: on 2026-07-11 the sc-16 reader (#403) merged before the sc-16 migration ran; every `accounts` SELECT 500'd until the revert. Draft state prevents a synchronous merge from re-creating the silent-gap. Applies to every migration-dependent code change, not just SC.
+
 **The runbook is code.** Every infrastructure change (env var added, Vercel setting changed, cron schedule modified) updates `docs/RUNBOOK.md` in the same commit. Same for env vars touching `docs/ENV_VARS.md`. Don't ship infra changes without doc updates.
 
 **Capacity, not speed, is the constraint.** The maintainer works on this full-time. There's no need to compress phases or skip validation windows to "move faster." When ahead of schedule, use the time for depth (stronger tests, better docs, more polish) rather than pulling future phases forward. The arc's pacing is deliberate - each phase needs to settle before the next builds on it.
