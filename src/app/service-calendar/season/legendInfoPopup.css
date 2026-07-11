@@ -105,6 +105,19 @@
   align-items: start;
 }
 
+/* Design review 2026-07-11 (Kevin): the FIGURES section swatch
+   carries the notation itself (~$3K / est. $3K / $3K) with a
+   min-width of 68px, but every row uses the shared 28px first
+   column above - so the figure notation was clipped to a ~10px
+   sliver and read as empty/broken. Contrary to Kevin's hypothesis
+   (the PR #398 sm-icon-strip touched tile markup, not this
+   popup), the mechanism is a grid-track-vs-swatch mismatch that
+   predates #398. Fix: give FigureRow its own row shape with a
+   wider first column so the figure notation renders in full. */
+.sc-legend-popup-row--figure {
+  grid-template-columns: 84px 1fr;
+}
+
 .sc-legend-popup-swatch {
   width: 24px;
   height: 24px;
@@ -123,7 +136,10 @@
 /* SC-041: text-only figure "swatch" for the Figures section. Not a
    color chip - carries the notation itself ("~$3K" / "est. $3K" / etc)
    so the operator sees the exact form the tiles render. Wider to fit
-   the text; no border to read as text, not as a status swatch. */
+   the text; no border to read as text, not as a status swatch.
+   Design review 2026-07-11: pair with the .sc-legend-popup-row--figure
+   modifier above so the parent grid gives this element the room its
+   min-width demands. */
 .sc-legend-popup-swatch--figure {
   width: auto;
   min-width: 68px;
