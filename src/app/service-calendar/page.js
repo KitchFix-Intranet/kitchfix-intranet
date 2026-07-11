@@ -137,14 +137,9 @@ export default function ServiceCalendarPage() {
   return (
     <div className="oh-app">
       <div className="oh-bound">
-        {/* The Suspense wrapper added in #330 was labeled "hygiene only" for
-            useSearchParams(), but in this already-"use client" + useSession
-            (dynamic) page it was unnecessary AND it swallowed URL updates
-            from client-side router.push - the drill-in `‹ Season` /
-            stepper buttons changed the URL but the URL-sync effect never
-            re-ran with the new params, so the view stayed frozen.
-            Rendering ServiceCalendar directly (pre-#330 shape) restores
-            the propagation. */}
+        {/* Rendering ServiceCalendar directly (pre-#330 shape) - see
+            layout.js segment config (`export const dynamic = "force-dynamic"`)
+            for the cold-deep-load fix that landed with this change. */}
         <ServiceCalendar
           showToast={showToast}
           session={session}
