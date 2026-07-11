@@ -1,20 +1,64 @@
 name: e2e
 
+# Two jobs, two event streams:
+#
+#   `matrix` runs on pull_request. It builds the PR's code as a
+#   production bundle IN the runner, starts it with the TEST_MODE
+#   middleware bypass, and drives the nav-matrix regression spec
+#   (tests/sc-nav-matrix.spec.ts). This is the #407 regression net -
+#   it only makes sense against a build we control (TEST_MODE lets
+#   Playwright reach the SC UI without OAuth). Runs every time a PR
+#   is opened or pushed.
+#
+#   `preview` runs on deployment_status. Vercel's GitHub App emits
+#   this event when it finishes building the PR's preview. The job
+#   reads the preview URL directly from the event payload
+#   (github.event.deployment_status.environment_url), waits nothing
+#   (the event ALREADY fires with state=success), and runs a
+#   dependency-free smoke check that the PR's own deploy responds as
+#   expected. This replaces the old workflow shape which ran
+#   Playwright against the hardcoded prod URL - green there proved
+#   "prod is up," not "this PR works."
+#
+# Nothing points at kitchfix-intranet.vercel.app anymore. The old
+# workflow's PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app
+# is gone (grep the file for that string - zero hits).
+
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+  deployment_status:
 
-# Cancel in-progress runs for the same PR when a new commit is pushed
+# Cancel-in-progress by PR number when we know it (pull_request),
+# else by deployment SHA (deployment_status).
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.deployment.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  playwright:
-    name: Playwright tests
+  # ═══════════════════════════════════════════════════════════════
+  # JOB A - nav matrix against a local production build.
+  # ═══════════════════════════════════════════════════════════════
+  matrix:
+    if: github.event_name == 'pull_request'
+    name: Nav matrix (local build)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # Build/boot placeholders. The matrix spec stubs every data route
+    # via Playwright's page.route, and TEST_MODE=true routes the
+    # middleware around real auth - so nothing here needs to be a real
+    # secret. Values are inline literals so this workflow stays
+    # self-contained: no Kevin-setup step blocks the check from
+    # running on the very PR that adds it.
+    env:
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: ci-placeholder-not-a-secret
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-placeholder-not-a-secret
+      GOOGLE_CLIENT_ID: ci-placeholder
+      GOOGLE_CLIENT_SECRET: ci-placeholder
 
     steps:
       - name: Checkout repository
@@ -32,25 +76,135 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install --with-deps chromium
 
-      - name: Restore Playwright auth state from secret
+      - name: Build production bundle
+        run: npx next build
+
+      - name: Start production server with TEST_MODE bypass
+        # Backgrounded. The wait step below blocks until it's serving.
+        # TEST_MODE=true is scoped to this step's environment ONLY; it
+        # doesn't leak into any subsequent step's shell (each `run:` is
+        # its own shell in Actions).
+        run: TEST_MODE=true nohup npx next start -p 3000 > /tmp/server.log 2>&1 &
+
+      - name: Wait for server readiness (bounded 60s)
+        # Poll the SC route. 200/307/401 all mean "server responded" -
+        # the specific code doesn't matter, only that it's serving.
+        # Failing here dumps the server log so a build/boot regression
+        # doesn't look like a cryptic 60s timeout.
         run: |
-          mkdir -p tests/.auth
-          echo "${{ secrets.PLAYWRIGHT_AUTH_STATE_B64 }}" | base64 -d > tests/.auth/user.json
-          test -s tests/.auth/user.json
-          echo "Auth state restored ($(wc -c < tests/.auth/user.json) bytes)"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/service-calendar 2>/dev/null || echo "")
+            if [[ "$code" =~ ^(200|307|401)$ ]]; then
+              echo "Server ready after ${i}s (http_code=$code)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server did not become ready within 60s"
+          echo "--- server log ---"
+          cat /tmp/server.log || true
+          exit 1
 
-      - name: Run Playwright tests
+      - name: Run nav matrix spec
         env:
-          PLAYWRIGHT_BASE_URL: https://kitchfix-intranet.vercel.app
-        run: npx playwright test --project=chromium
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+        # The spec itself guards on IS_LOCALHOST so it's a no-op if
+        # this ever gets pointed at a non-localhost base URL - but
+        # here it's exactly what the spec expects.
+        run: npx playwright test tests/sc-nav-matrix.spec.ts --project=chromium
 
       - name: Upload Playwright HTML report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: matrix-report
           path: playwright-report/
           retention-days: 7
 
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB B - preview smoke: this PR's own Vercel preview, not prod.
+  # ═══════════════════════════════════════════════════════════════
+  preview-smoke:
+    # Fires only for Vercel[bot] preview deployments that succeeded.
+    # deployment_status also emits on prod deploys and on failure -
+    # both are correctly ignored here.
+    if: >
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Preview') &&
+      github.event.deployment.creator.login == 'vercel[bot]'
+    name: Preview smoke (this PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Announce target
+        # Prints the exact preview URL this job is hitting. If Kevin
+        # ever sees kitchfix-intranet.vercel.app in this log line it's
+        # a genuine regression - the trigger got miswired to prod.
+        run: |
+          echo "Preview URL:  ${{ github.event.deployment_status.environment_url }}"
+          echo "Commit SHA:   ${{ github.event.deployment.sha }}"
+          echo "Environment:  ${{ github.event.deployment.environment }}"
+          echo "Creator:      ${{ github.event.deployment.creator.login }}"
+
+      - name: Reject prod URL (guardrail)
+        # Belt-and-suspenders: if a mis-scoped deployment_status ever
+        # slips through the if-filter above (e.g. a Vercel config
+        # change), this hard-fails BEFORE we start asserting - so
+        # green never means "prod is up" masquerading as PR coverage.
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          if [[ -z "$URL" ]]; then
+            echo "::error::deployment_status.environment_url is empty - Vercel event payload changed?"
+            exit 1
+          fi
+          if echo "$URL" | grep -qE "^https://kitchfix-intranet\.vercel\.app/?$"; then
+            echo "::error::Preview URL resolved to the PROD apex ($URL). Refusing to run - this job must test the PR's own preview, not prod."
+            exit 1
+          fi
+          echo "Non-prod preview URL confirmed."
+
+      - name: Smoke - preview responds
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+        # 200/307/401 all count as "serving." Anything else - 500,
+        # timeouts, DNS failures - fails the check. Bounded to 15s
+        # per curl call so a hung preview doesn't burn the job's
+        # 5-minute timeout.
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL/" || echo "curl-failed")
+          echo "GET $URL/ -> $code"
+          case "$code" in
+            200|307|401) echo "Preview root serving." ;;
+            *) echo "::error::Preview root returned $code (expected 200/307/401)"; exit 1 ;;
+          esac
+
+      - name: Smoke - middleware auth chain intact
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+        # An unauth request to /service-calendar should redirect to
+        # /login (middleware.js path). This proves:
+        #   1. The preview built - the middleware bundle deployed.
+        #   2. TEST_MODE bypass is CORRECTLY OFF on Vercel (VERCEL=1
+        #      dead-gate confirmed at the perimeter, not just by
+        #      reading middleware.js).
+        # If this ever returns 200 instead of 3xx, the bypass leaked
+        # to production Vercel and a rotation-worthy incident is in
+        # flight.
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL/service-calendar" || echo "curl-failed")
+          echo "GET $URL/service-calendar -> $code"
+          case "$code" in
+            307|302) echo "Middleware redirects unauth requests as expected." ;;
+            401) echo "Middleware challenges unauth requests as expected." ;;
+            200)
+              echo "::error::Unauth /service-calendar returned 200 on a Vercel preview. Middleware auth may have been bypassed - check the TEST_MODE gate against VERCEL=1 IMMEDIATELY."
+              exit 1
+              ;;
+            *) echo "::error::Unauth /service-calendar returned $code (expected 307/302/401)"; exit 1 ;;
+          esac
