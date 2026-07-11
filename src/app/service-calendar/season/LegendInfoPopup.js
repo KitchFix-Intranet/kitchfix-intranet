@@ -114,7 +114,10 @@ export default function LegendInfoPopup({
                 {it.description}
               </Row>
             ))}
-            {isMilb && !hasHomestandSchedule && !isFeeAccount && MILB_DAY_NIGHT.map(it => (
+            {/* sc-15 (2026-07-11): widen the day/night popup gate to MLB
+                fee accounts too - MLB home cells now render the same
+                sun/moon glyph as MiLB. */}
+            {(hasHomestandSchedule || (isMilb && !isFeeAccount)) && MILB_DAY_NIGHT.map(it => (
               <MilbRow key={it.mod} type={it.type} label={it.labelLong} />
             ))}
           </Section>

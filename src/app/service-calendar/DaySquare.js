@@ -206,6 +206,17 @@ export default function DaySquare({
         {size === "lg" && kind === "milb" && content?.milbPill && (
           <MilbPill type={content.milbPill} />
         )}
+        {/* sc-15 (2026-07-11): MLB home cells get the same sun/moon
+            glyph as MiLB, in the top row next to the date, at BOTH
+            sizes (mlb-fee sm mid-slot is already occupied by the
+            opponent chip; the glyph lives in the top row instead).
+            Only HOME GAME rows have content.dayNight; AWAY /
+            EXHIBITION carry null and no glyph renders. Reuses the
+            MilbPill component + shared .sc-daysq-milb-glyph CSS so
+            MLB and MiLB read as one visual language. */}
+        {kind === "mlb-fee" && content?.dayNight && (
+          <MilbPill type={content.dayNight} />
+        )}
         {/* P2 (item 3, R3): trailing cluster housing the note-indicator
             bubble + the status badge (or selection check). Wrapped so
             both children sit against the top-right corner; the outer
@@ -542,6 +553,9 @@ function buildAriaLabel({ date, status, isToday, isSelected, content, kind }) {
     // all other states use the "vs OPP" home-context reading.
     if (content.opponent) parts.push(status === "away" ? `at ${content.opponent}` : `vs ${content.opponent}`);
     if (content.milbPill) parts.push(`${content.milbPill} game`);
+    // sc-15 (2026-07-11): MLB home day/night in aria - mirrors the
+    // MiLB reading so screen readers get the same signal from either.
+    if (content.dayNight) parts.push(`${content.dayNight} game`);
     if (kind === "per-meal" && content.revenue != null) parts.push(fmt$K(content.revenue));
     const mealCount = content.served != null ? content.served : content.meals;
     if (mealCount != null) parts.push(`${mealCount} meals`);

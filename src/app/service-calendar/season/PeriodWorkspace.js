@@ -883,6 +883,10 @@ function buildLargeContent(day, kind, homestandMap, isMilb) {
       opponent: hs?.opponent || null,
       meals: day.hasActuals ? (meals ?? null) : (meals > 0 ? meals : null),
       isEstimated: !day.hasActuals,
+      // sc-15 (2026-07-11): day/night from sc_homestand_schedule.day_night
+      // (populated for HOME GAME rows). Drives the top-row sun/moon glyph.
+      // Null for AWAY / EXHIBITION - no glyph on those tiles.
+      dayNight: hs?.dayNight || null,
     };
   }
   if (kind === "milb") {
