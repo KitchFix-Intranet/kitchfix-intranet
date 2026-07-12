@@ -82,7 +82,9 @@ The boundary:
 
 ### Service Calendar architecture
 
-This section orients; the deep docs hold the detail.
+This section orients; the deep docs hold the detail. **Canonical module reference**: [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md). **Shipped-state + remaining work**: [`SC_STATUS.md`](SC_STATUS.md).
+
+**Two-flag schedule model.** `accounts.has_homestand_schedule` (sc-2 + sc-16, classification-driving; 4 MLB fee + 2 AAA per-meal accounts) and `accounts.has_schedule_overlay` (sc-17 + sc-17b, informational-only; STL - FL + TBJ - FL PDC accounts) are orthogonal booleans. The homestand flag routes accounts through `resolveDayKind` fee-branches and `classifyDayStatus` MLB-day-type-aware branches, and feeds actionable-day counters. The overlay flag is additive presentation only: it triggers `loadScheduleOverlay` (GAME rows only, belt-and-suspenders against future AWAY leakage) and layers an opponent chip + day/night pill onto the existing kind's render. HOME-only hard rule on overlay accounts (no AWAY rows, ever) - flipping AWAY on would either force wrong classification or require a defect-trade guard. Full derivation in [`audits/SC_17_INVESTIGATION_2026-07-11.md`](audits/SC_17_INVESTIGATION_2026-07-11.md); orthogonal-model summary + migration ledger in [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md).
 
 **Two-layer money model.** Per-meal / operational revenue is derived via the effective-dated view `sc_daily_revenue` (LATERAL join across `sc_service_prices` on `service_date`). Contract revenue (annual fees, SF% amounts, flat-fee accounts) lives in `sc_fee_schedule` and is managed via the admin surface. The KPI/dashboard lens reads both as additive P&L lines. Canonical doc: [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md).
 

@@ -2,14 +2,14 @@
 
 > **Purpose:** How to do operational things on this system. If you can't find the procedure here, add it after you've done it once.
 >
-> **Last verified:** 2026-05-11
+> **Last verified:** 2026-07-12
 > **Rule:** Every change to infrastructure must update this doc in the same commit.
 
 ---
 
 ## Standard development loop
 
-1. Confirm you're at `~/dev/kitchfix-intranet` and on main with clean tree:
+1. Confirm you're at the working directory (currently `~/dev/kf-cell-states` on Kevin's local; historical value: `~/dev/kitchfix-intranet`) and on main with clean tree:
 pwd && git status && git branch --show-current
 2. Pull latest: `git pull origin main`
 3. Create feature branch: `git checkout -b type/short-description`
@@ -161,3 +161,23 @@ Quick checks:
 - **2026-05-13** - Rewrote "How to restore a Google Sheet from backup" - backups went from "Phase 1 task" to live (`/api/cron/backup-sheets`, see PR #14). Documented two scenarios: tab-level restore (drilled and verified) and whole-sheet restore (theoretical, needs drilling). Added "drill on a copy" safety practice - never drill on live sheets.
 - **2026-05-15** - Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
 - **2026-05-15 (PR 3/3)** - Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` - these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.
+- **2026-07-12** - Added "TEST_MODE middleware bypass" + "PR-preview + nav-matrix CI" sections. TEST_MODE ships live via #407 (`src/middleware.js`); CI split into two-job matrix + preview-smoke via #408. Working-dir line acknowledges that the local checkout has moved from `~/dev/kitchfix-intranet` to `~/dev/kf-cell-states` on the current machine. Last-verified header bumped.
+
+---
+
+## TEST_MODE middleware bypass (Playwright, LIVE)
+
+`src/middleware.js` short-circuits at the top of the chain when `TEST_MODE === "true" AND VERCEL !== "1"`. Double-gated so a stray production export never opens the app. Value is set in the CI runner env (see `.github/workflows/e2e.yml` job A) or optionally in a local shell for Playwright development. Never on Vercel.
+
+- **CI use**: job A boots the in-runner build with `TEST_MODE=true npx next start`. All data routes are stubbed via `page.route`.
+- **Local use**: `TEST_MODE=true npm run dev` to iterate on Playwright specs without going through OAuth. Toggle off for anything that touches real auth.
+- **Deep detail**: [`docs/TESTING.md`](TESTING.md) "TEST_MODE bypass".
+
+## PR-preview + nav-matrix CI (LIVE)
+
+`.github/workflows/e2e.yml` has two jobs since PR #408:
+
+- **Job A (`matrix`)**: runs on `pull_request`. In-runner build + TEST_MODE + `tests/sc-nav-matrix.spec.ts` (26-URL matrix). Placeholder auth env vars (nothing to configure per PR).
+- **Job B (`preview-smoke`)**: runs on `deployment_status`. Reads the PR's own Vercel preview URL from the event payload + runs a dependency-free smoke check. Accepts `2xx / 3xx / 401` as "serving" (Vercel Preview Protection returns 302 SSO).
+
+Prior state (test against a hardcoded prod URL) is retired - `grep 'kitchfix-intranet.vercel.app' .github/workflows/e2e.yml` returns zero hits.

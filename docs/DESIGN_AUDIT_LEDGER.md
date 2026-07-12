@@ -5,6 +5,8 @@
 
 **Status: Sections 1-3 + Owner Rounds 2-3 + cleanup phase (C3/C2/C1a/C1b) COMPLETE pending runtime checks · 0 sev-4 open · remaining open: SC-014/015/020 (runtime), SC-011 (parked), SC-016-parity + partial-fail path (deferred by ruling)**
 
+> **Post-arc addendum (2026-07-12).** The 07-11 design-review-4-in-1 fix set (#409) landed the four items caught in the design review pass AFTER this ledger closed: actionable-only counters (#409/commit `8145caa` - excludes off/away from both numerator AND denominator), legend FIGURES row swatches render in full (#409/`ba35495`), chrome drill row single-line + Today pill sheds date (#409/`b55343d`), today date badge grows to short pill at 2 digits (#409/`30ec2ba`). Those fixes are RESOLVED at the code level and referenced from [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md) "Visual system"; they're not folded back into this ledger's table because Sections 1-3 are frozen. The **SC-036 candidate** (drill band chips hide below 640px on the chrome cluster) is unchanged - still awaiting a Kevin phone-check or CC read of `StickyContext.js`. The sc-18 (game-day wedge) and sc-19 (Spring Training styling) additions are new visual signals rather than audit findings; those live in [`SC_DRILLDOWN_DECISIONS.md`](SC_DRILLDOWN_DECISIONS.md) under the sm-tile "TWO sanctioned marks" philosophy entry.
+
 ## Section 1 - Calendar + Period Overview (PDC / MLB / MiLB) · audited 2026-07-08
 
 Evidence: Img 1 (skeleton), Img 2/3 (PDC cal/period), Img 4/5 (MLB), Img 6/7 (MiLB), Img 8 (legend
