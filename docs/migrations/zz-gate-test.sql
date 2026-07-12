@@ -1,0 +1,10 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- zz-gate-test.sql - scratch file for Migration gate RED-path test
+--
+-- NOT A REAL MIGRATION. This file exists only to prove that the
+-- Migration gate workflow correctly detects an ADDED docs/migrations/
+-- *.sql file, fails the check, then flips green on the canonical
+-- Studio-apply confirmation comment.
+--
+-- Will be deleted before the scratch PR closes; never merged to main.
+-- ═══════════════════════════════════════════════════════════════════
