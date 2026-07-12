@@ -131,7 +131,7 @@ These docs are session-log style or bundle-recon-style, superseded by shipped st
 
 ## Branch-protection finding
 
-`gh api repos/KitchFix-Intranet/kitchfix-intranet/branches/main/protection` returns `404 Branch not protected`. `CLAUDE.md`'s "Branch-and-PR for everything. No direct commits to main." is a discipline claim, not mechanical enforcement. The CI migration-gate hardening proposal above would benefit from actual branch protection first.
+Main IS protected via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic `GET /repos/.../branches/main/protection` endpoint returns 404 because rulesets are a separate surface (`GET /repos/.../rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" convention is mechanically enforced.** The CI migration-gate hardening proposal above lands as a required status check added to this ruleset - the workflow emits a check keyed on Studio-apply confirmation and the ruleset requires the check to pass before merge unlocks.
 
 ---
 
