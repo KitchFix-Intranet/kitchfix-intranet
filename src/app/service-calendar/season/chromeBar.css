@@ -26,7 +26,23 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  flex-wrap: wrap;
+  /* Design review 2026-07-11 (#409, b55343d) established the never-wrap
+     guarantee on .sc-chrome-drill. That fix stopped the drill from
+     wrapping ITSELF but the LEFT cluster still had `flex-wrap: wrap`,
+     which meant the drill could still wrap AS A WHOLE below the account
+     dropdown + category once its width exceeded the cluster's space.
+     Design review 2026-07-12 (#418, Kevin): sc-19's Spring Training
+     rider added post-#409 width to the drill; on periods that carry
+     BOTH a majority-phase pill AND the rider, the combined drill width
+     pushed past the wrap threshold and the whole drill dropped to a
+     second row. Fix: enforce nowrap on the desktop base rule; the
+     mobile @media block below overrides back to wrap so the two
+     clusters still stack cleanly on phone. Range remains the primary
+     elastic surface via its ellipsis (#409); phase-dot spans are
+     flex-shrink:0 so the color anchors survive; phase labels are the
+     next elastic surface via .sc-chrome-drill-phase's min-width:0 +
+     overflow:hidden below. */
+  flex-wrap: nowrap;
   min-width: 0;
 }
 
@@ -256,6 +272,11 @@
   .sc-chrome-bar-right {
     width: 100%;
     justify-content: flex-start;
+    /* #418 (2026-07-12): the base rule enforces nowrap for the desktop
+       drill Today-chip pinning. On mobile the 100%-width clusters need
+       their content to wrap onto multiple rows within the cluster, so
+       restore wrap here. */
+    flex-wrap: wrap;
   }
   .sc-chrome-bar-right {
     justify-content: space-between;
@@ -324,8 +345,24 @@
 .sc-chrome-drill-phase {
   display: inline-flex; align-items: center; gap: 7px;
   font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-default);
+  /* #418 (2026-07-12): after the range has fully ellipsized, the phase
+     labels (both the majority pill and the sc-19 Spring Training rider,
+     which shares this class) are the NEXT elastic surface. min-width:0
+     lets the flex item shrink below its content min; overflow:hidden
+     clips the bare text child at extremely narrow desktop widths so
+     the label truncates rather than force the drill past its container.
+     Priority: range compresses FIRST (#409); labels compress SECOND;
+     dots + stepper are inelastic. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.sc-chrome-drill-phase-dot { width: 9px; height: 9px; border-radius: var(--radius-circle); }
+.sc-chrome-drill-phase-dot {
+  width: 9px; height: 9px; border-radius: var(--radius-circle);
+  /* #418 (2026-07-12): the color dot is the semantic anchor of the
+     rider - never shrink it. */
+  flex-shrink: 0;
+}
 /* sc-19 (2026-07-12): Spring Training chrome-rider dot + label. Copper
    family - explicit override on top of the generic phase-dot (which
    picks its background from CANONICAL_PHASES tint via inline style).
