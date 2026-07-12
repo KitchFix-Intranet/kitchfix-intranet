@@ -68,10 +68,13 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **State**: not designed, not built. Awaiting Kevin's go on the approach before scoping.
 - **Owner**: Kevin (approval) + CC (build).
 
-### CIN - AZ fee decision (awaiting Kevin)
+### CIN - AZ service fee - RULED + SHIPPED (2026-07-12, PR #417)
 
-- **Context**: CIN - AZ is PDC per_meal today. Per the API survey ([`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md) Task 2), Cactus League spring games at Goodyear could power a spring overlay for the account (same shape as sc-17/17b). But whether CIN - AZ should ever move to a fee-based billing shape is a separate business decision awaiting Kevin.
-- **Owner**: Kevin.
+- **Ruling (Kevin, 2026-07-12)**: CIN - AZ (Goodyear PDC, `billing_model=actuals_drive_invoice`) bills a real contract service fee alongside per-meal revenue. The two are separate P&L lines per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md); per-meal continues to drive from `sc_daily_revenue`, and the fee lands in `sc_fee_schedule` as its own additive contract-revenue row.
+- **Mechanism (PR #417)**: `src/lib/dataStore/serviceCalendar.js` gained `FEE_ELIGIBLE_PER_MEAL = ["CIN - AZ"]` alongside the fee-schedule reader. `loadFeeSchedulePostgres` now returns any active account matching `billing_model === 'flat_fee' OR team_key IN FEE_ELIGIBLE_PER_MEAL`. Writes + history were already agnostic to billing_model. Consumers (export today, KPI later) key on fee-row existence, so once the row is added the fee flows through the money model automatically.
+- **Not touched**: calendar tile render (per-meal shape unchanged), `resolveDayKind` / `classifyDayStatus`, actionable-day counters, any migration (JS-side filter; no schema change).
+- **Kevin enters the real fee amount** via the admin surface after merge. If a future per_meal account also bills a fee, add its team_key to `FEE_ELIGIBLE_PER_MEAL` (one-line code change; no migration).
+- **Was**: "CIN - AZ fee decision (awaiting Kevin)" - resolved as of 2026-07-12.
 
 ### Authed preview e2e (follow-up from #408's honest limitation)
 

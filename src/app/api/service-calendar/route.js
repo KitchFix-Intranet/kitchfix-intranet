@@ -558,8 +558,10 @@ export async function GET(request) {
       return NextResponse.json({ success: true, accountKey, ...config });
     }
 
-    // ── sc-admin-fee-list: all flat_fee accounts with current as-of-today
-    //    fee + next upcoming change. The contract-revenue surface. ──
+    // ── sc-admin-fee-list: all fee-managed accounts (flat_fee + the
+    //    fee-eligible per_meal accounts per FEE_ELIGIBLE_PER_MEAL) with
+    //    current as-of-today fee + next upcoming change. The contract-
+    //    revenue surface. ──
     if (action === "sc-admin-fee-list") {
       if (!isScAdmin(email)) {
         return NextResponse.json(
