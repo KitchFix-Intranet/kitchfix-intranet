@@ -49,24 +49,22 @@
 - **Corner grammar** (top-right = event, bottom-left = season) documented in the same + [`SC_DRILLDOWN_DECISIONS.md`](SC_DRILLDOWN_DECISIONS.md).
 - **API depth survey** promoted to [`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md).
 
+### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
+
+- **What shipped**: `.github/workflows/migration-gate.yml` emits a `Migration gate` status check on every PR. Job A (`pull_request`) scans for added `docs/migrations/*.sql` - none -> pass instantly; any -> FAIL with a summary listing the files + the canonical phrase. Job B (`issue_comment`) matches `applied in Studio: YES` from an `OWNER`-association comment, resolves the PR head SHA, emits a `Migration gate` check_run as success on that SHA. Per-SHA reset: any push re-runs the scan.
+- **Ruleset**: after PR #416 merges, Kevin adds `Migration gate` as a required status check on the `main protection` ruleset (id 16364953). From that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
+- **What this closes**: the 2026-07-12 flip-and-merge failure class. The DRAFT-open discipline was necessary but not sufficient - a manual flip of the DRAFT toggle could still land migration-dependent code before the SQL rolled. The required check is the enforcement layer.
+- **Procedure**: `docs/RUNBOOK.md` -> "Confirming a migration-gated PR".
+
 ---
 
 ## Remaining work (as it actually stands)
 
 Not "sized roadmap" - decisions and follow-ups with clear blockers.
 
-### Dunedin verdict (sc-17b Studio-apply)
+### Dunedin verdict - RESOLVED (2026-07-12)
 
-- **State**: sc-17b file exists on main. Whether Kevin has applied it in Studio is external state.
-- **Ask**: Kevin confirms sc-17b applied. If yes, TBJ - FL overlay + inherited sc-18 wedges are LIVE. If no, state is code-live-data-empty (inert but safe).
-- **Owner**: Kevin.
-
-### CI migration-gate hardening (proposed, awaiting Kevin's go)
-
-- **Motivation**: two silent-gap incidents in 48h (sc-16 07-11 pre-rule; sc-17 07-12 through the draft rule via flip-and-merge). CLAUDE.md's draft-PR rule is discipline, not enforcement.
-- **Proposal**: workflow that scans PR head for new `docs/migrations/*.sql` and gates merge on an explicit review-comment ("sc-XX applied in Studio: YES") from Kevin.
-- **State**: not designed, not built. Awaiting Kevin's go on the approach before scoping.
-- **Owner**: Kevin (approval) + CC (build).
+- Kevin ran sc-17b in Studio 2026-07-12 ("Success. No rows returned"); TBJ - FL home tiles now render opponent chips + day/night pills + inherited sc-18 game-day wedges as designed. **TBJ - FL overlay is fully LIVE.**
 
 ### CIN - AZ service fee - RULED + SHIPPED (2026-07-12, PR #417)
 
@@ -134,7 +132,7 @@ These docs are session-log style or bundle-recon-style, superseded by shipped st
 
 ## Branch-protection finding
 
-Main IS protected via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic `GET /repos/.../branches/main/protection` endpoint returns 404 because rulesets are a separate surface (`GET /repos/.../rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" convention is mechanically enforced.** The CI migration-gate hardening proposal above lands as a required status check added to this ruleset - the workflow emits a check keyed on Studio-apply confirmation and the ruleset requires the check to pass before merge unlocks.
+Main IS protected via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic `GET /repos/.../branches/main/protection` endpoint returns 404 because rulesets are a separate surface (`GET /repos/.../rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" convention is mechanically enforced.** Migration gate shipped via #416; the required-check procedure lives in [`RUNBOOK.md`](RUNBOOK.md) "Confirming a migration-gated PR".
 
 ---
 

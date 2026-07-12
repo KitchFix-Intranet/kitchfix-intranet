@@ -54,6 +54,10 @@ GitHub Actions workflow: `.github/workflows/e2e.yml`. Two jobs, two event stream
 
 The pre-#408 workflow ran Playwright against a hardcoded prod URL (`PLAYWRIGHT_BASE_URL=https://kitchfix-intranet.vercel.app`). That string no longer exists in the workflow - `grep 'kitchfix-intranet.vercel.app' .github/workflows/e2e.yml` returns zero hits.
 
+### Migration gate check (`.github/workflows/migration-gate.yml`, LIVE since #416)
+
+A third required check enforces the "migrations are Studio-applied by hand" discipline mechanically. Job A (`pull_request`) diffs the PR head against merge-base for added `docs/migrations/*.sql` - none -> the check passes instantly (the common case, zero friction); any -> the check FAILS with a summary listing the files and the canonical confirmation phrase (`applied in Studio: YES`). Job B (`issue_comment`) matches that phrase from an `author_association == 'OWNER'` comment (Kevin), resolves the PR head SHA, and emits a `Migration gate` check_run as success on that SHA via the Checks API. Per-SHA reset: any push re-runs Job A, so a confirmation never outlives the code it confirmed. Kevin adds `Migration gate` as a required status check on the `main protection` ruleset once #416 lands, making migration-bearing PRs mechanically unmergeable until the confirmation fires. Full procedure: [`RUNBOOK.md`](RUNBOOK.md) -> "Confirming a migration-gated PR".
+
 ## Nav matrix regression net
 
 `tests/sc-nav-matrix.spec.ts` - the #407 regression net. 26-URL matrix covering:
@@ -107,3 +111,4 @@ Opens the last run's HTML report in a browser: screenshots, console logs, networ
 - **2026-05-13** - Auth state discovered to be environment-scoped (NextAuth session cookies domain-locked; `localhost:3000` state fails against Vercel). See [`GOTCHAS.md`](GOTCHAS.md) "Auth state is environment-scoped".
 - **2026-07-11** - Nav-matrix spec landed as part of PR #407. Read-only investigation preserved in [`audits/SC_NAV_SUBSYSTEM_MAP_2026-07-11.md`](audits/SC_NAV_SUBSYSTEM_MAP_2026-07-11.md).
 - **2026-07-12** - CI workflow rewritten in PR #408. Two-job split (in-runner matrix + preview smoke). Pre-existing "test against prod" shape retired; the hardcoded prod URL is gone. TEST_MODE bypass (from #407) is the mechanism that makes job A possible. Vercel Preview Protection 302 redirect is treated as "serving" by the smoke check (documented behavior, not a workaround).
+- **2026-07-12 (later)** - Migration gate check shipped via PR #416 (`.github/workflows/migration-gate.yml`). Third required check (once Kevin adds it to the `main protection` ruleset). Mechanical enforcement of the DRAFT rule: migration-bearing PRs are unmergeable until Kevin posts `applied in Studio: YES` as a comment. Per-SHA reset means a subsequent push resets the gate - flip-and-merge (the 2026-07-12 failure class) cannot survive a push.

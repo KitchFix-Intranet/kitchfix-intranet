@@ -1,0 +1,268 @@
+name: migration-gate
+
+# The mechanical enforcement layer for the "migrations are Studio-applied
+# by hand, not by Vercel" rule. Two triggers, one required check ("Migration
+# gate") that Kevin adds to the `main protection` ruleset (id 16364953).
+#
+# Trigger 1 — pull_request (opened / synchronize / reopened)
+#   Job A ("Migration gate") diffs the PR head against the merge-base for
+#   ADDED files matching docs/migrations/*.sql. None found -> the check
+#   passes immediately with a "No new migrations" summary (the overwhelmingly
+#   common case; zero friction). One or more found -> the check FAILS with
+#   a summary that lists the file(s) and prints the canonical confirmation
+#   phrase the maintainer must post to flip the check green.
+#
+# Trigger 2 — issue_comment (created) on a PR
+#   Job B ("confirm-and-emit") filters on comments whose body contains
+#   `applied in Studio: YES`. It validates that the comment author has
+#   author_association == 'OWNER' (the maintainer), resolves the PR's
+#   current head SHA via the pulls API, and emits a "Migration gate"
+#   check_run on that SHA as success via the Checks API. GitHub's required-
+#   check aggregation reads the LATEST check_run with a given name on a
+#   given SHA, so this flips the ruleset gate green even if the scan
+#   previously ran red on the same SHA.
+#
+# Per-SHA reset. A confirmation applies only to the SHA it was posted for.
+# Any subsequent push fires pull_request/synchronize, which re-runs Job A
+# on the new head SHA. If migration files are still present in the new
+# diff, the check goes red again and requires a fresh confirmation on
+# the new SHA. This means flip-and-merge (the 2026-07-12 failure class)
+# cannot survive a push.
+#
+# Ruleset handoff. Kevin adds "Migration gate" to the required status
+# checks on the `main protection` ruleset once this workflow has landed
+# and emitted a "Migration gate" check_run at least once (which happens
+# on the PR that introduces this file). See the paired PR body for the
+# exact click path.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+# Least-privilege for what each job needs:
+#   - checks: write   — Job B creates a check_run via the Checks API
+#   - pull-requests: read — Job B fetches the PR to resolve head SHA
+#   - contents: read  — Job A checks out the PR head to run `git diff`
+permissions:
+  checks: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # Job A — pull_request scan. This is THE required check on
+  # every PR. Kevin adds "Migration gate" to the ruleset by this
+  # exact string (spelled the same way in the `name:` field below).
+  # ═══════════════════════════════════════════════════════════════
+  scan:
+    if: github.event_name == 'pull_request'
+    name: Migration gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v6
+        with:
+          # merge-base needs both refs' history — depth 0 = full clone.
+          # Cheap on this repo (small history); tune only if runtime
+          # becomes a concern.
+          fetch-depth: 0
+          # Explicitly checkout the PR head SHA (not the merge commit).
+          # This is what Kevin will actually merge; diffing the merge
+          # commit vs the base would surface files that already exist
+          # on main, false-positiving PRs that don't touch migrations.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Detect added docs/migrations/*.sql files
+        id: detect
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          # merge-base gives the true divergence point. Diffing HEAD
+          # against base.sha alone would surface any migration file
+          # added on main AFTER the branch diverged — a false positive
+          # against PRs that don't themselves add a migration.
+          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          echo "merge-base: $MERGE_BASE"
+          echo "head:       $HEAD_SHA"
+          # --diff-filter=A: added files only. Renames + modifications
+          # do not count — the intent is "new SQL landed."
+          ADDED="$(git diff --name-only --diff-filter=A "$MERGE_BASE" "$HEAD_SHA" -- 'docs/migrations/*.sql' || true)"
+          if [[ -z "$ADDED" ]]; then
+            echo "No new migrations in this PR."
+            {
+              echo "## Migration gate: PASS"
+              echo ""
+              echo "No new files matching \`docs/migrations/*.sql\` were added in this PR."
+              echo ""
+              echo "The gate passes automatically on any PR that does not introduce a new migration file. The overwhelmingly common case; zero friction."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Added migration files:"
+          echo "$ADDED"
+          # Emit the file list + the canonical instruction. The summary
+          # renders on the check_run page, so Kevin sees exactly what he
+          # needs to post without leaving the PR view.
+          {
+            echo "## Migration gate: FAIL"
+            echo ""
+            echo "This PR adds migration file(s):"
+            echo ""
+            echo '```'
+            echo "$ADDED"
+            echo '```'
+            echo ""
+            echo "**Migrations are NOT auto-applied by Vercel.** The maintainer runs the SQL manually in Supabase Studio, then posts a canonical confirmation comment on this PR to flip this check green:"
+            echo ""
+            echo '```'
+            echo "Migration gate: applied in Studio: YES"
+            echo '```'
+            echo ""
+            echo "(The matcher accepts any comment containing the exact phrase \`applied in Studio: YES\`, from an author with \`author_association == 'OWNER'\`. The leading \`Migration gate:\` label is convention, not enforcement.)"
+            echo ""
+            echo "See \`docs/RUNBOOK.md\` -> \"Confirming a migration-gated PR\" for the full procedure (Studio apply -> run probes -> post comment -> merge)."
+            echo ""
+            echo "**Confirmation is per-SHA.** Any subsequent push to this PR resets the gate — a confirmation never outlives the code it confirmed. Flip-and-merge is not a viable path around this check."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Required checks need a definitive red, not neutral/pending.
+          # `exit 1` produces conclusion=failure on the check_run.
+          exit 1
+
+  # ═══════════════════════════════════════════════════════════════
+  # Job B — issue_comment trigger. Validates the maintainer's
+  # canonical confirmation + emits a "Migration gate" check_run on
+  # the PR head SHA as success.
+  #
+  # The job is NAMED 'confirm-and-emit' (not "Migration gate"), so
+  # its own workflow-level check_run — which lands on the default
+  # branch SHA for issue_comment events, NOT on the PR head SHA —
+  # doesn't pollute the required-check namespace. The actual
+  # "Migration gate" check_run is emitted explicitly on the PR head
+  # via the Checks API in the script below.
+  # ═══════════════════════════════════════════════════════════════
+  confirm-and-emit:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, 'applied in Studio: YES')
+    name: confirm-and-emit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Validate author + emit success check on PR head SHA
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const comment = context.payload.comment;
+            const issue = context.payload.issue;
+            const association = comment.author_association;
+            const login = comment.user.login;
+
+            core.info(`issue_comment fired on PR #${issue.number} by @${login} (author_association=${association}).`);
+
+            // Author validation.
+            //
+            // Accept only comments where author_association === 'OWNER'.
+            // In GitHub's data model this returns 'OWNER' for the actual
+            // repo owner (personal owner OR the org login for org-owned
+            // repos where the commenter has owner-level rights). In
+            // practice on this repo the only person who commenting with
+            // OWNER is Kevin.
+            //
+            // Solo-maintainer constraint: we cannot adversarially test
+            // the rejection path (no second user to comment on our own
+            // PRs). If a non-OWNER comment happens to contain the exact
+            // phrase, this job enters (the outer `if:` matches the
+            // phrase but not the author), then fails at this step,
+            // producing a red check_run on the DEFAULT BRANCH SHA —
+            // irrelevant to the PR's required check. The PR's own
+            // "Migration gate" red status (from Job A) remains
+            // unchanged; the merge is still blocked.
+            //
+            // If maintainer count changes (multiple humans allowed to
+            // confirm), extend to an allowlist of logins here.
+            if (association !== 'OWNER') {
+              core.setFailed(
+                `Comment author '${login}' has author_association '${association}', not 'OWNER'. ` +
+                `Only the repo owner's canonical comment counts as a Studio-apply confirmation. ` +
+                `Migration gate remains unchanged on PR #${issue.number}.`
+              );
+              return;
+            }
+
+            // Resolve the PR's current head SHA via the pulls API.
+            // Cannot use context.payload.pull_request — issue_comment
+            // events don't carry a full PR payload, only the issue view.
+            const prNumber = issue.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            const headSha = pr.head.sha;
+            const prState = pr.state;
+            const prMerged = pr.merged;
+            core.info(`PR #${prNumber} state=${prState} merged=${prMerged} head SHA: ${headSha}`);
+
+            // Defensive: don't emit success on merged/closed PRs. A
+            // confirmation on a closed PR is a no-op that should not
+            // silently succeed.
+            if (prState !== 'open') {
+              core.setFailed(
+                `PR #${prNumber} is not open (state: ${prState}, merged: ${prMerged}). ` +
+                `Migration gate confirmation only applies to open PRs. No check emitted.`
+              );
+              return;
+            }
+
+            // Emit "Migration gate" success on the PR head SHA.
+            //
+            // GitHub aggregates check_runs sharing a NAME on a given SHA
+            // using the LATEST — so this call flips the ruleset gate
+            // green even if Job A previously ran red on the same SHA.
+            //
+            // Truncate the comment body to keep the summary readable;
+            // long or paste-bomb comments should not blow up the summary.
+            const truncatedBody = comment.body.length > 500
+              ? comment.body.slice(0, 500) + '\n...(truncated)'
+              : comment.body;
+
+            const { data: check } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Migration gate',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Migration gate: confirmed by repo owner',
+                summary: [
+                  `**Confirmed via canonical comment on PR #${prNumber}.**`,
+                  '',
+                  '```',
+                  truncatedBody,
+                  '```',
+                  '',
+                  `Author: @${login} (author_association: \`${association}\`).`,
+                  `Head SHA at time of confirmation: \`${headSha}\`.`,
+                  '',
+                  '**Per-SHA scope.** This confirmation applies only to the SHA above. ' +
+                  `Any subsequent push to PR #${prNumber} fires a fresh Migration gate scan ` +
+                  'on the new head SHA. If migration files are still present in the new diff ' +
+                  'vs the merge-base, the check goes red again and requires a fresh confirmation ' +
+                  'on the new SHA — flip-and-merge cannot survive a push.',
+                ].join('\n'),
+              },
+            });
+
+            core.info(
+              `Created "Migration gate" check_run id ${check.id} on PR #${prNumber} ` +
+              `head SHA ${headSha} with conclusion=success.`
+            );
