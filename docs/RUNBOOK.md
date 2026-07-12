@@ -162,11 +162,11 @@ Quick checks:
 - **2026-05-15** - Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
 - **2026-05-15 (PR 3/3)** - Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` - these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.
 - **2026-07-12** - Added "TEST_MODE middleware bypass" + "PR-preview + nav-matrix CI" sections. TEST_MODE ships live via #407 (`src/middleware.js`); CI split into two-job matrix + preview-smoke via #408. Working-dir line acknowledges that the local checkout has moved from `~/dev/kitchfix-intranet` to `~/dev/kf-cell-states` on the current machine. Last-verified header bumped.
-- **2026-07-12 (later)** - Added "Confirming a migration-gated PR" procedure. Migration gate CI shipped via PR #415 (`.github/workflows/migration-gate.yml`). Job A scans PR head for added `docs/migrations/*.sql`; Job B validates the `applied in Studio: YES` confirmation from the repo OWNER and emits a `Migration gate` check_run on the PR head SHA. Per-SHA reset means a confirmation never outlives the code. Kevin adds `Migration gate` as a required status check on the `main protection` ruleset after PR #415 lands - from that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
+- **2026-07-12 (later)** - Added "Confirming a migration-gated PR" procedure. Migration gate CI shipped via PR #416 (`.github/workflows/migration-gate.yml`). Job A scans PR head for added `docs/migrations/*.sql`; Job B validates the `applied in Studio: YES` confirmation from the repo OWNER and emits a `Migration gate` check_run on the PR head SHA. Per-SHA reset means a confirmation never outlives the code. Kevin adds `Migration gate` as a required status check on the `main protection` ruleset after PR #416 lands - from that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
 
 ---
 
-## Confirming a migration-gated PR (LIVE since #415)
+## Confirming a migration-gated PR (LIVE since #416)
 
 Any PR adding a file under `docs/migrations/*.sql` opens with a **red `Migration gate` check** (from `.github/workflows/migration-gate.yml` Job A). The `main protection` ruleset requires this check, so the merge button is locked until it flips green. Procedure:
 

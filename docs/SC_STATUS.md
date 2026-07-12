@@ -49,10 +49,10 @@
 - **Corner grammar** (top-right = event, bottom-left = season) documented in the same + [`SC_DRILLDOWN_DECISIONS.md`](SC_DRILLDOWN_DECISIONS.md).
 - **API depth survey** promoted to [`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md).
 
-### Migration gate CI (#415, mechanical enforcement of the DRAFT rule)
+### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
 
 - **What shipped**: `.github/workflows/migration-gate.yml` emits a `Migration gate` status check on every PR. Job A (`pull_request`) scans for added `docs/migrations/*.sql` - none -> pass instantly; any -> FAIL with a summary listing the files + the canonical phrase. Job B (`issue_comment`) matches `applied in Studio: YES` from an `OWNER`-association comment, resolves the PR head SHA, emits a `Migration gate` check_run as success on that SHA. Per-SHA reset: any push re-runs the scan.
-- **Ruleset**: after PR #415 merges, Kevin adds `Migration gate` as a required status check on the `main protection` ruleset (id 16364953). From that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
+- **Ruleset**: after PR #416 merges, Kevin adds `Migration gate` as a required status check on the `main protection` ruleset (id 16364953). From that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
 - **What this closes**: the 2026-07-12 flip-and-merge failure class. The DRAFT-open discipline was necessary but not sufficient - a manual flip of the DRAFT toggle could still land migration-dependent code before the SQL rolled. The required check is the enforcement layer.
 - **Procedure**: `docs/RUNBOOK.md` -> "Confirming a migration-gated PR".
 
