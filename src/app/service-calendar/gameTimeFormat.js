@@ -30,6 +30,10 @@ const ACCOUNT_HOME_TZ = {
   // Intl formatter converts UTC into; the abbrev is presentational.
   "CIN - KY":     { tz: "America/New_York", abbrev: "ET" }, // Louisville Slugger Field
   "TBJ - NY":     { tz: "America/New_York", abbrev: "ET" }, // Sahlen Field
+  // sc-17 (2026-07-11): FSL Palm Beach Cardinals home-game overlay.
+  // Roger Dean Chevrolet Stadium, Jupiter FL. ET year-round matches
+  // the simple-label rule (avoids EDT/EST toggling on tile labels).
+  "STL - FL":     { tz: "America/New_York", abbrev: "ET" }, // Roger Dean Chevrolet Stadium
 };
 
 // Format an MLB HOME game_time (ISO TIMESTAMPTZ from PG) as

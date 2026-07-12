@@ -527,12 +527,30 @@ function renderFeeNoDollar(content) {
   // STL-FL discipline: no $ tokens. Structural absence enforced by
   // never calling fmt$K into this branch's logic (fmt$K is imported
   // file-wide via ./season/format, but this function does not call it).
-  const { served, meals } = content;
+  //
+  // sc-17 (2026-07-11): informational schedule overlay. When the
+  // buildLargeContent branch found a GAME row for this date, it set
+  // the opponent + dayNight + pillTime on the content bag. Prepend
+  // the chip and pill above the served count. No border / state /
+  // color change - this is purely additive presentation.
+  // Days without an overlay row have opponent + dayNight null and
+  // fall back to the pre-sc-17 served-only render byte-for-byte.
+  const { served, meals, opponent, dayNight, pillTime, isDoubleheader } = content;
   const n = served != null ? served : meals;
-  if (n == null) return null;
+  if (n == null && !opponent && !dayNight) return null;
   return (
     <div className="sc-daysq-mid">
-      <span className="sc-daysq-mid-meals">{fmtMeals(n)} served</span>
+      {opponent && (
+        <span className="sc-daysq-mid-opponent">
+          vs {opponent}{isDoubleheader ? " · DH" : ""}
+        </span>
+      )}
+      {dayNight && (
+        <DayNightPill type={dayNight} timeText={pillTime} />
+      )}
+      {n != null && (
+        <span className="sc-daysq-mid-meals">{fmtMeals(n)} served</span>
+      )}
     </div>
   );
 }
