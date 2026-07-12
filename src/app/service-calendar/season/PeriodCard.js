@@ -40,6 +40,7 @@ export default function PeriodCard({
   loadState = "loaded",       // SC-033: "failed" forces every cell to the failed atom
   onClick,                    // (periodKey) => void
   syncingDates,               // F3: Set<YYYY-MM-DD> for current account
+  springDateSet,              // sc-19: Set<YYYY-MM-DD> for Spring Training dates (client-derived from phaseCalendar.js)
 }) {
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
   // derive a homestand-based subtitle from the bucketed days (every
@@ -149,6 +150,9 @@ export default function PeriodCard({
                 // Sourced from the same day.hasScheduleGame boolean the
                 // year-summary loader sets when has_schedule_overlay=true.
                 isGameDayOverlay={!!cell.day.hasScheduleGame}
+                // sc-19 (2026-07-12): Spring Training corner wedge.
+                // Client-derived from phaseCalendar.js via springDateSet.
+                isSpringPhase={!!springDateSet?.has(cell.day.date)}
               />
             </span>
           );

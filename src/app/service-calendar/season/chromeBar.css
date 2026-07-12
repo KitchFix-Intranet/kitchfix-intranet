@@ -326,6 +326,19 @@
   font-size: var(--size-caption); font-weight: var(--wt-semibold); color: var(--text-default);
 }
 .sc-chrome-drill-phase-dot { width: 9px; height: 9px; border-radius: var(--radius-circle); }
+/* sc-19 (2026-07-12): Spring Training chrome-rider dot + label. Copper
+   family - explicit override on top of the generic phase-dot (which
+   picks its background from CANONICAL_PHASES tint via inline style).
+   Kevin's ruling: chrome color for spring is COPPER, distinct from
+   the pale-blue spring-training tint the phase pill would carry
+   otherwise. Hardcoded #8A4A1B - flagged promotable together with
+   the sm wedge + lg ST pill colors. */
+.sc-chrome-drill-phase-dot--spring {
+  background: #8A4A1B;             /* c-copper 800 - promotable */
+}
+.sc-chrome-drill-phase--spring {
+  color: #8A4A1B;                  /* c-copper 800 - promotable */
+}
 .sc-chrome-drill-today {
   display: inline-flex; align-items: center; gap: 6px; padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-control); background: var(--action-primary-bg);

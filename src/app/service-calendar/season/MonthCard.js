@@ -53,6 +53,7 @@ export default function MonthCard({
   loadState = "loaded",      // SC-033: "failed" forces every cell to the failed atom
   onClick,                   // (monthIndex) => void
   syncingDates,              // F3: Set<YYYY-MM-DD> for the current account; overlays SYNCING badge on matching tiles
+  springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -180,7 +181,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -308,7 +309,7 @@ function indexDays(monthSummary) {
   return m;
 }
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates }) {
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
@@ -341,6 +342,11 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       // has_schedule_overlay=true AND the date has a GAME row.
       // Non-overlay accounts pass undefined -> false, no wedge.
       isGameDayOverlay={!!day?.hasScheduleGame}
+      // sc-19 (2026-07-12): Spring Training corner wedge on sm tiles.
+      // springDateSet is derived client-side from phaseCalendar.js at
+      // the ServiceCalendar level; non-PDC accounts get an empty Set
+      // -> false, no wedge.
+      isSpringPhase={!!springDateSet?.has(cell.dateStr)}
     />
   );
 }

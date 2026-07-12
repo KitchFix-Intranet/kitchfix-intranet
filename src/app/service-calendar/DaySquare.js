@@ -143,6 +143,19 @@ export default function DaySquare({
   // classification, or counters. See the sm-render site below for
   // the philosophy amendment governing the #398 icon-strip rule.
   isGameDayOverlay = false,
+
+  // sc-19 (2026-07-12): the date is inside a `spring-training`
+  // canonical phase block per phaseCalendar.js (PDC accounts only).
+  // Drives TWO visual marks:
+  //   - sm tiles: a dark-copper corner wedge in the BOTTOM-LEFT
+  //     (mirror geometry of the sc-18 top-right game wedge). Corner
+  //     grammar: top-right = event (game, indigo); bottom-left =
+  //     season (spring, copper).
+  //   - lg tiles: a small "ST" pill in the top-right cluster,
+  //     leftmost of the existing furniture ([ST] [note] [status]).
+  // Purely presentational; never touches fill / border / state /
+  // classification / counters.
+  isSpringPhase = false,
 }) {
   const meta = STATUS_META[status] || STATUS_META.off;
   const day = dateNumber != null
@@ -169,14 +182,17 @@ export default function DaySquare({
   // doesn't matter to CSS (each draws its own box-shadow track) but
   // we list them deterministically for diff readability.
   //
-  // sc-18 philosophy amendment (Kevin, 2026-07-12):
-  //   "sm tiles carry color + border + date, plus exactly ONE mark:
-  //    the game-day wedge (sc-18, Kevin's deliberate amendment to
-  //    the #398 icon strip). No other marks return to sm without an
-  //    explicit ruling."
-  //   The `sc-daysq--game-day` modifier below is the ONE exception.
-  //   Any future sm mark needs an explicit Kevin ruling - do NOT
-  //   quietly reopen the icon channel by inheriting from this line.
+  // sc-19 philosophy amendment (Kevin, 2026-07-12; supersedes sc-18):
+  //   "sm tiles carry color + border + date, plus exactly TWO marks:
+  //    the game-day wedge (top-right, indigo, sc-18) and the season
+  //    wedge (bottom-left, dark copper, sc-19 - Spring Training).
+  //    Both are explicit Kevin rulings. No other marks return to sm
+  //    without one."
+  //   The `sc-daysq--game-day` and `sc-daysq--spring` modifiers below
+  //   are the TWO sanctioned exceptions. Corner grammar is official:
+  //   TOP-RIGHT = event; BOTTOM-LEFT = season. Any future sm mark
+  //   needs an explicit Kevin ruling - do NOT quietly reopen the
+  //   icon channel by inheriting from these two lines.
   const cls = [
     "sc-daysq",
     `sc-daysq--${size}`,
@@ -186,6 +202,7 @@ export default function DaySquare({
     isFocused && "sc-daysq--focused",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
+    isSpringPhase && "sc-daysq--spring",
   ].filter(Boolean).join(" ");
 
   const baseAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
@@ -195,9 +212,13 @@ export default function DaySquare({
   // built one.
   // sc-18 (2026-07-12): append "· game day" for the overlay wedge so
   // screen-reader users get the same signal the sighted wedge carries.
+  // sc-19 (2026-07-12): append "· spring training" for the copper
+  // season wedge on sm AND the ST pill on lg - same signal-to-label
+  // pattern.
   let composedAriaLabel = baseAriaLabel;
   if (hasNote) composedAriaLabel += " · has notes";
   if (isGameDayOverlay) composedAriaLabel += " · game day";
+  if (isSpringPhase) composedAriaLabel += " · spring training";
   const computedAriaLabel = composedAriaLabel;
 
   // sc-12: exhibition tiles absorb any click without firing the
@@ -245,6 +266,19 @@ export default function DaySquare({
             drill-down = detail. Do NOT restore the sm note bubble as
             a "bugfix" - it is intentionally stripped. */}
         <span className="sc-daysq-top-right">
+          {/* sc-19 (2026-07-12): "ST" pill leftmost in the cluster so
+              the reading order is [ST] [note bubble] [status badge].
+              Lg-only per Kevin's ruling - sm carries the copper corner
+              wedge instead (see sc-daysq--spring::after in DaySquare.css). */}
+          {size !== "sm" && isSpringPhase && (
+            <span
+              className="sc-daysq-st-pill"
+              title="Spring training"
+              aria-label="Spring training"
+            >
+              ST
+            </span>
+          )}
           {size !== "sm" && hasNote && <NoteBubble />}
           {size !== "sm" && (isSelected ? (
             <span className="sc-daysq-check" aria-hidden="true">✓</span>

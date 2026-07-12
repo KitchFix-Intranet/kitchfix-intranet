@@ -157,6 +157,12 @@ export default function LegendInfoPopup({
                 accounts already color their game days by state and
                 don't get the wedge. */}
             <GameDayRow />
+            {/* sc-19 (2026-07-12): Spring Training row - the dark-copper
+                corner wedge on sm overview tiles PLUS the "ST" pill on
+                lg drill-in tiles PLUS the chrome bar rider. PDC-only.
+                All three coordinated to the same phaseCalendar.js
+                spring block for the account. */}
+            <SpringTrainingRow />
           </Section>
 
           <Section title="Data states">
@@ -261,6 +267,24 @@ function GameDayRow() {
         <dt className="sc-legend-popup-row-label">Game day</dt>
         <dd className="sc-legend-popup-row-desc">
           A home game this day - drill in for opponent and first pitch. Overlay accounts only.
+        </dd>
+      </div>
+    </div>
+  );
+}
+
+// sc-19 (2026-07-12): legend row for Spring Training styling. The
+// swatch renders the same dark-copper bottom-left corner wedge sm
+// tiles get, on a neutral shell - the on-tile mark 1:1. Legend
+// swatches render outside the sm gate per #409's figure-row fix.
+function SpringTrainingRow() {
+  return (
+    <div className="sc-legend-popup-row">
+      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--spring" aria-hidden="true" />
+      <div className="sc-legend-popup-row-text">
+        <dt className="sc-legend-popup-row-label">Spring Training</dt>
+        <dd className="sc-legend-popup-row-desc">
+          Spring Training dates - copper corner on the overview, ST tag on day tiles. PDC accounts only.
         </dd>
       </div>
     </div>

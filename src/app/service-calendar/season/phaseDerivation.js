@@ -93,6 +93,49 @@ export function findPhaseAtDate(timeline, dateStr) {
   return timeline.blocks.find(b => dateStr >= b.start && dateStr <= b.end) || null;
 }
 
+// ─── collectSpringDates (sc-19) ──────────────────────────────────
+// Returns a Set<YYYY-MM-DD> of every date inside a `spring-training`
+// canonical block for the given timeline. Enumerated ONCE at the
+// SeasonShell / PeriodWorkspace level so sm tile renders can check
+// membership in O(1) instead of scanning blocks per cell.
+//
+// Returns an empty Set for non-PDC / absent / non-spring timelines
+// so callers can `.has(date)` without a null guard. Kevin's ruling
+// 2026-07-12: Spring Training is the second visible phase after
+// Off-season; other phases stay unstyled.
+export function collectSpringDates(timeline) {
+  const set = new Set();
+  if (!timeline?.blocks?.length) return set;
+  for (const b of timeline.blocks) {
+    if (b.phase !== "spring-training") continue;
+    // Enumerate dates from b.start to b.end INCLUSIVE. Anchor at
+    // UTC noon so DST transitions never bump us to the wrong day.
+    const d = new Date(b.start + "T12:00:00Z");
+    const end = new Date(b.end + "T12:00:00Z");
+    while (d <= end) {
+      set.add(d.toISOString().slice(0, 10));
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+  }
+  return set;
+}
+
+// ─── rangeIntersectsSpring (sc-19) ───────────────────────────────
+// Returns true when the given YYYY-MM-DD range overlaps at least
+// one `spring-training` block in the timeline. Used by the chrome
+// bar rider to decide whether to append "· Spring Training"
+// beside the date range (mirrors the existing "· Off-season" dot
+// pattern for period AND month drill headers).
+export function rangeIntersectsSpring(timeline, rangeStart, rangeEnd) {
+  if (!timeline?.blocks?.length || !rangeStart || !rangeEnd) return false;
+  for (const b of timeline.blocks) {
+    if (b.phase !== "spring-training") continue;
+    if (b.end < rangeStart || b.start > rangeEnd) continue;
+    return true;
+  }
+  return false;
+}
+
 // ─── derivePeriodPhase ───────────────────────────────────────────
 // Majority-phase tint rule (spec 7.4 / 11.x). Given a period range
 // and a derived timeline, find the phase(s) overlapping the period

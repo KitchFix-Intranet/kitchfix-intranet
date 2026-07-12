@@ -12,6 +12,7 @@
 // (see PeriodHeaderNav.js) - reused with a month-scoped onTodayJump.
 
 import { ChevronLeft, ChevronRight } from "../Icons";
+import { rangeIntersectsSpring } from "./phaseDerivation";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -29,7 +30,13 @@ export default function MonthHeaderNav({
   isLoading = false, // symmetric with PeriodHeaderNav. In practice monthRange
                      // derives synchronously from monthKey so the flag rarely
                      // flips true, but wire it for consistency.
+  // sc-19 (2026-07-12): the account's phase timeline, threaded from
+  // ServiceCalendar so the month-drill chrome header can render the
+  // copper "· Spring Training" rider when the month range intersects
+  // spring (mirrors PeriodHeaderNav's rider).
+  phaseTimeline,
 }) {
+  const inSpring = rangeIntersectsSpring(phaseTimeline, monthRange?.start, monthRange?.end);
   const monthNum = monthKey ? Number(monthKey.slice(5, 7)) : 0;
   const monthLabel = (monthNum >= 1 && monthNum <= 12) ? MONTH_NAMES[monthNum - 1] : "";
   const range = monthRange ? fmtDateRange(monthRange.start, monthRange.end) : "";
@@ -80,6 +87,26 @@ export default function MonthHeaderNav({
         </>
       ) : null}
       {/* Phase intentionally omitted - a calendar month spans phases. */}
+      {inSpring && (
+        <>
+          {/* sc-19 (2026-07-12): Spring Training rider on the month
+              header. Same shape as PeriodHeaderNav's rider (copper
+              dot + full label). Fires when the calendar month's range
+              intersects any spring-training block for the account. */}
+          <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
+          <span
+            className="sc-chrome-drill-phase sc-chrome-drill-phase--spring"
+            title="Spring Training phase"
+            aria-label="Spring Training phase"
+          >
+            <span
+              className="sc-chrome-drill-phase-dot sc-chrome-drill-phase-dot--spring"
+              aria-hidden="true"
+            />
+            Spring Training
+          </span>
+        </>
+      )}
     </div>
   );
 }

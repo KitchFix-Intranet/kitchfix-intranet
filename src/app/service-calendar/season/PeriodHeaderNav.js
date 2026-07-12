@@ -10,7 +10,7 @@
 // (ServiceCalendar) lifts the four nav handlers.
 
 import { useMemo } from "react";
-import { derivePhaseTimeline, derivePeriodPhase } from "./phaseDerivation";
+import { derivePhaseTimeline, derivePeriodPhase, rangeIntersectsSpring } from "./phaseDerivation";
 import { CANONICAL_PHASES } from "./phaseCalendar";
 import { ChevronLeft, ChevronRight } from "../Icons";
 
@@ -40,6 +40,18 @@ export default function PeriodHeaderNav({
   const phaseMeta = phaseAssignment?.primary
     ? CANONICAL_PHASES[phaseAssignment.primary]
     : null;
+
+  // sc-19 (2026-07-12): "Spring Training" chrome rider. Fires when
+  // the period's range intersects ANY spring-training block (not just
+  // when spring is the majority phase). Copper color, following the
+  // existing "· Off-season" dot+label pattern. Displaces the
+  // majority-phase pill ONLY when that pill would ALSO be Spring
+  // Training (avoid double-rendering "Spring Training" twice).
+  const inSpring = useMemo(
+    () => rangeIntersectsSpring(phaseTimeline, periodRange?.start, periodRange?.end),
+    [phaseTimeline, periodRange?.start, periodRange?.end]
+  );
+  const showMajorityPhasePill = phaseMeta && !(inSpring && phaseAssignment?.primary === "spring-training");
 
   const periodNum = periodKey ? String(periodKey).replace(/^P/i, "") : "";
   const range = periodRange
@@ -93,7 +105,7 @@ export default function PeriodHeaderNav({
               <span className="sc-chrome-drill-range">{range}</span>
             </>
           )}
-          {phaseMeta && (
+          {showMajorityPhasePill && (
             <>
               <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
               {/* SC-044: visual label stays abbreviated for width, but
@@ -111,6 +123,27 @@ export default function PeriodHeaderNav({
                   aria-hidden="true"
                 />
                 {chromePhaseLabel(phaseMeta.label)}
+              </span>
+            </>
+          )}
+          {inSpring && (
+            <>
+              {/* sc-19 (2026-07-12): copper Spring Training rider - full
+                  label + copper dot, distinct from the pale-blue
+                  spring-training tint the majority-phase pill would use.
+                  When the majority phase IS spring, that pill is
+                  suppressed above to avoid double-rendering. */}
+              <span className="sc-chrome-drill-dot" aria-hidden="true">·</span>
+              <span
+                className="sc-chrome-drill-phase sc-chrome-drill-phase--spring"
+                title="Spring Training phase"
+                aria-label="Spring Training phase"
+              >
+                <span
+                  className="sc-chrome-drill-phase-dot sc-chrome-drill-phase-dot--spring"
+                  aria-hidden="true"
+                />
+                Spring Training
               </span>
             </>
           )}

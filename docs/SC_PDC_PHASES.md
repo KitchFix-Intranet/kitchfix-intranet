@@ -137,3 +137,14 @@ The complex (ACL vs FCL) is determined by the account's state: AZ accounts -> AC
 - RESOLVED (2026-07): TBJ-FL + STL-FL recorded with a Kevin-approved simple calendar (see above).
 - Decide whether the Extended -> Complex-League distinction (recorded for the 3 clean accounts) should be a hard boundary operators plan around, or a softer label.
 - Confirm the ACL/FCL-by-state rule holds for all current and future PDC accounts.
+
+---
+
+## Annual sanity check (sc-19 standing ruling, 2026-07-12)
+
+Each January, sanity-check the Spring / FCL boundaries in `phaseCalendar.js` against the MLB Stats API's official brackets:
+
+- `GET /api/v1/seasons?sportId=1&season=<yr>` — MLB spring boundaries (`springStartDate` / `springEndDate`); calibrates Spring Training start/end across STL, TOR, CIN parents (all three parent orgs share the calendar cadence).
+- `GET /api/v1/seasons?sportId=16&season=<yr>` — FCL regular-season bounds; calibrates the "complex-league" summer window for STL-FL / TBJ-FL.
+
+**Boundaries stay hand-anchored** (this repo's phase data is Kevin-approved calendars). The API is a verifier, not a source of truth. If the API says the spring window shifted by a week from the hand-anchored value, that's a signal to REVIEW the calendar with the ops team — not to auto-overwrite.

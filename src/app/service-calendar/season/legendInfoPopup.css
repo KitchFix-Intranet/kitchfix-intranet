@@ -190,6 +190,31 @@
   pointer-events: none;
 }
 
+/* sc-19 (2026-07-12): Spring Training swatch. Mirror of the game-day
+   swatch above: same 24x24 shell + neutral surface, but with the
+   dark-copper wedge in the BOTTOM-LEFT corner (mirror geometry of
+   the sc-18 top-right game wedge). Legs proportional to the same
+   13/38 ratio at half scale (8px). Color = #8A4A1B (copper 800),
+   matched to the sm tile wedge + lg ST pill text - promotable
+   together with them. */
+.sc-legend-popup-swatch--spring {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  overflow: hidden;
+  position: relative;
+}
+.sc-legend-popup-swatch--spring::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: #8A4A1B;             /* c-copper 800 - promotable */
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  pointer-events: none;
+}
+
 .sc-legend-popup-row-text {
   min-width: 0;
 }
