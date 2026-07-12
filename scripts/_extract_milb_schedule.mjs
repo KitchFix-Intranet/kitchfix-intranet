@@ -58,6 +58,7 @@ const CLUBS = [
   { mlbId: 422, sportId: 11, name: "Buffalo Bisons",          accounts: ["TBJ - NY"], homeOnly: false },
   // sc-17 (FSL, HOME only - see file header for the reasoning)
   { mlbId: 279, sportId: 14, name: "Palm Beach Cardinals",    accounts: ["STL - FL"], homeOnly: true  },
+  { mlbId: 424, sportId: 14, name: "Dunedin Blue Jays",       accounts: ["TBJ - FL"], homeOnly: true  },
 ];
 
 async function fetchJson(url) {

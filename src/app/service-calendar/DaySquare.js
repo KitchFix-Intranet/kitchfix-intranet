@@ -385,14 +385,20 @@ function pickCompactSmall(kind, content, status) {
 }
 
 function renderPerMeal(content, status) {
-  const { revenue, meals, isEstimated } = content;
+  const { revenue, meals, isEstimated, opponent, dayNight, pillTime, isDoubleheader } = content;
   const hasRev = revenue != null;
   const hasMeals = meals != null;
-  if (!hasRev && !hasMeals) return null;
+  if (!hasRev && !hasMeals && !opponent && !dayNight) return null;
   // Off / no-service days (meals null OR zero): a single quiet "No service"
   // line, replacing the prior dead-air "$0". Kept in the middle slot so the
   // atom's date + status glyph read the same as elsewhere.
-  if (!meals) {
+  //
+  // sc-17 (2026-07-11): guard the short-circuit on !opponent. TBJ - FL
+  // on a future GAME day may have meals=null before projections are
+  // entered - the schedule already says "game day"; "No service"
+  // would misread. Show the opponent + pill and omit the meals /
+  // revenue lines below (matches the milb-branch guard from sc-16).
+  if (!meals && !opponent) {
     return (
       <div className="sc-daysq-mid sc-daysq-mid--off">
         <span className="sc-daysq-mid-noservice">No service</span>
@@ -407,11 +413,27 @@ function renderPerMeal(content, status) {
     + (status === "entered" ? " sc-daysq-mid-rev--actual" : " sc-daysq-mid-rev--projected");
   return (
     <div className="sc-daysq-mid sc-daysq-mid--stack">
+      {/* sc-17 (2026-07-11): informational overlay for TBJ - FL
+          (Dunedin Blue Jays). Same additive pattern as
+          renderFeeNoDollar: opponent chip and DayNightPill prepend
+          the existing meals / revenue stack. Days without an overlay
+          row have opponent + dayNight null and this row disappears -
+          the render collapses to the pre-sc-17 shape byte-for-byte. */}
+      {opponent && (
+        <span className="sc-daysq-mid-opponent">
+          vs {opponent}{isDoubleheader ? " · DH" : ""}
+        </span>
+      )}
+      {dayNight && (
+        <DayNightPill type={dayNight} timeText={pillTime} />
+      )}
+      {hasMeals && (
       <span className="sc-daysq-mid-meals">
         {fmtMeals(meals)}
         {/* SC-045: pluralize meal/meals on the exact-1 case. */}
         <span className="sc-daysq-mid-meals-unit">{meals === 1 ? "meal" : "meals"}</span>
       </span>
+      )}
       {hasRev && <span className={revClass}>{revPrefix}{fmt$K(revenue)}</span>}
     </div>
   );
