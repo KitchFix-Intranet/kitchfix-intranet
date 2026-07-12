@@ -145,6 +145,10 @@ export default function PeriodCard({
                 // (see loadYearSummary + readNoteDatesInRange). NOTE-only
                 // per Kevin's Q-b ruling; history rows never count here.
                 hasNote={!!cell.day.hasNoteEntries}
+                // sc-18 (2026-07-12): overlay-account game-day wedge.
+                // Sourced from the same day.hasScheduleGame boolean the
+                // year-summary loader sets when has_schedule_overlay=true.
+                isGameDayOverlay={!!cell.day.hasScheduleGame}
               />
             </span>
           );

@@ -335,6 +335,12 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       // (set by loadYearSummary via readNoteDatesInRange). Boolean is
       // pre-derived NOTE-only per Kevin's Q-b ruling.
       hasNote={!!day?.hasNoteEntries}
+      // sc-18 (2026-07-12): overlay-account game-day wedge on sm
+      // tiles. day.hasScheduleGame is set server-side by
+      // loadYearSummary when the account is flagged
+      // has_schedule_overlay=true AND the date has a GAME row.
+      // Non-overlay accounts pass undefined -> false, no wedge.
+      isGameDayOverlay={!!day?.hasScheduleGame}
     />
   );
 }

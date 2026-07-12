@@ -162,6 +162,34 @@
   color: var(--text-muted);
 }
 
+/* sc-18 (2026-07-12): game-day swatch. Renders the same indigo
+   corner wedge sm tiles carry, on a neutral surface so the legend
+   preview matches the on-tile mark. Reuses the 24x24 swatch shell
+   from .sc-legend-popup-swatch above (background: surface-card,
+   thin border, rounded corner) and pastes the wedge via ::before
+   at the same clip-path polygon the tile uses. Legs proportionally
+   scaled to the swatch (24px shell -> ~8px legs, matches Kevin's
+   13/38 ratio at half scale). Color = same hardcoded indigo-700
+   (#4338CA) - promotable together with the DaySquare wedge if the
+   token ramp lands. */
+.sc-legend-popup-swatch--gameday {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  overflow: hidden;
+  position: relative;
+}
+.sc-legend-popup-swatch--gameday::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: #4338CA;             /* c-indigo 700 - promotable */
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+
 .sc-legend-popup-row-text {
   min-width: 0;
 }

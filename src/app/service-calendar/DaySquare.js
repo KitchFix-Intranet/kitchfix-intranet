@@ -135,6 +135,14 @@ export default function DaySquare({
   // deliberately NOT counted here - the indicator is NOTES-only per
   // Kevin's Q-b ruling. aria-label picks up "· has notes".
   hasNote = false,
+
+  // sc-18 (2026-07-12): the date has an overlay GAME row on an
+  // overlay-flagged account (STL - FL / TBJ - FL today). Drives a
+  // small indigo corner wedge on sm tiles ONLY. Purely additive
+  // presentational mark - never touches fill, border, state,
+  // classification, or counters. See the sm-render site below for
+  // the philosophy amendment governing the #398 icon-strip rule.
+  isGameDayOverlay = false,
 }) {
   const meta = STATUS_META[status] || STATUS_META.off;
   const day = dateNumber != null
@@ -160,6 +168,15 @@ export default function DaySquare({
   // Compose the className chain. The order of overlay modifiers
   // doesn't matter to CSS (each draws its own box-shadow track) but
   // we list them deterministically for diff readability.
+  //
+  // sc-18 philosophy amendment (Kevin, 2026-07-12):
+  //   "sm tiles carry color + border + date, plus exactly ONE mark:
+  //    the game-day wedge (sc-18, Kevin's deliberate amendment to
+  //    the #398 icon strip). No other marks return to sm without an
+  //    explicit ruling."
+  //   The `sc-daysq--game-day` modifier below is the ONE exception.
+  //   Any future sm mark needs an explicit Kevin ruling - do NOT
+  //   quietly reopen the icon channel by inheriting from this line.
   const cls = [
     "sc-daysq",
     `sc-daysq--${size}`,
@@ -168,6 +185,7 @@ export default function DaySquare({
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
+    isGameDayOverlay && "sc-daysq--game-day",
   ].filter(Boolean).join(" ");
 
   const baseAriaLabel = ariaLabel || buildAriaLabel({ date, status, isToday, isSelected, content, kind });
@@ -175,7 +193,12 @@ export default function DaySquare({
   // NOTE ledger entry so the aria-label mirrors the visual signal
   // whether the caller passes a custom label or falls back to the
   // built one.
-  const computedAriaLabel = hasNote ? `${baseAriaLabel} · has notes` : baseAriaLabel;
+  // sc-18 (2026-07-12): append "· game day" for the overlay wedge so
+  // screen-reader users get the same signal the sighted wedge carries.
+  let composedAriaLabel = baseAriaLabel;
+  if (hasNote) composedAriaLabel += " · has notes";
+  if (isGameDayOverlay) composedAriaLabel += " · game day";
+  const computedAriaLabel = composedAriaLabel;
 
   // sc-12: exhibition tiles absorb any click without firing the
   // caller's onClick, so DisplayContract holds even when a bulk-grid

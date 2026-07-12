@@ -1020,12 +1020,13 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   // it in the same query.
   const billingRes = await supa
     .from("accounts")
-    .select("billing_model, has_homestand_schedule")
+    .select("billing_model, has_homestand_schedule, has_schedule_overlay")
     .eq("team_key", accountKey)
     .maybeSingle();
   throwOnError(billingRes.error, "loadYearSummary.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
   const hasHomestandScheduleFlag = !!billingRes.data?.has_homestand_schedule;
+  const hasScheduleOverlayFlag = !!billingRes.data?.has_schedule_overlay;
 
   // sc-16 (2026-07-11): gate on the flag rather than the billing model
   // proxy. Louisville / Buffalo pick up schedule context here even
@@ -1035,6 +1036,22 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     homestandMap = await loadHomestandContext(accountKey, first, last);
   }
   const hasHomestandData = Object.keys(homestandMap).length > 0;
+
+  // sc-18 (2026-07-12): year-scoped overlay presence for the game-day
+  // wedge on sm overview tiles. Fetches GAME rows across the whole
+  // year range in one query and reduces to a Set of dates - the sm
+  // render only needs presence (boolean per date), not opponent /
+  // time / DH flag. Purely additive: the year-summary payload gains
+  // a `hasScheduleGame` boolean on each day, wired through by the
+  // daysByMonth loop below. Overlay-flagged accounts only; other
+  // accounts skip the query entirely.
+  let scheduleOverlayDates = null;
+  if (hasScheduleOverlayFlag) {
+    const overlay = await loadScheduleOverlay(accountKey, first, last);
+    if (Object.keys(overlay).length > 0) {
+      scheduleOverlayDates = new Set(Object.keys(overlay));
+    }
+  }
 
   // P2 (item 3, R3, 2026-07-10): dates with at least one authored NOTE
   // entry in the year. Feeds the DaySquare bubble on sm tiles (year
@@ -1159,6 +1176,13 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       // sc-16 (2026-07-11): DH affix flag passes through so the
       // renderer can decorate the opponent chip.
       dayEntry.isDoubleheader = hs.isDoubleheader;
+    }
+    // sc-18 (2026-07-12): boolean-per-date overlay presence for the
+    // sm-tile game-day wedge. Purely presentational; never touches
+    // classify/kind/counters. Non-overlay accounts pass through with
+    // no field set (undefined -> the sm renderer treats as false).
+    if (scheduleOverlayDates && scheduleOverlayDates.has(s.date)) {
+      dayEntry.hasScheduleGame = true;
     }
     daysByMonth.get(monthKey).push(dayEntry);
   }
