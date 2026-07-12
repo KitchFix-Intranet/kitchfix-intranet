@@ -97,11 +97,15 @@ Per the API survey ([`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_M
 - **State**: all deferred until January 2027 unless Kevin surfaces sooner.
 - **Owner**: Kevin (prioritization) + CC (execution).
 
-### Coming Soon gate drop + function review
+### Launch roadmap (Kevin's ruling, 2026-07-12)
 
-- **State**: SC is dev-gated behind Coming Soon per `docs/PROJECT_DASHBOARD.md`. Gate drop = launch.
-- **Prerequisite**: overall webapp function review (per `PROJECT_DASHBOARD.md`'s "Active threads" next-step-4). SC-011 (200% zoom / text-scaling) parked for this conversation.
-- **Owner**: Kevin.
+Sequential path to desktop-launch + mobile follow-on. Absorbs the previous standalone "Coming Soon gate drop" item.
+
+1. **Final design polishes** (PR #418, this PR): spring wedge color, chrome-bar wrap regression, notes cache staleness.
+2. **PDF schedule export** for overview + drill-down (renders-first before any build): MLB / MiLB full-season game schedules; STL - FL / TBJ - FL their affiliate home slates.
+3. **Full pricing alignment** across all accounts to 100% accuracy including off-contract specifics (Kevin supplies), then client bill export.
+4. **Full-scale system + codebase test, cleanup, drop the Coming Soon gate → desktop DONE**. Absorbs the prior "Coming Soon gate drop" item + overall webapp function review + SC-011 (200% zoom parked for this pass).
+5. **Mobile** (details TBC).
 
 ### Roster indicators (survey Task 6, deferred by default)
 
