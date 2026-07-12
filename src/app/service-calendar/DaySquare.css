@@ -233,6 +233,50 @@
    future caller forgets the gate. */
 .sc-daysq--sm .sc-daysq-dn-pill { display: none; }
 
+/* sc-18 (2026-07-12): indigo game-day corner wedge on sm overview
+   tiles for overlay-flagged accounts (STL - FL, TBJ - FL today).
+   Purely additive presentational mark - never changes fill, border,
+   state, classification, or counters.
+
+   Philosophy amendment (Kevin, 2026-07-12): this is the FIRST mark
+   returning to sm tiles since #398 stripped them. See the matching
+   comment in DaySquare.js at the className composition. Do NOT
+   quietly add more sm marks by inheriting from this rule.
+
+   Shape: solid indigo triangle filling the TOP-RIGHT corner. Legs
+   scale roughly proportionally to Kevin's mockup ratio (13px / 38px
+   tile ~ 0.34). At sm's ~44px min-height that lands at 15px legs.
+
+   Clipping: the parent .sc-daysq already has `overflow: hidden` +
+   `border-radius: var(--radius-control)`, so the wedge's straight
+   edges are naturally masked into the tile's rounded corner - no
+   triangle poking past the radius.
+
+   Color: hardcoded #4338CA (Tailwind indigo-700). Kevin picked this
+   with the night-pill indigo family adjacency in mind - do NOT
+   "fix" it to green. Flagged promotable to a future --indigo-*
+   token ramp (see the existing "promotable" tags on the night pill
+   background/border/color above). */
+.sc-daysq--sm.sc-daysq--game-day::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 15px;
+  height: 15px;
+  background: #4338CA;             /* c-indigo 700 - promotable */
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Larger sizes do NOT render the wedge - drill-in tiles carry the
+   opponent chip + day/night pill already; the wedge is the sm-only
+   overview mark. Defensive rule in case a caller passes
+   isGameDayOverlay on a non-sm tile. */
+.sc-daysq:not(.sc-daysq--sm).sc-daysq--game-day::before {
+  display: none;
+}
+
 /* MLB fee tile stack (P7): opponent is a navy chip on its own line;
    the headcount sits below as "N meals" with the count as hero and
    the unit trailing muted. Scoped to --mlb so the year-view sm tiles

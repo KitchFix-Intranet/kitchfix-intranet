@@ -147,6 +147,16 @@ export default function LegendInfoPopup({
                 than in an account-shape status list because the signal
                 is orthogonal to status. */}
             <NoteRow />
+            {/* sc-18 (2026-07-12): game-day wedge - the small indigo
+                corner triangle DaySquare renders on sm overview tiles
+                when the account is has_schedule_overlay=true AND the
+                date has a GAME row. Rendered here alongside the today
+                ring and the note bubble because it's an orthogonal
+                overlay signal (not a status). Only applies to overlay
+                accounts (STL - FL, TBJ - FL today); fee/AAA homestand
+                accounts already color their game days by state and
+                don't get the wedge. */}
+            <GameDayRow />
           </Section>
 
           <Section title="Data states">
@@ -232,6 +242,26 @@ function NoteRow() {
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{NOTE_INDICATOR.labelLong}</dt>
         <dd className="sc-legend-popup-row-desc">{NOTE_INDICATOR.description}</dd>
+      </div>
+    </div>
+  );
+}
+
+// sc-18 (2026-07-12): legend row for the game-day wedge. The swatch
+// renders a neutral tile with the SAME indigo triangle sm tiles get,
+// so the popup preview matches the on-tile mark 1:1. Legend swatches
+// render outside the sm gate per the #409 legend-figures fix, so this
+// wedge actually shows up here even though `.sc-daysq-game-day::before`
+// on live tiles gates on --sm.
+function GameDayRow() {
+  return (
+    <div className="sc-legend-popup-row">
+      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--gameday" aria-hidden="true" />
+      <div className="sc-legend-popup-row-text">
+        <dt className="sc-legend-popup-row-label">Game day</dt>
+        <dd className="sc-legend-popup-row-desc">
+          A home game this day - drill in for opponent and first pitch. Overlay accounts only.
+        </dd>
       </div>
     </div>
   );
