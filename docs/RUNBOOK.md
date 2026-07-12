@@ -162,8 +162,25 @@ Quick checks:
 - **2026-05-15** - Removed `/api/cron/analytics` from the manual-trigger list. Analytics dashboard + cron + dashboard API deleted in PR 1 of the 3-PR analytics teardown (callsite cleanup in PR 2, `src/lib/analytics.js` stubbing + `ANALYTICS_SHEET_ID` removal + full doc sweep in PR 3).
 - **2026-05-15 (PR 3/3)** - Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` - these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.
 - **2026-07-12** - Added "TEST_MODE middleware bypass" + "PR-preview + nav-matrix CI" sections. TEST_MODE ships live via #407 (`src/middleware.js`); CI split into two-job matrix + preview-smoke via #408. Working-dir line acknowledges that the local checkout has moved from `~/dev/kitchfix-intranet` to `~/dev/kf-cell-states` on the current machine. Last-verified header bumped.
+- **2026-07-12 (later)** - Added "Confirming a migration-gated PR" procedure. Migration gate CI shipped via PR #415 (`.github/workflows/migration-gate.yml`). Job A scans PR head for added `docs/migrations/*.sql`; Job B validates the `applied in Studio: YES` confirmation from the repo OWNER and emits a `Migration gate` check_run on the PR head SHA. Per-SHA reset means a confirmation never outlives the code. Kevin adds `Migration gate` as a required status check on the `main protection` ruleset after PR #415 lands - from that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
 
 ---
+
+## Confirming a migration-gated PR (LIVE since #415)
+
+Any PR adding a file under `docs/migrations/*.sql` opens with a **red `Migration gate` check** (from `.github/workflows/migration-gate.yml` Job A). The `main protection` ruleset requires this check, so the merge button is locked until it flips green. Procedure:
+
+1. **Apply the SQL in Supabase Studio.** Paste the migration file's `BEGIN`/`COMMIT` block, run, wait for confirmation. This is the actual work; everything below is just recording it.
+2. **Run the verify probes.** Each migration file includes commented-out probe blocks at the bottom. Uncomment individually and run against Studio to confirm row counts, column presence, flag distribution. Do not skip - the probes catch schema drift and typos before the reader deploys against a bad state.
+3. **Post the canonical confirmation comment on the PR.** Comment body must contain the exact phrase `applied in Studio: YES`. Convention is to lead with `Migration gate: sc-XX applied in Studio: YES` for readability, but the matcher only requires the trailing phrase from an author with `author_association == 'OWNER'` (the repo owner).
+4. **Watch the check flip.** Job B (`issue_comment` trigger, `confirm-and-emit`) fires within seconds, resolves the PR head SHA, and emits a `Migration gate` check_run as success on that SHA. The required-check aggregation reads the LATEST check by name; the merge button unlocks.
+5. **Merge.** The `main protection` ruleset's PR requirement + all-review-threads-resolved still apply as usual.
+
+**Per-SHA scope.** If a push lands on the PR after the confirmation, Job A re-runs on the new head. If migration files are still present in the new diff vs merge-base, the check goes red again and a fresh confirmation comment is required on the new SHA. This is deliberate: flip-and-merge (the 2026-07-12 failure class) cannot survive a push, and neither can accidentally-approved-then-changed migration content.
+
+**Rejection paths (for future readers)**:
+- Comment from a non-`OWNER` author with the phrase -> the workflow enters Job B, fails at the association check, and emits a red check_run on the DEFAULT BRANCH SHA (irrelevant to the PR). The PR's own red `Migration gate` from Job A stays put; the merge stays blocked.
+- Comment on a closed/merged PR -> Job B fails defensively (doesn't emit a check on a stale head SHA).
 
 ## TEST_MODE middleware bypass (Playwright, LIVE)
 
