@@ -34,6 +34,9 @@ const ACCOUNT_HOME_TZ = {
   // Roger Dean Chevrolet Stadium, Jupiter FL. ET year-round matches
   // the simple-label rule (avoids EDT/EST toggling on tile labels).
   "STL - FL":     { tz: "America/New_York", abbrev: "ET" }, // Roger Dean Chevrolet Stadium
+  // sc-17b (2026-07-11): FSL Dunedin Blue Jays home-game overlay.
+  // TD Ballpark, Dunedin FL. Same ET-year-round simple-label rule.
+  "TBJ - FL":     { tz: "America/New_York", abbrev: "ET" }, // TD Ballpark
 };
 
 // Format an MLB HOME game_time (ISO TIMESTAMPTZ from PG) as

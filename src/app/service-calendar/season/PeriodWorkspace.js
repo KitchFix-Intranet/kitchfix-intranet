@@ -970,10 +970,20 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey, schedule
   const rev = day.hasActuals
     ? day.totals?.actualRevenue
     : day.totals?.projectedRevenue;
+  // sc-17b (2026-07-11): overlay for per-meal accounts that are
+  // flagged for informational schedule display (TBJ - FL, Dunedin
+  // Blue Jays). Same additive treatment as the fee-no-dollar branch
+  // above - opponent + pill get prepended when a GAME row exists;
+  // days without a row keep rendering pre-sc-17b behavior.
+  const ovPm = scheduleOverlay?.[day.date];
   return {
     revenue: rev != null ? rev : null,
     meals: meals || null,
     isEstimated: !day.hasActuals && isPastDate(day.date),
+    opponent: ovPm?.opponent || null,
+    dayNight: ovPm?.dayNight || null,
+    pillTime: formatMlbHomeGameTime(ovPm?.gameTime, accountKey),
+    isDoubleheader: !!ovPm?.isDoubleheader,
   };
 }
 

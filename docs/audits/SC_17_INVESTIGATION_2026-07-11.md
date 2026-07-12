@@ -1,33 +1,44 @@
-# sc-17 investigation — STL - FL home-game overlay (2026-07-11)
+# sc-17 investigation — STL - FL + TBJ - FL home-game overlays (2026-07-11)
 
-Read-only investigation done before any code / migration was written. Kevin's brief locks scope tight: STL - FL gets HOME games shown as `[vs OPP] + [day/night time pill]` on lg drill-down tiles, and nothing else changes.
+Read-only investigation done before any code / migration was written. Kevin's brief was revised to two accounts mid-day 2026-07-11. The initial sc-17 shipped covering STL - FL only; TBJ - FL adds via **sc-17b** as an extension of the same design.
 
-## Task 1 — Data verification (fold-in)
+Kevin's brief locks scope tight: both accounts get HOME games shown as `[vs OPP] + [day/night time pill]` on lg drill-down tiles, nothing else changes.
 
-### Account key
-`STL - FL` — verified against `docs/SC_SPREADSHEET_MAPPING.md:261` ("St. Louis Cardinals Jupiter, FL spring training") and the current `flat_fee` billing model (`:986`).
+## Task 1 — Data verification (fold-in, both accounts)
 
-### API team ID + parent org
+### Account keys and billing models
+
+| Account key | Description | billing_model | Rendered kind today |
+|---|---|---|---|
+| `STL - FL` | St. Louis Cardinals PDC, Palm Beach FL | `flat_fee` | `fee-no-dollar` (via `resolveDayKind`) |
+| `TBJ - FL` | Toronto Blue Jays PDC, Dunedin FL | `actuals_drive_invoice` | `per-meal` (default fallthrough) |
+
+Both verified against `docs/SC_SPREADSHEET_MAPPING.md`. **The two accounts render as different kinds today**, which means sc-17b's code changes touch BOTH `renderFeeNoDollar` (unchanged from initial sc-17 for STL - FL) AND `renderPerMeal` (new for TBJ - FL), plus both corresponding `buildLargeContent` branches.
+
+### API team IDs + parent orgs
+
 - `sportId=14` — Florida State League (Single-A). Confirmed via `statsapi.mlb.com/api/v1/teams?sportId=14&season=2026` returning 30 teams.
-- `teamId=279` — Palm Beach Cardinals. `parentOrgName = "St. Louis Cardinals"`. Confirmed - no guessing.
+- `teamId=279` — Palm Beach Cardinals. `parentOrgName = "St. Louis Cardinals"`. `abbreviation = "PMB"`. Venue: Roger Dean Chevrolet Stadium.
+- `teamId=424` — Dunedin Blue Jays. `parentOrgName = "Toronto Blue Jays"`. `abbreviation = "DUN"`. Venue: TD Ballpark.
 
-### 2026 schedule (raw pull, pre-dedup)
+### 2026 schedule stats (post shadow-preferred dedup + DH compression)
 
-| Metric | Value |
-|---|---|
-| Total games returned | 136 |
-| Raw HOME | 67 |
-| Raw AWAY | 69 (NOT loaded per brief) |
-| Postponement shadow duplicates (gamePk dupes) | 4 |
-| HOME dayNight coverage | 14 day / 53 night (100%) |
-| HOME gameDate missing | 0 (100% populated) |
-| HOME startTimeTBD | 0 |
-| HOME doubleHeader Y/S | 2 |
-| Unique HOME dates | 66 |
+| Metric | STL - FL | TBJ - FL |
+|---|---|---|
+| Raw HOME games | 67 | 66 |
+| Postponement shadow dupes | 4 | 4 |
+| HOME dayNight coverage | 100% (14 day / 53 night) | 100% (13 day / 53 night) |
+| HOME gameDate populated | 100% | 100% |
+| HOME startTimeTBD | 0 | 0 |
+| HOME DH-flagged | 3 | 4 |
+| **Unique HOME dates (final DB rows)** | **66** | **66** |
+| Raw AWAY (NOT loaded) | ~66 | ~66 |
 
-**Expected DB rows after sc-16 shadow-preferred derivation + DH compression**: **~65-66 GAME rows** for STL - FL. Zero AWAY rows (excluded by design). Zero TBD games (no re-pull needed for STL - FL in the first pass, but the extractor's re-runnable posture is preserved for parity with the AAA clubs).
+Neither account has TBD games in this pull, so a mid-season re-run isn't required for either — but the extractor stays re-runnable for parity with the AAA clubs.
 
-Jupiter Hammerheads (MIA affiliate, also based at Roger Dean) share the venue - the API's home/away designation is authoritative and independent of venue. Verified sport IDs: MIA affiliate is on `sportId=14` too but under a different team ID; no cross-contamination.
+Both venues host multiple teams (Roger Dean also hosts the Jupiter Hammerheads MIA affiliate; TD Ballpark also hosts the Blue Jays spring training) — the API's home/away designation is authoritative and independent of venue. Verified no cross-contamination.
+
+**Same-league opponents**: PBC (STL - FL) and Dunedin (TBJ - FL) are both FSL, so they play each other. `PMB` (Palm Beach's API abbreviation) appears as an opponent code on TBJ - FL's home slate. Expected, no special handling.
 
 ## Task 2 — CRITICAL investigation: rowless-day behavior on a flagged account
 
