@@ -1,14 +1,16 @@
 // ════════════════════════════════════════════════════════════════════════════
-// EXTRACT: MLB Stats API (sportId=11, AAA) -> SQL for Louisville + Buffalo
-// schedule parity (HOME + AWAY, opponent + game_pk + game_time + day_night +
-// is_doubleheader).
+// EXTRACT: MLB Stats API -> SQL for MiLB schedule loads.
+//
+// Currently covers:
+//   sportId=11 (AAA)  Louisville Bats (CIN - KY), Buffalo Bisons (TBJ - NY)
+//                     HOME + AWAY inserts. sc-16 shape.
+//   sportId=14 (FSL)  Palm Beach Cardinals (STL - FL)
+//                     HOME rows ONLY. sc-17 (overlay-only) shape.
 //
 // Sources:
-//   https://statsapi.mlb.com/api/v1/teams?sportId=11&season=2026
-//   https://statsapi.mlb.com/api/v1/schedule?sportId=11&teamId=<id>&season=2026&gameType=R
+//   https://statsapi.mlb.com/api/v1/teams?sportId=<n>&season=<yr>
+//   https://statsapi.mlb.com/api/v1/schedule?sportId=<n>&teamId=<id>&season=<yr>&gameType=R
 //
-// Reads:   the AAA teams roster (once, for id->abbreviation map) + 2 team
-//          schedules (Louisville 416, Buffalo 422).
 // Writes:  stdout - SQL block for INSERT INTO sc_homestand_schedule.
 // Model:   sc-13 (AWAY inserts) + sc-15 (game_time/day_night backfill).
 //
@@ -29,10 +31,21 @@
 //   Store as-is. Re-running this extractor after MiLB firms the times will
 //   emit fresh SQL that UPDATEs game_time / day_night on those rows.
 //
+// STL - FL HOME-ONLY MODE (sc-17):
+//   Palm Beach Cardinals get HOME rows only. Kevin's ruling: STL - FL is a
+//   PDC (flat-fee, serves daily) and the schedule is a purely informational
+//   overlay for site leaders. Away rows would either misclassify daily
+//   service days or force operationally-wrong away treatment - excluded by
+//   design at the extractor layer AND by a "NO AWAY rows on this account"
+//   comment in the migration.
+//
 // USAGE
 //   node scripts/_extract_milb_schedule.mjs > /tmp/sc-milb-schedule.sql
 //
-// Then paste the emitted block into the Task 2 migration file.
+// The emitted block covers ALL clubs at once. Paste the STL - FL slice into
+// sc-17 and the AAA slice into sc-16 (already applied). Idempotent per club:
+// re-running produces the same rows; ON CONFLICT DO UPDATE handles TBD
+// firm-ups without a manual delete step.
 // ════════════════════════════════════════════════════════════════════════════
 
 const SEASON = 2026;
@@ -40,8 +53,11 @@ const SCHEDULE = "https://statsapi.mlb.com/api/v1/schedule";
 const TEAMS = "https://statsapi.mlb.com/api/v1/teams";
 
 const CLUBS = [
-  { mlbId: 416, name: "Louisville Bats",  accounts: ["CIN - KY"] },
-  { mlbId: 422, name: "Buffalo Bisons",   accounts: ["TBJ - NY"] },
+  // sc-16 (AAA, HOME + AWAY)
+  { mlbId: 416, sportId: 11, name: "Louisville Bats",         accounts: ["CIN - KY"], homeOnly: false },
+  { mlbId: 422, sportId: 11, name: "Buffalo Bisons",          accounts: ["TBJ - NY"], homeOnly: false },
+  // sc-17 (FSL, HOME only - see file header for the reasoning)
+  { mlbId: 279, sportId: 14, name: "Palm Beach Cardinals",    accounts: ["STL - FL"], homeOnly: true  },
 ];
 
 async function fetchJson(url) {
@@ -50,8 +66,11 @@ async function fetchJson(url) {
   return res.json();
 }
 
-async function fetchAaaAbbrevMap() {
-  const doc = await fetchJson(`${TEAMS}?sportId=11&season=${SEASON}`);
+// Fetches teams for a given sportId and returns a Map keyed by team ID
+// with { code, name }. Callers pool the per-sportId maps into a single
+// global map so opponent lookups don't care which league the team plays in.
+async function fetchAbbrevMap(sportId) {
+  const doc = await fetchJson(`${TEAMS}?sportId=${sportId}&season=${SEASON}`);
   const map = new Map();
   for (const t of doc.teams || []) {
     if (t.id != null) {
@@ -174,17 +193,29 @@ function nullOr(v, wrap = (x) => `'${sqlEscape(x)}'`) {
 }
 
 async function main() {
-  process.stderr.write(`Fetching AAA teams roster (sportId=11, season=${SEASON})...\n`);
-  const abbrevMap = await fetchAaaAbbrevMap();
-  process.stderr.write(`  ${abbrevMap.size} AAA teams cached.\n\n`);
+  // Pool per-sportId abbrev maps into one global lookup keyed by team ID.
+  // FSL uses different team IDs than AAA, so both leagues can share the
+  // opponent lookup without collision (MLB team IDs are unique across
+  // sports).
+  const abbrevMap = new Map();
+  const seenSportIds = new Set();
+  for (const club of CLUBS) {
+    if (seenSportIds.has(club.sportId)) continue;
+    seenSportIds.add(club.sportId);
+    process.stderr.write(`Fetching teams roster (sportId=${club.sportId}, season=${SEASON})...\n`);
+    const sub = await fetchAbbrevMap(club.sportId);
+    for (const [id, entry] of sub.entries()) abbrevMap.set(id, entry);
+    process.stderr.write(`  ${sub.size} teams cached from sportId=${club.sportId}.\n`);
+  }
+  process.stderr.write(`\nTotal opponent teams cached: ${abbrevMap.size}\n\n`);
 
   const homeRows = []; // GAME day_type
   const awayRows = []; // AWAY day_type
   const summary = {};
 
   for (const club of CLUBS) {
-    process.stderr.write(`Fetching ${club.name} (id=${club.mlbId})...\n`);
-    const doc = await fetchJson(`${SCHEDULE}?sportId=11&teamId=${club.mlbId}&season=${SEASON}&gameType=R`);
+    process.stderr.write(`Fetching ${club.name} (sportId=${club.sportId}, teamId=${club.mlbId}, homeOnly=${club.homeOnly})...\n`);
+    const doc = await fetchJson(`${SCHEDULE}?sportId=${club.sportId}&teamId=${club.mlbId}&season=${SEASON}&gameType=R`);
     const plans = derivePlanOfRecord(doc, club.mlbId);
     process.stderr.write(`  planned games (post shadow/makeup dedup): ${plans.length}\n`);
 
@@ -195,12 +226,18 @@ async function main() {
       const dhFlagged = collapsed.filter((r) => r.is_doubleheader).length;
       const nightCount = home.filter((r) => r.dayNight === "night").length;
       const dayCount = home.filter((r) => r.dayNight === "day").length;
-      summary[acct] = { home: home.length, away: away.length, dh: dhFlagged, night: nightCount, day: dayCount };
+      // Report the AWAY count in summary regardless of homeOnly so the
+      // stderr trace is honest about what the API says; the SQL block
+      // just doesn't emit them.
+      summary[acct] = {
+        home: home.length, away: away.length, dh: dhFlagged,
+        night: nightCount, day: dayCount, homeOnly: club.homeOnly,
+      };
 
       for (const r of home) {
         const opp = abbrevMap.get(r.opponentId);
         if (!opp || !opp.code) {
-          throw new Error(`Unknown opponent id=${r.opponentId} for ${club.name} (account=${acct}) - update AAA teams cache.`);
+          throw new Error(`Unknown opponent id=${r.opponentId} for ${club.name} (account=${acct}) - team missing from sportId=${club.sportId} cache.`);
         }
         homeRows.push({
           account_key: acct,
@@ -213,10 +250,13 @@ async function main() {
           is_doubleheader: !!r.is_doubleheader,
         });
       }
+      // sc-17 STL - FL is homeOnly - skip AWAY row emission entirely for
+      // the overlay-only account. AAA clubs still emit AWAY.
+      if (club.homeOnly) continue;
       for (const r of away) {
         const opp = abbrevMap.get(r.opponentId);
         if (!opp || !opp.code) {
-          throw new Error(`Unknown opponent id=${r.opponentId} for ${club.name} (account=${acct}) - update AAA teams cache.`);
+          throw new Error(`Unknown opponent id=${r.opponentId} for ${club.name} (account=${acct}) - team missing from sportId=${club.sportId} cache.`);
         }
         awayRows.push({
           account_key: acct,

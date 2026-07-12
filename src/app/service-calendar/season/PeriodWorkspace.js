@@ -50,6 +50,13 @@ export default function PeriodWorkspace({
   isFeeAccount,
   isMilb,
   homestandMap,
+  // sc-17 (2026-07-11): informational schedule overlay - a
+  // { "YYYY-MM-DD": {opponent, dayNight, gameTime, isDoubleheader} } map
+  // for accounts flagged has_schedule_overlay. Drives ONLY the tile
+  // decoration on lg drill-in tiles (opponent chip + pill on top of
+  // the existing served count). Independent of homestandMap - overlay
+  // never touches classify/kind/counters.
+  scheduleOverlay,
   today,                    // YYYY-MM-DD string
   loading,
   loadState = "loaded",     // SC-047: "loading" | "loaded" | "failed"
@@ -209,6 +216,7 @@ export default function PeriodWorkspace({
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
         homestandMap={homestandMap}
+        scheduleOverlay={scheduleOverlay}
         accountKey={account?.key}
         bulkMode={bulkMode}
         bulkSelected={bulkSelected}
@@ -665,7 +673,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -805,7 +813,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // and content drops so the atom renders the dashed shell.
               const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
-              const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb, accountKey);
+              const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb, accountKey, scheduleOverlay);
               // Bulk-selectable gate: needs-entry / overdue / future
               // days are always selectable. SC-069 widens the gate to
               // also allow ENTERED FUTURE days so a fully-caught-up
@@ -871,7 +879,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
 // per-day record (post-B2a periodDays) has day.totals, day.projected,
 // day.actual, day.meta.week, day.gameType, day.hasActuals - richer
 // than year-summary's day shape, so we render real $ and meals.
-function buildLargeContent(day, kind, homestandMap, isMilb, accountKey) {
+function buildLargeContent(day, kind, homestandMap, isMilb, accountKey, scheduleOverlay) {
   const projMeals = sumProjectedMeals(day);
   const actMeals = day.hasActuals ? sumActualMeals(day) : 0;
   const meals = day.hasActuals ? actMeals : projMeals;
@@ -943,7 +951,20 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey) {
     };
   }
   if (kind === "fee-no-dollar") {
-    return { served: meals || null };
+    // sc-17 (2026-07-11): if the account is flagged for schedule
+    // overlay (STL - FL today), a GAME row on this date brings an
+    // opponent chip + day/night pill into the tile ADDITIVELY -
+    // the served-only render stays intact underneath, no state /
+    // color / border change. Days without a row keep rendering
+    // exactly as they did pre-sc-17.
+    const ov = scheduleOverlay?.[day.date];
+    return {
+      served: meals || null,
+      opponent: ov?.opponent || null,
+      dayNight: ov?.dayNight || null,
+      pillTime: formatMlbHomeGameTime(ov?.gameTime, accountKey),
+      isDoubleheader: !!ov?.isDoubleheader,
+    };
   }
   // per-meal default
   const rev = day.hasActuals

@@ -8,6 +8,7 @@ import {
   loadMonthData,
   loadYearSummary,
   loadHomestandContext,
+  loadScheduleOverlay,
   saveActuals,
   addDayNoteEntry,
   readSavedDayTotals,
@@ -117,7 +118,7 @@ async function loadAccountList() {
   const [accountsRes, svcsRes] = await Promise.all([
     supa
       .from("accounts")
-      .select("team_key, name, level, billing_model, has_homestand_schedule")
+      .select("team_key, name, level, billing_model, has_homestand_schedule, has_schedule_overlay")
       .eq("active", true)
       .order("team_key", { ascending: true }),
     supa
@@ -133,6 +134,10 @@ async function loadAccountList() {
   // (revenue-driven display). See ServiceCalendar.js isFeeAccount.
   // sc-16 (2026-07-11): hasHomestandSchedule surfaced as a per-account
   // flag so the UI can decouple schedule-presence from billing_model.
+  // sc-17 (2026-07-11): hasScheduleOverlay surfaced as an ORTHOGONAL
+  // per-account flag - accounts flagged for informational overlay
+  // (STL - FL PDC today) render the opponent chip + pill on lg
+  // WITHOUT any change to classify/kind/counters.
   const accountsWithServices = new Set((svcsRes.data || []).map((r) => r.account_key));
   return (accountsRes.data || [])
     .filter((a) => accountsWithServices.has(a.team_key))
@@ -142,6 +147,7 @@ async function loadAccountList() {
       name:         a.name || a.team_key,
       billingModel: a.billing_model || null,
       hasHomestandSchedule: !!a.has_homestand_schedule,
+      hasScheduleOverlay:   !!a.has_schedule_overlay,
     }));
 }
 
@@ -149,7 +155,7 @@ async function loadAccountInfo(accountKey) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from("accounts")
-    .select("name, level, billing_model, has_homestand_schedule")
+    .select("name, level, billing_model, has_homestand_schedule, has_schedule_overlay")
     .eq("team_key", accountKey)
     .maybeSingle();
   if (error) throw new Error("[sc.route] loadAccountInfo: " + error.message);
@@ -404,6 +410,14 @@ export async function GET(request) {
       const days = transformDays(monthData.days);
       const billingModel = accountInfo.billing_model || null;
       const hasHomestandScheduleFlag = !!accountInfo.has_homestand_schedule;
+      const hasScheduleOverlayFlag = !!accountInfo.has_schedule_overlay;
+
+      // Month-range bounds match the loadMonthData month exactly.
+      // Computed here so both the homestand fetch and the sc-17
+      // overlay fetch share the same range.
+      const first = `${String(year)}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const last = `${String(year)}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
       // Homestand context: fetched for any account with the
       // has_homestand_schedule flag TRUE (4 MLB fee accounts + the 2
@@ -412,14 +426,21 @@ export async function GET(request) {
       // UI side so old and new behavior stay in sync for STL-FL.
       let homestandMap = null;
       if (hasHomestandScheduleFlag) {
-        // Month-range bounds match the loadMonthData month exactly.
-        const first = `${String(year)}-${String(month).padStart(2, "0")}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const last = `${String(year)}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
         const map = await loadHomestandContext(accountKey, first, last);
         // Only include in response when there IS data, so the UI's
         // !!data.homestandMap gate works cleanly.
         if (Object.keys(map).length > 0) homestandMap = map;
+      }
+
+      // sc-17 schedule overlay: fetched for any account flagged
+      // has_schedule_overlay=true (currently STL-FL only). Reads
+      // day_type='GAME' rows only; feeds a purely informational
+      // render on lg drill-in tiles (opponent chip + day/night pill).
+      // NEVER touches classify/kind/counters - see the audit doc.
+      let scheduleOverlay = null;
+      if (hasScheduleOverlayFlag) {
+        const overlay = await loadScheduleOverlay(accountKey, first, last);
+        if (Object.keys(overlay).length > 0) scheduleOverlay = overlay;
       }
 
       const responsePayload = {
@@ -429,6 +450,7 @@ export async function GET(request) {
           category,
           name: accountInfo.name || accountKey,
           billingModel,
+          hasScheduleOverlay: hasScheduleOverlayFlag,
           // spreadsheetId kept on the response shape for legacy parity;
           // the UI still echoes it back in the POST body but the
           // PG route ignores it.
@@ -443,6 +465,7 @@ export async function GET(request) {
         accounts,
       };
       if (homestandMap) responsePayload.homestandMap = homestandMap;
+      if (scheduleOverlay) responsePayload.scheduleOverlay = scheduleOverlay;
       return NextResponse.json(responsePayload);
     }
 

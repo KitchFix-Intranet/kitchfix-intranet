@@ -871,6 +871,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     return merged;
   }, [lens, periodKey, periodRanges, monthCache]);
 
+  // sc-17 (2026-07-11): parallel merge for the schedule overlay -
+  // same cross-month merge pattern as the homestand map above,
+  // sourced from responsePayload.scheduleOverlay (fetched only for
+  // accounts flagged has_schedule_overlay=true; today STL - FL
+  // only). Overlay drives ONLY the lg tile render decoration
+  // (opponent chip + pill on top of the existing served count).
+  const periodScheduleOverlay = useMemo(() => {
+    if (lens !== "period" || !periodKey || !periodRanges) return null;
+    const range = periodRanges.find((r) => r.period === periodKey);
+    if (!range) return null;
+    const monthsNeeded = monthsBetween(range.start, range.end);
+    const merged = {};
+    for (const mk of monthsNeeded) {
+      const m = monthCache[mk];
+      if (m?.scheduleOverlay) Object.assign(merged, m.scheduleOverlay);
+    }
+    return Object.keys(merged).length > 0 ? merged : null;
+  }, [lens, periodKey, periodRanges, monthCache]);
+
   // ─── Month drill derivations (parallel to the period ones) ─────
   // Same range-based inputs PeriodWorkspace consumes; the workspace body
   // is reused as-is with a calendar-month range instead of a fiscal-
@@ -900,6 +919,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const monthHomestandMap = useMemo(() => {
     if (!monthKey) return null;
     return monthCache[monthKey]?.homestandMap || {};
+  }, [monthKey, monthCache]);
+
+  // sc-17 (2026-07-11): parallel single-month overlay for the month
+  // scope (parallel to periodScheduleOverlay above).
+  const monthScheduleOverlay = useMemo(() => {
+    if (!monthKey) return null;
+    return monthCache[monthKey]?.scheduleOverlay || null;
   }, [monthKey, monthCache]);
 
   // Unified drill-active days for the DayDetail lookup + day nav. Works
@@ -1014,6 +1040,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const isFeeAccount = data?.account?.billingModel === "flat_fee";
   const hasHomestandSchedule = !!data?.homestandMap;
   const homestandMap = data?.homestandMap || {};
+  // sc-17 (2026-07-11): the current-month scheduleOverlay from the
+  // sc-load payload. Non-flagged accounts NEVER see a scheduleOverlay
+  // key in the response (api/route.js gates on has_schedule_overlay),
+  // so this stays null for every account except STL - FL. Feeds the
+  // period + month rollups above via monthCache.
+  const scheduleOverlay = data?.scheduleOverlay || null;
   const isMilb = data?.account?.category === "MiLB";
 
   // Momentum toast helpers - the four submission successes below emit a
@@ -2025,6 +2057,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
             homestandMap={periodHomestandMap || homestandMap}
+            scheduleOverlay={periodScheduleOverlay || scheduleOverlay}
             today={today}
             loading={loading && !periodDays}
             loadState={
@@ -2072,6 +2105,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
             homestandMap={monthHomestandMap || homestandMap}
+            scheduleOverlay={monthScheduleOverlay || scheduleOverlay}
             today={today}
             loading={loading && !monthDays}
             partialError={partialError}

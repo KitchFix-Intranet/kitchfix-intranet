@@ -938,6 +938,59 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+// loadScheduleOverlay (sc-17)
+// ═══════════════════════════════════════════════════════════════
+//
+// STRICTLY informational schedule fetch for accounts that want the
+// opponent chip + day/night pill on drill-in tiles WITHOUT running
+// the fee-account homestand classifier (which reclassifies rowless
+// dates as "off-season" and reroutes resolveDayKind - see the
+// investigation doc for why that's wrong for STL - FL's daily-
+// service PDC).
+//
+// Reads ONLY day_type='GAME' rows so no AWAY / EXHIBITION / PREP
+// signal can ever bleed into the overlay. If a future migration
+// accidentally inserts a non-GAME row for an overlay-flagged
+// account, this select's WHERE clause silently drops it.
+//
+// Return shape:
+//   {
+//     "YYYY-MM-DD": { opponent: "SLU", dayNight: "night",
+//                     gameTime: "2026-04-02T22:30:00Z", isDoubleheader: false },
+//     ...
+//   }
+// Dates without a GAME row are absent from the map. Callers render
+// the tile identically to today when the key is missing.
+//
+// Returns an empty object (not null) if the account has zero GAME
+// rows, so callers can `Object.keys(...).length` for a truthy gate.
+
+export async function loadScheduleOverlay(accountKey, firstDate, lastDate) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("sc_homestand_schedule")
+    .select("service_date, opponent, day_night, game_time, is_doubleheader")
+    .eq("account_key", accountKey)
+    .eq("day_type", "GAME")
+    .gte("service_date", firstDate)
+    .lte("service_date", lastDate)
+    .order("service_date", { ascending: true });
+  throwOnError(error, "loadScheduleOverlay");
+
+  const map = {};
+  for (const r of data || []) {
+    map[r.service_date] = {
+      opponent:       r.opponent || "",
+      dayNight:       r.day_night || null,
+      gameTime:       r.game_time || null,
+      isDoubleheader: !!r.is_doubleheader,
+    };
+  }
+  return map;
+}
+
+
 async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   const supa = getServiceClient();
   const { first, last } = yearBounds(year);
