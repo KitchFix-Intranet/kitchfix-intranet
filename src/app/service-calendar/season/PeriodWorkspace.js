@@ -57,6 +57,14 @@ export default function PeriodWorkspace({
   // the existing served count). Independent of homestandMap - overlay
   // never touches classify/kind/counters.
   scheduleOverlay,
+  // sc-19 (2026-07-12): Set<YYYY-MM-DD> of Spring Training dates for
+  // this account (phaseCalendar.js-derived), plus the derived phase
+  // timeline. springDateSet drives the sm year-grid corner wedge in
+  // PeriodCard/MonthCard AND the lg "ST" pill on drill-in DaySquare.
+  // phaseTimeline is the source-of-truth for the chrome bar "· Spring
+  // Training" rider (period + month drill headers).
+  springDateSet,
+  phaseTimeline,
   today,                    // YYYY-MM-DD string
   loading,
   loadState = "loaded",     // SC-047: "loading" | "loaded" | "failed"
@@ -217,6 +225,7 @@ export default function PeriodWorkspace({
         isMilb={isMilb}
         homestandMap={homestandMap}
         scheduleOverlay={scheduleOverlay}
+        springDateSet={springDateSet}
         accountKey={account?.key}
         bulkMode={bulkMode}
         bulkSelected={bulkSelected}
@@ -673,7 +682,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -864,6 +873,10 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     // orchestrator). NOTE-only signal - history rows
                     // are excluded per Kevin's Q-b ruling.
                     hasNote={(d.noteEntries?.length || 0) > 0}
+                    // sc-19 (2026-07-12): drives the "ST" pill on the
+                    // lg tile's top-right cluster. Client-derived from
+                    // phaseCalendar.js.
+                    isSpringPhase={!!springDateSet?.has(d.date)}
                   />
                 </span>
               );

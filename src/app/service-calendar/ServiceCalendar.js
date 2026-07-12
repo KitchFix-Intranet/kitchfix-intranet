@@ -14,6 +14,7 @@ import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
 import { isActionableDay } from "./season/dayPredicates";
+import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivation";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
@@ -1048,6 +1049,22 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const scheduleOverlay = data?.scheduleOverlay || null;
   const isMilb = data?.account?.category === "MiLB";
 
+  // sc-19 (2026-07-12): client-side derivation of the account's phase
+  // timeline + Spring Training date set. phaseCalendar.js is the source
+  // of truth (Kevin's ruling: NOT the API). Non-PDC accounts get an
+  // empty Set; PDC accounts without recorded phase data (none today -
+  // all 5 PDCs have blocks) would also get an empty Set. Threaded to
+  // SeasonShell + PeriodWorkspace for the sm corner wedge, the lg "ST"
+  // pill, and the chrome bar rider.
+  const phaseTimeline = useMemo(
+    () => derivePhaseTimeline(data?.account?.key, data?.account?.category, year),
+    [data?.account?.key, data?.account?.category, year]
+  );
+  const springDateSet = useMemo(
+    () => collectSpringDates(phaseTimeline),
+    [phaseTimeline]
+  );
+
   // Momentum toast helpers - the four submission successes below emit a
   // rich <SubmissionToast /> payload via showToast({ variant:"recorded",
   // ... }). SC-051: the toast's amount + meals come from the server's
@@ -1948,6 +1965,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onClimbToSeason={handleClimbToSeason}
               onPrevMonth={handlePrevMonth}
               onNextMonth={handleNextMonth}
+              phaseTimeline={phaseTimeline}
             />
           ) : null
         }
@@ -2011,6 +2029,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
+            springDateSet={springDateSet}
             loading={loading || !data || !yearData}
             loadState={
               // SC-033: debug hook - dev + ?debug=failed forces the
@@ -2058,6 +2077,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isMilb={isMilb}
             homestandMap={periodHomestandMap || homestandMap}
             scheduleOverlay={periodScheduleOverlay || scheduleOverlay}
+            springDateSet={springDateSet}
+            phaseTimeline={phaseTimeline}
             today={today}
             loading={loading && !periodDays}
             loadState={
@@ -2106,6 +2127,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             isMilb={isMilb}
             homestandMap={monthHomestandMap || homestandMap}
             scheduleOverlay={monthScheduleOverlay || scheduleOverlay}
+            springDateSet={springDateSet}
+            phaseTimeline={phaseTimeline}
             today={today}
             loading={loading && !monthDays}
             partialError={partialError}

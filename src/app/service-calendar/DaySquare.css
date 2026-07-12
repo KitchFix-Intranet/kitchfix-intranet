@@ -233,30 +233,35 @@
    future caller forgets the gate. */
 .sc-daysq--sm .sc-daysq-dn-pill { display: none; }
 
-/* sc-18 (2026-07-12): indigo game-day corner wedge on sm overview
-   tiles for overlay-flagged accounts (STL - FL, TBJ - FL today).
-   Purely additive presentational mark - never changes fill, border,
-   state, classification, or counters.
+/* sc-18 + sc-19 corner-wedge grammar (Kevin, 2026-07-12):
+   TWO sanctioned sm marks, opposite corners, distinct colors.
 
-   Philosophy amendment (Kevin, 2026-07-12): this is the FIRST mark
-   returning to sm tiles since #398 stripped them. See the matching
-   comment in DaySquare.js at the className composition. Do NOT
-   quietly add more sm marks by inheriting from this rule.
+   Philosophy amendment (supersedes sc-18's ONE-mark line):
+     "sm tiles carry color + border + date, plus exactly TWO marks:
+      the game-day wedge (top-right, indigo, sc-18) and the season
+      wedge (bottom-left, dark copper, sc-19 - Spring Training).
+      Both are explicit Kevin rulings. No other marks return to sm
+      without one."
+   Any future sm mark needs an explicit Kevin ruling - do NOT quietly
+   add more by inheriting from these rules.
 
-   Shape: solid indigo triangle filling the TOP-RIGHT corner. Legs
-   scale roughly proportionally to Kevin's mockup ratio (13px / 38px
-   tile ~ 0.34). At sm's ~44px min-height that lands at 15px legs.
+   Corner grammar (official):
+     TOP-RIGHT     = event   (game, indigo)   -> ::before pseudo
+     BOTTOM-LEFT   = season  (spring, copper) -> ::after pseudo
 
-   Clipping: the parent .sc-daysq already has `overflow: hidden` +
-   `border-radius: var(--radius-control)`, so the wedge's straight
-   edges are naturally masked into the tile's rounded corner - no
-   triangle poking past the radius.
+   Shape: solid triangle, legs scale to Kevin's mockup ratio
+   (13px / 38px tile ~ 0.34). At sm's ~44px min-height that lands
+   at 15px legs. Clipping: the parent .sc-daysq already has
+   `overflow: hidden` + `border-radius: var(--radius-control)`, so
+   the wedges' straight edges are naturally masked into the tile's
+   rounded corners - no triangle poking past the radius.
 
-   Color: hardcoded #4338CA (Tailwind indigo-700). Kevin picked this
-   with the night-pill indigo family adjacency in mind - do NOT
-   "fix" it to green. Flagged promotable to a future --indigo-*
-   token ramp (see the existing "promotable" tags on the night pill
-   background/border/color above). */
+   Colors are hardcoded (indigo-700 for game, dark copper for
+   spring). Flagged promotable to future --indigo-* / --copper-*
+   ramps if the token layer ever gains them (see night-pill
+   "promotable" tags above). */
+
+/* sc-18: indigo game-day corner wedge (TOP-RIGHT). */
 .sc-daysq--sm.sc-daysq--game-day::before {
   content: "";
   position: absolute;
@@ -276,6 +281,54 @@
 .sc-daysq:not(.sc-daysq--sm).sc-daysq--game-day::before {
   display: none;
 }
+
+/* sc-19: dark-copper Spring Training corner wedge (BOTTOM-LEFT).
+   Kevin chose dark copper (#8A4A1B) over mid-copper because the
+   mid variant washed out on the needs-entry amber fill - do NOT
+   lighten this. Mirror geometry of the sc-18 game wedge: same
+   15px legs, opposite corner, clip-path polygon rotated 180deg. */
+.sc-daysq--sm.sc-daysq--spring::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 15px;
+  height: 15px;
+  background: #8A4A1B;             /* c-copper 800 - promotable */
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Same defensive non-sm hide as the game wedge. */
+.sc-daysq:not(.sc-daysq--sm).sc-daysq--spring::after {
+  display: none;
+}
+
+/* sc-19: "ST" pill for lg drill-in tiles. Sits leftmost in the
+   .sc-daysq-top-right cluster: [ST] [note bubble] [status badge].
+   Filled copper-tint background so it reads distinctly from the
+   status badges without competing for hue. Small (9px letterspaced)
+   so it stays subordinate to the day + status hero.
+
+   Colors: bg #F9E9D2 (copper 100), border #E0B183 (copper 300),
+   text #8A4A1B (copper 800 - same as the sm wedge). All three
+   hardcoded, flagged promotable together. */
+.sc-daysq-st-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  border-radius: var(--radius-cell);
+  background: #F9E9D2;             /* c-copper 100 - promotable */
+  border: var(--border-thin) solid #E0B183; /* c-copper 300 - promotable */
+  color: #8A4A1B;                  /* c-copper 800 - promotable */
+  font-size: 9px;
+  font-weight: var(--wt-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  pointer-events: none;
+}
+.sc-daysq--sm .sc-daysq-st-pill { display: none; }
 
 /* MLB fee tile stack (P7): opponent is a navy chip on its own line;
    the headcount sits below as "N meals" with the count as hero and

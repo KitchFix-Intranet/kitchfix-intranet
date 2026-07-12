@@ -57,6 +57,12 @@ export default function SeasonShell({
   // queued locally. Threaded down to MonthCard + PeriodCard so their
   // DaySquare cells overlay the SYNCING badge on the right dates.
   syncingDates,
+  // sc-19 (2026-07-12): Set<string> of dates inside a Spring Training
+  // phase block for the current account (phaseCalendar.js). Threaded
+  // to MonthCard + PeriodCard so their sm cells can render the
+  // dark-copper bottom-left corner wedge. Empty Set for non-PDC /
+  // accounts without a Spring block.
+  springDateSet,
 }) {
   // Calendar | Period view state. Design Batch 2 lifts this to the
   // orchestrator's chrome bar so the toggle lives in the chrome with
@@ -184,6 +190,7 @@ export default function SeasonShell({
                   loadState={loadState}
                   onClick={onMonthClick}
                   syncingDates={syncingDates}
+                  springDateSet={springDateSet}
                 />
               </div>
             );
@@ -204,6 +211,7 @@ export default function SeasonShell({
           loadState={loadState}
           onPeriodClick={onPeriodClick}
           syncingDates={syncingDates}
+          springDateSet={springDateSet}
         />
       )}
       </div>
@@ -271,6 +279,7 @@ function PeriodGrid({
   loadState = "loaded",
   onPeriodClick,
   syncingDates,
+  springDateSet,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -296,6 +305,7 @@ function PeriodGrid({
             loadState={loadState}
             onClick={onPeriodClick}
             syncingDates={syncingDates}
+            springDateSet={springDateSet}
           />
         </div>
       ))}
