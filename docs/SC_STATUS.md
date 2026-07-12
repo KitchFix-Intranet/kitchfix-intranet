@@ -62,16 +62,17 @@
 
 Not "sized roadmap" - decisions and follow-ups with clear blockers.
 
-### Dunedin verdict (sc-17b Studio-apply)
+### Dunedin verdict - RESOLVED (2026-07-12)
 
-- **State**: sc-17b file exists on main. Whether Kevin has applied it in Studio is external state.
-- **Ask**: Kevin confirms sc-17b applied. If yes, TBJ - FL overlay + inherited sc-18 wedges are LIVE. If no, state is code-live-data-empty (inert but safe).
-- **Owner**: Kevin.
+- Kevin ran sc-17b in Studio 2026-07-12 ("Success. No rows returned"); TBJ - FL home tiles now render opponent chips + day/night pills + inherited sc-18 game-day wedges as designed. **TBJ - FL overlay is fully LIVE.**
 
-### CIN - AZ fee decision (awaiting Kevin)
+### CIN - AZ service fee - RULED + SHIPPED (2026-07-12, PR #417)
 
-- **Context**: CIN - AZ is PDC per_meal today. Per the API survey ([`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md) Task 2), Cactus League spring games at Goodyear could power a spring overlay for the account (same shape as sc-17/17b). But whether CIN - AZ should ever move to a fee-based billing shape is a separate business decision awaiting Kevin.
-- **Owner**: Kevin.
+- **Ruling (Kevin, 2026-07-12)**: CIN - AZ (Goodyear PDC, `billing_model=actuals_drive_invoice`) bills a real contract service fee alongside per-meal revenue. The two are separate P&L lines per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md); per-meal continues to drive from `sc_daily_revenue`, and the fee lands in `sc_fee_schedule` as its own additive contract-revenue row.
+- **Mechanism (PR #417)**: `src/lib/dataStore/serviceCalendar.js` gained `FEE_ELIGIBLE_PER_MEAL = ["CIN - AZ"]` alongside the fee-schedule reader. `loadFeeSchedulePostgres` now returns any active account matching `billing_model === 'flat_fee' OR team_key IN FEE_ELIGIBLE_PER_MEAL`. Writes + history were already agnostic to billing_model. Consumers (export today, KPI later) key on fee-row existence, so once the row is added the fee flows through the money model automatically.
+- **Not touched**: calendar tile render (per-meal shape unchanged), `resolveDayKind` / `classifyDayStatus`, actionable-day counters, any migration (JS-side filter; no schema change).
+- **Kevin enters the real fee amount** via the admin surface after merge. If a future per_meal account also bills a fee, add its team_key to `FEE_ELIGIBLE_PER_MEAL` (one-line code change; no migration).
+- **Was**: "CIN - AZ fee decision (awaiting Kevin)" - resolved as of 2026-07-12.
 
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
@@ -131,7 +132,7 @@ These docs are session-log style or bundle-recon-style, superseded by shipped st
 
 ## Branch-protection finding
 
-Main IS protected via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic `GET /repos/.../branches/main/protection` endpoint returns 404 because rulesets are a separate surface (`GET /repos/.../rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" convention is mechanically enforced.** The CI migration-gate hardening proposal above lands as a required status check added to this ruleset - the workflow emits a check keyed on Studio-apply confirmation and the ruleset requires the check to pass before merge unlocks.
+Main IS protected via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic `GET /repos/.../branches/main/protection` endpoint returns 404 because rulesets are a separate surface (`GET /repos/.../rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" convention is mechanically enforced.** Migration gate shipped via #416; the required-check procedure lives in [`RUNBOOK.md`](RUNBOOK.md) "Confirming a migration-gated PR".
 
 ---
 

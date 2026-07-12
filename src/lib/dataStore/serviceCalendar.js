@@ -2235,19 +2235,42 @@ export async function addServiceGroup(accountKey, groupName, reason, requestedBy
 // entity_type='fee'. The two inserts are sequential; failure of the
 // changelog insert aborts the operation just like the price path.
 
+// Fee-eligible per_meal accounts. Some PDCs bill a contract service
+// fee alongside per-meal revenue. Kevin ruling 2026-07-12: CIN - AZ
+// (Goodyear PDC, actuals_drive_invoice) is the current instance -
+// widened here so the admin surface + fee history + fee writes work
+// exactly like a flat_fee account, while the calendar tile render
+// stays per-meal and the actionable-day counters stay per-meal.
+//
+// Why here vs a boolean flag on `accounts`: the sc-16/17 two-flag
+// precedent is about schedule loading BEHAVIOR (which loader runs,
+// which classification path fires). This is about admin-surface
+// VISIBILITY. Migration cost is real; the list is short and
+// self-documenting. Add another team_key here if a future per_meal
+// account also bills a fee.
+const FEE_ELIGIBLE_PER_MEAL = ["CIN - AZ"];
+
 async function loadFeeSchedulePostgres() {
   const supa = getServiceClient();
   const today = isoDay(new Date());
 
+  // Read ALL active accounts + filter in JS to the union
+  // (billing_model === 'flat_fee') OR (team_key in the eligible-
+  // per_meal list). Table is small (~11 rows today) so the JS
+  // filter beats the PostgREST .or() quoting gymnastics required
+  // to inline team keys with spaces.
   const accountsRes = await supa
     .from("accounts")
     .select("team_key, name, level, billing_model")
-    .eq("billing_model", "flat_fee")
     .eq("active", true)
     .order("team_key", { ascending: true });
   throwOnError(accountsRes.error, "loadFeeSchedule.accounts");
 
-  const accountKeys = (accountsRes.data || []).map((a) => a.team_key);
+  const feeManagedAccounts = (accountsRes.data || []).filter(
+    (a) => a.billing_model === "flat_fee" || FEE_ELIGIBLE_PER_MEAL.includes(a.team_key)
+  );
+
+  const accountKeys = feeManagedAccounts.map((a) => a.team_key);
   let feeRows = [];
   if (accountKeys.length > 0) {
     const feesRes = await supa
@@ -2302,7 +2325,7 @@ async function loadFeeSchedulePostgres() {
     createdAt:            r.created_at,
   }) : null;
 
-  const fees = (accountsRes.data || []).map((a) => ({
+  const fees = feeManagedAccounts.map((a) => ({
     accountKey:  a.team_key,
     name:        a.name || a.team_key,
     level:       a.level || null,
@@ -2314,8 +2337,10 @@ async function loadFeeSchedulePostgres() {
 }
 
 /**
- * Read the fee schedule for all flat_fee accounts: current as-of-today
- * row + next upcoming change per account. Powers the admin Fee
+ * Read the fee schedule for all fee-managed accounts (all flat_fee
+ * accounts + the fee-eligible per_meal accounts listed in
+ * `FEE_ELIGIBLE_PER_MEAL`): current as-of-today row + next upcoming
+ * change per account. Powers the admin Fee
  * schedule surface.
  */
 export async function loadFeeSchedule() {
