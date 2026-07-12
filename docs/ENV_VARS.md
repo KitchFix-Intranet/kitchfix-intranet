@@ -2,7 +2,7 @@
 
 > **Purpose:** Canonical list of every environment variable used by this system. Where it's set, what it's for, what breaks if it's missing.
 >
-> **Last verified:** 2026-06-03
+> **Last verified:** 2026-07-12
 > **Rule:** Adding an env var requires updating this doc in the same commit.
 
 ---
@@ -102,9 +102,9 @@
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `INCIDENT_TEST_MODE` | When `"true"`, incidents skip live side-effects (Slack/email/calendar) | Prod, Preview | Defaults to false (live mode) |
-| `TEST_MODE` | **Reserved - not implemented yet.** When `"true"`, will route Sheet writes to test clones instead of prod sheets so the Playwright suite can exercise write paths. See `docs/TESTING.md → TEST_MODE plumbing`. | Not set anywhere yet | n/a - feature not built |
-| `TEST_COLLECTION_SHEET_ID` | **Reserved - inactive.** Test clone of the COLLECTION sheet (`1OcccMHY-TSvv30drmL0RdqaMz36GjoQgmpCp6vIaZYE`, created 2026-05-12, shared with the `kitchfix-sheets` service account). Unused until `TEST_MODE` plumbing lands. | Not set anywhere yet | n/a - feature not built |
-| `TEST_HUB_SHEET_ID` | **Reserved.** Will point to a test clone of the HUB sheet - **clone not yet created.** Needed before any Vendor Portal write test (Vendor writes go to HUB, not COLLECTION). | Not set anywhere yet | n/a - feature not built |
+| `TEST_MODE` | **LIVE (Playwright middleware bypass).** When `"true"` AND `VERCEL !== "1"`, `src/middleware.js` returns `NextResponse.next()` at the top of the chain, letting Playwright drive authed surfaces without OAuth. Double-gated on `VERCEL !== "1"` so a stray production export cannot open the app. Used by the CI `matrix` job (in-runner build) via inline env; not set on Vercel. See [`docs/TESTING.md`](TESTING.md) "TEST_MODE bypass". | CI runner + local dev only; NEVER Vercel | Middleware auth runs normally; Playwright cannot reach authed routes |
+| `TEST_COLLECTION_SHEET_ID` | **Reserved - inactive.** Test clone of the COLLECTION sheet (`1OcccMHY-TSvv30drmL0RdqaMz36GjoQgmpCp6vIaZYE`, created 2026-05-12, shared with the `kitchfix-sheets` service account). Not used by the sc-nav-matrix spec (all data routes stubbed via `page.route`); would re-activate if a future spec needs a real Sheets write target. | Not set anywhere yet | n/a - feature not currently used |
+| `TEST_HUB_SHEET_ID` | **Reserved.** Will point to a test clone of the HUB sheet - **clone not yet created.** Not needed for the current sc-nav-matrix spec; would matter for a future Vendor Portal write test (HUB, not COLLECTION). | Not set anywhere yet | n/a - feature not currently used |
 
 ---
 
@@ -126,3 +126,4 @@ See `docs/RUNBOOK.md → How to rotate a secret`.
 - **2026-05-12** - Added `ANALYTICS_ENABLED` (Phase 1 Task 12). Master kill-switch for analytics sheet writes; default off. Set to `false` on Vercel Production + Preview + Development. See `docs/MIGRATION.md → Captain's log`.
 - **2026-05-12** - Reserved `TEST_MODE`, `TEST_COLLECTION_SHEET_ID`, `TEST_HUB_SHEET_ID` for the Playwright write-test plumbing (deferred from Phase 1 Task 1 Round 1). None are set yet; documented now so the names are claimed. See `docs/TESTING.md`.
 - **2026-05-15** - Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` (PR 3/3 of the analytics teardown, PR #34). Both env vars must also be removed from Vercel Production + Preview + Development. `SLACK_RECAP_WEBHOOK` stays - still used by `/api/cron/backup-sheets/route.js:54`. See `docs/MIGRATION.md → Phase 3 commentary` for the new analytics-via-Sentry/Vercel/Supabase plan.
+- **2026-07-12** - `TEST_MODE` promoted from "Reserved" to "LIVE (Playwright middleware bypass)" - `src/middleware.js` now short-circuits when `TEST_MODE === "true" && VERCEL !== "1"`, landed in PR #407 as the Playwright reach mechanism for the nav-matrix spec. Double-gate on `VERCEL !== "1"` prevents a stray production export from opening the app. Value is set inline in `.github/workflows/e2e.yml` (job A step "Start production server with TEST_MODE bypass") - NOT on Vercel. `TEST_COLLECTION_SHEET_ID` + `TEST_HUB_SHEET_ID` remain reserved (no current consumer; the sc-nav-matrix spec stubs data routes via `page.route`). Last-verified header bumped implicitly.

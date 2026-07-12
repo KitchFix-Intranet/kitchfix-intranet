@@ -545,6 +545,18 @@ When a PR carrying a `docs/migrations/*.sql` file merges to main, Vercel builds 
 
 The sc-1 silent-gap incident (2026-06-12) is the classic form of this class of failure - see `docs/MIGRATION_PROJECT_CLOSEOUT.md` §E. The sc-9 case is the same pattern in a smaller blast radius.
 
+### Post-close-out sc- silent-gap history (2026-07-11, 2026-07-12) - the discipline broke around the rule
+
+Two more incidents in the same class landed inside 48h. Both are captured here so the pattern is documented outside individual PR bodies.
+
+- **sc-16 (2026-07-11)**: PR #403 landed the sc-16 reader (`SELECT ... has_homestand_schedule ... FROM accounts`) before the sc-16 migration ran in Studio. Every `accounts` SELECT returned 500 - the column didn't exist yet. Revert (PR #404) then reland (PR #406) after Kevin applied the SQL. **This incident triggered the CLAUDE.md rule "Migration-gated PRs open as DRAFT"** so a future migration-dependent PR cannot merge synchronously without Kevin confirming the SQL is applied.
+
+- **sc-17 (2026-07-12)**: same failure class, but this time THROUGH the draft rule. The sc-17 PR opened as DRAFT correctly, but was flipped to ready-for-review and merged before the SQL had rolled in Studio. The draft state is discipline - flipping it is a one-click action; there's no mechanical check that the SQL is applied before the PR becomes mergeable.
+
+**Proposed hardening (TODO, awaiting Kevin's go)**: a CI workflow that (a) scans PR head for new `docs/migrations/*.sql` files, (b) requires an explicit review-comment ("sc-XX applied in Studio: YES") from Kevin, (c) blocks the merge button until that comment lands. Combines the draft rule (which Kevin manages) with a check that survives the flip. Not built. Tracked in [`SC_STATUS.md`](SC_STATUS.md) "Remaining work".
+
+**Lesson**: a rule that depends on a single flip is a rule that will break exactly when it matters. Turn the check into something the CI can enforce.
+
 ---
 
 ## Captain's log

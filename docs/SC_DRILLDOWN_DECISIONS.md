@@ -39,6 +39,23 @@ that is its own explicit conversation with Kevin.
   Clicking a month opens `?month=YYYY-MM` (un-deprecates the month view); the month header
   omits the phase (a month spans phases). Keyboard roving-tabindex on the drill-in grid only;
   year-view keyboard deferred. (#325/#326.)
+- **Sm-tile marks philosophy: exactly TWO sanctioned marks, corner-anchored.** Decided 2026-07-12.
+  The sm overview tile carries color + border + date + up to two corner marks. Top-right = event
+  (transient, per-day). Bottom-left = season (multi-day, phase-driven). If a third signal is ever
+  needed, it goes on a new axis (never re-opens the icon channel). Enshrined verbatim in comments
+  in `DaySquare.js`, `DaySquare.css`, and `LegendInfoPopup.js`. Any relaxation is a design conversation.
+- **Game-day mark = indigo top-right wedge (`#4338CA`).** Decided 2026-07-12.
+  Rendered via `::before` + `clip-path: polygon(0 0, 100% 0, 100% 100%)` on the sm tile.
+  Gate: `has_schedule_overlay=true` AND the date has a GAME row. Overlay accounts only
+  (STL - FL, TBJ - FL today). Not on homestand-fee or MiLB accounts (they color their game days by state).
+  Legend row (Calendar context) shows a half-scale swatch. (#412.)
+- **Spring-Training mark = dark-copper bottom-left wedge (`#8A4A1B`) + ST pill on lg + chrome rider.** Decided 2026-07-12.
+  Rendered via `::after` + `clip-path: polygon(0 0, 0 100%, 100% 100%)` on the sm tile. All three sites
+  (sm wedge / lg ST pill in the top-right cluster / chrome bar copper rider) coordinated to the same
+  `phaseCalendar.js` spring block for the account. PDC accounts only (5: CIN - AZ, TXR - AZ, TBR - FL,
+  TBJ - FL, STL - FL - phase-driven, zero per-account UI code). STL - FL Spring runs Feb 9 - Mar 22
+  (report-date, not game-window - Kevin Flag 1 ruling on PR #413). Annual January sanity check against
+  `/api/v1/seasons?sportId=1|16` per [`SC_PDC_PHASES.md`](SC_PDC_PHASES.md). Legend row shows a half-scale swatch. (#413.)
 
 ## Per-section log
 (sections appended as they complete: date · section · decisions · PR #)

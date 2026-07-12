@@ -36,6 +36,20 @@ This file captures the kind of knowledge that lives in Kevin's head: domain rule
 
 > Note: the billing model is not yet encoded as an account flag in the system - it lives here as operational reference. Surfacing it in the data model / UI (so per-meal vs fee accounts can be treated differently where counts are entered) is a separate, unscoped thread.
 
+### Schedule data - who has what (the two-flag model)
+
+Beyond `billing_model`, two orthogonal booleans on `accounts` gate the schedule subsystem. Both were added post the migration-project close-out; canonical architecture ref: [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md).
+
+- **`has_homestand_schedule`** (sc-2 + sc-16, classification-driving). TRUE for the 4 MLB fee accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) and the 2 AAA per-meal accounts (CIN-KY = Louisville Bats sportId=11, TBJ-NY = Buffalo Bisons sportId=11). Full HOME + AWAY schedule loaded via `loadHomestandContext`. Feeds `resolveDayKind`, `classifyDayStatus`, actionable-day counters. A rowless date on a flagged account classifies as `off-season`.
+
+- **`has_schedule_overlay`** (sc-17 + sc-17b, informational-only). TRUE for the 2 FSL PDC accounts (STL-FL = Palm Beach Cardinals sportId=14, TBJ-FL = Dunedin Blue Jays sportId=14). HOME games only via `loadScheduleOverlay` (belt-and-suspenders against future AWAY leakage). Does NOT touch classify or kind or counters - additive only, layers an opponent chip + day/night pill on the account's existing render.
+
+**Why orthogonal**: STL-FL is `flat_fee` + `fee-no-dollar` kind (PDC that serves daily regardless of who's playing). Flipping `has_homestand_schedule=true` for STL-FL would (a) route it to `mlb-fee` kind (loses no-$ discipline), (b) classify rowless days as off-season (catastrophic for daily-service), (c) collapse actionable-day counters. Full derivation: [`audits/SC_17_INVESTIGATION_2026-07-11.md`](audits/SC_17_INVESTIGATION_2026-07-11.md).
+
+**HOME-only hard rule**: STL-FL + TBJ-FL are PDC accounts that serve daily. Inserting AWAY rows would force operationally-wrong "away" tiles or require a classifier defect trade. **No AWAY rows on overlay accounts. Ever.** Enforced in `scripts/_extract_milb_schedule.mjs` via `homeOnly: true` per club.
+
+**Migration ledger**: sc-13 (AWAY load), sc-15 (game_time + day_night + is_doubleheader), sc-16 (has_homestand_schedule column + AAA accounts), sc-17 (has_schedule_overlay column + STL-FL), sc-17b (TBJ-FL extension). See [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md) "Migration index" for applied-dates.
+
 ### GL_CODES per-account tab structure
 - **What:** GL codes live in a separate Google Sheet (`SHEET_IDS.GL_CODES`) where each account has its own tab. The tab name is resolved via `getGLTabName(accountKey)`. Invoice submissions read the relevant tab to populate the GL code dropdown.
 - **Why:** Different accounts have different GL code structures (Cardinals chart of accounts differs from Rangers, etc.). Per-tab isolation prevents code-pollution and lets accounts manage their own GL structure independently.

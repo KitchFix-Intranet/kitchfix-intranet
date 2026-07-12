@@ -45,6 +45,10 @@ The close-out + status docs are canonical for current state. ARCHITECTURE.md is 
 
 **Migration-gated PRs open as DRAFT.** If a PR's code reads or writes any schema object (column, table, view, function, RLS policy) that is created or altered by a not-yet-applied migration, the PR opens as a **draft** with a checklist item `☐ sc-XX migration applied in Studio (Kevin confirms)`. The PR is marked ready-for-review ONLY after Kevin confirms the migration is applied in Studio and the verify probes pass. Rationale: on 2026-07-11 the sc-16 reader (#403) merged before the sc-16 migration ran; every `accounts` SELECT 500'd until the revert. Draft state prevents a synchronous merge from re-creating the silent-gap. Applies to every migration-dependent code change, not just SC.
 
+**The discipline broke around the rule (2026-07-12).** The sc-17 PR opened as DRAFT correctly, but was flipped to ready-for-review and merged before the Studio-apply completed - same silent-gap class in the same 48h window. The draft-state check requires a manual flip; there is no mechanical check that the SQL applied. **Proposed hardening**: a CI workflow that scans PR head for new `docs/migrations/*.sql` and gates merge on an explicit "sc-XX applied in Studio: YES" review comment. Not built. Tracked in [`docs/SC_STATUS.md`](docs/SC_STATUS.md) "Remaining work".
+
+**Branch-protection reality (2026-07-12).** Main IS protected, via a **repository ruleset** named `main protection` (id 16364953), not the classic branch-protection API. The classic endpoint returns 404 because rulesets are a separate surface (`GET /repos/{owner}/{repo}/rulesets` reveals them). The ruleset is `enforcement: active` with an empty `bypass_actors` list, so the rules apply to every actor including repo admins. Current rules: deletion blocked, non-fast-forward blocked, pull-request required (0 required approvals but stale reviews dismissed on push + all review threads must resolve before merge). All three merge methods (merge / squash / rebase) allowed. **The "no direct commits to main" claim is mechanically enforced.** The migration-gate hardening proposal would land as a required status check added to this ruleset (workflow emits a check keyed on Studio-apply confirmation; ruleset requires the check to pass before merge).
+
 **The runbook is code.** Every infrastructure change (env var added, Vercel setting changed, cron schedule modified) updates `docs/RUNBOOK.md` in the same commit. Same for env vars touching `docs/ENV_VARS.md`. Don't ship infra changes without doc updates.
 
 **Capacity, not speed, is the constraint.** The maintainer works on this full-time. There's no need to compress phases or skip validation windows to "move faster." When ahead of schedule, use the time for depth (stronger tests, better docs, more polish) rather than pulling future phases forward. The arc's pacing is deliberate - each phase needs to settle before the next builds on it.
@@ -108,13 +112,13 @@ Commit messages are terse and lowercase. Examples from the repo's history: "new 
 
 ## Side project isolation (HARD RULE)
 
-The maintainer has a separate game project. It lives at `~/Holtburg/holtburg-hollow/`. The two projects must never know about each other. You are working only in `~/dev/kitchfix-intranet/`. Do not reference the game project. Do not search for files outside this directory. If the maintainer mentions the game in conversation, redirect back to the intranet - those should stay in their own session.
+The maintainer has a separate game project. It lives at `~/Holtburg/holtburg-hollow/`. The two projects must never know about each other. You are working only in the current intranet checkout (either `~/dev/kf-cell-states/` or `~/dev/kitchfix-intranet/` on this machine - both are worktrees of the same intranet repo). Do not reference the game project. Do not search for files outside the intranet working directory. If the maintainer mentions the game in conversation, redirect back to the intranet - those should stay in their own session.
 
 ## Session start checklist
 
 When starting a fresh session, after reading the docs above:
 
-1. Confirm `pwd` is `/Users/kevinfietek/dev/kitchfix-intranet`
+1. Confirm `pwd` matches the current working directory. On this machine that's `/Users/kevinfietek/dev/kf-cell-states` as of 2026-07-12; the historical `/Users/kevinfietek/dev/kitchfix-intranet` remains a valid `main`-worktree checkout of the same repo
 2. Confirm `git status` is clean
 3. Confirm `git branch --show-current` matches what the maintainer expects
 4. State the phase and task you understand to be in scope
