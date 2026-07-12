@@ -21,7 +21,7 @@
 ### Visual system (sc-18, sc-19, design-review 4-in-1)
 
 - **sc-18** (#412) - indigo game-day corner wedge on sm overview tiles (top-right, `#4338CA`, `polygon(0 0, 100% 0, 100% 100%)`). Overlay accounts only. Sm-tile philosophy amended from ONE mark to TWO.
-- **sc-19** (#413) - Spring Training styling at three sites: dark-copper wedge on sm tiles (bottom-left, `#8A4A1B`), ST pill on lg drill-in tiles, chrome bar rider. Phase-driven scope: all 5 PDC accounts inherit automatically.
+- **sc-19** (#413) - Spring Training styling at three sites: sun-copper wedge on sm tiles (bottom-left, `#C2410C` since 2026-07-12; originally `#8A4A1B`), ST pill on lg drill-in tiles + chrome bar rider (both `#8A4A1B` text). Two-step ramp of one copper family: dark-for-text (pill + rider), saturated-for-fill (wedge). Phase-driven scope: all 5 PDC accounts inherit automatically.
 - **Design-review 4-in-1** (#409) - four fixes:
   - `8145caa` actionable-only counters for X of Y entered
   - `ba35495` legend FIGURES row swatches render in full

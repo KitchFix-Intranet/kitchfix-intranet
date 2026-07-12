@@ -49,13 +49,14 @@ that is its own explicit conversation with Kevin.
   Gate: `has_schedule_overlay=true` AND the date has a GAME row. Overlay accounts only
   (STL - FL, TBJ - FL today). Not on homestand-fee or MiLB accounts (they color their game days by state).
   Legend row (Calendar context) shows a half-scale swatch. (#412.)
-- **Spring-Training mark = dark-copper bottom-left wedge (`#8A4A1B`) + ST pill on lg + chrome rider.** Decided 2026-07-12.
+- **Spring-Training mark = copper bottom-left wedge + ST pill on lg + chrome rider.** Decided 2026-07-12.
   Rendered via `::after` + `clip-path: polygon(0 0, 0 100%, 100% 100%)` on the sm tile. All three sites
   (sm wedge / lg ST pill in the top-right cluster / chrome bar copper rider) coordinated to the same
   `phaseCalendar.js` spring block for the account. PDC accounts only (5: CIN - AZ, TXR - AZ, TBR - FL,
   TBJ - FL, STL - FL - phase-driven, zero per-account UI code). STL - FL Spring runs Feb 9 - Mar 22
   (report-date, not game-window - Kevin Flag 1 ruling on PR #413). Annual January sanity check against
   `/api/v1/seasons?sportId=1|16` per [`SC_PDC_PHASES.md`](SC_PDC_PHASES.md). Legend row shows a half-scale swatch. (#413.)
+  - **Wedge color revised 2026-07-12 to `#C2410C`** (sun copper, copper-600 fill territory) per Kevin's density-review ruling. The lg ST pill text + chrome-bar rider dot/text keep `#8A4A1B` (copper-800) as the family's TEXT step - two-step ramp of one copper family, dark-for-text and saturated-for-fill. The legend swatch mirrors the on-tile mark 1:1 so it moved too. Sites touched: `DaySquare.css` `.sc-daysq--sm.sc-daysq--spring::after`; `legendInfoPopup.css` `.sc-legend-popup-swatch--spring::after`. Sites NOT touched: pill text + chrome-rider dot/text + all associated tokens.
 
 ## Per-section log
 (sections appended as they complete: date · section · decisions · PR #)

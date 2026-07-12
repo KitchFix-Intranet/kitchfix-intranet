@@ -191,12 +191,14 @@
 }
 
 /* sc-19 (2026-07-12): Spring Training swatch. Mirror of the game-day
-   swatch above: same 24x24 shell + neutral surface, but with the
-   dark-copper wedge in the BOTTOM-LEFT corner (mirror geometry of
-   the sc-18 top-right game wedge). Legs proportional to the same
-   13/38 ratio at half scale (8px). Color = #8A4A1B (copper 800),
-   matched to the sm tile wedge + lg ST pill text - promotable
-   together with them. */
+   swatch above: same 24x24 shell + neutral surface, with the sun-
+   copper wedge in the BOTTOM-LEFT corner (mirror geometry of the
+   sc-18 top-right game wedge). Legs proportional to the same 13/38
+   ratio at half scale (8px). Color = #C2410C (copper 600 fill),
+   matched to the sm tile wedge - the swatch is the legend preview
+   of that on-tile mark and MUST move with it. The lg ST pill text
+   + chrome-bar rider keep the darker copper-800 step; do NOT sweep
+   this preview to that value. */
 .sc-legend-popup-swatch--spring {
   background: var(--surface-card);
   border-color: var(--border-default);
@@ -210,7 +212,7 @@
   left: 0;
   width: 8px;
   height: 8px;
-  background: #8A4A1B;             /* c-copper 800 - promotable */
+  background: #C2410C;             /* c-copper 600 fill - promotable */
   clip-path: polygon(0 0, 0 100%, 100% 100%);
   pointer-events: none;
 }
