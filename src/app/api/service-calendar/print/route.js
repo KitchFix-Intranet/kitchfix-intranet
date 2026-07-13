@@ -7,14 +7,15 @@ import {
   renderPeriodSheetHtml,
 } from "@/lib/print/monthSheet";
 import { loadSeasonPrintData, renderSeasonSheet } from "@/lib/print/seasonSheet";
+import { loadYearPrintData, renderYearSheet } from "@/lib/print/yearSheet";
 
-// SC print - Wave 1 (2026-07-13).
+// SC print - Wave 1 (2026-07-13) + Wave 2 (2026-07-13 Year sheet).
 //
 // GET /api/service-calendar/print
 //
 // Query params:
 //   account (required)  - canonical spaced form, e.g. "STL - FL"
-//   scope   (required)  - "month" | "period" | "season"
+//   scope   (required)  - "month" | "period" | "season" | "year"
 //   year    (required)  - "YYYY"
 //   month              - required when scope=month;  "YYYY-MM"
 //   period             - required when scope=period; "7" or "P7"
@@ -53,8 +54,8 @@ export async function GET(request) {
   if (!accountKey) {
     return NextResponse.json({ success: false, error: "account param required" }, { status: 400 });
   }
-  if (!["month", "period", "season"].includes(scope)) {
-    return NextResponse.json({ success: false, error: "scope must be month|period|season" }, { status: 400 });
+  if (!["month", "period", "season", "year"].includes(scope)) {
+    return NextResponse.json({ success: false, error: "scope must be month|period|season|year" }, { status: 400 });
   }
   if (!yearParam || !/^\d{4}$/.test(yearParam)) {
     return NextResponse.json({ success: false, error: "year param required (YYYY)" }, { status: 400 });
@@ -76,6 +77,10 @@ export async function GET(request) {
     // surface as JSON 500s instead of half-launched browsers.
     let html = "";
     let filenameStem = "";
+    // Year sheet ships in portrait; the other three (month, period,
+    // season) ship in landscape. Puppeteer's page.pdf() takes an
+    // explicit landscape flag - we flip it per scope below.
+    let landscape = true;
     if (scope === "month") {
       const ctx = await loadMonthPrintData(accountKey, year, monthParam);
       phase = "render";
@@ -87,11 +92,18 @@ export async function GET(request) {
       html = renderPeriodSheetHtml(ctx);
       const num = String(periodParam).replace(/^P/i, "");
       filenameStem = buildFilenameStem(accountKey, `Period${num}_FY${year}`);
-    } else {
+    } else if (scope === "season") {
       const ctx = await loadSeasonPrintData(accountKey, year);
       phase = "render";
       html = renderSeasonSheet(ctx);
       filenameStem = buildFilenameStem(accountKey, `Season_FY${year}`);
+    } else {
+      // scope === "year"
+      const ctx = await loadYearPrintData(accountKey, year);
+      phase = "render";
+      html = renderYearSheet(ctx);
+      filenameStem = buildFilenameStem(accountKey, `Year_FY${year}`);
+      landscape = false;
     }
 
     // Chromium launch: dynamic imports keep the ~55MB tarball off any
@@ -116,9 +128,9 @@ export async function GET(request) {
     await page.setContent(html, { waitUntil: "networkidle0" });
     const pdf = await page.pdf({
       format: "letter",
-      // Landscape for Month/Period/Season - matches the spec. Year
-      // sheet in Wave 2 will pass portrait via a scope switch.
-      landscape: true,
+      // Month / Period / Season = landscape; Year = portrait. Flag
+      // set above per scope.
+      landscape,
       printBackground: true,
       // The template CSS sets @page margin:0 and paints its own padding,
       // so we skip puppeteer's margin block.
