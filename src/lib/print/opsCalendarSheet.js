@@ -2,39 +2,47 @@
 //
 // #422 (Wave 3, 2026-07-13): replaces v1's "year at a glance" sparkline
 // grammar entirely. Spec Sheet 4 (SC_PRINT_SPEC_v2). Letter portrait,
-// 12 mini-months in a 3-column grid, day numbers in every ~16px cell.
+// 12 mini-months in a 3-column grid, square day cells (aspect-ratio 1/1).
 //
-// States (from resolveDayState):
-//   SERVED       -> .sv fill (#D3E2C8)
-//   PROJECTED    -> .pj fill + border (#EBF3E4 + #A8C796)
-//   NO ACTUALS   -> .nd dashed copper border (compliance signal)
-//   NO SERVICE   -> default soft fill (baseline)
+// Polish wave (2026-07-13):
+// - O1: SERVICE DAY collapse via opsServiceState. Single green replaces
+//       the SERVED / PROJECTED / NO ACTUALS split on this overview
+//       surface. Drill sheets keep the 4-state model pending redesign.
+// - O2: Mini spring legend swatch (kk-spring) proxying the actual
+//       per-cell treatment.
+// - O3: Square tiles (aspect-ratio: 1/1). Cell borders now use the
+//       darker --grid token (G1) for paper definition.
+// - O4: Inventory-due ring LIVE. Copper open outline layered over
+//       every state (SERVICE green, plain soft, period-start navy).
+//       Data from src/lib/print/inventoryCalendar.js. MLB variant:
+//       ring renders too - inventory is real ops even where actuals
+//       aren't owed (R5 scoped service states, not fiscal markers).
 //
-// Plus:
-//   period start -> .ps navy square; the day-number cell is replaced
-//                   with the P-number label (e.g. "P8")
-//   spring       -> .spb decorator: 2.5px copper top bar per cell
-//                   (kept ONLY at year scale in v2 - month/period
-//                   variants use the title copper chip instead)
-//   header chips -> Mon = M (invoice/CC EOD), Fri = F (actuals EOD),
-//                   both with .hd (ink) background under the weekday
-//                   row.
+// States (non-MLB, via opsServiceState):
+//   SERVICE_DAY -> .svc fill (single green)
+//   NO_SERVICE  -> default soft fill (baseline)
+//
+// MLB variant (R5 superseded 2026-07-13): plain day cells (no state
+// layer). Period-start navy + inventory ring only. M chip only in
+// header (F chip dropped).
+//
+// Plus (all variants):
+//   period start -> .ps navy square; day-number cell replaced with P-N label
+//   inventory    -> .inv copper open ring overlay on due-date cells
+//   spring       -> .spb decorator: 2.5px copper top bar (year scale only)
+//   header chips -> Mon = M (invoice/CC EOD).
+//                   Non-MLB also gets Fri = F (actuals EOD).
 //
 // GAMES DO NOT APPEAR on this sheet.
-//
-// Inventory-due copper ring (spec block 4) is DEFERRED per Kevin's
-// Option A ruling 2026-07-13: period_data (which carries due dates)
-// lives in Sheets HUB, not PG. The follow-up PR migrates period_data
-// to PG and wires the ring + a legend entry then. Until then, no ring
-// AND no legend entry - "legend matches reality."
 
 import { getServiceClient } from "@/lib/supabase";
 import {
   derivePhaseTimeline,
   collectSpringDates,
 } from "@/app/service-calendar/season/phaseDerivation";
-import { esc, sheetHead, loadSealDataUri, footerDate, resolveDayState }
+import { esc, sheetHead, loadSealDataUri, footerDate, opsServiceState }
   from "./assets";
+import { getInventoryDueIndex } from "./inventoryCalendar";
 
 const MON3 = ["JAN","FEB","MAR","APR","MAY","JUN",
               "JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -81,21 +89,29 @@ export async function loadOpsCalendarPrintData(accountKey, year) {
   const phaseTimeline = derivePhaseTimeline(accountKey, account.level, year);
   const springDates   = collectSpringDates(phaseTimeline);
 
+  // O4: inventory-due index for the year. GLOBAL schedule (Kevin's
+  // 2026 supplied schedule per phaseCalendar.js precedent). Applies
+  // to every account including MLB - inventory is real ops even
+  // where actuals aren't owed.
+  const inventoryDueIndex = getInventoryDueIndex(year);
+
   return {
     account,
     year,
     statusByDate,
     periodStarts,
     springDates,
+    inventoryDueIndex,
   };
 }
 
 // ── Renderer ─────────────────────────────────────────────────────────
 export function renderOpsCalendarSheet(ctx) {
-  const { account, year, statusByDate, periodStarts, springDates } = ctx;
+  const { account, year, statusByDate, periodStarts, springDates, inventoryDueIndex } = ctx;
   // R5 superseded (2026-07-13): MLB Ops Calendars render plain day
   // cells (no state layer), M chip only (F drops - no actuals deadline
-  // exists for MLB), legend slimmed to PERIOD START + INVOICE/CC EOD.
+  // exists for MLB), legend slimmed to PERIOD START + INVENTORY DUE +
+  // INVOICE / CC EOD MONDAY.
   const isMlb = account.level === "MLB";
 
   const seal = loadSealDataUri();
@@ -104,28 +120,28 @@ export function renderOpsCalendarSheet(ctx) {
 
   const monthBlocks = [];
   for (let m = 1; m <= 12; m++) {
-    monthBlocks.push(renderMonth(year, m, statusByDate, periodStarts, springDates, {
+    monthBlocks.push(renderMonth(year, m, statusByDate, periodStarts, springDates, inventoryDueIndex, {
       accountLevel: account.level,
       isMlb,
     }));
   }
 
+  // Legend order per Kevin's polish-wave brief:
+  //   non-MLB: SERVICE DAY + PERIOD START + SPRING + INVENTORY DUE + M + F
+  //   MLB:     PERIOD START + INVENTORY DUE + M
   const legend = isMlb
     ? `
         <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
+        <span><span class="kk-inv"></span>INVENTORY DUE</span>
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>`
     : `
-        <span><span class="kk" style="background:#D3E2C8"></span>SERVED</span>
-        <span><span class="kk" style="background:#EBF3E4;border:1px solid #A8C796"></span>PROJECTED</span>
-        <span><span class="kk" style="background:#fff;border:1.5px dashed #C2410C"></span>NO ACTUALS</span>
-        <span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>
+        <span><span class="kk" style="background:#D3E2C8;border:1px solid #B9C9AE"></span>SERVICE DAY</span>
         <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
-        <span><span class="kk" style="background:#C2410C;height:3px;border-radius:1.5px;margin-top:3px"></span>SPRING</span>
+        <span><span class="kk-spring"></span>SPRING</span>
+        <span><span class="kk-inv"></span>INVENTORY DUE</span>
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>
         <span><span class="km">F</span>ACTUALS EOD FRIDAY</span>`;
-  const trailerCopy = isMlb
-    ? `<span class="asof">AS OF ${esc(asOf)}</span>`
-    : `<span class="asof">AS OF ${esc(asOf)}</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER`;
+  const trailerCopy = `<span class="asof">AS OF ${esc(asOf)}</span>`;
 
   return `<!doctype html>
 <html>
@@ -136,7 +152,7 @@ ${sheetHead({ title: `KitchFix Ops Calendar`, orientation: "portrait" })}
 <div class="sheet">
   <div class="band"><img class="seal" src="${seal}" alt="" /><span class="bk">KITCHFIX</span><span class="ba">${bandRight}</span></div>
   <div class="pad">
-    <div class="trow">
+    <div class="trow compact">
       <span class="mo">${esc(String(year))}</span>
       <span class="yr">OPS CALENDAR</span>
     </div>
@@ -154,7 +170,7 @@ ${sheetHead({ title: `KitchFix Ops Calendar`, orientation: "portrait" })}
 </html>`;
 }
 
-function renderMonth(year, month, statusByDate, periodStarts, springDates, opts) {
+function renderMonth(year, month, statusByDate, periodStarts, springDates, inventoryDueIndex, opts) {
   const label = MON3[month - 1];
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   // Header row: M T W T F S S. Non-MLB shows Monday (M invoice/CC EOD)
@@ -179,7 +195,7 @@ function renderMonth(year, month, statusByDate, periodStarts, springDates, opts)
   // Real days.
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    cells.push(renderCell(iso, d, statusByDate, periodStarts, springDates, opts));
+    cells.push(renderCell(iso, d, statusByDate, periodStarts, springDates, inventoryDueIndex, opts));
   }
   // Blank pad cells for the tail (grid completes to a multiple of 7).
   const total = dow0Mon + daysInMonth;
@@ -189,27 +205,23 @@ function renderMonth(year, month, statusByDate, periodStarts, springDates, opts)
   return `<div class="ymo"><h5>${esc(label)}</h5><div class="yg">${header}${cells.join("")}</div></div>`;
 }
 
-function renderCell(iso, d, statusByDate, periodStarts, springDates, opts) {
-  const isSpring = springDates.has(iso);
-  const springClass = isSpring ? " spb" : "";
+function renderCell(iso, d, statusByDate, periodStarts, springDates, inventoryDueIndex, opts) {
+  // Compose the class list. Ring (.inv) and spring bar (.spb) are
+  // overlays that layer on top of the base state / period-start /
+  // baseline. The base is chosen first, then decorators appended.
+  const decorators = [];
+  if (springDates.has(iso)) decorators.push("spb");
+  if (inventoryDueIndex[iso]) decorators.push("inv");
+  const decorSuffix = decorators.length ? " " + decorators.join(" ") : "";
 
   // Period start overrides day number with the P label.
   if (periodStarts[iso] != null) {
-    return `<span class="ps${springClass}">P${periodStarts[iso]}</span>`;
+    return `<span class="ps${decorSuffix}">P${periodStarts[iso]}</span>`;
   }
 
   const stat = statusByDate[iso];
-  const state = stat ? resolveDayState(stat, { accountLevel: opts.accountLevel }) : null;
-  switch (state) {
-    case "SERVED":
-      return `<span class="sv${springClass}">${d}</span>`;
-    case "PROJECTED":
-      return `<span class="pj${springClass}">${d}</span>`;
-    case "NO_ACTUALS":
-      return `<span class="nd${springClass}">${d}</span>`;
-    case "NO_SERVICE":
-      return `<span class="${springClass.trim()}">${d}</span>`;
-    default:
-      return `<span class="${springClass.trim()}">${d}</span>`;
-  }
+  const state = stat ? opsServiceState(stat, { accountLevel: opts.accountLevel }) : null;
+  const base = state === "SERVICE_DAY" ? "svc" : "";
+  const cls = [base, ...decorators].filter(Boolean).join(" ");
+  return `<span${cls ? ` class="${cls}"` : ""}>${d}</span>`;
 }

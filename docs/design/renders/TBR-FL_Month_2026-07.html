@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>KitchFix SC month</title>
+<style>
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,STRIPPED) format('woff2');}@font-face{font-family:'Mulish';font-style:normal;font-weight:400;font-display:block;src:url(data:font/woff2;base64,STRIPPED) format('woff2');}@font-face{font-family:'Mulish';font-style:normal;font-weight:600;font-display:block;src:url(data:font/woff2;base64,STRIPPED) format('woff2');}@font-face{font-family:'Mulish';font-style:normal;font-weight:700;font-display:block;src:url(data:font/woff2;base64,STRIPPED) format('woff2');}@font-face{font-family:'Mulish';font-style:normal;font-weight:800;font-display:block;src:url(data:font/woff2;base64,STRIPPED) format('woff2');}
+@page{size:letter landscape;margin:0;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Mulish',sans-serif;color:#26262B;background:#ffffff;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;
+}
+:root{
+  --navy:#16305E; --ink:#26262B; --mut:#8A857A; --hair:#E4E0D6;
+  --soft:#F6F4EF; --copper:#C2410C; --copl:#F3B48C;
+  --homefill:#DCE5F3; --awayfill:#EFEDE6;
+  /* #422 print-tuned green pair. Do NOT sweep to --status-entered-bg
+     screen token - divergence is print-survival (paler for paper). */
+  --svc:#D3E2C8; --proj:#EBF3E4; --projline:#A8C796;
+  --mlsv:#33582B; --mlsv2:#5F7A55; --mlpj:#7E9573; --mlpj2:#9DB292;
+  --nd:#FBF1EA; --ndink:#B45327;
+}
+.sheet{background:#fff;}
+.pad{padding:0 40px 22px;}
+.band{background:var(--navy);color:#fff;display:flex;align-items:center;padding:10px 40px;gap:13px;}
+.band .seal{width:30px;height:30px;display:block;}
+.band .bk{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.09em;}
+.band .ba{font-size:9px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;opacity:.92;margin-left:auto;}
+.trow{display:flex;align-items:baseline;gap:12px;margin:22px 0 14px;}
+.mo{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:.9;}
+.yr{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:.9;color:#D8D4CA;margin-left:auto;}
+.ptag{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--navy);border:1.5px solid var(--navy);border-radius:3px;padding:3px 7px;position:relative;top:-5px;}
+.schip{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--copper);border:1.5px solid var(--copper);border-radius:3px;padding:3px 7px;position:relative;top:-5px;}
+/* ── Month / Period calendar (Drill sheets 5-8) ───────────────── */
+table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
+.cal th{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--mut);text-align:left;padding:0 0 5px 8px;border-bottom:1.5px solid var(--ink);}
+.cal td{height:108px;border-bottom:1px solid var(--hair);border-right:1px solid var(--hair);vertical-align:top;padding:6px 8px;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
+.cal td:last-child{border-right:none;}
+.cal tr:last-child td{border-bottom:1.5px solid var(--ink);}
+.cal td.hm{background:var(--homefill);}
+.cal td.aw{background:var(--awayfill);}
+.cal td.sv{background:var(--svc);}
+.cal td.pj{background:var(--proj);box-shadow:inset 0 0 0 1.5px var(--projline);}
+.cal td.ns{background:var(--soft);}
+.cal td.nd{background:var(--nd);}
+.d{font-size:12px;font-weight:700;}
+.blank{background:#FCFBF8 !important;} .blank .d{color:#D8D4CA;font-weight:600;}
+.ns .d{color:var(--mut);}
+.nd .d{color:var(--ndink);}
+.nst{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:#B7B2A5;}
+.ndt{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:var(--ndink);}
+.opp{position:absolute;bottom:17px;left:8px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--navy);}
+/* Away opponent label - spec Sheet 5 grammar, greyed and with @OPP
+   format. Do NOT reuse .opp (navy) for away cells - the greyscale
+   contrast between home navy and away grey is the load-bearing
+   home/away signal on paper. */
+.awy{position:absolute;bottom:7px;left:8px;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#A9A499;}
+.tm{position:absolute;bottom:6px;left:8px;font-size:8.5px;font-weight:700;color:#5A6B8C;}
+.tm.day{color:var(--copper);font-weight:800;}
+/* Meal stack (PDC + PDCO + AAA drill). Grammar per
+   docs/design/SC_PRINT_MEALSTACK_ADDENDUM.html:
+   - Full-cell-width flex rows: <n>service name</n> left, <v>count</v> right.
+   - service_name printed verbatim (case preserved - "Pre-game" ne
+     "Pre-Game"; census I.3 collision case).
+   - Long names wrap to two lines, never clip.
+   - Hairline rule + bold Total row (same name-left/value-right shape).
+   - Included services = every row with a non-zero count for the state's
+     key (actualCount SERVED, projectedCount PROJECTED) AND is_non_revenue
+     = false. No name-based exclusions - the pre-corrective wave name
+     regex is retired (R3, 2026-07-13).
+   - .msl = SERVED tone; .msl.pj = PROJECTED tone.
+   - When the month's densest day pushes past the 7px comfort ceiling
+     the loader adds .dense to the table root and steps to 6.5px + a
+     console.warn identifies the month (R4 6.5px floor).
+   Rebuild replaces the pre-corrective single-letter shortLabel() grammar
+   which collided on real data - Continental Plus/Coffee Service both
+   mapped to C on CIN - AZ; Arrival/Post BP/Post-Game all mapped to
+   ambiguous single-letter labels on MLB accounts. */
+/* .msl uses absolute positioning so it can safely coexist with the
+   absolute-positioned .opp / .tm / .awy game-info spans on AAA / PDCO
+   game + away cells (R4). On plain state cells the bottom:6px reservation
+   is a no-op; on .hm / .aw cells the .hm .msl / .aw .msl overrides push
+   bottom up to leave room for the game-info spans. Content that exceeds
+   the reserved area clips instead of overflowing into game info; the
+   .dense variant + 6.5px floor is the density mitigation. */
+.msl{position:absolute;top:22px;left:8px;right:8px;bottom:6px;overflow:hidden;}
+.msl .r{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:7px;font-weight:700;line-height:1.32;color:var(--mlsv);}
+.msl .r n{font-style:normal;text-align:left;overflow-wrap:anywhere;}
+.msl .r v{font-style:normal;font-variant-numeric:tabular-nums;flex:none;}
+.msl .t{display:flex;justify-content:space-between;font-size:8.5px;font-weight:800;color:var(--mlsv);border-top:1px solid #B9C9AE;margin-top:2px;padding-top:2px;}
+.msl.pj .r,.msl.pj .t{color:var(--mlpj);}
+.msl.pj .t{border-top-color:#CCD9C2;}
+/* On home game cells .opp (bottom:17px, 10.5px) + .tm (bottom:6px, 8.5px)
+   claim ~27px of bottom room; reserve 30px for safe clearance. On away
+   cells .awy (bottom:7px, 9.5px) claims ~17px; reserve 20px. */
+.hm .msl{bottom:30px;}
+.aw .msl{bottom:20px;}
+/* Dense months: step to 6.5px line size when max rendered services on
+   any single day exceed the 7px ceiling. Loader sets .dense on the
+   table root + emits a console.warn identifying the month. */
+.cal.dense .msl .r{font-size:6.5px;line-height:1.28;}
+.cal.dense .msl .t{font-size:7.5px;}
+/* ── Season mini-grid (sheets 1-3) ─────────────────────────────── */
+.smos{display:grid;grid-template-columns:repeat(3,1fr);gap:0 24px;}
+.smo h4{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;margin:10px 0 6px;border-bottom:1.5px solid var(--ink);padding-bottom:4px;display:flex;justify-content:space-between;align-items:baseline;}
+.smo h4 s{text-decoration:none;font-family:'Mulish',sans-serif;font-size:7px;font-weight:800;letter-spacing:.07em;color:var(--mut);}
+.sg{display:grid;grid-template-columns:repeat(7,1fr);gap:2.5px;}
+.sg b{font-size:6px;font-weight:800;letter-spacing:.08em;color:var(--mut);text-align:center;padding-bottom:2px;}
+.sg span{height:32px;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.12;font-variant-numeric:tabular-nums;position:relative;padding-top:4px;}
+/* Day number tag (top-left) inside a season cell. */
+.sg span u{position:absolute;top:2px;left:3.5px;font-size:5.5px;font-weight:800;text-decoration:none;color:#B0AB9F;}
+.sg .h{background:var(--navy);color:#fff;}
+.sg .h u{color:rgba(255,255,255,.7);}
+.sg .h em{font-style:normal;font-size:7.5px;font-weight:800;}
+.sg .h i{font-style:normal;font-size:6.5px;font-weight:600;opacity:.88;}
+.sg .h i.day{color:var(--copl);opacity:1;font-weight:800;}
+.sg .a{background:var(--awayfill);}
+.sg .a em{font-style:normal;font-size:7px;font-weight:700;color:#8A857A;}
+.sg .s{background:var(--svc);}
+.sg .s u{color:#7E9573;}
+.sg .o{background:var(--soft);}
+.sg .x{background:#FCFBF8;}
+.seasend{font-size:7px;font-weight:800;letter-spacing:.1em;color:var(--mut);text-align:right;margin-top:5px;}
+/* ── Ops Calendar mini-grid (sheet 4 - all accounts) ──────────── */
+.ymos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 18px;}
+.ymo h5{font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;margin:0 0 4px;border-bottom:1px solid var(--ink);padding-bottom:3px;}
+.yg{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px;}
+.yg b{font-size:5.5px;font-weight:800;color:var(--mut);text-align:center;padding-bottom:1.5px;}
+.yg b.hd{color:#fff;background:var(--ink);border-radius:2px;padding:1px 0;}
+.yg span{height:16px;border-radius:2.5px;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;color:#9B968A;background:var(--soft);border:1px solid var(--soft);font-variant-numeric:tabular-nums;position:relative;}
+.yg .x{background:#FCFBF8;border-color:#FCFBF8;}
+.yg .sv{background:var(--svc);border-color:var(--svc);color:#5F7A55;}
+.yg .pj{background:var(--proj);border:1px solid var(--projline);color:#7E9573;}
+.yg .nd{background:#fff;border:1.5px dashed var(--copper);color:var(--ndink);}
+.yg .spb::after{content:"";position:absolute;top:0;left:0;right:0;height:2.5px;background:var(--copper);border-radius:2px 2px 0 0;}
+.yg .ps{background:var(--navy);border:1px solid var(--navy);color:#fff;font-weight:800;font-size:7px;border-radius:2.5px;}
+/* .yg .inv - inventory-due ring, DEFERRED per Kevin's Option A ruling.
+   period_data lives in Sheets HUB (not PG); wiring the copper ring
+   waits for the period_data -> PG migration. No legend entry for it
+   either (legend matches reality). */
+/* ── Footer + legend ──────────────────────────────────────────── */
+.ft{display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;font-size:8px;color:var(--mut);font-weight:700;letter-spacing:.05em;gap:10px;}
+.ft .k{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.asof{color:var(--ink);font-weight:800;}
+.kk{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+.km{display:inline-block;background:var(--ink);color:#fff;border-radius:2px;font-size:6px;font-weight:800;padding:1px 3px;margin-right:4px;}
+.kct{color:var(--copper);font-weight:800;}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="band"><img class="seal" src="data:image/png;base64,STRIPPED" alt="" /><span class="bk">KITCHFIX</span><span class="ba">Tampa Bay Rays</span></div>
+  <div class="pad">
+    <div class="trow">
+      <span class="mo">JULY</span>
+      <span class="ptag">P7 – P8</span>
+      
+      <span class="yr">2026</span>
+    </div>
+    <table class="cal dense">
+      <tr><th>MON</th><th>TUE</th><th>WED</th><th>THU</th><th>FRI</th><th>SAT</th><th>SUN</th></tr>
+      <tr><td class="blank"><span class="d">29</span></td><td class="blank"><span class="d">30</span></td><td class="sv"><span class="d">1</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">2</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>92</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">3</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">4</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="ns"><span class="d">5</span><span class="nst">NO SERVICE</span></td></tr><tr><td class="sv"><span class="d">6</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">7</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>92</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">8</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">9</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">10</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>92</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">11</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="ns"><span class="d">12</span><span class="nst">NO SERVICE</span></td></tr><tr><td class="sv"><span class="d">13</span><span class="msl"><span class="r"><n>Lunch - MiLB</n><v>212</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">14</span><span class="msl"><span class="r"><n>Lunch - MiLB</n><v>240</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">15</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">16</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>92</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">17</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">18</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="ns"><span class="d">19</span><span class="nst">NO SERVICE</span></td></tr><tr><td class="sv"><span class="d">20</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">21</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="r"><n>Extra Protein - Chicken/Pork</n><v>1</v></span><span class="r"><n>Extended Day labor</n><v>1</v></span><span class="t"><n>Total</n><v>242</v></span></span></td><td class="sv"><span class="d">22</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">23</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>92</v></span><span class="r"><n>Road Sandwiches - MiLB</n><v>28</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="sv"><span class="d">24</span><span class="msl"><span class="r"><n>Breakfast - MiLB</n><v>120</v></span><span class="r"><n>Lunch - MiLB</n><v>120</v></span><span class="t"><n>Total</n><v>240</v></span></span></td><td class="pj"><span class="d">25</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>145</v></span><span class="r"><n>Lunch - MiLB ST</n><v>145</v></span><span class="t"><n>Total</n><v>290</v></span></span></td><td class="ns"><span class="d">26</span><span class="nst">NO SERVICE</span></td></tr><tr><td class="pj"><span class="d">27</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>95</v></span><span class="r"><n>Lunch - MiLB ST</n><v>95</v></span><span class="t"><n>Total</n><v>190</v></span></span></td><td class="pj"><span class="d">28</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>95</v></span><span class="r"><n>Lunch - MiLB ST</n><v>95</v></span><span class="t"><n>Total</n><v>190</v></span></span></td><td class="pj"><span class="d">29</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>95</v></span><span class="r"><n>Lunch - MiLB ST</n><v>95</v></span><span class="t"><n>Total</n><v>190</v></span></span></td><td class="pj"><span class="d">30</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>145</v></span><span class="r"><n>Lunch - MiLB ST</n><v>145</v></span><span class="t"><n>Total</n><v>290</v></span></span></td><td class="pj"><span class="d">31</span><span class="msl pj"><span class="r"><n>Breakfast - MiLB ST</n><v>145</v></span><span class="r"><n>Lunch - MiLB ST</n><v>145</v></span><span class="t"><n>Total</n><v>290</v></span></span></td><td class="blank"><span class="d">1</span></td><td class="blank"><span class="d">2</span></td></tr><tr><td class="blank"><span class="d">3</span></td><td class="blank"><span class="d">4</span></td><td class="blank"><span class="d">5</span></td><td class="blank"><span class="d">6</span></td><td class="blank"><span class="d">7</span></td><td class="blank"><span class="d">8</span></td><td class="blank"><span class="d">9</span></td></tr>
+    </table>
+    <div class="ft">
+      <span class="k"><span><span class="kk" style="background:#D3E2C8"></span>SERVED</span><span><span class="kk" style="background:#EBF3E4;border:1px solid #A8C796"></span>PROJECTED</span><span><span class="kk" style="background:#FBF1EA"></span>NO ACTUALS</span><span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span><span><span class="kk" style="background:#DCE5F3"></span>HOME · FIRST PITCH ET</span><span class="kct">DAY GAME</span></span>
+      <span><span class="asof">AS OF 13 JUL 2026</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

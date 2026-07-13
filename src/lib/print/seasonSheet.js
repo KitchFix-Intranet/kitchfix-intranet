@@ -194,35 +194,48 @@ export function renderSeasonSheetHtml(ctx) {
     </div>`);
   }
 
-  const svLeg  = `<span><span class="kk" style="background:#D3E2C8"></span>SERVICE</span>`;
-  const hmLeg  = `<span><span class="kk" style="background:#16305E"></span>HOME · OPPONENT + FIRST PITCH ${esc(tz)}</span>`;
+  // S1 + M2 (2026-07-13, polish wave): legend edits.
+  // - Delete DAY GAME + DH · DOUBLEHEADER from legend (cell styling
+  //   for both stays: copper day-game time still renders in cells,
+  //   DH affix still renders on doubleheader dates).
+  // - Rename HOME · OPPONENT + FIRST PITCH {TZ} -> Home Game.
+  // - Overlay + non-overlay share the compact legend.
+  const svLeg  = `<span><span class="kk" style="background:#D3E2C8;border:1px solid #B9C9AE"></span>SERVICE DAY</span>`;
+  const hmLeg  = `<span><span class="kk" style="background:#16305E"></span>Home Game</span>`;
   const awLeg  = `<span><span class="kk" style="background:#EFEDE6"></span>@AWAY</span>`;
-  const dayLeg = `<span class="kct">DAY GAME</span>`;
-  const dhLeg  = `<span>DH · DOUBLEHEADER</span>`;
   const nsLeg  = `<span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>`;
   const legend = isOverlay
-    ? [svLeg, nsLeg, hmLeg, dayLeg, dhLeg].join("")
-    : [hmLeg, awLeg, dayLeg, dhLeg].join("");
+    ? [svLeg, nsLeg, hmLeg].join("")
+    : [hmLeg, awLeg].join("");
+
+  // M1 + S3 (2026-07-13, polish wave): season renders portrait with a
+  // 3-column month grid so all variants fit one letter portrait page
+  // with square tiles. Overlay-blended originally kept landscape but
+  // square tiles overflowed to 2 pages, so we flip to portrait 3-col
+  // too (Kevin's S3 fallback: "if squares break the page, flip this
+  // variant to portrait and flag it").
+  const orientation = "portrait";
+  const smosClass = "smos p2";
 
   return `<!doctype html>
 <html>
 <head>
-${sheetHead({ title: `KitchFix SC season`, orientation: "landscape" })}
+${sheetHead({ title: `KitchFix SC season`, orientation })}
 </head>
 <body>
 <div class="sheet">
   <div class="band"><img class="seal" src="${seal}" alt="" /><span class="bk">KITCHFIX</span><span class="ba">${bandRight}</span></div>
   <div class="pad">
-    <div class="trow">
+    <div class="trow${isOverlay ? "" : " compact"}">
       <span class="mo">${esc(String(year))} SCHEDULE</span>
       <span class="yr">${esc(rightGhost)}</span>
     </div>
-    <div class="smos">
+    <div class="${smosClass}">
       ${monthBlocks.join("")}
     </div>
     <div class="ft" style="margin-top:14px;">
       <span class="k">${legend}</span>
-      <span><span class="asof">AS OF ${esc(asOf)}</span>${isOverlay ? " — SERVED = ACTUALS ENTERED · PROJECTED AFTER" : ""}</span>
+      <span><span class="asof">AS OF ${esc(asOf)}</span></span>
     </div>
   </div>
 </div>
@@ -259,14 +272,15 @@ function buildSeasonMonthCells(year, month, dayRows, accountKey, statusByDate, a
       cells.push(`<span class="a"><u>${dom}</u><em>${esc(row.opponent || "")}</em></span>`);
       continue;
     }
-    // Blended (overlay) accounts: overlay a service layer under
-    // non-game days keyed on the classifier state.
+    // Blended (overlay) accounts: SERVICE DAY overlay under non-game
+    // days (polish-wave S2: opsServiceState collapse - one green means
+    // entered OR past-and-expected OR future-with-projection). Home
+    // game style already handled above and wins the cell on game days.
     const stat = statusByDate?.[iso];
     if (stat) {
       const svc = seasonServiceState(stat, { accountLevel });
-      if (svc === "SERVICE")     { cells.push(`<span class="s"><u>${dom}</u></span>`); continue; }
+      if (svc === "SERVICE_DAY") { cells.push(`<span class="s"><u>${dom}</u></span>`); continue; }
       if (svc === "NO_SERVICE")  { cells.push(`<span class="o"><u>${dom}</u></span>`); continue; }
-      if (svc === "NO_ACTUALS")  { cells.push(`<span class="s"><u>${dom}</u></span>`); continue; }
     }
     cells.push(`<span class="o"><u>${dom}</u></span>`);
   }
