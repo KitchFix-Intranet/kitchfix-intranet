@@ -7,9 +7,10 @@ import {
   renderPeriodSheetHtml,
 } from "@/lib/print/monthSheet";
 import { loadSeasonPrintData, renderSeasonSheet } from "@/lib/print/seasonSheet";
-import { loadYearPrintData, renderYearSheet } from "@/lib/print/yearSheet";
+import { loadOpsCalendarPrintData, renderOpsCalendarSheet } from "@/lib/print/opsCalendarSheet";
 
-// SC print - Wave 1 (2026-07-13) + Wave 2 (2026-07-13 Year sheet).
+// SC print - Wave 1 (2026-07-13) + Wave 2 (Year sheet) + Wave 3
+// (#422, v2 restyle: state model + Ops Calendar replacing year).
 //
 // GET /api/service-calendar/print
 //
@@ -98,11 +99,13 @@ export async function GET(request) {
       html = renderSeasonSheet(ctx);
       filenameStem = buildFilenameStem(accountKey, `Season_FY${year}`);
     } else {
-      // scope === "year"
-      const ctx = await loadYearPrintData(accountKey, year);
+      // scope === "year" - kept as the URL param for backwards
+      // compatibility, but the sheet is now the Ops Calendar (v2).
+      // yearSheet.js was retired in #422.
+      const ctx = await loadOpsCalendarPrintData(accountKey, year);
       phase = "render";
-      html = renderYearSheet(ctx);
-      filenameStem = buildFilenameStem(accountKey, `Year_FY${year}`);
+      html = renderOpsCalendarSheet(ctx);
+      filenameStem = buildFilenameStem(accountKey, `OpsCalendar_FY${year}`);
       landscape = false;
     }
 

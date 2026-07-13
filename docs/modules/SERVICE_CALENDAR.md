@@ -308,9 +308,74 @@ The rulings ledger captures decisions that outlive their originating conversatio
 
 ---
 
-## Printable schedules (PDF export, Wave 1)
+## Printable schedules (PDF export, Wave 3 v2)
 
-Wave 1 of the SC print export ships three sheets - Month, Period, Season - as PDFs alongside the existing xlsx workbook export. Year sheet comes in Wave 2 (separate PR).
+The SC print export ships four sheets - Month, Period, Season, Ops Calendar - as PDFs alongside the existing xlsx workbook export. **Pixel authority**: `docs/design/SC_PRINT_SPEC_v2.html` (Kevin-approved 2026-07-13, `#422`). `docs/design/SC_PRINT_SPEC_v1.html` kept for history only.
+
+**Wave shipping**:
+- Wave 1 (`#419`) - Month + Period + Season (v1 grammar).
+- Wave 2 (`#420`) - Year sheet (v1 sparkline).
+- Wave 3 (`#422`) - **v2 restyle** of all sheets; Year retired and replaced by Ops Calendar.
+
+### State model (all service-bearing sheets)
+
+Single vocabulary across every service-bearing sheet:
+
+- **SERVED** - actuals row exists for the date (never keyed on date-is-past). Fill `--svc` (`#D3E2C8`).
+- **PROJECTED** - no actuals, projection exists / date upcoming. Fill `--proj` (`#EBF3E4`) + 1.5px inset `--projline` (`#A8C796`) border.
+- **NO ACTUALS** - service was expected, date is past account-local, no actuals row. Fill `--nd` (`#FBF1EA`), day number + micro `NO ACTUALS` label in `--ndink` (`#B45327`). **THE COMPLIANCE SIGNAL.**
+- **NO SERVICE** - soft `--soft` fill + micro `NO SERVICE` label. One name everywhere; `OFF` is retired.
+
+The classifier's amber-vs-red split (`needs-entry` vs `overdue`) collapses to a single **NO ACTUALS** state in print - the compliance signal doesn't need the two-tier ramp on paper. See `resolveDayState()` in `src/lib/print/assets.js`.
+
+**Meal figures print exactly as stored - no rounding, served or projected.** Every service legend carries the AS-OF line: `AS OF {date} - SERVED = ACTUALS ENTERED · PROJECTED AFTER`.
+
+### Print-tuned green pair (intentional divergence from screen tokens)
+
+`--svc` (`#D3E2C8`) + `--proj` (`#EBF3E4`) + `--projline` (`#A8C796`) diverge intentionally from the app's on-screen `--status-entered-bg` (`--green-300` = `#7DC78B`). The screen green survives backlit rendering but blows out under grayscale laser and kills the day-number contrast on paper. **Do NOT sweep the print pair to the screen tokens** - the divergence is print-survival. Comment anchors the divergence in `assets.js` sheetCss.
+
+### Route
+
+`GET /api/service-calendar/print` - session-gated, `runtime: 'nodejs'`, `maxDuration: 60`. Params: `account`, `scope` (`month | period | season | year`), `year`, plus `month` (YYYY-MM) for month scope or `period` (N / PN) for period scope. `scope=year` renders the Ops Calendar in v2 (URL param retained for backwards compat; yearSheet.js retired).
+
+### Sheet-by-sheet
+
+- **Month + Period - MLB & MiLB fee** (spec Sheet 5, approved): home fill (`--homefill` `#DCE5F3`) + opponent + time; away fill (`--awayfill` `#EFEDE6`) + `@OPP` + no time. NO state grid. NO meal stack. Period-boundary line + in-grid `Pn` REMOVED. Title P-tag stays.
+- **Month + Period - AAA per-meal + PDC overlay** (spec Sheet 6): full state-fill grid + game overlay layered on top. Games render as home fill + opponent + time. NO meal stack. Spring copper title chip when the scope intersects a spring block. Overlay accounts (STL - FL, TBJ - FL) get HOME-only games per the sc-17 hard rule.
+- **Month + Period - PDC per-meal** (spec Sheet 7): full state-fill grid + right-aligned meal stack (per-service short label + count, hairline rule, bold total). Dark green tone when SERVED; light green tone when PROJECTED. No game overlay. Spring copper title chip.
+- **Season - MLB / AAA full-schedule** (spec Sheets 1 + 2, approved): day numbers (5.5px, top-left) in each cell; HOME (navy fill + opponent + time + optional " DH") + AWAY (light fill + opponent code only, no time). Counts `N H · N A`.
+- **Season - PDC overlay (blended SERVICE CALENDAR)** (spec Sheet 3): ghost renamed from "HOME SCHEDULE" to "SERVICE CALENDAR". Service days layer under the affiliate HOME games (season scale collapses SERVED + PROJECTED to a single green per the spec). Counts stay `N HOME` (affiliate games only; the account is home-only by design).
+- **Ops Calendar (all accounts)** (spec Sheet 4): letter portrait; 12 mini-months in a 3-column grid; day numbers in each ~16px cell.
+  - States: SERVED (`.sv`) / PROJECTED (`.pj`) / NO ACTUALS (`.nd` dashed copper border) / baseline (default soft fill).
+  - Period start (`.ps`) - navy square carrying the P number (replaces the day number).
+  - Spring (`.spb`) - 2.5px copper top bar per cell (kept ONLY at year scale in v2; Month + Period use the title chip instead).
+  - M and F header chips (`.hd`, ink background) - Mon = invoice/CC EOD; Fri = actuals EOD.
+  - **Games do NOT appear.**
+  - **Inventory-due copper ring (spec block 4) is DEFERRED** per Kevin's Option A ruling 2026-07-13. `period_data` (which carries due dates) lives in Sheets HUB, not PG. Follow-up PR migrates `period_data` to PG and wires the ring + a legend entry then. Until then, no ring AND no legend entry - "legend matches reality." Tracked in [`SC_STATUS.md`](../SC_STATUS.md).
+
+### Data sources (all in PG)
+
+- **Per-day state**: `classifyDayStatus()` in `src/lib/dataStore/serviceCalendar.js` via `sc_daily_revenue` (has_actuals, has_projection, actual_count, projected_count, game_type). Same source the operator sees on screen 1:1.
+- **Period dates**: `sc_day_metadata.period` per-day; `loadYearSummary` builds `periodRanges: [{period, start, end}]` used by both the on-screen chrome and the Ops Calendar's period-start squares.
+- **Games**: `sc_homestand_schedule` (HOME + AWAY for schedule accounts; GAME rows only for overlay accounts).
+- **Spring blocks**: `phaseCalendar.js` `PER_ACCOUNT_2026` (5 PDC accounts).
+- **Timezone (game times)**: `ACCOUNT_HOME_TZ` in `src/app/service-calendar/gameTimeFormat.js`. No new map needed.
+
+### Fonts + seal
+
+Fonts self-hosted (Bebas Neue + Mulish 400/600/700/800) via `@fontsource/*` packages, inlined as data URIs into `<head>` at render time - zero runtime Google Fonts fetch. KitchFix seal from `public/PFS_PrimaryLogo_White_Circle.png`, inlined as data URI in the brand band.
+
+### Export UI (`ExportControl.js`)
+
+Flat list of format-explicit menu items:
+- Drill-in (period / month): Excel this scope / PDF this scope / Excel full year fallback.
+- Overview (year): Excel full year / PDF - season schedule (schedule accounts only, blended service-calendar variant for overlay accounts) / **PDF - ops calendar** (ALL accounts; label renamed from "year at a glance" in Wave 3).
+
+### Local proof (per Kevin's ruling)
+
+`scripts/sc-print/gen-all-pdfs.mjs` runs loader → renderer → puppeteer end-to-end on the developer's machine. Kevin's SSO click is confirmation, not discovery. Attach all PDFs to the PR body; artifacts folder is gitignored.
+
+`scripts/sc-print/loader-smoke.mjs` exercises every print loader across representative account shapes as the regression guard.
 
 **Route**: `GET /api/service-calendar/print`
 - Query params: `account` (canonical spaced form), `scope` (`month` | `period` | `season`), `year` (YYYY), `month` (YYYY-MM, when scope=month), `period` (N or PN, when scope=period).

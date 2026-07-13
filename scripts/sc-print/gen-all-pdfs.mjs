@@ -25,10 +25,10 @@ const YEAR = 2026;
 const OUT_DIR = path.resolve("./scripts/sc-print/artifacts");
 await fs.mkdir(OUT_DIR, { recursive: true });
 
-const [monthSheet, seasonSheet, yearSheet] = await Promise.all([
+const [monthSheet, seasonSheet, opsCal] = await Promise.all([
   import("../../src/lib/print/monthSheet.js"),
   import("../../src/lib/print/seasonSheet.js"),
-  import("../../src/lib/print/yearSheet.js"),
+  import("../../src/lib/print/opsCalendarSheet.js"),
 ]);
 
 const CASES = [
@@ -57,20 +57,33 @@ const CASES = [
       const ctx = await seasonSheet.loadSeasonPrintData("TBJ - FL", YEAR);
       return seasonSheet.renderSeasonSheet(ctx);
     }},
-  { slug: "STL-FL_Year",           landscape: false, label: "year · STL - FL",
+  // #422 Wave 3: extra month case for CIN - AZ Feb (spring row + PDC
+  // meal stack) per Kevin's brief.
+  { slug: "CIN-AZ_Month_2026-02",  landscape: true,  label: "month · CIN - AZ · 2026-02 (PDC + spring)",
     build: async () => {
-      const ctx = await yearSheet.loadYearPrintData("STL - FL", YEAR);
-      return yearSheet.renderYearSheet(ctx);
+      const ctx = await monthSheet.loadMonthPrintData("CIN - AZ", YEAR, "2026-02");
+      return monthSheet.renderMonthSheet(ctx);
     }},
-  { slug: "CIN-OH_Year",           landscape: false, label: "year · CIN - OH",
+  // #422 Wave 3: season CIN - OH (MLB fee, home + away in v2 grammar).
+  { slug: "CIN-OH_Season",         landscape: true,  label: "season · CIN - OH (MLB with day numbers + AWAY)",
     build: async () => {
-      const ctx = await yearSheet.loadYearPrintData("CIN - OH", YEAR);
-      return yearSheet.renderYearSheet(ctx);
+      const ctx = await seasonSheet.loadSeasonPrintData("CIN - OH", YEAR);
+      return seasonSheet.renderSeasonSheet(ctx);
     }},
-  { slug: "CIN-AZ_Year",           landscape: false, label: "year · CIN - AZ (no schedule)",
+  { slug: "STL-FL_OpsCalendar",    landscape: false, label: "ops-calendar · STL - FL",
     build: async () => {
-      const ctx = await yearSheet.loadYearPrintData("CIN - AZ", YEAR);
-      return yearSheet.renderYearSheet(ctx);
+      const ctx = await opsCal.loadOpsCalendarPrintData("STL - FL", YEAR);
+      return opsCal.renderOpsCalendarSheet(ctx);
+    }},
+  { slug: "CIN-OH_OpsCalendar",    landscape: false, label: "ops-calendar · CIN - OH",
+    build: async () => {
+      const ctx = await opsCal.loadOpsCalendarPrintData("CIN - OH", YEAR);
+      return opsCal.renderOpsCalendarSheet(ctx);
+    }},
+  { slug: "CIN-AZ_OpsCalendar",    landscape: false, label: "ops-calendar · CIN - AZ (no schedule)",
+    build: async () => {
+      const ctx = await opsCal.loadOpsCalendarPrintData("CIN - AZ", YEAR);
+      return opsCal.renderOpsCalendarSheet(ctx);
     }},
 ];
 

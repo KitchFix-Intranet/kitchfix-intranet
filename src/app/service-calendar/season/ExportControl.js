@@ -280,13 +280,16 @@ function pdfSeasonItem({ year, accountKey }) {
   };
 }
 
-function pdfYearItem({ year, accountKey }) {
+function pdfOpsCalendarItem({ year, accountKey }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
+  // Wave 3 (#422) rename: "year at a glance" -> "ops calendar" to
+  // reflect the v2 spec's compliance-signal focus (states + period
+  // starts + spring bars; games do NOT appear here).
   return {
-    key: "pdf-year",
-    label: `PDF - year at a glance`,
-    filename: `KitchFix_SC_${safeAccount}_Year_FY${year}_${dateStr}.pdf`,
+    key: "pdf-ops-calendar",
+    label: `PDF - ops calendar`,
+    filename: `KitchFix_SC_${safeAccount}_OpsCalendar_FY${year}_${dateStr}.pdf`,
     href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=year&year=${year}`,
   };
 }
@@ -312,10 +315,11 @@ function buildMenuItems({
     if (hasSchedule) {
       items.push(pdfSeasonItem({ year, accountKey }));
     }
-    // #420 (Wave 2): "PDF - year at a glance" for ALL accounts (not
-    // schedule-gated). Per-meal PDCs get their service rhythm on a
-    // page too.
-    items.push(pdfYearItem({ year, accountKey }));
+    // #422 (Wave 3): "PDF - ops calendar" for ALL accounts (not
+    // schedule-gated). Replaces "year at a glance" - the v2 sheet is
+    // a compliance surface (state fills, period starts, spring, M/F
+    // header chips), not a game-density heatmap.
+    items.push(pdfOpsCalendarItem({ year, accountKey }));
   }
   return items.filter(Boolean);
 }

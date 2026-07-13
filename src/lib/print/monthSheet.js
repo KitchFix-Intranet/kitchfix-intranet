@@ -1,24 +1,34 @@
 // Month + Period sheet renderer for the SC print export.
 //
-// One template. The Period export just swaps the `.trow` title:
-// "MARCH 2026" -> "PERIOD 8" + fiscal-range "FEB 16 – MAR 15",
-// with the P-tag replaced by the period number itself. Everything
-// below the title row (grid, spring row, P-boundary, NS cells,
-// footer) is identical between the two scopes.
+// #422 (Wave 3, 2026-07-13): rewritten to SC_PRINT_SPEC_v2. One
+// template, four variants keyed on account shape:
 //
-// Data sources (kept lean - print does not need actuals):
-//   - loadMonthData() for the target month(s): gives day.status
-//     (so NO SERVICE cells match what the operator sees on-screen)
-//     plus period metadata for the P-boundary logic + homestand
-//     rows for schedule accounts.
-//   - loadScheduleOverlay() supplements loadMonthData for overlay
-//     accounts (STL-FL, TBJ-FL) whose HOME games live in
-//     sc_homestand_schedule but aren't fetched by loadMonthData
-//     (that loader's homestand fetch is gated on has_homestand_schedule).
-//   - derivePhaseTimeline() + collectSpringDates() from the shared
-//     phaseDerivation module: the same phase source the calendar
-//     screen uses, so print + screen agree on where Spring Training
-//     runs for each PDC account.
+//   MLB   - MLB fee accounts + AAA fee accounts: home fill (#DCE5F3)
+//           + away fill (#EFEDE6) + opponent + time. NO state fills.
+//           NO meal stack. Boundary lines and in-grid P-marks REMOVED
+//           (approved as spec Sheet 5, untouched).
+//   AAA   - MiLB / AAA per-meal accounts: full state-fill grid
+//           (SERVED / PROJECTED / NO ACTUALS / NO SERVICE) + game
+//           overlay (home fill + opponent + time). NO meal stack.
+//           Spec Sheet 6 grammar.
+//   PDCO  - PDC overlay accounts (STL - FL, TBJ - FL): state-fill
+//           grid + game overlay (HOME only per sc-17 hard rule).
+//           Same grammar as AAA. Spec Sheet 6.
+//   PDC   - Per-meal PDC without games (CIN - AZ, TXR - AZ, TBR - FL):
+//           state-fill grid + right-aligned meal stack (per-service
+//           actual/projected count with hairline rule + bold total).
+//           No game overlay. Spec Sheet 7.
+//
+// Period scope reuses the chosen variant with a fiscal-range title
+// swap; the grid renders the calendar month containing the period
+// start. Spec Sheet 8.
+//
+// Grammar removals from v1: fiscal period boundary line (2px navy top
+// rule) + in-grid Pn corner mark. Both retired; period structure now
+// lives on the Period sheet's title only, per Kevin's ruling
+// 2026-07-13. Spring styling: title-row copper chip when the scope
+// intersects a spring block; NO per-cell wash or bottom band at month
+// scale (that treatment is Ops Calendar only in v2).
 
 import { getServiceClient } from "@/lib/supabase";
 import {
@@ -28,10 +38,13 @@ import {
 import {
   derivePhaseTimeline,
   collectSpringDates,
+  rangeIntersectsSpring,
 } from "@/app/service-calendar/season/phaseDerivation";
 import { formatMlbHomeGameTime, formatMilbHomeGameTime, getAccountHomeTz }
   from "@/app/service-calendar/gameTimeFormat";
-import { esc, sheetHead, loadSealDataUri, footerDate } from "./assets";
+import {
+  esc, sheetHead, loadSealDataUri, footerDate, resolveDayState,
+} from "./assets";
 
 // ── Date utilities ───────────────────────────────────────────────────
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,72 +59,30 @@ function isoDay(d) {
   const dd = String(d.getUTCDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
 function parseIso(s) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12));
 }
+function shiftDays(d, days) { return new Date(d.getTime() + days * DAY_MS); }
+function shortMonthDay(d) { return `${MON_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`; }
+function monFirstIndex(d) { const js = d.getUTCDay(); return js === 0 ? 6 : js - 1; }
+function weekAnchor(d) { return shiftDays(d, -monFirstIndex(d)); }
 
-function shiftDays(d, days) {
-  return new Date(d.getTime() + days * DAY_MS);
-}
-
-function shortMonthDay(d) {
-  return `${MON_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
-}
-
-// Mon-first weekday index. spec uses MON THU WED THU FRI SAT SUN.
-// JS getUTCDay(): Sun=0, Mon=1, ... Sat=6. Mon-first: Mon=0, ... Sun=6.
-function monFirstIndex(d) {
-  const js = d.getUTCDay();
-  return js === 0 ? 6 : js - 1;
-}
-
-// Monday on or before d.
-function weekAnchor(d) {
-  const idx = monFirstIndex(d);
-  return shiftDays(d, -idx);
-}
-
-// ── Period boundary + range utility ──────────────────────────────────
-// Period keys are stored in sc_day_metadata.period as bare integers
-// (post-2026-07 hotfix). Comparing two adjacent dates' period values
-// tells us where the fiscal boundary sits inside a calendar month.
+// ── Period helpers ───────────────────────────────────────────────────
 function periodOf(dayRow) {
   if (!dayRow || dayRow.period == null) return null;
   const raw = String(dayRow.period).replace(/^P/i, "").trim();
   return raw ? Number(raw) : null;
 }
 
-// Given a period key (e.g. "P8" or 8) and the full year's day-period
-// map, return { start, end } as ISO YYYY-MM-DD.
-function periodRange(periodMap, periodKey) {
-  const target = Number(String(periodKey).replace(/^P/i, ""));
-  const dates = Object.keys(periodMap)
-    .filter((d) => periodMap[d] === target)
-    .sort();
-  if (!dates.length) return null;
-  return { start: dates[0], end: dates[dates.length - 1] };
-}
-
 // ── Per-account time formatter selector ──────────────────────────────
-// MLB fee accounts have TIMESTAMPTZ game_time -> formatMlbHomeGameTime
-// (Intl DateTimeFormat with the account's home tz).
-// MiLB per-meal accounts store manually-entered TEXT game_time ->
-// formatMilbHomeGameTime (light cleanup, keeps whatever the operator
-// typed). Overlay accounts (STL-FL, TBJ-FL) went through sc-15 so
-// they use TIMESTAMPTZ + Intl formatter too.
-function formatGameTime(gameTime, accountKey, billingModel) {
+function formatGameTime(gameTime, accountKey) {
   if (!gameTime) return "";
   const tz = getAccountHomeTz(accountKey);
   if (tz) return formatMlbHomeGameTime(gameTime, accountKey) || "";
   return formatMilbHomeGameTime(gameTime) || "";
 }
 
-// "Day game" = first pitch before 2 PM account-local. Uses the tz
-// map because ET/CT accounts produce different UTC->local hour maps
-// for the same wall-clock label. Returns null when the game_time is
-// missing or unparseable so callers can skip the copper class.
 function isDayGame(gameTime, accountKey) {
   if (!gameTime) return null;
   const tz = getAccountHomeTz(accountKey);
@@ -121,13 +92,10 @@ function isDayGame(gameTime, accountKey) {
     const parts = new Intl.DateTimeFormat("en-US", {
       hour: "numeric", hour12: false, timeZone: tz.tz,
     }).formatToParts(d);
-    const hourStr = parts.find((p) => p.type === "hour")?.value;
-    const hour = Number(hourStr);
+    const hour = Number(parts.find((p) => p.type === "hour")?.value);
     if (Number.isNaN(hour)) return null;
     return hour < 14;
   }
-  // MiLB text field ("7:05 PM" / "12:05 PM" style). Strip AM/PM and
-  // parse the hour.
   const raw = String(gameTime);
   const pmMatch = /pm/i.test(raw);
   const amMatch = /am/i.test(raw);
@@ -139,13 +107,20 @@ function isDayGame(gameTime, accountKey) {
   return hour < 14;
 }
 
+// ── Variant selector ────────────────────────────────────────────────
+// Uses the account's level + billing_model + schedule flags to pick
+// the render variant that matches SC_PRINT_SPEC_v2 sheets 5 / 6 / 7.
+function pickVariant(account) {
+  if (account.level === "MLB") return "MLB";
+  if (account.has_schedule_overlay) return "PDCO";
+  if (account.has_homestand_schedule) return "AAA";
+  return "PDC";
+}
+
 // ── Data loader ──────────────────────────────────────────────────────
-// Given accountKey + a date range (inclusive), return everything the
-// grid renderer needs.
 export async function loadMonthPrintData(accountKey, year, monthKey) {
   const supa = getServiceClient();
 
-  // Account meta - name, level, billing_model, both flags.
   const accountRes = await supa
     .from("accounts")
     .select("team_key, name, level, billing_model, has_homestand_schedule, has_schedule_overlay")
@@ -155,58 +130,24 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
   const account = accountRes.data;
   if (!account) throw new Error(`Account not found: ${accountKey}`);
 
-  // Reuse loadMonthData for status derivation + homestand context (for
-  // schedule accounts). Kept the light `noWrite: true` option out - we
-  // just consume its output.
-  //
-  // #420 bugfix (2026-07-13, caught by scripts/sc-print/loader-smoke.mjs):
-  // loadMonthData expects `month` as a number (or 2-char zero-padded
-  // string) - it internally does `String(month).padStart(2, "0")` +
-  // `${year}-${m}-01`. Passing the full monthKey ("2026-06") produced
-  // "2026-2026-06-01" and threw "invalid input syntax for type date"
-  // from the sc_daily_revenue fetch. This bug existed in Wave 1's
-  // monthSheet.js from day one but slipped through the browser
-  // verification. The Wave 2 regression guard invokes all four print
-  // loaders against real Supabase creds so mistyped filters like this
-  // one can no longer ship silently.
-  const monthNumber = Number(monthKey.slice(5));   // "2026-06" -> 6
+  // #420 bugfix (2026-07-13): loadMonthData expects the month as a
+  // number, not the full "YYYY-MM" string. See PR #421 for the guard.
+  const monthNumber = Number(monthKey.slice(5));
   const monthData = await loadMonthData(accountKey, year, monthNumber);
 
-  // Overlay accounts (STL-FL, TBJ-FL) need a separate call - loadMonthData
-  // only fetches homestand when has_homestand_schedule is TRUE.
+  // Overlay accounts (STL - FL, TBJ - FL) need a separate call -
+  // loadMonthData only fetches homestand when has_homestand_schedule is TRUE.
   let overlayMap = {};
   if (account.has_schedule_overlay) {
-    const [year4, month2] = monthKey.split("-");
-    const first = `${year4}-${month2}-01`;
-    const lastDay = new Date(Date.UTC(Number(year4), Number(month2), 0)).getUTCDate();
-    const last = `${year4}-${month2}-${String(lastDay).padStart(2, "0")}`;
+    const first = `${monthKey}-01`;
+    const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    const last = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
     overlayMap = await loadScheduleOverlay(accountKey, first, last);
   }
 
-  // Period lookup for THIS month + the next month (in case the month
-  // ends mid-period, we need the next month's period boundary sitting
-  // at the end for the grid to catch it). Cheap query.
-  const [y4, m2] = monthKey.split("-").map(Number);
-  const grid = buildMonthGrid(y4, m2);
-  const rangeStart = isoDay(grid.firstCell);
-  const rangeEnd   = isoDay(grid.lastCell);
-  const periodRowsRes = await supa
-    .from("sc_day_metadata")
-    .select("service_date, period")
-    .eq("account_key", accountKey)
-    .gte("service_date", rangeStart)
-    .lte("service_date", rangeEnd)
-    .order("service_date", { ascending: true });
-  if (periodRowsRes.error) throw new Error(`loadMonthPrint.periods: ${periodRowsRes.error.message}`);
-  const periodMap = {};
-  for (const r of periodRowsRes.data || []) {
-    const p = periodOf(r);
-    if (p != null) periodMap[r.service_date] = p;
-  }
+  const grid = buildMonthGrid(year, monthNumber);
 
-  // Homestand: loadMonthData already carried it in via day.homestandId /
-  // day.dayType / day.opponent / day.gameTime / day.dayNight for flagged
-  // accounts. Re-index by date for a uniform lookup below.
+  // Homestand + overlay -> single date map (day_type, opponent, gameTime, dayNight, is_doubleheader).
   const homestandByDate = {};
   for (const d of monthData?.days || []) {
     if (d.dayType) {
@@ -231,17 +172,46 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
     }
   }
 
-  // Statuses (for the NS cell) - loadMonthData ran the classifier
-  // already. Index by date.
+  // Per-date lookups: state (from classifier), per-service actuals /
+  // projections (for the PDC meal stack), period metadata.
   const statusByDate = {};
+  const servicesByDate = {};
   for (const d of monthData?.days || []) {
-    if (d.status) statusByDate[d.date] = d.status;
+    if (d.status) statusByDate[d.date] = {
+      status:        d.status,
+      hasActuals:    !!d.hasActuals,
+      hasProjection: !!d.hasProjection,
+      isPast:        !!d.isPast,
+    };
+    if (Array.isArray(d.services) && d.services.length > 0) {
+      servicesByDate[d.date] = d.services;
+    }
   }
 
-  // Spring block: pull from the same phaseCalendar the on-screen chrome
-  // reads. Only fires for PDC accounts.
+  // Period metadata for the P-tag (Month) or period-range title (Period).
+  const rangeStart = isoDay(grid.firstCell);
+  const rangeEnd   = isoDay(grid.lastCell);
+  const periodRowsRes = await supa
+    .from("sc_day_metadata")
+    .select("service_date, period")
+    .eq("account_key", accountKey)
+    .gte("service_date", rangeStart)
+    .lte("service_date", rangeEnd)
+    .order("service_date", { ascending: true });
+  if (periodRowsRes.error) throw new Error(`loadMonthPrint.periods: ${periodRowsRes.error.message}`);
+  const periodMap = {};
+  for (const r of periodRowsRes.data || []) {
+    const p = periodOf(r);
+    if (p != null) periodMap[r.service_date] = p;
+  }
+
+  // Spring block (for the copper title chip on PDC variants).
   const phaseTimeline = derivePhaseTimeline(accountKey, account.level, year);
-  const springDates = collectSpringDates(phaseTimeline);
+  const springDates   = collectSpringDates(phaseTimeline);
+  const monthFirst    = `${monthKey}-01`;
+  const monthLastDay  = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const monthLast     = `${monthKey}-${String(monthLastDay).padStart(2, "0")}`;
+  const monthIntersectsSpring = rangeIntersectsSpring(phaseTimeline, monthFirst, monthLast);
 
   return {
     account,
@@ -250,16 +220,14 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
     grid,
     homestandByDate,
     statusByDate,
+    servicesByDate,
     periodMap,
     springDates,
-    hasScheduleOverlay: !!account.has_schedule_overlay,
-    hasHomestandSchedule: !!account.has_homestand_schedule,
+    monthIntersectsSpring,
+    variant: pickVariant(account),
   };
 }
 
-// Given a calendar year + 1-indexed month, produce a 6-row grid (42
-// cells) starting on the Monday-anchored week that contains the 1st.
-// Blank cells are the out-of-month spillover.
 function buildMonthGrid(year, month) {
   const first = new Date(Date.UTC(year, month - 1, 1, 12));
   const firstCell = weekAnchor(first);
@@ -269,9 +237,9 @@ function buildMonthGrid(year, month) {
     for (let c = 0; c < 7; c++) {
       const d = shiftDays(firstCell, r * 7 + c);
       cells.push({
-        date:            isoDay(d),
-        dayOfMonth:      d.getUTCDate(),
-        outOfMonth:      d.getUTCMonth() !== (month - 1) || d.getUTCFullYear() !== year,
+        date:       isoDay(d),
+        dayOfMonth: d.getUTCDate(),
+        outOfMonth: d.getUTCMonth() !== (month - 1) || d.getUTCFullYear() !== year,
       });
     }
     rows.push(cells);
@@ -280,100 +248,42 @@ function buildMonthGrid(year, month) {
   return { firstCell, lastCell, rows };
 }
 
-// ── Renderer ─────────────────────────────────────────────────────────
-// Same template for month + period. The caller supplies a `title`
-// override for period scope.
+// ── Renderer ────────────────────────────────────────────────────────
 export function renderMonthSheetHtml(ctx, opts = {}) {
   const {
     account, year, monthKey, grid, homestandByDate, statusByDate,
-    periodMap, springDates, hasScheduleOverlay,
+    servicesByDate, periodMap, monthIntersectsSpring, variant,
   } = ctx;
   const {
-    titleMain,        // "MARCH" (month scope) or "PERIOD 8" (period scope)
-    titleTagRight,    // "P8 – P9" (month) or "FEB 16 – MAR 15" (period)
-    titleYear,        // 2026 - Bebas ghost (period keeps the year too)
-    scopeLabel,       // "month" | "period" - for filename hint only
-    tzAbbrev,         // "ET"/"CT"/etc for the legend
+    titleMain, titleTagRight, titleYear, scopeLabel, tzAbbrev,
   } = opts;
 
   const [y4, m2] = monthKey.split("-").map(Number);
   const monthNameFull = MON_NAMES[m2 - 1];
-
   const tzForLegend = tzAbbrev || (getAccountHomeTz(account.team_key)?.abbrev || "ET");
   const seal = loadSealDataUri();
-
-  // Weeks: mark each row as spring if ANY in-month date sits in the
-  // spring block; mark a row as pb if it contains the FIRST date of a
-  // new period (compared to the previous cell's period).
-  let prevPeriod = null;
-  let periodBoundaryHtml = null;   // remembered when we set pmark on a cell
+  const asOf = footerDate();
 
   const rowsHtml = grid.rows.map((cells) => {
-    let rowIsSpring = false;
-    let rowIsPb = false;
-    let firstNewPeriodDate = null;
-    let firstNewPeriodNum = null;
-
-    for (const c of cells) {
-      if (!c.outOfMonth && springDates.has(c.date)) rowIsSpring = true;
-      const p = periodMap[c.date];
-      if (p != null) {
-        if (prevPeriod == null) {
-          prevPeriod = p;
-        } else if (p !== prevPeriod) {
-          rowIsPb = true;
-          firstNewPeriodDate = c.date;
-          firstNewPeriodNum = p;
-          prevPeriod = p;
-        }
-      }
-    }
-
-    const rowClass = [
-      rowIsSpring ? "spr" : "",
-      rowIsPb ? "pb" : "",
-    ].filter(Boolean).join(" ");
-
-    const cellsHtml = cells.map((c) => {
-      if (c.outOfMonth) {
-        return `<td class="blank"><span class="d">${c.dayOfMonth}</span></td>`;
-      }
-      const isNs = statusByDate[c.date] === "no-service";
-      const home = homestandByDate[c.date];
-      const isSpringCell = springDates.has(c.date);
-      const pmark = (c.date === firstNewPeriodDate)
-        ? `<span class="pmark">P${firstNewPeriodNum}</span>`
-        : "";
-
-      // Priority: NO SERVICE > HOME GAME > blank-in-month.
-      // Spring row applies bottom copper on ALL non-blank cells in the
-      // row via the CSS selector - no per-cell class needed.
-      if (isNs) {
-        return `<td class="ns"><span class="d">${c.dayOfMonth}</span>${pmark}<span class="nst">NO SERVICE</span></td>`;
-      }
-      if (home && home.dayType === "GAME") {
-        const timeStr = formatGameTime(home.gameTime, account.team_key, account.billing_model);
-        const day = isDayGame(home.gameTime, account.team_key);
-        const timeClass = day ? "tm day" : "tm";
-        const oppLabel = home.opponent
-          ? (home.isDoubleheader ? `${esc(home.opponent)} · DH` : esc(home.opponent))
-          : "";
-        const oppHtml = oppLabel ? `<span class="opp">${oppLabel}</span>` : "";
-        const timeHtml = timeStr ? `<span class="${timeClass}">${esc(timeStr)}</span>` : "";
-        return `<td class=""><span class="d">${c.dayOfMonth}</span>${pmark}${oppHtml}${timeHtml}</td>`;
-      }
-      return `<td class=""><span class="d">${c.dayOfMonth}</span>${pmark}</td>`;
-    }).join("");
-
-    return `<tr class="${rowClass}">${cellsHtml}</tr>`;
+    const cellsHtml = cells.map((c) => renderCell(c, {
+      account, homestandByDate, statusByDate, servicesByDate, variant,
+    })).join("");
+    return `<tr>${cellsHtml}</tr>`;
   }).join("");
 
   const bandRight = esc(account.name || account.team_key);
   const titleMonth = titleMain || monthNameFull;
-  const titleTag  = titleTagRight != null ? titleTagRight : (calcMonthPTag(periodMap, m2, y4));
+  const titleTag = titleTagRight != null ? titleTagRight : calcMonthPTag(periodMap);
   const titleYearStr = titleYear != null ? titleYear : year;
+  // Spring copper chip fires when the current scope intersects a spring
+  // block AND the variant is a PDC variant (spring only applies to PDCs).
+  const isPdcVariant = variant === "PDC" || variant === "PDCO";
+  const springChip = (isPdcVariant && monthIntersectsSpring)
+    ? `<span class="schip">SPRING TRAINING</span>`
+    : "";
 
-  const footerDateStr = footerDate();
+  // Legend copy per variant.
+  const legend = variantLegend(variant, tzForLegend);
 
   return `<!doctype html>
 <html>
@@ -387,6 +297,7 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
     <div class="trow">
       <span class="mo">${esc(titleMonth)}</span>
       ${titleTag ? `<span class="ptag">${esc(titleTag)}</span>` : ""}
+      ${springChip}
       <span class="yr">${esc(String(titleYearStr))}</span>
     </div>
     <table class="cal">
@@ -394,13 +305,8 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
       ${rowsHtml}
     </table>
     <div class="ft">
-      <span class="k">
-        <span><span class="knavy"></span>HOME · FIRST PITCH ${esc(tzForLegend)}</span>
-        <span class="kct">DAY GAME</span>
-        <span><span class="ksoft"></span>NO SERVICE</span>
-        <span><span class="kcop"></span>SPRING TRAINING</span>
-      </span>
-      <span>KITCHFIX · ${esc(footerDateStr)}</span>
+      <span class="k">${legend}</span>
+      <span><span class="asof">AS OF ${esc(asOf)}</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER</span>
     </div>
   </div>
 </div>
@@ -408,9 +314,142 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
 </html>`;
 }
 
-// Derive the month title's P-tag when scope = month. Returns the range
-// "P8 – P9" if the month spans two periods; "P8" if only one; "" if
-// there is no period data at all.
+// ── Cell renderer (variant-aware) ────────────────────────────────────
+function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate, variant }) {
+  if (c.outOfMonth) return `<td class="blank"><span class="d">${c.dayOfMonth}</span></td>`;
+
+  const home = homestandByDate[c.date];
+  const stat = statusByDate[c.date];
+  const state = stat ? resolveDayState(stat) : null;
+
+  // ── MLB variant: home/away fills only, no state grid, no meal stack.
+  if (variant === "MLB") {
+    if (home && home.dayType === "GAME") {
+      return renderGameCell(c, home, account, "hm");
+    }
+    if (home && home.dayType === "AWAY") {
+      return renderAwayCell(c, home);
+    }
+    return `<td class=""><span class="d">${c.dayOfMonth}</span></td>`;
+  }
+
+  // ── AAA / PDCO / PDC variants: state grid; game overlay layered on top.
+  const gameCell = home && home.dayType === "GAME";
+  const awayCell = home && home.dayType === "AWAY";
+
+  if (gameCell) {
+    // Home game overrides state fill (navy-tint fill + game info).
+    // Meal stack still renders on PDC variant if the day carried a
+    // per-service actual/projection (game days at PDCs DO get served
+    // meals; the stack conveys those).
+    const mealStack = (variant === "PDC" && servicesByDate[c.date])
+      ? renderMealStack(servicesByDate[c.date], state)
+      : "";
+    return renderGameCell(c, home, account, "hm", mealStack);
+  }
+  if (awayCell) {
+    // Away cells render as ordinary state cells (no navy fill, no time).
+    // AAA / PDCO carry AWAY data but the day still might have service
+    // context. Fall through to state cell + optional away chip.
+    return renderStateCell(c, state, variant, servicesByDate[c.date], home);
+  }
+
+  return renderStateCell(c, state, variant, servicesByDate[c.date]);
+}
+
+function renderGameCell(c, home, account, cls, extraStack = "") {
+  const timeStr = formatGameTime(home.gameTime, account.team_key);
+  const day = isDayGame(home.gameTime, account.team_key);
+  const timeClass = day ? "tm day" : "tm";
+  const oppLabel = home.opponent
+    ? (home.isDoubleheader ? `${esc(home.opponent)} · DH` : esc(home.opponent))
+    : "";
+  const oppHtml = oppLabel ? `<span class="opp">${oppLabel}</span>` : "";
+  const timeHtml = timeStr ? `<span class="${timeClass}">${esc(timeStr)}</span>` : "";
+  return `<td class="${cls}"><span class="d">${c.dayOfMonth}</span>${oppHtml}${timeHtml}${extraStack}</td>`;
+}
+
+function renderAwayCell(c, home) {
+  const opp = home.opponent ? `@${esc(home.opponent)}` : "";
+  const oppHtml = opp ? `<span class="opp">${opp}</span>` : "";
+  return `<td class="aw"><span class="d">${c.dayOfMonth}</span>${oppHtml}</td>`;
+}
+
+function renderStateCell(c, state, variant, services, awayHome) {
+  const awayHtml = (awayHome && awayHome.dayType === "AWAY" && awayHome.opponent)
+    ? `<span class="opp">@${esc(awayHome.opponent)}</span>`
+    : "";
+  const mealStack = (variant === "PDC" && services)
+    ? renderMealStack(services, state)
+    : "";
+  switch (state) {
+    case "SERVED":
+      return `<td class="sv"><span class="d">${c.dayOfMonth}</span>${mealStack}${awayHtml}</td>`;
+    case "PROJECTED":
+      return `<td class="pj"><span class="d">${c.dayOfMonth}</span>${mealStack}${awayHtml}</td>`;
+    case "NO_ACTUALS":
+      return `<td class="nd"><span class="d">${c.dayOfMonth}</span><span class="ndt">NO ACTUALS</span>${awayHtml}</td>`;
+    case "NO_SERVICE":
+      return `<td class="ns"><span class="d">${c.dayOfMonth}</span><span class="nst">NO SERVICE</span></td>`;
+    default:
+      return `<td><span class="d">${c.dayOfMonth}</span>${awayHtml}</td>`;
+  }
+}
+
+// PDC meal stack: right-aligned per-service label + count, with a
+// hairline rule + bold total. Dark green when served (SERVED state);
+// light green when projected (PROJECTED state). Services are the
+// per-day services array from loadMonthData with actualCount or
+// projectedCount per row.
+function renderMealStack(services, state) {
+  const pj = state === "PROJECTED";
+  const cls = pj ? "mls pj" : "mls";
+  const key = pj ? "projectedCount" : "actualCount";
+  // Only include services with a non-null count. Take the first two
+  // "core" services (typically Breakfast + Lunch); the tail is folded
+  // into the total. Group short labels 1-char: B, L, D, S, etc.
+  const shortLabel = (name) => {
+    if (!name) return "";
+    const trim = String(name).trim();
+    if (/breakfast/i.test(trim)) return "B";
+    if (/lunch/i.test(trim))     return "L";
+    if (/dinner/i.test(trim))    return "D";
+    if (/snack/i.test(trim))     return "S";
+    if (/coffee|beverage|bev/i.test(trim)) return "";  // skip beverages
+    return trim.charAt(0).toUpperCase();
+  };
+  const rows = [];
+  let total = 0;
+  for (const s of services) {
+    const v = Number(s[key]);
+    if (Number.isNaN(v) || v === 0) continue;
+    const l = shortLabel(s.serviceName);
+    if (l) rows.push({ l, v });
+    total += v;
+  }
+  if (total === 0) return "";
+  // Cap the rows shown to keep the cell readable at 84px height.
+  const displayRows = rows.slice(0, 2);
+  const labels = displayRows.map((r) => r.l).join("/");
+  const line = labels ? `<i>${esc(labels)}</i>` : "";
+  const totalHtml = `<b>${total}</b>`;
+  return `<span class="${cls}">${line}${totalHtml}</span>`;
+}
+
+function variantLegend(variant, tzAbbrev) {
+  const svLeg    = `<span><span class="kk" style="background:#D3E2C8"></span>SERVED</span>`;
+  const pjLeg    = `<span><span class="kk" style="background:#EBF3E4;border:1px solid #A8C796"></span>PROJECTED</span>`;
+  const ndLeg    = `<span><span class="kk" style="background:#FBF1EA"></span>NO ACTUALS</span>`;
+  const nsLeg    = `<span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>`;
+  const hmLeg    = `<span><span class="kk" style="background:#DCE5F3"></span>HOME · FIRST PITCH ${esc(tzAbbrev)}</span>`;
+  const awLeg    = `<span><span class="kk" style="background:#EFEDE6"></span>@AWAY</span>`;
+  const dayLeg   = `<span class="kct">DAY GAME</span>`;
+  if (variant === "MLB") {
+    return [hmLeg, awLeg, dayLeg].join("");
+  }
+  return [svLeg, pjLeg, ndLeg, nsLeg, hmLeg, dayLeg].join("");
+}
+
 function calcMonthPTag(periodMap) {
   const seen = new Set();
   for (const p of Object.values(periodMap)) if (p != null) seen.add(p);
@@ -420,20 +459,11 @@ function calcMonthPTag(periodMap) {
   return `P${nums[0]} – P${nums[nums.length - 1]}`;
 }
 
-// ── Period-scope helpers ─────────────────────────────────────────────
-// Kevin's brief: Month + Period share ONE template. The Period scope
-// swaps the title row to "PERIOD 8" + fiscal-range "FEB 16 – MAR 15"
-// while everything below is identical. To make the grid line up with
-// the fiscal range, load the calendar month(s) that contain the
-// period range and let the grid render as it would for any month
-// (blank cells fill the spillover).
-
+// ── Period-scope helpers (unchanged shape from Wave 1) ───────────────
 export async function loadPeriodPrintData(accountKey, year, periodKey) {
   const supa = getServiceClient();
   const targetPeriodNum = Number(String(periodKey).replace(/^P/i, ""));
 
-  // Find every day this year with period == target. Cheap - one row per
-  // service_date.
   const rowsRes = await supa
     .from("sc_day_metadata")
     .select("service_date, period")
@@ -449,19 +479,9 @@ export async function loadPeriodPrintData(accountKey, year, periodKey) {
     throw new Error(`Period P${targetPeriodNum} has no metadata rows in ${year}`);
   }
   const startDate = periodDates[0];
-  const endDate = periodDates[periodDates.length - 1];
-
-  // Load the calendar month that CONTAINS the period start. Kevin's
-  // spec pictures a single-page period grid; if a period spans two
-  // calendar months, we still render one month page (the one that
-  // holds the period's majority - the start date's month). Extension
-  // to a 2-month grid is a follow-up polish.
+  const endDate   = periodDates[periodDates.length - 1];
   const startMonth = startDate.slice(0, 7);
   const monthCtx = await loadMonthPrintData(accountKey, year, startMonth);
-
-  // Filter the grid + status: cells outside the period range render
-  // as "blank" so the visual grid shows just the fiscal period. The
-  // month name in the title becomes the fiscal range.
   return {
     ...monthCtx,
     periodNum: targetPeriodNum,
@@ -474,7 +494,7 @@ export function renderPeriodSheetHtml(ctx) {
   const { periodNum, periodStart, periodEnd } = ctx;
   const startD = parseIso(periodStart);
   const endD   = parseIso(periodEnd);
-  const range = `${shortMonthDay(startD)} – ${shortMonthDay(endD)}`;
+  const range  = `${shortMonthDay(startD)} – ${shortMonthDay(endD)}`;
   return renderMonthSheetHtml(ctx, {
     titleMain:     `PERIOD ${periodNum}`,
     titleTagRight: range,
@@ -484,7 +504,6 @@ export function renderPeriodSheetHtml(ctx) {
   });
 }
 
-// Public export used by the print route for the month scope.
 export function renderMonthSheet(ctx) {
   return renderMonthSheetHtml(ctx, {
     scopeLabel: "month",
