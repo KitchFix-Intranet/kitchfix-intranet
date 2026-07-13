@@ -187,11 +187,16 @@ export default function ExportControl({
               ref={idx === 0 ? firstItemRef : null}
               type="button"
               role="menuitem"
-              className="sc-export-menu-item"
-              onClick={() => startDownload(item)}
+              className={`sc-export-menu-item${item.disabled ? " sc-export-menu-item-disabled" : ""}`}
+              onClick={() => { if (!item.disabled) startDownload(item); }}
+              aria-disabled={item.disabled || undefined}
+              title={item.disabledTitle || undefined}
             >
-              <span className="sc-export-menu-item-label">{item.label}</span>
-              <span className="sc-export-menu-item-sub">{item.filename}</span>
+              <span className="sc-export-menu-item-label">
+                {item.label}
+                {item.comingSoon ? <span className="sc-export-menu-item-tag">COMING SOON</span> : null}
+              </span>
+              <span className="sc-export-menu-item-sub">{item.disabled ? item.disabledSub : item.filename}</span>
             </button>
           ))}
         </div>
@@ -244,29 +249,53 @@ function xlsxItem({ scope, year, periodKey, monthKey, accountKey }) {
   return null;
 }
 
-function pdfMonthItem({ year, monthKey, accountKey }) {
+// The PDC/PDCO drill PDF is PARKED behind Coming Soon per Kevin's ruling
+// 2026-07-13. The redesign lives at docs/design/PDC_PRINT_REDESIGN.md;
+// the current sheet was superseded-in-waiting so the menu greys the
+// drill item + the route returns 404 for scope=month|period on these
+// accounts. Excel + Season PDF + Ops Calendar PDF are UNTOUCHED - PDC/
+// PDCO operators keep every other export. See buildMenuItems() below
+// for the gating rule (drill items grey when has_homestand_schedule is
+// false + has_schedule_overlay drives the PDCO/PDC split).
+const PDC_DRILL_DISABLED_TITLE = "PDF print for this account is being redesigned - see docs/design/PDC_PRINT_REDESIGN.md";
+
+function pdfMonthItem({ year, monthKey, accountKey, disabled }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
   const [yy, mm] = monthKey.split("-").map(Number);
   const monthName = new Date(yy, mm - 1, 1).toLocaleDateString("en-US", { month: "long" });
-  return {
+  const item = {
     key: "pdf-month",
     label: `PDF - ${monthName} schedule`,
     filename: `KitchFix_SC_${safeAccount}_${monthKey}_${dateStr}.pdf`,
     href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=month&year=${year}&month=${monthKey}`,
   };
+  if (disabled) {
+    item.disabled = true;
+    item.comingSoon = true;
+    item.disabledTitle = PDC_DRILL_DISABLED_TITLE;
+    item.disabledSub = "redesign in progress";
+  }
+  return item;
 }
 
-function pdfPeriodItem({ year, periodKey, accountKey }) {
+function pdfPeriodItem({ year, periodKey, accountKey, disabled }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
   const num = String(periodKey).replace(/^P/i, "");
-  return {
+  const item = {
     key: "pdf-period",
     label: `PDF - Period ${num} schedule`,
     filename: `KitchFix_SC_${safeAccount}_Period${num}_FY${year}_${dateStr}.pdf`,
     href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=period&year=${year}&period=${num}`,
   };
+  if (disabled) {
+    item.disabled = true;
+    item.comingSoon = true;
+    item.disabledTitle = PDC_DRILL_DISABLED_TITLE;
+    item.disabledSub = "redesign in progress";
+  }
+  return item;
 }
 
 function pdfSeasonItem({ year, accountKey }) {
@@ -301,14 +330,19 @@ function buildMenuItems({
   if (!accountKey || !year) return [];
   const items = [];
   const hasSchedule = !!(hasHomestandSchedule || hasScheduleOverlay);
+  // Park gate (2026-07-13): PDC + PDCO drill PDFs are Coming Soon
+  // pending the wall-poster redesign. PDC = neither flag; PDCO =
+  // has_schedule_overlay only. MLB + AAA drill PDFs stay live.
+  // See docs/design/PDC_PRINT_REDESIGN.md.
+  const isPdcOrPdco = !hasHomestandSchedule;
 
   if (scope === "month" && monthKey) {
     items.push(xlsxItem({ scope, year, monthKey, accountKey }));
-    items.push(pdfMonthItem({ year, monthKey, accountKey }));
+    items.push(pdfMonthItem({ year, monthKey, accountKey, disabled: isPdcOrPdco }));
     items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "period" && periodKey) {
     items.push(xlsxItem({ scope, year, periodKey, accountKey }));
-    items.push(pdfPeriodItem({ year, periodKey, accountKey }));
+    items.push(pdfPeriodItem({ year, periodKey, accountKey, disabled: isPdcOrPdco }));
     items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "year") {
     items.push(xlsxItem({ scope: "year", year, accountKey }));
