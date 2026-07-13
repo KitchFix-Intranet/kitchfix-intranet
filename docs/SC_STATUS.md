@@ -101,8 +101,8 @@ Per the API survey ([`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_M
 
 Sequential path to desktop-launch + mobile follow-on. Absorbs the previous standalone "Coming Soon gate drop" item.
 
-1. **Final design polishes** (PR #418, this PR): spring wedge color, chrome-bar wrap regression, notes cache staleness.
-2. **PDF schedule export** for overview + drill-down (renders-first before any build): MLB / MiLB full-season game schedules; STL - FL / TBJ - FL their affiliate home slates.
+1. **Final design polishes** (PR #418, SHIPPED 2026-07-13): spring wedge color, chrome-bar wrap regression, notes cache staleness.
+2. **PDF schedule export** for overview + drill-down. **Wave 1 IN PROGRESS (PR #419)**: Month + Period + Season sheets (renders faithful to `docs/design/SC_PRINT_SPEC_v1.html`; serverless headless Chrome via `puppeteer-core` + `@sparticuz/chromium`; fonts self-hosted; timezone per-account via `ACCOUNT_HOME_TZ`). Wave 2 (separate PR): Year sheet.
 3. **Full pricing alignment** across all accounts to 100% accuracy including off-contract specifics (Kevin supplies), then client bill export.
 4. **Full-scale system + codebase test, cleanup, drop the Coming Soon gate → desktop DONE**. Absorbs the prior "Coming Soon gate drop" item + overall webapp function review + SC-011 (200% zoom parked for this pass).
 5. **Mobile** (details TBC).

@@ -2022,6 +2022,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             monthKey={isMonthView ? monthKey : null}
             accountKey={selectedAccount}
             showToast={showToast}
+            // #419 (Wave 1): gate the "PDF - season schedule" menu item
+            // to schedule-carrying accounts only. Both flags default to
+            // false in ExportControl; per-meal PDCs without a schedule
+            // simply don't see the item.
+            hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+            hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
           />
         ) : null}
         drillNav={

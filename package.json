@@ -18,8 +18,11 @@
     "backfill:invoice": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-invoice.mjs"
   },
   "dependencies": {
+    "@fontsource/bebas-neue": "^5.2.7",
+    "@fontsource/mulish": "^5.2.8",
     "@kitchfix-intranet/shared": "^1.0.1",
     "@sentry/nextjs": "10.53.1",
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.106.2",
     "exceljs": "^4.4.0",
     "google-auth-library": "10.5.0",
@@ -28,6 +31,7 @@
     "next": "16.2.6",
     "next-auth": "5.0.0-beta.30",
     "pdf-lib": "1.17.1",
+    "puppeteer-core": "^25.3.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

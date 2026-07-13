@@ -308,6 +308,30 @@ The rulings ledger captures decisions that outlive their originating conversatio
 
 ---
 
+## Printable schedules (PDF export, Wave 1)
+
+Wave 1 of the SC print export ships three sheets - Month, Period, Season - as PDFs alongside the existing xlsx workbook export. Year sheet comes in Wave 2 (separate PR).
+
+**Route**: `GET /api/service-calendar/print`
+- Query params: `account` (canonical spaced form), `scope` (`month` | `period` | `season`), `year` (YYYY), `month` (YYYY-MM, when scope=month), `period` (N or PN, when scope=period).
+- Session-gated (401 for anonymous). Same shape as the xlsx route at `/api/service-calendar/export`.
+- Runtime: `nodejs` (edge cannot spawn a subprocess). `maxDuration: 60` covers chromium cold-start + render.
+- Returns `application/pdf` with `Content-Disposition: inline; filename=KitchFix_SC_<Account>_<Slug>_<YYYY-MM-DD>.pdf`.
+- `X-SC-Print-Ms` timing header on the response.
+
+**Mechanism**: `puppeteer-core` + `@sparticuz/chromium` — serverless headless Chrome renders the HTML sheet templates to PDF. Chromium tarball (~55MB) is bundled ONLY into this route's function via `next.config.mjs` `outputFileTracingIncludes`, keeping it off every other function. Fonts (Bebas Neue + Mulish 400/600/700/800) are self-hosted via `@fontsource/*` packages and inlined as data URIs into `<head>` at render time - zero runtime Google Fonts fetch. The KitchFix seal is read from `public/PFS_PrimaryLogo_White_Circle.png` and inlined as a data URI in the brand band.
+
+**Pixel authority**: `docs/design/SC_PRINT_SPEC_v1.html` (Kevin-approved 2026-07-13). When the module code and the spec disagree, the spec wins.
+
+**Sheets**:
+- **Month** - available for ALL accounts. Fee accounts render homestand games via sc-13/15; per-meal PDCs may have game-free months and the grid renders honestly either way. Spring row = 3px copper (`#C2410C`) inset bottom band on any week that intersects a `phaseCalendar.js` spring block. Period boundary = 2px navy top rule on the first week row of a new fiscal period plus a micro `Pn` mark in the first day cell. Day game = first pitch before 2 PM account-local -> copper time; timezone derived from `src/app/service-calendar/gameTimeFormat.js` `ACCOUNT_HOME_TZ`.
+- **Period** - same template as Month. Title row swaps to `PERIOD 8` + fiscal-range `FEB 16 - MAR 15`. Grid = calendar month containing the period start; out-of-period cells render as blank spillover. All other treatments (spring, P-boundary, day-game, NS, footer legend) identical to Month.
+- **Season** - available only for accounts with `has_homestand_schedule` OR `has_schedule_overlay`. Full-schedule accounts render both HOME (navy fill, opponent + time + optional " DH" affix) and AWAY (light fill, opponent code only, no time); overlay accounts (STL - FL, TBJ - FL) get the `HOME SCHEDULE` right-ghost variant and `N HOME` count in each month header - their data is home-only by design (66 rows) and the sheet says so honestly. Season-ends trim + micro `SEASON ENDS SEP 20` label under the final month.
+
+**Export UI** (`src/app/service-calendar/season/ExportControl.js`) - flat list of format-explicit menu items (UX shape: flat list rather than a Format submenu; picked flat because the list stays at 3 items). Drill-in (period/month) shows Excel this scope / PDF this scope / Excel full year fallback. Overview (year) shows Excel full year / PDF - season schedule (schedule-accounts-only; per-meal PDCs don't see the item).
+
+**Not shipped in Wave 1** (Wave 2, separate PR): Year sheet (portrait; 12 mini-months with tan service tiles / copper spring wash / navy game marks / offseason panel).
+
 ## Danger zones (SC-specific)
 
 Standard danger-zone rules from [`CLAUDE.md`](../../CLAUDE.md) apply. SC-specific hot spots:

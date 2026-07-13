@@ -163,8 +163,23 @@ Quick checks:
 - **2026-05-15 (PR 3/3)** - Rewrote the "Analytics writes are feature-flagged off" section as "Analytics module deleted". `src/lib/analytics.js` reduced from 397 lines to a 12-line no-op stub exporting only `logEventSA`. Removed `ANALYTICS_SHEET_ID` and `ANALYTICS_ENABLED` env var references from this doc and `docs/ENV_VARS.md` - these env vars must also be removed from Vercel manually. Future analytics is Sentry/Vercel Analytics/Supabase, not a custom surface.
 - **2026-07-12** - Added "TEST_MODE middleware bypass" + "PR-preview + nav-matrix CI" sections. TEST_MODE ships live via #407 (`src/middleware.js`); CI split into two-job matrix + preview-smoke via #408. Working-dir line acknowledges that the local checkout has moved from `~/dev/kitchfix-intranet` to `~/dev/kf-cell-states` on the current machine. Last-verified header bumped.
 - **2026-07-12 (later)** - Added "Confirming a migration-gated PR" procedure. Migration gate CI shipped via PR #416 (`.github/workflows/migration-gate.yml`). Job A scans PR head for added `docs/migrations/*.sql`; Job B validates the `applied in Studio: YES` confirmation from the repo OWNER and emits a `Migration gate` check_run on the PR head SHA. Per-SHA reset means a confirmation never outlives the code. Kevin adds `Migration gate` as a required status check on the `main protection` ruleset after PR #416 lands - from that click, migration-bearing PRs are mechanically unmergeable until the confirmation fires.
+- **2026-07-13** - Added "SC print PDF export (Wave 1, #419)" section. New route `/api/service-calendar/print` renders schedule sheets via `puppeteer-core` + `@sparticuz/chromium` (~55MB chromium tarball). Bundle scoped to just this route via `next.config.mjs` `outputFileTracingIncludes`; other functions stay lean. Fonts self-hosted (`@fontsource/bebas-neue` + `@fontsource/mulish`), no runtime Google Fonts fetch. Cold-start budget: 2-4s for chromium extraction. `maxDuration: 60`. No new env vars.
 
 ---
+
+## SC print PDF export (Wave 1, #419)
+
+`GET /api/service-calendar/print` renders Month / Period / Season sheets to PDF via serverless headless Chrome. Session-gated; returns `application/pdf`. Same shape as the xlsx export at `/api/service-calendar/export`.
+
+Operational notes:
+- **Deps**: `puppeteer-core` (~7MB) + `@sparticuz/chromium` (~67MB including a ~55MB chromium tarball) + `@fontsource/bebas-neue` + `@fontsource/mulish` (fonts self-hosted per Kevin's guardrail: no runtime Google Fonts fetch).
+- **Bundle scoping**: `next.config.mjs` `outputFileTracingIncludes` scopes the chromium tarball + font WOFF2s + KitchFix seal to `/api/service-calendar/print` ONLY. Other functions stay lean.
+- **Cold start**: expect 2-4s for chromium tarball extraction on the first invocation after a deploy (extracts into `/tmp`, reuses on warm invocations). Warm renders complete in <1s for a single sheet.
+- **Runtime**: `node` (edge cannot spawn a subprocess). `maxDuration: 60`.
+- **No new env vars**.
+- **Failure mode**: on error, the route returns `500 { success: false, error, phase, elapsedMs }` as JSON so the browser never receives a broken .pdf download.
+
+Spec authority: `docs/design/SC_PRINT_SPEC_v1.html` (Kevin-approved 2026-07-13). Module reference: `docs/modules/SERVICE_CALENDAR.md` "Printable schedules".
 
 ## Confirming a migration-gated PR (LIVE since #416)
 
