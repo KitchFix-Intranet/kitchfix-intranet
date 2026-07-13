@@ -12,11 +12,14 @@
 //       per-cell treatment.
 // - O3: Square tiles (aspect-ratio: 1/1). Cell borders now use the
 //       darker --grid token (G1) for paper definition.
-// - O4: Inventory-due ring LIVE. Copper open outline layered over
-//       every state (SERVICE green, plain soft, period-start navy).
-//       Data from src/lib/print/inventoryCalendar.js. MLB variant:
-//       ring renders too - inventory is real ops even where actuals
-//       aren't owed (R5 scoped service states, not fiscal markers).
+// - O4: Inventory-due ring PARKED to 2027 per Kevin's amendment
+//       (2026-07-13). Machinery stays dormant: getInventoryDueIndex()
+//       returns {} for every year until inventoryCalendar.js is
+//       repopulated. Ring CSS (.yg .inv, .yg .ps.inv, .kk-inv) stays
+//       in assets.js so re-enable is a one-file edit. Legend entry
+//       is data-driven: renders ONLY when the year's index is
+//       non-empty. This year the entry is absent on every variant
+//       (MLB included) and no rings appear on any Ops Calendar.
 //
 // States (non-MLB, via opsServiceState):
 //   SERVICE_DAY -> .svc fill (single green)
@@ -126,19 +129,25 @@ export function renderOpsCalendarSheet(ctx) {
     }));
   }
 
-  // Legend order per Kevin's polish-wave brief:
-  //   non-MLB: SERVICE DAY + PERIOD START + SPRING + INVENTORY DUE + M + F
-  //   MLB:     PERIOD START + INVENTORY DUE + M
+  // Legend order per Kevin's polish-wave brief + O4 park amendment
+  // (2026-07-13): INVENTORY DUE entry renders ONLY when the year's
+  // due-date index is non-empty. Ring surface is parked until 2027;
+  // this year the entry is absent on every variant (MLB included).
+  // The .kk-inv swatch CSS + .yg .inv ring CSS stay in assets.js as
+  // dormant machinery - re-enable is a one-file edit in
+  // src/lib/print/inventoryCalendar.js.
+  const hasInventory = Object.keys(inventoryDueIndex || {}).length > 0;
+  const invEntry = hasInventory
+    ? `\n        <span><span class="kk-inv"></span>INVENTORY DUE</span>`
+    : "";
   const legend = isMlb
     ? `
-        <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
-        <span><span class="kk-inv"></span>INVENTORY DUE</span>
+        <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>${invEntry}
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>`
     : `
         <span><span class="kk" style="background:#D3E2C8;border:1px solid #B9C9AE"></span>SERVICE DAY</span>
         <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
-        <span><span class="kk-spring"></span>SPRING</span>
-        <span><span class="kk-inv"></span>INVENTORY DUE</span>
+        <span><span class="kk-spring"></span>SPRING</span>${invEntry}
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>
         <span><span class="km">F</span>ACTUALS EOD FRIDAY</span>`;
   const trailerCopy = `<span class="asof">AS OF ${esc(asOf)}</span>`;
