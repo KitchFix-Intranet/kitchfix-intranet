@@ -93,6 +93,10 @@ export async function loadOpsCalendarPrintData(accountKey, year) {
 // ── Renderer ─────────────────────────────────────────────────────────
 export function renderOpsCalendarSheet(ctx) {
   const { account, year, statusByDate, periodStarts, springDates } = ctx;
+  // R5 superseded (2026-07-13): MLB Ops Calendars render plain day
+  // cells (no state layer), M chip only (F drops - no actuals deadline
+  // exists for MLB), legend slimmed to PERIOD START + INVOICE/CC EOD.
+  const isMlb = account.level === "MLB";
 
   const seal = loadSealDataUri();
   const bandRight = esc(account.name || account.team_key);
@@ -100,8 +104,28 @@ export function renderOpsCalendarSheet(ctx) {
 
   const monthBlocks = [];
   for (let m = 1; m <= 12; m++) {
-    monthBlocks.push(renderMonth(year, m, statusByDate, periodStarts, springDates));
+    monthBlocks.push(renderMonth(year, m, statusByDate, periodStarts, springDates, {
+      accountLevel: account.level,
+      isMlb,
+    }));
   }
+
+  const legend = isMlb
+    ? `
+        <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
+        <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>`
+    : `
+        <span><span class="kk" style="background:#D3E2C8"></span>SERVED</span>
+        <span><span class="kk" style="background:#EBF3E4;border:1px solid #A8C796"></span>PROJECTED</span>
+        <span><span class="kk" style="background:#fff;border:1.5px dashed #C2410C"></span>NO ACTUALS</span>
+        <span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>
+        <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
+        <span><span class="kk" style="background:#C2410C;height:3px;border-radius:1.5px;margin-top:3px"></span>SPRING</span>
+        <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>
+        <span><span class="km">F</span>ACTUALS EOD FRIDAY</span>`;
+  const trailerCopy = isMlb
+    ? `<span class="asof">AS OF ${esc(asOf)}</span>`
+    : `<span class="asof">AS OF ${esc(asOf)}</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER`;
 
   return `<!doctype html>
 <html>
@@ -120,17 +144,9 @@ ${sheetHead({ title: `KitchFix Ops Calendar`, orientation: "portrait" })}
       ${monthBlocks.join("")}
     </div>
     <div class="ft" style="margin-top:14px;">
-      <span class="k">
-        <span><span class="kk" style="background:#D3E2C8"></span>SERVED</span>
-        <span><span class="kk" style="background:#EBF3E4;border:1px solid #A8C796"></span>PROJECTED</span>
-        <span><span class="kk" style="background:#fff;border:1.5px dashed #C2410C"></span>NO ACTUALS</span>
-        <span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>
-        <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
-        <span><span class="kk" style="background:#C2410C;height:3px;border-radius:1.5px;margin-top:3px"></span>SPRING</span>
-        <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>
-        <span><span class="km">F</span>ACTUALS EOD FRIDAY</span>
+      <span class="k">${legend}
       </span>
-      <span><span class="asof">AS OF ${esc(asOf)}</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER</span>
+      <span>${trailerCopy}</span>
     </div>
   </div>
 </div>
@@ -138,17 +154,18 @@ ${sheetHead({ title: `KitchFix Ops Calendar`, orientation: "portrait" })}
 </html>`;
 }
 
-function renderMonth(year, month, statusByDate, periodStarts, springDates) {
+function renderMonth(year, month, statusByDate, periodStarts, springDates, opts) {
   const label = MON3[month - 1];
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  // Header row: M T W T F S S with Monday + Friday emphasized as
-  // .hd (invoice/CC EOD Monday; actuals EOD Friday).
+  // Header row: M T W T F S S. Non-MLB shows Monday (M invoice/CC EOD)
+  // AND Friday (F actuals EOD). MLB drops the Friday emphasis - no
+  // actuals deadline exists for MLB accounts per R5 superseded.
   const header = [
     `<b class="hd">M</b>`,
     `<b>T</b>`,
     `<b>W</b>`,
     `<b>T</b>`,
-    `<b class="hd">F</b>`,
+    opts.isMlb ? `<b>F</b>` : `<b class="hd">F</b>`,
     `<b>S</b>`,
     `<b>S</b>`,
   ].join("");
@@ -162,7 +179,7 @@ function renderMonth(year, month, statusByDate, periodStarts, springDates) {
   // Real days.
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    cells.push(renderCell(iso, d, statusByDate, periodStarts, springDates));
+    cells.push(renderCell(iso, d, statusByDate, periodStarts, springDates, opts));
   }
   // Blank pad cells for the tail (grid completes to a multiple of 7).
   const total = dow0Mon + daysInMonth;
@@ -172,7 +189,7 @@ function renderMonth(year, month, statusByDate, periodStarts, springDates) {
   return `<div class="ymo"><h5>${esc(label)}</h5><div class="yg">${header}${cells.join("")}</div></div>`;
 }
 
-function renderCell(iso, d, statusByDate, periodStarts, springDates) {
+function renderCell(iso, d, statusByDate, periodStarts, springDates, opts) {
   const isSpring = springDates.has(iso);
   const springClass = isSpring ? " spb" : "";
 
@@ -182,7 +199,7 @@ function renderCell(iso, d, statusByDate, periodStarts, springDates) {
   }
 
   const stat = statusByDate[iso];
-  const state = stat ? resolveDayState(stat) : null;
+  const state = stat ? resolveDayState(stat, { accountLevel: opts.accountLevel }) : null;
   switch (state) {
     case "SERVED":
       return `<span class="sv${springClass}">${d}</span>`;

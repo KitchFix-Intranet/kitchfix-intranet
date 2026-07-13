@@ -340,18 +340,32 @@ The classifier's amber-vs-red split (`needs-entry` vs `overdue`) collapses to a 
 
 ### Sheet-by-sheet
 
-- **Month + Period - MLB & MiLB fee** (spec Sheet 5, approved): home fill (`--homefill` `#DCE5F3`) + opponent + time; away fill (`--awayfill` `#EFEDE6`) + `@OPP` + no time. NO state grid. NO meal stack. Period-boundary line + in-grid `Pn` REMOVED. Title P-tag stays.
-- **Month + Period - AAA per-meal + PDC overlay** (spec Sheet 6): full state-fill grid + game overlay layered on top. Games render as home fill + opponent + time. NO meal stack. Spring copper title chip when the scope intersects a spring block. Overlay accounts (STL - FL, TBJ - FL) get HOME-only games per the sc-17 hard rule.
-- **Month + Period - PDC per-meal** (spec Sheet 7): full state-fill grid + right-aligned meal stack (per-service short label + count, hairline rule, bold total). Dark green tone when SERVED; light green tone when PROJECTED. No game overlay. Spring copper title chip.
+- **Month + Period - MLB fee** (spec Sheet 5, approved): home fill (`--homefill` `#DCE5F3`) + opponent + time; away fill (`--awayfill` `#EFEDE6`) + `@OPP` + no time. **NO state grid, NO meal stack** - MLB accounts are gated at the resolver (opts.accountLevel === "MLB" → null) so no service state can leak in from a stray test actual. Period-boundary line + in-grid `Pn` REMOVED. Title P-tag stays.
+- **Month + Period - AAA per-meal + PDC overlay + PDC per-meal** (spec Sheet 6/7, corrective wave 2026-07-13): full state-fill grid + game overlay + meal stack. Applies uniformly across AAA (CIN - KY, TBJ - NY), PDCO (STL - FL, TBJ - FL), PDC (CIN - AZ, TXR - AZ, TBR - FL) per R4. AWAY days on AAA render `--awayfill` + grey `@OPP` (`.awy`) like the MLB sheet grammar; the meal stack overlays if the day carries service counts. GAME days on AAA / PDCO render `--homefill` + navy `.opp` + `.tm` time + meal stack. **R6**: past game days without actuals render `.nd` (NO ACTUALS copper) + opp + time + **no meal stack** (projections don't print on past days). Spring copper title chip fires on PDC / PDCO variants when the scope intersects a spring block.
+- **Meal stack (msl grammar per `docs/design/SC_PRINT_MEALSTACK_ADDENDUM.html`, corrective wave)**: full-cell-width flex rows, one per service - `<span class="r"><n>ServiceName</n><v>Count</v></span>` - with a hairline rule and a bold `<span class="t"><n>Total</n><v>Sum</v></span>` row. Service names print **verbatim** (case preserved - `Pre-game` ≠ `Pre-Game`); long names wrap via `overflow-wrap: anywhere`. **Exclusion is `is_non_revenue === true` ONLY** (R3) - the pre-corrective wave name regex is retired; flat-fee services like Coffee Service and Fountain Bev print like any other row. Included services = every row with a non-zero value for the state's key (`actualCount` when SERVED, `projectedCount` when PROJECTED). **Density**: when the month's densest day carries more than 4 services with non-zero counts, the loader stamps `.dense` on the table + emits a `console.warn` identifying the month, and the CSS steps the line font to a 6.5px floor (Total 7.5px). Cell height is 108px; the `.msl` container is absolute-positioned with reserved bottom (`.hm .msl { bottom: 30px }`, `.aw .msl { bottom: 20px }`) so game info stays visible under the stack.
 - **Season - MLB / AAA full-schedule** (spec Sheets 1 + 2, approved): day numbers (5.5px, top-left) in each cell; HOME (navy fill + opponent + time + optional " DH") + AWAY (light fill + opponent code only, no time). Counts `N H · N A`.
 - **Season - PDC overlay (blended SERVICE CALENDAR)** (spec Sheet 3): ghost renamed from "HOME SCHEDULE" to "SERVICE CALENDAR". Service days layer under the affiliate HOME games (season scale collapses SERVED + PROJECTED to a single green per the spec). Counts stay `N HOME` (affiliate games only; the account is home-only by design).
-- **Ops Calendar (all accounts)** (spec Sheet 4): letter portrait; 12 mini-months in a 3-column grid; day numbers in each ~16px cell.
-  - States: SERVED (`.sv`) / PROJECTED (`.pj`) / NO ACTUALS (`.nd` dashed copper border) / baseline (default soft fill).
-  - Period start (`.ps`) - navy square carrying the P number (replaces the day number).
-  - Spring (`.spb`) - 2.5px copper top bar per cell (kept ONLY at year scale in v2; Month + Period use the title chip instead).
-  - M and F header chips (`.hd`, ink background) - Mon = invoice/CC EOD; Fri = actuals EOD.
-  - **Games do NOT appear.**
+- **Ops Calendar** (spec Sheet 4): letter portrait; 12 mini-months in a 3-column grid; day numbers in each ~16px cell.
+  - **Non-MLB accounts** (PDC, PDCO, AAA): full state layer. SERVED (`.sv`) / PROJECTED (`.pj`) / NO ACTUALS (`.nd` dashed copper border) / baseline (default soft fill). Period start (`.ps`) navy square replaces day number. Spring (`.spb`) 2.5px copper top bar. M + F header chips. Full 8-item legend.
+  - **MLB accounts** (level === "MLB", R5 superseded 2026-07-13): **NO state layer**. Plain day cells everywhere - no green, no copper, no soft fill - because MLB actuals are Kevin's test entries and the intranet has no actuals-owed concept for MLB accounts. Period-start navy squares stay. **M chip only** (F chip dropped - no actuals deadline exists). Legend slimmed to `PERIOD START` + `M INVOICE / CC EOD MONDAY`. Trailer copy drops the `SERVED = ACTUALS ENTERED · PROJECTED AFTER` suffix.
+  - **Games do NOT appear on any variant.**
   - **Inventory-due copper ring (spec block 4) is DEFERRED** per Kevin's Option A ruling 2026-07-13. `period_data` (which carries due dates) lives in Sheets HUB, not PG. Follow-up PR migrates `period_data` to PG and wires the ring + a legend entry then. Until then, no ring AND no legend entry - "legend matches reality." Tracked in [`SC_STATUS.md`](../SC_STATUS.md).
+
+### resolveDayState() contract
+
+The single mapping from classifier `day.status` to a v2 print state, in `src/lib/print/assets.js`. **Exhaustive** against every status observed in `sc_daily_revenue`-derived output (`entered`, `no-service`, `overdue`, `needs-entry`, `future`, `away`) - the pre-corrective-wave fallthrough silently dropped `future` (Bug 4) and `away`. Every classifier status has an explicit branch; unknown statuses `console.warn` and return `null`.
+
+Signature: `resolveDayState(day, opts)` where `opts.accountLevel` is the R5 MLB gate. Callers thread the account level in explicitly:
+
+- `opsCalendarSheet.js` - `renderCell(iso, d, statusByDate, periodStarts, springDates, opts)` receives opts + calls `resolveDayState(stat, { accountLevel })`.
+- `monthSheet.js` - `renderCell()` reads `account.level` from ctx and calls `resolveDayState(stat, { accountLevel: account.level })`.
+- `seasonSheet.js` - `buildSeasonMonthCells(..., accountLevel)` threads level to `seasonServiceState(stat, { accountLevel })`.
+
+The R5 gate returns null before any status match, so MLB accounts never render state cells regardless of what `sc_daily_revenue` says.
+
+### Day-level state flags (R2)
+
+`loadMonthData` and `loadYearSummary` in `src/lib/dataStore/serviceCalendar.js` emit day-level `hasActuals` + `hasProjection` booleans (true if ANY service on the day carries the respective value, mirroring the per-service `sc_daily_revenue.has_actuals` / `.has_projection` view fields). The additive fields feed print's `resolveDayState` future-day branch (`hasProjection && !hasActuals → PROJECTED`); existing screen consumers that read `hasAnyActuals` remain unchanged. Without these day-level flags, the `future` classifier status silently dropped to `null` (Bug 4: TBJ - FL green died after early July).
 
 ### Data sources (all in PG)
 

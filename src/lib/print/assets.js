@@ -107,7 +107,7 @@ body{
 /* ── Month / Period calendar (Drill sheets 5-8) ───────────────── */
 table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .cal th{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--mut);text-align:left;padding:0 0 5px 8px;border-bottom:1.5px solid var(--ink);}
-.cal td{height:84px;border-bottom:1px solid var(--hair);border-right:1px solid var(--hair);vertical-align:top;padding:6px 8px;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
+.cal td{height:108px;border-bottom:1px solid var(--hair);border-right:1px solid var(--hair);vertical-align:top;padding:6px 8px;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
 .cal td:last-child{border-right:none;}
 .cal tr:last-child td{border-bottom:1.5px solid var(--ink);}
 .cal td.hm{background:var(--homefill);}
@@ -130,14 +130,49 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .awy{position:absolute;bottom:7px;left:8px;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#A9A499;}
 .tm{position:absolute;bottom:6px;left:8px;font-size:8.5px;font-weight:700;color:#5A6B8C;}
 .tm.day{color:var(--copper);font-weight:800;}
-/* Meal stack (PDC drill only). Right-aligned; one line per service
-   offered that day (B/L etc), hairline rule under the last service,
-   bold total below. .mls = SERVED tone; .mls.pj = PROJECTED tone. */
-.mls{position:absolute;top:17px;right:8px;text-align:right;line-height:1.45;}
-.mls i{display:block;font-style:normal;font-size:7.5px;font-weight:700;color:var(--mlsv2);}
-.mls b{display:block;font-size:10px;font-weight:800;color:var(--mlsv);margin-top:2px;border-top:1px solid #B9C9AE;padding-top:2px;}
-.mls.pj i{color:var(--mlpj2);}
-.mls.pj b{color:var(--mlpj);border-top-color:#CCD9C2;}
+/* Meal stack (PDC + PDCO + AAA drill). Grammar per
+   docs/design/SC_PRINT_MEALSTACK_ADDENDUM.html:
+   - Full-cell-width flex rows: <n>service name</n> left, <v>count</v> right.
+   - service_name printed verbatim (case preserved - "Pre-game" ne
+     "Pre-Game"; census I.3 collision case).
+   - Long names wrap to two lines, never clip.
+   - Hairline rule + bold Total row (same name-left/value-right shape).
+   - Included services = every row with a non-zero count for the state's
+     key (actualCount SERVED, projectedCount PROJECTED) AND is_non_revenue
+     = false. No name-based exclusions - the pre-corrective wave name
+     regex is retired (R3, 2026-07-13).
+   - .msl = SERVED tone; .msl.pj = PROJECTED tone.
+   - When the month's densest day pushes past the 7px comfort ceiling
+     the loader adds .dense to the table root and steps to 6.5px + a
+     console.warn identifies the month (R4 6.5px floor).
+   Rebuild replaces the pre-corrective single-letter shortLabel() grammar
+   which collided on real data - Continental Plus/Coffee Service both
+   mapped to C on CIN - AZ; Arrival/Post BP/Post-Game all mapped to
+   ambiguous single-letter labels on MLB accounts. */
+/* .msl uses absolute positioning so it can safely coexist with the
+   absolute-positioned .opp / .tm / .awy game-info spans on AAA / PDCO
+   game + away cells (R4). On plain state cells the bottom:6px reservation
+   is a no-op; on .hm / .aw cells the .hm .msl / .aw .msl overrides push
+   bottom up to leave room for the game-info spans. Content that exceeds
+   the reserved area clips instead of overflowing into game info; the
+   .dense variant + 6.5px floor is the density mitigation. */
+.msl{position:absolute;top:22px;left:8px;right:8px;bottom:6px;overflow:hidden;}
+.msl .r{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:7px;font-weight:700;line-height:1.32;color:var(--mlsv);}
+.msl .r n{font-style:normal;text-align:left;overflow-wrap:anywhere;}
+.msl .r v{font-style:normal;font-variant-numeric:tabular-nums;flex:none;}
+.msl .t{display:flex;justify-content:space-between;font-size:8.5px;font-weight:800;color:var(--mlsv);border-top:1px solid #B9C9AE;margin-top:2px;padding-top:2px;}
+.msl.pj .r,.msl.pj .t{color:var(--mlpj);}
+.msl.pj .t{border-top-color:#CCD9C2;}
+/* On home game cells .opp (bottom:17px, 10.5px) + .tm (bottom:6px, 8.5px)
+   claim ~27px of bottom room; reserve 30px for safe clearance. On away
+   cells .awy (bottom:7px, 9.5px) claims ~17px; reserve 20px. */
+.hm .msl{bottom:30px;}
+.aw .msl{bottom:20px;}
+/* Dense months: step to 6.5px line size when max rendered services on
+   any single day exceed the 7px ceiling. Loader sets .dense on the
+   table root + emits a console.warn identifying the month. */
+.cal.dense .msl .r{font-size:6.5px;line-height:1.28;}
+.cal.dense .msl .t{font-size:7.5px;}
 /* ── Season mini-grid (sheets 1-3) ─────────────────────────────── */
 .smos{display:grid;grid-template-columns:repeat(3,1fr);gap:0 24px;}
 .smo h4{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;margin:10px 0 6px;border-bottom:1.5px solid var(--ink);padding-bottom:4px;display:flex;justify-content:space-between;align-items:baseline;}
@@ -227,18 +262,52 @@ export function footerDate(d = new Date()) {
 // Collapses the classifier's amber-vs-red (needs-entry vs overdue)
 // into ONE compliance signal per Kevin's ruling 2026-07-13. The print
 // doesn't split the two - both surface as NO ACTUALS.
+//
+// Corrective wave (2026-07-13): resolver is now EXHAUSTIVE against the
+// classifier statuses observed in the wild per PRINT_DATA_CENSUS.md §F
+// ("entered", "no-service", "overdue", "needs-entry", "future", "away").
+// Every status is explicitly handled; unknown statuses console.warn.
+// The prior fallthrough silently dropped "future" (Bug 4) and "away".
+//
+// R5 superseded (2026-07-13): MLB accounts get NO state layer on any
+// print surface. Any actuals on MLB accounts are Kevin's test entries
+// and don't reflect real operations - the intranet has no actuals-owed
+// concept for MLB accounts. Route around the state mapping explicitly
+// here (via opts.accountLevel === "MLB"), not via a silent fallthrough
+// downstream. Applies to every print consumer (Ops Calendar, Season,
+// Month/Period), so MLB sheets stay games-only + period-start markers.
 export function resolveDayState(day, opts = {}) {
+  if (opts.accountLevel === "MLB") return null;
   if (!day) return null;
   const s = day.status;
-  if (s === "entered")     return "SERVED";
-  if (s === "no-service")  return "NO_SERVICE";
-  if (s === "overdue" || s === "needs-entry") return "NO_ACTUALS";
-  // "upcoming" or projection-only future days classify as PROJECTED
-  // when a projection exists (hasProjection). Days with no projection
-  // AND no actuals fall through to null (renderer picks the default,
-  // typically white).
-  if (day.hasProjection && !day.hasActuals) return "PROJECTED";
-  return null;
+  switch (s) {
+    case "entered":
+      return "SERVED";
+    case "no-service":
+      return "NO_SERVICE";
+    case "overdue":
+    case "needs-entry":
+      return "NO_ACTUALS";
+    case "future":
+      // Future day: PROJECTED when a projection exists on the day
+      // (day-level hasProjection is the R2 additive flag - see
+      // dataStore/serviceCalendar.js). No projection AND no actuals
+      // returns null and renders as the default soft cell.
+      return (day.hasProjection && !day.hasActuals) ? "PROJECTED" : null;
+    case "away":
+      // Away days: the .awy label + --awayfill are driven by
+      // homestandByDate at the render site, not by the state fill.
+      // Returning null here means an away cell never gets a state
+      // fill on top of the away visual.
+      return null;
+    default:
+      // Unknown classifier status - warn so this cannot silently drop
+      // again the way "future" did pre-corrective-wave.
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn(`[print/resolveDayState] unknown status "${s}" on ${day?.date || "?"} - returning null`);
+      }
+      return null;
+  }
 }
 
 // Season-scale collapse: served OR projected -> single .s (green) cell.
