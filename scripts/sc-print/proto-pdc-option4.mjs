@@ -57,7 +57,12 @@ const ACCOUNTS = [
   { key: "STL - FL",  overlay: true  },
   { key: "TBJ - FL",  overlay: true  },
 ];
-const MONTHS = ["2026-05", "2026-06"];
+// March added per Kevin's #427 addendum 2026-07-13: the set's first
+// 6-week-row month + spring peak density case. NOTE: the prototype has
+// no spring-block treatment (no copper title chip, no ST marker) - March
+// renders spring-season data unlabeled. Flagged as an open design
+// question for Kevin in the PR comment; NOT improvising a spring marker.
+const MONTHS = ["2026-03", "2026-05", "2026-06"];
 
 // ── Colors + tokens (Option 4 pixel reference in docs/design/
 // sc-pdc-four-options.html) ────────────────────────────────────────────
