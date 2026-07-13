@@ -1,23 +1,38 @@
 "use client";
 
-// ExportControl - the operator Excel-export CTA (render J2).
+// ExportControl - the operator export CTA (render J2).
 //
 // Chrome-right position, immediately LEFT of the Today chip. Renders a
 // 32px bordered square carrying the download glyph. Click opens a
-// dropdown menu (render J1's anatomy):
-//   - Item 1 is scope-aware (e.g. "Export Period 7" / "Export July"
-//     / "Export full year 2026") with the filename as the subtitle.
-//   - Item 2 "Export full year YYYY" is shown at period + month
-//     scopes; hidden when the current scope is already the year.
+// dropdown menu:
+//
+//   Drill-in (period / month):
+//     - Excel workbook (this scope)
+//     - PDF - this month OR PDF - this period (whichever matches scope)
+//     - Excel full year YYYY (year fallback, existing pattern)
+//
+//   Overview (year):
+//     - Excel workbook (full year)
+//     - PDF - season schedule (SCHEDULE-ACCOUNT-ONLY - gated on
+//       has_homestand_schedule || has_schedule_overlay)
+//
+// #419 (2026-07-13): the menu was originally Excel-only with a scope-
+// aware Item 1 + a year fallback. Wave 1 of the SC print export
+// extends it to a flat list of format-explicit items. The UX shape
+// choice was: FLAT LIST rather than a Format submenu, so operators
+// can see every option at a glance and pick with one click. If we
+// ever ship a third format the flat list stays manageable up to ~4
+// items; beyond that, promote to a submenu.
 //
 // While a download is in flight the square becomes a spinner with
-// aria-live="polite" and the tooltip flips to "Preparing workbook...".
-// Chrome around it stays interactive. Failures fall back to a toast
-// (`showToast` prop) rather than a modal.
+// aria-live="polite" and the tooltip flips to "Preparing..." (the
+// specific artifact depends on the item clicked). Chrome around it
+// stays interactive. Failures fall back to a toast (`showToast` prop)
+// rather than a modal.
 //
 // Presentational + self-contained: the parent supplies scope + account
-// + year + period/month + showToast, ExportControl owns the menu open
-// state, keyboard handlers, and fetch.
+// + year + period/month + schedule-flag props + showToast, ExportControl
+// owns the menu open state, keyboard handlers, and fetch.
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Download } from "../Icons";
@@ -30,6 +45,11 @@ export default function ExportControl({
   monthKey,            // "2026-07" (when scope === "month")
   accountKey,          // "CIN - AZ"
   showToast,           // (msg, kind?) => void
+  // #419 (Wave 1): schedule flags gate the "PDF - season schedule"
+  // menu item at year scope. Both default to false so the PDF item is
+  // hidden for per-meal PDCs (which have no schedule to print).
+  hasHomestandSchedule = false,
+  hasScheduleOverlay   = false,
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,10 +88,19 @@ export default function ExportControl({
     return () => cancelAnimationFrame(raf);
   }, [open]);
 
-  const primary = deriveScopeItem({ scope, year, periodKey, monthKey, accountKey });
-  const yearFallback = scope !== "year"
-    ? deriveScopeItem({ scope: "year", year, accountKey })
-    : null;
+  // #419: build a flat list of export items scoped to the current view.
+  //
+  //   Drill-in scopes (period / month):
+  //     [Excel this scope, PDF this scope, Excel full year]
+  //   Year scope (overview):
+  //     [Excel full year, PDF season schedule (if schedule flag on)]
+  //
+  // Order matters - the first item is the "default" the operator lands
+  // on when the menu opens (autofocus below).
+  const menuItems = buildMenuItems({
+    scope, year, periodKey, monthKey, accountKey,
+    hasHomestandSchedule, hasScheduleOverlay,
+  });
 
   const startDownload = useCallback(async (item) => {
     if (!accountKey || !item) return;
@@ -147,32 +176,22 @@ export default function ExportControl({
         <div
           className="sc-export-menu"
           role="menu"
-          aria-label="Export scope"
+          aria-label="Export format + scope"
           onKeyDown={onMenuKeyDown}
         >
-          {primary && (
+          {menuItems.map((item, idx) => (
             <button
-              ref={firstItemRef}
+              key={item.key}
+              ref={idx === 0 ? firstItemRef : null}
               type="button"
               role="menuitem"
               className="sc-export-menu-item"
-              onClick={() => startDownload(primary)}
+              onClick={() => startDownload(item)}
             >
-              <span className="sc-export-menu-item-label">{primary.label}</span>
-              <span className="sc-export-menu-item-sub">{primary.filename}</span>
+              <span className="sc-export-menu-item-label">{item.label}</span>
+              <span className="sc-export-menu-item-sub">{item.filename}</span>
             </button>
-          )}
-          {yearFallback && (
-            <button
-              type="button"
-              role="menuitem"
-              className="sc-export-menu-item"
-              onClick={() => startDownload(yearFallback)}
-            >
-              <span className="sc-export-menu-item-label">{yearFallback.label}</span>
-              <span className="sc-export-menu-item-sub">{yearFallback.filename}</span>
-            </button>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -180,40 +199,106 @@ export default function ExportControl({
 }
 
 // ── scope -> label + filename + href ──────────────────────────────────
-// Filename mirrors the server's buildFilename output so the tooltip
+// Filenames mirror the server's Content-Disposition so the tooltip
 // preview matches what the browser actually downloads. Kept in sync
-// with src/lib/export/scWorkbook.js buildFilename.
+// with src/lib/export/scWorkbook.js buildFilename (xlsx) and
+// src/app/api/service-calendar/print/route.js buildFilenameStem (pdf).
 
-function deriveScopeItem({ scope, year, periodKey, monthKey, accountKey }) {
-  if (!accountKey || !year) return null;
+function todayDateStr() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
+
+function xlsxItem({ scope, year, periodKey, monthKey, accountKey }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dateStr = todayDateStr();
   if (scope === "year") {
     return {
-      label: `Export full year ${year}`,
+      key: "xlsx-year",
+      label: `Excel - full year ${year}`,
       filename: `KitchFix_SC_${safeAccount}_FY${year}_${dateStr}.xlsx`,
       href: `/api/service-calendar/export?account=${encodeURIComponent(accountKey)}&scope=year&year=${year}`,
     };
   }
   if (scope === "period") {
-    if (!periodKey) return null;
     const num = String(periodKey).replace(/^P/i, "");
     return {
-      label: `Export Period ${num}`,
+      key: "xlsx-period",
+      label: `Excel - Period ${num}`,
       filename: `KitchFix_SC_${safeAccount}_Period${num}_${dateStr}.xlsx`,
       href: `/api/service-calendar/export?account=${encodeURIComponent(accountKey)}&scope=period&year=${year}&period=${num}`,
     };
   }
   if (scope === "month") {
-    if (!monthKey) return null;
     const [yy, mm] = monthKey.split("-").map(Number);
     const monthName = new Date(yy, mm - 1, 1).toLocaleDateString("en-US", { month: "long" });
     return {
-      label: `Export ${monthName}`,
+      key: "xlsx-month",
+      label: `Excel - ${monthName}`,
       filename: `KitchFix_SC_${safeAccount}_${monthKey}_${dateStr}.xlsx`,
       href: `/api/service-calendar/export?account=${encodeURIComponent(accountKey)}&scope=month&year=${year}&month=${monthKey}`,
     };
   }
   return null;
+}
+
+function pdfMonthItem({ year, monthKey, accountKey }) {
+  const safeAccount = String(accountKey).replace(/\s+/g, "");
+  const dateStr = todayDateStr();
+  const [yy, mm] = monthKey.split("-").map(Number);
+  const monthName = new Date(yy, mm - 1, 1).toLocaleDateString("en-US", { month: "long" });
+  return {
+    key: "pdf-month",
+    label: `PDF - ${monthName} schedule`,
+    filename: `KitchFix_SC_${safeAccount}_${monthKey}_${dateStr}.pdf`,
+    href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=month&year=${year}&month=${monthKey}`,
+  };
+}
+
+function pdfPeriodItem({ year, periodKey, accountKey }) {
+  const safeAccount = String(accountKey).replace(/\s+/g, "");
+  const dateStr = todayDateStr();
+  const num = String(periodKey).replace(/^P/i, "");
+  return {
+    key: "pdf-period",
+    label: `PDF - Period ${num} schedule`,
+    filename: `KitchFix_SC_${safeAccount}_Period${num}_FY${year}_${dateStr}.pdf`,
+    href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=period&year=${year}&period=${num}`,
+  };
+}
+
+function pdfSeasonItem({ year, accountKey }) {
+  const safeAccount = String(accountKey).replace(/\s+/g, "");
+  const dateStr = todayDateStr();
+  return {
+    key: "pdf-season",
+    label: `PDF - season schedule`,
+    filename: `KitchFix_SC_${safeAccount}_Season_FY${year}_${dateStr}.pdf`,
+    href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=season&year=${year}`,
+  };
+}
+
+function buildMenuItems({
+  scope, year, periodKey, monthKey, accountKey,
+  hasHomestandSchedule, hasScheduleOverlay,
+}) {
+  if (!accountKey || !year) return [];
+  const items = [];
+  const hasSchedule = !!(hasHomestandSchedule || hasScheduleOverlay);
+
+  if (scope === "month" && monthKey) {
+    items.push(xlsxItem({ scope, year, monthKey, accountKey }));
+    items.push(pdfMonthItem({ year, monthKey, accountKey }));
+    items.push(xlsxItem({ scope: "year", year, accountKey }));
+  } else if (scope === "period" && periodKey) {
+    items.push(xlsxItem({ scope, year, periodKey, accountKey }));
+    items.push(pdfPeriodItem({ year, periodKey, accountKey }));
+    items.push(xlsxItem({ scope: "year", year, accountKey }));
+  } else if (scope === "year") {
+    items.push(xlsxItem({ scope: "year", year, accountKey }));
+    if (hasSchedule) {
+      items.push(pdfSeasonItem({ year, accountKey }));
+    }
+  }
+  return items.filter(Boolean);
 }

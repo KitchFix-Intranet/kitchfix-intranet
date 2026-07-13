@@ -14,6 +14,17 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/service-calendar/print": [
       "./node_modules/@sparticuz/chromium/bin/**",
+      // Self-hosted fonts (Kevin's guardrail: no runtime Google Fonts
+      // fetch). Only the specific latin WOFF2 weights used by the sheet
+      // templates are traced - the Cyrillic / Greek / Vietnamese subsets
+      // and italic variants stay unbundled.
+      "./node_modules/@fontsource/bebas-neue/files/bebas-neue-latin-400-normal.woff2",
+      "./node_modules/@fontsource/mulish/files/mulish-latin-400-normal.woff2",
+      "./node_modules/@fontsource/mulish/files/mulish-latin-600-normal.woff2",
+      "./node_modules/@fontsource/mulish/files/mulish-latin-700-normal.woff2",
+      "./node_modules/@fontsource/mulish/files/mulish-latin-800-normal.woff2",
+      // KitchFix mark - inlined as data URI in the brand band.
+      "./public/PFS_PrimaryLogo_White_Circle.png",
     ],
   },
 };
