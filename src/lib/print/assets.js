@@ -138,6 +138,21 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .sg .a{background:#EFEDE6;} .sg .a em{font-style:normal;font-size:7.5px;font-weight:700;color:#8A857A;letter-spacing:.03em;}
 .sg .o{background:#fff;border:1px solid #F0EDE5;}
 .seasend{font-size:7px;font-weight:800;letter-spacing:.1em;color:var(--mut);text-align:right;margin-top:5px;}
+/* ── Year sheet (Wave 2) ────────────────────────────────────────
+   The Year sheet reuses the shared band + trow but swaps the calendar
+   for a 3-column grid of 28-cell sparklines per month. Cell classes:
+   svc default = tan (--svc), .sp = copper wash (--cop2),
+   .gm = navy fill (--navy), .of = hollow hairline. .offpanel spans
+   the grid full-width and carries the offseason label when trailing
+   empty months collapse. Verbatim from the spec's Sheet 3. */
+.ymos{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 22px;margin-top:4px;}
+.ymo h5{font-family:'Bebas Neue',sans-serif;font-size:13.5px;letter-spacing:.07em;margin:0 0 5px;border-bottom:1px solid var(--ink);padding-bottom:3px;}
+.ygg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.ygg i{height:15px;border-radius:2.5px;background:var(--svc);font-style:normal;display:block;}
+.ygg i.sp{background:var(--cop2);}
+.ygg i.gm{background:var(--navy);}
+.ygg i.of{background:#fff;border:1px solid #EFECE3;}
+.offpanel{grid-column:1/-1;border:1px solid var(--hair);border-radius:4px;padding:10px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.14em;color:#B7B2A5;}
 `;
 }
 

@@ -15,6 +15,8 @@
 //     - Excel workbook (full year)
 //     - PDF - season schedule (SCHEDULE-ACCOUNT-ONLY - gated on
 //       has_homestand_schedule || has_schedule_overlay)
+//     - PDF - year at a glance (ALL ACCOUNTS, since Wave 2 #420 -
+//       per-meal PDCs get their service rhythm on a page too)
 //
 // #419 (2026-07-13): the menu was originally Excel-only with a scope-
 // aware Item 1 + a year fallback. Wave 1 of the SC print export
@@ -278,6 +280,17 @@ function pdfSeasonItem({ year, accountKey }) {
   };
 }
 
+function pdfYearItem({ year, accountKey }) {
+  const safeAccount = String(accountKey).replace(/\s+/g, "");
+  const dateStr = todayDateStr();
+  return {
+    key: "pdf-year",
+    label: `PDF - year at a glance`,
+    filename: `KitchFix_SC_${safeAccount}_Year_FY${year}_${dateStr}.pdf`,
+    href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=year&year=${year}`,
+  };
+}
+
 function buildMenuItems({
   scope, year, periodKey, monthKey, accountKey,
   hasHomestandSchedule, hasScheduleOverlay,
@@ -299,6 +312,10 @@ function buildMenuItems({
     if (hasSchedule) {
       items.push(pdfSeasonItem({ year, accountKey }));
     }
+    // #420 (Wave 2): "PDF - year at a glance" for ALL accounts (not
+    // schedule-gated). Per-meal PDCs get their service rhythm on a
+    // page too.
+    items.push(pdfYearItem({ year, accountKey }));
   }
   return items.filter(Boolean);
 }
