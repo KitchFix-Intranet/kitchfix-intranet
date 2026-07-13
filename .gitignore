@@ -57,3 +57,7 @@ scripts/content/.dryrun-samples/
 # Service Calendar one-time import intermediate (regeneratable via
 # python3 scripts/_extract_sc_xlsx.py)
 scripts/_sc_extract.json
+
+# SC print artifacts — regenerated per PR via scripts/sc-print/gen-all-pdfs.mjs.
+# Never commit; attach to PR body instead. Post-#421 cleanup.
+scripts/sc-print/artifacts/*.pdf

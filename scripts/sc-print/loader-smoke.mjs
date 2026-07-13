@@ -37,7 +37,9 @@ const CASES = [
   { name: "month · overlay account (STL - FL · 2026-03)",
     fn: async (M) => M.loadMonthPrintData("STL - FL", YEAR, "2026-03"),
     module: "monthSheet",
-    check: (ctx) => ctx.account && ctx.grid && ctx.hasScheduleOverlay === true },
+    // #422: v2 ctx exposes variant instead of the raw flag - PDCO
+    // = PDC overlay.
+    check: (ctx) => ctx.account && ctx.grid && ctx.variant === "PDCO" },
   { name: "period · per-meal PDC (CIN - AZ · P8)",
     fn: async (M) => M.loadPeriodPrintData("CIN - AZ", YEAR, "P8"),
     module: "monthSheet",
@@ -50,18 +52,18 @@ const CASES = [
     fn: async (M) => M.loadSeasonPrintData("TBJ - FL", YEAR),
     module: "seasonSheet",
     check: (ctx) => ctx.account && ctx.isOverlay === true },
-  { name: "year · schedule account (STL - FL)",
-    fn: async (M) => M.loadYearPrintData("STL - FL", YEAR),
-    module: "yearSheet",
-    check: (ctx) => ctx.account && ctx.homeDates instanceof Set && ctx.springDates instanceof Set },
-  { name: "year · MLB fee account (CIN - OH)",
-    fn: async (M) => M.loadYearPrintData("CIN - OH", YEAR),
-    module: "yearSheet",
-    check: (ctx) => ctx.account && ctx.hasSchedule === true && ctx.homeDates.size > 0 },
-  { name: "year · per-meal PDC no schedule (CIN - AZ)",
-    fn: async (M) => M.loadYearPrintData("CIN - AZ", YEAR),
-    module: "yearSheet",
-    check: (ctx) => ctx.account && ctx.hasSchedule === false && ctx.homeDates.size === 0 },
+  { name: "ops-calendar · schedule account (STL - FL)",
+    fn: async (M) => M.loadOpsCalendarPrintData("STL - FL", YEAR),
+    module: "opsCalendarSheet",
+    check: (ctx) => ctx.account && ctx.statusByDate && typeof ctx.periodStarts === "object" && ctx.springDates instanceof Set },
+  { name: "ops-calendar · MLB fee account (CIN - OH)",
+    fn: async (M) => M.loadOpsCalendarPrintData("CIN - OH", YEAR),
+    module: "opsCalendarSheet",
+    check: (ctx) => ctx.account && ctx.statusByDate && Object.keys(ctx.periodStarts).length > 0 },
+  { name: "ops-calendar · per-meal PDC no schedule (CIN - AZ)",
+    fn: async (M) => M.loadOpsCalendarPrintData("CIN - AZ", YEAR),
+    module: "opsCalendarSheet",
+    check: (ctx) => ctx.account && ctx.statusByDate && ctx.springDates instanceof Set },
 ];
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -72,7 +74,9 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 const modules = {
   monthSheet: await import("../../src/lib/print/monthSheet.js"),
   seasonSheet: await import("../../src/lib/print/seasonSheet.js"),
-  yearSheet: await import("../../src/lib/print/yearSheet.js"),
+  // #422: yearSheet.js retired; opsCalendarSheet.js replaces it under
+  // the same scope=year URL.
+  opsCalendarSheet: await import("../../src/lib/print/opsCalendarSheet.js"),
 };
 
 let fails = 0;
