@@ -339,10 +339,12 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
 
   if (gameCell) {
     // Home game overrides state fill (navy-tint fill + game info).
-    // Meal stack still renders on PDC variant if the day carried a
-    // per-service actual/projection (game days at PDCs DO get served
-    // meals; the stack conveys those).
-    const mealStack = (variant === "PDC" && servicesByDate[c.date])
+    // #422 Wave 3 correction: PDCO (STL - FL, TBJ - FL) gets the meal
+    // stack too - on service days AND game days - per spec block 6 +
+    // Kevin's ruling 2026-07-13. Previous variant map incorrectly
+    // excluded PDCO from the stack.
+    const wantsStack = (variant === "PDC" || variant === "PDCO");
+    const mealStack = (wantsStack && servicesByDate[c.date])
       ? renderMealStack(servicesByDate[c.date], state)
       : "";
     return renderGameCell(c, home, account, "hm", mealStack);
@@ -370,16 +372,19 @@ function renderGameCell(c, home, account, cls, extraStack = "") {
 }
 
 function renderAwayCell(c, home) {
+  // #422 Wave 3 correction: away opponent uses .awy (grey #A9A499)
+  // not .opp (navy). Spec Sheet 5 (approved) grammar. The navy-vs-grey
+  // greyscale contrast is the load-bearing home/away signal on paper.
   const opp = home.opponent ? `@${esc(home.opponent)}` : "";
-  const oppHtml = opp ? `<span class="opp">${opp}</span>` : "";
+  const oppHtml = opp ? `<span class="awy">${opp}</span>` : "";
   return `<td class="aw"><span class="d">${c.dayOfMonth}</span>${oppHtml}</td>`;
 }
 
 function renderStateCell(c, state, variant, services, awayHome) {
   const awayHtml = (awayHome && awayHome.dayType === "AWAY" && awayHome.opponent)
-    ? `<span class="opp">@${esc(awayHome.opponent)}</span>`
+    ? `<span class="awy">@${esc(awayHome.opponent)}</span>`
     : "";
-  const mealStack = (variant === "PDC" && services)
+  const mealStack = ((variant === "PDC" || variant === "PDCO") && services)
     ? renderMealStack(services, state)
     : "";
   switch (state) {
@@ -396,44 +401,59 @@ function renderStateCell(c, state, variant, services, awayHome) {
   }
 }
 
-// PDC meal stack: right-aligned per-service label + count, with a
-// hairline rule + bold total. Dark green when served (SERVED state);
-// light green when projected (PROJECTED state). Services are the
+// Meal stack: right-aligned per-service label + count, with a hairline
+// rule + bold total. One line per service (spec blocks 6/7 + Kevin's
+// ruling: exact figures, no service cap). SERVED state = dark green
+// (.mls); PROJECTED state = light green (.mls.pj). Services are the
 // per-day services array from loadMonthData with actualCount or
 // projectedCount per row.
+//
+// #422 Wave 3 correction (Kevin's ruling): render one line per service
+// with its count ("B 110"); no two-service cap; ALL revenue-bearing
+// services show. Total = sum of visible lines.
+//
+// **BEVERAGE / NON-REVENUE RULING (FLAGGED)**: services marked
+// isNonRevenue OR whose names match /coffee|beverage|bev|fountain/i
+// are EXCLUDED from the meal stack entirely - they don't appear as a
+// line AND they don't contribute to the total. Rationale: PDC meal
+// stacks are the billable-meal signal; beverages / non-revenue rows
+// are accompaniments and would inflate the visible sum. Alternative
+// (include beverages as lines with counts) is straightforward if
+// Kevin overrides. Visible lines always sum to the printed total.
 function renderMealStack(services, state) {
   const pj = state === "PROJECTED";
   const cls = pj ? "mls pj" : "mls";
   const key = pj ? "projectedCount" : "actualCount";
-  // Only include services with a non-null count. Take the first two
-  // "core" services (typically Breakfast + Lunch); the tail is folded
-  // into the total. Group short labels 1-char: B, L, D, S, etc.
+
   const shortLabel = (name) => {
-    if (!name) return "";
+    if (!name) return null;
     const trim = String(name).trim();
-    if (/breakfast/i.test(trim)) return "B";
-    if (/lunch/i.test(trim))     return "L";
-    if (/dinner/i.test(trim))    return "D";
-    if (/snack/i.test(trim))     return "S";
-    if (/coffee|beverage|bev/i.test(trim)) return "";  // skip beverages
+    if (/breakfast/i.test(trim))                return "B";
+    if (/lunch/i.test(trim))                    return "L";
+    if (/dinner/i.test(trim))                   return "D";
+    if (/post[- ]?game/i.test(trim))            return "PG";
+    if (/pre[- ]?game/i.test(trim))             return "PreG";
+    if (/snack/i.test(trim))                    return "Sn";
+    // Beverages / coffee / non-revenue names: exclude from stack.
+    if (/coffee|beverage|bev|fountain|water|hydration/i.test(trim)) return null;
     return trim.charAt(0).toUpperCase();
   };
+
   const rows = [];
   let total = 0;
   for (const s of services) {
+    if (s.isNonRevenue) continue;
     const v = Number(s[key]);
     if (Number.isNaN(v) || v === 0) continue;
-    const l = shortLabel(s.serviceName);
-    if (l) rows.push({ l, v });
+    const label = shortLabel(s.serviceName);
+    if (!label) continue;
+    rows.push({ label, v });
     total += v;
   }
-  if (total === 0) return "";
-  // Cap the rows shown to keep the cell readable at 84px height.
-  const displayRows = rows.slice(0, 2);
-  const labels = displayRows.map((r) => r.l).join("/");
-  const line = labels ? `<i>${esc(labels)}</i>` : "";
-  const totalHtml = `<b>${total}</b>`;
-  return `<span class="${cls}">${line}${totalHtml}</span>`;
+  if (rows.length === 0) return "";
+
+  const lines = rows.map((r) => `<i>${esc(r.label)} ${r.v}</i>`).join("");
+  return `<span class="${cls}">${lines}<b>${total}</b></span>`;
 }
 
 function variantLegend(variant, tzAbbrev) {

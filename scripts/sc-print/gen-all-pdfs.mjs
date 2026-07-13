@@ -47,6 +47,13 @@ const CASES = [
       const ctx = await monthSheet.loadPeriodPrintData("STL - FL", YEAR, "P8");
       return monthSheet.renderPeriodSheetHtml(ctx);
     }},
+  // #422 Wave 3 rider: AAA month for Kevin's ruling on the
+  // state-grid-vs-game-fills-only variant question.
+  { slug: "CIN-KY_Month_2026-07",  landscape: true,  label: "month · CIN - KY · 2026-07 (AAA - variant choice OPEN)",
+    build: async () => {
+      const ctx = await monthSheet.loadMonthPrintData("CIN - KY", YEAR, "2026-07");
+      return monthSheet.renderMonthSheet(ctx);
+    }},
   { slug: "CIN-KY_Season",         landscape: true,  label: "season · CIN - KY",
     build: async () => {
       const ctx = await seasonSheet.loadSeasonPrintData("CIN - KY", YEAR);
