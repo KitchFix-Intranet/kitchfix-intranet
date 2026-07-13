@@ -410,8 +410,8 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
   const pillStart = periodPillStarts ? periodPillStarts[c.date] : null;
   const pillEnd   = periodPillEnds   ? periodPillEnds[c.date]   : null;
   const pillHtml =
-    (pillEnd   != null) ? `<span class="ppill e">P${pillEnd}</span>` :
-    (pillStart != null) ? `<span class="ppill s">P${pillStart}</span>` :
+    (pillEnd   != null) ? `<span class="ppill e">P${pillEnd} ENDS</span>` :
+    (pillStart != null) ? `<span class="ppill s">P${pillStart} STARTS</span>` :
     "";
 
   // ── MLB variant: home/away fills only, no state grid, no meal stack.

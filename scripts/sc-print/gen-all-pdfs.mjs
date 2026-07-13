@@ -116,6 +116,14 @@ const CASES = [
       const ctx = await opsCal.loadOpsCalendarPrintData("STL - MO", YEAR);
       return opsCal.renderOpsCalendarSheet(ctx);
     }},
+  // #428 amendment (2026-07-13): TBJ - NY (Buffalo Bisons, AAA) season
+  // added to the proof set per Kevin's "all four season PNGs" check -
+  // pre-amendment only 3 seasons (CIN - OH, CIN - KY, TBJ - FL) rendered.
+  { slug: "TBJ-NY_Season",         landscape: true,  label: "season · TBJ - NY (AAA - Buffalo Bisons)",
+    build: async () => {
+      const ctx = await seasonSheet.loadSeasonPrintData("TBJ - NY", YEAR);
+      return seasonSheet.renderSeasonSheet(ctx);
+    }},
 ];
 
 const browser = await puppeteer.launch({ headless: true });
