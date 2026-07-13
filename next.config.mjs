@@ -1,7 +1,21 @@
 import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
+  // SC print spike (2026-07-13): puppeteer-core + @sparticuz/chromium
+  // must NOT be bundled by Turbopack - they resolve files at runtime
+  // (chromium binary tarballs in node_modules/@sparticuz/chromium/bin/).
+  // Bundling swallows those files. serverExternalPackages leaves them
+  // as external require()s and preserves the on-disk layout. The
+  // matching outputFileTracingIncludes ensures Vercel's function
+  // bundler carries the /bin/ tarballs into the deployment for the
+  // print route only (they're ~55MB - keep them off every other
+  // function).
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  outputFileTracingIncludes: {
+    "/api/service-calendar/print": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+  },
 };
 
 export default withSentryConfig(nextConfig, {
