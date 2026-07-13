@@ -59,20 +59,28 @@ const ACCOUNTS = [
 ];
 const MONTHS = ["2026-05", "2026-06"];
 
-// ── Colors + tokens (Option 4 pixel reference) ─────────────────────────
+// ── Colors + tokens (Option 4 pixel reference in docs/design/
+// sc-pdc-four-options.html) ────────────────────────────────────────────
 const TOK = {
   navy:    "#16305E",
   ink:     "#26262B",
   mut:     "#8A857A",
-  hair:    "#E4E0D6",
-  grid:    "#C9C3B5",       // polish-wave G1 darker line
+  hair:    "#C9C3B5",       // mockup's --hair value (matches polish-wave --grid)
   soft:    "#F6F4EF",
   wknd:    "#FAF8F3",       // weekend row tint (Zone 2)
   copper:  "#C2410C",
-  confInk: "#33582B",       // CONFIRMED deep green text
-  confBg:  "#E4EDDA",       // CONFIRMED fill
-  projInk: "#7E9573",       // PROJECTED sage text
-  projLn:  "#B9C9AE",       // PROJECTED outline
+  // Semantics per mockup:
+  //   svcC / fillC / barC = CONFIRMED text / cell fill / bar fill (saturated)
+  //   svcP / barP         = PROJECTED text / bar fill (lighter)
+  //   PROJECTED zone-1 cells stay unfilled (default border only + sage text)
+  //   per mockup grammar; the "outline" in Kevin's brief reads as the
+  //   default cell border, not a distinct outline color.
+  svcC:    "#33582B",
+  svcP:    "#7E9573",
+  fillC:   "#E4EDDA",
+  barC:    "#B9CFA8",
+  barP:    "#DCE7D4",
+  emptyInk:"#D8D4CA",       // em-dash placeholder color in empty matrix cells
 };
 
 // Portrait letter page ≈ 792px tall × 612px wide at 96dpi.
@@ -84,8 +92,10 @@ function pickRowHeights(daysInMonth, weekRowsCount) {
   const CHROME = 165;
   const PAGE   = 792;
 
-  const targetR2 = 22, floorR2 = 19;
-  const targetR1 = 42, floorR1 = 34;
+  // Mockup targets: Zone 2 row 26px, Zone 1 cell 44px. Floors are
+  // Kevin's brief numbers.
+  const targetR2 = 26, floorR2 = 19;
+  const targetR1 = 44, floorR1 = 34;
 
   const compute = (r1, r2) =>
     CHROME + weekRowsCount * r1 + daysInMonth * r2;
@@ -264,17 +274,21 @@ function renderZone1(month, r1) {
   }
   while (rows.length > 0 && rows[rows.length - 1].every((c) => c.outOfMonth)) rows.pop();
 
+  // Mockup grammar: out-of-month cells render as empty (no day number,
+  // no border), no-service days render the day number only in soft
+  // fill (no "·" label), value cells render day number top-left + hero
+  // total centered.
   const cellFor = (c) => {
-    if (c.outOfMonth) return `<div class="z1c blank"><span class="dn">${c.dom}</span></div>`;
+    if (c.outOfMonth) return `<div class="z1c blank"></div>`;
     const dt = dayTotals[c.iso];
     const ns = dayNoService.has(c.iso);
     const gm = games[c.iso];
     const gameDot = (overlay && gm) ? `<span class="gdot"></span>` : "";
     if (ns) {
-      return `<div class="z1c ns"><span class="dn">${c.dom}</span><span class="nslabel">·</span>${gameDot}</div>`;
+      return `<div class="z1c ns"><span class="dn">${c.dom}</span>${gameDot}</div>`;
     }
     if (!dt || dt.value === 0) {
-      return `<div class="z1c empty"><span class="dn">${c.dom}</span>${gameDot}</div>`;
+      return `<div class="z1c"><span class="dn">${c.dom}</span>${gameDot}</div>`;
     }
     const cls = dt.style === "PROJECTED" ? "z1c proj" : "z1c conf";
     return `<div class="${cls}"><span class="dn">${c.dom}</span><span class="hero">${dt.value}</span>${gameDot}</div>`;
@@ -297,13 +311,19 @@ function renderZone2(month, r2, tzAbbrev) {
     dayNoService, games, colMax, maxDayTotal, allDates, overlay, svcMonthTotals,
   } = month;
 
+  // Mockup grammar: DAY column left, then GAME (if overlay), then
+  // service columns, then TOTAL with left rule. Header alignment matches
+  // mockup (thead th text-align right except .l which is left for DAY +
+  // GAME context columns).
   const showGame = !!overlay;
   const headerCells = [
-    `<div class="z2hd day">DAY</div>`,
+    `<div class="z2hd l">DAY</div>`,
+    ...(showGame ? [`<div class="z2hd l">GAME</div>`] : []),
     ...columns.map((svc) => `<div class="z2hd svc"><span>${escHtml(svc)}</span></div>`),
-    ...(showGame ? [`<div class="z2hd game">GAME</div>`] : []),
     `<div class="z2hd total">TOTAL</div>`,
   ].join("");
+
+  const emDashCell = `<div class="z2c empty"><span class="dash">—</span></div>`;
 
   const rowsHtml = allDates.map((iso) => {
     const d = parseIso(iso);
@@ -311,15 +331,31 @@ function renderZone2(month, r2, tzAbbrev) {
     const dow = DOW_SHORT[dowIdx];
     const isMon = dowIdx === 0;
     const isWkend = dowIdx >= 5;
+    const isNs = dayNoService.has(iso);
+
+    // No-service days collapse: single spanning cell instead of empty
+    // matrix cells (mockup grammar for compliance-agnostic no-service).
+    if (isNs) {
+      const nsClasses = ["z2row", "ns"];
+      if (isMon) nsClasses.push("mon");
+      if (isWkend) nsClasses.push("wknd");
+      const gameFillHtml = showGame ? `<div class="z2c gm"></div>` : "";
+      return `<div class="${nsClasses.join(" ")}">
+        <div class="z2dc"><span class="dow">${dow}</span><span class="dm">${d.getUTCDate()}</span></div>
+        ${gameFillHtml}
+        <div class="z2c nsspan" style="grid-column: span ${columns.length};">NO SERVICE</div>
+        <div class="z2c total empty"></div>
+      </div>`;
+    }
+
     const rowClasses = ["z2row"];
     if (isMon) rowClasses.push("mon");
     if (isWkend) rowClasses.push("wknd");
-    if (dayNoService.has(iso)) rowClasses.push("ns");
 
     const bucket = daySvcMap.get(iso) || new Map();
     const svcCellsHtml = columns.map((svc) => {
       const cell = bucket.get(svc);
-      if (!cell) return `<div class="z2c empty"></div>`;
+      if (!cell) return emDashCell;
       const pct = colMax[svc] > 0 ? Math.max(2, Math.round((cell.value / colMax[svc]) * 100)) : 0;
       const cls = cell.style === "PROJECTED" ? "z2c proj" : "z2c conf";
       return `<div class="${cls}"><span class="bar" style="width:${pct}%;"></span><span class="num">${cell.value}</span></div>`;
@@ -330,7 +366,10 @@ function renderZone2(month, r2, tzAbbrev) {
       const gm = games[iso];
       if (gm && gm.opp) {
         const time = gm.gameTime ? formatOverlayGameTime(gm.gameTime, month.accountKey) : "";
-        gameHtml = `<div class="z2c gm"><span>${escHtml(gm.opp)}${time ? " " + escHtml(time) : ""}</span></div>`;
+        // Mockup grammar: opp letters navy + inline time in muted navy
+        // (<i class> is the mockup's <i> child element).
+        const timeHtml = time ? `<i>${escHtml(time)}</i>` : "";
+        gameHtml = `<div class="z2c gm">${escHtml(gm.opp)}${timeHtml}</div>`;
       } else {
         gameHtml = `<div class="z2c gm"></div>`;
       }
@@ -348,16 +387,18 @@ function renderZone2(month, r2, tzAbbrev) {
 
     return `<div class="${rowClasses.join(" ")}">
       <div class="z2dc"><span class="dow">${dow}</span><span class="dm">${d.getUTCDate()}</span></div>
-      ${svcCellsHtml}
       ${gameHtml}
+      ${svcCellsHtml}
       ${totalHtml}
     </div>`;
   }).join("");
 
-  // Grid template: fixed DAY block + N service cols + optional GAME + TOTAL.
+  // Grid template: fixed DAY + optional GAME + N service cols + TOTAL.
   const svcColsTemplate = columns.map(() => "minmax(0, 1fr)").join(" ");
-  const gameCol = showGame ? " 84px" : "";
-  const gridTemplate = `52px ${svcColsTemplate}${gameCol} 68px`;
+  const dayCol = "58px";
+  const gameCol = showGame ? " 74px" : "";
+  const totalCol = "68px";
+  const gridTemplate = `${dayCol}${gameCol} ${svcColsTemplate} ${totalCol}`;
 
   return `<div class="zone-label">FULL MONTH — DETAIL</div>
   <div class="z2 matrix" style="--r2:${r2}px; --grid-cols:${gridTemplate};">
@@ -438,60 +479,61 @@ body{
 .trow{display:flex;align-items:baseline;gap:12px;margin:14px 0 8px;}
 .mo{font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:.9;color:${TOK.ink};}
 .yr{font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:.9;color:#D8D4CA;margin-left:auto;}
-.zone-label{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.13em;color:${TOK.mut};margin:8px 0 4px;padding-bottom:2px;border-bottom:1px solid ${TOK.ink};}
+.zone-label{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.1em;color:${TOK.mut};margin:14px 0 8px;padding-bottom:3px;border-bottom:1.5px solid ${TOK.ink};}
 /* ── Zone 1: mini month grid ────────────────────────────────────── */
-.z1{display:flex;flex-direction:column;gap:2px;}
-.z1row{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
-.z1row.z1hdr{margin-bottom:1px;}
-.z1hcell{font-size:6px;font-weight:800;letter-spacing:.1em;color:${TOK.mut};text-align:left;padding:0 0 1px 4px;}
-.z1c{height:var(--r1);border-radius:3px;background:${TOK.soft};border:1px solid ${TOK.grid};position:relative;padding:3px 5px;}
-.z1c .dn{font-size:7px;font-weight:800;color:${TOK.mut};}
-.z1c .hero{position:absolute;left:0;right:0;top:50%;transform:translateY(-40%);text-align:center;font-size:15px;font-weight:800;line-height:1;}
-.z1c.conf{background:${TOK.confBg};border-color:#B9C9AE;}
-.z1c.conf .hero{color:${TOK.confInk};}
-.z1c.proj{background:#fff;border:1px solid ${TOK.projLn};}
-.z1c.proj .hero{color:${TOK.projInk};}
-.z1c.ns{background:${TOK.soft};border-color:${TOK.grid};}
-.z1c.ns .nslabel{position:absolute;left:0;right:0;top:50%;transform:translateY(-40%);text-align:center;color:${TOK.mut};font-size:12px;}
-.z1c.empty{background:#fff;}
-.z1c.blank{background:#FCFBF8;border-color:#F0EBDF;}
-.z1c.blank .dn{color:#D8D4CA;}
-.z1c .gdot{position:absolute;top:3px;right:4px;width:4px;height:4px;border-radius:50%;background:${TOK.navy};}
-/* ── Zone 2: bar matrix ─────────────────────────────────────────── */
+/* Mockup grammar: text-align:center, vertical-align:middle, cell
+   border 1.5px hair, day number top-left, hero total centered. */
+.z1{display:flex;flex-direction:column;gap:0;}
+.z1row{display:grid;grid-template-columns:repeat(7,1fr);gap:0;}
+.z1row.z1hdr .z1c{border:none;height:auto;padding-bottom:4px;}
+.z1hcell{font-size:8px;font-weight:800;letter-spacing:.12em;color:${TOK.mut};text-align:center;padding:0 0 4px;}
+.z1c{height:var(--r1);border:1.5px solid ${TOK.hair};text-align:center;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
+.z1c .dn{position:absolute;top:2px;left:4px;font-size:7px;font-weight:800;color:#B0AB9F;}
+.z1c .hero{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:15px;font-weight:800;line-height:1;}
+.z1c.conf{background:${TOK.fillC};}
+.z1c.conf .hero{color:${TOK.svcC};}
+.z1c.proj .hero{color:${TOK.svcP};font-weight:700;}
+.z1c.ns{background:${TOK.soft};}
+.z1c.blank{border:none;background:transparent;}
+.z1c .gdot{position:absolute;top:3px;right:4px;width:6px;height:6px;border-radius:50%;background:${TOK.navy};}
+/* ── Zone 2: bar matrix (Option 1 grammar inside Option 4) ─────── */
+/* Row-level style would break mixed-source days (per Kevin's brief:
+   value = actualCount if hasActuals else projectedCount; style follows
+   source per cell). Prototype uses per-cell CONFIRMED/PROJECTED to
+   preserve that resolution. Mockup shows row-level; brief overrides. */
 .z2{display:flex;flex-direction:column;}
-.z2row{display:grid;grid-template-columns:var(--grid-cols);align-items:center;column-gap:3px;}
-.z2row.hdr{padding:0 0 2px 0;border-bottom:1px solid ${TOK.ink};}
-.z2hd{font-size:6.5px;font-weight:800;letter-spacing:.1em;color:${TOK.mut};padding:0 3px;overflow:hidden;}
-.z2hd.svc{white-space:normal;line-height:1.05;overflow-wrap:anywhere;}
+.z2row{display:grid;grid-template-columns:var(--grid-cols);align-items:center;column-gap:0;}
+.z2row.hdr{padding:0 0 6px 0;border-bottom:2px solid ${TOK.ink};}
+.z2hd{font-size:8px;font-weight:800;color:${TOK.ink};padding:0 6px;overflow:hidden;line-height:1.25;text-align:right;vertical-align:bottom;}
+.z2hd.svc{white-space:normal;overflow-wrap:anywhere;}
 .z2hd.svc span{display:inline-block;}
-.z2hd.day{color:${TOK.mut};}
+.z2hd.l{text-align:left;}
 .z2hd.total{text-align:right;color:${TOK.ink};}
-.z2hd.game{text-align:left;}
 .z2row:not(.hdr){height:var(--r2);border-bottom:1px solid ${TOK.hair};}
 .z2row.mon{border-top:2.5px solid ${TOK.ink};}
 .z2row.wknd{background:${TOK.wknd};}
-.z2dc{display:flex;flex-direction:column;padding:0 4px 0 0;line-height:1;}
-.z2dc .dow{font-size:5.5px;font-weight:800;letter-spacing:.09em;color:${TOK.mut};}
-.z2dc .dm{font-size:10px;font-weight:800;color:${TOK.ink};}
-.z2c{position:relative;height:100%;display:flex;align-items:center;justify-content:flex-end;padding:0 4px;overflow:hidden;}
-.z2c.empty{opacity:.3;}
-.z2c .bar{position:absolute;left:2px;top:2px;bottom:2px;height:auto;border-radius:2px;}
-.z2c .num{position:relative;font-size:8px;font-weight:700;line-height:1;z-index:1;}
-.z2c.conf .bar{background:${TOK.confBg};}
-.z2c.conf .num{color:${TOK.confInk};}
-.z2c.proj .bar{background:#fff;border:1px solid ${TOK.projLn};}
-.z2c.proj .num{color:${TOK.projInk};font-weight:700;}
-.z2c.total{border-left:2px solid ${TOK.ink};padding-left:6px;}
-.z2c.gm{padding:0 4px;font-size:7px;font-weight:800;color:${TOK.navy};letter-spacing:.02em;text-align:left;}
-.z2c.gm span{display:inline;line-height:1.1;}
-.z2row.ns{opacity:.75;}
-.z2row.ns .z2c:not(.total):not(.gm){background:${TOK.soft};}
+.z2dc{padding:0 6px;white-space:nowrap;font-size:10px;font-weight:800;line-height:1;}
+.z2dc .dow{color:${TOK.mut};font-weight:700;margin-right:5px;font-size:10px;}
+.z2dc .dm{color:${TOK.ink};font-weight:800;}
+/* Bar cells: mockup grammar - bar absolute right:0 top:4 bottom:4,
+   number relative z-index 1. Right-aligned bar grows toward left. */
+.z2c{position:relative;height:100%;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;overflow:hidden;}
+.z2c .bar{position:absolute;right:0;top:4px;bottom:4px;border-radius:2px 0 0 2px;z-index:0;}
+.z2c .num{position:relative;font-size:13px;font-weight:700;line-height:1;z-index:1;}
+.z2c.conf .bar{background:${TOK.barC};}
+.z2c.conf .num{color:${TOK.svcC};}
+.z2c.proj .bar{background:${TOK.barP};}
+.z2c.proj .num{color:${TOK.svcP};font-weight:600;}
+.z2c.total{border-left:2px solid ${TOK.ink};}
+.z2c.total .num{font-size:14.5px;font-weight:800;}
+.z2c.gm{font-size:8.5px;font-weight:800;color:${TOK.navy};padding:0 6px;white-space:nowrap;justify-content:flex-start;}
+.z2c.gm i{font-style:normal;color:#5A6B8C;font-weight:700;margin-left:3px;}
+.z2c.empty .dash{color:${TOK.emptyInk};font-weight:600;font-size:13px;line-height:1;}
+.z2row.ns{background:${TOK.soft};}
+.z2row.ns .nsspan{color:#B7B2A5;font-size:8px;font-weight:800;letter-spacing:.12em;justify-content:flex-start;padding:0 6px;}
 /* ── Footer ────────────────────────────────────────────────────── */
-.ft{display:flex;justify-content:space-between;align-items:flex-start;margin-top:8px;font-size:7px;color:${TOK.mut};font-weight:700;letter-spacing:.05em;gap:10px;}
-.ft .k{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
-.ft .swatch{display:inline-block;vertical-align:-1px;width:8px;height:8px;border-radius:2px;margin-right:3px;}
-.ft .swatch.conf{background:${TOK.confBg};border:1px solid #B9C9AE;}
-.ft .swatch.proj{background:#fff;border:1px solid ${TOK.projLn};}
+/* Mockup grammar: pure-text legend, no swatches. */
+.ft{display:flex;justify-content:space-between;align-items:flex-start;margin-top:8px;font-size:8px;color:${TOK.mut};font-weight:700;letter-spacing:.05em;gap:10px;}
 .ft .asof{color:${TOK.ink};font-weight:800;}
 .fitflag{color:${TOK.copper};font-weight:800;}
 </style>
@@ -507,12 +549,8 @@ body{
     ${zone1}
     ${zone2}
     <div class="ft">
-      <span class="k">
-        <span><span class="swatch conf"></span>CONFIRMED = deep green, filled</span>
-        <span><span class="swatch proj"></span>PROJECTED = sage, outlined</span>
-        ${!fits ? `<span class="fitflag">FIT: projected ${projected}px > 792px @ floors</span>` : ""}
-      </span>
-      <span><span class="asof">KITCHFIX · ${asOfStr}</span></span>
+      <span>CONFIRMED = deep green, filled · PROJECTED = sage, outlined${!fits ? ` · <span class="fitflag">FIT: projected ${projected}px > 792px @ floors</span>` : ""}</span>
+      <span class="asof">KITCHFIX · ${asOfStr}</span>
     </div>
   </div>
 </div>
