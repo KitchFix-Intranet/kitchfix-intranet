@@ -158,7 +158,19 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
   // Reuse loadMonthData for status derivation + homestand context (for
   // schedule accounts). Kept the light `noWrite: true` option out - we
   // just consume its output.
-  const monthData = await loadMonthData(accountKey, year, monthKey);
+  //
+  // #420 bugfix (2026-07-13, caught by scripts/sc-print/loader-smoke.mjs):
+  // loadMonthData expects `month` as a number (or 2-char zero-padded
+  // string) - it internally does `String(month).padStart(2, "0")` +
+  // `${year}-${m}-01`. Passing the full monthKey ("2026-06") produced
+  // "2026-2026-06-01" and threw "invalid input syntax for type date"
+  // from the sc_daily_revenue fetch. This bug existed in Wave 1's
+  // monthSheet.js from day one but slipped through the browser
+  // verification. The Wave 2 regression guard invokes all four print
+  // loaders against real Supabase creds so mistyped filters like this
+  // one can no longer ship silently.
+  const monthNumber = Number(monthKey.slice(5));   // "2026-06" -> 6
+  const monthData = await loadMonthData(accountKey, year, monthNumber);
 
   // Overlay accounts (STL-FL, TBJ-FL) need a separate call - loadMonthData
   // only fetches homestand when has_homestand_schedule is TRUE.
