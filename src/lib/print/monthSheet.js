@@ -33,6 +33,7 @@
 import { getServiceClient } from "@/lib/supabase";
 import {
   loadMonthData,
+  loadHomestandContext,
   loadScheduleOverlay,
 } from "@/lib/dataStore/serviceCalendar";
 import {
@@ -135,33 +136,38 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
   const monthNumber = Number(monthKey.slice(5));
   const monthData = await loadMonthData(accountKey, year, monthNumber);
 
-  // Overlay accounts (STL - FL, TBJ - FL) need a separate call -
-  // loadMonthData only fetches homestand when has_homestand_schedule is TRUE.
-  let overlayMap = {};
-  if (account.has_schedule_overlay) {
-    const first = `${monthKey}-01`;
-    const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-    const last = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
-    overlayMap = await loadScheduleOverlay(accountKey, first, last);
-  }
+  const first = `${monthKey}-01`;
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const last = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
 
-  const grid = buildMonthGrid(year, monthNumber);
-
-  // Homestand + overlay -> single date map (day_type, opponent, gameTime, dayNight, is_doubleheader).
+  // R1 (2026-07-13, corrective wave): games into month sheets at the
+  // PRINT loader. loadMonthData does NOT propagate homestand fields to
+  // day rows (PRINT_DATA_CENSUS.md §D.3), so the previous
+  // monthData.days[i].dayType mapping loop was dead code -
+  // homestandByDate stayed empty for every schedule account, and MLB /
+  // AAA month sheets rendered blank (Bugs 1+2). Fetch now goes direct
+  // to sc_homestand_schedule via the existing helpers, keyed on the
+  // account flags:
+  //   has_homestand_schedule -> loadHomestandContext (GAME + AWAY)
+  //   has_schedule_overlay   -> loadScheduleOverlay (GAME only per sc-17)
+  // Both feed the same homestandByDate map; overlay entries synthesize
+  // dayType: "GAME" so the render path sees one uniform shape.
   const homestandByDate = {};
-  for (const d of monthData?.days || []) {
-    if (d.dayType) {
-      homestandByDate[d.date] = {
-        dayType:        d.dayType,
-        opponent:       d.opponent || "",
-        gameTime:       d.gameTime,
-        dayNight:       d.dayNight,
-        isDoubleheader: !!d.isDoubleheader,
+  if (account.has_homestand_schedule) {
+    const ctx = await loadHomestandContext(accountKey, first, last);
+    for (const [date, entry] of Object.entries(ctx)) {
+      homestandByDate[date] = {
+        dayType:        entry.dayType,
+        opponent:       entry.opponent || "",
+        gameTime:       entry.gameTime,
+        dayNight:       entry.dayNight,
+        isDoubleheader: !!entry.isDoubleheader,
       };
     }
   }
-  for (const [date, entry] of Object.entries(overlayMap)) {
-    if (entry.dayType === "GAME") {
+  if (account.has_schedule_overlay) {
+    const overlay = await loadScheduleOverlay(accountKey, first, last);
+    for (const [date, entry] of Object.entries(overlay)) {
       homestandByDate[date] = {
         dayType:        "GAME",
         opponent:       entry.opponent || "",
@@ -171,6 +177,8 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
       };
     }
   }
+
+  const grid = buildMonthGrid(year, monthNumber);
 
   // Per-date lookups: state (from classifier), per-service actuals /
   // projections (for the PDC meal stack), period metadata.
@@ -213,6 +221,21 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
   const monthLast     = `${monthKey}-${String(monthLastDay).padStart(2, "0")}`;
   const monthIntersectsSpring = rangeIntersectsSpring(phaseTimeline, monthFirst, monthLast);
 
+  // R4 density: count the max services that would render on any single
+  // day this month (services with !isNonRevenue and either projectedCount
+  // > 0 or actualCount > 0). If it exceeds MEAL_STACK_LINE_CEILING the
+  // table renders with the .dense class -> 6.5px line size floor. Emit
+  // a console.warn so operations knows which month hit the floor.
+  const variant = pickVariant(account);
+  const wantsStack = (variant === "PDC" || variant === "PDCO" || variant === "AAA");
+  const mealStackMax = wantsStack ? computeMealStackDensity(servicesByDate) : 0;
+  const denseStack = mealStackMax > MEAL_STACK_LINE_CEILING;
+  if (denseStack) {
+    console.warn(
+      `[print/monthSheet] ${accountKey} ${monthKey}: densest day carries ${mealStackMax} services - stepping to 6.5px floor`
+    );
+  }
+
   return {
     account,
     year,
@@ -224,8 +247,31 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
     periodMap,
     springDates,
     monthIntersectsSpring,
-    variant: pickVariant(account),
+    variant,
+    mealStackMax,
+    denseStack,
   };
+}
+
+// Threshold set at 4: five-service days trigger .dense (6.5px floor).
+// The 5-row stack + Total row + game info (opp+time on .hm cells) does
+// not fit in the 56px reservation at 7px line size (63px required);
+// 6.5px steps it to 56.2px, which fits within a 108px cell height.
+const MEAL_STACK_LINE_CEILING = 4;
+
+function computeMealStackDensity(servicesByDate) {
+  let max = 0;
+  for (const services of Object.values(servicesByDate)) {
+    let count = 0;
+    for (const s of services) {
+      if (s.isNonRevenue) continue;
+      const proj = Number(s.projectedCount) || 0;
+      const act  = Number(s.actualCount)    || 0;
+      if (proj > 0 || act > 0) count++;
+    }
+    if (count > max) max = count;
+  }
+  return max;
 }
 
 function buildMonthGrid(year, month) {
@@ -252,7 +298,7 @@ function buildMonthGrid(year, month) {
 export function renderMonthSheetHtml(ctx, opts = {}) {
   const {
     account, year, monthKey, grid, homestandByDate, statusByDate,
-    servicesByDate, periodMap, monthIntersectsSpring, variant,
+    servicesByDate, periodMap, monthIntersectsSpring, variant, denseStack,
   } = ctx;
   const {
     titleMain, titleTagRight, titleYear, scopeLabel, tzAbbrev,
@@ -300,7 +346,7 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
       ${springChip}
       <span class="yr">${esc(String(titleYearStr))}</span>
     </div>
-    <table class="cal">
+    <table class="cal${denseStack ? " dense" : ""}">
       <tr><th>MON</th><th>TUE</th><th>WED</th><th>THU</th><th>FRI</th><th>SAT</th><th>SUN</th></tr>
       ${rowsHtml}
     </table>
@@ -320,7 +366,10 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
 
   const home = homestandByDate[c.date];
   const stat = statusByDate[c.date];
-  const state = stat ? resolveDayState(stat) : null;
+  // R5 superseded: MLB accounts route around state mapping in the
+  // resolver. Threading accountLevel keeps the safety consistent even
+  // though the MLB branch below already skips state.
+  const state = stat ? resolveDayState(stat, { accountLevel: account.level }) : null;
 
   // ── MLB variant: home/away fills only, no state grid, no meal stack.
   if (variant === "MLB") {
@@ -333,27 +382,34 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
     return `<td class=""><span class="d">${c.dayOfMonth}</span></td>`;
   }
 
-  // ── AAA / PDCO / PDC variants: state grid; game overlay layered on top.
+  // ── AAA / PDCO / PDC variants: state grid + game overlay + meal stack.
   const gameCell = home && home.dayType === "GAME";
   const awayCell = home && home.dayType === "AWAY";
+  const wantsStack = (variant === "PDC" || variant === "PDCO" || variant === "AAA");
 
   if (gameCell) {
-    // Home game overrides state fill (navy-tint fill + game info).
-    // #422 Wave 3 correction: PDCO (STL - FL, TBJ - FL) gets the meal
-    // stack too - on service days AND game days - per spec block 6 +
-    // Kevin's ruling 2026-07-13. Previous variant map incorrectly
-    // excluded PDCO from the stack.
-    const wantsStack = (variant === "PDC" || variant === "PDCO");
+    // R6 (2026-07-13): past game days without actuals render as
+    // NO ACTUALS (copper) with game info still visible (opp + time).
+    // No meal stack - projections don't print on past days.
+    if (state === "NO_ACTUALS") {
+      return renderGameCell(c, home, account, "nd");
+    }
+    // Home game overrides state fill (navy-tint fill + game info + stack).
     const mealStack = (wantsStack && servicesByDate[c.date])
       ? renderMealStack(servicesByDate[c.date], state)
       : "";
     return renderGameCell(c, home, account, "hm", mealStack);
   }
   if (awayCell) {
-    // Away cells render as ordinary state cells (no navy fill, no time).
-    // AAA / PDCO carry AWAY data but the day still might have service
-    // context. Fall through to state cell + optional away chip.
-    return renderStateCell(c, state, variant, servicesByDate[c.date], home);
+    // R1 (2026-07-13): AAA + PDCO away days render --awayfill + grey
+    // @OPP like the approved MLB Sheet 5. If the day carries service
+    // counts, the meal stack overlays on top (R4). Was falling through
+    // to renderStateCell(state=null) -> plain white cell with no away
+    // visual.
+    const mealStack = (wantsStack && servicesByDate[c.date])
+      ? renderMealStack(servicesByDate[c.date], state)
+      : "";
+    return renderAwayCell(c, home, mealStack);
   }
 
   return renderStateCell(c, state, variant, servicesByDate[c.date]);
@@ -371,89 +427,70 @@ function renderGameCell(c, home, account, cls, extraStack = "") {
   return `<td class="${cls}"><span class="d">${c.dayOfMonth}</span>${oppHtml}${timeHtml}${extraStack}</td>`;
 }
 
-function renderAwayCell(c, home) {
-  // #422 Wave 3 correction: away opponent uses .awy (grey #A9A499)
-  // not .opp (navy). Spec Sheet 5 (approved) grammar. The navy-vs-grey
-  // greyscale contrast is the load-bearing home/away signal on paper.
+function renderAwayCell(c, home, extraStack = "") {
+  // Away opponent uses .awy (grey #A9A499) not .opp (navy). Spec
+  // Sheet 5 (approved) grammar. The navy-vs-grey greyscale contrast
+  // is the load-bearing home/away signal on paper.
   const opp = home.opponent ? `@${esc(home.opponent)}` : "";
   const oppHtml = opp ? `<span class="awy">${opp}</span>` : "";
-  return `<td class="aw"><span class="d">${c.dayOfMonth}</span>${oppHtml}</td>`;
+  return `<td class="aw"><span class="d">${c.dayOfMonth}</span>${oppHtml}${extraStack}</td>`;
 }
 
-function renderStateCell(c, state, variant, services, awayHome) {
-  const awayHtml = (awayHome && awayHome.dayType === "AWAY" && awayHome.opponent)
-    ? `<span class="awy">@${esc(awayHome.opponent)}</span>`
-    : "";
-  const mealStack = ((variant === "PDC" || variant === "PDCO") && services)
+function renderStateCell(c, state, variant, services) {
+  const wantsStack = (variant === "PDC" || variant === "PDCO" || variant === "AAA");
+  const mealStack = (wantsStack && services)
     ? renderMealStack(services, state)
     : "";
   switch (state) {
     case "SERVED":
-      return `<td class="sv"><span class="d">${c.dayOfMonth}</span>${mealStack}${awayHtml}</td>`;
+      return `<td class="sv"><span class="d">${c.dayOfMonth}</span>${mealStack}</td>`;
     case "PROJECTED":
-      return `<td class="pj"><span class="d">${c.dayOfMonth}</span>${mealStack}${awayHtml}</td>`;
+      return `<td class="pj"><span class="d">${c.dayOfMonth}</span>${mealStack}</td>`;
     case "NO_ACTUALS":
-      return `<td class="nd"><span class="d">${c.dayOfMonth}</span><span class="ndt">NO ACTUALS</span>${awayHtml}</td>`;
+      return `<td class="nd"><span class="d">${c.dayOfMonth}</span><span class="ndt">NO ACTUALS</span></td>`;
     case "NO_SERVICE":
       return `<td class="ns"><span class="d">${c.dayOfMonth}</span><span class="nst">NO SERVICE</span></td>`;
     default:
-      return `<td><span class="d">${c.dayOfMonth}</span>${awayHtml}</td>`;
+      return `<td><span class="d">${c.dayOfMonth}</span></td>`;
   }
 }
 
-// Meal stack: right-aligned per-service label + count, with a hairline
-// rule + bold total. One line per service (spec blocks 6/7 + Kevin's
-// ruling: exact figures, no service cap). SERVED state = dark green
-// (.mls); PROJECTED state = light green (.mls.pj). Services are the
-// per-day services array from loadMonthData with actualCount or
-// projectedCount per row.
+// Meal stack: full-cell-width rows per service - name left, count right.
+// Grammar per docs/design/SC_PRINT_MEALSTACK_ADDENDUM.html:
+//   <span class="msl [pj]">
+//     <span class="r"><n>ServiceName</n><v>Count</v></span>...
+//     <span class="t"><n>Total</n><v>Sum</v></span>
+//   </span>
+// Service names print VERBATIM - case preserved. "Pre-game" (STL - FL)
+// stays distinct from "Pre-Game" (TBJ - FL). Long names wrap to two
+// lines via overflow-wrap:anywhere; never clipped.
 //
-// #422 Wave 3 correction (Kevin's ruling): render one line per service
-// with its count ("B 110"); no two-service cap; ALL revenue-bearing
-// services show. Total = sum of visible lines.
-//
-// **BEVERAGE / NON-REVENUE RULING (FLAGGED)**: services marked
-// isNonRevenue OR whose names match /coffee|beverage|bev|fountain/i
-// are EXCLUDED from the meal stack entirely - they don't appear as a
-// line AND they don't contribute to the total. Rationale: PDC meal
-// stacks are the billable-meal signal; beverages / non-revenue rows
-// are accompaniments and would inflate the visible sum. Alternative
-// (include beverages as lines with counts) is straightforward if
-// Kevin overrides. Visible lines always sum to the printed total.
+// Includes every service that carries a non-zero value for the state's
+// key AND is_non_revenue = false. Exclusion is is_non_revenue ONLY -
+// the pre-corrective wave name-regex is retired (R3, 2026-07-13). Flat-
+// fee services (Coffee Service, Fountain Bev) print like any other
+// row when they carry counts.
 function renderMealStack(services, state) {
   const pj = state === "PROJECTED";
-  const cls = pj ? "mls pj" : "mls";
+  const cls = pj ? "msl pj" : "msl";
   const key = pj ? "projectedCount" : "actualCount";
-
-  const shortLabel = (name) => {
-    if (!name) return null;
-    const trim = String(name).trim();
-    if (/breakfast/i.test(trim))                return "B";
-    if (/lunch/i.test(trim))                    return "L";
-    if (/dinner/i.test(trim))                   return "D";
-    if (/post[- ]?game/i.test(trim))            return "PG";
-    if (/pre[- ]?game/i.test(trim))             return "PreG";
-    if (/snack/i.test(trim))                    return "Sn";
-    // Beverages / coffee / non-revenue names: exclude from stack.
-    if (/coffee|beverage|bev|fountain|water|hydration/i.test(trim)) return null;
-    return trim.charAt(0).toUpperCase();
-  };
 
   const rows = [];
   let total = 0;
   for (const s of services) {
     if (s.isNonRevenue) continue;
     const v = Number(s[key]);
-    if (Number.isNaN(v) || v === 0) continue;
-    const label = shortLabel(s.serviceName);
-    if (!label) continue;
-    rows.push({ label, v });
+    if (!Number.isFinite(v) || v <= 0) continue;
+    if (!s.serviceName) continue;
+    rows.push({ name: s.serviceName, v });
     total += v;
   }
   if (rows.length === 0) return "";
 
-  const lines = rows.map((r) => `<i>${esc(r.label)} ${r.v}</i>`).join("");
-  return `<span class="${cls}">${lines}<b>${total}</b></span>`;
+  const lines = rows
+    .map((r) => `<span class="r"><n>${esc(r.name)}</n><v>${r.v}</v></span>`)
+    .join("");
+  return `<span class="${cls}">${lines}<span class="t"><n>Total</n><v>${total}</v></span></span>`;
 }
 
 function variantLegend(variant, tzAbbrev) {

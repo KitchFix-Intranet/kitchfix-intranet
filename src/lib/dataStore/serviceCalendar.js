@@ -812,6 +812,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         ...day,
         ...ctx,
         hasAnyActuals,
+        // R2 (2026-07-13): day-level flags for print's resolveDayState.
+        // Additive - existing consumers reading `hasAnyActuals` unchanged.
+        hasActuals: hasAnyActuals,
+        hasProjection: hasProj,
         status,
         totals: { projectedCount, actualCount, projectedRevenue, actualRevenue },
         // SC-079: per-day ledger, newest first. [] when the day has no
@@ -1161,6 +1165,10 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       // count so the payload stays compact - the tile only needs
       // "has any" for the bubble render.
       hasNoteEntries: noteDates.has(s.date),
+      // R2 (2026-07-13): day-level flags for print's resolveDayState +
+      // ops-calendar variant. Additive - screen consumers unaffected.
+      hasActuals:    !!s.hasAct,
+      hasProjection: !!s.hasProj,
     };
     const hs = homestandMap[s.date];
     if (hs) {

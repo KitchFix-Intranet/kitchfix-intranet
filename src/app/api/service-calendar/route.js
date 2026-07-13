@@ -450,6 +450,7 @@ export async function GET(request) {
           category,
           name: accountInfo.name || accountKey,
           billingModel,
+          hasHomestandSchedule: hasHomestandScheduleFlag,
           hasScheduleOverlay: hasScheduleOverlayFlag,
           // spreadsheetId kept on the response shape for legacy parity;
           // the UI still echoes it back in the POST body but the

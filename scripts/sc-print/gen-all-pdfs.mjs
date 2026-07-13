@@ -92,6 +92,30 @@ const CASES = [
       const ctx = await opsCal.loadOpsCalendarPrintData("CIN - AZ", YEAR);
       return opsCal.renderOpsCalendarSheet(ctx);
     }},
+  // Corrective wave (2026-07-13): new coverage per Kevin's brief.
+  //   TBJ - FL July: PDCO overlay + projected stacks with real names
+  //     (13-service catalog, longest count 167; the meal stack density
+  //     test post-R3-exclusion sweep).
+  //   TBR - FL July: 28-char "Extra Protein - Beef/Seafood" worst case
+  //     - the system ceiling test for name width + wrap behavior.
+  //   STL - MO Ops Calendar: R5 evidence - MLB fee account with zero
+  //     actuals for the year -> flood of NO ACTUALS copper (compliance
+  //     signal, "default honest" ruling stays until Kevin flips it).
+  { slug: "TBJ-FL_Month_2026-07",  landscape: true,  label: "month · TBJ - FL · 2026-07 (PDCO overlay + projected stacks)",
+    build: async () => {
+      const ctx = await monthSheet.loadMonthPrintData("TBJ - FL", YEAR, "2026-07");
+      return monthSheet.renderMonthSheet(ctx);
+    }},
+  { slug: "TBR-FL_Month_2026-07",  landscape: true,  label: "month · TBR - FL · 2026-07 (28-char worst-case names, densest catalog)",
+    build: async () => {
+      const ctx = await monthSheet.loadMonthPrintData("TBR - FL", YEAR, "2026-07");
+      return monthSheet.renderMonthSheet(ctx);
+    }},
+  { slug: "STL-MO_OpsCalendar",    landscape: false, label: "ops-calendar · STL - MO (R5 evidence: MLB w/ zero actuals -> copper flood)",
+    build: async () => {
+      const ctx = await opsCal.loadOpsCalendarPrintData("STL - MO", YEAR);
+      return opsCal.renderOpsCalendarSheet(ctx);
+    }},
 ];
 
 const browser = await puppeteer.launch({ headless: true });

@@ -182,7 +182,7 @@ export function renderSeasonSheetHtml(ctx) {
     const countLabel = isOverlay
       ? `${counts.h} HOME`
       : `${counts.h} H · ${counts.a} A`;
-    const cells = buildSeasonMonthCells(year, m, dayRows, account.team_key, statusByDate);
+    const cells = buildSeasonMonthCells(year, m, dayRows, account.team_key, statusByDate, account.level);
     const isLast = m === lastMonth;
     const trailer = (isLast && seasonEnd)
       ? `<div class="seasend">SEASON ENDS ${esc(monthDayLabel(seasonEnd))}</div>`
@@ -230,7 +230,7 @@ ${sheetHead({ title: `KitchFix SC season`, orientation: "landscape" })}
 </html>`;
 }
 
-function buildSeasonMonthCells(year, month, dayRows, accountKey, statusByDate) {
+function buildSeasonMonthCells(year, month, dayRows, accountKey, statusByDate, accountLevel) {
   const first = new Date(Date.UTC(year, month - 1, 1, 12));
   const anchor = weekAnchor(first);
   const cells = ["<b>M</b>","<b>T</b>","<b>W</b>","<b>T</b>","<b>F</b>","<b>S</b>","<b>S</b>"];
@@ -263,7 +263,7 @@ function buildSeasonMonthCells(year, month, dayRows, accountKey, statusByDate) {
     // non-game days keyed on the classifier state.
     const stat = statusByDate?.[iso];
     if (stat) {
-      const svc = seasonServiceState(stat);
+      const svc = seasonServiceState(stat, { accountLevel });
       if (svc === "SERVICE")     { cells.push(`<span class="s"><u>${dom}</u></span>`); continue; }
       if (svc === "NO_SERVICE")  { cells.push(`<span class="o"><u>${dom}</u></span>`); continue; }
       if (svc === "NO_ACTUALS")  { cells.push(`<span class="s"><u>${dom}</u></span>`); continue; }
