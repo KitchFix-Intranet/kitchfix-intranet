@@ -21,7 +21,7 @@
 ### Visual system (sc-18, sc-19, design-review 4-in-1)
 
 - **sc-18** (#412) - indigo game-day corner wedge on sm overview tiles (top-right, `#4338CA`, `polygon(0 0, 100% 0, 100% 100%)`). Overlay accounts only. Sm-tile philosophy amended from ONE mark to TWO.
-- **sc-19** (#413) - Spring Training styling at three sites: dark-copper wedge on sm tiles (bottom-left, `#8A4A1B`), ST pill on lg drill-in tiles, chrome bar rider. Phase-driven scope: all 5 PDC accounts inherit automatically.
+- **sc-19** (#413) - Spring Training styling at three sites: sun-copper wedge on sm tiles (bottom-left, `#C2410C` since 2026-07-12; originally `#8A4A1B`), ST pill on lg drill-in tiles + chrome bar rider (both `#8A4A1B` text). Two-step ramp of one copper family: dark-for-text (pill + rider), saturated-for-fill (wedge). Phase-driven scope: all 5 PDC accounts inherit automatically.
 - **Design-review 4-in-1** (#409) - four fixes:
   - `8145caa` actionable-only counters for X of Y entered
   - `ba35495` legend FIGURES row swatches render in full
@@ -97,11 +97,15 @@ Per the API survey ([`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_M
 - **State**: all deferred until January 2027 unless Kevin surfaces sooner.
 - **Owner**: Kevin (prioritization) + CC (execution).
 
-### Coming Soon gate drop + function review
+### Launch roadmap (Kevin's ruling, 2026-07-12)
 
-- **State**: SC is dev-gated behind Coming Soon per `docs/PROJECT_DASHBOARD.md`. Gate drop = launch.
-- **Prerequisite**: overall webapp function review (per `PROJECT_DASHBOARD.md`'s "Active threads" next-step-4). SC-011 (200% zoom / text-scaling) parked for this conversation.
-- **Owner**: Kevin.
+Sequential path to desktop-launch + mobile follow-on. Absorbs the previous standalone "Coming Soon gate drop" item.
+
+1. **Final design polishes** (PR #418, this PR): spring wedge color, chrome-bar wrap regression, notes cache staleness.
+2. **PDF schedule export** for overview + drill-down (renders-first before any build): MLB / MiLB full-season game schedules; STL - FL / TBJ - FL their affiliate home slates.
+3. **Full pricing alignment** across all accounts to 100% accuracy including off-contract specifics (Kevin supplies), then client bill export.
+4. **Full-scale system + codebase test, cleanup, drop the Coming Soon gate → desktop DONE**. Absorbs the prior "Coming Soon gate drop" item + overall webapp function review + SC-011 (200% zoom parked for this pass).
+5. **Mobile** (details TBC).
 
 ### Roster indicators (survey Task 6, deferred by default)
 

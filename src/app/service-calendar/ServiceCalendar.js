@@ -1350,6 +1350,39 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         // to so the drill-in refetches just that month, not the whole
         // cache (see the note above the dayMap memo).
         const mk = day.date.slice(0, 7);
+        // #418 (2026-07-12): if a rideNote was appended successfully,
+        // patch yearData[m].days[i].hasNoteEntries=true BEFORE the
+        // monthCache invalidation so the sm-tile bubble reflects the
+        // note immediately (yearData survives monthCache refetch and
+        // is refreshed by the reloadKey bump below). The note TEXT
+        // itself arrives in DayDetail via the paired refetch of the
+        // invalidated month - typically 100-300ms, and DayDetail's
+        // own local `noteEntries` state (seeded from day.noteEntries
+        // via handleAddNote's ride-through pattern) already shows the
+        // draft in the open composer. Choice: sc-submit-day does NOT
+        // return the appended entry (Kevin's guardrail: no server
+        // note-path changes), so we can't do the direct entry patch
+        // used in handleAddNote. Chose "trigger the minimal targeted
+        // refetch of that day" (via the existing month invalidation)
+        // over client-fabrication of the entry to preserve server-
+        // derived author/timestamp truth.
+        const rideNoteAppended = !!(opts.rideNote && (opts.rideNote || "").trim().length > 0 && !result.noteFailed);
+        if (rideNoteAppended) {
+          setYearData(prev => {
+            if (!prev) return prev;
+            let touched = false;
+            const next = prev.map(m => {
+              if (!m.days) return m;
+              const patched = m.days.map(d => {
+                if (d.date !== day.date) return d;
+                touched = true;
+                return { ...d, hasNoteEntries: true };
+              });
+              return touched ? { ...m, days: patched } : m;
+            });
+            return touched ? next : prev;
+          });
+        }
         setMonthCache(prev => {
           if (!(mk in prev)) return prev;
           const next = { ...prev }; delete next[mk]; return next;
@@ -1394,6 +1427,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // Server derives author from the session - never accepts a client
   // value. Returns { success, entry } so the child can prepend
   // optimistically. Errors surface a plain oh-toast.
+  //
+  // #418 (2026-07-12): before this fix, standalone Add note posts
+  // succeeded server-side and DayDetail's local ledger prepended the
+  // server-returned entry (see DayDetail.js:422), but neither
+  // `monthCache[mk].days[i].noteEntries` (the drill-in day record) nor
+  // `yearData[m].days[i].hasNoteEntries` (the sm-tile bubble source)
+  // were patched. On close/reopen, DayDetail re-mounted with `day` from
+  // the stale monthCache and the note was gone until hard refresh.
+  // Fix: on success, patch both caches with the server-returned entry
+  // so reopen reads the fresh state without a refetch. Mirror of the
+  // savedRevenue/savedMeals response-echo pattern in handleSave.
   const handleAddNote = useCallback(async (day, note) => {
     if (!data?.account) return { success: false, error: "No account loaded" };
     // C1b (F4): AbortController joins the tracked set (see handleSave).
@@ -1408,6 +1452,45 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       });
       const result = await res.json();
       if (!isMountedRef.current) return result;
+      if (result.success && result.entry) {
+        // #418: patch the drill-in day record. Prepends the server-
+        // returned entry (author + timestamp server-derived) and flips
+        // hasNoteEntries to true so DayDetail reopen and sm-tile bubble
+        // both reflect reality immediately.
+        const mk = day.date.slice(0, 7);
+        setMonthCache(prev => {
+          const monthEntry = prev[mk];
+          if (!monthEntry?.days) return prev;
+          const patchedDays = monthEntry.days.map(d => {
+            if (d.date !== day.date) return d;
+            return {
+              ...d,
+              noteEntries:    [result.entry, ...(d.noteEntries || [])],
+              hasNoteEntries: true,
+            };
+          });
+          return { ...prev, [mk]: { ...monthEntry, days: patchedDays } };
+        });
+        // #418: patch the year-summary hasNoteEntries so the sm-tile
+        // bubble appears on the overview grid without a refetch. Full
+        // note text lives only in monthCache; year-summary carries a
+        // boolean per the P2-item-3 compact-payload rule (see
+        // dataStore/serviceCalendar.js:1160-1164).
+        setYearData(prev => {
+          if (!prev) return prev;
+          let touched = false;
+          const next = prev.map(m => {
+            if (!m.days) return m;
+            const patched = m.days.map(d => {
+              if (d.date !== day.date) return d;
+              touched = true;
+              return { ...d, hasNoteEntries: true };
+            });
+            return touched ? { ...m, days: patched } : m;
+          });
+          return touched ? next : prev;
+        });
+      }
       if (!result.success) {
         showToast(result.error || "Failed to add note", "error");
       }

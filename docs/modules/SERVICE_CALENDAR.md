@@ -122,7 +122,7 @@ The two sanctioned marks and the corner grammar:
 | Corner | Mark | Meaning | Color | Trigger |
 |---|---|---|---|---|
 | **Top-right** | Indigo wedge | Game day (transient, per-day) | `#4338CA` (indigo-700) | `has_schedule_overlay=true` AND the date has a `GAME` row |
-| **Bottom-left** | Copper wedge | Season (multi-day, phase-driven) | `#8A4A1B` (copper-800) | Date falls inside a Spring Training block from `phaseCalendar.js`; PDC accounts only |
+| **Bottom-left** | Copper wedge | Season (multi-day, phase-driven) | `#C2410C` (copper-600 fill) | Date falls inside a Spring Training block from `phaseCalendar.js`; PDC accounts only. Kevin's density-review ruling 2026-07-12: fill takes the saturated step; text sites (ST pill + chrome rider) keep `#8A4A1B` (copper-800). |
 
 **Corner grammar**: top-right = event (transient), bottom-left = season (multi-day). If a third mark is ever needed, it goes on a corner that carries its axis - do not reopen the icon channel.
 

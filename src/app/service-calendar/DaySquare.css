@@ -282,11 +282,15 @@
   display: none;
 }
 
-/* sc-19: dark-copper Spring Training corner wedge (BOTTOM-LEFT).
-   Kevin chose dark copper (#8A4A1B) over mid-copper because the
-   mid variant washed out on the needs-entry amber fill - do NOT
-   lighten this. Mirror geometry of the sc-18 game wedge: same
-   15px legs, opposite corner, clip-path polygon rotated 180deg. */
+/* sc-19: sun-copper Spring Training corner wedge (BOTTOM-LEFT).
+   Kevin's density-review ruling 2026-07-12: the fill site takes
+   the saturated step of the copper family (#C2410C, copper-600
+   territory); text sites (the lg ST pill + chrome-bar rider) keep
+   the dark step (#8A4A1B, copper-800). Two-step ramp: dark-for-
+   text, saturated-for-fill. Mirror geometry of the sc-18 game
+   wedge: same 15px legs, opposite corner, clip-path polygon
+   rotated 180deg. Do NOT re-sweep to #8A4A1B or the pill/rider
+   colors - the family split is intentional. */
 .sc-daysq--sm.sc-daysq--spring::after {
   content: "";
   position: absolute;
@@ -294,7 +298,7 @@
   left: 0;
   width: 15px;
   height: 15px;
-  background: #8A4A1B;             /* c-copper 800 - promotable */
+  background: #C2410C;             /* c-copper 600 fill - promotable */
   clip-path: polygon(0 0, 0 100%, 100% 100%);
   pointer-events: none;
   z-index: 1;
@@ -311,8 +315,11 @@
    so it stays subordinate to the day + status hero.
 
    Colors: bg #F9E9D2 (copper 100), border #E0B183 (copper 300),
-   text #8A4A1B (copper 800 - same as the sm wedge). All three
-   hardcoded, flagged promotable together. */
+   text #8A4A1B (copper 800). The pill (text site) uses the DARK
+   copper step; the sm-tile wedge (fill site) uses the SATURATED
+   step (#C2410C) per Kevin's density-review ruling 2026-07-12.
+   Two-step ramp of one copper family: dark-for-text, saturated-
+   for-fill. All colors hardcoded, flagged promotable together. */
 .sc-daysq-st-pill {
   display: inline-flex;
   align-items: center;
