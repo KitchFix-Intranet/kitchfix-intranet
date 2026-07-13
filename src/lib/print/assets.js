@@ -123,6 +123,11 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .nst{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:#B7B2A5;}
 .ndt{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:var(--ndink);}
 .opp{position:absolute;bottom:17px;left:8px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--navy);}
+/* Away opponent label - spec Sheet 5 grammar, greyed and with @OPP
+   format. Do NOT reuse .opp (navy) for away cells - the greyscale
+   contrast between home navy and away grey is the load-bearing
+   home/away signal on paper. */
+.awy{position:absolute;bottom:7px;left:8px;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#A9A499;}
 .tm{position:absolute;bottom:6px;left:8px;font-size:8.5px;font-weight:700;color:#5A6B8C;}
 .tm.day{color:var(--copper);font-weight:800;}
 /* Meal stack (PDC drill only). Right-aligned; one line per service
