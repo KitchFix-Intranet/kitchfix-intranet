@@ -204,9 +204,14 @@ export function renderSeasonSheetHtml(ctx) {
   const hmLeg  = `<span><span class="kk" style="background:#16305E"></span>Home Game</span>`;
   const awLeg  = `<span><span class="kk" style="background:#EFEDE6"></span>@AWAY</span>`;
   const nsLeg  = `<span><span class="kk" style="background:#F6F4EF;border:1px solid #E4E0D6"></span>NO SERVICE</span>`;
+  // AAA season squish fix (2026-07-13): TZ was stripped from cell times
+  // to de-crowd dense schedules; carry TZ context in a small legend
+  // note so the reader knows the frame. Applies to every variant since
+  // the same fix runs on all season sheets.
+  const tzLeg  = `<span class="tznote">Times local · ${esc(tz)}</span>`;
   const legend = isOverlay
-    ? [svLeg, nsLeg, hmLeg].join("")
-    : [hmLeg, awLeg].join("");
+    ? [svLeg, nsLeg, hmLeg, tzLeg].join("")
+    : [hmLeg, awLeg, tzLeg].join("");
 
   // M1 + S3 (2026-07-13, polish wave): season renders portrait with a
   // 3-column month grid so all variants fit one letter portrait page
@@ -260,9 +265,17 @@ function buildSeasonMonthCells(year, month, dayRows, accountKey, statusByDate, a
     // Home game takes priority even on blended (service under the game).
     if (row && row.day_type === "GAME") {
       const timeStr = formatTimeForCell(row, accountKey);
+      // AAA season squish fix (2026-07-13): strip trailing TZ suffix
+      // (" ET" / " CT" / " MT" / " PT") from cell times on the season
+      // sheet. On dense MiLB schedules (like CIN - KY's May daily
+      // slate + August DH stretch) the "OPP 6:35 ET DH" string
+      // overflows the ~35-40px square tile at portrait 3-col scale.
+      // The TZ context is already in the legend / trailer copy on the
+      // season sheet, so ET on each cell reads as redundant noise.
+      const compactTime = (timeStr || "").replace(/\s+(ET|CT|MT|PT)$/i, "");
       const day = isDayGame(row, accountKey);
       const dhAffix = row.is_doubleheader ? " DH" : "";
-      const timeContent = timeStr ? `${esc(timeStr)}${dhAffix}` : dhAffix.trim();
+      const timeContent = compactTime ? `${esc(compactTime)}${dhAffix}` : dhAffix.trim();
       const timeClass = day ? "day" : "";
       const timeHtml = timeContent ? `<i class="${timeClass}">${timeContent}</i>` : "";
       cells.push(`<span class="h"><u>${dom}</u><em>${esc(row.opponent || "")}</em>${timeHtml}</span>`);

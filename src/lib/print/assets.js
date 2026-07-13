@@ -147,6 +147,15 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .blank{background:#FCFBF8 !important;} .blank .d{color:#D8D4CA;font-weight:600;}
 .ns .d{color:var(--mut);}
 .nd .d{color:var(--ndink);}
+/* Period pills (2026-07-13 amendment): STARTS = navy fill, ENDS = navy
+   outline. Top-right of the day cell on the month + period drill
+   sheets. Applies to every variant (MLB, AAA, PDC, PDCO). "Pn" label
+   is small enough (6.5px 800) to sit above game info + meal stack
+   without crowding. Both variants use the same size so start and end
+   read as paired markers on the same period at a glance. */
+.ppill{position:absolute;top:6px;right:8px;font-size:6.5px;font-weight:800;letter-spacing:.05em;padding:1.5px 4px;border-radius:6px;line-height:1;font-variant-numeric:tabular-nums;}
+.ppill.s{background:var(--navy);color:#fff;}
+.ppill.e{background:#fff;color:var(--navy);border:1.5px solid var(--navy);padding:0 3.5px;}
 .nst{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:#B7B2A5;}
 .ndt{position:absolute;bottom:7px;left:8px;font-size:6.5px;font-weight:800;letter-spacing:.13em;color:var(--ndink);}
 .opp{position:absolute;bottom:17px;left:8px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--navy);}
@@ -278,6 +287,9 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .ft{display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;font-size:8px;color:var(--mut);font-weight:700;letter-spacing:.05em;gap:10px;}
 .ft .k{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .asof{color:var(--ink);font-weight:800;}
+/* AAA season squish fix (2026-07-13): TZ context in a small legend
+   note so cell times can drop the trailing " ET". */
+.tznote{color:var(--mut);font-weight:600;letter-spacing:.02em;}
 .kk{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
 .km{display:inline-block;background:var(--ink);color:#fff;border-radius:2px;font-size:6px;font-weight:800;padding:1px 3px;margin-right:4px;}
 .kct{color:var(--copper);font-weight:800;}

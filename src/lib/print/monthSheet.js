@@ -196,21 +196,36 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
     }
   }
 
-  // Period metadata for the P-tag (Month) or period-range title (Period).
-  const rangeStart = isoDay(grid.firstCell);
-  const rangeEnd   = isoDay(grid.lastCell);
+  // Period metadata for the P-tag (Month) or period-range title (Period)
+  // + period-pill starts/ends (2026-07-13 amendment). Fetch the WHOLE
+  // YEAR so the ACTUAL first/last date of each period is known - the
+  // month grid alone can't tell us whether a boundary in-grid is the
+  // true period boundary or just the first visible date of an
+  // already-in-progress period.
   const periodRowsRes = await supa
     .from("sc_day_metadata")
     .select("service_date, period")
     .eq("account_key", accountKey)
-    .gte("service_date", rangeStart)
-    .lte("service_date", rangeEnd)
+    .gte("service_date", `${year}-01-01`)
+    .lte("service_date", `${year}-12-31`)
     .order("service_date", { ascending: true });
   if (periodRowsRes.error) throw new Error(`loadMonthPrint.periods: ${periodRowsRes.error.message}`);
   const periodMap = {};
+  const yearPeriodDates = {};  // period -> [dates sorted]
   for (const r of periodRowsRes.data || []) {
     const p = periodOf(r);
-    if (p != null) periodMap[r.service_date] = p;
+    if (p == null) continue;
+    periodMap[r.service_date] = p;
+    if (!yearPeriodDates[p]) yearPeriodDates[p] = [];
+    yearPeriodDates[p].push(r.service_date);
+  }
+  // Period pill bounds: date -> period number, for STARTS + ENDS.
+  const periodPillStarts = {};
+  const periodPillEnds   = {};
+  for (const [p, dates] of Object.entries(yearPeriodDates)) {
+    if (dates.length === 0) continue;
+    periodPillStarts[dates[0]] = Number(p);
+    periodPillEnds[dates[dates.length - 1]] = Number(p);
   }
 
   // Spring block (for the copper title chip on PDC variants).
@@ -245,6 +260,8 @@ export async function loadMonthPrintData(accountKey, year, monthKey) {
     statusByDate,
     servicesByDate,
     periodMap,
+    periodPillStarts,
+    periodPillEnds,
     springDates,
     monthIntersectsSpring,
     variant,
@@ -307,7 +324,8 @@ function buildMonthGrid(year, month) {
 export function renderMonthSheetHtml(ctx, opts = {}) {
   const {
     account, year, monthKey, grid, homestandByDate, statusByDate,
-    servicesByDate, periodMap, monthIntersectsSpring, variant, denseStack,
+    servicesByDate, periodMap, periodPillStarts, periodPillEnds,
+    monthIntersectsSpring, variant, denseStack,
   } = ctx;
   const {
     titleMain, titleTagRight, titleYear, scopeLabel, tzAbbrev,
@@ -322,6 +340,7 @@ export function renderMonthSheetHtml(ctx, opts = {}) {
   const rowsHtml = grid.rows.map((cells) => {
     const cellsHtml = cells.map((c) => renderCell(c, {
       account, homestandByDate, statusByDate, servicesByDate, variant,
+      periodPillStarts, periodPillEnds,
     })).join("");
     return `<tr>${cellsHtml}</tr>`;
   }).join("");
@@ -370,7 +389,7 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
 }
 
 // ── Cell renderer (variant-aware) ────────────────────────────────────
-function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate, variant }) {
+function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate, variant, periodPillStarts, periodPillEnds }) {
   if (c.outOfMonth) return `<td class="blank"><span class="d">${c.dayOfMonth}</span></td>`;
 
   const home = homestandByDate[c.date];
@@ -380,15 +399,30 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
   // though the MLB branch below already skips state.
   const state = stat ? resolveDayState(stat, { accountLevel: account.level }) : null;
 
+  // Period pill (2026-07-13 amendment): navy fill for STARTS, navy
+  // outline for ENDS. Top-right of the day cell. Applies to every
+  // variant. A single date could be both a period end AND the next
+  // period's start (P7 ends 7/12, P8 starts 7/13 on non-share days);
+  // in the observed schedule they're consecutive not colinear, so we
+  // render whichever is present. If a future schedule collides them
+  // on the same date, ENDS takes visual priority (outline) so the
+  // fill of the STARTS doesn't hide the outline underneath.
+  const pillStart = periodPillStarts ? periodPillStarts[c.date] : null;
+  const pillEnd   = periodPillEnds   ? periodPillEnds[c.date]   : null;
+  const pillHtml =
+    (pillEnd   != null) ? `<span class="ppill e">P${pillEnd} ENDS</span>` :
+    (pillStart != null) ? `<span class="ppill s">P${pillStart} STARTS</span>` :
+    "";
+
   // ── MLB variant: home/away fills only, no state grid, no meal stack.
   if (variant === "MLB") {
     if (home && home.dayType === "GAME") {
-      return renderGameCell(c, home, account, "hm");
+      return renderGameCell(c, home, account, "hm", pillHtml);
     }
     if (home && home.dayType === "AWAY") {
-      return renderAwayCell(c, home);
+      return renderAwayCell(c, home, pillHtml);
     }
-    return `<td class=""><span class="d">${c.dayOfMonth}</span></td>`;
+    return `<td class=""><span class="d">${c.dayOfMonth}</span>${pillHtml}</td>`;
   }
 
   // ── AAA / PDCO / PDC variants: state grid + game overlay + meal stack.
@@ -401,13 +435,13 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
     // NO ACTUALS (copper) with game info still visible (opp + time).
     // No meal stack - projections don't print on past days.
     if (state === "NO_ACTUALS") {
-      return renderGameCell(c, home, account, "nd");
+      return renderGameCell(c, home, account, "nd", pillHtml);
     }
     // Home game overrides state fill (navy-tint fill + game info + stack).
     const mealStack = (wantsStack && servicesByDate[c.date])
       ? renderMealStack(servicesByDate[c.date], state)
       : "";
-    return renderGameCell(c, home, account, "hm", mealStack);
+    return renderGameCell(c, home, account, "hm", mealStack + pillHtml);
   }
   if (awayCell) {
     // R1 (2026-07-13): AAA + PDCO away days render --awayfill + grey
@@ -418,10 +452,10 @@ function renderCell(c, { account, homestandByDate, statusByDate, servicesByDate,
     const mealStack = (wantsStack && servicesByDate[c.date])
       ? renderMealStack(servicesByDate[c.date], state)
       : "";
-    return renderAwayCell(c, home, mealStack);
+    return renderAwayCell(c, home, mealStack + pillHtml);
   }
 
-  return renderStateCell(c, state, variant, servicesByDate[c.date]);
+  return renderStateCell(c, state, variant, servicesByDate[c.date], pillHtml);
 }
 
 function renderGameCell(c, home, account, cls, extraStack = "") {
@@ -445,22 +479,22 @@ function renderAwayCell(c, home, extraStack = "") {
   return `<td class="aw"><span class="d">${c.dayOfMonth}</span>${oppHtml}${extraStack}</td>`;
 }
 
-function renderStateCell(c, state, variant, services) {
+function renderStateCell(c, state, variant, services, pillHtml = "") {
   const wantsStack = (variant === "PDC" || variant === "PDCO" || variant === "AAA");
   const mealStack = (wantsStack && services)
     ? renderMealStack(services, state)
     : "";
   switch (state) {
     case "SERVED":
-      return `<td class="sv"><span class="d">${c.dayOfMonth}</span>${mealStack}</td>`;
+      return `<td class="sv"><span class="d">${c.dayOfMonth}</span>${mealStack}${pillHtml}</td>`;
     case "PROJECTED":
-      return `<td class="pj"><span class="d">${c.dayOfMonth}</span>${mealStack}</td>`;
+      return `<td class="pj"><span class="d">${c.dayOfMonth}</span>${mealStack}${pillHtml}</td>`;
     case "NO_ACTUALS":
-      return `<td class="nd"><span class="d">${c.dayOfMonth}</span><span class="ndt">NO ACTUALS</span></td>`;
+      return `<td class="nd"><span class="d">${c.dayOfMonth}</span><span class="ndt">NO ACTUALS</span>${pillHtml}</td>`;
     case "NO_SERVICE":
-      return `<td class="ns"><span class="d">${c.dayOfMonth}</span><span class="nst">NO SERVICE</span></td>`;
+      return `<td class="ns"><span class="d">${c.dayOfMonth}</span><span class="nst">NO SERVICE</span>${pillHtml}</td>`;
     default:
-      return `<td><span class="d">${c.dayOfMonth}</span></td>`;
+      return `<td><span class="d">${c.dayOfMonth}</span>${pillHtml}</td>`;
   }
 }
 
@@ -605,6 +639,11 @@ export async function loadPeriodPrintData(accountKey, year, periodKey) {
     statusByDate:            Object.assign({}, ...ctxs.map((c) => c.statusByDate)),
     servicesByDate:          Object.assign({}, ...ctxs.map((c) => c.servicesByDate)),
     periodMap:               Object.assign({}, ...ctxs.map((c) => c.periodMap)),
+    // Period pill bounds are year-scoped (identical across ctxs since
+    // loadMonthPrintData queries the whole year for correctness). Pick
+    // from the first ctx.
+    periodPillStarts:        ctxs[0].periodPillStarts,
+    periodPillEnds:          ctxs[0].periodPillEnds,
     springDates:             ctxs[0].springDates,
     monthIntersectsSpring:   ctxs.some((c) => c.monthIntersectsSpring),
     variant:                 ctxs[0].variant,
