@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { getServiceClient } from "@/lib/supabase";
 import {
   loadMonthPrintData,
   loadPeriodPrintData,
@@ -67,6 +68,32 @@ export async function GET(request) {
   }
   if (scope === "period" && !periodParam) {
     return NextResponse.json({ success: false, error: "period param required for scope=period" }, { status: 400 });
+  }
+
+  // Park gate (2026-07-13): the PDC/PDCO drill PDF is PARKED behind
+  // Coming Soon per Kevin's ruling - the current sheet is superseded-
+  // in-waiting by the wall-poster redesign at
+  // docs/design/PDC_PRINT_REDESIGN.md. The ExportControl menu greys
+  // the drill item; this route returns 404 as defense-in-depth for
+  // anyone who bookmarks or hand-crafts a URL. Season + Ops Calendar
+  // + Excel exports for these accounts stay live; MLB + AAA drill
+  // scopes stay live. Detection: PDC = neither schedule flag; PDCO =
+  // has_schedule_overlay only. Both have has_homestand_schedule=false;
+  // MLB + AAA both have has_homestand_schedule=true.
+  if (scope === "month" || scope === "period") {
+    const supa = getServiceClient();
+    const gateRes = await supa
+      .from("accounts")
+      .select("has_homestand_schedule")
+      .eq("team_key", accountKey)
+      .maybeSingle();
+    if (!gateRes.error && gateRes.data && gateRes.data.has_homestand_schedule === false) {
+      return NextResponse.json({
+        success: false,
+        error: "PDF print for this account is being redesigned - see docs/design/PDC_PRINT_REDESIGN.md",
+        parked: true,
+      }, { status: 404 });
+    }
   }
 
   const t0 = Date.now();
