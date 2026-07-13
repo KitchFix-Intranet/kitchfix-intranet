@@ -290,7 +290,16 @@ function buildMonthGrid(year, month) {
     }
     rows.push(cells);
   }
-  const lastCell = shiftDays(firstCell, 41);
+  // E1 (2026-07-13, polish wave): drop trailing rows that are entirely
+  // out-of-month. Months like Feb 2026 (starts Sun, 28 days) fit in
+  // exactly 5 rows; months like Aug 2026 fit in 5 rows too. Only months
+  // that spill into a 6th week keep 6 rows. In-week spillover (Jul 1-5
+  // sharing June's final week) is CORRECT and kept; a fully-ghost
+  // trailing row was the bug.
+  while (rows.length > 0 && rows[rows.length - 1].every((c) => c.outOfMonth)) {
+    rows.pop();
+  }
+  const lastCell = rows.length > 0 ? shiftDays(firstCell, rows.length * 7 - 1) : firstCell;
   return { firstCell, lastCell, rows };
 }
 
@@ -346,13 +355,13 @@ ${sheetHead({ title: `KitchFix SC ${scopeLabel || "month"}`, orientation: "lands
       ${springChip}
       <span class="yr">${esc(String(titleYearStr))}</span>
     </div>
-    <table class="cal${denseStack ? " dense" : ""}">
+    <table class="cal ${variant.toLowerCase()}${denseStack ? " dense" : ""}">
       <tr><th>MON</th><th>TUE</th><th>WED</th><th>THU</th><th>FRI</th><th>SAT</th><th>SUN</th></tr>
       ${rowsHtml}
     </table>
     <div class="ft">
       <span class="k">${legend}</span>
-      <span><span class="asof">AS OF ${esc(asOf)}</span> — SERVED = ACTUALS ENTERED · PROJECTED AFTER</span>
+      <span><span class="asof">AS OF ${esc(asOf)}</span>${(variant === "MLB" || variant === "AAA") ? "" : " — SERVED = ACTUALS ENTERED · PROJECTED AFTER"}</span>
     </div>
   </div>
 </div>
@@ -501,8 +510,15 @@ function variantLegend(variant, tzAbbrev) {
   const hmLeg    = `<span><span class="kk" style="background:#DCE5F3"></span>HOME · FIRST PITCH ${esc(tzAbbrev)}</span>`;
   const awLeg    = `<span><span class="kk" style="background:#EFEDE6"></span>@AWAY</span>`;
   const dayLeg   = `<span class="kct">DAY GAME</span>`;
+  // D2 (2026-07-13, polish wave): MLB + AAA drill legends drop DAY GAME
+  // (cell styling stays - copper day-game time still renders in cells,
+  // just off the legend). PDC + PDCO drill legends untouched pending
+  // design-side redesign discussion.
   if (variant === "MLB") {
-    return [hmLeg, awLeg, dayLeg].join("");
+    return [hmLeg, awLeg].join("");
+  }
+  if (variant === "AAA") {
+    return [svLeg, pjLeg, ndLeg, nsLeg, hmLeg].join("");
   }
   return [svLeg, pjLeg, ndLeg, nsLeg, hmLeg, dayLeg].join("");
 }
@@ -516,7 +532,42 @@ function calcMonthPTag(periodMap) {
   return `P${nums[0]} – P${nums[nums.length - 1]}`;
 }
 
-// ── Period-scope helpers (unchanged shape from Wave 1) ───────────────
+// ── Period-scope helpers ─────────────────────────────────────────────
+// E2 (2026-07-13, polish wave): period scope renders the period's WEEKS,
+// not the calendar month containing the period start. Rows run from
+// the Monday of periodStart's week through the Sunday of periodEnd's
+// week; cells outside [periodStart, periodEnd] ghost. Cross-month
+// periods are the normal case (P7, P8, ...): loadMonthData is called
+// once per month the period spans (usually 1 or 2 months) and the maps
+// are merged, then a period-scoped grid is built to replace the
+// month-scoped grid.
+function buildPeriodGrid(periodStart, periodEnd) {
+  const startD = parseIso(periodStart);
+  const endD = parseIso(periodEnd);
+  const firstCell = weekAnchor(startD);
+  const lastCellOfEndWeek = shiftDays(weekAnchor(endD), 6);
+  const totalDays = Math.round((lastCellOfEndWeek.getTime() - firstCell.getTime()) / DAY_MS) + 1;
+  const totalRows = Math.max(1, Math.round(totalDays / 7));
+  const rows = [];
+  for (let r = 0; r < totalRows; r++) {
+    const cells = [];
+    for (let c = 0; c < 7; c++) {
+      const d = shiftDays(firstCell, r * 7 + c);
+      const iso = isoDay(d);
+      // `outOfMonth` is used as the ghost-cell flag by the cell
+      // renderer. In period scope it means "outside the period date
+      // range" - the same visual (blank cell + faint day number).
+      cells.push({
+        date:       iso,
+        dayOfMonth: d.getUTCDate(),
+        outOfMonth: iso < periodStart || iso > periodEnd,
+      });
+    }
+    rows.push(cells);
+  }
+  return { firstCell, lastCell: lastCellOfEndWeek, rows };
+}
+
 export async function loadPeriodPrintData(accountKey, year, periodKey) {
   const supa = getServiceClient();
   const targetPeriodNum = Number(String(periodKey).replace(/^P/i, ""));
@@ -537,10 +588,42 @@ export async function loadPeriodPrintData(accountKey, year, periodKey) {
   }
   const startDate = periodDates[0];
   const endDate   = periodDates[periodDates.length - 1];
+
+  // E2: load every month the period touches (usually 1 or 2). Merge
+  // status + services + homestand maps so the period grid gets the
+  // full range of context, not just the start month.
   const startMonth = startDate.slice(0, 7);
-  const monthCtx = await loadMonthPrintData(accountKey, year, startMonth);
+  const endMonth   = endDate.slice(0, 7);
+  const monthKeys = startMonth === endMonth ? [startMonth] : [startMonth, endMonth];
+  const ctxs = await Promise.all(monthKeys.map((mk) => loadMonthPrintData(accountKey, year, mk)));
+
+  const merged = {
+    account:                 ctxs[0].account,
+    year,
+    monthKey:                startMonth,
+    homestandByDate:         Object.assign({}, ...ctxs.map((c) => c.homestandByDate)),
+    statusByDate:            Object.assign({}, ...ctxs.map((c) => c.statusByDate)),
+    servicesByDate:          Object.assign({}, ...ctxs.map((c) => c.servicesByDate)),
+    periodMap:               Object.assign({}, ...ctxs.map((c) => c.periodMap)),
+    springDates:             ctxs[0].springDates,
+    monthIntersectsSpring:   ctxs.some((c) => c.monthIntersectsSpring),
+    variant:                 ctxs[0].variant,
+    // Density recompute across the merged services map so the dense
+    // flag reflects the whole period, not just the start month.
+  };
+  const wantsStack = (merged.variant === "PDC" || merged.variant === "PDCO" || merged.variant === "AAA");
+  merged.mealStackMax = wantsStack ? computeMealStackDensity(merged.servicesByDate) : 0;
+  merged.denseStack = merged.mealStackMax > MEAL_STACK_LINE_CEILING;
+  if (merged.denseStack) {
+    console.warn(
+      `[print/monthSheet] ${accountKey} P${targetPeriodNum}: densest day carries ${merged.mealStackMax} services - stepping to 6.5px floor`
+    );
+  }
+
+  merged.grid = buildPeriodGrid(startDate, endDate);
+
   return {
-    ...monthCtx,
+    ...merged,
     periodNum: targetPeriodNum,
     periodStart: startDate,
     periodEnd:   endDate,

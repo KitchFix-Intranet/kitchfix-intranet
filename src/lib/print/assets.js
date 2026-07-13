@@ -85,6 +85,12 @@ body{
 }
 :root{
   --navy:#16305E; --ink:#26262B; --mut:#8A857A; --hair:#E4E0D6;
+  /* G1 (2026-07-13, polish wave): darker print-only grid-line token,
+     ~2 shades below --hair. Applied to inter-cell borders + mini-grid
+     definition wherever days need to read as separated on paper.
+     Screen tokens untouched - same print-divergence doctrine as the
+     green pair below (print-survival, not on-screen legibility). */
+  --grid:#C9C3B5;
   --soft:#F6F4EF; --copper:#C2410C; --copl:#F3B48C;
   --homefill:#DCE5F3; --awayfill:#EFEDE6;
   /* #422 print-tuned green pair. Do NOT sweep to --status-entered-bg
@@ -102,12 +108,33 @@ body{
 .trow{display:flex;align-items:baseline;gap:12px;margin:22px 0 14px;}
 .mo{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:.9;}
 .yr{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:.9;color:#D8D4CA;margin-left:auto;}
+/* Polish-wave compact title for portrait overview sheets (ops calendar,
+   season MLB/AAA). Halves the title bar so 12 mini-months + 6-cell-row
+   months fit one letter portrait page. */
+.trow.compact{margin:10px 0 8px;}
+.trow.compact .mo,.trow.compact .yr{font-size:32px;}
 .ptag{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--navy);border:1.5px solid var(--navy);border-radius:3px;padding:3px 7px;position:relative;top:-5px;}
 .schip{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--copper);border:1.5px solid var(--copper);border-radius:3px;padding:3px 7px;position:relative;top:-5px;}
 /* ── Month / Period calendar (Drill sheets 5-8) ───────────────── */
 table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .cal th{font-size:8.5px;font-weight:800;letter-spacing:.13em;color:var(--mut);text-align:left;padding:0 0 5px 8px;border-bottom:1.5px solid var(--ink);}
-.cal td{height:108px;border-bottom:1px solid var(--hair);border-right:1px solid var(--hair);vertical-align:top;padding:6px 8px;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
+.cal td{height:108px;border-bottom:1px solid var(--grid);border-right:1px solid var(--grid);vertical-align:top;padding:6px 8px;position:relative;font-variant-numeric:tabular-nums;background:#fff;}
+/* D1 (2026-07-13, polish wave): variant-specific cell heights so every
+   drill sheet fits letter landscape at both 5- and 6-row months. MLB
+   has no stacks so cells go shortest; AAA needs headroom for the
+   AAA-shape meal stack; PDC + PDCO use a slightly-shorter 100px cell
+   ONLY as a page-fit accommodation (Kevin's brief scopes PDC + PDCO
+   drill styling out of this wave pending design-side redesign - the
+   height change is not a restyle, just enough to keep 6-row months
+   like Mar / Aug / Nov 2026 on one page). */
+.cal.mlb td{height:78px;}
+.cal.aaa td{height:88px;}
+.cal.pdc td,.cal.pdco td{height:100px;}
+/* .msl reservation for stack variants scales with the smaller cells:
+   at 100px cell, .hm reserves 26px and .aw reserves 18px to keep the
+   game info anchored at the bottom without crowding the stack. */
+.cal.pdc .hm .msl,.cal.pdco .hm .msl{bottom:26px;}
+.cal.pdc .aw .msl,.cal.pdco .aw .msl{bottom:18px;}
 .cal td:last-child{border-right:none;}
 .cal tr:last-child td{border-bottom:1.5px solid var(--ink);}
 .cal td.hm{background:var(--homefill);}
@@ -175,11 +202,22 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .cal.dense .msl .t{font-size:7.5px;}
 /* ── Season mini-grid (sheets 1-3) ─────────────────────────────── */
 .smos{display:grid;grid-template-columns:repeat(3,1fr);gap:0 24px;}
+/* M1 (2026-07-13, polish wave): season MLB/AAA renders portrait with
+   a 3-column month-block grid so the full schedule (up to 7 months
+   for AAA) fits one letter portrait page with square tiles. 2-column
+   overflowed - cells at that width were too tall to hold 3-4 rows of
+   month blocks. The overlay variant (STL - FL, TBJ - FL SERVICE
+   CALENDAR) also flips to portrait 3-col via the same class
+   (landscape with square tiles overflowed to 2 pages). */
+.smos.p2{grid-template-columns:repeat(3,1fr);gap:10px 18px;}
 .smo h4{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;margin:10px 0 6px;border-bottom:1.5px solid var(--ink);padding-bottom:4px;display:flex;justify-content:space-between;align-items:baseline;}
 .smo h4 s{text-decoration:none;font-family:'Mulish',sans-serif;font-size:7px;font-weight:800;letter-spacing:.07em;color:var(--mut);}
 .sg{display:grid;grid-template-columns:repeat(7,1fr);gap:2.5px;}
 .sg b{font-size:6px;font-weight:800;letter-spacing:.08em;color:var(--mut);text-align:center;padding-bottom:2px;}
-.sg span{height:32px;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.12;font-variant-numeric:tabular-nums;position:relative;padding-top:4px;}
+/* S3 (2026-07-13, polish wave): square tiles - aspect-ratio 1/1 - so
+   the season mini-grid reads as a real weekly calendar instead of
+   squat rectangles. Cells auto-size from column width. */
+.sg span{aspect-ratio:1/1;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.12;font-variant-numeric:tabular-nums;position:relative;padding-top:4px;}
 /* Day number tag (top-left) inside a season cell. */
 .sg span u{position:absolute;top:2px;left:3.5px;font-size:5.5px;font-weight:800;text-decoration:none;color:#B0AB9F;}
 .sg .h{background:var(--navy);color:#fff;}
@@ -195,22 +233,47 @@ table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
 .sg .x{background:#FCFBF8;}
 .seasend{font-size:7px;font-weight:800;letter-spacing:.1em;color:var(--mut);text-align:right;margin-top:5px;}
 /* ── Ops Calendar mini-grid (sheet 4 - all accounts) ──────────── */
-.ymos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 18px;}
-.ymo h5{font-family:'Bebas Neue',sans-serif;font-size:12.5px;letter-spacing:.07em;margin:0 0 4px;border-bottom:1px solid var(--ink);padding-bottom:3px;}
+/* 4-col × 3-row layout so 12 mini-months + 6-cell-row months hold one
+   letter portrait page with square tiles. 3-col × 4-row overflowed by
+   ~17px per iteration; 4-col compresses column width to ~120px so
+   square cells land at ~15px and the whole year fits comfortably. */
+.ymos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px;}
+.ymo h5{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:.07em;margin:0 0 3px;border-bottom:1px solid var(--ink);padding-bottom:2px;}
 .yg{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px;}
-.yg b{font-size:5.5px;font-weight:800;color:var(--mut);text-align:center;padding-bottom:1.5px;}
+.yg b{font-size:5.5px;font-weight:800;color:var(--mut);text-align:center;padding-bottom:1px;}
 .yg b.hd{color:#fff;background:var(--ink);border-radius:2px;padding:1px 0;}
-.yg span{height:16px;border-radius:2.5px;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;color:#9B968A;background:var(--soft);border:1px solid var(--soft);font-variant-numeric:tabular-nums;position:relative;}
-.yg .x{background:#FCFBF8;border-color:#FCFBF8;}
-.yg .sv{background:var(--svc);border-color:var(--svc);color:#5F7A55;}
-.yg .pj{background:var(--proj);border:1px solid var(--projline);color:#7E9573;}
-.yg .nd{background:#fff;border:1.5px dashed var(--copper);color:var(--ndink);}
+/* O3 (2026-07-13, polish wave): square tiles - aspect-ratio 1/1 - so the
+   ops calendar reads as a real grid instead of squat cells. Grid-line
+   token (G1) applied via border for cell definition on paper. Sized to
+   fit 12 mini-months on one letter portrait page - font + gap tuning
+   above compresses the year block enough that 6-row months hold. */
+.yg span{aspect-ratio:1/1;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;color:#9B968A;background:var(--soft);border:1px solid var(--grid);font-variant-numeric:tabular-nums;position:relative;}
+.yg .x{background:#FCFBF8;border-color:#F0EBDF;}
+/* O1 (2026-07-13, polish wave): single SERVICE DAY green (opsServiceState).
+   No projected inset, no copper NO ACTUALS on the ops calendar overview
+   surface. Drill sheets keep the 4-state model. */
+.yg .svc{background:var(--svc);border-color:#B9C9AE;color:#5F7A55;}
 .yg .spb::after{content:"";position:absolute;top:0;left:0;right:0;height:2.5px;background:var(--copper);border-radius:2px 2px 0 0;}
 .yg .ps{background:var(--navy);border:1px solid var(--navy);color:#fff;font-weight:800;font-size:7px;border-radius:2.5px;}
-/* .yg .inv - inventory-due ring, DEFERRED per Kevin's Option A ruling.
-   period_data lives in Sheets HUB (not PG); wiring the copper ring
-   waits for the period_data -> PG migration. No legend entry for it
-   either (legend matches reality). */
+/* O4 (2026-07-13, polish wave): inventory-due ring, LIVE. Copper open
+   ring layered as an overlay so it composes cleanly on top of any cell
+   state - SERVICE DAY green, plain soft, or period-start navy. The
+   ring uses a pseudo-element positioned inside the cell padding so
+   the day number stays legible in the center. This retires the prior
+   Option A deferral - Kevin's supplied 2026 schedule lives in
+   src/lib/print/inventoryCalendar.js as INVENTORY_DUE_2026. */
+.yg .inv::before{content:"";position:absolute;inset:1.5px;border-radius:50%;border:1.5px solid var(--copper);pointer-events:none;}
+.yg .ps.inv::before{inset:0.5px;border-color:var(--copl);}
+/* O2 mini spring swatch for the legend: a proxy of the actual per-cell
+   treatment (soft baseline tile with a 2.5px copper bar across the top).
+   Renders inline in the legend with the same aspect ratio as a real
+   ops calendar cell. */
+.kk-spring{display:inline-block;position:relative;width:12px;height:12px;background:var(--soft);border:1px solid var(--grid);border-radius:2px;vertical-align:-2px;margin-right:4px;overflow:hidden;}
+.kk-spring::after{content:"";position:absolute;top:0;left:0;right:0;height:2.5px;background:var(--copper);}
+/* O4 mini ring swatch for the legend: outline circle over a plain
+   soft cell so the legend matches the render. */
+.kk-inv{display:inline-block;position:relative;width:12px;height:12px;background:var(--soft);border:1px solid var(--grid);border-radius:2px;vertical-align:-2px;margin-right:4px;}
+.kk-inv::before{content:"";position:absolute;inset:1.5px;border-radius:50%;border:1.5px solid var(--copper);}
 /* ── Footer + legend ──────────────────────────────────────────── */
 .ft{display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;font-size:8px;color:var(--mut);font-weight:700;letter-spacing:.05em;gap:10px;}
 .ft .k{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
@@ -314,10 +377,44 @@ export function resolveDayState(day, opts = {}) {
 // The season mini-grid is dense enough that the projected-inset border
 // reads as noise; the spec Sheet 3 shows one green for both. Per-day
 // discrimination survives on the Month / Period / Ops Calendar surfaces.
+//
+// Polish wave (2026-07-13): season now uses the SERVICE DAY collapse
+// (opsServiceState) which folds NO_ACTUALS into SERVICE so the green
+// runs continuously from season start to end. Kevin's ruling: overview
+// surfaces don't split the four states - one green means "there was
+// (or will be) service that day."
 export function seasonServiceState(day, opts = {}) {
-  const st = resolveDayState(day, opts);
-  if (st === "SERVED" || st === "PROJECTED") return "SERVICE";
-  if (st === "NO_ACTUALS") return "NO_ACTUALS";
-  if (st === "NO_SERVICE") return "NO_SERVICE";
-  return null;
+  return opsServiceState(day, opts);
+}
+
+// Polish-wave overview collapse (O1, 2026-07-13). Used by the Ops
+// Calendar (non-MLB) + the blended-overlay Season sheet. Single state
+// on these overview surfaces:
+//
+//   SERVICE_DAY - the day is entered OR past-and-expected (overdue /
+//                 needs-entry) OR future-with-projection.
+//   NO_SERVICE  - explicit no-service.
+//   null        - baseline soft (nothing to signal).
+//
+// Drill sheets keep the 4-state model (SERVED / PROJECTED / NO ACTUALS /
+// NO SERVICE) pending a design-side redesign discussion; do NOT change
+// resolveDayState. MLB accounts get null throughout (R5 superseded).
+export function opsServiceState(day, opts = {}) {
+  if (opts.accountLevel === "MLB") return null;
+  if (!day) return null;
+  const s = day.status;
+  switch (s) {
+    case "entered":
+    case "overdue":
+    case "needs-entry":
+      return "SERVICE_DAY";
+    case "future":
+      return day.hasProjection ? "SERVICE_DAY" : null;
+    case "no-service":
+      return "NO_SERVICE";
+    case "away":
+      return null;
+    default:
+      return null;
+  }
 }
