@@ -16,6 +16,164 @@
 - **Contract basis**: 2024 MiLB Post service-fee Lunch/Dinner Rate $19.40 (Minor League SOW § 6(a)(iv) p.5); with 75% × CPI-U Food Away from Home escalation to 2026, actual escalated rate is $21.68 per QB, not $20.96 per digest
 - **See**: EVIDENCE_TBR-FL.md §7
 
+#### A-1 recompute addendum (2026-07-14 micro-task)
+
+**Verdict: NEAR MISS on BOTH sides — digest and invoice each fail to derive cleanly from the contract's escalation clause. Neither is the contract-correct rate.**
+
+##### Contract facts (verbatim, from EVIDENCE_TBR-FL.md §2)
+
+- **2024 Base Lunch/Dinner Rate** (Minor League SOW § 6(a)(ii) p.5): **$25.86**, "not inclusive of tax"
+- **2024 Post service-fee Lunch/Dinner Rate** (§ 6(a)(iv) p.5): **$19.40**, "not inclusive of tax"
+- **SF discount** (§ 6(c) p.6): "The Rates will be reduced by **25%** for all billings for the Minor League Baseball Teams within the Term." Verified: $19.40 / $25.86 = 0.7501 → 25% discount applied post-sticker.
+- **Escalation clause** (§ 6(a)(v) p.5, verbatim):
+  > "For each year of the SOW Term after 2024, each Breakfast Meal prepared by the Provider in accordance with this SOW for the Minor League Baseball Teams shall be at the rate of the 2024 Base Breakfast Rate and the rate of the 2024 Post service-fee Breakfast Fee, as the case may be, as adjusted upward or downward by a percentage equal to **seventy-five percent** of the percentage change in the 'CPI Index'"
+- **CPI Index definition** (Major League SOW § 6(i)(c) p.5, cross-applied to MiLB per § 6(a)(v)):
+  > "CPI Index shall refer to the Consumer Price Index for All Urban Consumers (CPI-U): U.S. City Average, Food Away from Home – Full Service Meals and Snacks, as calculated by the United States Department of Labor, Bureau of Labor Statistics (CPI)."
+- **Reset cadence** (same § 6(i)(c) p.5):
+  > "For purposes of this SOW, the adjustment in rate, if any, for 2025 shall be based upon the change from the November 2024 CPI Index to the November 2023 CPI Index (with the same procedure to be followed for each year of the Term after 2025)."
+
+##### BLS-published CPI values
+
+Series: **CUUR0000SEFV01** = "CPI-U U.S. City Average - Food away from home - Full service meals and snacks", Not Seasonally Adjusted. Source: BLS Public API `https://api.bls.gov/publicAPI/v2/timeseries/data/CUUR0000SEFV01` (fetched 2026-07-14).
+
+| Month | Index value |
+|---|---:|
+| November 2023 | **221.574** |
+| November 2024 | **229.554** |
+| November 2025 | **239.371** |
+
+YoY changes:
+
+- Nov 2023 → Nov 2024: (229.554 − 221.574) / 221.574 = **3.6015%**
+- Nov 2024 → Nov 2025: (239.371 − 229.554) / 229.554 = **4.2766%**
+
+Contract escalator (75% × YoY):
+
+- 2025 escalator: 0.75 × 3.6015% = **2.7011%**
+- 2026 escalator: 0.75 × 4.2766% = **3.2074%**
+
+Reference (NOT the contract-cited series — for completeness): generic CUUR0000SEFV "Food away from home" gave Nov 2023 = 360.383, Nov 2024 = 373.530, Nov 2025 = 387.202 (YoY 3.6482% then 3.6602%). Slightly different figures; contract explicitly cites the sub-index (SEFV01), not the parent (SEFV).
+
+##### Computed 2026 rate — every interpretation of the clause
+
+All computations start from the contract 2024 post-SF Lunch/Dinner rate of $19.40 (the clause escalates the base and post-SF rates independently per "as the case may be").
+
+**Method (b) — contract-correct: compound YoY, 75% × contract-cited CPI**
+
+    2025 post-SF = $19.40 × (1 + 0.027011) = $19.9240
+    2026 post-SF = $19.9240 × (1 + 0.032074) = $20.5631
+
+→ **Contract-correct 2026 rate = $20.56.**
+
+**Method (c) — cumulative from 2024 base, 75% × contract-cited CPI**
+
+    Nov 2023→Nov 2025 cumulative CPI: (239.371 − 221.574) / 221.574 = 8.0321%
+    75% × 8.0321% = 6.0241%
+    2026 post-SF = $19.40 × 1.060241 = $20.5687
+
+→ $20.57 (rounds the same as Method b; +$0.006 difference is a compounding-order artifact).
+
+**Method (d) — DROP the 75% multiplier, compound YoY, contract-cited CPI**
+
+    2025 = $19.40 × 1.036015 = $20.0987
+    2026 = $20.0987 × 1.042766 = $20.9582
+
+→ **$20.96 EXACT MATCH to PG/digest**.
+
+**Method (e) — 100% CPI, compound YoY, GENERIC CUUR0000SEFV (not contract-cited)**
+
+    2025 = $19.40 × 1.036482 = $20.1077
+    2026 = $20.1077 × 1.036602 = $20.8437
+
+→ $20.84 (not a match).
+
+**Method (f) — sticker-first (escalate $25.86 sticker), 100% CPI, then apply 25% discount to escalated sticker**
+
+    2025 sticker = $25.86 × 1.036015 = $26.7913
+    2026 sticker = $26.7913 × 1.042766 = $27.9371
+    2026 post-SF = $27.9371 × 0.75 = $20.9528
+
+→ $20.95 (rounds to $20.96 same as Method d).
+
+##### Delta table vs invoice-observed $21.68
+
+| Method | Contract fidelity | 2026 rate | Delta vs invoice | Explains what |
+|---|---|---:|---:|---|
+| **(b) contract-correct** | 100% faithful to clause | **$20.56** | **+$1.12 (+5.43%)** | Neither digest nor invoice matches contract |
+| (c) cumulative | 100% faithful (arithmetic variant) | $20.57 | +$1.11 (+5.40%) | Same as (b) |
+| **(d) drop-75% compound** | drops the "seventy-five percent" | **$20.96** | +$0.72 (+3.44%) | **Exact match to PG/digest** |
+| (e) generic-index compound | drops both 75% AND uses wrong index | $20.84 | +$0.84 (+4.01%) | Not a match |
+| (f) sticker-first drop-75% | drops the 75%, sticker-order variant | $20.95 | +$0.72 (+3.47%) | Same as (d) modulo rounding |
+
+##### Findings
+
+1. **PG/digest $20.96 = Method (d)**: the digest was computed using the contract-cited index but **dropped the "seventy-five percent of" multiplier** from the escalation clause. It applied 100% of the CPI change instead of 75%. This is a **derivation bug in the digest source (Price Review v3 or its downstream)**.
+
+2. **Invoice $21.68 does NOT match any interpretation** of the escalation clause. Excess vs the contract-correct Method (b) rate = **$1.12/meal (+5.43%)**. Excess vs the digest's dropped-75% rate = **$0.72/meal (+3.44%)**. No CPI-based reading (contract-cited or generic; compound or cumulative; sticker-first or post-SF-first) produces $21.68 from the $19.40 base.
+
+3. **The $0.72 residual** between digest and invoice cannot be explained by CPI arithmetic. Most likely candidates (evidence-only, Kevin rules):
+   - **Manual rate override in QB**: Sebastian set a rate not derived from the escalation formula.
+   - **Unseen 2026 SOW amendment**: a 2026-specific rate update between Kevin and the Rays not present in the executed 2024 SOW file. Would parallel the missing 2026 SOWs at CIN-AZ (C-1) and TXR-AZ (C-3).
+   - **Add-on baked into per-meal rate**: labor, packaging, or other ancillary rolled into the meal rate rather than a separate line item. (Note: same invoice K300168871 does bill Labor Fee $280 and Road Sandwiches $15 as separate lines, so this reading is weak.)
+   - **Different multiplier factor applied**: e.g., 100% CPI plus a 3.44% administrative uplift. 3.44% isn't a clean number; unlikely.
+
+4. **Neither the digest nor the invoice matches the contract-correct rate.** The digest is a formulaic error; the invoice source is unidentified without further evidence.
+
+##### A-1 disposition
+
+**NEAR MISS on both sides.** Contract-correct 2026 rate per verbatim clause + published BLS data = **$20.56**. Digest $20.96 = contract-cited index applied at 100% (dropped the 75% multiplier). Invoice $21.68 cannot be derived from any interpretation of the escalation clause; residual +$0.72 above digest is unexplained.
+
+**Rulings needed from Kevin at the summit** (do NOT apply anything now):
+1. Which is the source of truth — the executed contract (rate $20.56), the digest ($20.96), or the operator-set invoice ($21.68)?
+2. Is there an unseen 2026 SOW amendment / operator-agreed rate memo for TBR-FL that would justify $21.68?
+3. If the contract stands, backfill: fix PG effective-dated to $20.56 (queued for Phase 3), refund/credit for over-billed 2026 meals to date.
+4. If the invoice stands, execute a written amendment covering the 3.4% uplift over the escalation formula.
+
+##### Sources cited
+
+- Contract: `/Users/kevinfietek/Documents/Claude /Contracts/TBR FL/Minor League SOW 2024 EXECUTION Josh.pdf` § 6(a)(ii), § 6(a)(iv), § 6(a)(v), § 6(c) p.5-6.
+- Contract: `/Users/kevinfietek/Documents/Claude /Contracts/TBR FL/Major League SOW 2024 EXECUTION Josh.pdf` § 6(i)(c) p.5 (defines CPI Index + cadence, cross-applied).
+- BLS series `CUUR0000SEFV01` "Food away from home - Full service meals and snacks", All Urban Consumers, U.S. City Average, Not Seasonally Adjusted. Fetched from BLS Public API on 2026-07-14; values verifiable at `https://data.bls.gov/timeseries/CUUR0000SEFV01`.
+- Invoice: `/Users/kevinfietek/Documents/Claude /Client Invoices/Invoice K300168871.pdf` dated 2026-07-05, TBR-FL MiLB meal service.
+- Cross-refs: `docs/pricing-summit/EVIDENCE_TBR-FL.md` §2.1-2.5; `docs/SC_MONEY_MODEL.md` per-account digest row for TBR - FL.
+
+#### A-1 REVISION (2026-07-14 Layer D audit — signed sheet is authority per P-1)
+
+**A-1 is DOWNGRADED from live conflict to NOT-A-CONFLICT.** The apparent $0.72 delta was a MONEY_MODEL DIGEST oversimplification, not a PG or invoice staleness. Superseded by the PG-vs-signed audit at `docs/pricing-summit/PRICE_AUDIT.md`.
+
+**What the signed Price Review v3 actually contains for TBR-FL Minor League** (source: `KitchFix_Service_Calendar_Price_Review_v3_FINAL.xlsx` tab `Service Price Review` rows R90-R95, verbatim):
+
+| Row | Service | Full Rate | Billing Price | Unit |
+|---|---|---:|---:|---|
+| R90 | Breakfast - MiLB ST | $23.77 | **$17.8275** | per meal |
+| R91 | Lunch - MiLB ST | $28.90 | **$21.675** | per meal |
+| R92 | Breakfast - MiLB | $23.77 | **$17.8275** | per meal |
+| R93 | Lunch - MiLB | $28.90 | **$21.675** | per meal |
+| R95 | Dinner | $27.9491 | **$20.96183** | per meal |
+
+**PG stores these EXACTLY** (verified in `/tmp/pg-effective-prices.json`):
+
+| PG service_name | PG price |
+|---|---:|
+| Breakfast - MiLB | 17.8275 |
+| Breakfast - MiLB ST | 17.8275 |
+| Lunch - MiLB | 21.675 |
+| Lunch - MiLB ST | 21.675 |
+| Dinner | 20.96183 |
+
+**Invoice K300168871 verbatim**: every `TBR MiLB - Lunch/Dinner` line has Description column showing "Lunch" (not Dinner). Rate applied: **$21.68** = rounded $21.675 (signed Lunch rate). Zero Dinner lines on this invoice.
+
+**Verdict**: PG correctly stores the two distinct signed rates. Invoice correctly bills Lunch at $21.68 (=signed $21.675 rounded). The "$0.72 delta" in Phase 0a was the MONEY_MODEL per-account digest flattening Lunch + Dinner into one "MiLB $20.96" row — that's the digest's misrepresentation, not a PG or invoice error.
+
+**Contract escalation-based computed rate ($20.56)** derived in the earlier addendum: **superseded by P-1**. Joe Lessard's signed Billing Price is the #1 authority; the contract's 75%-of-CPI formula does NOT govern once the signed sheet exists. Full arithmetic in the addendum stands as an accounting-audit note, but no longer represents a "contract-correct target."
+
+**Rulings needed** (revised, tighter):
+1. Approve the A-1 downgrade to NOT-A-CONFLICT.
+2. Approve MONEY_MODEL digest row expansion for TBR-FL to reflect the three distinct MiLB rates (Breakfast $17.83 / Lunch $21.675 / Dinner $20.96) instead of the single "MiLB $20.96" (B-2 already flagged in Phase 0a).
+3. Document that P-1 (signed sheet) supersedes the CPI escalation clause for computed rates — clarify MONEY_MODEL's sources-of-truth priority list.
+
+**A-1 residual open question** (not blocking): the signed sheet's TBR-FL MiLB Lunch full rate of **$28.90** is NOT derivable from the contract's 2024 Base Lunch/Dinner Rate ($25.86) via the escalation clause. Ratio $28.90/$25.86 = 11.76%, no clean CPI interpretation. Either an unseen 2025 SOW split Lunch from Dinner into different bases, or Joe's sign-off codified a business-side price update outside the escalation formula. Same paperwork-gap class as C-1 (CIN-AZ 2026 SOW missing) and C-3 (TXR-AZ 2026 SOW missing). Kevin: consider chasing the paper trail for the Lunch-vs-Dinner base rate split.
+
 ### A-2. TBR - FL Service Fee 2026 renewal — CONTRACT SILENT vs MONEY_MODEL "2024 one-time"
 
 - **Source A** (Minor League SOW § 6(c) p.6): The $382,448 Service Fee is defined with exactly two installments: "(A) On the first date that this SOW has been signed by both parties, the Club shall pay the sum of two hundred thousand dollars (USD $200,000.00), and (B) On or before February 1, 2024, the Club shall pay the sum of one hundred eighty-two thousand four hundred forty-eight dollars (USD $182,448)." Contract SILENT on whether the SF recurs in any subsequent Agreement Year.
@@ -201,7 +359,7 @@
 
 ---
 
-## G. Summary count
+## G. Summary count (Phase 0a evidence pass, pre-P&L)
 
 - **Live conflicts (A)**: 7
 - **Rate-table gaps (B)**: 6
@@ -210,3 +368,203 @@
 - **Non-conflicts / consistent (E)**: 6 categories
 
 Kevin rules all A + C + D at the summit; B is a mechanical MONEY_MODEL digest expansion; E is informational.
+
+---
+
+# Phase 0b — 2026 P&L per-site deep-dive additions (2026-07-14)
+
+New conflicts surfaced from the P&L extract. Same A/B/C/D/E taxonomy. Cross-reference: `docs/pricing-summit/PL_2026_APPENDIX.md` and `docs/pricing-summit/BILLING_TERMS_MATRIX.md`. **Recognition-vs-billing differences are NOT flagged as conflicts per Kevin's Interpretation Guard** — only real disagreements make it into A-*.
+
+## A. Live conflicts (Phase 0b additions, Kevin rules)
+
+### A-8. P&L account-code classification: flat-fee SF booked in 2400.1, not 2300
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` §e p.28-29): "2400.1 Meal Service (Home) = per-meal invoice = actual_count × post-SF invoice rate. ... 2300 Service Charges = Service Fee attributable to the review period."
+- **Source B** (P&L 2026 individual-site files):
+  - **CIN - OH** (R25 verbatim): 2400.1 = $376,688/yr; R22 2300 = $0. Contract fee = $362,500 flat SF.
+  - **STL - FL** (R25): 2400.1 = $1,400,000/yr; R22 2300 = $0. Contract fee = $1,400,000 flat SF.
+  - **STL - MO** (R25): 2400.1 = $439,431/yr (meal-services portion of $473K); R22 2300 = $50,000 (Road Food only).
+  - **TXR - TX - H** (R25): 2400.1 = $604,019/yr; R22 2300 = $0. Contract fee = $604,032 flat SF.
+- **Delta**: 4 flat-fee accounts' SFs land in 2400.1 (Meal Service (Home)), not 2300 (Service Charges), on the P&L. MONEY_MODEL §e mapping treats 2400.1 as per-meal-only and 2300 as the SF line — the P&L convention differs.
+- **Kevin rules**: whether MONEY_MODEL §e should be amended to reflect the P&L classification, or the P&L classification should be adjusted to match MONEY_MODEL §e, OR both are correct with a clear "P&L classification decouples from MONEY_MODEL SF taxonomy" note.
+
+### A-9. STL - FL P1 amount + peak-period location: P&L contradicts GOTCHAS
+
+- **Source A** (`docs/GOTCHAS.md` claim, cited via MONEY_MODEL §g p.234-235): "STL-FL prorated allocation: the $1.4M is spread PHASE-AWARE across the 13 periods per the P&L pattern (P1 $45,553 ... P3 peak $407,375 ... FCL plateau $98,915 ... offseason $0)."
+- **Source B** (P&L R25 for STL-FL, `docs/pricing-summit/PL_2026_APPENDIX.md` §3.4):
+  - P1 = **$171,367** (not $45,553 as GOTCHAS states)
+  - P2 = **$407,375** (peak) — GOTCHAS placed the peak at P3
+  - P3 = **$132,755**
+  - P4-P8 = $98,915 each (5 periods; confirms "FCL plateau" claim)
+  - P12-P13 = $0 (confirms offseason)
+- **Delta**: GOTCHAS' P1 number is 3.76× too low; peak period is P2 not P3.
+- **Kevin rules**: `docs/GOTCHAS.md` (lines around the STL-FL allocation) should be updated to the P&L-verified values. Not a MONEY_MODEL conflict per se; a stale downstream doc.
+
+### A-10. CIN - AZ 2200 Catering Revenue not documented in MONEY_MODEL
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` per-account digest, CIN - AZ row): no 2200 Catering Revenue line item.
+- **Source B** (P&L R21 for CIN-AZ, `docs/pricing-summit/PL_2026_APPENDIX.md` §3.2): 2200 = $52,000/yr (row shows P1 $3,000 + P2 $3,000, then zeros with Year total $52,000 — sum-of-periods delta of $46K suggests a hidden P13 value or Year-column formula).
+- **Delta**: $52K annual "Catering Revenue" line for CIN-AZ appears on the P&L; MONEY_MODEL is silent. Also the intra-file arithmetic ($6K periods sum vs $52K Year) needs verification with the accountant.
+- **Kevin rules**: whether 2200 is a legitimate CIN-AZ revenue line (educational-services cooking classes at $1,000/class per contract § IV.C p.7? outside-catering at CIN-AZ Goodyear? something else?) and whether MONEY_MODEL should document it.
+
+### A-11. TBR - FL 2200 Catering Revenue not documented in MONEY_MODEL
+
+- **Source A**: MONEY_MODEL per-account digest, TBR - FL row: no 2200 Catering Revenue.
+- **Source B** (P&L R21 for TBR-FL, PL_2026_APPENDIX §3.8): 2200 = **$79,950/yr** spread across P1-P12 with varying weekly amounts.
+- **Delta**: MONEY_MODEL silent on ~$80K/yr TBR-FL catering revenue. Likely B&G Boys & Girls Club $6.50/lunch (per MONEY_MODEL §Open items #6) + Road Sandwiches + other ancillary catering per invoice K300168871. Needs classification.
+- **Kevin rules**: whether 2200 for TBR-FL should be documented in MONEY_MODEL (and whether B&G is the primary contributor).
+
+### A-12. P&L 2300 for TBR - FL supports fresh 2026 SF billing (C-2 evidence)
+
+- **Source A** (Minor League SOW § 6(c) p.6): $382,448 = TWO 2024 installments ($200K + $182,448 by Feb 1, 2024). Contract SILENT on 2025+ recurrence.
+- **Source B** (P&L R22 for TBR-FL): **2300 = $457,768/yr** for 2026, spread P1-P11 in a season-weighted pattern (peak P2 $99,287; plateau P3-P8 ~$41K; decline P9-P11).
+- **Source C** (Invoice K300168545 + K300168871): NO 2300 SF line on the 2026 TBR-FL invoices in the sample (both pure per-meal).
+- **Delta**: P&L books $457,768/yr; contract expired one-time 2024 payment; invoice sample doesn't show SF billing. Three possibilities:
+  1. A NEW 2026 SF has been billed but not sampled (SF invoice likely on a separate cadence than per-meal, not in the two weekly per-meal invoices we saw).
+  2. The P&L reflects revenue-recognition of amortized $382,448 with delta being CPI-escalation + accounting rounding. 19.7% delta is large for pure CPI.
+  3. The $457K represents a projected 2026 SF that Kevin is budgeting for but hasn't executed via written contract.
+- **Kevin rules**: C-2 is HELD. This entry documents the evidence, does not conclude.
+
+### A-13. TXR - TX - V P&L books $312,000/yr in 2400.1 despite MONEY_MODEL "$0 covered by H"
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` §g + fee schedule table): TXR-TX-V is $0 fee-schedule, "covered by TXR-TX-H contract"; "Real visiting-team direct-sales revenue is tracked in the Season Tracker workflow (sold-through revenue × 19.23% labor model), out of scope for the SC and the fee schedule."
+- **Source B** (P&L R25 for TXR-TX-V, PL_2026_APPENDIX §3.11): **2400.1 = $312,000/yr**, spread P3-P9 season pattern ($312K / 81 games ≈ $3,852/game).
+- **Delta**: TXR-TX-V has $312K/yr on the P&L (presumably the Season Tracker direct sales). MONEY_MODEL treats this as out-of-scope for the SC + fee schedule; the P&L includes it in 2400.1.
+- **Kevin rules**: whether TXR-TX-V's direct-sales revenue should flow through the SC (currently no), or MONEY_MODEL should be updated to acknowledge the P&L classification, or both.
+
+## B. Rate-table gaps (Phase 0b additions)
+
+### B-7. CIN - AZ 2200 Catering Revenue line item
+
+- New line item: 2200 Catering Revenue $52,000/yr. Add to MONEY_MODEL per-account digest if Kevin approves A-10.
+
+### B-8. TBR - FL 2200 Catering Revenue line item
+
+- New line item: 2200 Catering Revenue $79,950/yr. Same treatment.
+
+### B-9. STL - MO Road Food Management as separate 2300 line
+
+- Verbatim from P&L: line reads "**2300 Service Charges - Road Catering**" ($50,000/yr). MONEY_MODEL §Fee schedule table lists "$50,000 for 'Road Food Management' services". Both consistent; the P&L uses "Road Catering" as the sub-label, MONEY_MODEL uses "Road Food Management". Minor labeling delta — no conflict, but flag for terminology alignment.
+
+## C. Paperwork gaps (no Phase 0b additions)
+
+None. All confirmed gaps were in Phase 0a.
+
+## D. Documentation corrections (Phase 0b additions)
+
+### D-3. GOTCHAS STL - FL P1 number
+
+- Update `docs/GOTCHAS.md` (STL-FL prorated allocation entry) to: **P1 $171,367 · P2 peak $407,375 · P3 $132,755 · FCL plateau P4-P8 $98,915 · offseason P12-13 $0** (from P&L R25). Not applied here per Kevin's ruling; queue for a follow-up doc PR.
+
+## E. Non-conflicts / consistent (Phase 0b — Kevin's interpretation guard applied)
+
+- **P&L recognition spread ≠ contract billing schedule** for every account (CIN-AZ SF billed 75% Feb 1/25% Mar 15 but recognized across P1-P11; STL-FL SF billed quarterly but recognized across P1-P11; TXR-TX-H SF billed monthly Apr-Sep but recognized across P3-P9; etc.): **EXPECTED under Kevin's guard**. Recognition ≠ billing.
+- **CIN-AZ 2300 P&L $445,716 vs contract 2023 base $402,016**: ~11% escalation over 3 years = consistent with § IV.B.3's CPI-U Food Away from Home 2%-5% band. EXPECTED.
+- **TBJ-FL 2300 P&L $515,712 vs contract 2023 base $452,812**: ~14% escalation over 3 years = consistent with § 12(c) provider-initiated CPI approvals. EXPECTED.
+- **STL-MO Total Revenue $489,431 vs contract base $473K**: CPI-escalated per § 2.d.i. EXPECTED.
+- **TXR-AZ 2300 P&L $301,621 vs 2025 deposit $297,419**: ~1.4% higher. Consistent trajectory (may be a partial 2.5%/yr escalator or rounding to 2026 projection). EXPECTED.
+- **CIN-OH 2400.1 $376,688 vs contract $362,500 base**: 3.9% escalation via § 2.a CPI-U Aug 1-4% band. EXPECTED.
+- **All P&L rows show pre-tax figures (no tax line)**: consistent with Kevin's R9 ruling. EXPECTED.
+- **All P&L rows exclude passthrough** (CIN-OH food/supplies, STL-MO $225K, STL-FL $900K): consistent with MONEY_MODEL §h. EXPECTED.
+- **2400.1 sanity spot-check (CIN-AZ + TBJ-FL)**: rough `projected_count × post-SF rate` reconciliation lands within a few percent of the P&L number. EXPECTED (no arithmetic conflict).
+
+---
+
+## H. Phase 0b summary count
+
+- **Live conflicts (A-8 through A-13)**: 6 new (grand total A-* = 13)
+- **Rate-table gaps (B-7 through B-9)**: 3 new (grand total B-* = 9)
+- **Paperwork gaps**: 0 new (grand total C-* = 7)
+- **Doc corrections (D-3)**: 1 new (grand total D-* = 3)
+- **Non-conflicts (per Kevin's interpretation guard)**: 8 new categories
+
+Kevin rules all new A + D at the summit.
+
+---
+
+# Phase 0c — Signed-Price-Review v3 vs PG audit (Layer D certification gate, 2026-07-14)
+
+Diagnosis only. Per Kevin's ratified P-1: signed Price Review v3 `Service Price Review > Billing Price` column (Joe Lessard-attested) is the #1 authority for per-service prices. This section captures new PG-vs-signed audit findings. Full detail: `docs/pricing-summit/PRICE_AUDIT.md`.
+
+**Systemic-staleness fear REFUTED**: 1 STALE_PG row of 105 services (0.95%), at rounding-level ($0.014/meal). Not a systemic bug pattern.
+
+## A. Live conflicts (Phase 0c additions)
+
+### A-14. CIN - AZ Major League Breakfast — rounding-level PG staleness
+
+- **Source A** (signed Price Review v3, `Service Price Review` tab R5, column E `Billing Price`, verbatim): **$20.30622**
+- **Source B** (PG `sc_service_prices` effective 2026-06-18 for CIN-AZ Major League Breakfast, `price_kind='projected'`): **$20.32**
+- **Delta**: +$0.01378 (PG is 1.4¢/meal high)
+- **Fix candidate**: `UPDATE sc_service_prices SET price = 20.30622 WHERE service_id = <CIN - AZ Major League Breakfast> AND effective_date = 2026-06-18 AND price_kind = 'projected';` — Phase 3, Kevin-applied.
+- **Scope check**: CIN-AZ Major League Lunch + Dinner both correctly show $20.30622 in PG (match signed exactly). ONLY Breakfast is stale. Consistent with a single-row typo, NOT a systemic issue.
+
+## B. Rate-table + naming (Phase 0c additions)
+
+### B-10. Naming mismatch: PG service_name has "(tax-free)" suffix, signed sheet doesn't
+
+- **CIN - AZ Coffee Service**: signed says "Coffee Service"; PG says "Coffee Service (tax-free)". Prices IDENTICAL ($511.05293).
+- **CIN - AZ Fountain Bev**: signed says "Fountain Bev"; PG says "Fountain Bev (tax-free)". Prices IDENTICAL ($283.91714).
+- **Fix candidate**: pick a direction (drop "(tax-free)" from PG or add to signed) and align. Suggest DROP FROM PG since PG has `is_tax_free = true` as a first-class flag — the suffix in the name is redundant. Cosmetic; no billing impact.
+
+### B-11. Naming mismatch: TBR - FL "Extended Day Labor" vs "Extended Day labor" (case-only)
+
+- Signed: "Extended Day Labor" (capital L)
+- PG: "Extended Day labor" (lowercase L)
+- Prices IDENTICAL ($280). Cosmetic; no billing impact.
+
+## C. Paperwork gaps (Phase 0c additions — Joe-pending)
+
+### C-8. Joe-pending: STL - FL MiLB Snack Billing Price
+
+- **Source** (signed Price Review v3, Instructions tab Q(a) row 23): "STL-FL MiLB Snack - price? ($0 since fee account?)"
+- **Signed sheet row for the service**: Billing Price cell BLANK; Notes = "NEEDS PRICE - or $0 since fee account?"; Flags = `fee_account`; Action Required = blank.
+- **PG**: has the service; UNKNOWN what value (need to check — probably $0 given fee_account flag).
+- **Kevin rules**: does STL-FL MiLB Snack have a real billing rate, or is it $0 since STL-FL is fee-billed?
+
+### C-9. Joe-pending: STL - FL "Palm Beach Cardinals" Breakfast vs "Arrival"
+
+- **Source** (Instructions tab Q(d) row 27): "STL-FL 'Arrival' vs 'Breakfast' - same service?"
+- **Signed sheet**: row with Group "Palm Beach Cardinals" + Service "Breakfast" + Billing Price 0.
+- **PG**: has a service "Arrival" (under STL-FL), not "Breakfast".
+- **Question**: is the SC's "Arrival" service the same as the signed "Breakfast"? If yes, rename PG or signed to align. If not, add the missing service.
+
+### C-10. Joe-pending: TBJ - NY Snack + Shake prices
+
+- **Source** (Instructions tab Q(b) row 24): "TBJ-NY Snack and Shake - what prices?"
+- **Rows** in signed sheet with blank Billing Price for TBJ-NY Snack + Shake (deactivated services per MONEY_MODEL §c).
+- **Kevin rules**: are these deactivated (correct) or should have real prices?
+
+### C-11. Joe-pending: TBR - FL "Breakfast - MiLB ST" vs "Breakfast - MiLB"
+
+- **Source** (Instructions tab Q(c) rows 25-26): "TBR-FL 'Breakfast - MiLB ST' vs 'Breakfast - MiLB' - same service renamed after spring training? Or two distinct?"
+- **Signed sheet**: both exist with same $17.8275 Billing Price.
+- **PG**: both exist with same $17.8275.
+- Consistent between sources but redundant. Kevin: consolidate or keep as two SC-time-bounded services?
+
+### C-12. Joe-pending: TBJ - FL Media Meals proj-vs-actuals gap
+
+- **Source** (Instructions tab Q(e) row 28): "TBJ-FL Media Meals - $16 (proj) or $15 (actuals)? Real $1 gap."
+- **Signed sheet**: row exists with some Billing Price (verify by inspecting the row directly).
+- **PG**: check what's stored.
+- **Kevin rules**: which is correct — $15 or $16?
+
+## D. Documentation corrections (Phase 0c additions)
+
+None — Joe Lessard rename (D-1) still pending; GOTCHAS STL-FL P1 (D-3) still pending.
+
+## E. Consistent / non-conflicts (Phase 0c)
+
+- **Invoice vs signed alignment** (9-invoice sample) — every invoice line rate matches signed Billing Price within rounding. See PRICE_AUDIT §5.1.
+- **PG stores TBR-FL MiLB Lunch AND Dinner correctly** as two distinct rates ($21.675 + $20.96). MONEY_MODEL digest's "MiLB $20.96" flattens these into one — that's a digest issue, not a PG issue. See A-1 revision.
+- **STL - FL fee account per-meal $0 in PG matches signed** (all STL-FL per-meal signed rows show Billing Price $0 per Instructions rule: "For fee accounts, Billing Price = $0").
+- **9 accounts have 100% MATCH** (CIN-KY, CIN-OH, STL-MO, TBJ-FL, TBJ-NY, TXR-AZ, TXR-TX-H, TXR-TX-V, plus most of CIN-AZ + TBR-FL).
+
+## F. Phase 0c summary count
+
+- **New A conflicts (A-14)**: 1 (grand total A-* = 14, though A-1 is now downgraded to NOT-A-CONFLICT, so **effective live A-* = 13**)
+- **New B additions (B-10 + B-11)**: 2 (grand total B-* = 11)
+- **New C paperwork gaps (C-8 through C-12)**: 5 Joe-pending rows (grand total C-* = 12)
+- **New D**: 0
+
+**Kevin's Layer D verdict**: signed Price Review v3 is a valid source of truth for pricing. **PG is 99% aligned to it**; systemic staleness ruled out; A-1 downgrades; Phase 3 correction target is 1 row (CIN-AZ MLB Breakfast $0.014 rounding). Ready to certify.
+
