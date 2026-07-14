@@ -8,9 +8,13 @@
       "path": "/api/cron/incident-reminders",
       "schedule": "0 14 * * *"
     },
-      {
+    {
       "path": "/api/cron/backup-sheets",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/schedule-drift",
+      "schedule": "0 11 * * *"
     }
   ]
 }

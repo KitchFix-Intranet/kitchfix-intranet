@@ -137,6 +137,16 @@ When Kevin updates a team's schedule (the schedule changes mid-season - postpone
 
 **Deferred design decision**: automation (a cron that runs the extract + diff + emits a review-ready migration draft daily). Not in scope for the schedule-truth doctrine PR. Kevin's call whether/when to build.
 
+### Drift detection (Stage 1, LIVE)
+
+`/api/cron/schedule-drift` fires nightly at 06:00 ET (11:00 UTC cron `0 11 * * *`). It pulls the MLB / MiLB Stats API for the 8 schedule-bearing accounts and diffs against `sc_homestand_schedule`. Drift lines post to `#service-calendar` via `SLACK_SC_WEBHOOK_URL`. **The cron never writes** - it detects and notifies only. Applying changes stays the manual extract -> migration flow described above (schedule truth doctrine).
+
+Buckets emitted: `MISSING_IN_DB`, `PHANTOM_IN_DB`, `DATE_DRIFT`, `H_A_FLIP`, `OPP_CHANGE`, `TIME_DELTA` (>5 min tolerance), plus `PPD` and `DH` counts. `KNOWN_ISSUES` (in `src/lib/scheduleDrift.js`) suppresses the 25 open pks from the Part 4 backlog into a single "known gaps" line - they'll unsuppress when Option A ships and re-extracts. PDCO AWAY games are silently ignored (overlay is HOME-only by sc-17/17b design).
+
+Noise discipline: Slack posts fire only on drift, cron failure, or the Monday heartbeat (one line, "schedules clean"). Silence any other day = no news is good news. Dry-run: append `?dry=1` to the route URL (auth'd) to get the intended payload as JSON without posting.
+
+Stage 2/3 (auto-draft migration PRs on drift, ON CONFLICT auto-apply) are PARKED to 2027 review - see `SC_STATUS.md` parked-projects.
+
 ---
 
 ## Visual system
