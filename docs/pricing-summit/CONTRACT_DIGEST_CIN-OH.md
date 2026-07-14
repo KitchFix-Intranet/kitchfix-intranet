@@ -1,0 +1,194 @@
+# CIN - OH — Contract Source-of-Record
+
+**Account:** CIN - OH (Cincinnati Reds MLB at Great American Ball Park)
+**Folder:** `/Users/kevinfietek/Documents/Claude /Contracts/CINN/`
+
+## §A. Document inventory
+
+| Filename | Document type | Effective date | Execution date | Signatories | STATUS |
+|---|---|---|---|---|---|
+| `2025-26 Reds-KitchFix Food Services Agreement.pdf` | Base Food Services Agreement (multi-year: 2025 + 2026 MLB Seasons, with option to extend through 2027) | November 22, 2024 | Signed (dates not printed near signatures) | Nicholas Krall, President of Baseball Operations (Cincinnati Reds LLC); Josh Katt, CEO (CJK Foods, LLC dba KitchFix) | OPERATIVE for 2026 (2026 base $362,500 escalated by CPI-U Aug 2024 → Aug 2025 with floor 1% cap 4%) |
+| `2026 ABR Conversation Planning.docx` | Historical planning notes — internal Kitchfix ABR conversation prep for 2027 lockout / 2027+ restructure ("We would like to make a deal for 2027+ ending the option periods and starting with a locked contract for 2027 including an MSA.") | n/a (planning) | n/a (not executed) | n/a | HISTORICAL — NOT EXECUTED, planning notes only |
+
+Scanned PDF, clean typewritten scan, no OCR ambiguity.
+
+## §B. Operative terms — VERBATIM (2025-26 agreement)
+
+### B.1 Term / duration
+
+> "This Food Services Agreement ("Agreement") is made and entered into as of the 22 th day of November 2024 (the "Effective Date") by and between The Cincinnati Reds LLC, a Delaware limited liability company (the "Reds"), and CJK Foods, LLC, d/b/a KitchFix ("Contractor")."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § preamble p.1]
+
+> "3. TERM & TERMINATION.
+> a. Term. This Agreement shall commence as of the Effective Date and expire upon conclusion of the 2026 Major League Baseball Season (the "Term"). The Reds shall have the option to extend the Term through the 2027 Major League Baseball Season by providing written notice to Contractor of its election to exercise the option and extend the Term on or before October 1, 2026; provided, however, if the Reds fail to provide notice of its exercise of the option to extend through the 2027, Contractor and Reds agree to meet and confer prior to November 1, 2026 to discuss the terms on which the parties would extend the Term beyond the 2026 Major League Baseball Season."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 3.a p.3]
+
+### B.2 Per-meal rates
+
+NOT PRESENT as per-meal rates. The 2025-26 CIN OH agreement is structured as a fixed Services Fee (see §B.3) plus food-cost passthrough plus clubhouse-extras reimbursement — no per-meal MLB/MiLB rate schedule. Meal volume is described only as:
+
+> "b. Meals. Contractor agrees to prepare three (3) meals per Game for up to seventy five (75) people. The meals shall be high-quality, nutritious, freshly prepared with good quality ingredients, and will be comprised of those menu items identified by the Reds' nutritionist assigned to the Major League club (the "Meals"). Contractor shall source and provide the Services and Meals in conformity with high industry standards, within the budget set forth below in Section 2(c), and the Reds' reasonable requests. The Services and Meals shall be provided in a clean and sanitary manner."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 1.b p.1]
+
+Games covered:
+
+> "…Subject to Section 2(b) below, there shall be approximately eighty-one (81) Major League Baseball Regular Season Games played at the Ballpark each year of the Term (the Reds are scheduled to play 80 Games at the Ballpark during the 2025 Major League Baseball Season)."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 1.a p.1]
+
+### B.3 Service fee
+
+> "2. FEES AND COSTS.
+> a. Services Fee. During the 2025 Major league Baseball Season, the Reds shall pay Contractor the sum of $357,500.00 (the "Services Fee") plus applicable sales tax as payment in full for the Services. For the 2025 Major League Baseball Season, the Services Fees shall be due in seven (7) installment as set forth below:"
+
+Installment table:
+
+| DATE | INSTALLMENT |
+|---|---|
+| MARCH 1, 2025 | $56,250 |
+| APRIL 1, 2025 | $56,250 |
+| MAY 1, 2025 | $56,250 |
+| JUNE 1, 2025 | $56,250 |
+| JULY 1, 2025 | $56,250 |
+| AUGUST 1, 2025 | $56,250 |
+| JANUARY 1, 2027 | $20,000 |
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.a pp.1-2]
+
+(Note: text says "seven (7) installment[s]"; the table shows six monthly $56,250 installments in 2025 [Mar 1 through Aug 1] plus one $20,000 installment on Jan 1, 2027. 6 × $56,250 = $337,500 + $20,000 = $357,500, matching the stated $357,500 total.)
+
+2026 installment cadence:
+
+> "For the 2026 Major League Baseball Season and each Major League Baseball Season thereafter, the Service Fee (plus the annual rate increase) will be due and payable in six consecutive and equal monthly installments due on the first (1st) day of the month beginning on March 1st and ending August 1st."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.a (post-table) p.2]
+
+### B.4 Escalation clause
+
+> "Beginning with calendar year 2026 and each year of the Term thereafter, the Service Fee will be determined by the Consumer Price Index for All Urban Consumers (CPI-U): U.S. City Average, Food Away from Home annual increase as of August. Annual rate increases shall have a floor of 1% and a cap of 4%. For clarity, the 2026 fee will be based off of an initial fee of $362,500 and increased by the percentage change from August 2024 to August 2025 CPI-U. The 2027 rate, if applicable, will be based off of the 2026 actual fee and increased by the percentage change from August 2025 to August 2026 CPI-U."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.a (post-table) p.2]
+
+Note: initial 2025 fee is $357,500 per §2.a; escalator base for 2026 is stated as $362,500 (different from 2025's $357,500). Also note escalator applies to "Service Fee" not to Post Season Game Rate directly, though a separate cross-reference exists (see §B.6).
+
+### B.5 Tax language
+
+> "…the Reds shall pay Contractor the sum of $357,500.00 (the "Services Fee") plus applicable sales tax as payment in full for the Services."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.a p.1]
+
+Post Season rates:
+
+> "…$4,413.58, plus all applicable taxes; and… $2,206.79, plus applicable taxes."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.e.i-ii p.2]
+
+No separate tax rate stated; no "separately state tax" clause; sales tax simply passed through in addition to fees.
+
+### B.6 Postseason
+
+> "e. Post Season. For Services needed during the 2025 Post Season, Contractor will bill the Cincinnati Reds as follows:
+> i. "Post Season Game Rate" (1/81 of the Service Fee): $4,413.58, plus all applicable taxes; and
+> ii. "Post Season Workout Day Rate" (50% of the Post Season Game Rate): $2,206.79, plus applicable taxes."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.e p.2]
+
+> "Following the 2025 Post Season, the Post Season Game Rate and the Post Season Workout Day Rate shall be subject to the increases described in Section 2(a)."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.e (post-list) p.2]
+
+Postseason qualifier language:
+
+> "…and, if the Reds qualify, for Major League Baseball Postseason games…"
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 1.a p.1]
+
+### B.7 Passthrough / reimbursement
+
+Food and disposables (passthrough):
+
+> "b. Cost of Food and Disposable Supplies. Prior to March 1st, the Reds shall provide Contractor with a budget for food and disposable supplies to prepare and serve the Meals. Contractor will order all such food and disposable supplies, will invoice the Reds in accordance with Section 2(d) and will maintain detailed books and records, in form and substance satisfactory to the Reds, for expenditures for food and disposable supplies. Contractor is responsible to keep Reds informed of the budget throughout the year. Contractor is not liable and will be reimbursed for any cost of food and disposable supplies over and above the budgeted amount(s)."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.b p.2]
+
+Clubhouse Extras (passthrough):
+
+> "c. Cost of Clubhouse Extras. At the request of the Reds, Contractor will source and purchase additional food items for the clubhouse and will be reimbursed by the Reds pursuant to Section 2(d). These additional food items, Clubhouse Extras, are over and above the food budget outlined in Section 2(b). Example of Clubhouse Extras include but are not limited to snacks, beverages, and special outside catering. Clubhouse Extras are further defined as the following:
+> a. Items that are offered from the "grab-and-go" cooler
+> b. All packaged snacks and bottled beverages
+> c. Hot coffee and tea products
+> d. Cold pressed juices
+> e. Cold brew coffee and kombucha
+> f. Any requests made during the Major League Baseball Regular Season that are not referenced in the 2025 SOP, which SOP shall be mutually agreed upon prior to the commencement of the 2025 Major League Baseball Regular Season
+> g. Outside catering services provided by request of the Club"
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.c p.2]
+
+Reimbursement mechanic:
+
+> "d. Reimbursement for Costs. After each homestand, Contractor will provide an invoice to the Reds for costs incurred from Sections 2(b) and (c). The Reimbursement for Costs invoice will carry 30 day terms."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 2.d p.2]
+
+### B.8 Billing cadence / payment terms
+
+Services Fee: monthly on the 1st (see §B.3 installment table above — 6 monthly $56,250 payments Mar-Aug 2025, plus $20,000 on Jan 1, 2027; 2026 season 6 consecutive equal monthly installments March 1 - August 1).
+
+Reimbursement (food + clubhouse extras): after each homestand, 30-day terms (see §2.d above).
+
+### B.9 MFN / exclusivity / count-reporting / dispute clauses
+
+Exclusivity: NOT PRESENT as explicit exclusive-caterer clause. §1.a scopes Contractor's Services to Reds MLB players/personnel for each Reds home Game plus rehab as-needed but does not grant exclusivity.
+
+MFN: NOT PRESENT.
+
+Count reporting: NOT PRESENT as an explicit count-reporting clause. Meal capacity capped at "three (3) meals per Game for up to seventy five (75) people" (§1.b).
+
+Confidentiality:
+
+> "9. CONFIDENTIALITY. Except as otherwise required by applicable MLB documents, by applicable laws, or by any applicable governmental entity or agency, the Reds and Contractor agree not to (a) disclose Confidential Information to any third Party other than on a need-to-know basis to their respective shareholders, partners, members, directors, officers, employees, owners, agents and advisors (including legal, financial and accounting advisors) (collectively, "Representatives"), or (b) use Confidential Information for any purpose other than performing its obligations under this Agreement…"
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 9 p.6]
+
+MLB subservience:
+
+> "13. MLB SUBSERVIENCE; COMPLIANCE WITH FACILITY RULES AND REGULATIONS. Notwithstanding any other provision of this Agreement, this Agreement and any rights granted by the Reds hereunder are in all respects subordinate to and shall not conflict with any present or future Major League Baseball ("MLB"), or any present or future MLB-related entity's/(ies'), rules, regulations, guidelines, mandates, policies, bulletins, directives, agreements, and/or governing documents…"
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 13 p.7]
+
+Governing law / venue:
+
+> "15. GOVERNING LAW; VENUE.
+> a. Governing Law. All matters arising out of or relating to this Agreement shall be governed by and construed in accordance with the internal laws of the State of Ohio…
+> b. Venue. Any legal suit, action or proceeding arising out of or based upon or relating to this Agreement, or the transactions contemplated hereby shall be instituted in the federal courts of the United States of America or the courts of the State of Ohio in each case located in Hamilton County, Ohio…"
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 15 p.7]
+
+Termination:
+
+> "b. Termination. Either Party may terminate this Agreement upon a material breach by the other Party, which breach remains uncured after ten (10) days' written notice is furnished by the non-breaching Party. Notwithstanding the foregoing, the Reds may terminate this Agreement at any time and for any reason by providing Contractor with at least thirty (30) days' prior written notice and paying the pro-rata portion of the applicable Services Fee(s) through the end of the notice period. In the event of termination of this Agreement, the Reds shall pay the portion of the applicable Services Fees due for the period in which Services were rendered (less any damages due to Contractor's breach, as the case may be), but shall not be responsible for the remainder of the applicable Services Fees for the Term. If the Reds have prepaid any portion of the Services Fees, then Contractor shall refund the amount of the prepayment within five (5) business days of effective date of the Reds' termination of this Agreement."
+
+[Source: 2025-26 Reds-KitchFix Food Services Agreement.pdf § 3.b p.3]
+
+## §C. Year-over-year table
+
+| Field | 2025 (per contract) | 2026 (per escalator formula) | 2027 (if extended) |
+|---|---|---|---|
+| Services Fee base | $357,500.00 | $362,500 × (1 + CPI-U Aug 2024→Aug 2025 %Δ), floor 1% / cap 4% | 2026 actual fee × (1 + CPI-U Aug 2025→Aug 2026 %Δ), floor 1% / cap 4% |
+| Installment schedule | 6 × $56,250 (Mar 1–Aug 1, 2025) + $20,000 (Jan 1, 2027) | 6 equal monthly installments (Mar 1–Aug 1, 2026) | (if extended) 6 equal monthly installments (Mar 1–Aug 1, 2027) |
+| Post Season Game Rate | $4,413.58 + tax (= 1/81 of Services Fee) | Post 2025 subject to increases per §2(a) | Post 2026 subject to increases per §2(a) |
+| Post Season Workout Day Rate | $2,206.79 + tax (= 50% of Game Rate) | Escalated per §2(a) | Escalated per §2(a) |
+| Games covered | ~81 MLB regular season, up to 2 exhibition, plus MLB postseason if qualified | Same | Same |
+
+Note: 2026 base of $362,500 is stated as separate from 2025's $357,500 — this is not derived from an escalator applied to $357,500; it is a stipulated jump in the base before the CPI-U index is applied. Verbatim: "the 2026 fee will be based off of an initial fee of $362,500 and increased by the percentage change from August 2024 to August 2025 CPI-U."
+
+## §D. Cross-check flags
+
+- 2026 base is stated as **$362,500** (not $357,500) before applying CPI-U Aug 2024→Aug 2025; if PG / Price Review v3 / MONEY_MODEL models 2026 as $357,500 × CPI, that is inconsistent with the contract's explicit "$362,500 × (1+CPI%)" formula.
+- Escalator floor/cap for CIN OH is **1% / 4%** — differs from CIN AZ's 2% / 5% floor/cap. Verify these are correctly applied per-account in MONEY_MODEL.
+- CPI-U measurement month for CIN OH is **August** vs. CIN AZ's **October**. Verify PG uses correct measurement month per account.
+- Installment table lists "seven (7) installment[s]" in text but the schedule shows six 2025 monthly installments plus one Jan 1, 2027 installment. Verify PG / MONEY_MODEL revenue-recognition timing includes the $20,000 Jan 1, 2027 tail installment (revenue for 2025 season but cash in 2027).
+- "2026 ABR Conversation Planning.docx" is planning-only ("We would like to make a deal for 2027+ ending the option periods and starting with a locked contract for 2027 including an MSA") — do not treat as executed; any 2027 assumptions in EVIDENCE packs should flag this as an unresolved item pending the pre-Nov 1, 2026 meet-and-confer.
