@@ -59,5 +59,7 @@ scripts/content/.dryrun-samples/
 scripts/_sc_extract.json
 
 # SC print artifacts — regenerated per PR via scripts/sc-print/gen-all-pdfs.mjs.
-# Never commit; attach to PR body instead. Post-#421 cleanup.
-scripts/sc-print/artifacts/*.pdf
+# Never commit; attach to PR body instead. Post-#421 cleanup. Widened
+# 2026-07-14 to cover PNGs + nested subdirs + the -proto sibling.
+scripts/sc-print/artifacts/
+scripts/sc-print/artifacts-proto/
