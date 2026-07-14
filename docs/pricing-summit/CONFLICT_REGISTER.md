@@ -201,7 +201,7 @@
 
 ---
 
-## G. Summary count
+## G. Summary count (Phase 0a evidence pass, pre-P&L)
 
 - **Live conflicts (A)**: 7
 - **Rate-table gaps (B)**: 6
@@ -210,3 +210,115 @@
 - **Non-conflicts / consistent (E)**: 6 categories
 
 Kevin rules all A + C + D at the summit; B is a mechanical MONEY_MODEL digest expansion; E is informational.
+
+---
+
+# Phase 0b — 2026 P&L per-site deep-dive additions (2026-07-14)
+
+New conflicts surfaced from the P&L extract. Same A/B/C/D/E taxonomy. Cross-reference: `docs/pricing-summit/PL_2026_APPENDIX.md` and `docs/pricing-summit/BILLING_TERMS_MATRIX.md`. **Recognition-vs-billing differences are NOT flagged as conflicts per Kevin's Interpretation Guard** — only real disagreements make it into A-*.
+
+## A. Live conflicts (Phase 0b additions, Kevin rules)
+
+### A-8. P&L account-code classification: flat-fee SF booked in 2400.1, not 2300
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` §e p.28-29): "2400.1 Meal Service (Home) = per-meal invoice = actual_count × post-SF invoice rate. ... 2300 Service Charges = Service Fee attributable to the review period."
+- **Source B** (P&L 2026 individual-site files):
+  - **CIN - OH** (R25 verbatim): 2400.1 = $376,688/yr; R22 2300 = $0. Contract fee = $362,500 flat SF.
+  - **STL - FL** (R25): 2400.1 = $1,400,000/yr; R22 2300 = $0. Contract fee = $1,400,000 flat SF.
+  - **STL - MO** (R25): 2400.1 = $439,431/yr (meal-services portion of $473K); R22 2300 = $50,000 (Road Food only).
+  - **TXR - TX - H** (R25): 2400.1 = $604,019/yr; R22 2300 = $0. Contract fee = $604,032 flat SF.
+- **Delta**: 4 flat-fee accounts' SFs land in 2400.1 (Meal Service (Home)), not 2300 (Service Charges), on the P&L. MONEY_MODEL §e mapping treats 2400.1 as per-meal-only and 2300 as the SF line — the P&L convention differs.
+- **Kevin rules**: whether MONEY_MODEL §e should be amended to reflect the P&L classification, or the P&L classification should be adjusted to match MONEY_MODEL §e, OR both are correct with a clear "P&L classification decouples from MONEY_MODEL SF taxonomy" note.
+
+### A-9. STL - FL P1 amount + peak-period location: P&L contradicts GOTCHAS
+
+- **Source A** (`docs/GOTCHAS.md` claim, cited via MONEY_MODEL §g p.234-235): "STL-FL prorated allocation: the $1.4M is spread PHASE-AWARE across the 13 periods per the P&L pattern (P1 $45,553 ... P3 peak $407,375 ... FCL plateau $98,915 ... offseason $0)."
+- **Source B** (P&L R25 for STL-FL, `docs/pricing-summit/PL_2026_APPENDIX.md` §3.4):
+  - P1 = **$171,367** (not $45,553 as GOTCHAS states)
+  - P2 = **$407,375** (peak) — GOTCHAS placed the peak at P3
+  - P3 = **$132,755**
+  - P4-P8 = $98,915 each (5 periods; confirms "FCL plateau" claim)
+  - P12-P13 = $0 (confirms offseason)
+- **Delta**: GOTCHAS' P1 number is 3.76× too low; peak period is P2 not P3.
+- **Kevin rules**: `docs/GOTCHAS.md` (lines around the STL-FL allocation) should be updated to the P&L-verified values. Not a MONEY_MODEL conflict per se; a stale downstream doc.
+
+### A-10. CIN - AZ 2200 Catering Revenue not documented in MONEY_MODEL
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` per-account digest, CIN - AZ row): no 2200 Catering Revenue line item.
+- **Source B** (P&L R21 for CIN-AZ, `docs/pricing-summit/PL_2026_APPENDIX.md` §3.2): 2200 = $52,000/yr (row shows P1 $3,000 + P2 $3,000, then zeros with Year total $52,000 — sum-of-periods delta of $46K suggests a hidden P13 value or Year-column formula).
+- **Delta**: $52K annual "Catering Revenue" line for CIN-AZ appears on the P&L; MONEY_MODEL is silent. Also the intra-file arithmetic ($6K periods sum vs $52K Year) needs verification with the accountant.
+- **Kevin rules**: whether 2200 is a legitimate CIN-AZ revenue line (educational-services cooking classes at $1,000/class per contract § IV.C p.7? outside-catering at CIN-AZ Goodyear? something else?) and whether MONEY_MODEL should document it.
+
+### A-11. TBR - FL 2200 Catering Revenue not documented in MONEY_MODEL
+
+- **Source A**: MONEY_MODEL per-account digest, TBR - FL row: no 2200 Catering Revenue.
+- **Source B** (P&L R21 for TBR-FL, PL_2026_APPENDIX §3.8): 2200 = **$79,950/yr** spread across P1-P12 with varying weekly amounts.
+- **Delta**: MONEY_MODEL silent on ~$80K/yr TBR-FL catering revenue. Likely B&G Boys & Girls Club $6.50/lunch (per MONEY_MODEL §Open items #6) + Road Sandwiches + other ancillary catering per invoice K300168871. Needs classification.
+- **Kevin rules**: whether 2200 for TBR-FL should be documented in MONEY_MODEL (and whether B&G is the primary contributor).
+
+### A-12. P&L 2300 for TBR - FL supports fresh 2026 SF billing (C-2 evidence)
+
+- **Source A** (Minor League SOW § 6(c) p.6): $382,448 = TWO 2024 installments ($200K + $182,448 by Feb 1, 2024). Contract SILENT on 2025+ recurrence.
+- **Source B** (P&L R22 for TBR-FL): **2300 = $457,768/yr** for 2026, spread P1-P11 in a season-weighted pattern (peak P2 $99,287; plateau P3-P8 ~$41K; decline P9-P11).
+- **Source C** (Invoice K300168545 + K300168871): NO 2300 SF line on the 2026 TBR-FL invoices in the sample (both pure per-meal).
+- **Delta**: P&L books $457,768/yr; contract expired one-time 2024 payment; invoice sample doesn't show SF billing. Three possibilities:
+  1. A NEW 2026 SF has been billed but not sampled (SF invoice likely on a separate cadence than per-meal, not in the two weekly per-meal invoices we saw).
+  2. The P&L reflects revenue-recognition of amortized $382,448 with delta being CPI-escalation + accounting rounding. 19.7% delta is large for pure CPI.
+  3. The $457K represents a projected 2026 SF that Kevin is budgeting for but hasn't executed via written contract.
+- **Kevin rules**: C-2 is HELD. This entry documents the evidence, does not conclude.
+
+### A-13. TXR - TX - V P&L books $312,000/yr in 2400.1 despite MONEY_MODEL "$0 covered by H"
+
+- **Source A** (`docs/SC_MONEY_MODEL.md` §g + fee schedule table): TXR-TX-V is $0 fee-schedule, "covered by TXR-TX-H contract"; "Real visiting-team direct-sales revenue is tracked in the Season Tracker workflow (sold-through revenue × 19.23% labor model), out of scope for the SC and the fee schedule."
+- **Source B** (P&L R25 for TXR-TX-V, PL_2026_APPENDIX §3.11): **2400.1 = $312,000/yr**, spread P3-P9 season pattern ($312K / 81 games ≈ $3,852/game).
+- **Delta**: TXR-TX-V has $312K/yr on the P&L (presumably the Season Tracker direct sales). MONEY_MODEL treats this as out-of-scope for the SC + fee schedule; the P&L includes it in 2400.1.
+- **Kevin rules**: whether TXR-TX-V's direct-sales revenue should flow through the SC (currently no), or MONEY_MODEL should be updated to acknowledge the P&L classification, or both.
+
+## B. Rate-table gaps (Phase 0b additions)
+
+### B-7. CIN - AZ 2200 Catering Revenue line item
+
+- New line item: 2200 Catering Revenue $52,000/yr. Add to MONEY_MODEL per-account digest if Kevin approves A-10.
+
+### B-8. TBR - FL 2200 Catering Revenue line item
+
+- New line item: 2200 Catering Revenue $79,950/yr. Same treatment.
+
+### B-9. STL - MO Road Food Management as separate 2300 line
+
+- Verbatim from P&L: line reads "**2300 Service Charges - Road Catering**" ($50,000/yr). MONEY_MODEL §Fee schedule table lists "$50,000 for 'Road Food Management' services". Both consistent; the P&L uses "Road Catering" as the sub-label, MONEY_MODEL uses "Road Food Management". Minor labeling delta — no conflict, but flag for terminology alignment.
+
+## C. Paperwork gaps (no Phase 0b additions)
+
+None. All confirmed gaps were in Phase 0a.
+
+## D. Documentation corrections (Phase 0b additions)
+
+### D-3. GOTCHAS STL - FL P1 number
+
+- Update `docs/GOTCHAS.md` (STL-FL prorated allocation entry) to: **P1 $171,367 · P2 peak $407,375 · P3 $132,755 · FCL plateau P4-P8 $98,915 · offseason P12-13 $0** (from P&L R25). Not applied here per Kevin's ruling; queue for a follow-up doc PR.
+
+## E. Non-conflicts / consistent (Phase 0b — Kevin's interpretation guard applied)
+
+- **P&L recognition spread ≠ contract billing schedule** for every account (CIN-AZ SF billed 75% Feb 1/25% Mar 15 but recognized across P1-P11; STL-FL SF billed quarterly but recognized across P1-P11; TXR-TX-H SF billed monthly Apr-Sep but recognized across P3-P9; etc.): **EXPECTED under Kevin's guard**. Recognition ≠ billing.
+- **CIN-AZ 2300 P&L $445,716 vs contract 2023 base $402,016**: ~11% escalation over 3 years = consistent with § IV.B.3's CPI-U Food Away from Home 2%-5% band. EXPECTED.
+- **TBJ-FL 2300 P&L $515,712 vs contract 2023 base $452,812**: ~14% escalation over 3 years = consistent with § 12(c) provider-initiated CPI approvals. EXPECTED.
+- **STL-MO Total Revenue $489,431 vs contract base $473K**: CPI-escalated per § 2.d.i. EXPECTED.
+- **TXR-AZ 2300 P&L $301,621 vs 2025 deposit $297,419**: ~1.4% higher. Consistent trajectory (may be a partial 2.5%/yr escalator or rounding to 2026 projection). EXPECTED.
+- **CIN-OH 2400.1 $376,688 vs contract $362,500 base**: 3.9% escalation via § 2.a CPI-U Aug 1-4% band. EXPECTED.
+- **All P&L rows show pre-tax figures (no tax line)**: consistent with Kevin's R9 ruling. EXPECTED.
+- **All P&L rows exclude passthrough** (CIN-OH food/supplies, STL-MO $225K, STL-FL $900K): consistent with MONEY_MODEL §h. EXPECTED.
+- **2400.1 sanity spot-check (CIN-AZ + TBJ-FL)**: rough `projected_count × post-SF rate` reconciliation lands within a few percent of the P&L number. EXPECTED (no arithmetic conflict).
+
+---
+
+## H. Phase 0b summary count
+
+- **Live conflicts (A-8 through A-13)**: 6 new (grand total A-* = 13)
+- **Rate-table gaps (B-7 through B-9)**: 3 new (grand total B-* = 9)
+- **Paperwork gaps**: 0 new (grand total C-* = 7)
+- **Doc corrections (D-3)**: 1 new (grand total D-* = 3)
+- **Non-conflicts (per Kevin's interpretation guard)**: 8 new categories
+
+Kevin rules all new A + D at the summit.
+
