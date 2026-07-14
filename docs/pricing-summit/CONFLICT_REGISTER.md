@@ -137,6 +137,43 @@ All computations start from the contract 2024 post-SF Lunch/Dinner rate of $19.4
 - Invoice: `/Users/kevinfietek/Documents/Claude /Client Invoices/Invoice K300168871.pdf` dated 2026-07-05, TBR-FL MiLB meal service.
 - Cross-refs: `docs/pricing-summit/EVIDENCE_TBR-FL.md` §2.1-2.5; `docs/SC_MONEY_MODEL.md` per-account digest row for TBR - FL.
 
+#### A-1 REVISION (2026-07-14 Layer D audit — signed sheet is authority per P-1)
+
+**A-1 is DOWNGRADED from live conflict to NOT-A-CONFLICT.** The apparent $0.72 delta was a MONEY_MODEL DIGEST oversimplification, not a PG or invoice staleness. Superseded by the PG-vs-signed audit at `docs/pricing-summit/PRICE_AUDIT.md`.
+
+**What the signed Price Review v3 actually contains for TBR-FL Minor League** (source: `KitchFix_Service_Calendar_Price_Review_v3_FINAL.xlsx` tab `Service Price Review` rows R90-R95, verbatim):
+
+| Row | Service | Full Rate | Billing Price | Unit |
+|---|---|---:|---:|---|
+| R90 | Breakfast - MiLB ST | $23.77 | **$17.8275** | per meal |
+| R91 | Lunch - MiLB ST | $28.90 | **$21.675** | per meal |
+| R92 | Breakfast - MiLB | $23.77 | **$17.8275** | per meal |
+| R93 | Lunch - MiLB | $28.90 | **$21.675** | per meal |
+| R95 | Dinner | $27.9491 | **$20.96183** | per meal |
+
+**PG stores these EXACTLY** (verified in `/tmp/pg-effective-prices.json`):
+
+| PG service_name | PG price |
+|---|---:|
+| Breakfast - MiLB | 17.8275 |
+| Breakfast - MiLB ST | 17.8275 |
+| Lunch - MiLB | 21.675 |
+| Lunch - MiLB ST | 21.675 |
+| Dinner | 20.96183 |
+
+**Invoice K300168871 verbatim**: every `TBR MiLB - Lunch/Dinner` line has Description column showing "Lunch" (not Dinner). Rate applied: **$21.68** = rounded $21.675 (signed Lunch rate). Zero Dinner lines on this invoice.
+
+**Verdict**: PG correctly stores the two distinct signed rates. Invoice correctly bills Lunch at $21.68 (=signed $21.675 rounded). The "$0.72 delta" in Phase 0a was the MONEY_MODEL per-account digest flattening Lunch + Dinner into one "MiLB $20.96" row — that's the digest's misrepresentation, not a PG or invoice error.
+
+**Contract escalation-based computed rate ($20.56)** derived in the earlier addendum: **superseded by P-1**. Joe Lessard's signed Billing Price is the #1 authority; the contract's 75%-of-CPI formula does NOT govern once the signed sheet exists. Full arithmetic in the addendum stands as an accounting-audit note, but no longer represents a "contract-correct target."
+
+**Rulings needed** (revised, tighter):
+1. Approve the A-1 downgrade to NOT-A-CONFLICT.
+2. Approve MONEY_MODEL digest row expansion for TBR-FL to reflect the three distinct MiLB rates (Breakfast $17.83 / Lunch $21.675 / Dinner $20.96) instead of the single "MiLB $20.96" (B-2 already flagged in Phase 0a).
+3. Document that P-1 (signed sheet) supersedes the CPI escalation clause for computed rates — clarify MONEY_MODEL's sources-of-truth priority list.
+
+**A-1 residual open question** (not blocking): the signed sheet's TBR-FL MiLB Lunch full rate of **$28.90** is NOT derivable from the contract's 2024 Base Lunch/Dinner Rate ($25.86) via the escalation clause. Ratio $28.90/$25.86 = 11.76%, no clean CPI interpretation. Either an unseen 2025 SOW split Lunch from Dinner into different bases, or Joe's sign-off codified a business-side price update outside the escalation formula. Same paperwork-gap class as C-1 (CIN-AZ 2026 SOW missing) and C-3 (TXR-AZ 2026 SOW missing). Kevin: consider chasing the paper trail for the Lunch-vs-Dinner base rate split.
+
 ### A-2. TBR - FL Service Fee 2026 renewal — CONTRACT SILENT vs MONEY_MODEL "2024 one-time"
 
 - **Source A** (Minor League SOW § 6(c) p.6): The $382,448 Service Fee is defined with exactly two installments: "(A) On the first date that this SOW has been signed by both parties, the Club shall pay the sum of two hundred thousand dollars (USD $200,000.00), and (B) On or before February 1, 2024, the Club shall pay the sum of one hundred eighty-two thousand four hundred forty-eight dollars (USD $182,448)." Contract SILENT on whether the SF recurs in any subsequent Agreement Year.
@@ -442,4 +479,92 @@ None. All confirmed gaps were in Phase 0a.
 - **Non-conflicts (per Kevin's interpretation guard)**: 8 new categories
 
 Kevin rules all new A + D at the summit.
+
+---
+
+# Phase 0c — Signed-Price-Review v3 vs PG audit (Layer D certification gate, 2026-07-14)
+
+Diagnosis only. Per Kevin's ratified P-1: signed Price Review v3 `Service Price Review > Billing Price` column (Joe Lessard-attested) is the #1 authority for per-service prices. This section captures new PG-vs-signed audit findings. Full detail: `docs/pricing-summit/PRICE_AUDIT.md`.
+
+**Systemic-staleness fear REFUTED**: 1 STALE_PG row of 105 services (0.95%), at rounding-level ($0.014/meal). Not a systemic bug pattern.
+
+## A. Live conflicts (Phase 0c additions)
+
+### A-14. CIN - AZ Major League Breakfast — rounding-level PG staleness
+
+- **Source A** (signed Price Review v3, `Service Price Review` tab R5, column E `Billing Price`, verbatim): **$20.30622**
+- **Source B** (PG `sc_service_prices` effective 2026-06-18 for CIN-AZ Major League Breakfast, `price_kind='projected'`): **$20.32**
+- **Delta**: +$0.01378 (PG is 1.4¢/meal high)
+- **Fix candidate**: `UPDATE sc_service_prices SET price = 20.30622 WHERE service_id = <CIN - AZ Major League Breakfast> AND effective_date = 2026-06-18 AND price_kind = 'projected';` — Phase 3, Kevin-applied.
+- **Scope check**: CIN-AZ Major League Lunch + Dinner both correctly show $20.30622 in PG (match signed exactly). ONLY Breakfast is stale. Consistent with a single-row typo, NOT a systemic issue.
+
+## B. Rate-table + naming (Phase 0c additions)
+
+### B-10. Naming mismatch: PG service_name has "(tax-free)" suffix, signed sheet doesn't
+
+- **CIN - AZ Coffee Service**: signed says "Coffee Service"; PG says "Coffee Service (tax-free)". Prices IDENTICAL ($511.05293).
+- **CIN - AZ Fountain Bev**: signed says "Fountain Bev"; PG says "Fountain Bev (tax-free)". Prices IDENTICAL ($283.91714).
+- **Fix candidate**: pick a direction (drop "(tax-free)" from PG or add to signed) and align. Suggest DROP FROM PG since PG has `is_tax_free = true` as a first-class flag — the suffix in the name is redundant. Cosmetic; no billing impact.
+
+### B-11. Naming mismatch: TBR - FL "Extended Day Labor" vs "Extended Day labor" (case-only)
+
+- Signed: "Extended Day Labor" (capital L)
+- PG: "Extended Day labor" (lowercase L)
+- Prices IDENTICAL ($280). Cosmetic; no billing impact.
+
+## C. Paperwork gaps (Phase 0c additions — Joe-pending)
+
+### C-8. Joe-pending: STL - FL MiLB Snack Billing Price
+
+- **Source** (signed Price Review v3, Instructions tab Q(a) row 23): "STL-FL MiLB Snack - price? ($0 since fee account?)"
+- **Signed sheet row for the service**: Billing Price cell BLANK; Notes = "NEEDS PRICE - or $0 since fee account?"; Flags = `fee_account`; Action Required = blank.
+- **PG**: has the service; UNKNOWN what value (need to check — probably $0 given fee_account flag).
+- **Kevin rules**: does STL-FL MiLB Snack have a real billing rate, or is it $0 since STL-FL is fee-billed?
+
+### C-9. Joe-pending: STL - FL "Palm Beach Cardinals" Breakfast vs "Arrival"
+
+- **Source** (Instructions tab Q(d) row 27): "STL-FL 'Arrival' vs 'Breakfast' - same service?"
+- **Signed sheet**: row with Group "Palm Beach Cardinals" + Service "Breakfast" + Billing Price 0.
+- **PG**: has a service "Arrival" (under STL-FL), not "Breakfast".
+- **Question**: is the SC's "Arrival" service the same as the signed "Breakfast"? If yes, rename PG or signed to align. If not, add the missing service.
+
+### C-10. Joe-pending: TBJ - NY Snack + Shake prices
+
+- **Source** (Instructions tab Q(b) row 24): "TBJ-NY Snack and Shake - what prices?"
+- **Rows** in signed sheet with blank Billing Price for TBJ-NY Snack + Shake (deactivated services per MONEY_MODEL §c).
+- **Kevin rules**: are these deactivated (correct) or should have real prices?
+
+### C-11. Joe-pending: TBR - FL "Breakfast - MiLB ST" vs "Breakfast - MiLB"
+
+- **Source** (Instructions tab Q(c) rows 25-26): "TBR-FL 'Breakfast - MiLB ST' vs 'Breakfast - MiLB' - same service renamed after spring training? Or two distinct?"
+- **Signed sheet**: both exist with same $17.8275 Billing Price.
+- **PG**: both exist with same $17.8275.
+- Consistent between sources but redundant. Kevin: consolidate or keep as two SC-time-bounded services?
+
+### C-12. Joe-pending: TBJ - FL Media Meals proj-vs-actuals gap
+
+- **Source** (Instructions tab Q(e) row 28): "TBJ-FL Media Meals - $16 (proj) or $15 (actuals)? Real $1 gap."
+- **Signed sheet**: row exists with some Billing Price (verify by inspecting the row directly).
+- **PG**: check what's stored.
+- **Kevin rules**: which is correct — $15 or $16?
+
+## D. Documentation corrections (Phase 0c additions)
+
+None — Joe Lessard rename (D-1) still pending; GOTCHAS STL-FL P1 (D-3) still pending.
+
+## E. Consistent / non-conflicts (Phase 0c)
+
+- **Invoice vs signed alignment** (9-invoice sample) — every invoice line rate matches signed Billing Price within rounding. See PRICE_AUDIT §5.1.
+- **PG stores TBR-FL MiLB Lunch AND Dinner correctly** as two distinct rates ($21.675 + $20.96). MONEY_MODEL digest's "MiLB $20.96" flattens these into one — that's a digest issue, not a PG issue. See A-1 revision.
+- **STL - FL fee account per-meal $0 in PG matches signed** (all STL-FL per-meal signed rows show Billing Price $0 per Instructions rule: "For fee accounts, Billing Price = $0").
+- **9 accounts have 100% MATCH** (CIN-KY, CIN-OH, STL-MO, TBJ-FL, TBJ-NY, TXR-AZ, TXR-TX-H, TXR-TX-V, plus most of CIN-AZ + TBR-FL).
+
+## F. Phase 0c summary count
+
+- **New A conflicts (A-14)**: 1 (grand total A-* = 14, though A-1 is now downgraded to NOT-A-CONFLICT, so **effective live A-* = 13**)
+- **New B additions (B-10 + B-11)**: 2 (grand total B-* = 11)
+- **New C paperwork gaps (C-8 through C-12)**: 5 Joe-pending rows (grand total C-* = 12)
+- **New D**: 0
+
+**Kevin's Layer D verdict**: signed Price Review v3 is a valid source of truth for pricing. **PG is 99% aligned to it**; systemic staleness ruled out; A-1 downgrades; Phase 3 correction target is 1 row (CIN-AZ MLB Breakfast $0.014 rounding). Ready to certify.
 
