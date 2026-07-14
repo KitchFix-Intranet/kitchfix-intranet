@@ -111,6 +111,34 @@ The two payloads are additive; the render layer chooses which to consume based o
 
 ---
 
+## Schedule truth hierarchy
+
+**Doctrine (Kevin's ruling, 2026-07-14).** For every schedule-bearing account (MLB fee, AAA, PDCO overlay affiliates), the source-of-truth stack is:
+
+1. **MLB / MiLB Stats API** - calendar truth. The schedule is set by the league; we mirror it.
+2. **`sc_homestand_schedule` / overlay tables** - the mirror. Loaded via the sc-13 / sc-16 / sc-17 / sc-17b extract scripts, pasted as migrations, verified by probe. Day-existence for schedule-bearing accounts is derived from these tables.
+3. **Operator actuals + no-service decisions** - what actually happened per day. Confirmed via the SC entry UI on top of the day the schedule created.
+4. **`sc_daily_projections` (via `sc_daily_revenue`)** - the authored overlay. Written by Kevin before final schedules exist, by design. **Projections OVERLAY the schedule skeleton, never DEFINE it.** A day's existence on the Service Calendar NEVER depends on revenue-row presence.
+5. **Prices + billing** - MLB fee stays calendar-only (R5, still standing - flag loudly if any code path contradicts this). AAA + MiLB per-meal are actuals x built-in prices; those accounts' meal counts feed billing.
+
+**Consequence for the loaders (2026-07-14 widening).** Both `loadYearSummaryPostgres` and `loadMonthDataPostgres` call `addMissingScheduleDates` with the UNION of homestand + overlay date sets. Any date the schedule says exists materializes a `days[]` entry, even when `sc_daily_revenue` has zero rows. The screen and print output stop dropping getaway AWAY dates + HOME games lacking projections + PDCO overlay dates without projections. Fee branch tiles render `@ OPP` / `vs OPP` with correct classification; per-meal (AAA) branch does the same for its schedule-having accounts (Louisville / Buffalo). See `src/lib/dataStore/serviceCalendar.js:29` (helper) + Part 3 audit at `/tmp/txr_schedule_audit.md`.
+
+### Manual re-actualization procedure (today)
+
+When Kevin updates a team's schedule (the schedule changes mid-season - postponements, doubleheaders, rescheduled games), the flow is manual:
+
+1. Re-run the extract script for the affected teams. Today's scripts:
+   - `scripts/_extract_sc_13_away_schedule.mjs` for MLB (teamIds 113/138/140).
+   - `scripts/_extract_milb_schedule.mjs` for AAA (Louisville / Buffalo).
+   - No PDCO extractor yet - STL - FL / TBJ - FL overlay rows were seeded ad-hoc (sc-17 / sc-17b).
+2. Diff the newly-generated SQL against the current DB via probe (`scripts/_probe_sc_daytype_metadata_three_way_diff.mjs` covers the four MLB accounts; extend for other levels as needed).
+3. Compose a migration (`docs/migrations/sc-XX-<subject>.sql`) with the deltas. Kevin pastes into Supabase Studio.
+4. Verify via a second probe run against the migrated state.
+
+**Deferred design decision**: automation (a cron that runs the extract + diff + emits a review-ready migration draft daily). Not in scope for the schedule-truth doctrine PR. Kevin's call whether/when to build.
+
+---
+
 ## Visual system
 
 ### Sm-tile philosophy (the two-marks rule)

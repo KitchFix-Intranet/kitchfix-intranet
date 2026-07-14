@@ -121,6 +121,36 @@ Sequential path to desktop-launch + mobile follow-on. Absorbs the previous stand
 
 ---
 
+## Known issues (pre-launch, tracked)
+
+### Bug A - transient month-swap on the Screen Month drill (parked)
+
+**State**: not reproducible from a clean load. Observed by Kevin once (2026-07-13ish); July drill for TXR - TX - H painted with April's payload under correct July date labels. Diagnosis at `/tmp/txr_schedule_audit.md` addendum + Bug A follow-up:
+
+- Server, cache-key composition, route param math, fetch-effect race - all exonerated on code-read + probe.
+- No named file:line mechanism from code alone.
+- Surface: **screen Month drill** (Kevin's ruling 2026-07-14; app nav bar visible in the screenshots; all-caps "MON TUE WED" traces to CSS `text-transform: uppercase` in `src/app/service-calendar/season/periodWorkspace.css:535` applied to a title-case source `["Mon","Tue","Wed",...]` in `PeriodWorkspace.js:781`).
+- Zombie `useState(new Date().getMonth())` at `ServiceCalendar.js:267` (never mutated after mount) is the leading suspect for a path-dependent transient. Every render surface for the drill body reads from URL-based monthKey, not from the zombie's `data`. Kevin's August screenshots (correct data, correct label) argue against any deterministic month offset.
+
+**Hard rule (Kevin, 2026-07-14)**: no fix ships without a named file:line mechanism. Bug A stays parked as a pre-release known-issue.
+
+**Reproduction checklist** (any ONE data point unblocks the fix):
+
+- [ ] Surface: SCREEN Season overview / SCREEN Month drill / SCREEN Period workspace / PDF export (which scope). SCREEN has the plane icon + sun/moon pill glyph + `text-transform:uppercase` MON header; PDF has the PDF viewer chrome around it.
+- [ ] Account: exact `team_key`.
+- [ ] Exact click path from a known starting URL to the "wrong" render (approx timing; account switch or back-button use noted).
+- [ ] Capture: FULL URL bar at the moment wrong data is visible AND one sc-load Network row (request URL + response payload, minimum `days[0].date` + first homestandMap key). Alternatively: `console.log(monthCache)` snapshot.
+
+Filing target: paste into a GitHub issue (or Kevin ping CC) with the four boxes filled.
+
+### Bug B - vanishing schedule days (FIXED, PR pending merge)
+
+**Was**: Getaway AWAY dates immediately preceding a home opener (plus any HOME game day lacking projections) rendered as bare "off" tiles on the SCREEN Month drill for schedule-bearing accounts. Root cause: `loadMonthDataPostgres` built `days[]` from `sc_daily_revenue` view rows only, with no schedule-truth fallback. 27+ dates across the 4 MLB fee accounts + AAA (TBJ - NY: 12 dates) + PDCO (STL - FL: 24 dates) affected.
+
+**Fixed by (this PR)**: `addMissingScheduleDates` helper called by both loaders; unions homestand + overlay dates from `sc_homestand_schedule` / `loadScheduleOverlay` and materializes any missing day in the loader's map. Schedule truth wins over projection presence per the doctrine at [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md) "Schedule truth hierarchy". Unit tests: `scripts/content/__tests__/sc-fee-fallback.test.mjs` (32/32 green). E2E deferred to roadmap 4.
+
+---
+
 ## Dead doc candidates (Kevin decides - no unilateral action)
 
 These docs are session-log style or bundle-recon-style, superseded by shipped state + the new canonical docs above. Propose archive to `docs/archive/`.

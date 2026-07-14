@@ -1,6 +1,42 @@
 import { getServiceClient } from "@/lib/supabase";
 import { isDualWrite } from "@/lib/cutover";
 
+// ── Schedule-truth fallback (shared) ──────────────────────────────────
+//
+// DOCTRINE (Kevin's ruling, 2026-07-14): the MLB / MiLB Stats API schedule
+// is CALENDAR TRUTH for every schedule-bearing account (MLB fee, AAA,
+// PDCO overlay affiliates). Projections are authored before final
+// schedules exist, by design - they overlay the skeleton, never define
+// it. Day existence on the Service Calendar derives from the schedule
+// table (sc_homestand_schedule) or the overlay table (sc-17/sc-17b),
+// NEVER from sc_daily_revenue row presence. See
+// docs/modules/SERVICE_CALENDAR.md "Schedule truth hierarchy".
+//
+// Called by both loadYearSummaryPostgres and loadMonthDataPostgres to
+// backfill the loader's day map from schedule truth for any date the
+// revenue view happens not to cover (getaway AWAY dates immediately
+// preceding a home opener - Part 3 audit finding; PREP/OPEN/CLOSE days;
+// GAME days lacking projections; any future case where schedule >
+// projection lag exists). Scoped to ALL schedule-bearing accounts (not
+// just MLB fee) per the 2026-07-14 widening: AAA per-meal + PDCO
+// overlay-only both benefit.
+//
+// The two loaders keep different per-day shapes, so the caller passes a
+// `defaultFactory(date) -> entry` closure and pre-computes the union of
+// schedule/overlay date sets. Exported for unit tests -
+// scripts/content/__tests__/sc-fee-fallback.test.mjs. Returns the count
+// of dates added.
+export function addMissingScheduleDates(mapRef, scheduleDates, defaultFactory) {
+  let added = 0;
+  for (const date of scheduleDates) {
+    if (!mapRef.has(date)) {
+      mapRef.set(date, defaultFactory(date));
+      added++;
+    }
+  }
+  return added;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SERVICE CALENDAR MODULE - PG-native orchestrator
 // ═══════════════════════════════════════════════════════════════
@@ -181,7 +217,7 @@ function throwOnError(error, op) {
 //   "future"       - future date (also the fee "GAME day, no actuals")
 //   "prep"         - fee non-GAME homestand day (PREP/OPEN/CLOSE/CLEAN)
 //   "off-season"   - fee date not in the homestand schedule
-function classifyDayStatus(s, ctx) {
+export function classifyDayStatus(s, ctx) {
   const d = new Date(s.date + "T12:00:00");
   const isPast = d < ctx.today;
   const isOverdue = d < ctx.lockCutoff;
@@ -714,7 +750,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
     ),
     supa
       .from("accounts")
-      .select("billing_model, has_homestand_schedule")
+      .select("billing_model, has_homestand_schedule, has_schedule_overlay")
       .eq("team_key", accountKey)
       .maybeSingle(),
     // SC-079: one batched query for the whole month range. Returns a
@@ -728,6 +764,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   throwOnError(billingRes.error, "loadMonthData.billing_model");
   const billingModel = billingRes.data?.billing_model || null;
   const hasHomestandScheduleFlag = !!billingRes.data?.has_homestand_schedule;
+  const hasScheduleOverlayFlag = !!billingRes.data?.has_schedule_overlay;
 
   // sc-16 (2026-07-11): schedule presence is now a data-driven flag on
   // accounts, not a billing_model proxy. Gate the loadHomestandContext
@@ -739,6 +776,15 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
     homestandMap = await loadHomestandContext(accountKey, first, last);
   }
   const hasHomestandData = Object.keys(homestandMap).length > 0;
+  // Schedule-truth doctrine (2026-07-14): PDCO overlay-only accounts
+  // (STL-FL, TBJ-FL) also need day-existence from schedule. Fetch the
+  // overlay so its dates can seed the day map alongside homestandMap.
+  // The route.js sc-load handler still fetches overlay separately for
+  // the response payload; this fetch is internal-only for materialization.
+  let scheduleOverlayForMaterialize = {};
+  if (hasScheduleOverlayFlag) {
+    scheduleOverlayForMaterialize = await loadScheduleOverlay(accountKey, first, last);
+  }
   const statusCtx = { today, lockCutoff, billingModel, hasHomestandData, homestandMap };
 
   // Bucket rows by date.
@@ -773,6 +819,27 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
       hasProjection:       !!r.has_projection,
     });
   }
+
+  // Schedule-truth fallback (Part 3 fix, widened 2026-07-14). For every
+  // schedule-bearing account (homestand OR overlay), any date the
+  // schedule says exists must materialize in days[], even when
+  // sc_daily_revenue has no rows for it. Getaway AWAY dates + missing-
+  // projection HOME days + PDCO overlay dates without projections all
+  // stop dropping silently. Uses the shared addMissingScheduleDates
+  // helper - symmetric with loadYearSummaryPostgres below.
+  const scheduleDatesUnion = new Set([
+    ...Object.keys(homestandMap),
+    ...Object.keys(scheduleOverlayForMaterialize),
+  ]);
+  addMissingScheduleDates(dayBuckets, scheduleDatesUnion, (date) => ({
+    date,
+    period:     null,
+    weekLabel:  null,
+    eventLabel: null,
+    gameType:   null,
+    gameTime:   null,
+    services:   [],
+  }));
 
   // Build the final day array sorted by date. Compute totals + isPast/
   // isLocked per day, plus the reduced state (hasAct / anyNonZeroAct /
@@ -1127,24 +1194,24 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     if (!st.gameType && r.game_type) st.gameType = r.game_type;
   }
 
-  // Fee accounts: ensure every homestand date has a dayState entry even
-  // if it's not in sc_daily_revenue (e.g. PREP/OPEN/CLOSE days that have
-  // no projection rows). Without this, those dates would silently drop
-  // from the year response and render as gaps in the heatmap.
-  if (billingModel === "flat_fee" && hasHomestandData) {
-    for (const date of Object.keys(homestandMap)) {
-      if (!dayState.has(date)) {
-        dayState.set(date, {
-          date,
-          hasAct: false,
-          anyNonZeroAct: false,
-          hasProj: false,
-          anyNonZeroProj: false,
-          gameType: "",
-        });
-      }
-    }
-  }
+  // Schedule-truth fallback (widened 2026-07-14). Symmetric with
+  // loadMonthDataPostgres via the shared addMissingScheduleDates helper -
+  // day-existence for schedule-bearing accounts derives from schedule/
+  // overlay truth, never from revenue-row presence. Scoped to homestand
+  // OR overlay dates so AAA per-meal and PDCO overlay-only accounts get
+  // the same lag-tolerance MLB fee already had.
+  const yearScheduleDatesUnion = new Set([
+    ...Object.keys(homestandMap),
+    ...(scheduleOverlayDates || []),
+  ]);
+  addMissingScheduleDates(dayState, yearScheduleDatesUnion, (date) => ({
+    date,
+    hasAct: false,
+    anyNonZeroAct: false,
+    hasProj: false,
+    anyNonZeroProj: false,
+    gameType: "",
+  }));
 
   const statusCtx = { today, lockCutoff, billingModel, hasHomestandData, homestandMap };
 
