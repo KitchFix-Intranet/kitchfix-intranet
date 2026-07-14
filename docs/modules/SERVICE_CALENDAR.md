@@ -135,7 +135,7 @@ When Kevin updates a team's schedule (the schedule changes mid-season - postpone
 3. Compose a migration (`docs/migrations/sc-XX-<subject>.sql`) with the deltas. Kevin pastes into Supabase Studio.
 4. Verify via a second probe run against the migrated state.
 
-**Deferred design decision**: automation (a cron that runs the extract + diff + emits a review-ready migration draft daily). Not in scope for the schedule-truth doctrine PR. Kevin's call whether/when to build.
+**Automation status**: Stage 1 (nightly detect + Slack notify) shipped 2026-07-14 in PR #432 - see "Drift detection (Stage 1, LIVE)" below. Stage 2 (nightly cron generates a review-ready migration draft) and Stage 3 (idempotent ON CONFLICT auto-apply for drift classes with unambiguous resolution) are PARKED to 2027 review; the manual extract -> migration flow remains the applying-changes path per Kevin's ruling.
 
 ### Drift detection (Stage 1, LIVE)
 
