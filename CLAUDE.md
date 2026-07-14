@@ -57,6 +57,8 @@ The close-out + status docs are canonical for current state. ARCHITECTURE.md is 
 
 **Floor-first.** Every UI change must work on a 375px viewport before it ships. The mental model: a chef on a phone in a 38°F walk-in cooler with wet hands.
 
+**Bidirectional-diff law.** Any DB <-> external-truth audit must walk BOTH directions - every DB row -> external record AND every external record -> DB row on its correct current identifier. A one-way walk hides re-anchored records: on 2026-07-14 the STL - MO pk 823042 DATE_DRIFT (a postponed game the API relocated 6/25 -> 7/23) sat in the DB for a week because Part 1's DB->API walk found every DB row matched some API game, but the reverse walk was never run. See `docs/audits/SC_SCHEDULE_TRUTH_AUDIT_2026-07.md` "ARC CLOSEOUT" for the full case.
+
 ## Danger zones
 
 These files have outsized blast radius. Edit only with explicit user approval and never in autonomous "make it work" mode:

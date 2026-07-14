@@ -1495,3 +1495,69 @@ Option A + nightly refresh together retire the PPD/DATE_DRIFT class permanently.
 - `scripts/_probe_sc_part4_milb_name_resolve.mjs` (READ-ONLY, name resolution)
 - `scripts/_probe_sc_part4_bidirectional_diff.mjs` (READ-ONLY, full bidirectional diff + PPD/DH + projection alignment)
 - `/tmp/txr_schedule_audit.md` (this append)
+
+
+---
+
+# ARC CLOSEOUT (2026-07-14)
+
+Everything below is post-audit synthesis: how the arc unfolded, what shipped, what Kevin ruled, what stays open. Meant to be readable in one pass by anyone landing cold.
+
+## Timeline
+
+| Step | Trigger | Output | State |
+|---|---|---|---|
+| 1 | Kevin's "100% wrong" red flag on TXR home/away render | Part 1 audit | DB clean vs MLB Stats API (156/162 CLEAN + 6 code-style ARI/AZ; 0 missing, 0 phantom on DB->API walk). Kevin's report NOT SUPPORTED by DB-vs-API evidence. |
+| 2 | Kevin's July SCREEN screenshots showing April data on July labels | Part 2 SCREEN trace + Bug A follow-up | Server proven innocent; monthCache keys correct; fetch race guarded; NO named file:line mechanism found. Bug A **parked** as pre-release known-issue with §A.4 reproduction checklist. |
+| 3 | Kevin's August MLB.com side-by-sides showing missing away tiles | Part 3 metadata + render-gate audit | Kevin's `sc_day_metadata.game_type` suspect REFUTED. Real mechanism: `loadMonthDataPostgres` built `days[]` only from `sc_daily_revenue` view rows with no schedule-truth fallback. Getaway AWAY dates (0 revenue rows) silently dropped. **Bug B mechanism named at file:line.** |
+| 4 | Kevin's doctrine ruling | "Schedule Truth Doctrine" | MLB / MiLB Stats API is calendar truth; projections overlay, never define; operators enter actuals / no-service. |
+| 5 | Part 4 bidirectional audit under doctrine | AAA (sportId 11) + FSL (sportId 14) diffs; name-resolved; PPD/DH population enumerated | 8 accounts audited both directions. 29 DH dates, 30 PPD games, 24 DATE_DRIFT rows, 5 real MISSING_IN_DB pks (AAA). STL 7/23 - the case that hid in Part 1's one-way walk - surfaced as a DATE_DRIFT. |
+| 6 | Doctrine + audit -> PR arc | 3 PRs + 2 migrations + 1 cron | See "PR trail" below. |
+| 7 | Watchdog live + arc closed | Docs sweep (this PR) | ARC CLOSEOUT recorded. |
+
+## PR trail
+
+- **#430** (merged 2026-07-14) - **Bug B fix + Schedule Truth Doctrine + sc-18 counter-patches**. Added `addMissingScheduleDates` helper (`src/lib/dataStore/serviceCalendar.js:29`) called by both `loadMonthDataPostgres` and `loadYearSummaryPostgres` with the union of homestand + overlay dates. Widened per Kevin's ruling from fee-only to every schedule-bearing account (MLB fee + AAA + PDCO overlay). Doctrine documented in `docs/modules/SERVICE_CALENDAR.md` "Schedule truth hierarchy". Companion migration `sc-18-day-metadata-counter-patches.sql` fixed 5 `sc_day_metadata.game_type` misclassifications (CIN 5/29 + 8/20; TXR H/V 3/26/28/29 nulls). Unit tests: `scripts/content/__tests__/sc-fee-fallback.test.mjs` (32/32).
+- **#431** (merged 2026-07-14) - **sc-19 date-drift SAFE_NOW single-row migration**. Applied the one collision-free + actuals-free DATE_DRIFT row (STL - MO pk 823042, 2026-06-25 -> 2026-07-23; the case Part 1's one-way walk missed). 13 WAIT_OPTION_A + 12 GUARDED rows documented in the migration body for the Option A follow-up.
+- **#432** (merged 2026-07-14) - **Stage 1 schedule-drift watchdog** at `/api/cron/schedule-drift` (06:00 ET nightly). Pure `diffSchedule` + `KNOWN_ISSUES` suppression (25 pks from the Part 4 unreconciled population) + Slack notify via `SLACK_SC_WEBHOOK_URL`. Zero writes; detect-and-notify only. Companion sc-19b GUARDED reconcile intended for this PR turned out **empty** under the actuals-stay ruling - every previously-GUARDED row also has a target-date collision; all 12 joined `KNOWN_ISSUES` instead. Audit preserved from `/tmp` to `docs/audits/SC_SCHEDULE_TRUTH_AUDIT_2026-07.md` in this PR. Companion `.gitignore` widen for regenerable sc-print artifacts.
+
+Context: PRs **#426-#429** (print polish waves + PDC/PDCO drill park) preceded the arc and are logged in the RUNBOOK Captain's log; unrelated to schedule-truth but running in parallel through the same 2026-07-13/14 window.
+
+## Migrations applied by Kevin in Studio (both 2026-07-14)
+
+- **sc-18-day-metadata-counter-patches.sql** - 5 counter-only UPDATE rows (2 CIN game_type AWAY -> HOME; 6 TXR H+V game_type NULL -> AWAY; guards on pre-fix values). Verified 8/8 via `SELECT` (Kevin's post-apply "success. no rows returned" on the mismatch probe).
+- **sc-19-date-drift-safe-subset.sql** - 1 UPDATE (STL - MO pk 823042, `service_date` 2026-06-25 -> 2026-07-23; guard on the pre-fix date). Verified 1-row `SELECT` on the target date + 0-row `SELECT` on the source date.
+
+## Rulings ledger (Kevin, 2026-07-14 — verbatim intent)
+
+1. **Schedule Truth Doctrine.** The MLB / MiLB Stats API is calendar truth for every schedule-bearing account. Projections overlay the schedule skeleton, never define it. Operators confirm services with the client, enter actuals served, or mark no-service; a day's existence on the Service Calendar NEVER depends on revenue-row presence. Billing: **AAA + MiLB (per-meal)** on actuals × built-in prices; **MLB stays fee-billed, calendar-only** - R5 stands, flag loudly if any code path contradicts.
+2. **Actuals stay.** Actuals are day-records of real service and NEVER move when schedule rows re-anchor to a new date. If a game is postponed 6/25 -> 7/23, the operator's 6/25 actuals stay on 6/25 (service happened that day); only `sc_homestand_schedule.service_date` re-anchors to 7/23.
+3. **Drift watchdog: Stage 1 only.** Detect + Slack notify shipped 2026-07-14 (#432). Stages 2/3 (auto-draft migration PRs, ON CONFLICT auto-apply) PARKED to 2027 review; applying changes stays the manual extract -> migration flow.
+4. **Option A (game_number column + array-shape homestandMap).** APPROVED as sized (1-2 day PR per audit §P4.5). PARKED post-pricing-summit; retires the 25 KNOWN_ISSUES pks nightly for free once shipped.
+5. **MLB projection backfill: unnecessary.** Part 4 rider probe verified 0 MLB HOME game days lack projection rows across all 4 fee accounts. AAA / FSL projection alignment questions (232 off-schedule projection days on STL-FL + TBJ-FL; 40 each on CIN-KY + TBJ-NY) deferred to the pricing summit as billing-base clarity.
+6. **PDCO overlay stays HOME-only.** PDC service is year-round and not schedule-derived; away games would add clutter, not truth. Watchdog silently ignores PDCO AWAY MISSING_IN_DB by design. Revisit at Option A ship time.
+7. **ARI canonicalization stands.** DB canonicalizes to `ARI` (standard media abbreviation); API returns `AZ` (Arizona's fileCode). The 6 code-style mismatches from Part 1 stay tolerable per unchallenged recommendation.
+
+## Open rulings carried forward (so they don't evaporate)
+
+Items surfaced during the arc that were noted but not resolved. Preserved here so future work sees them:
+
+- **Spring-games destination** (Part 1 §6) - MLB Stats API returns spring exhibition + spring-training games that currently load nowhere in DB (sc-13 skips gameType!=R except for the 2 TXR-H sc-12 exhibitions). Resurfaces with TXR - AZ work.
+- **H+V duplicate-account model** (Part 1 §7) - TXR - H and TXR - V share teamId 140 and load identical schedules by design, but the actuals model for TXR - V (visiting clubhouse serving the same stadium) is unresolved. Banked to pricing summit.
+- **0-count-projection semantics** (Part 4 §P4.4) - TBJ - NY earlier rider probe reported 7 HOME + 5 AWAY lacking projections; the Part 4 rollup showed 0 schedule-days-without-projections. The gap is `has_projection` flag semantics on all-zero rows vs no rows at all. Pricing summit input.
+- **PDCO AWAY overlay widening** - deferred per §6 above; revisit at Option A ship time so calendar completeness is discussed alongside the array-shape refactor.
+- **MLB counter cosmetics under R5** - "0/15 game days" counter denominator reads correctly (from `sc_daily_revenue.game_type`) but the numerator is design-locked at 0 for MLB (R5: no state layer emitted). Design question for whether MLB accounts should show any counter at all; low priority.
+- **Bug A (transient month-swap)** - stays parked with the §A.4 reproduction checklist in `SC_STATUS.md`. Not reproducible from a clean load. Hard rule: no fix without a named file:line mechanism.
+- **DH/PPD representation for future MLB seasons** - Option A ships the shape but the operational procedure for when a postponed game is announced (do we re-run the extract same-day, next-day, or wait for the watchdog to alert?) is unwritten. Watchdog nightly cycle is currently the answer.
+
+## Maintenance pointer
+
+When Option A ships and re-extracts, **prune the 25 pks** from `KNOWN_ISSUES` in `src/lib/scheduleDrift.js`. The watchdog will then verify the fix nightly for free - if any of those pks reappear as drift after Option A ships, that's a real regression.
+
+Removal candidates by group:
+- **11 collision-only DATE_DRIFT pks** (Part 4 §P4.2 WAIT_OPTION_A): CIN-OH 824518, 824514; STL-MO 824518, 823062, 824514; TBJ-NY 815998, 815912, 815840, 815675, 816932; TBJ-FL 820655.
+- **11 collision+actuals DATE_DRIFT pks** (12 minus the deduped): CIN-KY 816286, 816276, 816810, 816802, 816638, 816643; TBJ-NY 816975, 816974, 816964; STL-FL 820419; TBJ-FL 820698, 820676.
+- **2 AAA MISSING_IN_DB DH game-2 pks**: CIN-KY 816263 (7/18); TBJ-NY 816824 (9/12).
+- **1 Suspended-pk pair**: STL-FL 820716 (7/12 + 8/11).
+
+After Option A + re-extract, running `node --env-file=.env.local scripts/_probe_sc_part4_bidirectional_diff.mjs` should surface 0 DATE_DRIFT, 0 MISSING_IN_DB, 0 PHANTOM_IN_DB (except the 2 TXR EXH nulls). Confirming that becomes the acceptance test for Option A shipping cleanly.

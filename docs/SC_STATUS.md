@@ -145,11 +145,13 @@ Sequential path to desktop-launch + mobile follow-on. Absorbs the previous stand
 
 Filing target: paste into a GitHub issue (or Kevin ping CC) with the four boxes filled.
 
-### Bug B - vanishing schedule days (FIXED, PR pending merge)
+### Bug B - vanishing schedule days (FIXED - merged 2026-07-14 in #430)
 
 **Was**: Getaway AWAY dates immediately preceding a home opener (plus any HOME game day lacking projections) rendered as bare "off" tiles on the SCREEN Month drill for schedule-bearing accounts. Root cause: `loadMonthDataPostgres` built `days[]` from `sc_daily_revenue` view rows only, with no schedule-truth fallback. 27+ dates across the 4 MLB fee accounts + AAA (TBJ - NY: 12 dates) + PDCO (STL - FL: 24 dates) affected.
 
-**Fixed by (this PR)**: `addMissingScheduleDates` helper called by both loaders; unions homestand + overlay dates from `sc_homestand_schedule` / `loadScheduleOverlay` and materializes any missing day in the loader's map. Schedule truth wins over projection presence per the doctrine at [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md) "Schedule truth hierarchy". Unit tests: `scripts/content/__tests__/sc-fee-fallback.test.mjs` (32/32 green). E2E deferred to roadmap 4.
+**Fix (PR #430, merged 2026-07-14)**: `addMissingScheduleDates` helper in `src/lib/dataStore/serviceCalendar.js` called by both loaders; unions homestand + overlay dates from `sc_homestand_schedule` / `loadScheduleOverlay` and materializes any missing day in the loader's map. Schedule truth wins over projection presence per the doctrine at [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md) "Schedule truth hierarchy". Unit tests: `scripts/content/__tests__/sc-fee-fallback.test.mjs` (32/32 green). E2E deferred to roadmap 4.
+
+**Acceptance**: fallback live in production; verified via Kevin's MLB.com side-by-sides that the four originally-flagged tiles restored (TXR 8/2 vs HOU, TXR 8/30 vs MIL, CIN 8/13 vs CWS, CIN 8/30 vs CHC). Companion counter-only migration sc-18 applied in Studio 2026-07-14 (5 rows: CIN 5/29 + 8/20 game_type -> HOME; TXR H/V 3/26/28/29 nulls -> AWAY). Companion sc-19 date-drift SAFE_NOW single-row migration applied same day (STL - MO pk 823042, 2026-06-25 -> 2026-07-23).
 
 ---
 
