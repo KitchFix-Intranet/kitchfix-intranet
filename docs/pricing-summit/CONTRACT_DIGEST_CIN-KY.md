@@ -1,0 +1,166 @@
+# CIN - KY — Contract Source-of-Record
+
+**Account:** CIN - KY (Louisville Bats — Cincinnati Reds AAA affiliate at Louisville Slugger Field)
+**Folder:** `/Users/kevinfietek/Documents/Claude /Contracts/CIN KY/`
+
+## §A. Document inventory
+
+| Filename | Document type | Effective date | Execution date | Signatories | STATUS |
+|---|---|---|---|---|---|
+| `BATS Contract Executed Final.pdf` | Base Services Agreement (2024 season) | January 28, 2024 (Effective Date) | Signed on the document | Sam Grossman, Asst. GM (Cincinnati Reds); Josh Katt, CEO (CJK Foods, LLC dba KitchFix) | SUPERSEDED (2024 term ended 12/31/2024) |
+| `BATS 2025 Contract.pdf` | Base Services Agreement (2025 season) | 1/1/2025 | Signed on the document | Nick Krall, President of Baseball Operations (Cincinnati Reds — the "Sam Grossman / Asst. GM" line is struck through and rewritten to Nick Krall); Josh Katt, CEO (KitchFix) | SUPERSEDED (2025 term ended 12/31/2025) |
+| `KitchFix_2026LouisvilleAgreement_4.22.26.pdf` | Base Services Agreement (2026 season) | April 21, 2026 | Josh Katt e-signed via Adobe/Docusign "Apr 21, 2026 14:12:49 CDT"; The Cincinnati Reds LLC signed by Nicholas Krall, President, Baseball Operations | OPERATIVE for 2026 |
+
+All three are image/scanned PDFs; text below is transcribed from visual read. Quality: clean typewritten scans; no OCR ambiguity noted.
+
+## §B. Operative terms — VERBATIM (2026 agreement)
+
+### B.1 Term / duration
+
+> "SERVICES AGREEMENT
+> This Services Agreement (the "Agreement") is made and entered into as of the April 21, 2026 (the "Effective Date") by and between The Cincinnati Reds LLC (the "Team" or "Club") and CJK Foods, LLC (d/b/a KitchFix), a Delaware limited liability company ("Kitchfix" or "Provider"). Each Team and Provider shall sometimes be referred to herein individually as a "party" and collectively as the "parties.""
+
+> "2) TERM & TERMINATION
+> a) Term. This Agreement shall commence as of the Effective Date and expire on December 31, 2026, unless earlier terminated pursuant to section 2 (b)."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § preamble + §2.a p.1]
+
+### B.2 Per-meal rates
+
+> "4) FEES AND COSTS
+> a) Team will be billed weekly based on meals ordered for the prior week. Per meal rates are based on the type of meal served and are not inclusive of applicable sales tax.
+> i. Type 1 – Breakfast or Lunch Buffet: $25.95/ Meal
+> ii. Type 2 – Snack / Lighter Meal - $8.64/ Meal
+> b) Based on the 2026 service calendar provided by Team (attached) for the arrival and mini-meal, Provider estimates the total annual investment to be $186,462.00 + applicable taxes."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 4.a-b p.2]
+
+No separate MLB/MiLB tier — Louisville is single-tier (MiLB AAA). No breakfast/lunch/dinner split — meals are categorized as Type 1 (buffet) or Type 2 (snack/lighter). Arrival meal and mini-meal are the two scoped services per §4.b and §5.a.i.
+
+### B.3 Service fee
+
+NOT PRESENT as a separate "Service Fee." 2026 agreement removed the prior-year $28,000 lump-sum upfront payment. The 2024 and 2025 agreements included:
+
+> "c) To offset initial upfront costs of recruiting and set up, there will be a lump sum payment of $28,000.00.
+> i. We will apply a credit of $2,000.00 towards each of the 14 regular season homestand invoices after all taxes are applied to the subtotal."
+
+[Source: BATS Contract Executed Final.pdf § 3.c p.2] and [Source: BATS 2025 Contract.pdf § 3.c p.2]
+
+In the 2026 agreement, no §c lump-sum clause appears; billing is pure per-meal weekly billing per §4.a.
+
+### B.4 Escalation clause
+
+NOT PRESENT explicitly. The 2026 rates are set at $25.95 (Type 1) and $8.64 (Type 2) — an increase over the 2025 rates of $24.98 and $8.32 (roughly 3.9% and 3.85% respectively), but no CPI or annual-escalator formula is written into the Agreement. Rates are renegotiated per single-year contract.
+
+Related clause on material menu changes triggering pricing revisit:
+
+> "The per meal rates defined in Section 3 are based on the Standard Operating Procedures in Exhibit A. Should the Club request material changes to the Meal Guidelines in Exhibit A, the parties agree to mutually revisit per meal pricing in good faith."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 5 (post-list) p.2]
+
+Note: text references "Section 3" but rates are actually in Section 4 of the 2026 doc — copy-paste artifact from prior year template.
+
+### B.5 Tax language
+
+> "Per meal rates are based on the type of meal served and are not inclusive of applicable sales tax."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 4.a p.2]
+
+> "…Provider estimates the total annual investment to be $186,462.00 + applicable taxes."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 4.b p.2]
+
+No Kentucky rate stated. No "Kitchfix separately states tax" clause equivalent to CIN AZ §IV.D.
+
+### B.6 Postseason
+
+NOT PRESENT. AAA Louisville does not have MLB Postseason. Playoff/end-date is left open in Exhibit A SOP ("through the end of the season, or playoffs if indicated. (Exact end date TBD, September 2026)").
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § Exhibit A "SEASON GUIDELINES (MAR–SEP 2026)" p.8]
+
+### B.7 Passthrough / reimbursement
+
+NOT PRESENT. All costs are captured in per-meal rates; no clubhouse-extras or food-cost passthrough mechanism.
+
+Outside-catering / rehab-related handling:
+
+> "iv. Kitchfix recognize that at times, some outside catering will be ordered with minimal notice (i.e. a MLB Rehab Player wants to buy dinner for the team). Kitchfix ask that notice be 72 hours of any outside catering and KitchFix use best efforts to utilize our product for another meal.
+> v. Should notice be given after the meal in question is less than 72 hours from being served, KitchFix reserves the right to seek compensation for the cost of any lost product (especially if that outside catered meal is at the end of a homestand and cannot be repurposed).
+> vi. KitchFix agrees to be transparent about any costs and as flexible as possible when these situations may occur."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 5.a.iv-vi p.2]
+
+### B.8 Billing cadence / payment terms
+
+> "Team will be billed weekly based on meals ordered for the prior week."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 4.a p.2]
+
+No stated payment-terms days (30 net etc.) in the 2026 body. The 2024 and 2025 agreements were also "billed weekly" per §3.a but similarly did not state a net-day term in-line. The 2026 lump-sum was removed (no §c upfront installment).
+
+### B.9 MFN / exclusivity / count-reporting / dispute clauses
+
+Exclusivity:
+
+> "1) SERVICES. PROVIDER will be the exclusive caterer and food service provider for the Louisville Bats at Louisville Slugger Field. SERVICES will be provided as outlined in Exhibit A. DATES OF SERVICES and BILLING SCHEDULE will be informed by the Service Calendar outlined in Exhibit B."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 1 p.1]
+
+Guaranteed meals:
+
+> "5) Guaranteed Number of Meals
+> a) Guaranteed Number of Meals
+> i. Team will utilize Provider services for every arrival and mini meal for the duration of the Term.
+> ii. After observing and experiencing the first and second homestand's stadium operations in the co-used kitchen, the parties will discuss the possibility of expanding into post-game service at the beginning of May.
+> iii. Team understands that KitchFix will offer the same menus that are served to the home team to the visiting teams."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 5.a.i-iii p.2]
+
+(Prior years 2024/2025 had a different guarantee: "Within a standard 6 game homestand, KitchFix will serve a minimum of 11 buffet meals." [Source: BATS Contract Executed Final.pdf § 4.a.i p.2] — replaced in 2026.)
+
+Termination / for-convenience (new in 2026):
+
+> "b) Either Party may terminate this Agreement upon a material breach by the other Party, which breach remains uncured after ten (10) days' written notice is furnished by the non-breaching Party. Notwithstanding the foregoing, the Club may terminate this Agreement at any time and for any reason by providing Kitchfix with at least thirty (30) days' prior written notice and paying the pro-rata portion of the applicable Services Fee(s) through the end of the notice period. In the event of termination of this Agreement, the Club shall pay the portion of the applicable Services Fees due for the period in which Services were rendered (less any damages due to Kitchfix's breach, as the case may be), but shall not be responsible for the remainder of the applicable Services Fees for the Term. If the Club have prepaid any portion of the Services Fees, then Kitchfix shall refund the amount of the prepayment within five (5) business days of effective date of the Club' termination of this Agreement."
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 2.b p.1]
+
+(Note: uses term "Services Fee(s)" in termination clause even though body of 2026 agreement has no defined "Services Fee" — copy-paste from CIN OH template. See §D.)
+
+Governing law:
+
+> "j) Governing Law. All matters arising out of or relating to this Agreement shall be governed by and construed in accordance with the internal laws of the State of Kentucky without giving effect to any choice or conflict of law provision or rule (whether of the State of Kentucky or any other jurisdiction) that would cause the application of Laws of any jurisdiction other than those of the State of Kentucky"
+
+[Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § 6.j p.6]
+
+MFN clause: NOT PRESENT.
+
+Count reporting: no explicit weekly-forecast requirement (2024/2025 had it in Exhibit A SOP, mostly re: menus 1 week ahead of first game of series).
+
+## §C. Year-over-year table
+
+| Field | 2024 | 2025 | 2026 |
+|---|---|---|---|
+| Effective Date | January 28, 2024 | 1/1/2025 | April 21, 2026 |
+| Expiration | December 31, 2024 | December 31, 2025 | December 31, 2026 |
+| Signatory (Reds) | Sam Grossman, Asst. GM | Nick Krall, President of Baseball Operations (Sam Grossman line struck through) | Nicholas Krall, President, Baseball Operations |
+| Termination cure period | 15 days | 15 days | 10 days + Club for-convenience with 30 days notice (new) |
+| Type 1 (Breakfast/Lunch Buffet) rate | $24.00 / Meal | $24.98 / Meal | $25.95 / Meal |
+| Type 2 (Snack/Lighter Meal) rate | $8.00 / Meal | $8.32 / Meal | $8.64 / Meal |
+| Est. annual investment | $182,880.00 + taxes | $179,463.00 + taxes | $186,462.00 + taxes |
+| Upfront lump sum | $28,000.00 (with $2,000 credits × 14 homestands) | $28,000.00 (with $2,000 credits × 14 homestands) | REMOVED |
+| Guaranteed meals per homestand | Minimum 11 buffet meals per 6-game homestand | Minimum 11 buffet meals per 6-game homestand | Every arrival + mini meal; post-game TBD May |
+| Season window | Mar 29, 2024 → Sep 2024 TBD | Mar 29, 2025 → Sep 2025 TBD | Mar 27, 2026 → Sep 13, 2026 (13 homestands total per Ex. B) |
+
+Verbatim Exhibit A per-year label:
+
+> "Louisville Bats Standard Operating Procedure – 2024" [Source: BATS Contract Executed Final.pdf § Exhibit A p.4]
+> "Louisville Bats Standard Operating Procedure – 2025" [Source: BATS 2025 Contract.pdf § Exhibit A p.4]
+> "Louisville Bats Standard Operating Procedure – 2026" [Source: KitchFix_2026LouisvilleAgreement_4.22.26.pdf § Exhibit A p.8]
+
+## §D. Cross-check flags
+
+- 2026 body has no defined "Services Fee" but §2.b termination clause references "Services Fee(s)" and "prepaid any portion of the Services Fees" — legacy language from Cincinnati (OH) template that doesn't match the KY per-meal-only structure. Verify handling of the $28,000 upfront removal in MONEY_MODEL.
+- $28,000 lump-sum + $2,000 × 14 homestands credit mechanism (2024 and 2025) was removed in 2026 — flag revenue/timing shift vs. any PG / MONEY_MODEL assumption carrying that structure forward.
+- 2026 Exhibit B references "13 homestands total" for Louisville, vs. 14 in 2024/2025 credit structures — verify against Price Review v3 homestand count.
+- 2026 §5.a.i guarantees "arrival and mini meal for the duration of the Term" and defers post-game to "beginning of May" — flag against any EVIDENCE pack assuming post-game service from Opening Day.
+- Escalation is by year-to-year renegotiation, not by CPI or fixed formula — flag if PG/Price Review v3 models an escalator for Louisville.

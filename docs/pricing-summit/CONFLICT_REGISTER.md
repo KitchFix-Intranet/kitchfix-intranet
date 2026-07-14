@@ -568,3 +568,88 @@ None — Joe Lessard rename (D-1) still pending; GOTCHAS STL-FL P1 (D-3) still p
 
 **Kevin's Layer D verdict**: signed Price Review v3 is a valid source of truth for pricing. **PG is 99% aligned to it**; systemic staleness ruled out; A-1 downgrades; Phase 3 correction target is 1 row (CIN-AZ MLB Breakfast $0.014 rounding). Ready to certify.
 
+---
+
+## G. Phase 0d additions — pointers from CONTRACT_DIGEST §D flags
+
+> Phase 0d built 11 verbatim source-of-record files (`CONTRACT_DIGEST_<ACCOUNT>.md`) that reproduce contract terms EXACTLY (block-quoted, page-cited). This section is a compact pointer index of new/updated flags surfaced by that pass. Every entry cites the digest file where the verbatim quote lives.
+
+### C-2 (recurring TBR-FL Service Fee) — PARTIALLY CONFIRMED + paperwork gap sustained
+
+- 2024 MiLB SOW § 6(c) p.6 verbatim confirms the `$200K static signing + variable second installment` pattern (2024 second installment: $182,448). See [CONTRACT_DIGEST_TBR-FL.md](CONTRACT_DIGEST_TBR-FL.md) §B.3.
+- Combined with Kevin's 2021 SOW screenshot ($200K + $120,569.84), the pattern is now documented in at least TWO years (2021 + 2024). NOT a one-time 2024 anomaly.
+- BUT: base Agreement § 2(a) says Service Fee is "in the amounts and at the times as set forth in the SOW" — pattern only contractually binding per SOW year. **No 2025 or 2026 TBR SOWs are in the folder.** So the recurrence for 2025 / 2026 is not documented.
+- **Kevin rules**: is C-2 (2026 SF renewal) resolved (pattern-recurs by practice, need paperwork) or still-open (paperwork gap prevents billing)?
+
+### A-4 (TBJ-FL FSL/FCL two-tier) — CONFIRMED verbatim
+
+- FSL Team Meal Fee **$14.50** (Schedule A § 12(b)(ii) p.30). See [CONTRACT_DIGEST_TBJ-FL.md](CONTRACT_DIGEST_TBJ-FL.md) §B.2.
+- FCL Team Meal Fee **$10.14** (Schedule A § 12(b)(iii) p.30).
+- MLB Player Meal Fee **$20.29** (Schedule A § 12(b)(i) p.30).
+- Snack $1.50 + Shake $5.00 verbatim (§ 12(b)(iv)-(v) p.30).
+
+### Q4 (TXR-AZ 2026 SOW) — paperwork gap SUSTAINED
+
+- 2025-2027 master requires per-year SOW: "Services Fee ... in the amount set forth in each SOW" (§2.a p.1). See [CONTRACT_DIGEST_TXR-AZ.md](CONTRACT_DIGEST_TXR-AZ.md) §A + §D.
+- 2025 SOW#1 is in-file; **NO 2026 SOW in folder.**
+- Master 2.5% escalator (§ 2.a p.1) governs 2026 per-meal rates by formula, but Annual Deposit dollar amount, discount cap trigger, and total projection are undocumented for 2026.
+
+### Q4 (TXR-TX-H 2026 SOW) — RESOLVED
+
+- 2026 executed doc found: `Food_Services_Agreement_-_KitchFix_(MLB_2026).pdf`. See [CONTRACT_DIGEST_TXR-TX-H.md](CONTRACT_DIGEST_TXR-TX-H.md) §A.
+- Total 2026 Services Fee: **$604,032** in 6 monthly installments Apr-Sep 2026 (§ 2.a pp.1-2). YoY escalation +10% (unlike TXR-AZ's contractual 2.5% escalator).
+- Removes Q4 from live-question list.
+
+### Q6 (TBJ-NY paperwork) — RESOLVED partially
+
+- 2019 Buffalo SOW `2019.04.16_Buffalo_Catering_SOW_v1.0_w_3rdpartyvendor.docx.pdf` found in Phase 0d re-walk (was empty in Phase 0a). See [CONTRACT_DIGEST_TBJ-NY.md](CONTRACT_DIGEST_TBJ-NY.md) §A.
+- HISTORICAL only — 2019 single-season, unsigned/draft-marked, no 2020-2026 SOW in folder.
+- Base MSA (Dec 11, 2018) still not in files.
+- Paperwork gap survives for 2026 operative Buffalo SOW.
+
+### C-13 (STL - FL work-stoppage lock-in cash timing) — NEW paperwork/timing item
+
+- 2025-27 FL Amendment § 2(c)(ii) p.3 requires Cardinals pay **$350,000 earned-in-full on November 1, 2026** for "readiness period January 1 through March 31, 2027". See [CONTRACT_DIGEST_STL-FL.md](CONTRACT_DIGEST_STL-FL.md) §B.3.
+- Cash date is in FY2026; economic period tag is FY2027. Verify MONEY_MODEL 2027 cash-timing.
+
+### C-14 (STL - FL $60K equipment double-count risk) — NEW pointer
+
+- Base MO Agreement § 2(e) p.2 obligates KitchFix to invest "up to $60K in kitchen equipment ... at Busch Stadium **and/or** the kitchen in Jupiter, FL" (Cardinals-owned upon purchase). See [CONTRACT_DIGEST_STL-MO.md](CONTRACT_DIGEST_STL-MO.md) §B.3.
+- FL Amendment § 2(b)(i) p.2 adds $15K/year equipment/repair budget (rolls over unused) as a Florida-specific line.
+- Flag if any evidence pack has attributed the $60K investment to Jupiter AND booked the $15K/year separately — would double-count. Verify allocation.
+
+### C-15 (TXR - AZ Kitchen Improvements double-count risk) — NEW pointer
+
+- Both 2022 (§ 4 p.2-3) and 2025-2027 (§ 5 p.2) TXR-AZ agreements each say "Provider will pay up to $75,000 for kitchen equipment ... at the Team Facility". See [CONTRACT_DIGEST_TXR-AZ.md](CONTRACT_DIGEST_TXR-AZ.md) §B.7.
+- Flag: is 2025-27 a fresh $75K commitment on top of the 2022 $75K spent, or a rollover? Kevin's rules.
+
+### C-16 (TXR - TX - V allocation) — NEW pointer
+
+- **No standalone visiting-clubhouse contract or SOW exists.** Visitors'-clubhouse services are a scope carve-in (Grab & Go / packaged snacks / condiments / beverages / coffee) within the master 2026 MLB agreement (§ 1.b p.1). No dollar/count is assignable from contract alone. See [CONTRACT_DIGEST_TXR-TX-V.md](CONTRACT_DIGEST_TXR-TX-V.md) §D.
+- If MONEY_MODEL splits TXR-TX-H vs TXR-TX-V revenue, that allocation is internal (not contract-driven). Kevin: how should the split be tagged?
+
+### D-2 (TBR CPI vs TBJ CPI escalator basis divergence) — NEW pointer
+
+- TBR-FL SOWs use **75% of CPI-U Food Away from Home - Full Service Meals and Snacks (CUUR0000SEFV01)**, resets Nov-Nov ([CONTRACT_DIGEST_TBR-FL.md](CONTRACT_DIGEST_TBR-FL.md) §B.4).
+- TBJ-FL uses **100% of CPI Food Away From Home** (broader index), resets Q4 ([CONTRACT_DIGEST_TBJ-FL.md](CONTRACT_DIGEST_TBJ-FL.md) §B.4).
+- CIN-AZ uses CPI-U Food Away from Home (October) with 2%/5% floor/cap ([CONTRACT_DIGEST_CIN-AZ.md](CONTRACT_DIGEST_CIN-AZ.md) §B.4).
+- CIN-OH uses CPI-U August with 1%/4% floor/cap.
+- STL-MO uses "CPI-U, CUUR0000SEFV" August-to-August (no floor/cap) — CIN-KY has no CPI formula (year-to-year renegotiation).
+- Verify Price Review v3 escalation assumptions across accounts — one-size-fits-all model is wrong.
+
+### D-3 (CIN-AZ Renewal Term paperwork) — NEW pointer
+
+- CIN-AZ § I.B p.1 requires written Club notice to exercise Renewal Term "on or before November 1, 2026" for 2027 (and existing 2025 renewal notice for 2026 would have been due Nov 1, 2025). See [CONTRACT_DIGEST_CIN-AZ.md](CONTRACT_DIGEST_CIN-AZ.md) §B.1.
+- No renewal-notice document in folder confirming 2026 operative status.
+- Kevin: pull renewal correspondence to close paperwork gap.
+
+### Phase 0d summary count
+
+- **New A**: 0 (A-4 CONFIRMED verbatim; A-1 remains downgraded)
+- **New B**: 0
+- **New C paperwork/timing gaps (C-13 through C-16)**: 4
+- **New D pointers (D-2, D-3)**: 2
+- **Resolved / promoted**: Q4 TXR-TX-H (2026 doc found); Q6 TBJ-NY partially resolved (2019 SOW found, but not operative)
+
+**Phase 0d disposition**: 11 verbatim source-of-record files landed. Every account has a "read the contract, not the interpretation" doc that flips the failure mode Kevin diagnosed ("ruling built on ONE document from a multi-document contract history, later reversed"). Paperwork gaps remaining: TBR-FL 2025+2026 SOWs, TXR-AZ 2026 SOW, TBJ-NY 2020+ SOWs, CIN-AZ renewal notices.
+
