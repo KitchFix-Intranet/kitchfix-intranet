@@ -16,6 +16,127 @@
 - **Contract basis**: 2024 MiLB Post service-fee Lunch/Dinner Rate $19.40 (Minor League SOW § 6(a)(iv) p.5); with 75% × CPI-U Food Away from Home escalation to 2026, actual escalated rate is $21.68 per QB, not $20.96 per digest
 - **See**: EVIDENCE_TBR-FL.md §7
 
+#### A-1 recompute addendum (2026-07-14 micro-task)
+
+**Verdict: NEAR MISS on BOTH sides — digest and invoice each fail to derive cleanly from the contract's escalation clause. Neither is the contract-correct rate.**
+
+##### Contract facts (verbatim, from EVIDENCE_TBR-FL.md §2)
+
+- **2024 Base Lunch/Dinner Rate** (Minor League SOW § 6(a)(ii) p.5): **$25.86**, "not inclusive of tax"
+- **2024 Post service-fee Lunch/Dinner Rate** (§ 6(a)(iv) p.5): **$19.40**, "not inclusive of tax"
+- **SF discount** (§ 6(c) p.6): "The Rates will be reduced by **25%** for all billings for the Minor League Baseball Teams within the Term." Verified: $19.40 / $25.86 = 0.7501 → 25% discount applied post-sticker.
+- **Escalation clause** (§ 6(a)(v) p.5, verbatim):
+  > "For each year of the SOW Term after 2024, each Breakfast Meal prepared by the Provider in accordance with this SOW for the Minor League Baseball Teams shall be at the rate of the 2024 Base Breakfast Rate and the rate of the 2024 Post service-fee Breakfast Fee, as the case may be, as adjusted upward or downward by a percentage equal to **seventy-five percent** of the percentage change in the 'CPI Index'"
+- **CPI Index definition** (Major League SOW § 6(i)(c) p.5, cross-applied to MiLB per § 6(a)(v)):
+  > "CPI Index shall refer to the Consumer Price Index for All Urban Consumers (CPI-U): U.S. City Average, Food Away from Home – Full Service Meals and Snacks, as calculated by the United States Department of Labor, Bureau of Labor Statistics (CPI)."
+- **Reset cadence** (same § 6(i)(c) p.5):
+  > "For purposes of this SOW, the adjustment in rate, if any, for 2025 shall be based upon the change from the November 2024 CPI Index to the November 2023 CPI Index (with the same procedure to be followed for each year of the Term after 2025)."
+
+##### BLS-published CPI values
+
+Series: **CUUR0000SEFV01** = "CPI-U U.S. City Average - Food away from home - Full service meals and snacks", Not Seasonally Adjusted. Source: BLS Public API `https://api.bls.gov/publicAPI/v2/timeseries/data/CUUR0000SEFV01` (fetched 2026-07-14).
+
+| Month | Index value |
+|---|---:|
+| November 2023 | **221.574** |
+| November 2024 | **229.554** |
+| November 2025 | **239.371** |
+
+YoY changes:
+
+- Nov 2023 → Nov 2024: (229.554 − 221.574) / 221.574 = **3.6015%**
+- Nov 2024 → Nov 2025: (239.371 − 229.554) / 229.554 = **4.2766%**
+
+Contract escalator (75% × YoY):
+
+- 2025 escalator: 0.75 × 3.6015% = **2.7011%**
+- 2026 escalator: 0.75 × 4.2766% = **3.2074%**
+
+Reference (NOT the contract-cited series — for completeness): generic CUUR0000SEFV "Food away from home" gave Nov 2023 = 360.383, Nov 2024 = 373.530, Nov 2025 = 387.202 (YoY 3.6482% then 3.6602%). Slightly different figures; contract explicitly cites the sub-index (SEFV01), not the parent (SEFV).
+
+##### Computed 2026 rate — every interpretation of the clause
+
+All computations start from the contract 2024 post-SF Lunch/Dinner rate of $19.40 (the clause escalates the base and post-SF rates independently per "as the case may be").
+
+**Method (b) — contract-correct: compound YoY, 75% × contract-cited CPI**
+
+    2025 post-SF = $19.40 × (1 + 0.027011) = $19.9240
+    2026 post-SF = $19.9240 × (1 + 0.032074) = $20.5631
+
+→ **Contract-correct 2026 rate = $20.56.**
+
+**Method (c) — cumulative from 2024 base, 75% × contract-cited CPI**
+
+    Nov 2023→Nov 2025 cumulative CPI: (239.371 − 221.574) / 221.574 = 8.0321%
+    75% × 8.0321% = 6.0241%
+    2026 post-SF = $19.40 × 1.060241 = $20.5687
+
+→ $20.57 (rounds the same as Method b; +$0.006 difference is a compounding-order artifact).
+
+**Method (d) — DROP the 75% multiplier, compound YoY, contract-cited CPI**
+
+    2025 = $19.40 × 1.036015 = $20.0987
+    2026 = $20.0987 × 1.042766 = $20.9582
+
+→ **$20.96 EXACT MATCH to PG/digest**.
+
+**Method (e) — 100% CPI, compound YoY, GENERIC CUUR0000SEFV (not contract-cited)**
+
+    2025 = $19.40 × 1.036482 = $20.1077
+    2026 = $20.1077 × 1.036602 = $20.8437
+
+→ $20.84 (not a match).
+
+**Method (f) — sticker-first (escalate $25.86 sticker), 100% CPI, then apply 25% discount to escalated sticker**
+
+    2025 sticker = $25.86 × 1.036015 = $26.7913
+    2026 sticker = $26.7913 × 1.042766 = $27.9371
+    2026 post-SF = $27.9371 × 0.75 = $20.9528
+
+→ $20.95 (rounds to $20.96 same as Method d).
+
+##### Delta table vs invoice-observed $21.68
+
+| Method | Contract fidelity | 2026 rate | Delta vs invoice | Explains what |
+|---|---|---:|---:|---|
+| **(b) contract-correct** | 100% faithful to clause | **$20.56** | **+$1.12 (+5.43%)** | Neither digest nor invoice matches contract |
+| (c) cumulative | 100% faithful (arithmetic variant) | $20.57 | +$1.11 (+5.40%) | Same as (b) |
+| **(d) drop-75% compound** | drops the "seventy-five percent" | **$20.96** | +$0.72 (+3.44%) | **Exact match to PG/digest** |
+| (e) generic-index compound | drops both 75% AND uses wrong index | $20.84 | +$0.84 (+4.01%) | Not a match |
+| (f) sticker-first drop-75% | drops the 75%, sticker-order variant | $20.95 | +$0.72 (+3.47%) | Same as (d) modulo rounding |
+
+##### Findings
+
+1. **PG/digest $20.96 = Method (d)**: the digest was computed using the contract-cited index but **dropped the "seventy-five percent of" multiplier** from the escalation clause. It applied 100% of the CPI change instead of 75%. This is a **derivation bug in the digest source (Price Review v3 or its downstream)**.
+
+2. **Invoice $21.68 does NOT match any interpretation** of the escalation clause. Excess vs the contract-correct Method (b) rate = **$1.12/meal (+5.43%)**. Excess vs the digest's dropped-75% rate = **$0.72/meal (+3.44%)**. No CPI-based reading (contract-cited or generic; compound or cumulative; sticker-first or post-SF-first) produces $21.68 from the $19.40 base.
+
+3. **The $0.72 residual** between digest and invoice cannot be explained by CPI arithmetic. Most likely candidates (evidence-only, Kevin rules):
+   - **Manual rate override in QB**: Sebastian set a rate not derived from the escalation formula.
+   - **Unseen 2026 SOW amendment**: a 2026-specific rate update between Kevin and the Rays not present in the executed 2024 SOW file. Would parallel the missing 2026 SOWs at CIN-AZ (C-1) and TXR-AZ (C-3).
+   - **Add-on baked into per-meal rate**: labor, packaging, or other ancillary rolled into the meal rate rather than a separate line item. (Note: same invoice K300168871 does bill Labor Fee $280 and Road Sandwiches $15 as separate lines, so this reading is weak.)
+   - **Different multiplier factor applied**: e.g., 100% CPI plus a 3.44% administrative uplift. 3.44% isn't a clean number; unlikely.
+
+4. **Neither the digest nor the invoice matches the contract-correct rate.** The digest is a formulaic error; the invoice source is unidentified without further evidence.
+
+##### A-1 disposition
+
+**NEAR MISS on both sides.** Contract-correct 2026 rate per verbatim clause + published BLS data = **$20.56**. Digest $20.96 = contract-cited index applied at 100% (dropped the 75% multiplier). Invoice $21.68 cannot be derived from any interpretation of the escalation clause; residual +$0.72 above digest is unexplained.
+
+**Rulings needed from Kevin at the summit** (do NOT apply anything now):
+1. Which is the source of truth — the executed contract (rate $20.56), the digest ($20.96), or the operator-set invoice ($21.68)?
+2. Is there an unseen 2026 SOW amendment / operator-agreed rate memo for TBR-FL that would justify $21.68?
+3. If the contract stands, backfill: fix PG effective-dated to $20.56 (queued for Phase 3), refund/credit for over-billed 2026 meals to date.
+4. If the invoice stands, execute a written amendment covering the 3.4% uplift over the escalation formula.
+
+##### Sources cited
+
+- Contract: `/Users/kevinfietek/Documents/Claude /Contracts/TBR FL/Minor League SOW 2024 EXECUTION Josh.pdf` § 6(a)(ii), § 6(a)(iv), § 6(a)(v), § 6(c) p.5-6.
+- Contract: `/Users/kevinfietek/Documents/Claude /Contracts/TBR FL/Major League SOW 2024 EXECUTION Josh.pdf` § 6(i)(c) p.5 (defines CPI Index + cadence, cross-applied).
+- BLS series `CUUR0000SEFV01` "Food away from home - Full service meals and snacks", All Urban Consumers, U.S. City Average, Not Seasonally Adjusted. Fetched from BLS Public API on 2026-07-14; values verifiable at `https://data.bls.gov/timeseries/CUUR0000SEFV01`.
+- Invoice: `/Users/kevinfietek/Documents/Claude /Client Invoices/Invoice K300168871.pdf` dated 2026-07-05, TBR-FL MiLB meal service.
+- Cross-refs: `docs/pricing-summit/EVIDENCE_TBR-FL.md` §2.1-2.5; `docs/SC_MONEY_MODEL.md` per-account digest row for TBR - FL.
+
 ### A-2. TBR - FL Service Fee 2026 renewal — CONTRACT SILENT vs MONEY_MODEL "2024 one-time"
 
 - **Source A** (Minor League SOW § 6(c) p.6): The $382,448 Service Fee is defined with exactly two installments: "(A) On the first date that this SOW has been signed by both parties, the Club shall pay the sum of two hundred thousand dollars (USD $200,000.00), and (B) On or before February 1, 2024, the Club shall pay the sum of one hundred eighty-two thousand four hundred forty-eight dollars (USD $182,448)." Contract SILENT on whether the SF recurs in any subsequent Agreement Year.
