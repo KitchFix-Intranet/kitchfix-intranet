@@ -94,16 +94,24 @@ async function classifyDrift(r) {
   const newActualsCount = newActuals.length;
   const guardTripped = oldActualsCount > 0 || newActualsCount > 0;
 
+  // Per Kevin's 2026-07-14 "actuals stay" ruling, actuals on either date
+  // are NOT a blocker - the schedule row moves, actuals stay put on the
+  // dates operators served. Collisions still block (need Option A). So
+  // the verdict ladder is: collision first (blocks now), then guard
+  // (reportable but not blocking), then SAFE_NOW.
   let verdict, reason;
-  if (guardTripped) {
-    verdict = "GUARDED";
-    const parts = [];
-    if (oldActualsCount > 0) parts.push(`old date has ${oldActualsCount} actuals row(s)`);
-    if (newActualsCount > 0) parts.push(`new date has ${newActualsCount} actuals row(s)`);
-    reason = parts.join("; ");
-  } else if (hasCollision) {
+  if (hasCollision) {
     verdict = "WAIT_OPTION_A";
     reason = `target ${r.newDate} already has ${tgtRows.length} hs row(s): ${tgtRows.map(x => `pk=${x.game_pk} ${x.day_type}/${x.opponent}`).join(", ")}`;
+  } else if (guardTripped) {
+    // Actuals present on old and/or new date. Under Kevin's ruling this
+    // is MOVABLE via sc-19b (actuals stay, only the hs row's
+    // service_date changes) but reported for transparency.
+    verdict = "GUARDED_MOVABLE";
+    const parts = [];
+    if (oldActualsCount > 0) parts.push(`old date has ${oldActualsCount} actuals row(s) (stay)`);
+    if (newActualsCount > 0) parts.push(`new date has ${newActualsCount} actuals row(s) (stay)`);
+    reason = parts.join("; ");
   } else {
     verdict = "SAFE_NOW";
     reason = "target date free; no actuals on either side";
@@ -164,16 +172,16 @@ async function main() {
   console.log(`\n============================================================`);
   console.log(`ROLLUP`);
   console.log(`============================================================`);
-  const counts = { SAFE_NOW: 0, WAIT_OPTION_A: 0, GUARDED: 0 };
-  for (const c of [...driftResults, ...missingResults]) counts[c.verdict]++;
-  console.log(`  SAFE_NOW      : ${counts.SAFE_NOW} row(s)`);
-  console.log(`  WAIT_OPTION_A : ${counts.WAIT_OPTION_A} row(s)`);
-  console.log(`  GUARDED       : ${counts.GUARDED} row(s)`);
+  const counts = { SAFE_NOW: 0, GUARDED_MOVABLE: 0, WAIT_OPTION_A: 0 };
+  for (const c of [...driftResults, ...missingResults]) counts[c.verdict] = (counts[c.verdict] || 0) + 1;
+  console.log(`  SAFE_NOW         : ${counts.SAFE_NOW || 0} row(s)  (sc-19 already shipped)`);
+  console.log(`  GUARDED_MOVABLE  : ${counts.GUARDED_MOVABLE || 0} row(s)  (sc-19b, actuals-stay ruling)`);
+  console.log(`  WAIT_OPTION_A    : ${counts.WAIT_OPTION_A || 0} row(s)  (Option A follow-up)`);
 
-  console.log(`\n=== SAFE_NOW subset (for sc-19 migration body) ===`);
-  for (const c of [...driftResults, ...missingResults].filter(x => x.verdict === "SAFE_NOW")) {
+  console.log(`\n=== GUARDED_MOVABLE subset (for sc-19b migration body) ===`);
+  for (const c of [...driftResults, ...missingResults].filter(x => x.verdict === "GUARDED_MOVABLE")) {
     const op = c.oldDate ? `UPDATE (${c.oldDate} -> ${c.newDate})` : `INSERT (${c.newDate})`;
-    console.log(`  ${c.acct} pk=${c.pk} ${op} ${c.ha}/${c.opp}`);
+    console.log(`  ${c.acct} pk=${c.pk} ${op} ${c.ha}/${c.opp}  actuals: old=${c.oldActualsCount || 0} new=${c.newActualsCount || 0}`);
   }
 }
 
