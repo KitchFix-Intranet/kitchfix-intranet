@@ -3,6 +3,28 @@
 
 ---
 
+## CURRENT STATE (read first — snapshot as of 2026-07-15)
+> This ledger is a **decision-journal**: it grows by appending. Sections A–S are the *discovery record* (how we got here, in order); sections **T–U are the final rulings** that supersede earlier framing where they conflict. When an earlier section and a later ruling disagree, **the later ruling wins** — the earlier text is preserved as history, not overwritten.
+
+**Kevin-owned rulings: ZERO outstanding.** Every conflict needing Kevin's head is resolved. What remains is async (Joe/Sebastian confirmations) + one CC verification pass.
+
+**Final dispositions of the conflicts that were open going into this session** (full reasoning in §T–U; earlier sections may show these as OPEN — that framing is superseded):
+- **A-4** → **DISSOLVED, not-a-conflict.** FSL and FCL are TWO SEPARATE GROUPS at two locations (FCL at the PDC $11.55; FSL = Dunedin Single-A at the stadium $16.51), NOT two tiers of one blended rate. The "blend" was a phantom. Both already correct in SC + signed sheet. **Everywhere earlier sections (§M, §O, §Q, §S) call this a "blend" or "two tiers of one population," that framing is WRONG — see §T.** (§T)
+- **A-10** → **out of scope.** CIN-AZ $52K catering = Owners Week Caterings + Fantasy Camp, billed separately. (§T)
+- **A-11** → **IN SCOPE (reversed).** TBR-FL $79,950 = Boys & Girls Club, which IS tracked in the SC and IS projected as TBR-FL revenue (TBR is the commissary-model account; BGC rides on it as a second client). The prior "out of scope" recommendation was WRONG — see §T. (§T)
+- **The 5 Instructions-tab rows (C-8→C-12)** → confirmed by Kevin; no Joe round-trip. (§U)
+- **A-6 (STL-FL tax 0.00)** → non-taxable, correct. Closed. (§U)
+- **D-2 (TBR "2025" memo)** → typo, ignore. Closed. (§U)
+
+**Still open (async — NOT Kevin's to answer):**
+- **Joe #3 (LOAD-BEARING)** — how TBR-FL's variable SF second installment is set each year. The one async item that gates the SC bill export for TBR.
+- Joe #1, #2, #5 (non-blocking) · Sebastian #3 (invoice samples, for Phase E) · Sebastian #4 (overlaps Joe #2).
+- **Escalation-verification CC pass** — re-derive all 11 accounts' 2026 numbers from clause + real CPI; confirm signed sheet applied the right per-account rule. Fold in 2 spot-checks: FSL signed = $16.51, BGC rates present as TBR-FL services.
+
+**Pending doc reconciliation (the batch doc-PR, staged):** MONEY_MODEL + digests still carry pre-ruling framing (A-4 "blend"; BGC excluded; TBR "one-time 2024"; Fauzia→Lessard). These are written back in a single reconciliation PR — see §Q "Batch doc-PR" + §T/§U doc-impact notes. Runs AFTER the 11 account files (building them surfaces any remaining corrections → one comprehensive pass).
+
+---
+
 ## A. Source register
 ### In hand ✓
 | Source | Role |
@@ -260,6 +282,8 @@ STL - FL upkeep budgets (~$15K equipment + $4K storage + $11K temporary cooler) 
 **Pattern note**: STL - FL passthrough now = $900K food/supplies + ~$30K upkeep budgets. R12 (internal money never reaches client as revenue) already covers the treatment.
 
 ### A-4 HELD for verbatim digest (Kevin observation, 2026-07-14)
+> ⚠️ **SUPERSEDED by §T (2026-07-15).** The "blend" premise below is WRONG. FSL and FCL are two separate groups/services/prices (FCL at PDC $11.55; FSL = Dunedin Single-A at stadium $16.51), not two tiers of one blended MiLB population. Preserved as discovery history. Read §T for the correct disposition.
+
 TBJ - FL FSL/FCL two-tier split: **appears ONLY in contract text** per CC's Phase 0a extraction. Kevin confirms: **no FSL reference and no two-tier price in the service-calendar spreadsheets currently used for billing**, and the provided invoice bills a single **$11.55** — the SAME rate stored in the spreadsheet SC. So the two operative billing sources (workbook + invoice) AGREE on $11.55; only the contract mentions tiers.
 - **Reframe**: this is likely a VESTIGIAL contract construct that operations already collapsed to a single blended MiLB rate — not a live practice-vs-authority divergence. The blend may simply BE the operative rate.
 - **On hold pending the verbatim contract digest** — need to read the exact FSL/FCL clause: is it superseded by a later SOW? does a 2026 doc state a single rate? is the tier language even in the 2026-governing contract or only a prior year's?
@@ -448,7 +472,7 @@ The register accumulated across CC's four phases; several entries were written b
 - **A-1** → RESOLVED, NOT-A-CONFLICT. (Register's own Phase 0c revision agrees: signed sheet stores 3 distinct MiLB rates, PG matches, invoice bills Lunch $21.68 correctly; the "$0.72" was digest-flattening. Kevin's negotiated-rate context + the TBR digest's Base-vs-Post-SF two-tier finding fully close it.)
 - **A-2** → PAPERWORK GAP (not "one-time"). TBR SF recurs ($200K + variable, SOW-gated); 2025+2026 SOWs missing.
 - **A-3** → OneSheeter-operative, provenance-flagged → JOE #1.
-- **A-4** → RULABLE NOW (TBJ digest confirmed tiers verbatim: FSL $14.50 / FCL $10.14 / MLB $20.29; practice bills $11.55 blend). **Still needs Kevin's ruling** — see open items.
+- **A-4** → **DISSOLVED, not-a-conflict (§T, 2026-07-15).** ⚠️ The "$11.55 blend" framing here is superseded. FSL and FCL are two SEPARATE groups at two locations (FCL at PDC $11.55; FSL = Dunedin Single-A at stadium $16.51), not two tiers of one blended population. Both already correct in SC + signed sheet. See §T.
 - **A-5** → RESOLVED: passthrough, Cardinals-paid (contract §2.b verbatim confirms).
 - **A-6** → SEBASTIAN #1 (tax itemization vs 0.00; no SC impact).
 - **A-7** → RESOLVED: opt-in sales model, out of SC scope (SOP + contract carve-in confirm).
@@ -477,9 +501,11 @@ CIN-AZ Oct 2%/5% · CIN-OH Aug 1%/4% · CIN-KY none · STL-MO Aug SEFV no-cap ·
 - **KEY EVIDENCE FOR KEVIN'S POSITION**: audit §5.1 shows invoice K300168587 bills "REDS MLB - Meal Service **$20.31**" — the REAL bill uses $20.31, not $20.30622. So the cell holds a sub-cent/formula value ($20.30622) while the approved+billed figure is $20.31.
 - **Phase-3 fix target = $20.31** (Kevin-approved + invoice-confirmed), NOT $20.30622 (audit's cell-read). Already logged this way.
 - **STANDING FLAG confirmed**: the audit's "signed" values may be pre-rounding CELL reads, not approved figures. Immaterial at billing level (§5.1 shows all invoices round cleanly to cents) but matters for PG STORAGE. → when PG is corrected in Phase 3, store the APPROVED cent-values, and/or confirm with Joe whether the signed sheet should display cents vs sub-cent precision. Low-stakes, but the R10 storage-precision question interacts here: decide whether PG stores sub-cent (matching a corrected sheet) or cent (matching approved/billed).
-**TBJ - FL preview (A-4)**: audit shows TBJ - FL 21/21 MATCH including "FSL Team" AND "FCL Team" as DISTINCT services, both matched by PG. → the signed sheet DOES carry both tiers separately, and PG matches. This will matter when the TBJ - FL contract digest lands — reframes A-4 (the $11.55 blend may be a THIRD thing, or the tiers may be live in PG while the invoice blends). Watch closely.
+**TBJ - FL preview (A-4)**: audit shows TBJ - FL 21/21 MATCH including "FSL Team" AND "FCL Team" as DISTINCT services, both matched by PG. → the signed sheet DOES carry both separately, and PG matches. **[This was the tell — confirmed in §T: FSL and FCL are two distinct groups/services, NOT a blend. The signed sheet was right all along; the "blend" was an artifact of the single sampled invoice showing only the FCL line.]**
 
 ### TBJ - FL evidence pack (Phase 0a, logged 2026-07-14) + A-4 fully teed up
+> ⚠️ **A-4 RESOLVED in §T (2026-07-15) — the "blend" question below was the WRONG question.** The answer wasn't "negotiated blend vs coincidence"; it was that FSL and FCL are two separate groups eating in two locations at two prices (FCL PDC $11.55 / FSL stadium $16.51). The single invoice showed only the FCL line, creating the illusion of a blend. Discovery history preserved below; §T governs.
+
 **Fidelity**: strong evidence pack — contract §12 verbatim + 2 invoices (MLB K300168548 @ $23.12, MiLB K300168872 @ $11.55), both weekly, FL 7% tax.
 **A-4 — FULLY INFORMED, awaiting Kevin's ruling**:
 - Contract §12(b): TWO MiLB tiers — FSL Team $14.50 / FCL Team $10.14 (2023 base). MLB $20.29. Snack $1.50, Shake $5.00.
@@ -524,57 +550,104 @@ Verbatim digest matches the evidence pack. Adds: year-over-year history (2022→
 
 ---
 
-## S. THE QBR (ABR_2025_OneSheeter.xlsx) — Austin's Annual Business Review, folded in 2026-07-14
-Austin's account-management one-sheeter, one tab per team (Master Template + TEXAS RANGERS, CINCINNATI REDS, TORONTO BLUE JAYS, TAMPA BAY RAYS — no STL). A DIFFERENT LENS than contracts: 2025 operational actuals + 2026 asks + client stakeholders. Read in full.
+## S. THE ABR 2025 ONESHEETER / QBR (ABR_2025_OneSheeter.xlsx) — folded in 2026-07-14
+> **Note**: this section consolidates what were two separate §S passes on the SAME document (the "QBR" and the "ABR OneSheeter" are one file). Merged 2026-07-15 for clarity; all unique findings from both preserved. Full standalone write-up in `reviews/ABR_ONESHEETER_REVIEW.md`.
 
-### RESOLVES A-10 + A-11 (the two open catering-revenue rulings) — CONFIRMED
-- **A-10 (CIN-AZ $52K 2200 Catering Revenue) = FANTASY CAMP + OWNERS WEEK CATERINGS.** Reds tab verbatim: "These numbers are with the 'Catering Revenue' removed (Fantasy Camp, Hell week, etc.)". Special-event catering, deliberately tracked SEPARATE from meal service. → that's WHY MONEY_MODEL (a meal-service model) doesn't carry it. Classification: ancillary event-catering revenue, out of the meal-service digest by design.
-- **A-11 (TBR-FL $79,950 2200 Catering Revenue) = BOYS & GIRLS CLUB (BGC).** Rays tab verbatim: "These numbers have BGC numbers removed." Confirms the $6.50-lunch hypothesis. Same treatment — ancillary, separate-tracked.
-- **DISPOSITION (Kevin to confirm)**: both are real ancillary revenue lines tracked outside the core meal-service model. Recommend MONEY_MODEL add a short note documenting that 2200 Catering Revenue exists per-account (CIN-AZ Fantasy Camp/Owners Week Caterings; TBR BGC) and is OUT of the SC meal-service scope, so future readers don't rediscover the gap. Does NOT flow through the SC bill export.
+The departed Director of Account Management's year-end 2025 handoff / annual business review. 5 tabs (Master Template + TEXAS RANGERS/Surprise, CINCINNATI REDS, TORONTO BLUE JAYS, TAMPA BAY RAYS — **no STL, no Globe Life TXR-TX**). A DIFFERENT LENS than contracts: 2025 operational actuals + 2026 asks + client stakeholders. SECONDARY source per P-1 (below contracts + signed sheet); corroborates, never overrides. Covers only the 4 relationships this director owned — not a complete 11-account picture. Read in full.
 
-### INDEPENDENTLY CORROBORATES the contract corpus (QBR contract-info blocks match banked terms)
-- TXR-AZ: P&L, through 2027, 2.5% annual, 20% SF, deposit 1/3 Jan/Feb/Mar ✓. Stakeholders: **Katie & Brandon** (Katie main).
-- CIN: 30% SF, 75% Feb 1 / 25% Mar 15, bracketed 2-5% CPI ✓. Stakeholder: **Ashley**. Good-through: end 2025 + 1yr auto-extension by Nov 1 (matches the renewal-option mechanic).
-- TBJ: SF = "Previous year Service Fee + CPI", ask 1×/year, split 1/1-2/1-3/1 evenly ✓. Stakeholders: **Michelle, Katarina** (Rogers if RFP).
-- TBR: 25% SF, Nov-Nov CPI, "$200K on the first day, remaining due 2/1" ✓✓ — **independently confirms C-2's $200K + variable structure from a second source.** Stakeholders: **Alex Roth** primary, Tatiana + Sonny secondary. Good-through: end 2026 + options through 2028.
+### RESOLVED A-10 + A-11 (via the KF Notes) — NOTE: A-11 later REVERSED by Kevin, see §T
+- **A-10 (CIN-AZ $52K 2200 Catering Revenue) = Fantasy Camp + Owners Week Caterings + similar events.** Reds tab verbatim: "These numbers are with the 'Catering Revenue' removed (Fantasy Camp, Hell week, etc.)" — "Hell week" = internal name for **Owners Week Caterings**. NOT the $1K educational demos. → Kevin ruled (§T): ancillary event-catering, billed separately, OUT of SC scope. **CONFIRMED.**
+- **A-11 (TBR-FL $79,950 2200 Catering Revenue) = Boys & Girls Club (BGC).** Rays tab verbatim: "These numbers have BGC numbers removed." → the OneSheeter's framing here ("ancillary, separate-tracked, out of scope") **was WRONG**. Kevin reversed it (§T): **BGC IS tracked in the SC and IS projected as TBR-FL revenue** — TBR is the commissary-model account and BGC rides on it as a second client. See §T for the correct disposition. Feeds C-5 ($6.50 BGC lunch = a real in-scope TBR-FL service line).
+
+### INDEPENDENTLY CORROBORATES the contract corpus (contract-info blocks match banked terms)
+- **TXR-AZ**: P&L, through 2027, 2.5% annual, 20% SF, deposit 1/3 Jan/Feb/Mar ✓. Stakeholders: **Katie & Brandon** (Katie main).
+- **CIN**: 30% SF, 75% Feb 1 / 25% Mar 15, bracketed 2-5% CPI ✓. Stakeholder: **Ashley**. Good-through: end 2025 + 1yr auto-extension by Nov 1 (matches the renewal-option mechanic).
+- **TBJ**: SF = "Previous year Service Fee + CPI", ask 1×/year, split 1/1-2/1-3/1 evenly ✓ (A-3 confirmed, OneSheeter-sourced). Stakeholders: **Michelle, Katarina** (Rogers if RFP).
+- **TBR**: 25% SF, Nov-Nov CPI, "$200K on the first day, remaining due 2/1" ✓✓ — **independently confirms C-2's $200K + variable structure from a second source.** Stakeholders: **Alex Roth** primary, Tatiana + Sonny secondary. Good-through: end 2026 + options through 2028.
+- 2025 rate tables escalation-consistent with signed 2026 (TXR-AZ ×1.025 exact; CIN coffee $491.87→$511.05; TBR ST-vs-regular Bfast split matches signed = confirms C-11 are two real services).
+
+### BIG OPERATIONAL FINDING — meal→snack mix shift (revenue erosion)
+Nearly every account shows actual MEALS under budget + SNACKS/continental over → revenue erosion (snacks bill lower). TXR net −$33K, CIN −$54K MiLB meals, TBJ −$34K MiLB; TBR the +outlier. → makes the SC's GRANULAR per-service pricing load-bearing (PG already stores snacks/continental separately — the mix shift is exactly why). Projection-accuracy point, not billing-correctness.
 
 ### NEW FLAG — C-24 (QBR 2025 post-SF prices don't all match our numbers)
-The QBR's "25 Meal Price" + "25 Post S.F." columns are Austin's 2025 operational-tracking figures. SOME don't cleanly reconcile to contract-derived / signed-sheet values:
-- CIN MLB Meal: 25 price $27.92 / post-SF **$19.54** (blended? CIN-OH is flat-fee, CIN-AZ MLB is $29.01 sticker/$20.31 post — the QBR "CINCINNATI REDS" tab appears to BLEND OH+AZ or report GY only).
-- TBR MiLB Lunch: 25 price $28.20 / post-SF **$21.15** (signed 2026 Lunch = $21.675; 2025 would be lower pre-escalation — plausibly consistent, needs check).
+The "25 Meal Price" + "25 Post S.F." columns are 2025 operational-tracking figures. SOME don't cleanly reconcile to contract-derived / signed-sheet values:
+- CIN MLB Meal: 25 price $27.92 / post-SF **$19.54** (blended? CIN-OH is flat-fee, CIN-AZ MLB is $29.01 sticker/$20.31 post — the "CINCINNATI REDS" tab appears to BLEND OH+AZ or report GY only).
+- TBR MiLB Lunch: 25 price $28.20 / post-SF **$21.15** (signed 2026 Lunch = $21.675; 2025 would be lower pre-escalation — plausibly consistent).
 - TBR MiLB Bfast: 25 $23.26 / post-SF $17.45 (signed 2026 = $17.8275; 2025 pre-escalation plausible).
 - TBJ MLB $22.25 / MiLB $11.12 (2025; 2026 signed = $23.12 / $11.55 — consistent with ~4% escalation ✓).
 - TXR-AZ MLB $34.85 / post-SF $27.88, MiLB $17.43 / $13.94 (2025 — EXACT match to contract SOW ✓).
-**Read (measured, NOT waving it off post-A-1)**: MOST reconcile as 2025 pre-escalation figures (TXR-AZ exact; TBJ ~4%; TBR plausible). The CIN row looks BLENDED (OH+AZ or GY-only) — a QBR reporting choice, not necessarily a price conflict. This is a THIRD data source (QBR) alongside contract + signed sheet; it's a management tool (may round/blend), so it's LOW authority under P-1 (signed sheet wins). → fold the QBR 2025 numbers into the ESCALATION-VERIFICATION PASS as a cross-check: if the pass re-derives 2025→2026 and the QBR 2025 base agrees, that's triple-confirmation; where QBR diverges, it's likely a QBR blend/rounding, not a signed-sheet error. Do NOT treat QBR as authority; treat as corroboration.
+**Read (measured)**: MOST reconcile as 2025 pre-escalation figures (TXR-AZ exact; TBJ ~4%; TBR plausible). The CIN row looks BLENDED (OH+AZ or GY-only) — a reporting choice, not necessarily a price conflict. LOW authority under P-1 (signed sheet wins). → fold into the ESCALATION-VERIFICATION PASS as a cross-check: agreement = triple-confirmation; divergence = likely a QBR blend/rounding, not a signed-sheet error. Do NOT treat QBR as authority; treat as corroboration.
 
-### BONUS — the QBR is a goldmine for NON-pricing summit context (note, don't action now)
-- **Client stakeholders per account** (above) — directly useful for the Joe/Sebastian lists + future account docs.
+### NEW services to verify in PG (add to batch)
+- CIN "Rehab" ($17.73/$12.41, 5,700 est — distinct line or billed as MiLB?)
+- TBR à-la-carte "Protein C/P" $107.64 + "Protein B/S" $156.08 (= B-5 extra-protein, two SKUs)
+- TBJ "Single A Jays" $15.89 = **Vancouver Canadians** (Single-A) — is this in the 11 or mislabeled TBJ-NY? Confirm mapping.
+- **TBR "MLB L/D + Ump" line** ($38/$38) — confirms umpire meals bundle into MLB L/D. **TBR "MiLB ST" vs "MiLB" rows are DISTINCT in the QBR** (ST Bfast $21.96/$16.47 vs regular Bfast $23.26/$17.45) → relevant to C-11: shows them at DIFFERENT 2025 prices; confirm whether 2026 signed collapsed them to the same $17.8275 deliberately or if ST should differ. [Kevin ruled §U: no cost diff at 2026 values.]
+
+### BONUS — non-pricing context captured (note, don't action now)
+- **Client stakeholders per account** (above) — useful for the Joe/Sebastian lists + future account docs.
 - **SF due-date cadences confirmed** from a second source (all match contracts).
-- **2026 asks per account** (operational, not pricing): TXR wants snack/bev billback during ST + Yankees-model visiting flat-fee; CIN wants Fee-vs-P&L clarity for Goodyear + CapEx lists; TBJ wants media-meals alignment + Fun Money review + Vancouver consulting; TBR wants action-station quantity charging + visiting-team ask billing + advance meal counts. These inform the OPERATIONAL side (not this pricing phase) but are worth surfacing to Kevin as "Austin's 2026 client-ask list is captured here."
-- **TBR "MLB L/D + Ump" line** ($38/$38) — confirms umpire meals bundle into MLB L/D. **TBR "MiLB ST" vs "MiLB" rows are DISTINCT in the QBR** (ST Bfast $21.96/$16.47 vs regular Bfast $23.26/$17.45) — relevant to C-11 (the ST-vs-regular question): the QBR shows them at DIFFERENT 2025 prices, suggesting they may NOT be pure duplicates. → re-open C-11 as "QBR shows ST and regular MiLB at different 2025 prices — confirm whether 2026 signed collapsed them to the same $17.8275 deliberately or if ST should differ."
+- **2026 forward asks (operational, not pricing)**: TXR wants MLB-ST snack/bev BILLBACK + possible flat-fee "Yankees model" visiting side · CIN "Fee vs P&L for GY" (Goodyear shape open) · TBJ "Fun Money program review" (is_non_revenue flag) · TBR action-stations "charge more for additional items" + visiting-team "how do we charge." Bill export should be buildable to accommodate these even though they're not live yet.
+
+**NET (as of the OneSheeter review)**: shrank open rulings from 3 to 1 (A-10/A-11 addressed here; A-4 was the last needing Kevin's memory). **All three subsequently closed by Kevin in §T** — including the A-11 reversal that this section got wrong. Escalation-verification pass unchanged as final systematic check.
 
 ---
 
-## S. ABR 2025 ONESHEETER reviewed (2026-07-14) — full review in ABR_ONESHEETER_REVIEW.md
-Departed Director of Account Management's year-end 2025 handoff. 5 tabs (Master + TXR/Surprise, CIN, TBJ, TBR). SECONDARY source per P-1 (below contracts + signed sheet); corroborates, never overrides. Covers only the 4 relationships this director owned — NO Cardinals (STL) or Globe Life Rangers (TXR-TX) tabs; not a complete 11-account picture.
+## T. FINAL RULINGS — A-4, A-10, A-11 (Kevin, 2026-07-15) — TWO were wrong in prior docs
 
-**RESOLVES two open rulings** (via the KF Notes):
-- **A-10 RESOLVED**: CIN 2200 "Catering Revenue" ($52K) = **Fantasy Camp + Owners Week Caterings + similar events** (verbatim source text: "'Catering Revenue' removed (Fantasy Camp, Hell week, etc.)" — "Hell week" = internal name for Owners Week Caterings). NOT the $1K educational demos. → rule: document as ancillary EVENT-catering revenue, OUT of SC per-meal model. RULABLE NOW.
-- **A-11 RESOLVED**: TBR 2200 ($79,950) = **Boys & Girls Club** (verbatim: "BGC numbers removed"). Feeds C-5 ($6.50 BGC lunch). → rule: document as ancillary BGC revenue, out of SC scope. RULABLE NOW.
-- Both: KitchFix runs ancillary food programs (Fantasy Camp/Owners Week Caterings @ Cincinnati, BGC @ Tampa) → real 2200 revenue, deliberately excluded from account meal-service review numbers. Document as named ancillary lines in MONEY_MODEL, out of SC export scope.
+### A-4 — DISSOLVED as NOT-A-CONFLICT (the "blend" was a phantom; FSL/FCL are two separate groups, not tiers)
+**Kevin's correction — the entire prior framing was wrong.** FSL and FCL are NOT two pricing tiers of one MiLB population, and $11.55 is NOT a blend between them. They are **two distinct groups, two locations, two services, two prices**:
+- **FCL** = the minor-leaguers who eat **at the PDC**. Contract wrote **$10.14**; **today = $11.55** (breakfast/lunch/dinner). This is what the $11.55 line bills.
+- **FSL** = the **Dunedin Blue Jays (Single-A)** who eat **at the stadium**. Contract wrote **$14.50**; **today = $16.51** (breakfast/pregame/postgame). A SEPARATE line.
+- Both are **already correct in the service calendar and the signed price sheet.** The sampled invoice simply didn't show the FSL line.
+**Why the confusion happened**: same error-species as A-1 — a summary (the contract-tier language + the single sampled invoice) made two distinct services look like one "blended" thing. There was never a blend to negotiate or paper. **A-4 → NOT-A-CONFLICT; two distinct groups/services, both priced correctly in SC + signed sheet.**
+**Corroboration**: the price audit already showed the signed sheet carries "FSL Team" AND "FCL Team" as DISTINCT services, both PG-matched — consistent with Kevin's account.
+**ONE VERIFY OWED (non-blocking, does NOT reopen ruling)**: confirm the signed sheet shows FSL at the CURRENT **$16.51**, not the old $14.50. If it still shows $14.50 → a real staleness catch to fix. If $16.51 → fully current. Either way A-4 stays dissolved (two distinct services is the ruling; the FSL number is a separate price-currency check).
+**Doc impact**: correct the ledger/register/CONTRACT_DIGEST_TBJ-FL framing everywhere they call this a "blend" or "two tiers of one population." FCL and FSL are two clients/groups. Update MONEY_MODEL digest: TBJ-FL MiLB is NOT a single $11.55 — it's FCL $11.55 (at PDC) + FSL $16.51 (at stadium), two distinct services.
 
-**CORROBORATES** (independent 3rd validation of the contract framework):
-- Every SF %, CPI note, reset month, SF due-date matches the executed contracts. TXR-AZ 20%/2.5%/thirds; CIN 30%/2-5%/75-Feb1-25-Mar15; TBJ prior-SF+CPI/1-1,2-1,3-1; TBR 25%/Nov-Nov/$200K-day-one+2-1.
-- **A-3 CONFIRMED**: TBJ SF cadence (1/1,2/1,3/1 even) is real operational practice, OneSheeter-sourced. Disposition holds (provenance-flagged).
-- **C-2 CORROBORATED a 3rd way**: TBR "$200K on the first day, remaining due 2/1."
-- 2025 rate tables escalation-consistent with signed 2026 (TXR-AZ ×1.025 exact; CIN coffee $491.87→$511.05; TBR ST-vs-regular Bfast split matches signed = confirms C-11 are two real services).
+### A-10 — CONFIRMED out of scope (Kevin)
+CIN-AZ $52K 2200 = Owners Week Caterings + Fantasy Camp. **Billed separately; OUT of SC scope.** Document in MONEY_MODEL as a named ancillary event-catering line, excluded from the SC per-meal model. LOCKED.
 
-**BIG OPERATIONAL FINDING — meal→snack mix shift**: nearly every account shows actual MEALS under budget + SNACKS/continental over → revenue erosion (snacks bill lower). TXR net −$33K, CIN −$54K MiLB meals, TBJ −$34K MiLB; TBR the +outlier. → makes the SC's GRANULAR per-service pricing load-bearing (PG already stores snacks/continental separately — the mix shift is exactly why). Projection-accuracy point, not billing-correctness.
+### A-11 — REVERSED: BGC is IN SCOPE, part of TBR-FL projected revenue (Kevin) — the INVERSE of A-10
+**My "out of scope" rec was WRONG. Kevin's correction:**
+- **TBR-FL is the ONLY account that does NOT cook in the client's facility.** KitchFix rents a **COMMISSARY** and delivers to the PDC, serving on-site.
+- The **Exec Chef has a separate relationship with the Boys & Girls Club**. To add revenue to the commissary operation, KitchFix **produces food for BGC and bills them like a SECOND CLIENT under the TBR-FL account.**
+- **BGC counts ARE tracked in the service calendar. BGC sales ARE projected as part of TBR-FL revenue.** The P&L 2200 line includes BGC **because it belongs there.**
+**Disposition**: BGC is an **IN-SCOPE revenue stream** for TBR-FL — effectively a second client riding on the TBR-FL commissary operation. MONEY_MODEL must document BGC as in-scope TBR-FL revenue (NOT excluded). The bill export logic for TBR-FL must account for BGC as tracked/projected SC revenue.
+**Contrast locked**: A-10 (CIN Owners Week/Fantasy Camp) = genuinely separate, out of scope. A-11 (TBR BGC) = in the SC, in TBR-FL projected revenue, in scope. The two 2200 catering lines have OPPOSITE dispositions — do not treat them the same.
+**Feeds C-5**: the missing $6.50 BGC lunch rate is now understood — it's a real in-scope TBR-FL service line (the BGC "second client"). → the BGC rate(s) should be in the signed sheet / PG as TBR-FL services; verify they're present.
+**New structural fact banked**: TBR-FL = commissary model (not on-site at client facility), which is WHY it can carry a second-client (BGC) revenue stream the other accounts can't. This is a first-class TBR-FL account characteristic for its account file.
 
-**NEW services to verify in PG** (add to batch): CIN "Rehab" ($17.73/$12.41, 5,700 est — distinct line or billed as MiLB?) · TBR à-la-carte "Protein C/P" $107.64 + "Protein B/S" $156.08 (= B-5 extra-protein, two SKUs) · TBJ "Single A Jays" $15.89 = **Vancouver Canadians** (Single-A) — is this in the 11 or mislabeled TBJ-NY? Confirm mapping.
+### NET: all Kevin-owned rulings now CLOSED
+A-4 dissolved · A-10 out-of-scope · A-11 in-scope (reversed). Remaining open items are async (Joe 5 / Sebastian 4) + the escalation-verification CC pass. No Kevin ruling outstanding.
+**Two price-currency verifies owed (non-blocking)**: FSL signed-sheet rate = $16.51 (A-4)? · BGC rate(s) present in signed sheet/PG as TBR-FL services (A-11/C-5)?
 
-**Stakeholder names for paperwork chases**: TXR Katie/Brandon · CIN Ashley · TBJ Michelle/Katarina · TBR Alex Roth (primary), Tatiana/Sonny.
+## U. MORE RULINGS (Kevin, 2026-07-15) — clears 3 async items
 
-**2026 forward asks (not billing, but relevant)**: TXR wants MLB-ST snack/bev BILLBACK + possible flat-fee "Yankees model" visiting side · CIN "Fee vs P&L for GY" (Goodyear shape open) · TBJ "Fun Money program review" (is_non_revenue flag) · TBR action-stations "charge more for additional items" + visiting-team "how do we charge." Bill export should be buildable to accommodate.
+### C-8→C-12 (the 5 signed-sheet Instructions-tab rows) — CONFIRMED by Kevin
+Kevin confirms his prior answers land in the signed sheet — no separate Joe confirmation needed:
+- **STL-FL MiLB Snack** = passthrough (purchased + passed through to Cardinals at cost, zero margin). NOT $0-because-fee.
+- **STL-FL "Arrival" vs "Breakfast"** = TWO distinct services. Keep both.
+- **TBJ-NY Snack + Shake** = deactivate (correct as no-price/inactive).
+- **TBR-FL "Breakfast - MiLB ST" vs "Breakfast - MiLB"** = no cost difference (both $17.8275). [NOTE: reconcile against A-4/A-11 corrections + the QBR C-24 finding that showed ST vs regular at DIFFERENT 2025 prices — the "no cost diff" holds for the 2026 signed values; the account file should state the current structure clearly.]
+- **TBJ-FL Media Meals** = $16 (projected correct; actuals $15 stale). Fix to $16.
+→ These were the JOE #4 list. **CLOSED — Kevin-confirmed, no Joe round-trip needed.** Removes Joe #4 from the async list.
 
-**NET**: 3 open rulings → 1. A-10 + A-11 resolved by the OneSheeter; only A-4 (was $11.55 a negotiated blend?) still needs Kevin's memory. Escalation-verification pass unchanged as final systematic check.
+### A-6 / SEBASTIAN #1 — RESOLVED: STL-FL SF is NON-TAXABLE (Kevin)
+The STL-FL $350K service-fee invoice showing TAX 0.00 is CORRECT — **the service fee is non-taxable.** The 0.00 satisfies the contract's §2.d itemization requirement (itemized as zero because non-taxable), not a skipped step. No finance-compliance issue. Zero SC impact regardless (R9 — SC emits pre-tax). **A-6 CLOSED.** Removes Sebastian #1 from the async list.
+- Account-file note (STL-FL): the SF line is non-taxable; only prepared-meal lines carry FL tax.
+
+### D-2 / SEBASTIAN #2 — IGNORE (Kevin): the "2025" memo is a typo
+The TBR-FL 2026 invoices reading "2025 Tampa Bay Rays..." in the memo = a cosmetic typo, **ignore.** Not worth a template-fix task. **D-2 CLOSED — no action.** Removes Sebastian #2 from the async list.
+
+### NET async list now SHRUNK
+Kevin cleared: Joe #4 (Instructions rows) + Sebastian #1 (tax) + Sebastian #2 (memo).
+**REMAINING async:**
+- **Joe #1** — TBJ-FL SF cadence (confirm Jan/Feb/Mar; OneSheeter-sourced). Non-blocking.
+- **Joe #2** — P&L 2300 computed-vs-billed for CIN-AZ + TXR-AZ. Non-blocking (structural clarity).
+- **Joe #3** — TBR-FL variable SF installment: how set each year? **LOAD-BEARING** — the bill export can't produce TBR's 2026 SF without this. The one async item that actually gates the SC export.
+- **Joe #5** — TBR-FL Lunch/Dinner base split ($28.90 provenance). Non-blocking (paperwork).
+- **Sebastian #3** — missing invoice samples (5 accounts) for golden-test coverage. Needed for Phase E (certification), not for account files.
+- **Sebastian #4** — SF-line-on-invoice confirmation (overlaps Joe #2).
+- Plus the **escalation-verification CC pass** (with the 2 folded spot-checks: FSL $16.51, BGC rates present).
+**Kevin-owned rulings: ZERO outstanding.** Only async confirmations + one CC pass remain.
