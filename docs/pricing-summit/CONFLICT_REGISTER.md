@@ -4,6 +4,8 @@
 >
 > Cross-references: EVIDENCE_&lt;ACCOUNT&gt;.md × 11 (this PR) + `docs/SC_MONEY_MODEL.md` + `docs/SC_CONTRACT_BILLING_SUMMARY.md`.
 
+> ⚠️ **STATUS SUPERSEDED — read this first.** This register is the point-in-time *discovery record* from the evidence phases (0a–0d). Many conflicts below are shown as OPEN/awaiting-ruling but have since been **ruled**. This file is preserved as the forensic history of what was found and when — it is intentionally NOT updated in place. **For the current disposition of every conflict, see `LEDGER.md` §Q (reconciled 2026-07-14).** The per-account current status lives in `accounts/ACCOUNT_<X>.md`.
+
 ---
 
 ## A. Live conflicts (Kevin rules)
