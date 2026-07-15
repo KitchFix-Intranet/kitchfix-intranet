@@ -1,0 +1,104 @@
+# ACCOUNT: CIN-KY
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_CIN-KY.md`.
+
+## 0. IDENTITY & ALIASES (the crosswalk — join everything on the primary key)
+- **Primary key (intranet)**: `CIN-KY`
+- **Team / entity**: Louisville Bats — Cincinnati Reds AAA affiliate, Louisville Slugger Field (Louisville, KY)
+- **Level / tier**: AAA (MiLB)
+- **Search aliases**: "Louisville", "Louisville Bats", "Bats", "Slugger Field", "Reds AAA", "Louisville Kentucky"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `CIN-KY` |
+  | PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
+  | PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
+  | QuickBooks (invoice `Item`) | expected "BATS - ..." scheme (no CIN-KY invoice in sample; UNKNOWN exact) |
+  | P&L file | Louisville Bats rows |
+  | ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
+  | Contract folder | `/Contracts/CIN KY/` |
+- **Client stakeholders**: **Rachel Sharley** — client dietitian (Reds-side; also covers CIN-AZ) `[src: Kevin, 2026-07-15, high]`
+- **Capture completeness**: **FULLY-CAPTURED** — all three years' contracts banked verbatim, rate history complete, structure is the simplest of the 11 (pure per-meal, no SF, no passthrough). The only gaps are non-blocking: no invoice in the sample (so no worked example / tax-rate confirmation), and net-payment days unstated in the executed contract.
+
+## 1. CONTRACT (pointer, not duplication)
+- **Operative doc**: `KitchFix_2026LouisvilleAgreement_4.22.26.pdf` — Services Agreement, effective **April 21, 2026**, executed Nicholas Krall (President, Baseball Operations, Cincinnati Reds) + Josh Katt (CEO, KitchFix). Single-season.
+- **Verbatim source-of-record**: `../CONTRACT_DIGEST_CIN-KY.md` (all clauses block-quoted + page-cited; includes the full 2024/2025/2026 year-over-year table).
+- **Term / renewal**: Effective Date → **December 31, 2026**. Single-season contract; renegotiated year-to-year (no renewal option, no auto-renew). · as-of 2026. `[digest §B.1, §C]`
+- **Paperwork status**: complete — the operative 2026 contract is executed and in the folder, plus the two prior years (2024, 2025) for history. No gaps.
+
+## 2. BILLING RECORD (consumer: bill export / PG / finance)
+
+### 2a. Money shape
+- **Shape**: **Pure per-meal, NO service fee.** The simplest shape — `actual_count × per-meal rate` = the invoice. No SF, no discount, no passthrough, no flat-fee component. `[MONEY_MODEL: No-SF; billing_model actuals_drive_invoice]`
+- **Service Fee**: **NONE.** `[digest §B.3]`
+  - ⚠️ **Copy-paste artifact to ignore**: the 2026 termination clause (§2.b) references "Services Fee(s)" and "prepaid Services Fees" — this is leftover template language from the CIN-OH contract. **CIN-KY has NO service fee.** Do not let the stray phrase imply one. `[digest §D]`
+- **Escalation regime**: **NONE (year-to-year renegotiation).** No CPI, no formula. Rates are set fresh each single-year contract. 2024 $24.00 → 2025 $24.98 → 2026 $25.95 (Type 1); ~3.9%/yr but negotiated, not formulaic. `[digest §B.4]`
+  - ⚠️ Price Review v3 / any model must NOT apply an escalator to Louisville.
+  - A material-menu-change clause (§5 trailing ¶) lets the parties revisit per-meal pricing in good faith if the Exhibit A SOP changes — a re-price trigger, not an escalator.
+- **Tax treatment**: rates are **pre-tax** ("not inclusive of applicable sales tax", §4.a). Kentucky sales tax applies at invoice (downstream in QB per R9). **KY rate not stated in the contract and no CIN-KY invoice in the sample → tax rate UNKNOWN** (do not guess). `[digest §B.5]`
+
+### 2b. Rate table (effective-dated; the retrievable price list)
+> Single-tier AAA account — meals are categorized as **Type 1 (Breakfast/Lunch Buffet)** or **Type 2 (Snack/Lighter Meal)**, NOT by breakfast/lunch/dinner or MLB/MiLB. No SF, so sticker = billed rate. All as-of 2026.
+
+| Service (contract Type) | Billed rate | Unit | as-of | Source | PG match |
+|---|---|---|---|---|---|
+| Type 1 — Breakfast/Lunch Buffet | **$25.95** | per meal | 2026 | contract §4.a / signed sheet | PG "Breakfast Buffet" + "Lunch Buffet" $25.95 ✓ |
+| Type 2 — Snack / Lighter Meal | **$8.64** | per meal | 2026 | contract §4.a / signed sheet | PG "Snack" $8.64 ✓ |
+| (Post-Game — planned) | $25.95 | per meal | 2026 | PG / brief | PG "Post-Game (planned)" $25.95 — **service DEFERRED** in contract (see §3); Type-1 rate if it starts |
+| (Umpire) | $25.95 | per meal | 2026 | PG | PG "Umpire" $25.95 (Type-1 rate) |
+
+**Rate-table notes:**
+- The contract defines only two rate *categories* (Type 1 / Type 2); PG expresses them as named services (Breakfast Buffet, Lunch Buffet, Post-Game, Umpire all at the Type-1 $25.95; Snack at Type-2 $8.64). Bill export maps any Type-1 service to $25.95.
+- **Estimated 2026 annual investment: $186,462 + tax** (contract §4.b, based on the 2026 service calendar for arrival + mini-meal). This is an *estimate*, not a fee — CIN-KY bills on actuals. Whether there's a year-end reconciliation against this estimate is UNKNOWN (contract silent).
+- **No coffee/fountain revenue line** — the Bats self-provide drinks, snacks, paper products (Exhibit A). Unlike CIN-AZ.
+
+### 2c. Passthrough / non-revenue lines
+- **NONE.** All costs baked into the per-meal rate; no passthrough budget, no Fun Money line. `[digest §B.7]`
+
+### 2d. Ancillary revenue (out of SC meal-model scope)
+- **NONE identified.** (Outside catering for MLB rehab players is handled operationally — see §3 — not as a standing ancillary revenue line.)
+
+### 2e. Worked billing example (golden-test seed — to the penny)
+- **NOT AVAILABLE** — no CIN-KY invoice in the sample. When one is obtained (Sebastian #3 covers this), the seed is: (Type-1 count × $25.95) + (Type-2 count × $8.64) = pre-tax subtotal, KY tax applied in QB. Flag: golden-test coverage for CIN-KY is pending an invoice sample. `[Sebastian #3]`
+
+## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
+- **Client stakeholders**: **Rachel Sharley** — client dietitian (Reds-side, covers CIN-AZ + CIN-KY) `[src: Kevin, 2026-07-15, high]`.
+- **PRODUCTION MODEL — commissary/delivery (NOT on-site cooking)**: KitchFix operates out of a **shared commissary kitchen** — the chef **produces, packs, drives, and delivers** the meals. **No on-site cooking facility at Louisville Slugger Field.** `[src: Kevin, 2026-07-15, high]`
+  - ⚠️ This is the **same commissary/delivery model as TBR-FL** — CIN-KY is a SECOND account on this model, not unique to Tampa. (The contract's "co-used kitchen" references describe the historical/stadium framing; operationally it runs as commissary production + delivery.) Relevant because commissary accounts have different cost/logistics shapes than on-site accounts.
+- **Service pattern**: AAA single-season, ~13 homestands in 2026 (Mar 27 → Sep 13). Guaranteed usage: "every arrival and mini meal for the duration of the Term" (§5.a.i). KitchFix is the **exclusive caterer** at Louisville Slugger Field (§1). Same menus offered to visiting teams as home team (§5.a.iii). `[digest §B.9]`
+- **Post-game service — ON-REQUEST ONLY (rare)**: post-game is **deferred unless the client requests it with 72-hour advance notice; not common.** The contract frames this as a "beginning of May" discussion (§5.a.ii), but operationally it's request-driven and infrequent, NOT a standing service. → **the SC projections should NOT carry Post-Game as a standing/opening-day service** — it's an exception, billed when it actually happens. Flag for the SC projection/display. `[src: Kevin, 2026-07-15, high; contract §5.a.ii]`
+- **Outside-catering / rehab clause**: MLB rehab players occasionally order outside catering with short notice. KitchFix asks 72hr notice; if <72hr and product is lost (esp. end-of-homestand, non-repurposable), KitchFix may seek compensation for lost product (§5.a.iv-vi). → a potential billable event with no dedicated SC field; track if triggered. `[digest §B.7]`
+- **Co-used kitchen**: KitchFix operates in a kitchen shared with stadium operations (referenced in the post-game deferral).
+
+## 4. RULINGS & DECISIONS (current dispositions; full reasoning in LEDGER)
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| C-18 | The $28,000 upfront lump-sum ($2,000 credit × 14 homestands) present in 2024 + 2025 was **REMOVED in the executed 2026 contract** → pure weekly per-meal. Anything downstream still assuming the lump-sum/credit is STALE. | CLOSED (removal confirmed verbatim) | 2026-07-14 | §P (C-18) |
+| Type-labeling | Contract uses "Type 1 / Type 2"; PG + MONEY_MODEL use named services (Breakfast Buffet / Post-Game / Umpire etc.). Not a conflict — Type-1 rate ($25.95) maps to all Type-1 services; Type-2 ($8.64) is Snack. Naming alignment only. | CLOSED (informational) | 2026-07-14 | §12 (evidence) |
+
+## 5. OPEN ITEMS (what's not settled — owner + status)
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| Post-game service in SC projections | OPEN | Kevin / ops | No | Post-game is on-request-only (72hr advance, rare) — NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served. |
+| KY sales-tax rate | PENDING (accounting pull) | Kevin's accounting team | No | Not stated in contract; no invoice sample yet. Accounting is pulling invoice copies — the KY rate will confirm from an actual invoice. SC emits pre-tax regardless (R9). |
+| Net-payment terms | UNKNOWN | — | No | The executed 2026 contract states "billed weekly" but no net-day term. Low-stakes. |
+| Year-end reconciliation vs $186,462 estimate | UNKNOWN | — | No | Contract silent on whether the annual estimate is trued up. CIN-KY bills on actuals, so likely no reconciliation, but unconfirmed. |
+| Homestand count (13 vs 14) | OPEN (verify) | — | No | 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13. |
+| Invoice sample for golden test | PENDING (accounting pull) | Kevin's accounting team | Phase E only | Accounting is pulling invoice copies. Once received: worked example + KY tax rate confirm. Closes CIN-KY's slice of Sebastian #3. |
+
+## 6. HISTORY (superseded facts — MARKED, never deleted)
+- **The $28,000 lump-sum (REMOVED 2026)**: 2024 + 2025 contracts each had "a lump sum payment of $28,000.00" with "a credit of $2,000.00 towards each of the 14 regular season homestand invoices." **Deleted in the executed 2026 contract** → pure weekly per-meal, no upfront, no credits. `[digest §B.3, §C; C-18]`
+- **Prior-year per-meal rates** (superseded by year-to-year renegotiation): Type 1 — 2024 $24.00 → 2025 $24.98 → 2026 $25.95. Type 2 — 2024 $8.00 → 2025 $8.32 → 2026 $8.64. `[digest §C]`
+- **Prior guarantee structure** (superseded 2026): 2024/2025 guaranteed "minimum 11 buffet meals per 6-game homestand"; 2026 replaced this with "every arrival and mini meal for the duration of the Term." `[digest §B.9]`
+- **Prior signatories**: 2024 Sam Grossman (Asst. GM); 2025 Nick Krall (Grossman line struck through); 2026 Nicholas Krall. `[digest §C]`
+- **Termination cure period** tightened: 15 days (2024/2025) → 10 days + new Club for-convenience (30-day notice, pro-rata) in 2026. `[digest §C]`
+
+## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
+- **Contract facts**: page-cited in `../CONTRACT_DIGEST_CIN-KY.md` (authoritative, verbatim; all three years).
+- **Per-service prices**: signed Price Review v3 (Joe **Lessard**-attested), confirmed against PG. No invoice sample to cross-check (Sebastian #3 pending).
+- **Money shape**: `../../SC_MONEY_MODEL.md` (No-SF pure per-meal).
+- **Operational facts**: contract Exhibit A + `../../ACCOUNT_SERVICES_BRIEF.md` (2026-06-16).
+- **Rulings**: `../LEDGER.md` §P (C-18).
+- **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
+
+---
+*Completeness: FULLY-CAPTURED. Simplest account — pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Non-blocking gaps: no invoice sample (worked example + KY tax rate pending), net-terms unstated, post-game start-date reconciliation. No open rulings.*
