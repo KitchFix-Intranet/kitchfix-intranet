@@ -651,3 +651,29 @@ Kevin cleared: Joe #4 (Instructions rows) + Sebastian #1 (tax) + Sebastian #2 (m
 - **Sebastian #4** — SF-line-on-invoice confirmation (overlaps Joe #2).
 - Plus the **escalation-verification CC pass** (with the 2 folded spot-checks: FSL $16.51, BGC rates present).
 **Kevin-owned rulings: ZERO outstanding.** Only async confirmations + one CC pass remain.
+
+---
+
+## V. NOTES FROM SOURCE REVIEW (2026-07-15) — CIN-AZ build prep
+
+### A-4 CORROBORATION — the operational brief had it RIGHT all along
+When building CIN-AZ, reviewed `ACCOUNT_SERVICES_BRIEF.md` (dated 2026-06-16). Its TBJ-FL section **already carried the correct two-groups structure**: "Single A Jays — Breakfast/Pre-Game/Post-Game $16.51 (FSL Team Meal)" and "Minor League — PDC — Breakfast/Lunch/Dinner $11.55 (FCL Team Meal)" as SEPARATE service groups. → Independent confirmation of Kevin's §T A-4 ruling: the "blend" was NEVER in the operational/billing view — it was purely an artifact of (a) the contract digest quoting the 2023 tier language and (b) a single sampled invoice that happened to show only the FCL ($11.55) line. The two-groups truth was sitting in the brief the whole time. Strengthens the §T dissolution; nothing to re-rule.
+- Also confirmed by PG appendix: TBJ-FL has "Breakfast $16.50971" (FSL/Single-A group) AND "Breakfast $11.55368" (FCL group) as distinct priced rows. Two groups, two prices, both in PG. Airtight.
+
+### BATCH DOC-PR SCOPE EXPANDED — ACCOUNT_SERVICES_BRIEF.md is a THIRD stale doc to true up
+`ACCOUNT_SERVICES_BRIEF.md` (2026-06-16) carries pre-summit framing that our rulings supersede — it's a third doc needing reconciliation alongside MONEY_MODEL + the digests. Specific staleness found:
+- TBR-FL "one-time 2024" SF + the [CONTRADICTION - confirm with Kevin] tags on TBR SF recurrence → resolved (recurring $200K + variable, §M/§T).
+- CIN-AZ "operative 2026 pricing document not in folder" hand-wringing → resolved (renewal-option mechanic + signed sheet is authority, §O/§P).
+- CIN-AZ money-model paragraph → superseded by MONEY_MODEL (brief's own banner says so).
+- The STL-MO $489,431-vs-$698,000 [CONTRADICTION] tag → still an open reconciliation (Joe #2-adjacent), note it.
+- BUT its per-account OPERATIONAL detail (service groups, phases, personnel swings, stakeholder names, live client conversations like "Ashley asked about moving GY to a fee account") is CURRENT + valuable → the account files should HARVEST this operational detail into their §3 (Operations Record), and the batch doc-PR should true up the brief's money-model/contradiction sections (or add a pointer to the account files as the new current-state source).
+→ **Batch doc-PR now covers THREE docs**: SC_MONEY_MODEL.md + the 11 CONTRACT_DIGEST_*.md (annotations only) + ACCOUNT_SERVICES_BRIEF.md. Runs AFTER the account files (which harvest the brief's good operational content + surface any last corrections).
+
+### PG price-history confirms A-14 drift (receipts)
+PG appendix shows CIN-AZ "Breakfast" (MLB) effective-dated rows: 2026-06-16 $20.30622 → 2026-06-17 $20.30622 → **2026-06-18 $20.32**. This IS the A-14 drift, visible in the data: the value was $20.30622, then changed to $20.32 on 06-18. Kevin's ruling: fix target = **$20.31** (Joe-approved), effective-dated, Phase 3. Both stored values ($20.30622 and $20.32) are off from the approved $20.31. → goes into CIN-AZ account file §6 History; already ruled in §O/audit-batch. No new ruling.
+
+### CIN-AZ pilot review — corrections (Kevin, 2026-07-15)
+- **CIN-AZ 2026 Service Fee CONFIRMED = $445,716** (Kevin, from 2026 P&L budget; cadence 75% Feb 1 / 25% Mar 15 confirmed). This was the previously-UNKNOWN escalated SF figure (2023 base was $402,016). **KEY: $445,716 = exactly the P&L 2300 line** that §N's SF-component analysis predicted (~$445.7K) and §S's ABR corroboration showed ($445,716). → does NOT resolve Joe #2 (billed-vs-computed) but confirms the number is right either way, and tightens the §N hypothesis (the predicted 2300 = the actual budget SF).
+- **STAKEHOLDER CHANGE (affects CIN-AZ + relevant to CIN-OH chases)**: **Ashley Meuser left the Reds ~April/May 2026.** She was named in the CIN-AZ contract §V.D as invoice recipient + was primary account contact. **Current CIN-AZ contact = Rachel Sharley (client dietitian).** Invoices now route to sgrossman@reds.com / Bill-To Sarah Vedder. → any paperwork chase naming "Ashley" (renewal notices, the fee-conversion conversation) must route to the current contact instead. The OneSheeter's "Ashley" stakeholder tag for CIN is now stale. The ABR-sourced "Ashley asked about moving GY to a fee account" conversation has an originator who has departed — currency UNKNOWN, re-confirm before treating as live.
+- CIN-AZ price table CONFIRMED correct by Kevin (all rates validated).
+- CIN-AZ pilot completeness: PARTIAL → **PARTIAL (near-full)** after SF confirmation. Remaining opens all non-blocking (C-17 volume tier, renewal-notice paperwork, Joe #2).
