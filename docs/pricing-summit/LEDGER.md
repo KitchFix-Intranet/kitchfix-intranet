@@ -677,3 +677,26 @@ PG appendix shows CIN-AZ "Breakfast" (MLB) effective-dated rows: 2026-06-16 $20.
 - **STAKEHOLDER CHANGE (affects CIN-AZ + relevant to CIN-OH chases)**: **Ashley Meuser left the Reds ~April/May 2026.** She was named in the CIN-AZ contract §V.D as invoice recipient + was primary account contact. **Current CIN-AZ contact = Rachel Sharley (client dietitian).** Invoices now route to sgrossman@reds.com / Bill-To Sarah Vedder. → any paperwork chase naming "Ashley" (renewal notices, the fee-conversion conversation) must route to the current contact instead. The OneSheeter's "Ashley" stakeholder tag for CIN is now stale. The ABR-sourced "Ashley asked about moving GY to a fee account" conversation has an originator who has departed — currency UNKNOWN, re-confirm before treating as live.
 - CIN-AZ price table CONFIRMED correct by Kevin (all rates validated).
 - CIN-AZ pilot completeness: PARTIAL → **PARTIAL (near-full)** after SF confirmation. Remaining opens all non-blocking (C-17 volume tier, renewal-notice paperwork, Joe #2).
+
+### Batch 1 review — corrections (Kevin, 2026-07-15): CIN-KY + TBJ-NY
+**CIN-KY:**
+- **Client stakeholder = Rachel Sharley** (same Reds-side dietitian as CIN-AZ; covers both Reds accounts).
+- **STRUCTURAL FACT — CIN-KY is a COMMISSARY/DELIVERY account (2nd one).** KitchFix does NOT cook on-site at Louisville Slugger Field: shared commissary kitchen, chef produces + packs + drives + delivers. → **CIN-KY runs the SAME model as TBR-FL** (the commissary account from A-11). So "commissary, not on-site" is NOT unique to Tampa — at least two accounts (CIN-KY, TBR-FL) operate this way. The contract's "co-used kitchen" language describes a historical/stadium framing; operationally it's commissary production + delivery. Relevant for cost/logistics shape + for the account files' operations sections.
+- **Post-game = ON-REQUEST ONLY (72hr advance, rare)** — NOT a standing service, NOT "starts in May." SC should not project Post-Game as opening-day/standing; it appears only when actually requested + served. (Sharpens the earlier "post-game deferred to May" framing.)
+
+**TBJ-NY:**
+- **$27.34 rate CONFIRMED CORRECT by Kevin.** Still contractually unbacked (no operative contract), but the NUMBER is now Kevin-confirmed (was assumption-only). Distinguishes "rate confirmed" from "contract still missing" — billing-accuracy covered, business-exposure gap remains.
+- **Michelle (TBJ contact) LEFT the org** — current Buffalo client contact TBD (Kevin to provide). (Second departed-contact this session, after Ashley Meuser at CIN.)
+- **"Single A Jays" / Vancouver is NOT part of TBJ-NY — REMOVED from the account file.** → **RESOLVES the Vancouver mapping question for TBJ-NY**: Vancouver Canadians / "Single A Jays" ($15.89) does NOT belong to Buffalo. It's either its own thing or maps elsewhere — but it's OFF TBJ-NY. The mapping question moves off TBJ-NY entirely (no longer a TBJ-NY open item). If it needs a home, it's a separate investigation, not a Buffalo sub-line.
+
+### INVOICE PULL IN PROGRESS (Kevin's accounting team, 2026-07-15) — burn-down checklist
+Kevin's accounting team is pulling invoice copies for all accounts where invoices can close outstanding questions. This is the UNLOCK for most remaining gaps. As copies arrive, each account gets: a worked example (golden-test seed), confirmed tax rate, confirmed net terms, and (for thinly-documented accounts) independent rate backing. **This directly closes Sebastian #3** (missing invoice samples) account-by-account.
+Invoice-sample status by account (✓ = have it, ⧗ = pending pull):
+- CIN-AZ ✓ (K300168587 MLB + K300168736 MiLB — worked example built)
+- CIN-KY ⧗ (needed for worked example + KY tax rate)
+- TBJ-NY ⧗ (needed for worked example + NY tax + independent $27.34 backing)
+- CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V ⧗ (flat-fee; invoices confirm fee installments + tax treatment)
+- TBJ-FL ✓ (K300168548 MLB + K300168872 MiLB — from A-4 evidence)
+- TBR-FL ⧗ (needed; also load-bearing for Joe #3 SF-installment question)
+- TXR-AZ ⧗ (needed for worked example + deposit-discount confirmation)
+→ Update this list as copies land. When all ⧗ clear, Sebastian #3 closes and Phase E golden-test coverage is complete.
