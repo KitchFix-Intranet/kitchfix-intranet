@@ -883,7 +883,7 @@ Four Batch-2 files reviewed + corrected. Generalizable rulings extracted:
 - `Meal Service - PFS (Away)` — visiting-team catering (TXR-V)
 - `Meal Service - PFS` (no suffix) — basic contracted meal service
 → Glossary gap CLOSED. Expansion added to all account files' QB crosswalk. `[Kevin, 2026-07-16]`
-→ RIPPLE: CIN-KY (already merged) references "PFS" without expansion — add the expansion when CIN-KY next rides a PR (batch with the pending "(Away) confirmed" edit).
+→ RIPPLE (RESOLVED): CIN-KY PFS expansion + "(Away) confirmed" edits were applied and MERGED in PR #441 (the Batch-2 commit included CIN-KY touch-ups). Sandbox CIN-KY = main. No pending CIN-KY delta remains — do NOT re-include CIN-KY in the enrichment PR (confirmed byte-identical to main 2026-07-16).
 
 ### STL SF TAXABILITY — RESOLVED (source: Slack, Josh + Joseph Lessard, 2026-07-16)
 **Both STL-FL and STL-MO: NO sales tax on the service-fee portion.** Verbatim reasoning (Josh):
@@ -902,7 +902,7 @@ Four Batch-2 files reviewed + corrected. Generalizable rulings extracted:
 Confirms the per-account SF-tax attribute for the bill export. The two Cardinals accounts share the tax-free position (same client, same lawyers); the two AL/OH accounts are taxed per state law.
 
 ### BATCH-DOC-PR SCOPE ADDITIONS (this round)
-- PFS expansion → glossary + CIN-KY (merged) annotation on next PR.
+- PFS expansion → glossary DONE; CIN-KY annotation MERGED in #441 (no longer pending).
 - SC_BILLING_OVERVIEW: SF-tax table (per-account) + note that STL tax-free = client legal position w/ Cardinals-borne risk (not a clean exemption).
 
 ---
@@ -1045,7 +1045,7 @@ Finance §W notes column placed the $24,500 credit on installment 3 (K300168342)
 2. ACCOUNT_TXR-TX-H: SF golden seed confirmed on real invoice (K300168474) — upgrade "contract-stated, invoice pending" → "invoice-confirmed".
 3. ACCOUNT_STL-FL: correct the $24,500 credit to installment 4 (not 3); SF tax-zero invoice-confirmed.
 4. ACCOUNT_CIN-OH: add K300168481 as corroborating installment 6 + SF-level handover confirmation.
-(Plus already-queued: CIN-OH/STL-MO "PG migration DONE" wording; CIN-KY PFS + (Away) edits. All ride the next doc-PR touch.)
+(Plus already-queued: CIN-OH/STL-MO "PG migration DONE" wording rides with these. NOTE: CIN-KY PFS + (Away) edits already MERGED in #441 — NOT a pending edit; sandbox CIN-KY = main.)
 
 ### CROSS-FILE RIPPLE CHECK — SF-invoice findings (2026-07-16)
 Ran the standing cross-file check after the SF-invoice corrections. Results:
@@ -1060,6 +1060,6 @@ Sandbox files with edits ahead of main:
 2. ACCOUNT_TXR-TX-H (SF golden seed invoice-confirmed)
 3. ACCOUNT_STL-FL (credit → inst 4 correction + SF-tax invoice-confirmed + finance-doc flag)
 4. ACCOUNT_CIN-OH (corroborating inst 6 + SF-level handover + PG-migration-done wording)
-5. ACCOUNT_CIN-KY (PFS = Performance Food Service expansion + (Away) confirmed + PFS open item resolved) — from earlier
+5. ~~ACCOUNT_CIN-KY~~ — CORRECTION: already MERGED in #441, sandbox = main, NOT a pending edit. Removed from the enrichment PR.
 6. TIER1_SC_BILLING_OVERVIEW_DRAFT (R9a/R9b/R9c SF-tax sub-clauses) — NEW this check
 7. LEDGER (all the §W/§X/§Y/§Z + SF-invoice + probe entries; main is at 967, sandbox now ~1050+)
