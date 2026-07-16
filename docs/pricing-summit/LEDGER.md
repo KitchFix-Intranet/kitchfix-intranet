@@ -965,3 +965,101 @@ TXR-V departs from the flat-fee template: it needs a real menu/pricing-authority
 5. **Off-menu/one-off requests = priced case-by-case, INTERNAL decision.** This explains the invoice "Special Upcharge" lines ($5 Quesadilla, $60 Fry Mix) — bespoke internal pricing, NOT menu SKUs. → Bill export must allow off-menu line items with ad-hoc prices; not every line maps to the menu. Closed (was a flag).
 6. **Ashley Meuser (CINN 4/3 series) = pre-departure, consistent.** Confirmed.
 Build TXR-V now (Cubs invoice still pending — spot-check later; Yankees invoice + menu + SOP sufficient to build complete).
+
+### PG sc_fee_schedule probe (2026-07-16) — migration ready + a fee-model-completeness finding
+Read-only probe of `sc_fee_schedule` (throwaway script, deleted, tree clean). Confirmed for the CIN-OH + STL-MO escalation migration:
+- **Column** = `amount` (annual figure, confirmed base-not-installment). **Key** = `account_key`, format `'CIN - OH'` / `'STL - MO'` (hyphen + spaces). **One row per account**, no effective-dated history.
+- Migration SQL written (`MIGRATION_sc_fee_schedule_escalate.sql`): PREVIEW → guarded BEGIN/COMMIT (each UPDATE has `AND amount = <base>` guard, self-verifying) → VERIFY. Updates `amount` + `reason` (cites §W) + `changed_by`. CIN-OH 362500→376686, STL-MO 473000→489497. **Kevin to run in Studio.**
+
+**⚠️ FEE-MODEL-COMPLETENESS FINDING (open — chase before Batch 3):**
+- `sc_fee_schedule` contains ONLY the 5 pure flat-fee accounts: CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V. (TXR-TX-V = $0, covered_by TXR-TX-H — the covered-by mechanic is a column, confirmed.)
+- **CIN-AZ is NOT in `sc_fee_schedule`.** CIN-AZ is the hybrid SF% account ($445,716 confirmed 2026 SF, §W) — its fee lives ELSEWHERE (likely derived via the SF% mechanic through `sc_service_prices`, or another table). 
+- **Implication for the "PG carries escalated" ruling**: the ruling is now satisfied for CIN-OH + STL-MO (in `sc_fee_schedule`). But:
+  1. **CIN-AZ** (already merged) — its escalated $445,716 may need applying wherever its fee actually lives. WHERE does CIN-AZ's fee live? UNKNOWN — chat-Claude may need to probe `sc_service_prices` or another table.
+  2. **Batch 3 escalating accounts (TBJ-FL $515,712, TXR-AZ $301,623)** — need to determine whether they're in `sc_fee_schedule` (flat-fee-style) or modeled like CIN-AZ (SF%/elsewhere) BEFORE assuming the escalated-figure migration reaches them.
+- → ACTION before Batch 3: probe how CIN-AZ, TBJ-FL, TXR-AZ fees are stored (which table/mechanic), so "PG carries escalated" is applied everywhere it should be, not just the flat-fee table. TBR-FL (per-meal, no SF in the finance schedule) and CIN-KY/TBJ-NY (per-meal, no SF) are likely N/A for a fee-schedule row.
+
+### PG migration RAN — CIN-OH + STL-MO escalated (Kevin, 2026-07-16) ✅
+Migration executed in Supabase Studio. VERIFIED:
+- CIN - OH: 362500 → **376686** ✓, changed_by = kf-fee-escalation-2026-07
+- STL - MO: 473000 → **489497** ✓, changed_by = kf-fee-escalation-2026-07
+- effective_date preserved (2026-01-01); reason fields updated with escalation source + §W cite.
+→ The "PG carries escalated" action is now DONE for CIN-OH + STL-MO. Their account-file §5 "PG fee-schedule migration to escalated" open items can flip to CLOSED on the next doc-PR touch (currently they say "ACTION (decided)" — the migration has now run; a future doc edit should mark them done).
+→ STILL OPEN (the fee-model-completeness chase): CIN-AZ (not in sc_fee_schedule — escalated $445,716 lives elsewhere), and Batch-3 TBJ-FL/TXR-AZ (determine where their fees live before assuming the migration pattern reaches them). Unchanged by this run.
+
+### TXR-V closeout + PR #442 merged (Kevin, 2026-07-16)
+- **PR #442 MERGED** — ACCOUNT_TXR-TX-V.md + ledger (906→967) now on main. TXR-V account record complete.
+- **Cubs invoice spot-check → RETIRED (not necessary).** The Yankees invoice (K300168675) already established the TXR-V model, and the SOP + menu confirm it's a standard process applied uniformly to every visiting team. A second invoice adds nothing. The TXR-V §5 "Cubs invoice spot-check" open item is CLOSED/dropped — no longer pending.
+- TXR-V remaining opens are now only: the SC buffet-row cleanup (off-contract but real — an SC-hygiene decision, not a data gap) + the year-start contact-roster refresh (recurring, not blocking).
+
+### ACCOUNT-RECORD LAYER STATUS (post-#442)
+Built + merged: 8 of 11 — CIN-AZ, CIN-KY, TBJ-NY, CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V.
+Remaining: **Batch 3 — TBJ-FL, TBR-FL, TXR-AZ.**
+Prereq before Batch 3 build: fee-model-completeness probe (where CIN-AZ / TBJ-FL / TXR-AZ fees are stored, so "PG carries escalated" reaches them).
+
+### FEE-MODEL PROBE RESOLVED (2026-07-16) — non-flat-fee accounts don't store SF in PG
+Read-only probe (`NON_FLAT_FEE_PROBE_OUTPUT.txt`, throwaway script deleted, tree clean). Definitive answer to where CIN-AZ / TBJ-FL / TXR-AZ SFs live in PG: **NOWHERE.**
+- All three are `billing_model = "actuals_drive_invoice"` (confirmed in `accounts`). PG holds only their **per-meal service catalog** (`sc_services` + `sc_service_prices`), NOT an annual SF dollar figure. There is no `sc_fee_schedule` row and no "Service Fee" service_name row for any of them.
+- Candidate SF/pct tables probed and NOT FOUND: sc_service_fee_pct, sc_sf_schedule, service_fee, sc_service_fees, sc_annual_fees, sc_fees, sc_fee_pct, sc_sf_pct, sc_fee_rules, account_fees, etc. The only fee table is `sc_fee_schedule` (flat-fee accounts only).
+- Their 2026 SF figures (CIN-AZ $445,716, TBJ-FL $515,712, TXR-AZ $301,623) live ONLY in the finance workbook (§W) + the account docs. PG has no cell for them (by design — SF% / actuals model computes billing from actuals × per-meal prices; the annual SF is out-of-band).
+
+**RESOLUTIONS:**
+1. **"PG carries the escalated figure" does NOT apply to CIN-AZ/TBJ-FL/TXR-AZ.** That ruling was flat-fee-specific (accounts with a `sc_fee_schedule.amount`). For `actuals_drive_invoice` accounts there is nothing to migrate. → Batch-3 files (TBJ-FL, TXR-AZ) must NOT say "update PG to escalated" like CIN-OH/STL-MO did; instead: SF lives in finance schedule + doc, PG holds only the per-meal catalog.
+2. **CIN-AZ loose end CLOSED.** No PG cell to apply its escalated $445,716 to — by design, not a gap. The fee-model-completeness open item is RESOLVED.
+3. **The flat-fee migration is confirmed complete.** Probe re-confirms sc_fee_schedule = exactly 5 rows (CIN-OH 376,686 ✓, STL-MO 489,497 ✓, STL-FL 1.4M, TXR-TX-H 604,032, TXR-TX-V 0/covered-by-H). Nothing analogous pending for anyone else.
+
+**BONUS — PG service catalogs captured for Batch 3 (informs rate tables before invoices):**
+- **TBJ-FL** `sc_services` (complex PDC — multiple groups): Breakfast/Lunch/Dinner/Umpire/Post-Game/Snack/Pre-Game + Media Meals, Scout Meals, Team Canada, Stadium Staff Meals, MLB G&G-Pantry, MiLB G&G-Pantry, MLB-Catering, Florida Ops-PDC, "Fun $$$$ Allocated" (is_flat_fee, is_non_revenue). Much broader than a simple per-meal account.
+- **TXR-AZ** `sc_services` (2 service groups): Breakfast/Lunch/Dinner/Continental Breakfast/Regular Snack/Pre-Game Hot Snack + Extra Protein - Chicken/Pork + Extra Protein - Beef/Seafood (both is_flat_fee add-ons).
+- **CIN-AZ** (already built) `sc_services`: 3 groups — Breakfast/Lunch/Dinner/Pre-Game Snack/Continental Plus + Coffee Service (tax-free, flat) + Fountain Bev (tax-free, flat). Matches the built ACCOUNT_CIN-AZ.md.
+(Note: `sc_service_prices` is keyed by service_id UUID, not account_key — prices join through sc_services.id; the probe didn't resolve the price values, only the service catalog. Batch-3 rate tables will need the actual prices from the signed Price Review / invoices, not this probe.)
+
+---
+
+## SF INVOICE EXTRACTION — golden seeds + naming finding (2026-07-16)
+4 SF installment invoices (`SF_INVOICE_EXTRACTION.md`), all July-1-dated: STL-FL K300168343, STL-MO K300168469, TXR-TX-H K300168474, CIN-OH K300168481. Closes the SF-invoice gaps on the merged Batch-2 fee accounts. These are edits to ALREADY-MERGED files → ride a future PR.
+
+### SF TAX — now CONFIRMED ON REAL INVOICES (was partly inferred)
+| Account | SF tax | Rate | Status |
+|---|---|---|---|
+| STL-MO | **$0.00** | non-taxable | 🎯 **KEY GAP CLOSED** — was never invoice-sampled; K300168469 proves tax-zero. Cardinals' legal position (§Y) now confirmed on a billed doc, not just asserted. STL-MO golden seed = $73,249.50, tax-zero. |
+| TXR-TX-H | $8,305.44 | 8.25% (Arlington) | 🎯 **GOLDEN SEED CONFIRMED** — $100,672 + $8,305.44 = $108,977.44, matches contract table to the penny. |
+| STL-FL | $0.00 | non-taxable | Confirmed (K300168343) + $24,500 credit shown applied. |
+| CIN-OH | $4,828.75 | 7.80% (Hamilton Cty) | Corroborates K300168479; Ashley→Sarah Vedder handover confirmed at SF level (inst 4 Ashley, inst 6 Sarah). |
+→ The per-account SF-taxability split (CIN-OH/TXR taxed, STL pair exempt) is now PROVEN on real invoices for all four. All 4 use Activity `Service Fees (PFS)` uniformly.
+
+### NEW FINDING — STL-MO SF invoice says "Management Fee" not "Service Fee"
+STL-MO's SF Description reads **"2026 Management Fee - 6 of 6"** (others say "Service Fee"). Same `Service Fees (PFS)` Activity code; only the free-text Description differs. Likely a QuickBooks convention for the Cardinals STL-MO AP/GL flow. → Bank in ACCOUNT_STL-MO (its invoices show "Management Fee"). Bill export must NOT assume the Description string is uniform across accounts. Flag to Sebastian for label-consistency review. NON-BLOCKING.
+
+### FINANCE-DOC DISCREPANCY — STL-FL $24,500 credit installment placement
+Finance §W notes column placed the $24,500 credit on installment 3 (K300168342). The ACTUAL invoice shows it applied on installment **4** (K300168343, as a PAYMENT line → $325,500 balance). Client credited either way (not a billing error), but the finance workbook's note is off by one installment. → Correct the note in ACCOUNT_STL-FL (invoice = ground truth; installment 4, not 3). Flag to Sebastian. NON-BLOCKING.
+
+### CONFIRMATIONS
+- STL-MO road food = SEPARATE invoice (K300168464, 02/01/2026), NOT a line on the monthly installments. 6× $73,249.50 + $50,000 = $489,497 ✓.
+- All 4 cadences confirmed (CIN-OH/TXR/STL-MO 6-monthly, STL-FL 4-quarterly).
+- STL-FL contact: Linda Brauer confirmed as Bill-To attention (already in the file).
+- These invoices give golden-test seeds for STL-MO + TXR-TX-H (previously seed-less); CIN-OH + STL-FL already had/corroborated.
+
+### PENDING-PR EDITS (to merged Batch-2 files — batch with other pending edits)
+1. ACCOUNT_STL-MO: SF golden seed ($73,249.50 tax-zero, invoice-confirmed) + "Management Fee" naming note + mark SF-invoice gap closed.
+2. ACCOUNT_TXR-TX-H: SF golden seed confirmed on real invoice (K300168474) — upgrade "contract-stated, invoice pending" → "invoice-confirmed".
+3. ACCOUNT_STL-FL: correct the $24,500 credit to installment 4 (not 3); SF tax-zero invoice-confirmed.
+4. ACCOUNT_CIN-OH: add K300168481 as corroborating installment 6 + SF-level handover confirmation.
+(Plus already-queued: CIN-OH/STL-MO "PG migration DONE" wording; CIN-KY PFS + (Away) edits. All ride the next doc-PR touch.)
+
+### CROSS-FILE RIPPLE CHECK — SF-invoice findings (2026-07-16)
+Ran the standing cross-file check after the SF-invoice corrections. Results:
+- **Ledger self-consistency: OK.** The original §W STL-FL entry (line ~735) already correctly states the credit applied on installment 4 (K300168343). The "installment 3" claim only ever came from the finance workbook's notes column; my discrepancy note flags that. No self-contradiction — the ledger consistently says inst 4.
+- **RIPPLE FOUND + FIXED: `TIER1_SC_BILLING_OVERVIEW_DRAFT.md` R9 was incomplete.** R9 ("tax never lives in the SC") did NOT capture per-account SF-taxability — a gap in a load-bearing ruling. Added **R9a** (SF-taxability per-account, invoice-confirmed rates, STL legal-position nuance), **R9b** (reimbursables always tax-zero, vendor-tax reasoning), **R9c** (Description strings not uniform — STL-MO "Management Fee"). This draft targets `docs/SC_BILLING_OVERVIEW.md`; it's a sandbox draft not yet on main, so it rides a future PR with the account-file edits. → This CLOSES the batch-doc-PR item "add SF-taxability rule to SC_BILLING_OVERVIEW."
+- **No ripple: `PRICING_SUMMIT_NORTH_STAR.md`** tracks the cert bar at the layer level (layer 4 = bill export + golden test, still ⬜); it doesn't track per-account seed status, so the 2 new golden seeds don't force an edit there.
+- **No ripple: `SC_MONEY_MODEL.md`** — the SF-tax + naming findings are additive framework rulings now captured in the BILLING_OVERVIEW draft (which complements MONEY_MODEL); MONEY_MODEL itself stays as-is until the batch-doc-PR (already in scope for the 2026-fee + Fauzia→Lessard + upkeep annotations).
+
+### PENDING-PR EDITS — updated tally (all ride the next doc-PR)
+Sandbox files with edits ahead of main:
+1. ACCOUNT_STL-MO (SF golden seed + Management Fee naming + SF-tax invoice-confirmed + PG-migration-done)
+2. ACCOUNT_TXR-TX-H (SF golden seed invoice-confirmed)
+3. ACCOUNT_STL-FL (credit → inst 4 correction + SF-tax invoice-confirmed + finance-doc flag)
+4. ACCOUNT_CIN-OH (corroborating inst 6 + SF-level handover + PG-migration-done wording)
+5. ACCOUNT_CIN-KY (PFS = Performance Food Service expansion + (Away) confirmed + PFS open item resolved) — from earlier
+6. TIER1_SC_BILLING_OVERVIEW_DRAFT (R9a/R9b/R9c SF-tax sub-clauses) — NEW this check
+7. LEDGER (all the §W/§X/§Y/§Z + SF-invoice + probe entries; main is at 967, sandbox now ~1050+)

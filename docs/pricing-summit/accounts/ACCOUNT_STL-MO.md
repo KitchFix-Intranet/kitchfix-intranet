@@ -13,7 +13,7 @@
   | PG `accounts` | team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
   | PG `sc_fee_schedule` | $473,000 base row (2026-01-01, annual, monthly-6) — NOTE: base; 2026 escalated actual bills at $489,497 (see §2) |
   | PG `sc_service_prices` | per-meal rows all $0 (flat-fee; planning only) — "Arrival", "Post BP", "Post-Game", "Umpire" |
-  | QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** `[K300168851, K300168853]`; SF Item expected "Service Fees (PFS)"-family (SF invoice not sampled) · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
+  | QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** `[K300168851, K300168853]`; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" — STL-MO-specific QB convention) `[K300168469]` · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
   | Finance schedule | "STL - MO" — accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food `[§W]` |
   | P&L file | St. Louis Cardinals — Busch / MLB rows |
   | ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR — flat-fee accounts run a different review track) |
@@ -40,7 +40,7 @@
   - **$473,000** = the revenue-recognized fee base (meal + road, excluding passthrough) — what PG `sc_fee_schedule` stores
   - **$489,497** = the CPI-escalated 2026 actual that BILLS ($439,497 + $50K). The old ABR "$489,431" figure was THIS number (escalated), not a contradiction. `[§W — supersedes the earlier $473K-is-operative note]`
 - **SF cadence**: meal-services 6 monthly, **March 1 →** (contract §2.a.i); Road Food **$50,000 annual, March 1** (§2.a.ii, §1.b.iii). Accrued **P4-P10** per finance. `[digest §B.3, §W]`
-- **SF TAX: NON-TAXABLE** (service-fee portion billed tax-free). RESOLVED — Josh/Lessard, 2026-07-16: STL-MO + STL-FL do NOT charge sales tax on the service-fee portion. ⚠️ **This is the Cardinals' asserted legal position, not a settled exemption** — "defensible," pushed by the Cardinals' lawyers; if the state challenged it and won, **the Cardinals would bear the tax liability**. Bill export: STL-MO SF = tax-zero, but flag the position's contingent nature. `[Slack Josh+Lessard, §Y]`
+- **SF TAX: NON-TAXABLE** (service-fee portion billed tax-free) — **invoice-confirmed** (K300168469: $73,249.50, TAX $0.00). RESOLVED via Josh/Lessard Slack §Y + now proven on a real billed document: STL-MO + STL-FL do NOT charge sales tax on the service-fee portion. ⚠️ **This is the Cardinals' asserted legal position, not a settled exemption** — "defensible," pushed by the Cardinals' lawyers; if the state challenged it and won, **the Cardinals would bear the tax liability**. Bill export: STL-MO SF = tax-zero, but flag the position's contingent nature. `[Slack Josh+Lessard, §Y]`
 - **Escalation regime**: **CPI-U Food Away from Home (CUUR0000SEFV), August-to-August, no floor/cap stated.** 2026 off Aug 2025 report; 2027 off Aug 2026. `[digest §B.4]`
 
 ### 2b. Rate table
@@ -67,7 +67,7 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 
 ### 2e. Worked billing example (golden-test seed)
 - **Reimbursable pair (invoices K300168851 + K300168853, wk 6/1-6/7)**: Food $32,212.91 + Food-Beverages $8,347.35 = $40,560.26, tax-zero. The reimbursable export = the week's at-cost total across both tracks.
-- **SF installment**: $73,249.50 meal-services (finance-confirmed) — SF invoice not sampled, so no tax-treatment seed yet. Golden-test SF seed pending an SF invoice.
+- **SF installment (invoice K300168469, 7/1/2026, "6 of 6")**: $73,249.50, **TAX $0.00** (non-taxable), balance $73,249.50. Description reads "2026 Management Fee - 6 of 6" (STL-MO calls it "Management Fee"; Activity code still `Service Fees (PFS)`). **This is STL-MO's golden-test seed** — the SF export for an STL-MO month = $73,249.50 non-taxable. Road food ($50K) is a SEPARATE invoice (K300168464, 02/01/2026), not a line here. `[K300168469]`
 
 ## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
 - **Client stakeholders**: **Carl Kochan** (client, ckochan@cardinals.com); **Linda Brauer** (Finance/AP, lbrauer@cardinals.com). `[Kevin, high]`
@@ -83,14 +83,14 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 | R11 | Flat-fee postseason = 1/81-of-fee mechanic ($5,222.22/game). Satisfied. | CLOSED | 2026-07 | R11 |
 | Reimbursable tax | Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts. | CLOSED | 2026-07-16 | §X |
 | PG carries escalated | PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling. | CLOSED (decision) → migration pending | 2026-07-16 | §W |
-| SF tax | STL-MO SF is **NON-TAXABLE** (Cardinals' asserted legal position; Cardinals bear the liability risk). | CLOSED | 2026-07-16 | §Y |
+| SF tax | STL-MO SF is **NON-TAXABLE** (Cardinals' legal position; they bear the risk) — **invoice-confirmed** K300168469 (tax $0.00). | CLOSED | 2026-07-16 | §Y + SF-invoice |
+| SF description naming | STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. Bill export must not assume uniform Description strings. | NOTED | 2026-07-16 | SF-invoice |
 
 ## 5. OPEN ITEMS (what's not settled — owner + status)
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
 
 | PG fee-schedule migration to escalated | ACTION (decided) | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Update `sc_fee_schedule` $473,000 base → $489,497 escalated. Same migration as CIN-OH/others. Run in Supabase Studio. |
-| SF invoice for golden test | PENDING (accounting) | accounting | Phase E only | Only reimbursable invoices sampled; an SF installment invoice would confirm tax + provide the SF golden seed. |
 | $225K passthrough true-up | UNKNOWN | — | No | Savings revert to Cardinals, overage billable; SF-level true-up not specified. |
 
 ## 6. HISTORY (superseded facts — MARKED, never deleted)
@@ -108,4 +108,4 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
 
 ---
-*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; the $489K/$698K/$473K figure question RESOLVED ($473K base → $489,497 escalated 2026 actual, finance-confirmed); reimbursable structure invoice-confirmed (Food + Food-Beverages, tax-zero weekly lumps); postseason 1/81 mechanic banked. SF non-taxable (Cardinals' legal position; they bear liability risk). Non-blocking opens: PG fee-schedule migration to the escalated figure (decided, pending).*
+*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; the $489K/$698K/$473K figure question RESOLVED ($473K base → $489,497 escalated 2026 actual, finance-confirmed); reimbursable structure invoice-confirmed (Food + Food-Beverages, tax-zero weekly lumps); postseason 1/81 mechanic banked. SF non-taxable — invoice-confirmed (K300168469, tax $0.00); STL-MO invoices label the SF "Management Fee". PG migration to escalated DONE (2026-07-16).*
