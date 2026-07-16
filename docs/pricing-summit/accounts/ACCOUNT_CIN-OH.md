@@ -1,0 +1,107 @@
+# ACCOUNT: CIN-OH
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_CIN-OH.md`.
+
+## 0. IDENTITY & ALIASES (the crosswalk — join everything on the primary key)
+- **Primary key (intranet)**: `CIN-OH`
+- **Team / entity**: Cincinnati Reds MLB — Great American Ball Park (Cincinnati, OH)
+- **Level / tier**: MLB
+- **Search aliases**: "Reds MLB", "Cincinnati", "GABP", "Great American Ball Park", "Reds Ohio", "Reds home", "REDS OH", "REDS CIN", "REDS CINN"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `CIN-OH` |
+  | PG `accounts` | team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+  | PG `sc_fee_schedule` | $362,500 base row (2026-01-01, annual, monthly-6) — ⚠️ **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) — see §2 + §5 |
+  | PG `sc_service_prices` | per-meal rows all $0 (flat-fee; meals tracked for planning only) — "Arrival", "Post BP", "Post-Game", "Umpire" |
+  | QuickBooks (invoice `Item`) | SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** `[invoices K300168479, K300168777, K300168859, K300168860]` · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
+  | Finance schedule | "CIN - OH" — accrued P4-P10, billed 6× $61,907.08 `[§W]` |
+  | P&L file | Cincinnati Reds — GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY) |
+  | ABR OneSheeter tab | "CINCINNATI REDS" (SHARED tab — blends/distinguishes OH from AZ) |
+  | Contract folder | `/Contracts/CINN/` |
+  | Invoice recipients | Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) `[§X]` |
+- **Client stakeholders**: **Rachel Sharley** — client dietitian (Reds-side, covers CIN-AZ + CIN-OH + CIN-KY); **Sarah Vedder** — AP/billing recipient (post-Ashley) `[§X, high]`
+- **Capture completeness**: **FULLY-CAPTURED** — contract banked, 2026 fee finance-confirmed ($376,686 accrued / $371,442.48 billed), SF + both reimbursable tracks invoice-confirmed, tax treatment confirmed (SF taxable 7.80%, reimbursables tax-zero), postseason mechanic banked. Non-blocking opens: the "seven installments" contract typo (cosmetic), postseason per-game invoice unsampled (Phase E).
+
+## 1. CONTRACT (pointer, not duplication)
+- **Operative doc**: `2025-26 Reds-KitchFix Food Services Agreement.pdf` — signed Nov 22, 2024, Nicholas Krall (President, Baseball Ops) + Josh Katt. Covers 2025 + 2026 MLB seasons, option to extend through 2027.
+- **Verbatim source-of-record**: `../CONTRACT_DIGEST_CIN-OH.md`.
+- **Term / renewal**: Effective Nov 22, 2024 → conclusion of **2026 MLB season**. Reds option to extend through 2027 by written notice **by Oct 1, 2026**; if not, parties meet-and-confer before Nov 1, 2026. · as-of 2026. `[digest §B.1]`
+- **Also in folder (NOT operative)**: `2026 ABR Conversation Planning.docx` — internal planning notes for a 2027+ restructure ("locked contract for 2027 including an MSA"). Planning only, not executed. `[digest §A]`
+
+## 2. BILLING RECORD (consumer: bill export / PG / finance)
+
+### 2a. Money shape
+- **Shape**: **Flat-fee** — fixed annual Services Fee + food/supplies passthrough + Clubhouse Extras passthrough. NO per-meal billing (meals tracked for planning; PG stores per-meal at $0). `[MONEY_MODEL flat_fee; billing_model flat_fee]`
+- **2026 Services Fee**: **$376,686 accrued / $371,442.48 billed** (finance §W) — the CPI-escalated figure (~3.9% Aug-CPI escalation from the $362,500 base). Billed as **6 monthly installments of $61,907.08** (invoice-confirmed K300168479 = "4 of 6"). · as-of 2026 · source: finance schedule + invoice `[§W, §X]`
+  - **Base was $362,500** (contract's stipulated 2026 base, before CPI). The escalated actual that bills is $376,686. **PG should carry the escalated $376,686** (Kevin ruling 2026-07-16) — PG's `sc_fee_schedule` currently holds the $362,500 base and needs updating. `[digest §B.4, §W]`
+  - The small accrued-vs-billed gap ($376,686 − $371,442.48 = $5,243.52) is an annualized-fee-vs-invoiceable rounding artifact, not an error. `[§W]`
+- **SF cadence**: 6 consecutive equal monthly installments, **March 1 → August 1** (contract §2.a). Accrued across **P4-P10** (regular-season 7 periods) per finance JE labels. `[digest §B.3, §W]`
+- **SF TAX: TAXABLE at 7.80%** (Cincinnati/Hamilton County; Ohio 5.75% state + 2.05% local). Invoice K300168479: $61,907.08 + $4,828.75 tax = $66,735.83. `[§X]`
+  - ⚠️ **CONTRAST with STL-FL** (SF tax-zero). SF-taxability is a **per-account attribute** — CIN-OH taxed, STL-FL exempt. The bill export must not apply a global SF-tax rule. `[§X — structural constraint]`
+- **Escalation regime**: **CPI-U Food Away from Home, August annual, 1% floor / 4% cap.** 2026 base $362,500 × CPI(Aug'24→Aug'25). `[digest §B.4]`
+  - ⚠️ Distinct from CIN-AZ (Oct, 2%/5%) — same team, DIFFERENT escalator. And the 2026 base is a **stipulated jump** to $362,500, NOT $357,500×CPI. Don't model off the 2025 $357,500.
+
+### 2b. Rate table
+> **Flat-fee account — no per-meal rate table.** PG stores per-meal services (Arrival, Post BP, Post-Game, Umpire) at **$0** for planning/tracking only. The money is the Services Fee (§2a) + passthrough (§2c). Meal capacity is contractually capped at "3 meals per Game for up to 75 people" (§1.b) — a scope cap, not a billing rate.
+
+### 2c. Passthrough / reimbursables (billed separately from the SF, at cost)
+Two reimbursement tracks, invoiced **per-homestand/weekly, Net 30** (contract §2.d), billed as **single-line weekly lump aggregates, TAX-ZERO** (invoice-confirmed):
+| Track | Contract basis | QB Activity | Sampled amounts (invoice) |
+|---|---|---|---|
+| Food + disposable supplies | §2.b — Reds provide a budget; KitchFix orders, invoices at cost, reimbursed for any overage | **"Food"** | wk 5/4-5/10 $11,840.45; wk 6/1-6/7 $16,723.20 `[K300168777, K300168859]` |
+| Clubhouse Extras | §2.c — G&G cooler, packaged snacks/beverages, hot coffee/tea, cold-pressed juices, cold brew, kombucha, outside catering | **"Clubhouse Snacks"** | wk 6/1-6/7 $146.70 `[K300168860]` |
+
+**Passthrough notes:**
+- **Reimbursables are OUT of SC per-meal scope** and OUT of the SF — they're at-cost passthrough (savings/overage flow to/from the Reds per §2.b). NOT revenue in the meal-service sense.
+- **Tax-zero** on every reimbursable line — tax is already paid to vendors on the underlying purchase invoices (the general reimbursable-tax rule; avoids double-tax). `[Kevin, §X]`
+- Single-line per week — no client-facing itemization (the itemized detail lives in KitchFix's books per §2.b "detailed books and records").
+- Effective due dates ran ~40-44 days on the sampled reimbursables despite "Net 30" label — possible finance convention (reimbursables get an extended window). Non-blocking. `[§X]`
+
+### 2d. Postseason
+- **Post Season Game Rate = $4,413.58** (1/81 of the Services Fee) + tax; **Post Season Workout Day Rate = $2,206.79** (50% of game rate) + tax. Subject to CPI escalation post-2025. `[digest §B.6]`
+- **Satisfies the flat-fee "same rate + additional days" doctrine** (R11): 1/81-of-annual-fee per postseason game = the same underlying fee pro-rated per extra service day. `[LEDGER R11]`
+- Postseason per-game invoice not yet sampled (would confirm the mechanic on real dollars — Phase E).
+
+### 2e. Worked billing example (golden-test seed)
+- **SF installment (invoice K300168479, 5/1/2026, "4 of 6")**: $61,907.08 + $4,828.75 (7.80% OH tax) = **$66,735.83**. The SF export for a CIN-OH month should reproduce the $61,907.08 pre-tax installment. `[§X]`
+- **Reimbursable (invoice K300168859, wk 6/1-6/7)**: $16,723.20 Food, tax-zero, single line. The reimbursable export = the week's at-cost total, no tax.
+- Note: CIN-OH invoices were unpaid at sampling (no PAID golden seed yet), but the amounts tie to the finance schedule exactly.
+
+## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
+- **Client stakeholders**: Rachel Sharley (dietitian, Reds-side, covers all 3 CIN accounts); Sarah Vedder (AP/billing, post-Ashley). Ashley Meuser was the prior contact — departed ~May 2026 (invoice handover visible 5/10→6/7). `[§X, high]`
+- **Service pattern**: MLB home clubhouse. ~81 regular-season games + up to 2 exhibition + postseason if qualified. 3 meals/game for up to 75 people (§1.b). Menu set by the Reds' MLB nutritionist. `[digest §B.2]`
+- **Count mechanics**: scope cap (75 people, 3 meals/game), no client sign-off gate for invoicing. `[digest §B.9]`
+- **Reimbursable rhythm**: Food + Clubhouse Extras invoiced per-homestand/weekly at cost.
+
+## 4. RULINGS & DECISIONS (current dispositions; full reasoning in LEDGER)
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| R11 | Flat-fee postseason = "same rate + additional days" via the 1/81-of-annual-fee mechanic. CIN-OH's $4,413.58/game satisfies it. | CLOSED | 2026-07 | R11 |
+| SF-tax (per-account) | CIN-OH SF is **TAXABLE (7.80%)** — invoice-confirmed. SF-taxability is per-account (contrast STL-FL exempt); bill export carries it as an account attribute. | CLOSED | 2026-07-16 | §X |
+| Fee figure | 2026 SF = $376,686 accrued / $371,442.48 billed (finance-confirmed), escalated from $362,500 base. | CLOSED | 2026-07-16 | §W |
+| PG carries escalated | PG `sc_fee_schedule` should carry the **escalated** $376,686, not the $362,500 base. Kevin ruling. | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+
+## 5. OPEN ITEMS (what's not settled — owner + status)
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| "Seven installments" contract typo | OPEN (cosmetic) | — | No | Contract §2.a says "seven (7) installments" but the table shows 6 monthly $56,250 (2025) + 1× $20,000 (Jan 1 2027). Math works ($357,500). The $20K is a 2025-season revenue tail landing in 2027 cash — a recognition-timing note. |
+| PG fee-schedule migration to escalated | ACTION (decided) | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. PG `sc_fee_schedule` needs updating from $362,500 base → $376,686 escalated. Same migration applies to STL-MO ($473K→$489,497) and any other escalating fee account. A `sc_fee_schedule` data migration, run in Supabase Studio. |
+| Postseason per-game invoice | N/A unless Reds qualify | accounting | No | This invoice type only gets created IF the Reds make the postseason (Kevin). No postseason invoice exists to sample unless/until they qualify. The $4,413.58 mechanic is contract-defined; a real invoice is contingent on a playoff berth, so it's NOT a standing Phase-E gap. |
+| 2027 extension | OPEN (future) | Kevin | No | Reds notice by Oct 1, 2026, else meet-and-confer by Nov 1. The ABR planning doc floats a 2027+ MSA restructure. |
+| Reimbursable due-date convention | OPEN (minor) | Sebastian | No | Reimbursables invoiced ~40-44 day effective terms despite "Net 30". Confirm the finance convention. |
+
+## 6. HISTORY (superseded facts — MARKED, never deleted)
+- **2025 Services Fee = $357,500** (superseded by 2026 $376,686). Billed 6× $56,250 (Mar-Aug 2025) + $20,000 (Jan 1, 2027 tail). `[digest §B.3]`
+- **2026 base $362,500** — the stipulated pre-CPI base; escalated to $376,686 for 2026 actual. `[digest §B.4, §W]`
+- **Prior contact: Ashley Meuser** — departed ~May 2026; AP handover to Sarah Vedder visible across invoices (Ashley on 5/1 + 5/10; Sarah Vedder on 6/7). `[§X]`
+
+## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
+- **Contract facts**: `../CONTRACT_DIGEST_CIN-OH.md` (verbatim, page-cited).
+- **2026 fee + cadence + accrual**: finance schedule `PFS Service Fees 2026.xlsx` (§W) — high authority for the SF layer.
+- **SF tax + reimbursable structure + AP handover**: invoices K300168479 (SF), K300168777/K300168859 (Food reimb), K300168860 (Clubhouse Snacks reimb) (§X).
+- **Money shape**: `../../SC_MONEY_MODEL.md` (flat_fee). NOTE: MONEY_MODEL's fee figure ($362,500 base) is superseded by finance's escalated $376,686 — pending batch-doc-PR annotation.
+- **Rulings**: `../LEDGER.md` R11, §W, §X.
+- **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+
+---
+*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; 2026 SF finance-confirmed ($376,686 accrued / $371,442 billed, escalated from $362,500 base); SF taxable 7.80% (invoice-confirmed, per-account attribute vs STL-FL exempt); both reimbursable tracks (Food + Clubhouse Snacks) invoice-confirmed as tax-zero weekly lumps; postseason 1/81 mechanic banked. Non-blocking opens: "seven installments" typo (cosmetic), postseason invoice unsampled (Phase E), PG-stores-base decision.*

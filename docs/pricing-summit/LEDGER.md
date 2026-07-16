@@ -731,3 +731,176 @@ Two client invoices extracted verbatim (K300168861 CIN-KY PAID; K300168849 TBJ-N
 ### TBJ client contact confirmed (Kevin, 2026-07-16)
 - **Katarina Dimino = client contact for BOTH TBJ accounts (TBJ-NY + TBJ-FL).** Replaces the departed Michelle. Applied to ACCOUNT_TBJ-NY now; **wire into ACCOUNT_TBJ-FL when built (Batch 3).**
 - **Charlie Wilson = AP/billing recipient** (invoice "Sent to" at the Toronto PDC), distinct from the account contact. Not the stakeholder.
+
+### STL-FL invoice K300168343 — the $24,500 "prior payment" EXPLAINED (Kevin, 2026-07-16)
+The STL-FL SF invoice K300168343 (2026-07-01, $350K "4 of 4 Final") showed a "$24,500 prior payment applied" that the evidence pack flagged as unexplained. Kevin: **it's a CREDIT KitchFix owed the Cardinals for the 2025 tax matter**, applied as a "payment" line against this SF installment (Total $350,000 − $24,500 credit = Balance Due $325,500). → CLOSES the §prior-payment-$24,500 flag. Not a partial prepayment; a prior-year tax-reconciliation credit/offset.
+- **Billing-mechanics fact**: KitchFix applies credits/offsets against future SF installments (as a "payment" line) rather than issuing separate refunds. Worth noting for the bill export's handling of credits generally.
+- Corroborates the STL-FL SF non-taxable ruling (§U A-6): the SF line still bills TAX 0.00; the $24,500 is a separate credit line, not a tax adjustment on this invoice.
+- This invoice is the SAME K300168343 already in EVIDENCE_STL-FL.md §3.1 — no re-extraction needed; the only missing piece was what the $24,500 was, now supplied.
+
+---
+
+## W. FINANCE 2026 SERVICE-FEE SCHEDULE — new high-authority source (2026-07-16)
+**Source**: `PFS Service Fees 2026.xlsx` (finance-owned), 2 tabs: **Accrual Schedule** (P1–P13 revenue-recognition per account) + **Billing Schedule** (invoice-level: send date, due date, amount, Inv #, JE #). Cross-linked (accrual Total Billed = SUM of billing installments); a Difference column + AR aging flag drift. Covers the **8 fee accounts** (CIN-AZ, CIN-OH, STL-FL, STL-MO, TBJ-FL, TBR-FL, TXR-AZ, TXR-HOME=TXR-TX-H). Absent (correctly): CIN-KY, TBJ-NY, TXR-TX-V (no service fee). **Purely the SF layer — NO passthrough lines** (STL-FL $900K, STL-MO $225K, CIN-OH food budget not here).
+**Authority**: for **2026 SF dollar amounts + accrual/billing timing**, this is HIGH authority (finance's own control doc; computed actuals, not formulas). Cross-checks against contracts (formulas) + signed sheet (SF layer). Add to §A source register.
+
+### 🎯 JOE #3 — ANSWERED FOR 2026 (method still unknown)
+**TBR-FL 2026 SF = $457,768** = **$200,000** (installment 1, inv K300168375, due 11/01/2025, PIF) + **$257,768** (installment 2 — THE VARIABLE ONE, inv K300168376, due 02/01/2026, PIF). Matches the P&L 2300 line to the dollar + confirms the ledger's C-2 "$200K static + variable second" hypothesis.
+- **What's resolved**: the 2026 variable installment IS $257,768, documented at invoice level. TBR-FL's 2026 bill export can now be built (unblocks the hardest Batch-3 account).
+- **What's STILL open**: HOW the $257,768 is derived each year (not a visible formula). Joe #3 downgrades from "load-bearing BLOCKER" to "answered for 2026; going-forward derivation method still to confirm with Joe." No longer gates the 2026 build.
+
+### 2026 SF AMOUNTS — now finance-confirmed (were mostly UNKNOWN/formula-only)
+| Account | 2026 SF (finance) | Prior state | Note |
+|---|---|---|---|
+| CIN-AZ | $445,716 | Kevin-confirmed | Finance CROSS-CONFIRMS exactly. Billing: 2 installments $334,287 (P1-12) + $111,429, ≈75/25 split (matches contract 75% Feb / 25% Mar cadence). |
+| CIN-OH | $376,686 accrued / $371,442.48 billed | base $362,500, CPI unknown | ~3.9% Aug-CPI escalation (within 1%/4% band). 6 monthly $61,907.08, accrued P4-P10. |
+| STL-FL | $1,400,000 | confirmed | SF only ($900K passthrough excluded, correct). 4 quarterly $350K. |
+| STL-MO | $489,497 | see reframe below | $73,249.50×6 meal-svc + $50,000 Road Food. |
+| TBJ-FL | $515,712 | base $452,812 | **+13.89% jump ⚠️** — 3× $171,904 (Jan/Feb/Mar). Flag for escalation-verification (see below). |
+| TBR-FL | $457,768 | Joe #3 gate | ANSWERED (above). |
+| TXR-AZ | $301,623 | 2025 was $297,419 | +1.4% (deposit is projection-based, not formula — OK). 3× $100,541 (Jan/Feb/Mar). |
+| TXR-TX-H | $604,032 | confirmed | Exact. 6 monthly $100,672, accrued P4-P10. |
+
+### STL-MO FIGURE — RESOLUTION UPDATED (supersedes my earlier $473K note)
+Earlier I concluded $473K was "the operative figure." CORRECTION per finance: **$473K is the contract BASE; the CPI-escalated 2026 ACTUAL that bills = $489,497** ($439,497 meal-services [=$73,249.50×6, ~4% escalation on $423K] + $50,000 Road Food). → This VINDICATES the ABR's "$489,431" figure the ledger had flagged as a contradiction — it wasn't wrong, it was the escalated number. **Final STL-MO resolution: base $473K (PG sc_fee_schedule) → 2026 billed $489,497 (finance) → old "$489,431" was the same escalated figure (~$66 rounding diff). Contradiction CLOSED.** PG's $473K is the base; finance's $489,497 is what actually bills 2026.
+
+### TBJ-FL — ESCALATION JUMP FLAG (for Batch-3 build + escalation-verification)
+Finance 2026 = $515,712 vs contract base $452,812 = **+13.89%** one-year. TBJ-FL's escalator is provider-initiated, Club-approval, CPI-based, max 1 increase/year — a ~14% single jump is large. Either compounded multi-year CPI catching up or a negotiated non-CPI step. NOT resolvable now; flag prominently on ACCOUNT_TBJ-FL (Batch 3) + feed the escalation-verification pass.
+
+### STRUCTURAL INSIGHT — accrual patterns (for Phase D/E bill export + P&L tie-out)
+- 13-period model (P1–P13). JE labels encode accrual span:
+  - **P4–P10** (regular-season-only, 7 periods): CIN-OH, STL-MO, TXR-TX-H — the MLB-clubhouse flat-fee accounts.
+  - **P1–P12**: CIN-AZ, STL-FL, TBR-FL, TXR-AZ (PDC accounts, spread across the year).
+  - **P1–P13**: TBJ-FL (full-year spread).
+- This accrual-vs-billing split IS the P&L-2300 tie-out infrastructure Phase E needs. The per-period vectors are the recognition truth; the billing installments are the cash truth.
+- **AR aging** in the doc shows CIN-OH, STL-MO, TXR-TX-H each with their latest 2 installments unpaid (current + 1-30) — expected mid-season timing, not a problem.
+
+### DATA-QUALITY FLAGS (transcribe-don't-fix; for finance to correct)
+- **CIN-AZ due-date typos**: two Due cells read 2025 (02/01/2025, 03/15/2025) — should be 2026 given send dates + invoice range. Cosmetic; finance to fix. Does not affect amounts.
+- Trivial accrual-vs-billed rounding: STL-MO +$64, TXR-TX-H +$13, CIN-OH -$5,243.52 (the CIN-OH gap = annualized-fee-vs-invoiceable estimate, not an error).
+
+### BUILD-READINESS IMPACT
+The finance doc makes the remaining Batch-2 fee accounts (CIN-OH, STL-MO, STL-FL, TXR-TX-H) fully build-ready on the SF layer (amounts + cadence + accrual all confirmed) WITHOUT waiting on more invoices. Only the PASSTHROUGH invoices (reimbursables) remain a gap for STL-FL/STL-MO/CIN-OH, and TXR-TX-V's catering stream. Batch 3's TBR-FL is now unblocked (Joe #3 answered for 2026).
+
+---
+
+## X. MIXED INVOICE SET — reimbursables + SF-tax + TXR-V catering (2026-07-16, CC-extracted)
+9 unique invoices (`INVOICE_EXTRACTION_mixed_set.md`): 3 CIN-OH reimbursables + 1 CIN-OH SF + 2 STL-MO reimbursables + 1 TBJ-FL MiLB pantry + 1 TXR-V Yankees catering + 1 bonus TBR-FL MLB per-meal.
+
+### 🎯 STRUCTURAL RULING NEEDED/BANKED — SF-TAXABILITY IS PER-ACCOUNT, NOT GLOBAL
+- **CIN-OH SF bills WITH tax: 7.80%** (Cincinnati/Hamilton County; invoice K300168479, $61,907.08 + $4,828.75 tax = $66,735.83). Activity `Service Fees (PFS)`, T-flagged.
+- **STL-FL SF bills TAX 0.00** (Kevin §U ruling, invoice K300168343).
+- Same product family, OPPOSITE tax treatment (driven by state law + service classification). → **Bill export MUST carry SF-taxability as a per-account attribute; NO global SF-tax rule.** Design constraint for Phase D. Add to SC_BILLING_OVERVIEW rules when built.
+- Confirms CIN-OH SF installment = **$61,907.08** (matches finance doc §W exactly), labeled "4 of 6" (6 cash installments, accrued P4-P10 per §W — cash-vs-recognition distinction, not a conflict).
+
+### REIMBURSABLE STRUCTURE — now known (was a black box)
+- **Single-line lump per week**: NO client-facing itemization. One row = "Week of X/Y-X/Y" + one total. (Answers the long-open "how do reimbursables bill" question.)
+- **TAX = $0.00** on every reimbursable, every account (passthrough at cost).
+- **Weekly cadence**, Sunday-invoiced.
+- **Per-account Activity-code taxonomy** (NOT shared):
+  - CIN-OH: `Food` + `Clubhouse Snacks` (the §2.c Clubhouse Extras — confirms two-track structure)
+  - STL-MO: `Reimbursables - Food` + `Reimbursables - Food-Beverages`
+  - TBJ-FL: `MiLB Pantry` ("Total pantry purchases for the MiLB fueling station") — invoice cites "without any mark-up" contract clause; "fueling station" matches Schedule A §12(b)(v)
+- **No "at cost"/markup/budget-cap language ON the invoices** — only asserted in contracts.
+- **Sampled weekly magnitudes** (week 6/1-6/7): CIN-OH Food $16,723.20 + Snacks $146.70; STL-MO Food $32,212.91 + Food-Bev $8,347.35 = $40,560.26. STL-MO ~2.4× CIN-OH (Busch scale). TBJ-FL pantry (wk 4/27) $12,025.17.
+- **Reimbursables use LONGER effective due dates** (~40-44 days) vs strict Net-30 on SF/catering/per-meal. Possible finance convention (reimbursables get extended window). Confirm w/ Sebastian. NON-BLOCKING.
+
+### TXR-V CATERING — REFRAMED (the account-defining finding; feeds the held TXR-V build)
+Yankees invoice K300168675 (4/29/2026):
+- **Bill-To = NEW YORK YANKEES / Andrew Weisberg — the VISITING TEAM DIRECTLY, not the Rangers.** TXR-V catering is NOT Rangers revenue; billed to each visiting club.
+- **À-la-carte menu**: MTO $1,000/day flat, Smoothies $13, Power Bites $4, Acai Bowls $15, BIB Breakfast $30, Yogurt Parfaits $15, Continental Sweets Platter $180, + "Special Upcharge" items (Quesadilla $5, GS Burrito $215, Fry Mix $60). Menu-priced, not contract-per-meal.
+- **4% credit-card Processing Fee** as an explicit invoice line ($325.29) — confirms Britt's SOP CC-surcharge.
+- **Taxed** (~7.9% [CC calc]; near Arlington 8.25% — verify).
+- **Activity `Meal Service - PFS (Away)`** — mirror of CIN-KY's `PFS (Home)`. First invoice-level confirmation of the Home/Away split.
+- **Per-series** (3 game days = one Yankees @ Rangers series).
+- ⚠️ **Cubs TXR-V invoice was NOT delivered** (expected 2). Can't yet confirm "every visiting team billed identically." Get the Cubs invoice with TXR-V detail.
+- → TXR-V is a visiting-team-billed, à-la-carte, CC-surcharged, taxed catering stream, SEPARATE from the $604K Rangers home fee. Kevin holding TXR-V build for more detail — this is the invoice-side foundation.
+
+### `(PFS)` CODE FAMILY — mapped (acronym still undefined)
+`Service Fees (PFS)` (SF) · `Meal Service - PFS (Home)` (CIN-KY home meals) · `Meal Service - PFS (Away)` (TXR-V visiting catering) · `Meal Service - PFS` (no suffix, expected for basic contracted meals). Root = KitchFix product-family code. GLOSSARY: still need PFS expansion from Kevin. The CIN-KY-flagged "(Away) variant may exist" is now CONFIRMED to exist (TXR-V).
+
+### OPEN QUESTION FOR KEVIN — the "Michelle" tension
+TBJ-FL pantry invoice K300168698 (5/3/2026) "Sent to: **Michelle Rodgers** (Michelle.rodgers@bluejays.com)". But we set Katarina Dimino as the TBJ contact after Kevin said "Michelle left the org." Either (a) Michelle Rodgers departed AFTER 5/3, or (b) the departed "Michelle" (ABR relationship contact) ≠ Michelle Rodgers (pantry-invoice AP recipient). **NEEDS KEVIN CLARIFICATION before finalizing TBJ contact fields.** The built TBJ-NY file says "Michelle (prior contact) left the org" — may need nuance (Michelle Rodgers may be a current AP contact, distinct from the departed relationship Michelle).
+
+### CIN-OH AP HANDOVER — invoice-level confirmation
+CIN-OH invoices span the Ashley Meuser → Sarah Vedder handover: Ashley on 5/1 (SF) + 5/10 (Food reimb); Sarah Vedder on 6/7 (both 6/7 invoices). Handover window 5/10–6/7/2026. Confirms ledger's "Ashley left ~Apr/May 2026." NOTE: TWO distinct post-Ashley Reds contacts — **Sarah Vedder (AP/billing)** + **Rachel Sharley (dietitian)** — not the same person. (Applies to CIN-OH build + already-built CIN-AZ uses Sarah Vedder as Bill-To + Rachel Sharley as stakeholder — consistent.)
+
+### BONUS — TBR-FL MLB per-meal invoice (not requested, useful for Batch 3)
+Invoice K300168509 (2/15/2026, spring training wk 2/9-2/15): TBR MLB Breakfast **$35.63** + Lunch/Dinner **$39.48** confirmed (matches MONEY_MODEL). FL tax **7.00%** (Pinellas/St. Pete). Header "Tampa Bay Rays MiLB/MLB". Bill-To Sean "Sunny" Jones / Rays Baseball Club. **Marked OVERDUE (due 3/17/2026, ~4 months past due as of 7/16)** — real AR item, flag to finance. Memo "2025" typo = the D-2 CLOSED (ignore) item. Banks TBR MLB rates for the Batch-3 TBR-FL build.
+
+### CIN-OH REIMBURSABLE INVOICE-LEVEL FACTS (for the CIN-OH build)
+- Ohio reimbursables = tax-zero, weekly, single-line. Food reimb wk 5/4-5/10 = $11,840.45; wk 6/1-6/7 = $16,723.20; Clubhouse Snacks wk 6/1-6/7 = $146.70.
+- CIN-OH SF invoice: $61,907.08 + 7.80% tax = $66,735.83, "4 of 6", Net 30, Bill-To Ashley (5/1) → later Sarah Vedder.
+
+### STILL-MISSING (gaps in this set)
+- Cubs TXR-V invoice (for TXR-V build).
+- STL-FL reimbursable (only STL-MO sampled; the $900K STL-FL passthrough weekly draw unseen — but structure likely mirrors STL-MO).
+- BGC invoice (would confirm A-11 in-scope reversal on real dollars).
+- CIN-OH postseason per-game invoice (would confirm R11 flat-fee-postseason on real dollars).
+
+### BATCH-DOC-PR SCOPE ADDITIONS (accumulating for the eventual reconciliation PR)
+- MONEY_MODEL 2026 fee figures now superseded by finance §W: STL-MO ($473K base→$489,497 billed), TBJ-FL ($452,812→$515,712), CIN-OH (base→$376,686 accrued). Annotate.
+- SC_BILLING_OVERVIEW: add the per-account SF-taxability rule (CIN-OH taxable, STL-FL exempt).
+- Glossary: PFS expansion (pending Kevin); reimbursable Activity-code taxonomy per account.
+
+### §X follow-ups RESOLVED (Kevin, 2026-07-16)
+- **The "Michelle" tension → RESOLVED, no conflict.** The TBJ-FL pantry invoice K300168698 (5/3/2026, "Sent to: Michelle Rodgers") is an OLD invoice from BEFORE Michelle left and Katarina Dimino took over. So the timeline is confirmed, not contradicted: Michelle Rodgers was the prior TBJ contact (the departed "Michelle"); Katarina Dimino is the current contact for both TBJ accounts. The 5/3 invoice simply predates the handover. → Katarina stays as the TBJ contact in the account files (TBJ-NY correct as-is; wire Katarina into TBJ-FL at Batch-3 build). No open question remains.
+- **The bonus TBR-FL MLB invoice K300168509 → old invoice that snuck into the file set.** Its rate data (TBR MLB Breakfast $35.63 / Lunch-Dinner $39.48, FL 7% tax) is still useful reference for the Batch-3 TBR-FL build, BUT its "Overdue" status is NOT a live AR flag (old invoice). Don't action the overdue status.
+- **Cubs TXR-V invoice → deferred.** Kevin will send it with the rest of the TXR-V details/docs when we return to build TXR-V. TXR-V stays held.
+
+### §X follow-ups — Batch-2 review corrections (Kevin, 2026-07-16)
+Four Batch-2 files reviewed + corrected. Generalizable rulings extracted:
+
+- **REIMBURSABLE-TAX RULE (general, all accounts): reimbursables bill TAX-ZERO because tax is already paid to vendors on the underlying purchase invoices.** Charging the client tax again would double-tax. This is WHY every sampled reimbursable (CIN-OH, STL-MO, TBJ-FL) showed TAX 0.00 — not an accident, a deliberate rule. Applies to CIN-OH (Food + Clubhouse Snacks), STL-MO (Food + Food-Beverages), STL-FL (full $900K food/snack/beverage stream), TBJ-FL (MiLB Pantry), and any account with reimbursables. → Bill export: reimbursable lines are always tax-zero.
+
+- **PG CARRIES THE ESCALATED FIGURE (Kevin ruling): `sc_fee_schedule` should store the escalated 2026 actual, NOT the contract base.** Migration needed: CIN-OH $362,500→$376,686; STL-MO $473,000→$489,497. (STL-FL flat $1.4M and TXR-TX-H single-year $604,032 have no base/escalated split — N/A.) This is a `sc_fee_schedule` data migration run in Supabase Studio. Applies to every escalating fee account — when Batch 3's escalating accounts (TBJ-FL, TXR-AZ) are built, same migration: PG carries their escalated §W figures. → Add to the PG-migration action list.
+
+- **SF (service-charge) TAX: still AWAITING FINANCE for STL-MO + STL-FL.** CIN-OH SF taxed 7.80% (confirmed), TXR-TX-H taxed 8.25% (contract-stated), STL-FL SF billed tax-zero on the invoice (§U) — but Kevin is confirming the service-charge tax treatment with finance across the flat-fee accounts. Current states stand (CIN-OH/TXR taxed, STL-FL non-taxable per invoice); STL-MO genuinely open. Per-account attribute either way. NON-BLOCKING.
+
+- **STL-FL UPKEEP OWNERSHIP RESOLVED**: the $30K upkeep envelope ($15K equip/repair + $4K pod + $11K cooler) is a **Cardinals-reimbursed passthrough** — KitchFix spends, Cardinals reimburse. NOT KitchFix-borne (supersedes the MONEY_MODEL "KitchFix-borne" reading). Sits on top of the $1.4M like the $900K stream. → Batch-doc-PR: annotate MONEY_MODEL §h.
+
+- **STL-FL FULL PASSTHROUGH CONFIRMED**: ALL food/snacks/beverages at STL-FL are reimbursable passthrough (the whole $900K stream), not just "food & packaging."
+
+- **STAKEHOLDERS captured** (Kevin): STL-MO = Carl Kochan (client) + Linda Brauer (Finance). STL-FL = Carl Kochan (top, Jen+Linda's boss) + Jen Goldstein (site RD) + Linda Brauer (Finance). TXR-TX-H = Brandon Boyd (Clubhouse Mgr, main client) + Katie McInnes (RD) + Ross Fenstermaker (GM signatory). CIN-OH = Rachel Sharley (dietitian) + Sarah Vedder (AP). [Carl Kochan + Linda Brauer span both STL accounts — Kochan is the top Cardinals stakeholder over both MO + FL.]
+
+- **CIN-OH postseason invoice**: only created IF the Reds make the playoffs — NOT a standing Phase-E gap (contingent on a berth). The $4,413.58 mechanic is contract-defined regardless.
+
+- **CIN-OH aliases** added: REDS OH, REDS CIN, REDS CINN.
+
+### BATCH-DOC-PR SCOPE ADDITIONS (this round)
+- MONEY_MODEL §h: STL-FL upkeep is Cardinals-reimbursed passthrough (not KitchFix-borne).
+- PG-migration action list: `sc_fee_schedule` carries escalated figures (CIN-OH, STL-MO now; TBJ-FL, TXR-AZ at Batch 3).
+- Reimbursable-tax rule (tax-zero, vendor-paid) → add to SC_BILLING_OVERVIEW alongside the per-account SF-tax rule.
+
+---
+
+## Y. STL SF-TAX RESOLUTION + PFS GLOSSARY (2026-07-16)
+
+### PFS = **Performance Food Service** (glossary CLOSED)
+`PFS` on all QuickBooks Item names = **Performance Food Service** (KitchFix's parent/product-family brand — matches "KitchFix Performance Foodservice"). The code root across the family:
+- `Service Fees (PFS)` — service-fee line
+- `Meal Service - PFS (Home)` — home-clubhouse per-meal (CIN-KY)
+- `Meal Service - PFS (Away)` — visiting-team catering (TXR-V)
+- `Meal Service - PFS` (no suffix) — basic contracted meal service
+→ Glossary gap CLOSED. Expansion added to all account files' QB crosswalk. `[Kevin, 2026-07-16]`
+→ RIPPLE: CIN-KY (already merged) references "PFS" without expansion — add the expansion when CIN-KY next rides a PR (batch with the pending "(Away) confirmed" edit).
+
+### STL SF TAXABILITY — RESOLVED (source: Slack, Josh + Joseph Lessard, 2026-07-16)
+**Both STL-FL and STL-MO: NO sales tax on the service-fee portion.** Verbatim reasoning (Josh):
+- Vendors charge KitchFix sales tax on the goods; KitchFix is reimbursed the full (tax-included) invoice for goods → no tax charged again to the client. (This IS the reimbursable-tax rule, stated by Josh.)
+- On the service fee: the Cardinals believe tax-free is "the law," it's "defensible," the Cardinals' lawyers pushed the position.
+- ⚠️ **CRITICAL NUANCE — this is the Cardinals' asserted legal position, NOT a settled exemption.** Josh: "If the state came after us and they won the Cardinals would be liable." So the tax-liability RISK sits with the Cardinals (they pushed it). Do NOT record this as a clean legal exemption; record it as a client-driven position with contingent liability.
+→ STL-MO SF tax question (was "awaiting finance") = CLOSED: non-taxable, Cardinals' position. STL-FL SF = reconfirmed non-taxable (already §U A-6). Both files updated with the nuance.
+
+### SF-TAXABILITY — full per-account picture now (4 of 4 Batch-2 known)
+| Account | SF tax | Basis |
+|---|---|---|
+| CIN-OH | TAXABLE 7.80% | invoice-confirmed (OH law) |
+| TXR-TX-H | TAXABLE 8.25% | contract-stated with-tax figure (Arlington) |
+| STL-FL | NON-TAXABLE | invoice + Cardinals' legal position (they bear risk) |
+| STL-MO | NON-TAXABLE | Cardinals' legal position (they bear risk) |
+Confirms the per-account SF-tax attribute for the bill export. The two Cardinals accounts share the tax-free position (same client, same lawyers); the two AL/OH accounts are taxed per state law.
+
+### BATCH-DOC-PR SCOPE ADDITIONS (this round)
+- PFS expansion → glossary + CIN-KY (merged) annotation on next PR.
+- SC_BILLING_OVERVIEW: SF-tax table (per-account) + note that STL tax-free = client legal position w/ Cardinals-borne risk (not a clean exemption).
