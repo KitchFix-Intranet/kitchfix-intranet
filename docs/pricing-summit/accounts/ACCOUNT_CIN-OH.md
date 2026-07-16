@@ -63,7 +63,7 @@ Two reimbursement tracks, invoiced **per-homestand/weekly, Net 30** (contract §
 - Postseason per-game invoice not yet sampled (would confirm the mechanic on real dollars — Phase E).
 
 ### 2e. Worked billing example (golden-test seed)
-- **SF installment (invoice K300168479, 5/1/2026, "4 of 6")**: $61,907.08 + $4,828.75 (7.80% OH tax) = **$66,735.83**. The SF export for a CIN-OH month should reproduce the $61,907.08 pre-tax installment. `[§X]`
+- **SF installment (invoices K300168479 "4 of 6" 5/1/2026 + K300168481 "6 of 6" 7/1/2026)**: $61,907.08 + $4,828.75 (7.80% OH tax) = **$66,735.83** each — two installments confirm the consistent 6-monthly billing. The SF export for a CIN-OH month reproduces $61,907.08 pre-tax + 7.80% tax. `[§X, K300168481]`
 - **Reimbursable (invoice K300168859, wk 6/1-6/7)**: $16,723.20 Food, tax-zero, single line. The reimbursable export = the week's at-cost total, no tax.
 - Note: CIN-OH invoices were unpaid at sampling (no PAID golden seed yet), but the amounts tie to the finance schedule exactly.
 
@@ -93,7 +93,7 @@ Two reimbursement tracks, invoiced **per-homestand/weekly, Net 30** (contract §
 ## 6. HISTORY (superseded facts — MARKED, never deleted)
 - **2025 Services Fee = $357,500** (superseded by 2026 $376,686). Billed 6× $56,250 (Mar-Aug 2025) + $20,000 (Jan 1, 2027 tail). `[digest §B.3]`
 - **2026 base $362,500** — the stipulated pre-CPI base; escalated to $376,686 for 2026 actual. `[digest §B.4, §W]`
-- **Prior contact: Ashley Meuser** — departed ~May 2026; AP handover to Sarah Vedder visible across invoices (Ashley on 5/1 + 5/10; Sarah Vedder on 6/7). `[§X]`
+- **Prior contact: Ashley Meuser** — departed ~May 2026; AP handover to Sarah Vedder confirmed across BOTH reimbursable AND SF invoices (Ashley on SF K300168479 5/1 + reimb 5/10; Sarah Vedder on SF K300168481 7/1 + reimb 6/7). Handover complete by early July. `[§X, K300168481]`
 
 ## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
 - **Contract facts**: `../CONTRACT_DIGEST_CIN-OH.md` (verbatim, page-cited).

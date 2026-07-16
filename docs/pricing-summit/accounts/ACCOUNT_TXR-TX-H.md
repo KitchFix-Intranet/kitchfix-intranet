@@ -13,7 +13,7 @@
   | PG `accounts` | team_key `TXR - TX - H` · name "Texas Rangers Home" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
   | PG `sc_fee_schedule` | $604,032 (2026-01-01, annual, monthly-6) |
   | PG `sc_service_prices` | per-meal rows all $0 (flat-fee planning only) — "Arrival", "Post BP", "Post-Game", "Umpire" |
-  | QuickBooks (invoice `Item`) | SF Item expected "Service Fees (PFS)"-family (SF invoice not sampled) · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
+  | QuickBooks (invoice `Item`) | SF: Activity **"Service Fees (PFS)"**, Description "2026 Service Fee - N of 6" `[K300168474]` · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
   | Finance schedule | **"TXR - HOME"** (their label) — accrued P4-P10, billed 6× $100,672 `[§W]` |
   | P&L file | Texas Rangers — Globe Life / home rows |
   | ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
@@ -52,7 +52,7 @@
 - Workout-day postseason rate: contract silent (UNKNOWN).
 
 ### 2e. Worked billing example (golden-test seed)
-- **SF installment (contract table)**: $100,672 pre-tax + 8.25% tax = **$108,977.44 with tax**. The SF export for a TXR-TX-H month = $100,672 pre-tax (taxable). SF invoice not sampled, but the contract states the exact with-tax figure, so the golden seed is contract-confirmed.
+- **SF installment (invoice K300168474, 7/1/2026, "5 of 6")**: $100,672 pre-tax + $8,305.44 tax (8.25%) = **$108,977.44** — **invoice-confirmed**, matches the contract table to the penny. The SF export for a TXR-TX-H month = $100,672 pre-tax + 8.25% Arlington tax. `[K300168474]`
 
 ## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
 - **Client stakeholders**: **Brandon Boyd** (Clubhouse Manager, main client, bboyd@texasrangers.com); **Katie McInnes** (RD/Dietitian, kmcinnis@texasrangers.com); Ross Fenstermaker (GM, contract signatory). `[Kevin, high]`
@@ -73,7 +73,6 @@
 |---|---|---|---|---|
 | Missing §2(d) contract reference | OPEN (defect) | Kevin | No | §1.c references "the budget set forth below in Section 2(d)" for kitchen setup, but §2 has NO subsection (d). Dangling reference / missing clause. Kitchen-setup budget amount undocumented. Chase / note the drafting defect. |
 | Postseason per-game denominator | OPEN (derivation) | — | No | Contract says "pro rata" without a $/game figure; ~$7,457.19 is derived ($604,032/81). Workout-day rate silent. |
-| SF invoice for golden test | PENDING (accounting) | accounting | Phase E only | No TXR-TX-H invoice sampled; the contract states the with-tax figure, so the seed is contract-confirmed, but a real invoice would close Phase E. |
 | 2027 contract | OPEN (future) | Kevin | No | Single-year 2026; 2027 renegotiated separately (annual model). |
 | Background-check cost | OPEN (minor) | — | No | New 2026 obligation at KitchFix cost; not in a passthrough line. Watch for cost impact. |
 
@@ -93,4 +92,4 @@
 - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
 
 ---
-*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked (all 3 years); $604,032 fee finance+contract-confirmed exactly; monthly cadence + 8.25% tax gross-up confirmed (contract states the with-tax figure); postseason pro-rata mechanic banked. Note the ingredients/supplies are baked into the fee (no separate passthrough), unlike CIN-OH/STL. Non-blocking opens: the missing-§2(d) drafting defect, postseason denominator derivation, SF invoice unsampled (Phase E), single-year (2027 TBD).*
+*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked (all 3 years); $604,032 fee finance+contract+invoice-confirmed; monthly cadence + 8.25% tax gross-up invoice-confirmed (K300168474, $108,977.44 matches contract to the penny); postseason pro-rata mechanic banked. Note the ingredients/supplies are baked into the fee (no separate passthrough), unlike CIN-OH/STL. Non-blocking opens: the missing-§2(d) drafting defect, postseason denominator derivation, SF invoice unsampled (Phase E), single-year (2027 TBD).*

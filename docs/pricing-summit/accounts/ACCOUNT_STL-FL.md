@@ -35,7 +35,7 @@
 - **Florida Services Fee = $1,400,000** (finance §W + invoice-confirmed), billed **4 quarterly installments of $350,000**. · as-of 2026 · `[§W, digest §B.3]`
   - **This is the revenue-recognized fee.** The $900K passthrough + $30K upkeep are NOT part of this $1.4M (see §2c). PG `sc_fee_schedule` stores $1,400,000 — correct.
 - **SF cadence**: quarterly — **Nov 1, 2025 / Feb 1, 2026 / May 1, 2026 / Aug 1, 2026** (§2.a.i). Accrued **P1-P12** per finance. Invoiced ~30 days ahead of due date. `[digest §B.3, §W]`
-- **SF TAX: NON-TAXABLE** (bills TAX 0.00). Invoice K300168343 confirms; Kevin ruled §U (A-6); reconfirmed Josh/Lessard 2026-07-16. ⚠️ **This is the Cardinals' asserted legal position, not a settled exemption** — "defensible," pushed by the Cardinals' lawyers; if the state challenged it and won, **the Cardinals would bear the tax liability**. `[§U, §Y, §3.1 evidence]`
+- **SF TAX: NON-TAXABLE** (bills TAX 0.00) — invoice-confirmed (K300168343: $350,000, TAX $0.00). Kevin ruled §U (A-6); reconfirmed Josh/Lessard Slack §Y. ⚠️ **This is the Cardinals' asserted legal position, not a settled exemption** — "defensible," pushed by the Cardinals' lawyers; if the state challenged it and won, **the Cardinals would bear the tax liability**. `[§U, §Y, §3.1 evidence]`
   - ⚠️ **CONTRAST with CIN-OH** (SF taxed 7.80%). Per-account SF-tax attribute — STL-FL exempt, CIN-OH taxed. `[§X]`
   - **BUT** — the FIRST installment (K300168340, Nov 2025) WAS billed with sales tax (~$24.5K), which was later **credited back**. See the credit mechanic below.
 - **Escalation regime**: **NONE** in the Amendment — flat $2.3M for 2026 and 2027 (subject to the work-stoppage adjustments). The base agreement's CPI clause does NOT extend to the Florida Services fee. `[digest §B.4]`
@@ -53,7 +53,7 @@
 
 ### 2d. The $24,500 credit mechanic (a real billing behavior)
 - **Installment 1 (K300168340, Nov 2025) was billed WITH sales tax (~$24,500)** — before the SF was determined non-taxable.
-- **Installment 3 (K300168342, invoiced Apr 2026) carries a credit note**: "A credit of $24.5k has been applied to reimburse STL for tax paid on invoice K300168340." `[§W billing-schedule notes]`
+- **The $24,500 credit was applied on installment 4** (K300168343), as a PAYMENT line → $325,500 balance. ⚠️ NOTE: the finance workbook (§W) placed the credit note on installment 3 (K300168342), but the actual invoice shows it landed on installment **4**. Client is credited either way (not a billing error); the finance-doc note is off by one installment — flag to Sebastian. `[K300168343 invoice = ground truth; §W note discrepancy]`
 - On **installment 4 (K300168343)**, the $24,500 appears as a **"payment" line** ($350,000 total − $24,500 credit = $325,500 balance due). `[§X — Kevin confirmed: the $24,500 = the 2025 tax credit]`
 - **Billing-mechanics fact**: KitchFix applies credits/offsets as a "payment" line against a future SF installment, NOT as a separate refund. The bill export must support credit lines against installments. `[§X]`
 
@@ -89,6 +89,7 @@ The Amendment §2.c pre-scripts 2027 payments around a possible MLB work stoppag
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
 | $900K passthrough invoice | PENDING (accounting) | accounting | No | STL-FL reimbursable invoice not sampled. Structure inferred from STL-MO (single-line lump, tax-zero, at-cost). Confirm when obtained — the STL-FL $900K is the largest passthrough of the 11. |
+| Finance-doc credit note placement | OPEN (minor) | Sebastian | No | The $24,500 credit note in the finance workbook (§W) sits on installment 3, but the credit actually applied on installment 4 (per invoice K300168343). Off-by-one in the finance doc; not a billing error. Flag for correction. |
 | Fun Money allocation | OPEN (planned) | Kevin | No | $25,000 "Fun Money" (not contractually defined) — `is_non_revenue`, planned to move to the Fun Money Tracker. |
 | STL-FL MiLB Snack price missing | OPEN (minor) | Kevin | No | Snack projection price blank in the SC — reconcile (flat-fee, so $0 anyway, but the service row is incomplete). |
 
