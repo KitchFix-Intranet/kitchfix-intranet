@@ -1,0 +1,111 @@
+# ACCOUNT: STL-MO
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_STL-MO.md`.
+
+## 0. IDENTITY & ALIASES (the crosswalk — join everything on the primary key)
+- **Primary key (intranet)**: `STL-MO`
+- **Team / entity**: St. Louis Cardinals MLB — Busch Stadium (St. Louis, MO)
+- **Level / tier**: MLB
+- **Search aliases**: "Cardinals MLB", "St. Louis", "Busch", "Busch Stadium", "Cards home", "Cardinals Missouri"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `STL-MO` |
+  | PG `accounts` | team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+  | PG `sc_fee_schedule` | $473,000 base row (2026-01-01, annual, monthly-6) — NOTE: base; 2026 escalated actual bills at $489,497 (see §2) |
+  | PG `sc_service_prices` | per-meal rows all $0 (flat-fee; planning only) — "Arrival", "Post BP", "Post-Game", "Umpire" |
+  | QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** `[K300168851, K300168853]`; SF Item expected "Service Fees (PFS)"-family (SF invoice not sampled) · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand — the code root on all Item names). `[Kevin, 2026-07-16]`|
+  | Finance schedule | "STL - MO" — accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food `[§W]` |
+  | P&L file | St. Louis Cardinals — Busch / MLB rows |
+  | ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR — flat-fee accounts run a different review track) |
+  | Contract folder | `/Contracts/STL MO/` |
+  | Invoice recipients | St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact `[§X, Kevin]` |
+- **Client stakeholders**: **Carl Kochan** — client (ckochan@cardinals.com); **Linda Brauer** — Finance/AP (lbrauer@cardinals.com) `[src: Kevin, 2026-07-16, high]`
+- **Capture completeness**: **FULLY-CAPTURED** — contract banked, 2026 fee finance-confirmed ($489,497), the $489K/$698K/$473K figure question RESOLVED, reimbursable structure invoice-confirmed, postseason mechanic banked. SF non-taxable (Cardinals' legal position). Non-blocking: PG migration to escalated figure.
+
+## 1. CONTRACT (pointer, not duplication)
+- **Operative doc**: `2025-27 Food Services Agreement St. Louis Cardinals + KitchFix.pdf` — signed Nov 26, 2024, effective **Jan 1, 2025**, through **Dec 31, 2027**. Cardinals signatory (President, Baseball Ops) + Josh Katt. This is ALSO the base agreement the STL-FL (Jupiter) Amendment amends.
+- **Verbatim source-of-record**: `../CONTRACT_DIGEST_STL-MO.md`.
+- **Term / renewal**: Jan 1, 2025 → Dec 31, 2027 (3-year). No renewal option stated. · as-of 2026. `[digest §B.1]`
+
+## 2. BILLING RECORD (consumer: bill export / PG / finance)
+
+### 2a. Money shape
+- **Shape**: **Flat-fee** — annual Service Fee (meal services + road food) + food/supplies passthrough. NO per-meal billing (meals tracked for planning; PG stores $0). `[MONEY_MODEL flat_fee]`
+- **2026 Service Fee = $489,497** (finance §W) — the CPI-escalated actual that bills. Composed of:
+  - **$439,497 meal services** = 6 monthly installments of **$73,249.50** (~4% escalation on the $423,000 base) `[§W]`
+  - **$50,000 Road Food Management** — separate installment, due annually (invoice-confirmed same-dated as installment 1) `[§W]`
+  - · as-of 2026 · source: finance schedule `[§W]`
+- **THE FIGURE RESOLUTION** (long-open question, now CLOSED): three numbers, all correct in their context —
+  - **$698,000** = contract gross = $423K meal + $50K road + $225K passthrough `[digest §B.3]`
+  - **$473,000** = the revenue-recognized fee base (meal + road, excluding passthrough) — what PG `sc_fee_schedule` stores
+  - **$489,497** = the CPI-escalated 2026 actual that BILLS ($439,497 + $50K). The old ABR "$489,431" figure was THIS number (escalated), not a contradiction. `[§W — supersedes the earlier $473K-is-operative note]`
+- **SF cadence**: meal-services 6 monthly, **March 1 →** (contract §2.a.i); Road Food **$50,000 annual, March 1** (§2.a.ii, §1.b.iii). Accrued **P4-P10** per finance. `[digest §B.3, §W]`
+- **SF TAX: NON-TAXABLE** (service-fee portion billed tax-free). RESOLVED — Josh/Lessard, 2026-07-16: STL-MO + STL-FL do NOT charge sales tax on the service-fee portion. ⚠️ **This is the Cardinals' asserted legal position, not a settled exemption** — "defensible," pushed by the Cardinals' lawyers; if the state challenged it and won, **the Cardinals would bear the tax liability**. Bill export: STL-MO SF = tax-zero, but flag the position's contingent nature. `[Slack Josh+Lessard, §Y]`
+- **Escalation regime**: **CPI-U Food Away from Home (CUUR0000SEFV), August-to-August, no floor/cap stated.** 2026 off Aug 2025 report; 2027 off Aug 2026. `[digest §B.4]`
+
+### 2b. Rate table
+> **Flat-fee account — no per-meal rate table.** PG stores per-meal services (Arrival, Post BP, Post-Game, Umpire) at **$0** (planning only). Capacity: up to 70 individuals/meal, 81 home games + up to 6 workout dates (§1.a.ii). The money is the Service Fee (§2a) + passthrough (§2c).
+
+### 2c. Passthrough / reimbursables (billed separately, at cost)
+Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **single-line weekly lump aggregates, TAX-ZERO** (invoice-confirmed), on two Activity tracks:
+| Track | QB Activity | Sampled amount (wk 6/1-6/7) |
+|---|---|---|
+| Food | **"STL-MO Reimbursables - Food"** | $32,212.91 `[K300168851]` |
+| Food-Beverages | **"STL-MO Reimbursables - Food-Beverages"** | $8,347.35 `[K300168853]` |
+
+**Passthrough notes:**
+- Combined sampled week = $40,560.26 (~2.4× CIN-OH's weekly draw, consistent with Busch scale).
+- At-cost passthrough: KitchFix not responsible for the budget limit; savings revert to Cardinals; overage billable (§2.a.iii). OUT of SC per-meal scope and OUT of the SF.
+- **Tax-zero** on reimbursable lines — **by design**: KitchFix doesn't charge the Cardinals tax on reimbursables because tax is already paid to the vendors on the underlying purchase invoices (charging again would double-tax). This is the general reimbursable-tax rule, not an STL-MO quirk. `[Kevin, 2026-07-16]`
+- Single-line per week, no client-facing itemization.
+- **Road Food expenses**: the Cardinals pay all road catering expenses directly; the $50K is the *management fee*, not the road-food cost itself (§1.b.iii). Road-food actuals are Cardinals-borne, not a KitchFix passthrough line.
+
+### 2d. Postseason
+- **Post Season Game = $5,222.22**; **Post Season Workout Day = $2,777.78**; **Road Food Management = $600**. `[digest §B.6]`
+- **Satisfies the flat-fee "same rate + additional days" doctrine** (R11): $5,222.22/game = **1/81 of the $423,000 meal-services fee**. Same mechanic as CIN-OH. `[LEDGER R11]`
+- Postseason base numbers have no explicit escalation clause tied to them — held flat unless renegotiated. `[digest §D]`
+
+### 2e. Worked billing example (golden-test seed)
+- **Reimbursable pair (invoices K300168851 + K300168853, wk 6/1-6/7)**: Food $32,212.91 + Food-Beverages $8,347.35 = $40,560.26, tax-zero. The reimbursable export = the week's at-cost total across both tracks.
+- **SF installment**: $73,249.50 meal-services (finance-confirmed) — SF invoice not sampled, so no tax-treatment seed yet. Golden-test SF seed pending an SF invoice.
+
+## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
+- **Client stakeholders**: **Carl Kochan** (client, ckochan@cardinals.com); **Linda Brauer** (Finance/AP, lbrauer@cardinals.com). `[Kevin, high]`
+- **Service pattern**: MLB home clubhouse at Busch. ~81 home games + up to 6 workout dates, up to 70 individuals/meal (§1.a.ii). Plus **Road Food Management** — KitchFix coordinates ~6 road series on-site each season; Cardinals pay road catering costs directly. `[digest §B.9]`
+- **Count mechanics**: capacity cap (70/meal), no client sign-off gate. `[digest §B.9]`
+- **Registered Dietitian** provided at KitchFix cost, on-site up to 20 days/year (Exhibit 2). `[digest]`
+- **Reimbursable rhythm**: Food + Food-Beverages weekly at cost.
+
+## 4. RULINGS & DECISIONS (current dispositions; full reasoning in LEDGER)
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| Figure resolution | $698K gross / $473K base (PG) / **$489,497 escalated 2026 actual (bills)**. Old "$489,431" = the escalated figure, not a contradiction. CLOSED. | CLOSED | 2026-07-16 | §W |
+| R11 | Flat-fee postseason = 1/81-of-fee mechanic ($5,222.22/game). Satisfied. | CLOSED | 2026-07 | R11 |
+| Reimbursable tax | Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts. | CLOSED | 2026-07-16 | §X |
+| PG carries escalated | PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling. | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+| SF tax | STL-MO SF is **NON-TAXABLE** (Cardinals' asserted legal position; Cardinals bear the liability risk). | CLOSED | 2026-07-16 | §Y |
+
+## 5. OPEN ITEMS (what's not settled — owner + status)
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+
+| PG fee-schedule migration to escalated | ACTION (decided) | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Update `sc_fee_schedule` $473,000 base → $489,497 escalated. Same migration as CIN-OH/others. Run in Supabase Studio. |
+| SF invoice for golden test | PENDING (accounting) | accounting | Phase E only | Only reimbursable invoices sampled; an SF installment invoice would confirm tax + provide the SF golden seed. |
+| $225K passthrough true-up | UNKNOWN | — | No | Savings revert to Cardinals, overage billable; SF-level true-up not specified. |
+
+## 6. HISTORY (superseded facts — MARKED, never deleted)
+- **Contract base fee $423,000 meal + $50,000 road + $225,000 passthrough = $698,000 gross** (2025 contract base; escalated for 2026). `[digest §B.3]`
+- **The "$473,000" as operative** — earlier working assumption; corrected: $473K is the base, $489,497 is the escalated 2026 actual that bills. `[§W]`
+- **The "$489,431" ABR figure** — was flagged as a contradiction; RESOLVED as the escalated 2026 number (~$66 rounding from finance's $489,497). `[§W]`
+- **Termination-for-convenience fees** decline by year: $60K (2025) / $40K (2026) / $20K (2027). `[digest §B.3]`
+
+## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
+- **Contract facts**: `../CONTRACT_DIGEST_STL-MO.md` (verbatim, page-cited).
+- **2026 fee + cadence + accrual + figure resolution**: finance schedule (§W).
+- **Reimbursable structure**: invoices K300168851 (Food) + K300168853 (Food-Beverages) (§X).
+- **Money shape**: `../../SC_MONEY_MODEL.md` (flat_fee). NOTE: MONEY_MODEL's $473K figure is the base; superseded for 2026 billing by finance's $489,497 — pending batch-doc-PR annotation.
+- **Rulings**: `../LEDGER.md` §W (figure), R11 (postseason).
+- **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+
+---
+*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; the $489K/$698K/$473K figure question RESOLVED ($473K base → $489,497 escalated 2026 actual, finance-confirmed); reimbursable structure invoice-confirmed (Food + Food-Beverages, tax-zero weekly lumps); postseason 1/81 mechanic banked. SF non-taxable (Cardinals' legal position; they bear liability risk). Non-blocking opens: PG fee-schedule migration to the escalated figure (decided, pending).*

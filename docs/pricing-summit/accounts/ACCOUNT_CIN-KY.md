@@ -12,7 +12,7 @@
   | Intranet (PRIMARY) | `CIN-KY` |
   | PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
   | PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
-  | QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). "(Home)" suffix implies an "(Away)"/road variant may exist. `[invoice K300168861]` |
+  | QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) — the Home/Away split is a real KitchFix taxonomy. `[invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16]` |
   | P&L file | Louisville Bats rows |
   | ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
   | Contract folder | `/Contracts/CIN KY/` |
@@ -85,7 +85,7 @@
 | Post-game service in SC projections | OPEN | Kevin / ops | No | Post-game is on-request-only (72hr advance, rare) — NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served. |
 | KY sales-tax rate | ✓ CONFIRMED (6.00%) | — | No | Invoice K300168861 confirms 6.00% exact (no local Louisville tax). Was pending; now closed. |
 | Net-payment terms | ✓ CONFIRMED (Net 30) | — | No | Invoice K300168861: Net 30, weekly Sunday-dated invoicing, 6-day service period (Tue-Sun). Was UNKNOWN; now closed. |
-| "PFS" meaning + "(Home)"/"(Away)" variant | OPEN (glossary) | Kevin | No | QB Item = "Meal Service - PFS (Home)". "PFS" undefined (Player Food Services?); "(Home)" suffix implies a road/"(Away)" variant may exist — connects to the "same menus to visiting teams" clause (§5.a.iii). Confirm whether road-food is separately billed. |
+| "PFS" meaning + "(Home)"/"(Away)" variant | RESOLVED | Kevin | No | **`PFS` = Performance Food Service** (Kevin, 2026-07-16). The **"(Away)" variant is CONFIRMED** (TXR-V visiting-team catering, invoice K300168675). CIN-KY itself is Home-only per-meal; the Away stream is the separate visiting-team catering lane (TXR-V), not CIN-KY road-food. Glossary closed. |
 | Year-end reconciliation vs $186,462 estimate | UNKNOWN | — | No | Contract silent on whether the annual estimate is trued up. CIN-KY bills on actuals, so likely no reconciliation, but unconfirmed. |
 | Homestand count (13 vs 14) | OPEN (verify) | — | No | 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13. |
 | Invoice sample for golden test | ✓ RECEIVED | — | closes CIN-KY slice of Sebastian #3 | Invoice K300168861 (PAID) obtained + worked example built (§2e). CIN-KY golden-test coverage complete. |
@@ -106,4 +106,4 @@
 - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
 
 ---
-*Completeness: FULLY-CAPTURED. Simplest account — pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Invoice K300168861 (PAID) confirms rates ($25.95/$8.64), KY tax (6.00%), Net 30, and provides a golden-test seed ($11,546.55 pre-tax). Minor open threads: "PFS"/(Away) glossary, homestand count verify, $186,462 reconciliation. No open rulings.*
+*Completeness: FULLY-CAPTURED. Simplest account — pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Invoice K300168861 (PAID) confirms rates ($25.95/$8.64), KY tax (6.00%), Net 30, and provides a golden-test seed ($11,546.55 pre-tax). Minor open threads: homestand count verify, $186,462 reconciliation. ("PFS"=Performance Food Service + "(Away)" variant now CONFIRMED — glossary closed.) No open rulings.*
