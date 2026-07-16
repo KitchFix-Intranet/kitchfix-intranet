@@ -904,3 +904,64 @@ Confirms the per-account SF-tax attribute for the bill export. The two Cardinals
 ### BATCH-DOC-PR SCOPE ADDITIONS (this round)
 - PFS expansion → glossary + CIN-KY (merged) annotation on next PR.
 - SC_BILLING_OVERVIEW: SF-tax table (per-account) + note that STL tax-free = client legal position w/ Cardinals-borne risk (not a clean exemption).
+
+---
+
+## Z. TXR-V DOC EXTRACTION — the visiting-catering model (2026-07-16, CC-extracted)
+Four docs → `TXRV_DOC_EXTRACTION.md`: (1) `TXR VISITING CATERING.xlsx` (2 tabs: 2026 Season per-series schedule w/ workflow booleans + All Contacts 30-team roster); (2) `THE VITAL PARTNER.pdf` (13-pg 2026 menu — THE pricing authority); (2b) `New Catering Items.pdf` (6 additions); (3) `Texas Catering System 2.0.pdf` (8-pg SOP "Visiting Catering Procedures"). Feeds the ACCOUNT_TXR-TX-V build.
+
+### THE MODEL — TXR-V is a per-team catering business inside the Rangers' visiting clubhouse
+- **KitchFix = embedded caterer** (kitchen + open kitchen to dining room + buffet + MTO grill). Each visiting MLB team = **independent client**, solicited ~4 weeks before their series.
+- **Revenue = à-la-carte menu orders, billed DIRECTLY to each visiting team, per-series.** Yankees invoice K300168675 → Bill-To New York Yankees / Andrew Weisberg (NOT Rangers). Universal — no billing-through-Rangers anywhere in the docs.
+- **Competitive/contestable**: teams may use outside caterers instead; MTO is the supplement to capture partial revenue (see MTO below). SF Giants marked "NEVER ORDERED FROM TXR" (opt-out-by-default). Pirates last ordered 2024.
+- **Snacks/beverages/G&G = the contract carve-in** (§1.b of the TXR-TX 2026 MLB agreement) — always stocked, paid through the Rangers' $604,032 home fee, NEVER charged to visiting teams. Menu p.13 "Snacks and More" = this baseline. Everything else on the menu = paid per-team add-on. **This is the free-vs-charged boundary the bill export must respect.**
+
+### THE MENU IS THE PRICING AUTHORITY (no signed Price Review for TXR-V)
+Unlike the 10 home/PDC accounts (governed by the Joe-Lessard-signed Price Review v3), TXR-V has **NO signed price sheet** — every team quotes off the same 2026 PDF menu. **The menu (`THE VITAL PARTNER.pdf`) IS the TXR-V price authority.** No per-team negotiated pricing. Structure:
+- **Buffets $40/person**: 7 Build-A-Bowls (Burrito/Med/Asian/Pasta/Poke/BBQ/Loaded Burger), 5 Hot Buffets (Backyard BBQ/Plancha/E.Asian/Trad Am-Asian/Steakhouse), 2 Lone Star (Tex Mex/Trad BBQ), + Southern Charm (addendum).
+- **BIB "Best in the Bigs" Buffet $30/person** — breakfast base (invoice "BIB Breakfast 60×$30" maps exactly).
+- **KitchFix Steakhouse $50/person** — premium.
+- **À la carte**: Sabores Latinos entrees ($140/$230 half/full pan; oxtail/ropa $200/$290; sancocho $295), handhelds ($15 cold / $17.50 hot each, min 10), Snackies ($50-$205 platter/dozen), Performance Snacks (Acai $15 / Smoothies $13 / Power Bites $4 / Juice Shots $6.50 / etc, per-item min 10), platters ($145-$275), flat à-la-carte (Chili Bar $400, Street Tacos $400, Ice Cream Social $240), Deluxe Stations ($470-$1,000), Bone Broth ($75/$110).
+- **Per-person add-ons**: Hot Buffet protein upgrades (NY Strip/Ribeye +$11, Filet +$15), Steakhouse Premium Sides +$5, BIB expansion tiers (+$2 potato / +$4 protein / +$5 specialty / +$2 egg).
+- **Invoice K300168675 maps to menu line-for-line** (BIB $30, Smoothies $13, Power Bites $4, Acai $15, Yogurt Parfait $15, Continental Sweets $180, Grand Slam Burritos $215/dz, MTO $1,000). Only unmapped: 2 "Special Upcharge" lines ($5 Quesadilla, $60 Fry Mix) = off-menu chef upcharges (menu doesn't document a modifier convention — FLAG).
+
+### MTO MECHANIC (the outside-catering supplement)
+- MTO all day = **$1,000/day flat**; **$600/day if ≥2 meal services ALSO purchased same day**.
+- Window: arrival meal → start of 3rd inning. Post-game by request only.
+- Explicitly **"supplementary offering meant to complement your buffet services"** — the gap-filler teams buy even when they bring outside catering. This is how KitchFix captures partial revenue on opt-out/partial teams.
+
+### BILLING WORKFLOW (from SOP)
+- **Chef-owned** (no more sales dept): the Visiting Clubhouse Chef coordinates/organizes/bills all traveling parties, initial Ops support.
+- **Cadence**: initial contact 4wk pre-series → follow-up 2wk if silent → finalize → bill "at end of catering finalization" → BEOs to Mason (Rangers clubhouse mgr) → satisfaction survey post-series.
+- **Billing structure**: per date-of-service, longhand math (qty × menu price = total + tax), day totals, series GRAND TOTAL + tax. Client confirms ACH vs CC (**4% CC fee**). Chef sends the same summary to **Sebastian (AP)** who issues the QuickBooks invoice to the team directly.
+- **Mandatory routing rule (2026)**: **all client catering comms must CC Britt Chernikovich (britt@kitchfix.com) + Kevin Fietek (k.fietek@kitchfix.com)** — Ops transparency/guidance, not Ops coordinating.
+- **4% CC processing fee**: documented policy — menu p.13, SOP billing section, and the real invoice line. NO service charge / gratuity model beyond that.
+
+### REVENUE LOCATION (needs Kevin confirm)
+CC infers: TXR-V revenue realized per-series, tracked in the **Season Tracker** (the per-series workflow log = the contacts xlsx Tab 1 booleans: Initial/Confirmed/Billed/Mason/Survey), OUTSIDE the SC, hitting **P&L 2400.1** (~$312K opt-in sales the ledger notes as legitimate). SC's role for TXR-V = operational only (no dollars). → CONFIRM with Kevin.
+
+### KEY PEOPLE (from docs)
+- **Bethany Ham** — Visiting Clubhouse Catering Coordinator (client outreach POC per email template).
+- **Jordan Rogers** — Visiting Clubhouse Executive Chef (BEO-to-Mason signatory).
+- **Britt Chernikovich** — Director of Culinary (britt@kitchfix.com); Ops cc + Galley recipe-approval authority.
+- **Kevin Fietek** — Ops cc (k.fietek@kitchfix.com).
+- **Mason** (Rangers Clubhouse Manager) — BEO recipient. **Sebastian** — KitchFix AP/billing.
+- **26-series 2026 schedule** with per-team AP contacts (each visiting team's own accounting person). Cubs contact = Beth Schwartz (5/8-5/10; beyond Tab 2's "TBD"). No STL series in 2026 (STL doesn't visit TXR — Cardinals "TBD" holds). CINN 4/3 series billed Ashley Meuser (pre-departure, consistent).
+
+### FLAGS (bank, non-blocking)
+- SOP worked-example prices STALE vs menu: Cubanos $220 (SOP) vs $210 (menu); BYO Acai $17 (SOP) vs $15 (menu). **Menu is authoritative.** Note for menu team.
+- Roster Tab1-vs-Tab2 contact mismatches: Cleveland (Mohney/Auriemme), San Diego (Wolters/Gottlieb), Toronto (2 phones). Minor; note.
+- Invoice "Special Upcharge" lines ($5 Quesadilla, $60 Fry Mix) = off-menu chef upcharges; menu lacks a documented modifier convention. Flag.
+- New Items addendum: 3 items priced (Southern Charm $40, Kolaches $75, BYO Avocado Toast $15), 3 unpriced (Southern Grits, Biscuits & Gravy, Pataya Bowl).
+
+### BUILD IMPACT
+TXR-V departs from the flat-fee template: it needs a real menu/pricing-authority section (pointer to the PDF menu as the price source), the per-team-client model, the direct-bill/per-series cadence, the free-vs-charged carve-in boundary, the MTO supplement mechanic, the 4% CC fee, and a "revenue lives in the Season Tracker / P&L 2400.1, NOT the SC" statement. Cubs invoice still pending (Kevin sending) to confirm the per-team pattern holds identically across teams.
+
+### §Z follow-ups RESOLVED (Kevin, 2026-07-16) — TXR-V build rulings
+1. **Internal roles + routing rule**: CAPTURE in the account file (chef-owned billing, Kevin+Britt CC'd on all client comms, Sebastian issues QB invoices, Mason gets BEOs, 4wk outreach cadence). Individual chef names captured lightly (staffing churns).
+2. **Season/Revenue Tracker → SC = FUTURE change.** CURRENT STATE: the Season/Revenue Tracker is a STANDALONE tool; TXR-V revenue lives OUTSIDE the SC (per-series, P&L 2400.1). SC's role for TXR-V is operational-only (no dollars) TODAY. **Kevin's roadmap: migrate the tracker INTO the SC (future).** File states current-state + flags the planned migration — does NOT describe it as already in the SC.
+3. **Menu is authoritative; SOP prices are pre-finalization/stale.** Cubanos ($210 menu, not SOP's $220) + BYO Acai ($15 menu, not SOP's $17) resolve to MENU. Closed.
+4. **Contact list = point-in-time starting point.** Needs periodic review through the year + 100% refresh at each year-start. File notes the review cadence so it's not treated as permanently authoritative.
+5. **Off-menu/one-off requests = priced case-by-case, INTERNAL decision.** This explains the invoice "Special Upcharge" lines ($5 Quesadilla, $60 Fry Mix) — bespoke internal pricing, NOT menu SKUs. → Bill export must allow off-menu line items with ad-hoc prices; not every line maps to the menu. Closed (was a flag).
+6. **Ashley Meuser (CINN 4/3 series) = pre-departure, consistent.** Confirmed.
+Build TXR-V now (Cubs invoice still pending — spot-check later; Yankees invoice + menu + SOP sufficient to build complete).
