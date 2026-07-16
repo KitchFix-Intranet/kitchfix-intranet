@@ -1,0 +1,139 @@
+# ACCOUNT: TXR-TX-V
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_TXR-TX-V.md`.
+>
+> ⚠️ **STRUCTURALLY UNIQUE ACCOUNT.** TXR-V is NOT a flat-fee or per-meal contract account like the other 10. It is a **per-team catering operation** run inside the Rangers' visiting clubhouse, where **each visiting MLB team is an independent client** billed directly. This file departs from the standard template accordingly (see §2).
+
+## 0. IDENTITY & ALIASES (the crosswalk — join everything on the primary key)
+- **Primary key (intranet)**: `TXR-TX-V`
+- **Team / entity**: Texas Rangers — **visiting clubhouse** catering, Globe Life Field (Arlington, TX). Clients = the visiting MLB teams, not the Rangers.
+- **Level / tier**: MLB (visiting-clubhouse service)
+- **Search aliases**: "Rangers visiting", "visiting clubhouse", "TXR visiting", "visiting team catering", "Arlington visiting", "away clubhouse", "TXR-V"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `TXR-TX-V` |
+  | PG `accounts` | team_key `TXR - TX - V` · name "Texas Rangers Visiting" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+  | PG `sc_fee_schedule` | **$0**, `covered_by_account_key = TXR - TX - H` — the visiting-clubhouse *contract carve-in* (G&G/snacks/coffee) is paid through TXR-H's $604,032. The **catering revenue** is a separate stream NOT in `sc_fee_schedule` (see §2). |
+  | PG `sc_service_prices` | per-meal rows all $0 (planning only) |
+  | QuickBooks (invoice `Item`) | **"Meal Service - PFS (Away)"** — the `(Away)` mirror of CIN-KY's `PFS (Home)`. `PFS` = Performance Food Service. `[invoice K300168675]` |
+  | Finance schedule | NOT present (no service fee — TXR-V has no SF row; it's catering revenue, not a fee) `[§W]` |
+  | P&L file | Texas Rangers — visiting-catering revenue → **P&L 2400.1** (opt-in sales revenue, ~$312K ledger reference) |
+  | ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
+  | Contract folder | `/Contracts/TXR H&V/` (shared 2026 MLB agreement with TXR-TX-H) |
+  | Season / Revenue Tracker | The per-series catering activity log (currently a **standalone tool** — `TXR VISITING CATERING.xlsx`, "2026 Season" tab). ⚠️ Kevin roadmap: migrate INTO the SC (future). `[§Z]` |
+  | Menu (pricing authority) | `THE VITAL PARTNER.pdf` (2026 Visiting Team Catering Menu) + `New Catering Items.pdf` addendum — **the price source of record for TXR-V** (no signed Price Review). `[§Z]` |
+- **Client stakeholders**: EACH VISITING TEAM has its own AP contact (see §3 for the roster). KitchFix-side: **Bethany Ham** (Visiting Clubhouse Catering Coordinator, client POC); **Jordan Rogers** (Visiting Clubhouse Exec Chef); **Britt Chernikovich** (Director of Culinary, Ops cc + recipe authority); **Kevin Fietek** (Ops cc); **Sebastian** (AP/billing); **Mason** (Rangers Clubhouse Manager, BEO recipient). `[§Z]`
+- **Capture completeness**: **FULLY-CAPTURED (model + pricing authority)** — contract carve-in banked, catering model + menu + SOP + billing workflow captured, invoice-confirmed (Yankees K300168675 maps to menu). One spot-check pending: the Cubs invoice (to confirm the per-team pattern holds identically across teams).
+
+## 1. CONTRACT (pointer, not duplication)
+- **Operative doc**: SAME as TXR-TX-H — `Food_Services_Agreement_-_KitchFix_(MLB_2026).pdf`, effective Jan 21, 2026, expires Dec 31, 2026. **There is NO separate visiting-clubhouse contract.**
+- **Verbatim source-of-record**: `../CONTRACT_DIGEST_TXR-TX-V.md`.
+- **What the contract covers for the visiting side**: ONLY the carve-in — §1.b: "in the visitors' clubhouse, Contractor agrees to provide: Grab & Go Snack options made by Contractor; packaged snacks, condiments, and beverages; and coffee service." This is bundled into the Rangers' $604,032 fee (§2.a "payment in full"). `[digest §B.1, §B.3]`
+- **What the contract does NOT cover**: the à-la-carte catering (buffets, MTO, meal packages) sold to visiting teams. That's an **off-contract commercial arrangement** KitchFix runs with each visiting team directly — no contractual basis in the Rangers agreement, no SOW. Paperwork gap noted (see §5). `[digest §D, §Z]`
+
+## 2. BILLING RECORD (consumer: bill export / PG / finance)
+
+> ⚠️ **TWO SEPARATE MONEY STREAMS** at TXR-V — keep them distinct:
+> - **Stream A — the contract carve-in** (G&G/snacks/coffee): $0 to visiting teams, paid through TXR-H's $604,032. Always available, never charged. This is what PG's `covered_by = TXR-TX-H` refers to.
+> - **Stream B — the per-team catering revenue** (buffets/MTO/meal packages): real revenue, billed **directly to each visiting team, per-series**. NOT in `sc_fee_schedule`. Tracked in the Season Tracker → P&L 2400.1.
+
+### 2a. Money shape
+- **Shape**: **Per-team catering** (not flat-fee, not per-meal-contract). KitchFix operates as an embedded caterer; each visiting team orders à-la-carte from the menu and is billed directly for its series.
+- **NO service fee for TXR-V** — it does not appear in the finance fee schedule (§W). Its money is catering sales, not a fee.
+- **Revenue location (CURRENT STATE)**: realized per-series, tracked in the **standalone Season/Revenue Tracker** (`TXR VISITING CATERING.xlsx`), OUTSIDE the SC, recognized to **P&L 2400.1** (opt-in catering sales, ~$312K ledger reference). The SC's role for TXR-V today is **operational only** (counts/scheduling, no dollars). `[§Z]`
+  - ⚠️ **FUTURE CHANGE (Kevin roadmap)**: migrate the Season/Revenue Tracker INTO the SC. Not yet done — do not model TXR-V revenue as living in the SC today. `[§Z]`
+
+### 2b. Pricing authority + rate structure (the menu IS the price source)
+> Unlike the 10 home/PDC accounts (governed by the Joe-Lessard-signed Price Review v3), **TXR-V has NO signed price sheet. The 2026 menu (`THE VITAL PARTNER.pdf` + `New Catering Items.pdf`) IS the pricing authority.** One standard menu for all teams — no per-team negotiated pricing. `[§Z]`
+
+Menu structure (2026):
+| Category | Items | Price |
+|---|---|---|
+| **BIB "Best in the Bigs" Buffet** (breakfast base) | select potato/proteins/specialty + eggs/fruit/oatmeal | **$30/person** |
+| **Build-A-Bowl** (7: Burrito, Mediterranean, Asian Fusion, Pasta, Poke, BBQ, Loaded Burger) | select 3 proteins + bases + toppings | **$40/person** |
+| **Hot Buffets** (5: Backyard BBQ, Plancha del Sur, East Asian, Trad American-Asian, Steakhouse) | select 3 proteins + sides + salad | **$40/person** |
+| **Lone Star** (Tex Mex Favorites, Traditional BBQ) + **Southern Charm** (addendum) | select 3 proteins + sides | **$40/person** |
+| **KitchFix Steakhouse** (premium) | 3 entrees, 2 sides, 1 sauce, salad, rolls | **$50/person** |
+| **Sabores Latinos** entrees | Pollo Guisado, Ropa Vieja, Oxtail, etc. | **$140-$230 half/full pan** ($200/$290 premium; Sancocho $295 full only) |
+| **Game Day handhelds** | Hot ($17.50 ea) / Cold ($15 ea), min 10 | per item |
+| **Snackies / platters** | fruit/crudité/dips ($175 platter), deviled eggs ($50/dz), sliders ($110/dz), deli platter ($205) | per platter/dozen |
+| **Performance Snacks** | Acai $15, Smoothies $13, Power Bites $4, Juice Shots $6.50, Protein/Side Salad $6-7, Dessert $7 — min 10 | per item |
+| **Flat à-la-carte** | Texas Chili Bar $400, Street Tacos $400, Ice Cream Social $240, Bone Broth $75/$110 | flat |
+| **Deluxe Stations** | Charcuterie $470, Oyster $470, Seafood Tower $600, Prime Rib Carving $1,000 | flat |
+| **Per-person add-ons** | Hot Buffet protein upgrades (NY Strip/Ribeye +$11, Filet +$15); Steakhouse Premium Sides +$5; BIB expansion (+$2 potato/+$4 protein/+$5 specialty/+$2 egg) | per person |
+
+- **Off-menu / one-off requests**: priced **case-by-case, internal decision** (chef/Ops). Explains the invoice "Special Upcharge" lines ($5 Quesadilla, $60 Fry Mix) — bespoke, NOT menu SKUs. → The bill export must allow **ad-hoc off-menu line items**; not every catering line maps to the menu. `[§Z, Kevin]`
+- **New Items addendum (2026)**: Southern Charm Buffet $40, Texas Kolaches $75, BYO Avocado Toast $15 (min 10); Southern Grits / Biscuits & Gravy / Pataya Bowl unpriced (breakfast add-ons). `[§Z]`
+
+### 2c. MADE-TO-ORDER (MTO) — the outside-catering supplement
+- **$1,000/day flat**, OR **$600/day if the team also buys ≥2 meal services that same day**. `[menu p.13, §Z]`
+- Window: arrival meal → start of 3rd inning. Post-game MTO by specific request only.
+- Explicitly **"a supplementary offering meant to complement your buffet services"** — the gap-filler. **Teams that use an outside caterer can still buy just the MTO** to fill gaps — this is how KitchFix captures partial revenue from opt-out/partial teams. `[§Z]`
+
+### 2d. The always-free carve-in (never charge visiting teams for this)
+Menu p.13 "Snacks and More" = the **contract carve-in** (§1.b): KitchFix stocks the visiting clubhouse with assorted beverages, fresh coffee, fresh-cut fruit, salads, sandwiches/wraps, jerky, bars, trail mixes, on-the-go snacks. **Paid through the Rangers' $604,032 (TXR-H); NEVER billed to visiting teams.** This is the free-vs-charged boundary — everything else on the menu is a paid per-team add-on. `[digest §B.3, §Z]`
+
+### 2e. Billing cadence + tax + fees
+- **Billed DIRECTLY to each visiting team, per-series** (Yankees invoice K300168675 → Bill-To New York Yankees / Andrew Weisberg, NOT Rangers). Each team's 3-4 day series = ONE invoice event. `[§Z, evidence]`
+- **Tax charged** on catering (Arlington TX ~8.25%; invoice showed ~7.9% on the sampled mix). `[§Z]`
+- **4% credit-card processing fee** — documented policy (menu p.13, SOP billing, and the real invoice line: $325.29 on K300168675). Client chooses ACH (no fee) or CC (+4%). `[§Z]`
+- **No service charge / gratuity** model beyond the 4% CC fee. `[§Z]`
+- Invoiced by **Sebastian (AP)** from the chef's finalized series summary. `[§Z]`
+
+### 2f. Worked billing example (golden-test seed)
+- **Invoice K300168675 (Yankees, series 4/27-4/29)**: à-la-carte across 3 game-days — MTO $1,000/day, BIB Breakfast 60×$30, Smoothies/Power Bites/Acai/Yogurt Parfaits (per-item), Continental Sweets $180, Grand Slam Burritos 2.5dz×$215, + 2 off-menu "Special Upcharge" lines, + 4% CC fee ($325.29), + tax. **Every menu line maps to the menu price exactly**; the export must sum per-day, add tax, add 4% CC. `[§Z]`
+- Cubs invoice pending — will confirm the pattern holds identically for a second team.
+
+## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
+
+### 3a. The service model
+KitchFix operates the visiting clubhouse kitchen + open kitchen to the dining room, running buffet + MTO grill service. Each visiting team is solicited ~4 weeks before their series. Goal: capture arrival/pregame/postgame meals. **Contestable** — teams may use outside caterers instead (set up as buffet in the cafe); KitchFix supplements with the MTO grill (simple flattop/fryer items). SF Giants = "NEVER ORDERED FROM TXR" (opt-out); Pirates last ordered 2024. `[§Z]`
+
+### 3b. Billing workflow (from the SOP `Texas Catering System 2.0.pdf`)
+- **Chef-owned** (no sales dept): the Visiting Clubhouse Chef coordinates, organizes, and bills all traveling parties (initial Ops support). `[§Z]`
+- **Cadence**: initial contact 4wk pre-series → follow-up 2wk if silent → finalize menu → bill at finalization → BEOs to Mason → satisfaction survey post-series. `[§Z]`
+- **Mandatory routing rule (2026)**: ALL client catering comms must **CC Britt Chernikovich (britt@kitchfix.com) + Kevin Fietek (k.fietek@kitchfix.com)** — Ops transparency/guidance (Ops does NOT coordinate orders). `[§Z]`
+- **Culinary standards**: cook the BEO exactly (no unrequested "chef's flair"); on-site upsells require verbal + written confirmation before firing; Galley recipes followed exactly; undocumented items require Director-of-Culinary collaboration; allergen meals prepped separately + double-checked; top-9 allergens labeled. `[§Z]`
+- KitchFix-side people: Bethany Ham (Coordinator/client POC), Jordan Rogers (Exec Chef), Britt Chernikovich (Dir. Culinary), Sebastian (AP), Mason (Rangers Clubhouse Mgr, BEO recipient). Individual chef staffing may churn — roles are the stable reference. `[§Z]`
+
+### 3c. Visiting-team AP contacts (2026 — point-in-time; review periodically, refresh 100% at year-start)
+> ⚠️ This roster is a **starting point**, current as of 2026-07-16. Kevin: contacts need periodic review through the year + a **full refresh at the start of each year**. Do not treat as permanently authoritative. `[§Z]`
+
+Each visiting team is billed via its own AP contact. Full roster in `TXR VISITING CATERING.xlsx` (All Contacts tab). Notable: Yankees = Andrew Weisberg (aweisberg@yankees.com); Cubs = Beth Schwartz (bschwartz@cubs.com, per 2026 Season tab — beyond the roster's "TBD"); **SF Giants = opt-out ("NEVER ORDERED")**; **STL Cardinals = no TXR series in 2026** (Cardinals don't visit Texas this season — "TBD" holds). Roster has minor Tab1-vs-Tab2 discrepancies (Cleveland, San Diego, Toronto) — flag for the year-start review. `[§Z]`
+
+## 4. RULINGS & DECISIONS (current dispositions; full reasoning in LEDGER)
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| Model | TXR-V = per-team catering (each visiting team = independent client, billed directly, per-series). NOT flat-fee/per-meal-contract. | CLOSED | 2026-07-16 | §Z |
+| Pricing authority | The 2026 menu (`THE VITAL PARTNER.pdf` + addendum) IS the price source. No signed Price Review; no per-team pricing. | CLOSED | 2026-07-16 | §Z |
+| Two streams | Carve-in (G&G/snacks/coffee) = $0, covered by TXR-H $604K. Catering = separate direct-bill revenue. Keep distinct. | CLOSED | 2026-07-16 | §Z |
+| Revenue location | CURRENT: standalone Season Tracker → P&L 2400.1, SC operational-only. FUTURE: migrate tracker into SC (Kevin roadmap, not yet done). | CLOSED (current) / FUTURE (migration) | 2026-07-16 | §Z |
+| Off-menu pricing | One-off/off-menu requests priced case-by-case (internal). Bill export must allow ad-hoc line items. | CLOSED | 2026-07-16 | §Z |
+| `PFS (Away)` | Confirmed activity code for visiting-team catering (mirror of `PFS (Home)`). PFS = Performance Food Service. | CLOSED | 2026-07-16 | §X, §Y |
+
+## 5. OPEN ITEMS (what's not settled — owner + status)
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| Cubs invoice spot-check | PENDING | Kevin | No | Kevin sending the Cubs TXR-V invoice; will confirm the per-team pattern (direct-bill, menu prices, 4% CC) holds identically across a second team. Yankees invoice already confirms the model. |
+| Season Tracker → SC migration | FUTURE (roadmap) | Kevin | No | Currently standalone; Kevin plans to fold the visiting-catering revenue tracker into the SC. Future change — not modeled as in-SC today. |
+| Paperwork gap (no catering SOW) | OPEN (informational) | Kevin | No | The à-la-carte catering has no contractual basis in the Rangers agreement (only the G&G/snacks/coffee carve-in is contracted). It's an off-contract commercial arrangement with each visiting team. Not a defect to fix — just documented. |
+| SC models buffet for TXR-V | OPEN (SC cleanup) | Kevin | No | Prior open item #25: SC mirrors TXR-H's full buffet service list on TXR-V, but the *contract* scope for V is G&G/snacks/coffee only. The buffet catering is real (Stream B) but off-contract — decide whether the SC keeps buffet rows for operational tracking or deletes them. |
+| Contact roster review | RECURRING | Kevin | No | Roster is point-in-time; review periodically + full refresh at year-start. Minor Tab1/Tab2 discrepancies (CLE, SD, TOR) to reconcile. |
+| Unpriced new items | OPEN (minor) | menu team | No | Southern Grits, Biscuits & Gravy, Pataya Bowl have no price on the addendum. |
+
+## 6. HISTORY (superseded facts — MARKED, never deleted)
+- **SOP worked-example prices** (Cubanos $220, BYO Acai $17) — STALE (SOP written before menu prices finalized). Menu is authoritative ($210, $15). `[§Z]`
+- **CINN 4/3-4/5 series billed Ashley Meuser** — Ashley was the Reds contact pre-departure (~May 2026); this April series predates her departure. Consistent. `[§Z]`
+- **Prior sales dept** — TXR-V catering was previously overseen by a sales department; for 2026 it moved to chef-owned coordination/billing (onsite team). `[§Z SOP]`
+
+## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
+- **Contract facts (carve-in)**: `../CONTRACT_DIGEST_TXR-TX-V.md` (shares the 2026 MLB agreement with TXR-TX-H).
+- **The catering model + menu + SOP + billing workflow + contacts**: `TXRV_DOC_EXTRACTION.md` (§Z) — the 4 docs (contacts xlsx, `THE VITAL PARTNER.pdf` menu, `New Catering Items.pdf`, `Texas Catering System 2.0.pdf` SOP).
+- **The pricing authority**: `THE VITAL PARTNER.pdf` (2026 menu) — the price source of record for TXR-V.
+- **Direct-bill + `PFS (Away)` + 4% CC**: invoice K300168675 (Yankees) (§X, §Z).
+- **Money shape / revenue location**: `../../SC_MONEY_MODEL.md` (flat_fee $0 covered-by-H for the carve-in) + §Z (catering revenue → P&L 2400.1, Season Tracker, future SC migration).
+- **Build rulings**: `../LEDGER.md` §Z + §Z follow-ups (Kevin, 2026-07-16).
+- **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TXR-V build).
+
+---
+*Completeness: FULLY-CAPTURED (model + pricing authority). STRUCTURALLY UNIQUE — per-team catering, not flat-fee. Two money streams: the contract carve-in (G&G/snacks/coffee, $0, covered by TXR-H's $604K) and the direct-to-team catering revenue (menu-priced, per-series, P&L 2400.1). The 2026 menu IS the pricing authority (no signed Price Review). MTO ($1,000/day, or $600 w/ 2+ services) is the outside-catering supplement. 4% CC fee documented. Billed directly to each visiting team by Sebastian per-series. Revenue currently in a standalone Season Tracker (future: migrate into SC). Invoice K300168675 (Yankees) confirms the model + menu mapping. Pending: Cubs invoice spot-check; SC buffet-row cleanup (off-contract but real); year-start contact refresh.*
