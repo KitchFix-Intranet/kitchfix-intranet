@@ -12,7 +12,7 @@
   | Intranet (PRIMARY) | `CIN-KY` |
   | PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
   | PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
-  | QuickBooks (invoice `Item`) | expected "BATS - ..." scheme (no CIN-KY invoice in sample; UNKNOWN exact) |
+  | QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). "(Home)" suffix implies an "(Away)"/road variant may exist. `[invoice K300168861]` |
   | P&L file | Louisville Bats rows |
   | ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
   | Contract folder | `/Contracts/CIN KY/` |
@@ -34,7 +34,7 @@
 - **Escalation regime**: **NONE (year-to-year renegotiation).** No CPI, no formula. Rates are set fresh each single-year contract. 2024 $24.00 → 2025 $24.98 → 2026 $25.95 (Type 1); ~3.9%/yr but negotiated, not formulaic. `[digest §B.4]`
   - ⚠️ Price Review v3 / any model must NOT apply an escalator to Louisville.
   - A material-menu-change clause (§5 trailing ¶) lets the parties revisit per-meal pricing in good faith if the Exhibit A SOP changes — a re-price trigger, not an escalator.
-- **Tax treatment**: rates are **pre-tax** ("not inclusive of applicable sales tax", §4.a). Kentucky sales tax applies at invoice (downstream in QB per R9). **KY rate not stated in the contract and no CIN-KY invoice in the sample → tax rate UNKNOWN** (do not guess). `[digest §B.5]`
+- **Tax treatment**: rates are **pre-tax** ("not inclusive of applicable sales tax", §4.a). **Kentucky sales tax = 6.00%** (confirmed from invoice K300168861: $692.79 / $11,546.55 = 6.00% exact; matches KY state statute, no local Louisville tax). Applied at invoice in QB per R9. `[digest §B.5; invoice K300168861]`
 
 ### 2b. Rate table (effective-dated; the retrievable price list)
 > Single-tier AAA account — meals are categorized as **Type 1 (Breakfast/Lunch Buffet)** or **Type 2 (Snack/Lighter Meal)**, NOT by breakfast/lunch/dinner or MLB/MiLB. No SF, so sticker = billed rate. All as-of 2026.
@@ -58,7 +58,11 @@
 - **NONE identified.** (Outside catering for MLB rehab players is handled operationally — see §3 — not as a standing ancillary revenue line.)
 
 ### 2e. Worked billing example (golden-test seed — to the penny)
-- **NOT AVAILABLE** — no CIN-KY invoice in the sample. When one is obtained (Sebastian #3 covers this), the seed is: (Type-1 count × $25.95) + (Type-2 count × $8.64) = pre-tax subtotal, KY tax applied in QB. Flag: golden-test coverage for CIN-KY is pending an invoice sample. `[Sebastian #3]`
+- **CONFIRMED from invoice K300168861 (2026-06-28, PAID in full)** — a real weekly period, Tue 6/23 → Sun 6/28:
+  - Buffet (Type 1) lines @ **$25.95**: 6/23 Lunch+Postgame (90), 6/24 Breakfast+Postgame (90), 6/25 Lunch (45), 6/26 Lunch+Postgame (90), 6/27 Lunch (45), 6/28 Breakfast (45)
+  - Snack (Type 2) lines @ **$8.64**: 6/23, 6/25, 6/26, 6/27 (30 each; not every day)
+  - **Pre-tax subtotal $11,546.55** · KY tax $692.79 (**6.00%** exact) · **grand total $12,239.34** · **PAID**
+- **This is a strong golden-test seed** — the client paid this exact figure, so the SC per-period export for this window must reproduce **$11,546.55 pre-tax** (tax applied downstream in QB). `[invoice K300168861]`
 
 ## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
 - **Client stakeholders**: **Rachel Sharley** — client dietitian (Reds-side, covers CIN-AZ + CIN-KY) `[src: Kevin, 2026-07-15, high]`.
@@ -79,11 +83,12 @@
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
 | Post-game service in SC projections | OPEN | Kevin / ops | No | Post-game is on-request-only (72hr advance, rare) — NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served. |
-| KY sales-tax rate | PENDING (accounting pull) | Kevin's accounting team | No | Not stated in contract; no invoice sample yet. Accounting is pulling invoice copies — the KY rate will confirm from an actual invoice. SC emits pre-tax regardless (R9). |
-| Net-payment terms | UNKNOWN | — | No | The executed 2026 contract states "billed weekly" but no net-day term. Low-stakes. |
+| KY sales-tax rate | ✓ CONFIRMED (6.00%) | — | No | Invoice K300168861 confirms 6.00% exact (no local Louisville tax). Was pending; now closed. |
+| Net-payment terms | ✓ CONFIRMED (Net 30) | — | No | Invoice K300168861: Net 30, weekly Sunday-dated invoicing, 6-day service period (Tue-Sun). Was UNKNOWN; now closed. |
+| "PFS" meaning + "(Home)"/"(Away)" variant | OPEN (glossary) | Kevin | No | QB Item = "Meal Service - PFS (Home)". "PFS" undefined (Player Food Services?); "(Home)" suffix implies a road/"(Away)" variant may exist — connects to the "same menus to visiting teams" clause (§5.a.iii). Confirm whether road-food is separately billed. |
 | Year-end reconciliation vs $186,462 estimate | UNKNOWN | — | No | Contract silent on whether the annual estimate is trued up. CIN-KY bills on actuals, so likely no reconciliation, but unconfirmed. |
 | Homestand count (13 vs 14) | OPEN (verify) | — | No | 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13. |
-| Invoice sample for golden test | PENDING (accounting pull) | Kevin's accounting team | Phase E only | Accounting is pulling invoice copies. Once received: worked example + KY tax rate confirm. Closes CIN-KY's slice of Sebastian #3. |
+| Invoice sample for golden test | ✓ RECEIVED | — | closes CIN-KY slice of Sebastian #3 | Invoice K300168861 (PAID) obtained + worked example built (§2e). CIN-KY golden-test coverage complete. |
 
 ## 6. HISTORY (superseded facts — MARKED, never deleted)
 - **The $28,000 lump-sum (REMOVED 2026)**: 2024 + 2025 contracts each had "a lump sum payment of $28,000.00" with "a credit of $2,000.00 towards each of the 14 regular season homestand invoices." **Deleted in the executed 2026 contract** → pure weekly per-meal, no upfront, no credits. `[digest §B.3, §C; C-18]`
@@ -101,4 +106,4 @@
 - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
 
 ---
-*Completeness: FULLY-CAPTURED. Simplest account — pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Non-blocking gaps: no invoice sample (worked example + KY tax rate pending), net-terms unstated, post-game start-date reconciliation. No open rulings.*
+*Completeness: FULLY-CAPTURED. Simplest account — pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Invoice K300168861 (PAID) confirms rates ($25.95/$8.64), KY tax (6.00%), Net 30, and provides a golden-test seed ($11,546.55 pre-tax). Minor open threads: "PFS"/(Away) glossary, homestand count verify, $186,462 reconciliation. No open rulings.*

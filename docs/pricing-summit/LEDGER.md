@@ -700,3 +700,34 @@ Invoice-sample status by account (✓ = have it, ⧗ = pending pull):
 - TBR-FL ⧗ (needed; also load-bearing for Joe #3 SF-installment question)
 - TXR-AZ ⧗ (needed for worked example + deposit-discount confirmation)
 → Update this list as copies land. When all ⧗ clear, Sebastian #3 closes and Phase E golden-test coverage is complete.
+
+### INVOICE SAMPLES RECEIVED — CIN-KY + TBJ-NY (2026-07-16, extracted by CC)
+Two client invoices extracted verbatim (K300168861 CIN-KY PAID; K300168849 TBJ-NY unpaid). Both fold into their account files. Key results:
+
+**CIN-KY (invoice K300168861, 2026-06-28, PAID):**
+- Rates CONFIRMED: Type-1 buffet $25.95, Type-2 snack $8.64 (every line).
+- **KY tax = 6.00% exact** ($692.79/$11,546.55). No local Louisville tax.
+- Net 30, weekly Sunday-invoiced, 6-day service period (Tue-Sun).
+- **Golden-test seed**: pre-tax $11,546.55 → total $12,239.34, PAID. Client paid this exact figure → strongest golden-test candidate.
+- QB Item = **"Meal Service - PFS (Home)"**. Two threads: (a) "PFS" undefined (glossary gap — Player Food Services?); (b) **"(Home)" suffix implies an "(Away)"/road variant** may exist → connects to CIN-KY's "same menus to visiting teams" clause; confirm whether road-food is separately billed.
+- Bill-To = Rachel Sharley / Louisville Bats → confirms the stakeholder change.
+- Completeness stays FULLY-CAPTURED; the pending invoice items are now closed.
+
+**TBJ-NY (invoice K300168849, 2026-06-21):**
+- **$27.34 rate INVOICE-CONFIRMED** (every line) — FIRST independent evidence for the rate that had no contract backing. Combined with Kevin-confirmed + Joe-attested + PG-matched, the number is now solid.
+- **NY tax = 8.75% exact** ($1,112.40/$12,713.10) = Erie County (4% NY + 4.75% Erie).
+- Net 30, weekly Sunday cadence, 6-day period. Worked example: pre-tax $12,713.10 → total $13,825.50.
+- **STRUCTURAL FINDING — Buffalo bills through the TORONTO PARENT PDC.** Bill-To = Rogers Blue Jays Baseball Partnership / Toronto Blue Jays PDC / 3031 Garrison Road, Dunedin FL — the SAME address as TBJ-FL. → Buffalo is a **sub-scope of the Toronto master relationship**, NOT a standalone/orphaned account. This REFRAMES the "highest doc-risk" story: the operative paper is almost certainly a Buffalo SOW under the **Dec 11 2018 Rogers/Toronto MSA** (the same master that governs TBJ-FL) — "which SOW scopes Buffalo," not "no paper exists." TBJ-NY completeness upgraded **THIN → PARTIAL**; Q6 reframed (reduced risk).
+- Invoice recipient = **Charlie Wilson** (Toronto PDC). Candidate for the [TBD] Buffalo client contact, BUT it's an AP/billing recipient — Kevin to confirm if he's the account contact. Michelle (departed) was the prior relationship contact.
+- Snack/Shake deactivation CONFIRMED (no such lines on invoice). No third-party-vendor line visible (the 2019 `w_3rdpartyvendor` hint has no representation on the current invoice) → that open thread effectively closed for the current billing.
+- QB Item = "Buffalo Meal Service"; all meal types at $27.34 (meal type in description, not separate SKUs).
+
+**CROSS-REF TO WIRE IN BATCH 3**: TBJ-NY billing rolls up to the TBJ-FL / Toronto PDC (Dunedin, Dec 2018 MSA). When ACCOUNT_TBJ-FL.md is built (Batch 3), cross-reference: TBJ-NY (Buffalo) is a sub-scope riding on the same Rogers/Toronto master. TBJ-FL's file should note Buffalo as an affiliated sub-scope; TBJ-NY's file already points up to Toronto.
+
+**INVOICE-PULL CHECKLIST UPDATE** (see prior INVOICE PULL section): CIN-KY ✓ (K300168861 PAID) and TBJ-NY ✓ (K300168849) now RECEIVED. Remaining ⧗: CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V (flat-fee), TBR-FL, TXR-AZ. Sebastian #3 progress: 4 of 11 accounts now have samples (CIN-AZ, TBJ-FL, CIN-KY, TBJ-NY).
+
+**PATTERN NOTE — invoices are high-value**: both invoices closed multiple loops at once (rate + tax + terms + cadence + naming + entity + golden-test seed) AND surfaced structural facts the contracts didn't (the Toronto-rollup; the "(Home)"/(Away) hint). Prioritize getting the remaining 7 invoice samples — each is likely to both close loops and reveal structure.
+
+### TBJ client contact confirmed (Kevin, 2026-07-16)
+- **Katarina Dimino = client contact for BOTH TBJ accounts (TBJ-NY + TBJ-FL).** Replaces the departed Michelle. Applied to ACCOUNT_TBJ-NY now; **wire into ACCOUNT_TBJ-FL when built (Batch 3).**
+- **Charlie Wilson = AP/billing recipient** (invoice "Sent to" at the Toronto PDC), distinct from the account contact. Not the stakeholder.
