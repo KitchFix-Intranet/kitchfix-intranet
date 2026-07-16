@@ -1,0 +1,105 @@
+# ACCOUNT: TXR-AZ
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_TXR-AZ.md`.
+
+## 0. IDENTITY & ALIASES (the crosswalk — join everything on the primary key)
+- **Primary key (intranet)**: `TXR-AZ`
+- **Team / entity**: Texas Rangers — Surprise, AZ spring-training complex (Surprise Stadium)
+- **Level / tier**: PDC (spring training + non-MLB food service)
+- **Search aliases**: "Rangers Surprise", "TXR Surprise", "Surprise AZ", "Rangers spring training", "TXR-AZ", "Surprise Stadium"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `TXR-AZ` |
+  | PG `accounts` | team_key `TXR - AZ` · name "Texas Rangers" · level `PDC` · city Surprise · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
+  | PG `sc_service_prices` | per-meal rates (post-deposit): MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. **NO `sc_fee_schedule` row** — the deposit is not a PG fee cell (see §2). |
+  | QuickBooks (invoice `Item`) | `TXR-AZ MLB - Breakfast/Lunch/Dinner`, `TXR-AZ MiLB - Breakfast/Lunch/Dinner`, `TXR-AZ - Pre-Game Hot Snack`, `TXR-AZ - Regular Snack`. All T-flagged (taxable). `[K300168585 MLB, K300168870 MiLB]` |
+  | Finance schedule (§W) | 2026 **Annual Deposit $301,623** (3× $100,541, Jan/Feb/Mar). This is the DEPOSIT, not a service-fee installment. |
+  | P&L file | Texas Rangers Surprise — meal revenue → 2400.1; deposit/SF-component → 2300 (~$301,621). |
+  | ABR OneSheeter tab | "TEXAS RANGERS" (Surprise section) |
+  | Contract folder | `/Contracts/TXR AZ/` — `Texas Rangers 2025-2027 Surprise Food Service Agreement.pdf` (operative) + 2022 (superseded) |
+- **Client stakeholders**: **MLB → Brandon Boyd** (same Brandon Boyd who is TXR-TX-H's clubhouse manager — the MLB Rangers relationship runs through him at both the home clubhouse and Surprise); **MiLB → Stanton "Stosh" Hoover** (AP recipient, MiLB invoices). MLB and MiLB bill to SEPARATE client cost centers (see §3). `[Kevin 2026-07-16; K300168870]`
+- **Capture completeness**: **FULLY-CAPTURED** — contract verbatim + 2 invoices (MLB + MiLB) confirming rates to the penny + AZ tax + all snack rates. The cleanest end-to-end trace of the corpus (contract → 2.5% escalation → signed sheet → PG → invoice all cohere). Non-blocking gaps: 2026 SOW is a paperwork-memorialization gap only (rates derive from the master + 2.5%; invoices confirm); the 2026 deposit invoice was not sampled (golden-test seed for the deposit line — Phase E).
+
+## 1. CONTRACT (pointer, not duplication)
+- **Operative doc**: `Texas Rangers 2025-2027 Surprise Food Service Agreement.pdf` — master effective Jan 1, 2025, Initial Term through Dec 31, 2027. SOW #1 covers 2025 pricing; 2026 governed by the master's fixed-2.5% escalation clause.
+- **Verbatim source-of-record**: `../CONTRACT_DIGEST_TXR-AZ.md`.
+- **2026 SOW**: NOT in the folder — but 2026 rates derive fully from the master (2025 × 1.025) and are invoice-confirmed. The only undocumented piece is the 2026 deposit dollar amount (projection-driven), which finance §W supplies ($301,623). Paperwork chase, low-priority, owner Kevin. `[digest §D]`
+- Signatories: Ross Fenstermaker (GM, Rangers Baseball LLC) + Josh Katt (CEO, CJK Foods). `[digest §A]`
+
+## 2. BILLING RECORD (consumer: bill export / PG / finance)
+
+### 2a. Money shape
+- **Shape**: **Per-meal with a 20% deposit-triggered discount.** Distinct from CIN-AZ (flat 30% SF) and TBR-FL (flat 25% MiLB). This is a fourth SF sub-mechanic. `[digest §B.3]`
+- **The mechanic** (contract §2.a-b): the Team pays an **Annual Deposit = 20% of the projected total Services Fee** (3 equal installments due Jan 1 / Feb 1 / Mar 1). AFTER paying the deposit, the Team receives a **20% discount on every per-meal fee.** The deposit TRIGGERS the discount. `[digest §B.3]`
+- **The deposit is NOT stored in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog (post-deposit rates); billing computes from actuals × per-meal price. The annual deposit is out-of-band — tracked in the finance workbook (§W), not `sc_fee_schedule`. `[fee-model probe, §Z]`
+- **Escalation**: fixed **2.5%/yr** (§2.a — "Starting in 2026, per-meal pricing shall increase by 2.5%, and in 2027 by 2.5% over the prior year"). NOT CPI. The cleanest escalator of the 11 — 2026 rates = 2025 × 1.025, trivially derivable + invoice-confirmed. `[digest §B.4]`
+
+### 2b. Rate table (effective-dated; the retrievable price list)
+All rates are POST-DEPOSIT (what actually bills once the deposit is paid). 2026 = 2025 SOW × 1.025.
+| Service | Level | 2026 post-deposit rate | 2025 SOW base | Taxable | Source |
+|---|---|---|---|---|---|
+| Breakfast / Lunch / Dinner | MLB | **$28.58** | $27.88 | Yes (9.5%) | K300168585 ✓ |
+| Breakfast / Lunch / Dinner | MiLB | **$14.29** | $13.95 | Yes (9.5%) | K300168870 ✓ |
+| Pre-Game Hot Snack | MiLB | **$10.93** | $10.66 | Yes (9.5%) | K300168870 ✓ |
+| Regular Snack | MiLB | **$5.89** | $5.74 | Yes (9.5%) | K300168870 ✓ |
+| Continental Breakfast | MiLB | (in PG; 2022 SKU dropped in 2025 SOW) | — | Yes | PG (verify 2026 price) |
+| Extra Protein - Chicken/Pork | MiLB | (is_flat_fee add-on) | — | Yes | PG |
+| Extra Protein - Beef/Seafood | MiLB | (is_flat_fee add-on) | — | Yes | PG |
+- **Sticker (pre-deposit) rates**: MLB $35.72, MiLB $17.87 (= post-deposit ÷ 0.80). These are the un-discounted per-meal fees; not what bills once the deposit is paid.
+- **MLB Dinner**: contract SOW #1 lists MLB Breakfast + Lunch only; PG carries `MLB Dinner` @ $28.58. Operationally served at the same rate (likely in the missing 2026 SOW). `[Kevin 2026-07-16]`
+- **Rounding**: all rates as stored/billed (full precision in PG/export; 2 decimals on the extended line). Storage precision per R10.
+
+### 2c. Passthrough / non-revenue lines
+- **NONE.** No food/packaging/supplies passthrough — ingredient/supply costs are borne by KitchFix (implicit in the per-meal rate). `[digest §B.7]`
+- **Kitchen equipment**: KitchFix funds up to $75,000 (§5) — KitchFix capex, not a passthrough line, not billed. `[digest §B.7]`
+
+### 2d. Ancillary revenue (OUT of SC meal-model scope)
+- None identified. (Unlike CIN-AZ's Owners Week / Fantasy Camp or TBR-FL's BGC.)
+
+### 2e. Worked billing example (golden-test seed — to the penny)
+- **MLB (invoice K300168585, wk 3/16-3/21/2026)**: 5 daily lines `TXR-AZ MLB` @ $28.58 (qty 225/256/160/135/100). Subtotal $25,036.08 + tax $2,378.43 (9.5% exact) = **$27,414.51 PAID**. → the MLB export for a TXR-AZ week reproduces qty × $28.58, then 9.5% AZ tax at invoice. `[K300168585]`
+- **MiLB (invoice K300168870, wk 6/29-7/4/2026)**: 6 days `TXR-AZ MiLB` @ $14.29 (qty 175/day) + 6 days `Pre-Game Hot Snack` @ $10.93 (qty 100/day) + 1 `Regular Snack` @ $5.89 (qty 60). Subtotal $20,822.90 + tax $1,978.18 (9.5% exact) = **$22,801.08**. `[K300168870]`
+- **Deposit golden seed**: PENDING — a 2026 deposit installment invoice ($100,541) was not sampled. Would confirm the deposit line's tax treatment + "Deposit" labeling. Phase-E item, non-blocking (amount finance-confirmed §W).
+
+### 2f. Tax
+- **AZ sales tax 9.5%** (Surprise) on all meal + snack lines — invoice-confirmed exact on both K300168585 (9.5000%) and K300168870 (9.5000%). Per R9, SC emits pre-tax; 9.5% applies at invoice in QB. `[K300168585, K300168870]`
+- Deposit tax treatment: contract says the Services Fee "is not inclusive of sales tax, if applicable" — deposit-line tax treatment to be confirmed at the deposit invoice (Phase E).
+
+## 3. OPERATIONS RECORD (consumer: OPD / SousAI / account management)
+- **Service model**: on-site food service at Surprise Stadium during spring training (MLB) + non-MLB (MiLB) service. Weekly per-meal billing (Mon-Sun), Net 30. `[digest §B.8]`
+- **Billing routing — MLB vs MiLB = SEPARATE cost centers**: MLB meals and MiLB meals bill to different client-side contacts/cost centers (one operation, two invoice streams by design — do NOT treat as a data inconsistency). MLB → Brandon Boyd; MiLB → Stanton "Stosh" Hoover. Emit MLB and MiLB as separate invoices, routed to the correct payer. `[Kevin 2026-07-16]`
+- **Count verification**: weekly invoicing on meals-provided basis; NO client sign-off gate (§3). `[digest §B.9]`
+- **Contacts are point-in-time** — review periodically + refresh at year-start. Stosh Hoover (MiLB) surfaced on the July invoice; Brandon Boyd (MLB) is the durable Rangers relationship contact.
+
+## 4. RULINGS & DECISIONS (current dispositions; full reasoning in LEDGER)
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| Model | 20% deposit-triggered discount + fixed 2.5%/yr escalation. `actuals_drive_invoice` — deposit out-of-band, not in PG. | CLOSED | 2026-07-16 | §W, §Z, digest |
+| Deposit | 2026 Annual Deposit = $301,623 (3× $100,541 Jan/Feb/Mar), finance-confirmed. Not a PG fee cell. | CLOSED | 2026-07-16 | §W |
+| Rates | Post-deposit: MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. All invoice-confirmed. | CLOSED | 2026-07-16 | §W, invoices |
+| Tax | AZ 9.5% (Surprise) on meals/snacks, invoice-confirmed exact. | CLOSED | 2026-07-16 | invoices |
+| MLB Dinner | Contract lists MLB B+L only; PG has MLB Dinner @ $28.58 (operationally served, same rate). | NOTED | 2026-07-16 | Kevin |
+
+## 5. OPEN ITEMS (what's not settled — owner + status)
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| Deposit golden seed | PENDING | accounting | Phase E only | 2026 deposit installment invoice ($100,541) not sampled — would confirm the deposit line's tax + labeling. Amount finance-confirmed (§W). |
+| 2026 SOW | OPEN (paperwork) | Kevin | No | Master + 2.5% escalation determines 2026 rates (invoice-confirmed); only the deposit dollar amount needed the SOW, and finance §W supplies it. Low-priority memorialization. |
+| Continental Breakfast 2026 price | OPEN (minor) | Kevin | No | 2022 SKU dropped in the 2025 SOW; PG carries it — verify the 2026 price. |
+| $75K kitchen equipment double-count | OPEN (cost only) | Kevin | No | Appears in both 2022 + 2025 agreements as fresh commitment — verify one-spend-restated vs genuine second obligation. KitchFix capex, no billing impact. |
+
+## 6. HISTORY (superseded facts — MARKED, never deleted)
+- **2025 SOW rates** (pre-2026 escalation): MLB $27.88 post-deposit / $34.85 sticker; MiLB $13.95 / $17.43; Pre-Game Hot $10.66; Regular Snack $5.74. 2026 = these × 1.025. `[digest §B.2]`
+- **2025 deposit = $297,419.26** (3× $99,139.75). 2026 = $301,623 (+1.4%, projection-based). `[digest §B.3]`
+- **2022 agreement** (superseded): Initial Term through Dec 31, 2024. Had a $50K start-up fee (dropped after 2022) + a Continental Breakfast $8 SKU (dropped in the 2025 SOW). `[digest §A, §C]`
+
+## 7. PROVENANCE & ATTRIBUTION KEY (for this file)
+- **Contract facts**: `../CONTRACT_DIGEST_TXR-AZ.md` (2025-2027 master + 2025 SOW).
+- **Rates + tax + worked examples**: invoices K300168585 (MLB) + K300168870 (MiLB), via `EVIDENCE_TXR-AZ.md` + the Batch-3 SF/deposit extraction (snack rates).
+- **Deposit amount + cadence**: finance §W (`PFS Service Fees 2026.xlsx`).
+- **Money shape / fee-model**: fee-model probe (§Z) — `actuals_drive_invoice`, deposit out-of-band.
+- **Contacts + build rulings**: `../LEDGER.md` Batch-3 build rulings (Kevin, 2026-07-16).
+- **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TXR-AZ build).
+
+---
+*Completeness: FULLY-CAPTURED. Per-meal with 20% deposit-triggered discount; fixed 2.5%/yr escalation (cleanest of the 11 — contract→escalation→signed→PG→invoice all cohere). Post-deposit rates invoice-confirmed to the penny (MLB $28.58, MiLB $14.29, snacks $10.93/$5.89), AZ 9.5% tax exact. 2026 deposit $301,623 (3× $100,541) finance-confirmed; not a PG cell (actuals_drive_invoice). MLB Dinner operationally served at $28.58 despite SOW listing B+L only. Non-blocking: deposit golden seed (Phase E), 2026 SOW memorialization, Continental 2026 price.*

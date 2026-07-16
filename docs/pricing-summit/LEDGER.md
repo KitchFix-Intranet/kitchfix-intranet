@@ -1063,3 +1063,149 @@ Sandbox files with edits ahead of main:
 5. ~~ACCOUNT_CIN-KY~~ — CORRECTION: already MERGED in #441, sandbox = main, NOT a pending edit. Removed from the enrichment PR.
 6. TIER1_SC_BILLING_OVERVIEW_DRAFT (R9a/R9b/R9c SF-tax sub-clauses) — NEW this check
 7. LEDGER (all the §W/§X/§Y/§Z + SF-invoice + probe entries; main is at 967, sandbox now ~1050+)
+
+---
+
+## BATCH-3 CONTRACT + EVIDENCE REVIEW (2026-07-16) — re-scopes the invoice extraction
+Re-read all 6 Batch-3 source docs (CONTRACT_DIGEST + EVIDENCE for TBJ-FL, TBR-FL, TXR-AZ) before extraction. Key finding: **the EVIDENCE packs already contain the per-meal invoices for all three accounts** — so the per-meal rate tables + tax rates are already invoice-confirmed. The extraction re-scopes to the FEW things still missing (SF/deposit invoices, BGC).
+
+### TXR-AZ — model fully clear, per-meal already invoice-confirmed (NOT a blank slate — I was wrong)
+- **20% deposit-triggered discount** (pay Annual Deposit = 20% of Services Fee in 3 installments Jan/Feb/Mar → every meal discounted 20%). NOT a straight per-meal account.
+- **Fixed 2.5%/yr escalation** (§2.a, NOT CPI): 2026 = 2025 × 1.025. Gives MONEY_MODEL exactly: MLB $35.72/$28.58, MiLB $17.87/$14.29.
+- **TWO 2026 invoices already in EVIDENCE**: K300168585 (MLB, $28.58, AZ tax **9.5%** Surprise), K300168870 (MiLB $14.29 + Pre-Game Hot Snack $10.93 + Regular Snack $5.89). Rates match to the penny.
+- **$301,623 = 2026 deposit** (2025 was $297,419; +1.4%, projection-based not formula). 3× $100,541 Jan/Feb/Mar.
+- **2026 SOW MISSING from folder** (only 2025 SOW attached to 2025-2027 master) — 2026 deposit amount not in paperwork, but calculable + finance-confirmed. FLAG: paperwork gap.
+- MLB Dinner: contract lists MLB Breakfast+Lunch only; PG has MLB Dinner @ $28.58 (operationally same, or in the missing 2026 SOW). Minor flag.
+- STILL MISSING: a 2026 DEPOSIT invoice (different from the weekly meal invoices we have) — would confirm $301,623 / 3× $100,541.
+
+### TBR-FL — Joe #3 answered, model clear, per-meal already invoice-confirmed
+- **MLB = per-meal, NO SF.** MiLB = per-meal with a **25% buy-down** funded by the SF (Rates "reduced by 25% for all billings for Minor League").
+- **SF ANNUALLY RECURRING** ($200K static + variable 2nd installment) — ledger already reversed the old "one-time 2024" reading (C-2). 2026 = $457,768 = $200,000 (K300168375, due 11/1/25, PIF) + **$257,768** (K300168376, due 2/1/26, PIF — the variable one). §W-confirmed.
+- **75% of CPI** escalation (NOT 100% — differs from TBJ-FL). Feeds escalation-verification pass.
+- **BGC (Boys & Girls Club) IS in-scope** — rides on TBR as a 2nd client (~$6.50/lunch), $79,950 P&L 2200 (A-11). Tracked in the SC per §T.
+- **TWO 2026 invoices already in EVIDENCE**: K300168545 (MLB, Bfast $35.63/Lunch-Dinner $39.48, FL 7%), K300168871 (MiLB, Bfast $17.83/Lunch-Dinner $21.68 + Road Sandwiches $15 + Labor Fee $280 + Extra Protein $111.84).
+- ⚠️ **MiLB rate conflict**: invoice Lunch/Dinner **$21.68** vs MONEY_MODEL digest **$20.96** ($0.72/meal delta). NEEDS KEVIN RULING on which is correct (invoice is ground truth, but digest may reflect a different escalation calc). Rate-table gaps: digest lacks Breakfast rows (MLB $35.63, MiLB $17.83) + add-ons (Road Sandwiches, Labor Fee, Extra Protein).
+- Memo template error: both TBR invoices say "2025" in the memo (cosmetic QB bug) — flag Sebastian.
+- STILL MISSING (lower priority — amounts already §W-confirmed): copies of the SF installment invoices (K300168375/168376) for golden seeds; a BGC invoice to confirm the $6.50 line.
+
+### TBJ-FL — the +13.89% escalation jump is the real open question; SF invoice is the high-value gap
+- **Flat SF $452,812/yr** (contract §12(a)) + per-meal in parallel. Per-meal already invoice-confirmed: K300168548 (MLB $23.12, FL 7%), K300168872 (MiLB $11.55).
+- ⚠️ **THE JUMP**: §W 2026 bills **$515,712** vs contract base **$452,812** = **+13.89%** one-year. TBJ's escalator (§12(c)) is provider-initiated, **100% of CPI Food Away From Home**, max 1 increase/yr, requires Club WRITTEN APPROVAL. A ~14% single jump is large for that mechanism → either compounded multi-year CPI catch-up or a negotiated non-CPI step. **UNRESOLVED — the SF invoice is the best lever to confirm what bills + hint at the basis.** 3× $171,904 Jan/Feb/Mar per §W.
+- ⚠️ **FSL-vs-FCL merge**: contract has TWO MiLB tiers (FSL $14.50, FCL $10.14); invoice + PG use ONE blended $11.55. Contract-vs-practice conflict — note for the build.
+- **MFN clause present** (§12(d), "Favored Pricing") — could obligate KitchFix to pass more-favorable pricing to TBJ. Operational risk to note.
+- **Governing law split**: master → Ontario, SOW → Florida. Canadian withholding-tax framework (§7, NR301 forms) — the client is Canadian (Rogers Blue Jays).
+- STILL MISSING (HIGH VALUE): the SF invoice — confirms $515,712 / 3× $171,904, FL tax on the SF, and the escalation basis.
+
+### RE-SCOPED EXTRACTION TARGETS (per-meal invoices already in hand — do NOT re-pull those)
+1. **TBJ-FL SF invoice** — HIGH VALUE (the +13.89% jump; $515,712 / 3× $171,904; FL tax on SF).
+2. **TXR-AZ 2026 deposit invoice** — confirms $301,623 / 3× $100,541 (deposit ≠ the weekly meal invoices we have).
+3. **TBR-FL SF installment invoices** (K300168375 $200K + K300168376 $257,768) — golden seeds; amounts already §W-confirmed so lower priority.
+4. **BGC invoice** (TBR-FL) — confirms the $6.50 in-scope BGC line on a real doc.
+Everything else (per-meal rates, per-account tax rates, the models) is already established from the evidence packs + §W.
+
+### RULING NEEDED FROM KEVIN (before/at TBR-FL build)
+- **TBR-FL MiLB Lunch/Dinner rate**: invoice $21.68 vs digest $20.96. Which is the correct 2026 rate for the account file + PG?
+
+### BATCH-3 BILLING-ROUTING NUANCE (Kevin, 2026-07-16) — MLB vs MiLB = different client cost centers
+For the spring-training PDC accounts (TBR-FL, TBJ-FL, TXR-AZ), **MLB meals and MiLB meals bill to DIFFERENT client-side contacts / cost centers** — even though during spring training the food is served under the same roof (MLB players eat at the PDC alongside everyone else). One physical operation, two invoice streams by design. This explains why each account shows two invoices with different Bill-To contacts — it is NOT a data inconsistency; the account files must state it so nobody "corrects" it.
+
+**TBR-FL** (the clearest example):
+- **Erik Hart** = **MLB** meal billing. He is WITH the MLB team at the PDC (Charlotte Sports Park) during spring training, then moves to **Tropicana Field** with the MLB club after ST. (Invoice K300168545 MLB → Erik Hart.)
+- **Sean "Sunny" Jones** = **MiLB** meal billing. He is at the complex **year-round** (the MiLB operation doesn't leave when ST ends). (Invoice K300168871 MiLB → Sunny Jones.)
+- Same roof during spring training; MLB → Erik's cost center, MiLB → Sunny's cost center.
+
+**TBJ-FL** (same pattern): MLB invoice K300168548 → **Michelle Rodgers**; MiLB invoice K300168872 → **Charlie Wilson**. Same Rogers Blue Jays entity, split by level/cost center. NOTE: Michelle Rodgers is a departed/prior contact (Katarina Dimino is the current TBJ contact) — the MLB-side contact needs a refresh, but the two-cost-center STRUCTURE is the durable fact.
+
+**TXR-AZ** (same pattern): MLB invoice K300168585 → Texas Rangers Surprise; MiLB invoice K300168870 → **Stanton "Stosh" Hoover** / Texas Rangers Surprise. Same entity, split by level/cost center.
+
+**BUILD IMPACT (all 3 Batch-3 accounts):**
+- The account file's operations/identity section states: MLB and MiLB bill to **separate client contacts / cost centers** (name the contacts per account), even though it's one operation under one roof in spring training.
+- **Bill export**: MLB and MiLB emit as SEPARATE invoices per account, routed to the correct contact/cost center. (Reinforces R7 service-class-within-account + adds the routing layer: different rates AND different client-side payers.)
+- The stable fact is the ROLE split (MLB-billing-contact vs MiLB-billing-contact); individual names churn + need the year-start contact refresh.
+- Erik Hart's dual-location detail (PDC in spring → Tropicana after) is an operational note; the durable fact is the MLB/MiLB routing split.
+
+### BATCH-3 CONTACT CORRECTIONS (Kevin, 2026-07-16) — invoices show STALE contacts
+The sampled invoices carry point-in-time Bill-To names that are now OUT OF DATE. Correct current contacts for the account-file builds (invoices are ground truth for AMOUNTS/tax, NOT for current contacts):
+- **TBJ-FL MLB contact = Katarina Dimino** (NOT Michelle Rodgers — Michelle departed; she's on the sampled invoice K300168548 but is the prior contact). MiLB = Charlie Wilson (AP, both TBJ accounts). So TBJ-FL: MLB → Katarina Dimino, MiLB → Charlie Wilson.
+- **TXR-AZ MLB contact = Brandon Boyd** (the same Brandon Boyd who is the TXR-TX-H clubhouse manager / main client — makes sense, MLB Rangers relationship). MiLB → Stanton "Stosh" Hoover (on invoice K300168870). So TXR-AZ: MLB → Brandon Boyd, MiLB → Stosh Hoover.
+- **TBR-FL** (unchanged, both current): MLB → Erik Hart, MiLB → Sean "Sunny" Jones.
+→ Account files use these CURRENT contacts in the identity/ops sections; note that sampled invoices may show prior names (Michelle Rodgers on TBJ MLB) as point-in-time. All Batch-3 contacts still ride the year-start refresh cadence.
+
+---
+
+## BATCH-3 SF/DEPOSIT EXTRACTION — target invoices NOT delivered; bonus rate confirms (2026-07-16)
+The re-scoped extraction (`INVOICE_EXTRACTION_batch3_SF.md`) targeted 4 missing invoice types (TBJ-FL SF, TXR-AZ deposit, TBR-FL SF, BGC). **NONE were in the delivered file set** — all 6 files were per-meal weekly invoices (the type the brief said not to re-pull; likely a file-selection slip). CC correctly wrote a gap report rather than re-transcribing per-meal invoices already in the evidence packs.
+
+**Still missing (unchanged targets):**
+- ❌ TBJ-FL SF installment ($171,904 × 3; the +13.89% jump)
+- ❌ TXR-AZ 2026 deposit installment ($100,541 × 3, Jan/Feb/Mar)
+- ❌ TBR-FL SF installments (K300168375 $200K + K300168376 $257,768)
+- ❌ BGC invoice (the $6.50 in-scope TBR line)
+
+**BONUS banked (useful even though not the ask):**
+- **TXR-AZ snack rates CONFIRMED** (closes the B-3 gap): `Pre-Game Hot Snack $10.93` + `Regular Snack $5.89` (invoice K300168870). Both match 2025×1.025.
+- **TBR-FL add-on rates SURFACED** (first invoice-level sighting): `Road Sandwiches $15.00/each` (confirms Joe's contract-side $15), `Labor Fee $280.00 flat` (new mechanic — a labor line), `Extra Protein (TBR) - Chicken/Pork $111.84 flat` (aligns w/ QBR C-24's "Protein C/P" ~$107.64 tracking). Invoice K300168871.
+- **TBR-FL MiLB summer invoice tax = 6.93%** (not the exact 7.00% on the buffet lines) — suggests MIXED taxability across the add-on lines (Road Sandwiches / Labor Fee / Extra Protein may carry different tax flags than base buffet). FLAG for Sebastian; not a math error. Relevant for the TBR-FL bill-export tax handling.
+- **New stakeholder names**: TXR-AZ MiLB → **Stanton "Stosh" Hoover** (confirms the corrected contact); TBR-FL → **Erik Hart** appears as MLB AP recipient (confirms the MLB/MiLB routing: Erik = MLB, Sunny = MiLB).
+- Cross-confirms per-account tax: TBR/TBJ 7.00% exact, TXR-AZ 9.50% exact.
+
+**DECISION POINT**: the 4 target invoices remain the only genuine gap for Batch 3. Two paths — (a) Kevin re-pulls the correct SF/deposit/BGC files → then build all 3 complete; or (b) build all 3 NOW from the very substantial data in hand (contracts + §W fees + per-meal invoices + PG catalogs + these bonus rates), marking the narrow gaps (TBJ-FL SF invoice-seed, TXR-AZ deposit invoice-seed, TBR-FL SF invoice-seed, BGC rate) as "pending invoice." The §W finance doc already CONFIRMS all three fee amounts, so these invoices would give golden-test SEEDS, not new fee facts — meaning (b) is viable and the gaps are Phase-E (certification) items, not build blockers.
+
+---
+
+## BATCH-3 BUILD RULINGS (Kevin, 2026-07-16) — answers to the consolidated question list
+Answers to build TBJ-FL, TBR-FL, TXR-AZ. Most confirmed prior readings; several sharpened or corrected facts.
+
+### TBJ-FL
+1. **Fee = $515,712 is the BILLABLE 2026 amount per the "PFS Service Fees 2026" finance sheet — NEGOTIATED last year.** The contract's $452,812 is simply OUTDATED, not a mystery +13.89% escalation. File states $515,712 as operative (finance = authority); contract base = historical/superseded. NO "escalation basis to investigate" framing — settled negotiated figure. **This also removes TBJ-FL from the escalation-verification concern** (fee is negotiated, not formula-derived).
+2. **FSL/FCL confirmed + location detail**: FCL (minor-leaguers at the PDC) = $11.55, served at PDC. FSL (Dunedin Single-A) = $16.51, PRODUCED at the PDC but DELIVERED to TD Ballpark (~15 min drive) where it's reheated/plated in the clubhouse. → TBJ-FL is PARTLY a commissary/delivery operation (for the FSL stream). Two distinct services, two locations.
+3. **SF cadence**: 3× $171,904 Jan/Feb/Mar — the period-by-period BILLED TOTALS are in the "PFS Service Fees 2026" sheet (finance = the cadence/timing source, supersedes the OneSheeter-sourced tag). Confirmed.
+4. **TBJ-NY cross-ref confirmed**: Buffalo bills through the Toronto PDC master (Dec 2018 MSA). TBJ-FL file notes Buffalo as affiliated sub-scope. Contacts: Katarina Dimino (MLB/relationship, both TBJ accounts), Charlie Wilson (MiLB AP).
+5. **Media Meals = $16** (not stale $15). Confirmed.
+
+### TBR-FL
+6. **Commissary model CONFIRMED — with a CORRECTION**: TBR-FL is NOT the only commissary operation. **CIN-KY is ALSO a commissary operation** (produces at commissary, delivers). Correct distinction: **TBR-FL is the only commissary serving a PDC; CIN-KY serves a MiLB team.** → RIPPLE: CIN-KY (already merged) may state "TBR is the only commissary" or imply CIN-KY uniqueness incorrectly — check + correct the framing. "Commissary model" is shared (TBR + CIN-KY); what's unique to TBR is commissary-serving-a-PDC.
+7. **BGC rate = $6.50/meal.** ⚠️ **Kevin HAS a BGC contract that needs CC extraction** (same CONTRACT_DIGEST treatment as all other accounts) → NEW DELIVERABLE: queue a CC prompt to extract the BGC contract + fold into the markdowns. BGC = in-scope TBR-FL revenue (second client on the commissary), $6.50/lunch, ~$79,950 P&L 2200. File records $6.50 now + notes the contract-digest is pending.
+8. **MiLB three rates (VERIFIED)**: Breakfast **$17.83**, Lunch **$21.68**, Dinner **$20.96** (Kevin confirmed 2026-07-16 — $20.96, from signed $20.96183; the earlier '$20.69' was a typo). MLB per-meal (no SF): Breakfast $35.63, Lunch/Dinner $39.48. LOCKED.
+9. **SF structure — $200K is STATIC**: installment 1 = $200,000 (static, always); installment 2 = variable (2026 = $257,768) → total $457,768. Same cadence every year (signing date + Feb 1). The contract text references the ORIGINAL year's amounts ($200K + $120,569.84) but the STRUCTURE (static $200K + variable second) is fixed. Period-level billed totals in the "PFS Service Fees 2026" sheet. Going-forward variable-derivation method still a Joe question (non-blocking).
+10. **Add-ons CONFIRMED**: Road Sandwiches $15, Labor Fee $280 flat, Extra Protein Chicken/Pork $111.84. Mixed-taxability note (add-on lines ~6.93% blended vs 7% buffet) recorded with the rate table.
+11. **"Breakfast - MiLB ST" vs "Breakfast - MiLB"**: both **$17.83** (round up), two calendar-scoped entries, same rate. Confirmed.
+
+### TXR-AZ
+12. **Deposit-discount model confirmed**: 20% deposit-triggered discount (pay Annual Deposit = 20% of Services Fee, 3 installments Jan/Feb/Mar → 20% off every meal). Fixed 2.5%/yr escalation.
+13. **Rates confirmed**: MLB $28.58 (post-deposit), MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. AZ tax 9.5%.
+14. **Deposit confirmed**: 2026 = $301,623 (3× $100,541). Contacts: MLB Brandon Boyd, MiLB Stosh Hoover.
+15. **MLB Dinner confirmed**: contract lists MLB Breakfast+Lunch only; PG has MLB Dinner @ $28.58. Record as "operationally served, same rate; likely in the missing 2026 SOW."
+
+### RESOLVED — TBR-FL MiLB Dinner rate = $20.96 (Kevin, 2026-07-16)
+Dinner = **$20.96** (signed $20.96183; the '$20.69' was a typo). Final TBR-FL MiLB rate table LOCKED: Breakfast $17.83 · Lunch $21.68 · Dinner $20.96. All three ready for the build.
+
+---
+
+## BGC CONTRACT DIGEST — extracted (2026-07-16, CC) + TBR-FL corrections
+CC extracted the BGC contract → `CONTRACT_DIGEST_BGC.md` (`Boys and Girls Club Contract 25_26`, single 5-page catering contract with **Boys & Girls Clubs of Charlotte County**, Port Charlotte FL). Findings folded into ACCOUNT_TBR-FL. Key results:
+
+### CONFIRMED
+- **$6.50 rate — contract-verbatim** (§V "$6.50 per Estimated Meal" + §VI "$6.50 per meal"). Kevin's figure matches exactly. FLAT rate — no split by meal type, no tiering.
+- **Term = Aug 19, 2025 → May 21, 2026** (10-month school year, Tue-Thu, 1:30pm delivery). Signed Aug 3, 2025; Josh Katt (KitchFix) + BGC-side signatory [handwritten, illegible — Kevin to confirm].
+- **BGC is TAX-EXEMPT** (§V + §X.b — "Client has provided Tax Exempt documentation"). No sales tax on BGC lines.
+- **Contractually INDEPENDENT of the Rays** — standalone client (BGC of Charlotte County); commissary overlap is operational, not contractual. Rays contract not a party.
+- **Billing = prepaid 4-week periods**: Period Estimate 7+ days ahead → invoice at $6.50 × estimate at period start → Club pays BEFORE period begins → unserved meals credit forward. Check-only payment (§VII, only box checked); 5%/month late fee (§VIII); 125/day = planning estimate, not a billed floor.
+
+### CORRECTIONS to as-built TBR-FL (the ripple)
+1. **⚠️ Meal type: NOT "lunch" → after-school supper.** The ledger banked "$6.50 BGC lunch rate" (C-5). The contract corrects this: **1:30pm delivery** (post-lunch), the contract's **sample menu is a DINNER menu**, and service follows the USDA **CCFP** pattern — all consistent with after-school supper delivery, not lunch. Rate is flat regardless of meal type → a LABELING correction, not a price change. → also propagate to MONEY_MODEL in the batch-doc-PR (drop "lunch" for BGC). C-5's "lunch" label was imprecise.
+2. **⚠️ School-year term straddles two calendar years, NO auto-renewal.** For calendar **2026, only Jan 1–May 21** is under contract; **fall 2026 (Aug+) needs a NEW BGC contract not yet on file.** → BGC's 2026 revenue projection is SPRING-ONLY (partial-year) unless/until a 2026-27 renewal is signed. New non-blocking paperwork item: BGC 2026-27 renewal (owner Kevin). The ~$79,950 P&L 2200 figure is the 2025-26 SCHOOL-YEAR total (not a calendar-2026 figure) — relevant for the Phase-E P&L tie-out.
+3. **Tax-exempt** confirmed (was "pending" in the as-built file).
+
+### FLAGS (non-blocking, from the digest)
+- **Delivery location wording**: §II says "deliver in Englewood" but Bill-To = Port Charlotte (21500 Gibralter Dr) — adjacent Charlotte County communities; delivery site vs billing HQ. Non-blocking.
+- **Payment method**: Check is the ONLY approved method (ACH + CC unchecked). If BGC is actually paying via ACH, that's out-of-contract — note to Sebastian.
+- **Caterer termination clause very one-sided** (§X.e — KitchFix can cancel "at any time without notice," only refunding advances); Client owes 30-day notice (§XII). Note for dispute reference only.
+- **BGC-side signatory handwritten/illegible** — Kevin to confirm current BGC signatory + AP contact (the signer may not be the AP recipient).
+- **CC's fill-rate calc**: ~$79,950 ÷ $6.50 ≈ 12,300 meals over ~120 service days ≈ ~102/day avg (within the 125/day estimate). Consistent.
+
+### BATCH-DOC-PR SCOPE ADDITION
+- MONEY_MODEL: document BGC as in-scope TBR-FL revenue, $6.50 flat, **after-school supper (NOT lunch)**, tax-exempt, school-year term. Drop any "lunch" label.
+
+### PLACEMENT NOTE (for the Batch-3 commit)
+`CONTRACT_DIGEST_BGC.md` should be committed alongside the other `CONTRACT_DIGEST_*.md` files IF those are tracked in the repo (CC to check `docs/pricing-summit/CONTRACT_DIGEST_*.md` and match the convention). TBR-FL's pointer (`../CONTRACT_DIGEST_BGC.md`) matches the sibling-digest convention used by all account files.
