@@ -7,7 +7,10 @@
 //
 // SC-057 aligns the toast on whole dollars; consolidation lives here.
 export function fmt$(n, opts) {
-  const decimals = (opts && opts.decimals) || 0;
+  // SC Stage 4: 2 decimals is the standard for exact-dollar surfaces.
+  // Explicit override still honored, incl. whole dollars: fmt$(n, { decimals: 0 }).
+  // The compact tile/card formatter fmt$K is intentionally unchanged.
+  const decimals = opts && opts.decimals != null ? opts.decimals : 2;
   const num = Number(n) || 0;
   const value = decimals === 0 ? Math.round(num) : num;
   return "$" + value.toLocaleString("en-US", {

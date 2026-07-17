@@ -7,7 +7,6 @@ import { isPastDate } from "./dayResolvers";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-function fmtPrice(n) { return "$" + Number(n).toFixed(2).replace(/\.00$/, ""); }
 function formatDate(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
@@ -136,6 +135,32 @@ function deltaChip(numVal, projVal) {
   const weightCls = isStrong ? " sc-day-row-delta--strong" : "";
   const sign = delta > 0 ? "+" : "−"; // U+2212 minus sign for typographic sanity
   return { text: `${sign}${mag}`, cls: `${dirCls}${weightCls}` };
+}
+
+// Unit label for the rate line. PG has no unit column, so infer from the
+// service name + flat flag (mirrors scripts/generate-price-book.mjs).
+function deriveUnit(name, isFlatFee) {
+  const n = (name || "").toLowerCase();
+  if (/coffee|fountain|bev/.test(n)) return "wk";
+  if (/extra protein/.test(n))       return "pan";
+  if (/\bmto\b/.test(n))             return "order";
+  if (/extended day labor/.test(n))  return "day";
+  return isFlatFee ? "ea" : "meal";
+}
+
+// Rate-cell content for a service: "$X.XX / unit" plus flag tags.
+// Non-revenue shows "not billed" instead of a rate.
+function renderRate(svc, rate, unit) {
+  if (svc.isNonRevenue) {
+    return <span className="sc-day-svc-tag sc-day-svc-tag--nonrev">not billed</span>;
+  }
+  return (
+    <>
+      <span className="sc-day-rate-amt">{fmt$(rate)} / {unit}</span>
+      {svc.isFlatFee && <span className="sc-day-svc-tag sc-day-svc-tag--flat">flat</span>}
+      {svc.isTaxFree && <span className="sc-day-svc-tag sc-day-svc-tag--tax">tax-free</span>}
+    </>
+  );
 }
 
 // In-service predicate: a (service, day) pair is in service iff the service
@@ -511,17 +536,17 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
 
   const groupSummary = useCallback((group) => {
     let meals = 0, rev = 0;
-    for (const s of group.services) { const v = getVal(s.colIndex); meals += v; rev += v * s.price; }
+    for (const s of group.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0); }
     return { meals, revenue: rev };
-  }, [getVal]);
+  }, [getVal, day.priceAtDate]);
 
   const summary = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
-      for (const s of g.services) { const v = getVal(s.colIndex); meals += v; rev += v * s.price; }
+      for (const s of g.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0); }
     }
     return { meals, revenue: rev };
-  }, [serviceGroups, getVal]);
+  }, [serviceGroups, getVal, day.priceAtDate]);
 
   const hasTouchedAny = touched.size > 0;
 
@@ -563,7 +588,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         const v = Number(editVal);
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
-        rev += v * price;
+        if (!s.isNonRevenue) rev += v * price;
       }
     }
     return { meals, revenue: rev };
@@ -582,7 +607,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         const v = day.projected[s.colIndex] ?? 0;
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
-        rev += v * price;
+        if (!s.isNonRevenue) rev += v * price;
       }
     }
     return { meals, revenue: rev };
@@ -778,35 +803,63 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
 
     let chip = null;
     if (inService && isTouched && !isEmpty) {
-      const numVal = Number(editVal);
-      chip = deltaChip(numVal, projVal);
+      chip = deltaChip(Number(editVal), projVal);
     }
 
+    // Qty cell = input + delta chip (in-service) or the archived chip.
+    // Protected mechanic - unchanged from pre-Stage-4 except an a11y label.
+    const qtyCell = inService ? (
+      <div className="sc-day-row-right">
+        <input type="text" inputMode="numeric" pattern="[0-9]*"
+          aria-label={svc.name}
+          className={`sc-day-input ${isTouched && !isEmpty ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
+          placeholder={String(projVal)}
+          value={editVal}
+          onChange={e => handleChange(svc.colIndex, e.target.value)} />
+        {chip ? (
+          <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+        ) : (
+          <span className="sc-day-row-delta" />
+        )}
+      </div>
+    ) : (
+      <span className="sc-day-row-archived-chip" title={`Archived as of ${archiveDate}`}>
+        Archived {archiveDate}
+      </span>
+    );
+
+    // Fee accounts: no per-meal dollars by design - keep the two-cell row.
+    if (isFeeAccount) {
+      return (
+        <div key={svc.colIndex} className={`sc-day-row${!inService ? " sc-day-row--archived" : ""}`}>
+          <div className="sc-day-row-left">
+            <span className="sc-day-row-name">{svc.name}</span>
+          </div>
+          {qtyCell}
+        </div>
+      );
+    }
+
+    // Per-service ledger row (Stage 4). Rate + amount from the effective-
+    // dated price the sc_daily_revenue view uses.
+    const rate = day.priceAtDate?.[svc.colIndex] ?? svc.price ?? 0;
+    const unit = deriveUnit(svc.name, svc.isFlatFee);
+    const entered = inService && isTouched && !isEmpty;
+
     return (
-      <div key={svc.colIndex} className={`sc-day-row${!inService ? " sc-day-row--archived" : ""}`}>
+      <div key={svc.colIndex} className={`sc-day-row sc-day-row--ledger${!inService ? " sc-day-row--archived" : ""}`}>
         <div className="sc-day-row-left">
           <span className="sc-day-row-name">{svc.name}</span>
         </div>
-        <div className="sc-day-row-right">
-          {inService ? (
-            <>
-              <input type="text" inputMode="numeric" pattern="[0-9]*"
-                className={`sc-day-input ${isTouched && !isEmpty ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
-                placeholder={String(projVal)}
-                value={editVal}
-                onChange={e => handleChange(svc.colIndex, e.target.value)} />
-              {chip ? (
-                <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
-              ) : (
-                <span className="sc-day-row-delta" />
-              )}
-            </>
-          ) : (
-            <span className="sc-day-row-archived-chip" title={`Archived as of ${archiveDate}`}>
-              Archived {archiveDate}
-            </span>
-          )}
-        </div>
+        <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
+        {qtyCell}
+        <span className="sc-day-row-amount">
+          {svc.isNonRevenue
+            ? <span className="sc-day-amount-none" title="Not billed">—</span>
+            : entered
+              ? fmt$(Number(editVal) * rate)
+              : <span className="sc-day-amount-pending">–</span>}
+        </span>
       </div>
     );
   }
@@ -848,24 +901,45 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               <div key={group.name} className="sc-day-group">
                 <div className="sc-day-group-header">
                   <span className="sc-day-group-name">{group.name}</span>
-                  {!isFeeAccount && (
-                    <span className="sc-day-group-price">
-                      {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
-                    </span>
+                  {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) && (
+                    <span className="sc-day-group-seg">{accountSegment}</span>
                   )}
                 </div>
+                {!isFeeAccount && svcs.length > 0 && (
+                  <div className="sc-day-ledger-head" aria-hidden="true">
+                    <span className="sc-lh-name">Service</span>
+                    <span className="sc-lh-rate">Rate</span>
+                    <span className="sc-lh-qty">Qty</span>
+                    <span className="sc-lh-amount">Amount</span>
+                  </div>
+                )}
                 {svcs.map(s => {
                   const projVal = day.projected[s.colIndex] ?? 0;
                   const numVal = getVal(s.colIndex);
                   // SC-064: review adopts the same helper as entry so
-                  // the direction/weight semantics stay identical
-                  // across the confirm step.
+                  // the direction/weight semantics stay identical.
                   const chip = deltaChip(numVal, projVal);
+                  if (isFeeAccount) {
+                    return (
+                      <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
+                        <span className="sc-day-row-name">{s.name}</span>
+                        <span className="sc-day-review-val2">{numVal}</span>
+                        <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+                      </div>
+                    );
+                  }
+                  const rate = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
                   return (
-                    <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
-                      <span className="sc-day-row-name">{s.name}</span>
-                      <span className="sc-day-review-val2">{numVal}</span>
-                      <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+                    <div key={s.colIndex} className="sc-day-row sc-day-review-row2 sc-day-row--ledger">
+                      <div className="sc-day-row-left"><span className="sc-day-row-name">{s.name}</span></div>
+                      <span className="sc-day-row-rate">{renderRate(s, rate, deriveUnit(s.name, s.isFlatFee))}</span>
+                      <div className="sc-day-row-right">
+                        <span className="sc-day-review-val2">{numVal}</span>
+                        <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+                      </div>
+                      <span className="sc-day-row-amount">
+                        {s.isNonRevenue ? <span className="sc-day-amount-none">—</span> : fmt$(numVal * rate)}
+                      </span>
                     </div>
                   );
                 })}
@@ -1062,13 +1136,19 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             <div key={group.name} className="sc-day-group">
               <div className="sc-day-group-header">
                 <span className="sc-day-group-name">{group.name}</span>
-                {!isFeeAccount && (
-                  <span className="sc-day-group-price">
-                    {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) ? `${accountSegment} · ` : ""}{fmtPrice(group.services[0]?.price || 0)} / meal
-                  </span>
+                {accountSegment && !groupNameCarriesSegment(group.name, accountSegment) && (
+                  <span className="sc-day-group-seg">{accountSegment}</span>
                 )}
               </div>
 
+              {!isFeeAccount && activeSvcs.length > 0 && (
+                <div className="sc-day-ledger-head" aria-hidden="true">
+                  <span className="sc-lh-name">Service</span>
+                  <span className="sc-lh-rate">Rate</span>
+                  <span className="sc-lh-qty">Qty</span>
+                  <span className="sc-lh-amount">Amount</span>
+                </div>
+              )}
               {activeSvcs.map(svc => renderServiceRow(svc))}
 
               {/* Per-group "actuals match" button */}
