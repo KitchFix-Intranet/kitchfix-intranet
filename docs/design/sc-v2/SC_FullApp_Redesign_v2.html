@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>KitchFix SC · Full-app redesign direction</title>
+<style>
+  :root{
+    --navy:#1a3050;--navy-deep:#122238;--navy-rail:#15273c;--navy-2:#223b55;
+    --cream:#f7f3ea;--band:#efe9dc;--card:#fff;--page:#e8e3d8;
+    --ink:#1f2d3d;--ink-soft:#46525f;--muted:#8b95a1;--rate:#7a838f;
+    --green:#2f7d4f;--green-deep:#1f6b41;--green-bright:#37a866;--green-wash:#f1f9f4;--green-line:#cae3d6;
+    --e-bg:#d9ecdf;--e-bd:#a9d4ba;--e-fg:#1f6b41;
+    --u-bg:#f0f7f2;--u-bd:#dcebe1;--u-fg:#7ba38b;
+    --n-bg:#fbeed3;--n-bd:#e7cb8e;--n-fg:#8a611a;
+    --o-bg:#fbe3dd;--o-bd:#e5a496;--o-fg:#a03b28;
+    --x-bg:#f1ede2;--x-fg:#b3ab99;
+    --f-bg:#fdf1ee;--f-bd:#d98070;--f-fg:#a03b28;
+    --amber:#a9761f;--copper:#c15b2e;
+    --line:#eae4d6;--line-2:#e2dccd;--ghost:#a49c8a;
+    --flat-bg:#e8edf3;--flat-fg:#3f5169;--flat-bd:#a9b6c6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);font-family:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;padding:30px 16px 70px}
+  .wraplbl{max-width:1180px;margin:38px auto 10px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#b07d28}
+  .wraplbl:first-child{margin-top:0}
+  .note{max-width:1180px;margin:0 auto 16px;font-size:13px;color:#5c6672;line-height:1.6}
+  .note b{color:var(--navy-deep)} code{background:#dcd7c9;padding:1px 5px;border-radius:4px;font-size:12px}
+  .cap{max-width:1180px;margin:13px auto 0;font-size:12.5px;color:#5c6672;line-height:1.65}.cap b{color:var(--navy-deep)}
+
+  /* ---------- app frame + command bar (replaces the hero banner) ---------- */
+  .app{max-width:1180px;margin:0 auto;background:var(--cream);border-radius:16px;overflow:hidden;box-shadow:0 3px 8px rgba(18,34,56,.10),0 24px 64px rgba(18,34,56,.18);display:flex;flex-direction:column}
+  .cmd{background:var(--navy);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap}
+  .cmd .ttl{font-size:13px;font-weight:800;letter-spacing:.02em;margin-right:4px}
+  .cpill{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.22);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:600;color:#eef2f7;cursor:pointer}
+  .cpill:hover{background:rgba(255,255,255,.07)}
+  .cpill .car{opacity:.6;font-size:10px}
+  .ctag{font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 8px;border-radius:6px}
+  .ctag.pdc{background:#3d5a80;color:#dfe9f5}.ctag.mlb{background:#e9b45b;color:#4a3308}
+  .seg{display:inline-flex;background:rgba(255,255,255,.10);border-radius:9px;padding:3px}
+  .seg span{padding:5px 13px;border-radius:7px;font-size:12px;font-weight:700;color:#c8d4e2;cursor:pointer}
+  .seg span.on{background:var(--cream);color:var(--navy-deep)}
+  .cspace{flex:1}
+  .chipN{background:#f6dfae;color:#6b4a10;font-size:11.5px;font-weight:800;border-radius:16px;padding:5px 11px;cursor:pointer}
+  .chipO{background:#f0b3a6;color:#6b1f10;font-size:11.5px;font-weight:800;border-radius:16px;padding:5px 11px;cursor:pointer}
+  .cmeta{font-size:11.5px;color:#b7c4d4;font-weight:600}
+  .todaybtn{background:var(--cream);color:var(--navy-deep);border:none;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:800;cursor:pointer}
+  .shell{flex:1;min-height:0;display:flex}
+  .content{flex:1;min-width:0;overflow-y:auto;padding:16px 18px 18px}
+  .content::-webkit-scrollbar{width:9px}.content::-webkit-scrollbar-thumb{background:#d5cebd;border-radius:6px;border:2px solid var(--cream)}
+
+  /* phase strip */
+  .phase{display:flex;align-items:center;height:22px;border-radius:7px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line-2)}
+  .phase div{height:100%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5f5647;white-space:nowrap;overflow:hidden}
+  .pt-off{background:#eee9dd}.pt-st{background:#f3ddc4;color:#8a5426}.pt-ext{background:#dbe5ee;color:#3f5169}.pt-cx{background:#cfe0da;color:#2f5c4a}.pt-br{background:#e8d9c2;color:#7a5a22}.pt-ins{background:#e6dcec;color:#5d4a72}.pt-camp{background:#f0e6cf;color:#7a5a22}
+  .phase .now{box-shadow:inset 0 -3px 0 var(--navy)}
+
+  /* month mini-cards */
+  .mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .mc{background:var(--card);border-radius:11px;border:1px solid var(--line);padding:10px 11px 9px;box-shadow:0 1px 2px rgba(18,34,56,.04)}
+  .mc.today-m{border:1.5px solid var(--navy)}
+  .mc h4{margin:0 0 6px;font-size:13px;font-weight:800;color:var(--navy-deep);display:flex;justify-content:space-between;align-items:baseline}
+  .mc h4 .off{font-size:10px;color:var(--ghost);font-weight:600;font-style:italic}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+  .dow span{font-size:8px;font-weight:700;color:#c2bba9;text-align:center}
+  .dgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .dc{height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;position:relative;background:transparent;color:transparent}
+  .dc-e{background:var(--e-bg);border:1px solid var(--e-bd);color:var(--e-fg)}
+  .dc-u{background:var(--u-bg);border:1px solid var(--u-bd);color:var(--u-fg)}
+  .dc-n{background:var(--n-bg);border:1px solid var(--n-bd);color:var(--n-fg)}
+  .dc-o{background:var(--o-bg);border:1px solid var(--o-bd);color:var(--o-fg)}
+  .dc-x{background:var(--x-bg);color:var(--x-fg)}
+  .dc-f{background:var(--f-bg);border:1px dashed var(--f-bd);color:var(--f-fg)}
+  .dc-t{box-shadow:0 0 0 1.5px var(--navy)}
+  .dc .corn{position:absolute;top:0;right:0;width:0;height:0;border-top:6px solid var(--copper);border-left:6px solid transparent;border-top-right-radius:5px}
+  .mfoot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10.5px;font-weight:700;color:var(--ink-soft)}
+  .mfoot .amt{color:var(--navy-deep)}.mfoot .amt.g{color:var(--ghost);font-weight:600}
+  .mbar{height:3px;background:#eee8da;border-radius:2px;margin-top:5px;overflow:hidden}
+  .mbar div{height:100%;background:linear-gradient(90deg,#2f7d4f,#5cc98a)}
+
+  /* legend band */
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;padding:9px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:10.5px;color:var(--ink-soft);align-items:center}
+  .legend .lt{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .lg{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+  .sw{width:13px;height:13px;border-radius:4px;display:inline-block}
+
+  /* rail (shared anatomy) */
+  .rail{width:336px;flex:none;background:var(--navy-rail);color:#e8edf3;display:flex;flex-direction:column;border-left:1px solid var(--navy-2)}
+  .rtop{padding:18px 20px 14px;flex:none}
+  .rlbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7f95af}
+  .rtotal{font-size:31px;font-weight:800;letter-spacing:-.02em;margin-top:4px;color:#eafff2;font-variant-numeric:tabular-nums}
+  .rmeta{font-size:12px;color:#8fa4bd;margin-top:3px;line-height:1.5}
+  .rbar{height:6px;background:#23405f;border-radius:4px;margin-top:12px;overflow:hidden}
+  .rbar div{height:100%;background:linear-gradient(90deg,#2f7d4f,#4ade80)}
+  .rprog{font-size:11px;color:#7f95af;margin-top:6px}
+  .rlist{flex:1;min-height:0;overflow-y:auto;padding:2px 20px 10px}
+  .rlist::-webkit-scrollbar{width:8px}.rlist::-webkit-scrollbar-thumb{background:#2c4867;border-radius:6px;border:2px solid var(--navy-rail)}
+  .rsec{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#6f88a5;margin:14px 0 6px;padding-top:9px;border-top:1px solid #1c3149}
+  .rsec:first-child{border-top:none;margin-top:8px;padding-top:0}
+  .qrow{display:flex;align-items:center;gap:9px;padding:8px 10px;margin:0 -10px;border-radius:9px;font-size:12.5px;cursor:pointer}
+  .qrow:hover{background:#1b3350}
+  .qdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .qdot.n{background:#e9b45b}.qdot.o{background:#e07b64}
+  .qrow .qt{flex:1;color:#d5e0ee;font-weight:600}.qrow .qt small{display:block;font-weight:500;color:#7f95af;font-size:11px;margin-top:1px}
+  .qrow .go{color:#8fd0aa;font-weight:800;font-size:12px}
+  .ln{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6.5px 0;border-bottom:1px solid #1c3149;align-items:baseline}
+  .ln .n{color:#c9d7e8;font-weight:600}.ln .n small{color:#7f95af;font-weight:500;font-size:11px;margin-left:6px}
+  .ln .a{font-variant-numeric:tabular-nums;color:#eafff2;font-weight:700}
+  .ln .a .ok{color:#7fd6a3;margin-left:5px;font-size:11px}
+  .ln.gh .n,.ln.gh .a{color:#5f7ea3;font-weight:500}
+  .ln.att .a{color:#f2d49a}
+  .rfoot{padding:13px 20px 16px;flex:none;border-top:1px solid var(--navy-2)}
+  .rbtn{width:100%;background:var(--green-bright);color:#04220f;border:none;border-radius:11px;padding:12px;font-size:13.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+  .rbtn.quiet{background:transparent;border:1px solid #2c4867;color:#c4d3e5}
+  .rhint{text-align:center;font-size:11px;color:#7f95af;margin-top:8px}
+  /* ---------- period cards ---------- */
+  .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .pc{background:var(--card);border-radius:11px;border:1px solid var(--line);overflow:hidden;box-shadow:0 1px 2px rgba(18,34,56,.04)}
+  .pc.today-p{border:1.5px solid var(--navy)}
+  .pc .ph{display:flex;justify-content:space-between;align-items:baseline;padding:8px 11px;background:var(--band);border-left:3px solid var(--navy)}
+  .pc .ph b{font-size:13px;font-weight:800;color:var(--navy-deep)}
+  .pc .ph span{font-size:10px;color:var(--muted);font-weight:600}
+  .pc .ph .pstrip{width:22px;height:5px;border-radius:3px;margin-left:6px}
+  .pc .pd{padding:9px 11px 8px}
+  .pc .pfoot{display:flex;justify-content:space-between;padding:0 11px 9px;font-size:10.5px;font-weight:700;color:var(--ink-soft)}
+  .pc .pfoot .g{color:var(--ghost);font-weight:600}
+
+  /* ---------- period drill tiles ---------- */
+  .dowbig{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:6px}
+  .dowbig span{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#b9b19e;text-align:center;text-transform:uppercase}
+  .tgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .tile{background:var(--card);border:1px solid var(--e-bd);border-radius:10px;min-height:74px;padding:7px 8px;position:relative;cursor:pointer;transition:box-shadow .15s,transform .12s}
+  .tile:hover{box-shadow:0 3px 10px rgba(18,34,56,.12);transform:translateY(-1px)}
+  .tile.ent{background:var(--e-bg)}
+  .tile .d{font-size:12px;font-weight:800;color:var(--navy-deep)}
+  .tile .opp{font-size:8.5px;font-weight:800;letter-spacing:.03em;color:#3f5169;background:#e8edf3;border-radius:4px;padding:1px 4px;display:inline-block;margin-top:2px}
+  .tile .tm{font-size:8.5px;font-weight:700;border-radius:4px;padding:1px 4px;display:inline-block;margin-top:2px}
+  .tile .tm.n{background:#e3e6f5;color:#3d4a8a}.tile .tm.d{background:#fdeec9;color:#8a611a}
+  .tile .meals{font-size:12.5px;font-weight:800;color:var(--e-fg);margin-top:3px;font-variant-numeric:tabular-nums}
+  .tile .meals small{font-size:9.5px;color:#6f9b82;font-weight:700}
+  .tile .k{font-size:9.5px;color:#7d8a80;font-weight:700}
+  .tile.mlb-a{background:var(--u-bg);border-color:var(--u-bd)}
+  .tile.mlb-a .d{color:#7ba38b}
+  .tile.mlb-a .ns{font-size:9px;color:#9cb3a5;font-style:italic;margin-top:4px}
+  .tile.mlb-a .pl{position:absolute;top:6px;right:7px;font-size:9px;color:#8fb39d}
+  .tile.mlb-h{background:#eef6f0;border-color:#cfe4d6}
+  .tile.mlb-h .meals{color:#4d7a62}
+  .tile.non{background:var(--x-bg);border-color:transparent}
+  .tile.non .d{color:var(--x-fg)}
+  .tile.sched{border-style:solid}
+  .tile .ring{position:absolute;inset:-1px;border:2px solid var(--navy);border-radius:10px;pointer-events:none}
+
+  /* homestand strip */
+  .hsband{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 13px;margin-bottom:14px}
+  .hsband .nx{font-size:9.5px;font-weight:800;letter-spacing:.06em;background:var(--navy);color:#fff;border-radius:5px;padding:3px 7px}
+  .hsband .hst{font-size:12.5px;font-weight:800;color:var(--navy-deep)}
+  .hsband .hst small{font-weight:600;color:var(--muted);margin-left:7px;font-size:11px}
+  .hsblocks{display:flex;gap:4px;flex:1;justify-content:flex-end}
+  .hsb{height:16px;flex:1;max-width:52px;border-radius:5px;background:#20395a}
+  .hsb.done{background:var(--navy)}
+  .hsb.next{background:#e9b45b;position:relative}
+  .hsb.next::after{content:"HS8";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#4a3308}
+  .hsb.fut{background:#e4ddcd}
+
+  /* ---------- phones ---------- */
+  .phones{max-width:1180px;margin:0 auto;display:flex;gap:26px;justify-content:center;flex-wrap:wrap}
+  .phone{width:328px;height:700px;background:#000;border-radius:38px;padding:9px;box-shadow:0 20px 50px rgba(18,34,56,.22);flex:none}
+  .screen{width:100%;height:100%;background:var(--cream);border-radius:30px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .mtop{background:var(--navy);color:#fff;padding:14px 16px 12px;flex:none}
+  .mtop .r1{display:flex;justify-content:space-between;align-items:center}
+  .mtop .acct{font-size:13.5px;font-weight:800}
+  .mtop .acct small{display:block;font-weight:500;opacity:.65;font-size:11px;margin-top:1px}
+  .mtop .mseg{display:inline-flex;background:rgba(255,255,255,.12);border-radius:8px;padding:2px;font-size:10.5px;font-weight:700}
+  .mtop .mseg span{padding:4px 9px;border-radius:6px;color:#c8d4e2}
+  .mtop .mseg .on{background:var(--cream);color:var(--navy-deep)}
+  .msum{background:var(--navy-rail);color:#eafff2;padding:14px 16px;flex:none}
+  .msum .t{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+  .msum .s{font-size:11px;color:#8fa4bd;margin-top:2px}
+  .msum .bar{height:5px;background:#23405f;border-radius:3px;margin-top:9px;overflow:hidden}
+  .msum .bar div{height:100%;background:linear-gradient(90deg,#2f7d4f,#4ade80)}
+  .msum .chips{display:flex;gap:7px;margin-top:9px}
+  .mchip{font-size:10px;font-weight:800;border-radius:12px;padding:3px 9px}
+  .mchip.n{background:#f6dfae;color:#6b4a10}.mchip.o{background:#f0b3a6;color:#6b1f10}
+  .mlist{flex:1;overflow-y:auto;padding-bottom:84px}
+  .mrow{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+  .mrow .mm{flex:1;min-width:0}
+  .mrow .mm b{font-size:13.5px;color:var(--navy-deep)}
+  .mrow .mm small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+  .mrow .val{font-size:13px;font-weight:800;color:var(--navy-deep);font-variant-numeric:tabular-nums}
+  .mrow .val.g{color:var(--ghost);font-weight:600}
+  .mrow .st{width:8px;height:8px;border-radius:50%;flex:none}
+  .st.e{background:#48a874}.st.n{background:#e9b45b}.st.o{background:#e07b64}.st.u{background:#cfe0d6}.st.x{background:#ddd6c6}
+  .mgband{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--band);border-bottom:1px solid var(--line-2);border-left:3px solid var(--navy);font-size:11.5px;font-weight:800;color:var(--navy-deep);z-index:2}
+  .mgband small{font-weight:600;color:var(--muted)}
+  .mbarS{position:absolute;left:0;right:0;bottom:0;background:var(--navy-rail);color:#eafff2;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 -6px 20px rgba(18,34,56,.2)}
+  .mbarS .t{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+  .mbarS .s{font-size:10.5px;color:#8fa4bd;margin-top:1px}
+  .mbarS .go{background:var(--green-bright);color:#04220f;border:none;border-radius:10px;padding:10px 15px;font-size:13px;font-weight:800}
+</style></head>
+<body>
+<style>
+/* ---------- v2 polish additions ---------- */
+/* clickability: cards lift like tiles */
+.mc,.pc{cursor:pointer;transition:box-shadow .15s,transform .12s}
+.mc:hover,.pc:hover{box-shadow:0 4px 14px rgba(18,34,56,.12);transform:translateY(-1px)}
+/* rail: rows navigate (chevron), one footer button acts */
+.qrow .chev{color:#7fa0c4;font-weight:800;font-size:14px}
+/* rail scroll affordance */
+.rail{position:relative}
+.railfade{position:absolute;left:0;right:10px;bottom:74px;height:36px;background:linear-gradient(180deg,rgba(21,39,60,0),#15273c);pointer-events:none}
+/* WCAG bump on ghosted rail lines */
+.ln.gh .n,.ln.gh .a{color:#6d8cb0}
+/* phase strip: real "now" tick */
+.phase{position:relative;overflow:visible}
+.ptick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--navy);border-radius:2px}
+.ptick::after{content:"";position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:6px;height:6px;border-radius:50%;background:var(--navy)}
+.phase .cur{font-weight:800;color:#2f5c4a}
+/* note dot replaces emoji */
+.ndot{width:7px;height:7px;border-radius:50%;background:#6f93bd;opacity:.55;display:inline-block;margin-left:5px;vertical-align:middle}
+/* week bands inside the drill grid */
+.wband{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;background:var(--band);border:1px solid var(--line-2);border-left:3px solid var(--navy);border-radius:8px;padding:7px 13px;font-size:11px;font-weight:800;color:var(--navy-deep);margin-top:2px}
+.wband small{font-weight:600;color:var(--muted);margin-left:7px}
+.wband .wv{font-variant-numeric:tabular-nums}
+.wband .wv .ok{color:var(--green);margin-left:5px}
+/* mobile: rows are tap-throughs */
+.mrow{position:relative;cursor:pointer}
+.mrow::after{content:"›";color:#c9c2b0;font-weight:800;font-size:15px;margin-left:2px}
+.st.u{background:transparent;border:2px solid #a9cdb8}
+/* ---------- intranet chrome (in-situ) ---------- */
+.sitewrap{max-width:1280px;margin:0 auto;background:#f4f1e9;border-radius:18px;overflow:hidden;box-shadow:0 4px 10px rgba(18,34,56,.10),0 30px 70px rgba(18,34,56,.18)}
+.knav{background:#fff;border-bottom:1px solid #e7e2d4;display:flex;align-items:center;gap:8px;padding:11px 26px}
+.klogo{display:flex;align-items:center;gap:9px;margin-right:26px}
+.klogo .kmark{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:.02em}
+.klogo b{font-size:15px;color:#1a2733;letter-spacing:-.01em}
+.kitems{display:flex;gap:4px;flex:1;justify-content:center}
+.kit{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;font-size:13.5px;font-weight:600;color:#5a6675;cursor:pointer}
+.kit:hover{background:#f4f2ec}
+.kit.on{background:#e9effc;color:#3b64c4;font-weight:700}
+.kit .ki{width:15px;height:15px;border:1.6px solid currentColor;border-radius:4px;opacity:.75}
+.kit.on .ki{opacity:1}
+.kright{display:flex;align-items:center;gap:16px}
+.kbell{position:relative;width:20px;height:20px;border:1.7px solid #6b7686;border-radius:6px 6px 8px 8px;opacity:.9}
+.kbell::after{content:"9+";position:absolute;top:-8px;right:-11px;background:#e2483d;color:#fff;font-size:8.5px;font-weight:800;border-radius:9px;padding:1px 4px}
+.kava{width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.pagepad{padding:20px 24px 26px;background:#f1eee6}
+/* ribbon: hero collapsed into the command surface */
+.ribbon{background:linear-gradient(180deg,#1d3554,#16283f)}
+.ribbon .r1{display:flex;align-items:center;justify-content:space-between;padding:15px 18px 9px;color:#fff}
+.ribbon .r1 .pt{font-size:17px;font-weight:800;letter-spacing:-.01em}
+.ribbon .r1 .pt small{display:block;font-size:11.5px;font-weight:500;color:#a9b8cb;margin-top:2px}
+.syncpill{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:5px 12px;font-size:11px;font-weight:600;color:#cfe0d4}
+.syncpill .dot{width:6px;height:6px;border-radius:50%;background:#4ade80}
+.ribbon .cmd{background:transparent;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
+</style>
+<div class="note" style="font-size:14px;max-width:1280px"><b>Polish pass v2 - critique applied.</b> Exact-2dp on billing-surface heroes (my render broke our own R13 rule - fixed); one money format per level ($1.08M, not $1,079K); rail rule locked: <b>rows navigate (›), the one footer button acts</b>; week bands inside the drill grid kill the dead space and tie grid to rail; cards lift to say they open; a real "now" tick on the phase strip; scroll fades on clipped rails; note-dot instead of emoji; WCAG bump on ghosted rail lines; month stepper on MLB; mobile rows get chevrons. And the thing you asked for first - <b>the redesign in situ, inside your intranet.</b></div>
+
+<!-- ================= 0. IN SITU · FULL PAGE ================= -->
+<div class="wraplbl">0 · In situ · the redesign inside the intranet (this is polished Render A)</div>
+<div class="note">Your nav, untouched. The decision underneath it: the tall photo hero <b>collapses into a slim navy ribbon merged with the command bar</b> - page identity + welcome + the live as-of/sync pill on line one, controls on line two. The module-hero convention survives, a full screen-height of scroll comes back, and the two-pane workspace starts immediately. This ribbon pattern is the template any Ops Hub module could adopt later.</div>
+<div class="sitewrap">
+  <div class="knav">
+    <span class="klogo"><span class="kmark">KF</span><b>KitchFix</b></span>
+    <span class="kitems">
+      <span class="kit"><span class="ki"></span>Home</span>
+      <span class="kit"><span class="ki"></span>People</span>
+      <span class="kit"><span class="ki"></span>Ops Hub</span>
+      <span class="kit on"><span class="ki"></span>Service</span>
+      <span class="kit"><span class="ki"></span>Playbook</span>
+      <span class="kit"><span class="ki"></span>Directory</span>
+    </span>
+    <span class="kright"><span class="kbell"></span><span class="kava">KF</span></span>
+  </div>
+  <div class="pagepad">
+    <div class="app" style="height:840px;max-width:none">
+      <div class="ribbon">
+        <div class="r1">
+          <span class="pt">Service Calendar<small>Welcome back, Kevin.</small></span>
+          <span class="syncpill"><span class="dot"></span>as of 4:19 PM · ⟳</span>
+        </div>
+        <div class="cmd">
+          <span class="cpill">CIN - AZ · Cincinnati Reds <span class="car">▾</span></span>
+          <span class="ctag pdc">PDC</span>
+          <span class="seg"><span class="on">Calendar</span><span>Period</span></span>
+          <span class="cspace"></span>
+          <span class="chipN">3 need entry</span>
+          <span class="cmeta">Jul 17 · P8 · W1</span>
+          <span class="cpill" title="Export">⬇</span>
+          <button class="todaybtn">Today</button>
+        </div>
+      </div>
+      <div class="shell">
+        <div class="content">
+          <div class="phase">
+            <div class="pt-off" style="flex:1.6">Off</div><div class="pt-st" style="flex:1.6">Spring Training</div><div class="pt-ext" style="flex:1.2">Extended</div><div class="pt-cx" style="flex:2"><span class="cur">Complex League</span></div><div class="pt-br" style="flex:.9">Bridge</div><div class="pt-ins" style="flex:1.6">Instructional</div><div class="pt-off" style="flex:1.8">Off-season</div>
+            <span class="ptick" style="left:54%"></span>
+          </div>
+          <div class="mgrid" id="mgridA"></div>
+          <div class="legend">
+            <span class="lt">Legend</span>
+            <span class="lg"><span class="sw" style="background:var(--e-bg);border:1px solid var(--e-bd)"></span>Entered</span>
+            <span class="lg"><span class="sw" style="background:var(--n-bg);border:1px solid var(--n-bd)"></span>Needs entry</span>
+            <span class="lg"><span class="sw" style="background:var(--o-bg);border:1px solid var(--o-bd)"></span>Overdue</span>
+            <span class="lg"><span class="sw" style="background:var(--u-bg);border:1px solid var(--u-bd)"></span>Upcoming</span>
+            <span class="lg"><span class="sw" style="background:var(--x-bg)"></span>No service</span>
+            <span class="lg"><span class="sw" style="box-shadow:0 0 0 1.5px var(--navy)"></span>Today</span>
+            <span class="lg"><span class="sw" style="background:var(--f-bg);border:1px dashed var(--f-bd)"></span>Could not load</span>
+            <span class="lg"><span class="sw" style="background:linear-gradient(135deg,#fff 60%,var(--copper) 60%);border:1px solid var(--line-2)"></span>Spring Training</span>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="rtop">
+            <div class="rlbl">Season · 2026 books</div>
+            <div class="rtotal">$1.08M</div>
+            <div class="rmeta">of ~$1.31M projected · <span id="daysA"></span> days recorded</div>
+            <div class="rbar"><div style="width:66%"></div></div>
+            <div class="rprog">66% of the season on the books</div>
+          </div>
+          <div class="rlist">
+            <div class="rsec">Needs attention</div>
+            <div class="qrow"><span class="qdot n"></span><span class="qt">Tue Jul 14 <small>needs entry · ~305 meals projected</small></span><span class="chev">›</span></div>
+            <div class="qrow"><span class="qdot n"></span><span class="qt">Wed Jul 15 <small>needs entry · ~305 meals projected</small></span><span class="chev">›</span></div>
+            <div class="qrow"><span class="qdot n"></span><span class="qt">Thu Jul 16 <small>needs entry · ~305 meals projected</small></span><span class="chev">›</span></div>
+            <div class="rsec">The season</div>
+            <div id="mlinesA"></div>
+          </div>
+          <div class="railfade"></div>
+          <div class="rfoot">
+            <button class="rbtn">Enter today · Jul 17</button>
+            <div class="rhint">3 open days clear the month</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cap"><b>What in-situ settles:</b> the redesign coexists cleanly with the nav (white bar stays white; the navy starts at the module boundary); the ribbon keeps the "welcome + as-of sync" identity the hero carried, in ~64px instead of ~180; and the rail rule shows here first - the three needs-entry rows are quiet navigations (›), the single green button owns the verb. The failed-fetch cell (Aug 14), legend band, and derived footers all carry over unchanged.</div>
+<!-- ================= B. SEASON OVERVIEW · PERIOD (polished) ================= -->
+<div class="wraplbl">B · Season overview · Period mode · PDC (TBJ-FL)</div>
+<div class="note">Polish applied: rail rows navigate with › (verbs live only in the footer button), ghosted lines brightened for contrast, scroll fade added, period cards lift on hover, and the phase strip carries the now-tick.</div>
+<div class="app" style="height:840px">
+  <div class="cmd">
+    <span class="ttl">Service Calendar</span>
+    <span class="cpill">TBJ - FL · Toronto Blue Jays <span class="car">▾</span></span>
+    <span class="ctag pdc">PDC</span>
+    <span class="seg"><span>Calendar</span><span class="on">Period</span></span>
+    <span class="cspace"></span>
+    <span class="chipO">9 overdue</span>
+    <span class="chipN">6 need entry</span>
+    <span class="cmeta">Jul 17 · P8 · W1</span>
+    <span class="cpill">⬇</span>
+    <button class="todaybtn">Today</button>
+  </div>
+  <div class="shell">
+    <div class="content">
+      <div class="phase">
+        <div class="pt-camp" style="flex:1.2">Camps</div><div class="pt-st" style="flex:1.4">Spring Training</div><div class="pt-ext" style="flex:.9">Ext</div><div class="pt-cx" style="flex:2"><span class="cur">Complex League</span></div><div class="pt-br" style="flex:1.4">Bridge</div><div class="pt-camp" style="flex:1.6">Camps</div><div class="pt-off" style="flex:1.2">Off</div>
+        <span class="ptick" style="left:53%"></span>
+      </div>
+      <div class="pgrid" id="pgridB"></div>
+    </div>
+    <div class="rail">
+      <div class="rtop">
+        <div class="rlbl">Season · 2026 books</div>
+        <div class="rtotal">$1.10M</div>
+        <div class="rmeta">of ~$1.40M projected · 162 of 297 days · 95,031 meals YTD</div>
+        <div class="rbar"><div style="width:55%"></div></div>
+        <div class="rprog">55% of the season on the books</div>
+      </div>
+      <div class="rlist">
+        <div class="rsec">Needs attention</div>
+        <div class="qrow"><span class="qdot o"></span><span class="qt">P7 · Jun 29 - Jul 4 <small>9 overdue days · oldest 18 days</small></span><span class="chev">›</span></div>
+        <div class="qrow"><span class="qdot n"></span><span class="qt">P8 · Jul 13 - 16 <small>4 need entry this week</small></span><span class="chev">›</span></div>
+        <div class="qrow"><span class="qdot n"></span><span class="qt">P8 · Jul 17 <small>today · not yet entered</small></span><span class="chev">›</span></div>
+        <div class="rsec">The season</div>
+        <div id="plinesB"></div>
+      </div>
+      <div class="railfade"></div>
+      <div class="rfoot">
+        <button class="rbtn">Clear P7 overdue · 9 days</button>
+        <div class="rhint">Oldest gap first - protects the invoice cycle</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cap"><b>Unchanged on purpose:</b> the aging framing ("oldest 18 days") and the footer targeting the oldest gap - that's the EI core of this surface. The queue rows lost their individual verbs; the button owns the action.</div>
+<!-- ================= C. PERIOD WORKSPACE (polished) ================= -->
+<div class="wraplbl">C · Period workspace · TBJ-FL · Period 6 (polished)</div>
+<div class="note">The two fixes that matter: <b>week bands inside the grid</b> (the dead cream field is gone - the grid now carries the same week subtotals the rail does, so the two panes read as one system), and the <b>hero goes exact-2dp</b> - a billing surface shows $101,316.65, the same number as its own total line, per the R13 discipline we just shipped in production. Note dot on Jun 4 replaces the emoji.</div>
+<div class="app" style="height:780px">
+  <div class="cmd">
+    <span class="ttl">Service Calendar</span>
+    <span class="cpill">TBJ - FL · Toronto Blue Jays <span class="car">▾</span></span>
+    <span class="ctag pdc">PDC</span>
+    <span class="cpill">‹ Season</span>
+    <span class="cpill"><b style="font-weight:800">Period 6</b>&nbsp;· May 18 - Jun 14 <span class="car">‹ ›</span></span>
+    <span class="cspace"></span>
+    <span class="cmeta">Complex League</span>
+    <span class="cpill">⬇</span>
+    <button class="todaybtn">Today</button>
+  </div>
+  <div class="shell">
+    <div class="content">
+      <div class="dowbig"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div class="tgrid" id="tgridC"></div>
+    </div>
+    <div class="rail">
+      <div class="rtop">
+        <div class="rlbl">Period 6 · books</div>
+        <div class="rtotal" style="font-size:27px">$101,316.65</div>
+        <div class="rmeta">of ~$105,745 projected · 28 of 28 days · 10,672 meals</div>
+        <div class="rbar"><div style="width:100%"></div></div>
+        <div class="rprog" style="color:#7fd6a3;font-weight:700">✓ All caught up</div>
+      </div>
+      <div class="rlist">
+        <div class="rsec">The period, week by week</div>
+        <div class="ln"><span class="n">Week 1 <small>May 18 - 24 · 7/7</small></span><span class="a">$28,029.60<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">Week 2 <small>May 25 - 31 · 7/7</small></span><span class="a">$21,218.75<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">Week 3 <small>Jun 1 - 7 · 7/7</small></span><span class="a">$30,901.04<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">Week 4 <small>Jun 8 - 14 · 7/7</small></span><span class="a">$21,167.26<span class="ok">✓</span></span></div>
+        <div class="ln" style="border-bottom:none;padding-top:9px"><span class="n" style="color:#eafff2;font-weight:800">Period total</span><span class="a">$101,316.65</span></div>
+        <div class="rsec">Notes this period</div>
+        <div class="qrow"><span class="qdot" style="background:#6f93bd"></span><span class="qt">Jun 4 · rain delay, added dinner <small>Kevin · 2 more notes in period</small></span><span class="chev">›</span></div>
+      </div>
+      <div class="rfoot">
+        <button class="rbtn quiet">Export period · CSV + workbook</button>
+        <div class="rhint">Week totals foot to the day bills (round-then-sum)</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cap"><b>Why the week bands earn their pixels:</b> they fill the canvas with structure instead of silence, they let the eye foot each row of tiles to a real number without leaving the grid, and they make the rail's week lines feel like a summary of something visible rather than a parallel universe. Hero and total line now show the same penny - the panel can never disagree with itself.</div>
+<!-- ================= D. MLB (polished) ================= -->
+<div class="wraplbl">D · MLB fee account · TXR · Homestand view (polished)</div>
+<div class="note">Polish: a proper <b>‹ May ›</b> month stepper in the command bar (it was missing), rail scroll fade, and the homestand-ledger rows now navigate with ›. The fee-account discipline is untouched: games and meals, never dollars, no urgency colors.</div>
+<div class="app" style="height:770px">
+  <div class="cmd">
+    <span class="ttl">Service Calendar</span>
+    <span class="cpill">TXR - TX - H · Texas Rangers Home <span class="car">▾</span></span>
+    <span class="ctag mlb">MLB</span>
+    <span class="seg"><span class="on">Calendar</span><span>Period</span></span>
+    <span class="cpill">‹&nbsp; <b style="font-weight:800">May</b> &nbsp;›</span>
+    <span class="cspace"></span>
+    <span class="cmeta">Game days 0/81 · Jul 17</span>
+    <span class="cpill">⬇</span>
+    <button class="todaybtn">Today</button>
+  </div>
+  <div class="shell">
+    <div class="content">
+      <div class="hsband">
+        <span class="nx">NEXT</span>
+        <span class="hst">HS8 · vs CWS / SEA <small>Jul 20 - 27 · 7 games · homestand 8 of 12</small></span>
+        <span class="hsblocks">
+          <span class="hsb done"></span><span class="hsb done"></span><span class="hsb done"></span><span class="hsb done"></span><span class="hsb done"></span><span class="hsb done"></span><span class="hsb done"></span><span class="hsb next"></span><span class="hsb fut"></span><span class="hsb fut"></span><span class="hsb fut"></span><span class="hsb fut"></span>
+        </span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 2px 8px">
+        <b style="font-size:14px;color:var(--navy-deep)">May</b>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">13 game days · 2 homestands · ~180 meals / game</span>
+      </div>
+      <div class="dowbig"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div class="tgrid" id="tgridD" style="gap:7px"></div>
+      <div class="legend" style="margin-top:12px">
+        <span class="lt">MLB legend</span>
+        <span class="lg"><span class="sw" style="background:var(--e-bg);border:1px solid var(--e-bd)"></span>Entered</span>
+        <span class="lg"><span class="sw" style="background:#eef6f0;border:1px solid #cfe4d6"></span>Scheduled game</span>
+        <span class="lg"><span class="sw" style="background:var(--u-bg);border:1px solid var(--u-bd)"></span>Away · no service</span>
+        <span class="lg"><span class="sw" style="background:var(--x-bg)"></span>Non-game day</span>
+        <span class="lg">☀ Day</span><span class="lg">☾ Night</span>
+        <span class="lg"><span class="sw" style="background:#c15b2e"></span>EXH · display-only</span>
+        <span class="lg"><span class="sw" style="box-shadow:0 0 0 1.5px var(--navy)"></span>Today</span>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="rtop">
+        <div class="rlbl">May · game days</div>
+        <div class="rtotal">0 <span style="font-size:16px;color:#7f95af;font-weight:700">/ 13</span></div>
+        <div class="rmeta">0 meal counts recorded · fee account · billing rides the homestand schedule</div>
+        <div class="rbar"><div style="width:0%"></div></div>
+        <div class="rprog">No urgency colors by design - the schedule sets the pace</div>
+      </div>
+      <div class="rlist">
+        <div class="rsec">Homestand ledger · 2026</div>
+        <div class="ln"><span class="n">HS1 <small>Apr 3 - 8 · 6 games</small></span><span class="a">1,092<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS2 <small>Apr 17 - 23 · 7 games</small></span><span class="a">1,260<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS3 <small>May 8 - 13 · 6 games</small></span><span class="a">1,081<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS4 <small>May 25 - 31 · 7 games</small></span><span class="a">1,254<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS5 <small>Jun 9 - 14 · 6 games</small></span><span class="a">1,077<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS6 <small>Jun 23 - 28 · 6 games</small></span><span class="a">1,065<span class="ok">✓</span></span></div>
+        <div class="ln"><span class="n">HS7 <small>Jul 7 - 12 · 6 games</small></span><span class="a">1,088<span class="ok">✓</span></span></div>
+        <div class="ln att"><span class="n">HS8 <small>Jul 20 - 27 · 7 games · NEXT</small></span><span class="a">~1,260</span></div>
+        <div class="ln gh"><span class="n">HS9 <small>Aug 4 - 9</small></span><span class="a">~1,080</span></div>
+        <div class="ln gh"><span class="n">HS10 <small>Aug 18 - 24</small></span><span class="a">~1,260</span></div>
+        <div class="ln gh"><span class="n">HS11 <small>Sep 1 - 6</small></span><span class="a">~1,080</span></div>
+        <div class="ln gh"><span class="n">HS12 <small>Sep 15 - 21</small></span><span class="a">~1,260</span></div>
+      </div>
+      <div class="railfade"></div>
+      <div class="rfoot">
+        <button class="rbtn">Prep HS8 · vs CWS / SEA →</button>
+        <div class="rhint">7 games · first pitch Jul 20, 7:05 CT</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="cap"><b>Held the line on:</b> no per-meal dollars anywhere, no amber/red, away days quiet. The stepper closes the navigation gap the first pass left open.</div>
+<!-- ================= E. MOBILE ================= -->
+<div class="wraplbl">E · Mobile · the rail becomes the screen</div>
+<div class="note">On a phone the two panes can't coexist, so the pattern inverts the same way entry did: <b>the money summary pins to the top or bottom, the content becomes a list</b>. Left: season overview (rail-as-header + month rows). Middle: period drill (day rows grouped by week, sticky period total). Right: MLB month (game rows, homestand context). Everything taps through to the day sheet from the entry mobile you approved.</div>
+<div class="phones">
+
+  <!-- Phone 1: season overview -->
+  <div class="phone"><div class="screen">
+    <div class="mtop"><div class="r1"><div class="acct">CIN - AZ · Reds<small>PDC · Service Calendar</small></div><span class="mseg"><span class="on">Cal</span><span>Period</span></span></div></div>
+    <div class="msum">
+      <div class="t">$1,079K</div>
+      <div class="s">of ~$1,311K · 155 of 236 days recorded</div>
+      <div class="bar"><div style="width:66%"></div></div>
+      <div class="chips"><span class="mchip n">3 need entry</span></div>
+    </div>
+    <div class="mlist">
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>January</b><small>17/17 entered</small></div><span class="val">$54K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>February</b><small>25/25 · Spring Training</small></div><span class="val">$282K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>March</b><small>30/30 · Spring Training</small></div><span class="val">$445K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>April</b><small>24/24 entered</small></div><span class="val">$88K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>May</b><small>26/26 entered</small></div><span class="val">$103K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>June</b><small>21/21 entered</small></div><span class="val">$70K</span></div>
+      <div class="mrow" style="background:#fdf8ec"><span class="st n"></span><div class="mm"><b>July</b><small>12/25 · 3 need entry · today</small></div><span class="val">$37K</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>August</b><small>0/26 upcoming</small></div><span class="val g">~$93K</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>September</b><small>0/26 upcoming</small></div><span class="val g">~$85K</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>October</b><small>0/23 upcoming</small></div><span class="val g">~$38K</span></div>
+      <div class="mrow"><span class="st x"></span><div class="mm"><b>November - December</b><small>winding down · off-season</small></div><span class="val g">~$16K</span></div>
+    </div>
+    <div class="mbarS"><div><div class="t">Jul 17</div><div class="s">today · not yet entered</div></div><button class="go">Enter today</button></div>
+  </div></div>
+
+  <!-- Phone 2: period drill -->
+  <div class="phone"><div class="screen">
+    <div class="mtop"><div class="r1"><div class="acct">TBJ - FL · P6<small>May 18 - Jun 14 · Complex</small></div><span class="mseg"><span>‹</span><span class="on">P6</span><span>›</span></span></div></div>
+    <div class="mlist">
+      <div class="mgband"><span>Week 1 <small>· May 18 - 24</small></span><span>$28,029.60</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Mon 18</b><small>303 meals</small></div><span class="val">$4K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Tue 19 · VS FTM ☾ 6:30</b><small>406 meals</small></div><span class="val">$5K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Wed 20 · VS FTM ☾ 6:30</b><small>402 meals</small></div><span class="val">$5K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Thu 21 · VS FTM · DH ☾ 4:30</b><small>402 meals</small></div><span class="val">$5K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Fri 22 · VS FTM ☾ 6:30</b><small>362 meals</small></div><span class="val">$5K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Sat 23 · VS FTM ☾ 6:30</b><small>352 meals</small></div><span class="val">$4K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Sun 24 · VS FTM ☀ 12:00</b><small>6 meals</small></div><span class="val">$69</span></div>
+      <div class="mgband"><span>Week 2 <small>· May 25 - 31</small></span><span>$21,218.75</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Mon 25</b><small>302 meals</small></div><span class="val">$3K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Tue 26</b><small>278 meals</small></div><span class="val">$3K</span></div>
+      <div class="mrow"><span class="st e"></span><div class="mm"><b>Wed 27</b><small>482 meals</small></div><span class="val">$4K</span></div>
+    </div>
+    <div class="mbarS"><div><div class="t">$101,317</div><div class="s">28/28 days · ✓ all caught up</div></div><button class="go">Export ⌃</button></div>
+  </div></div>
+
+  <!-- Phone 3: MLB month -->
+  <div class="phone"><div class="screen">
+    <div class="mtop"><div class="r1"><div class="acct">TXR - TX - H<small>MLB · May · 0/13 game days</small></div><span class="mseg"><span>‹</span><span class="on">May</span><span>›</span></span></div></div>
+    <div class="msum" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:9px;font-weight:800;background:#e9b45b;color:#4a3308;border-radius:4px;padding:2px 6px">NEXT</span><b style="font-size:13px">HS8 · vs CWS / SEA</b></div>
+      <div class="s">Jul 20 - 27 · 7 games · homestand 8 of 12</div>
+    </div>
+    <div class="mlist">
+      <div class="mgband"><span>@ DET <small>· May 1 - 3 · away</small></span><span style="color:var(--muted)">no service</span></div>
+      <div class="mgband"><span>VS CHC <small>· May 8 - 10 · home</small></span><span>3 games</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Fri 8 · VS CHC ☾ 7:05</b><small>scheduled</small></div><span class="val g">~180</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Sat 9 · VS CHC ☾ 6:05</b><small>scheduled</small></div><span class="val g">~180</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Sun 10 · VS CHC ☀ 1:35</b><small>scheduled · day game</small></div><span class="val g">~180</span></div>
+      <div class="mgband"><span>VS ARI <small>· May 11 - 13 · home</small></span><span>3 games</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Mon 11 · VS ARI ☾ 7:05</b><small>scheduled</small></div><span class="val g">~180</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Tue 12 · VS ARI ☾ 7:05</b><small>scheduled</small></div><span class="val g">~180</span></div>
+      <div class="mrow"><span class="st u"></span><div class="mm"><b>Wed 13 · VS ARI ☾ 7:05</b><small>scheduled</small></div><span class="val g">~180</span></div>
+      <div class="mgband"><span>@ HOU · @ COL <small>· May 15 - 20 · away</small></span><span style="color:var(--muted)">no service</span></div>
+    </div>
+    <div class="mbarS"><div><div class="t">0 / 13</div><div class="s">game days entered · May</div></div><button class="go">Prep HS8</button></div>
+  </div></div>
+
+</div>
+<div class="cap"><b>Mobile principle:</b> the rail becomes the header (season) or the sticky bar (period/MLB), and grids become tappable rows - the same inversion the entry screen uses, so the whole app tells one story on a phone. Away stretches on MLB compress to a single quiet band ("@ HOU · @ COL · no service") instead of six dead cells - a phone screen is too expensive for days where nothing happens.</div>
+
+<div class="note" style="margin-top:40px"><b>Honest notes before you fall in love.</b> (1) These are direction renders - real data shapes will stress them (a 40-service TBR day, a season with 300+ notes) and the build must survive that, not just this happy path. (2) The rail costs ~336px; at the 1280px matrix minimum the content pane still gets ~830px, which fits - but it should collapse below that. (3) Killing the hero banner and relocating the season summary/export into the rail are real IA decisions, not just paint. (4) Nothing here touches the engine - same views, same round-then-sum, same save paths; this is presentation over the data you already trust, same as Entry v2. (5) If you love it, this becomes an <b>SC Redesign program</b>: the Entry v2 scope you already have is one phase, and I'd write the sibling scope for the overview/drill/MLB surfaces with the same reuse-inventory + phased flag-guarded plan before CC touches anything.</div>
+<script>
+function cell(d, st, opts){
+  opts = opts || {};
+  var cls = "dc dc-" + st + (opts.today ? " dc-t" : "");
+  var corn = opts.corner ? '<span class="corn"></span>' : "";
+  return '<div class="' + cls + '">' + d + corn + '</div>';
+}
+function pad(){ return '<div class="dc" style="background:transparent"></div>'; }
+
+// ---------- A (in-situ): CIN-AZ months ----------
+var CIN = [
+ {n:"January", s:3, d:31, amt:"$54K",  st:function(d){ return (d<4 || [10,11,17,24,25,31].indexOf(d)>-1) ? "x" : "e"; }},
+ {n:"February",s:6, d:28, amt:"$282K", corner:function(d){return d>=9;}, st:function(d){ return d===1 ? "x" : "e"; }},
+ {n:"March",   s:6, d:31, amt:"$445K", corner:function(d){return d>=2 && d<=29;}, st:function(d){ return d===31 ? "x" : "e"; }},
+ {n:"April",   s:2, d:30, amt:"$88K",  st:function(d){ return [1,2,5,12,19,26].indexOf(d)>-1 ? "x" : "e"; }},
+ {n:"May",     s:4, d:31, amt:"$103K", st:function(d){ return [3,10,17,24,31].indexOf(d)>-1 ? "x" : "e"; }},
+ {n:"June",    s:0, d:30, amt:"$70K",  st:function(d){ return [7,9,11,12,13,14,18,21,28].indexOf(d)>-1 ? "x" : "e"; }},
+ {n:"July",    s:2, d:31, amt:"$37K", today:17, st:function(d){
+    if(d===17) return "u";
+    if([14,15,16].indexOf(d)>-1) return "n";
+    if([5,11,12,26].indexOf(d)>-1) return "x";
+    if(d<=13 || d===18) return "e";
+    return "u"; }},
+ {n:"August",  s:5, d:31, amt:"~$93K", ghost:1, st:function(d){ if(d===14) return "f"; return [2,9,16,23,30].indexOf(d)>-1 ? "x" : "u"; }},
+ {n:"September",s:1,d:30, amt:"~$85K", ghost:1, st:function(d){ return [6,13,20,27].indexOf(d)>-1 ? "x" : "u"; }},
+ {n:"October", s:3, d:31, amt:"~$38K", ghost:1, st:function(d){ return (d>23 || [4,11,18].indexOf(d)>-1) ? "x" : "u"; }},
+ {n:"November",s:6, d:30, amt:"~$16K", ghost:1, st:function(d){ return (d>13 || [1,8].indexOf(d)>-1) ? "x" : "u"; }},
+ {n:"December",s:1, d:31, off:"Off-season", st:function(){ return "x"; }}
+];
+var DOWS = ["M","T","W","T","F","S","S"];
+var totalDaysEntered = 0, totalService = 0;
+var mgridHtml = "", mlinesHtml = "";
+CIN.forEach(function(m){
+  var cellsHtml = "", E=0, N=0, O=0, U=0, F=0;
+  for(var i=0;i<m.s;i++) cellsHtml += pad();
+  for(var d=1; d<=m.d; d++){
+    var st = m.st(d);
+    if(st==="e")E++; if(st==="n")N++; if(st==="o")O++; if(st==="u")U++; if(st==="f")F++;
+    cellsHtml += cell(d, st, {today: m.today===d, corner: m.corner && m.corner(d)});
+  }
+  var svc = E+N+O+U+F;
+  totalDaysEntered += E; totalService += svc;
+  var isJuly = m.n==="July";
+  var foot;
+  if(m.off){ foot = '<span style="color:var(--ghost);font-style:italic;font-weight:600">'+m.off+'</span><span></span>'; }
+  else if(m.ghost){ foot = '<span>0/'+svc+'</span><span class="amt g">'+m.amt+'</span>'; }
+  else { foot = '<span>'+E+'/'+svc+' entered</span><span class="amt">'+m.amt+'</span>'; }
+  var barW = svc ? Math.round(E/svc*100) : 0;
+  mgridHtml += '<div class="mc'+(m.today?' today-m':'')+'">'
+    + '<h4>'+m.n+(m.off?'<span class="off">'+m.off+'</span>':'')+'</h4>'
+    + '<div class="dow">'+DOWS.map(function(x){return "<span>"+x+"</span>";}).join("")+'</div>'
+    + '<div class="dgrid">'+cellsHtml+'</div>'
+    + '<div class="mfoot">'+foot+'</div>'
+    + (m.off ? '' : '<div class="mbar"><div style="width:'+barW+'%"></div></div>')
+    + '</div>';
+  if(m.off){ mlinesHtml += '<div class="ln gh"><span class="n">December<small>off-season</small></span><span class="a">-</span></div>'; }
+  else if(m.ghost){ mlinesHtml += '<div class="ln gh"><span class="n">'+m.n+'</span><span class="a">'+m.amt+'</span></div>'; }
+  else if(isJuly){ mlinesHtml += '<div class="ln att"><span class="n">July<small>'+E+'/'+svc+' · in progress</small></span><span class="a">$37K</span></div>'; }
+  else { mlinesHtml += '<div class="ln"><span class="n">'+m.n+'</span><span class="a">'+m.amt+'<span class="ok">✓</span></span></div>'; }
+});
+document.getElementById("mgridA").innerHTML = mgridHtml;
+document.getElementById("mlinesA").innerHTML = mlinesHtml;
+document.getElementById("daysA").textContent = totalDaysEntered + " of " + totalService;
+
+// ---------- B ----------
+var PER = [
+ {n:"P1", sub:"mid Jan",  meals:"5,353",  phase:"#f0e6cf", kind:"done", svc:15},
+ {n:"P2", sub:"early Feb",meals:"19,986", phase:"#f3ddc4", kind:"done", svc:25},
+ {n:"P3", sub:"early Mar",meals:"31,337", phase:"#f3ddc4", kind:"done", svc:27},
+ {n:"P4", sub:"early Apr",meals:"10,011", phase:"#dbe5ee", kind:"done", svc:27},
+ {n:"P5", sub:"early May",meals:"15,802", phase:"#cfe0da", kind:"done", svc:27},
+ {n:"P6", sub:"early Jun",meals:"8,823",  phase:"#cfe0da", kind:"done", svc:28},
+ {n:"P7", sub:"late Jun", meals:"3,719",  phase:"#cfe0da", kind:"p7",   svc:24},
+ {n:"P8", sub:"late Jul", meals:"0",      phase:"#cfe0da", kind:"p8",   svc:24, today:1},
+ {n:"P9", sub:"late Aug", meals:"0",      phase:"#e8d9c2", kind:"fut",  svc:24},
+ {n:"P10",sub:"late Sep", meals:"0",      phase:"#e8d9c2", kind:"fut",  svc:24},
+ {n:"P11",sub:"mid Oct",  meals:"0",      phase:"#f0e6cf", kind:"fut",  svc:24},
+ {n:"P12",sub:"mid Nov",  meals:"0",      phase:"#f0e6cf", kind:"fut",  svc:18},
+ {n:"P13",sub:"early Dec",meals:"0",      phase:"#eee9dd", kind:"fut",  svc:10}
+];
+var pgridHtml = "", plinesHtml = "";
+PER.forEach(function(p){
+  var dots = "", E=0;
+  for(var d=1; d<=28; d++){
+    var st;
+    if(d > p.svc){ st = "x"; }
+    else if(p.kind==="done"){ st = "e"; }
+    else if(p.kind==="p7"){ st = d<=13 ? "e" : (d<=19 ? "o" : (d<=21 ? "n" : "u")); }
+    else if(p.kind==="p8"){ st = d<=4 ? "n" : "u"; }
+    else { st = "u"; }
+    if(st==="e")E++;
+    dots += cell(d, st, {today: p.kind==="p8" && d===5});
+  }
+  var footL = (p.kind==="done") ? p.svc+"/"+p.svc+" entered"
+            : (p.kind==="p7") ? "13/24 entered"
+            : "0/"+p.svc+" entered";
+  var footR = (p.kind==="fut") ? '<span class="g">upcoming</span>' : p.meals + " meals";
+  pgridHtml += '<div class="pc'+(p.kind==="p8"?' today-p':'')+'">'
+    + '<div class="ph"><span><b>'+p.n+'</b> <span>· '+p.sub+'</span></span><span class="pstrip" style="background:'+p.phase+'"></span></div>'
+    + '<div class="pd"><div class="dgrid" style="gap:3px">'+dots+'</div></div>'
+    + '<div class="pfoot"><span>'+footL+'</span><span'+(p.kind==="fut"?' class="g"':'')+'>'+footR+'</span></div>'
+    + '</div>';
+  if(p.kind==="done"){ plinesHtml += '<div class="ln"><span class="n">'+p.n+'<small>'+p.sub+'</small></span><span class="a">'+p.meals+' meals<span class="ok">✓</span></span></div>'; }
+  else if(p.kind==="p7"){ plinesHtml += '<div class="ln att"><span class="n">P7<small>13/24 · 9 overdue</small></span><span class="a">3,719 meals</span></div>'; }
+  else if(p.kind==="p8"){ plinesHtml += '<div class="ln att"><span class="n">P8<small>current · 4 need entry</small></span><span class="a">0 meals</span></div>'; }
+  else { plinesHtml += '<div class="ln gh"><span class="n">'+p.n+'<small>'+p.sub+'</small></span><span class="a">upcoming</span></div>'; }
+});
+document.getElementById("pgridB").innerHTML = pgridHtml;
+document.getElementById("plinesB").innerHTML = plinesHtml;
+
+// ---------- C: tiles with week bands ----------
+var P6W = [
+ {label:"Week 1", dates:"May 18 - 24", total:"$28,029.60", days:[
+   {d:18,m:"303",k:"$4K"},{d:19,o:"VS FTM",t:"6:30",dn:"n",m:"406",k:"$5K"},{d:20,o:"VS FTM",t:"6:30",dn:"n",m:"402",k:"$5K"},
+   {d:21,o:"VS FTM · DH",t:"4:30",dn:"n",m:"402",k:"$5K"},{d:22,o:"VS FTM",t:"6:30",dn:"n",m:"362",k:"$5K"},
+   {d:23,o:"VS FTM",t:"6:30",dn:"n",m:"352",k:"$4K"},{d:24,o:"VS FTM",t:"12:00",dn:"d",m:"6",k:"$69"}]},
+ {label:"Week 2", dates:"May 25 - 31", total:"$21,218.75", days:[
+   {d:25,m:"302",k:"$3K"},{d:26,m:"278",k:"$3K"},{d:27,m:"482",k:"$4K"},{d:28,m:"302",k:"$3K"},
+   {d:29,m:"318",k:"$4K"},{d:30,m:"302",k:"$3K"},{d:31,m:"6",k:"$69"}]},
+ {label:"Week 3", dates:"Jun 1 - 7", total:"$30,901.04", days:[
+   {d:1,m:"347",k:"$4K"},{d:2,o:"VS DBT",t:"6:30",dn:"n",m:"426",k:"$6K"},{d:3,o:"VS DBT",t:"6:30",dn:"n",m:"416",k:"$5K"},
+   {d:4,o:"VS DBT",t:"6:30",dn:"n",m:"466",k:"$6K",note:1},{d:5,o:"VS DBT",t:"7:15",dn:"n",m:"424",k:"$5K"},
+   {d:6,o:"VS DBT",t:"6:30",dn:"n",m:"373",k:"$5K"},{d:7,o:"VS DBT",t:"12:00",dn:"d",m:"9",k:"$104"}]},
+ {label:"Week 4", dates:"Jun 8 - 14", total:"$21,167.26", days:[
+   {d:8,m:"263",k:"$3K"},{d:9,m:"459",k:"$4K"},{d:10,m:"303",k:"$4K"},{d:11,m:"319",k:"$4K"},
+   {d:12,m:"483",k:"$4K"},{d:13,m:"303",k:"$4K"},{d:14,m:"9",k:"$104"}]}
+];
+var cHtml = "";
+P6W.forEach(function(w){
+  cHtml += w.days.map(function(x){
+    return '<div class="tile ent">'
+      + '<span class="d">'+x.d+'</span>'
+      + (x.o ? ' <span class="opp">'+x.o+'</span>' : '')
+      + (x.t ? '<br><span class="tm '+x.dn+'">'+(x.dn==="d"?"☀":"☾")+' '+x.t+'</span>' : '')
+      + '<div class="meals">'+x.m+' <small>meals</small>'+(x.note?'<span class="ndot"></span>':'')+'</div>'
+      + '<div class="k">'+x.k+'</div>'
+      + '</div>';
+  }).join("");
+  cHtml += '<div class="wband"><span>'+w.label+'<small>'+w.dates+' · 7/7 entered</small></span><span class="wv">'+w.total+'<span class="ok">✓</span></span></div>';
+});
+document.getElementById("tgridC").innerHTML = cHtml;
+
+// ---------- D: TXR May ----------
+function mlbTile(x){
+  if(x.type==="non"){ return '<div class="tile non"><span class="d">'+x.d+'</span></div>'; }
+  if(x.type==="away"){ return '<div class="tile mlb-a"><span class="pl">✈</span><span class="d">'+x.d+'</span><br><span class="opp" style="background:#e2efe7;color:#5c7f6b">'+x.o+'</span><div class="ns">no service</div></div>'; }
+  return '<div class="tile mlb-h sched"><span class="d">'+x.d+'</span> <span class="opp">'+x.o+'</span><br><span class="tm '+x.dn+'">'+(x.dn==="d"?"☀":"☾")+' '+x.t+'</span><div class="meals">~180 <small>meals</small></div></div>';
+}
+var MAY = [];
+function away(days,o){ days.forEach(function(d){ MAY.push({d:d,type:"away",o:o}); }); }
+function home(days,o,times){ days.forEach(function(d,i){ MAY.push({d:d,type:"home",o:o,t:times[i][0],dn:times[i][1]}); }); }
+away([1,2,3],"@ DET"); MAY.push({d:4,type:"non"}); away([5,6,7],"@ NYY");
+home([8,9,10],"VS CHC",[["7:05","n"],["6:05","n"],["1:35","d"]]);
+home([11,12,13],"VS ARI",[["7:05","n"],["7:05","n"],["7:05","n"]]);
+MAY.push({d:14,type:"non"}); away([15,16,17],"@ HOU"); away([18,19,20],"@ COL");
+MAY.push({d:21,type:"non"}); away([22,23,24],"@ LAA");
+home([25,26,27,28],"VS HOU",[["6:05","n"],["7:05","n"],["7:05","n"],["7:05","n"]]);
+home([29,30,31],"VS KC",[["7:05","n"],["3:05","d"],["1:35","d"]]);
+MAY.sort(function(a,b){return a.d-b.d;});
+var mayHtml = "";
+for(var i=0;i<4;i++) mayHtml += '<div></div>';
+mayHtml += MAY.map(mlbTile).join("");
+document.getElementById("tgridD").innerHTML = mayHtml;
+</script>
+</body></html>
