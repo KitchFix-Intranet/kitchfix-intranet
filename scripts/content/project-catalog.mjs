@@ -67,7 +67,7 @@ const VALID_SHELVES = new Set([
   "Brand & Documentation Standards",
 ]);
 const VALID_DOC_CLASSES = new Set([
-  "PB", "STD", "POL", "SOP", "TPL", "CHK", "REF", "AGR", "FORM", "POST",
+  "PB", "STD", "POL", "SOP", "TPL", "CHK", "REF", "AGR", "FORM", "POST", "REC",
 ]);
 const VALID_REL_TYPES = new Set([
   "references", "implements", "supersedes", "superseded_by", "derived_from", "related",
@@ -75,7 +75,7 @@ const VALID_REL_TYPES = new Set([
 const PREFIX_TO_CLASS = {
   PB: "PB", STD: "STD", POL: "POL", SOP: "SOP", TPL: "TPL",
   CHK: "CHK", REF: "REF", AGR: "AGR", FORM: "FORM", POST: "POST",
-  POSTER: "POST",
+  POSTER: "POST", REC: "REC",
 };
 
 // NOTE: PR1 follow-up audit confirmed the reader already renders the inverse

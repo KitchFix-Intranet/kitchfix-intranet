@@ -1,0 +1,448 @@
+---
+id: REF-140
+title: "Money Model - Service Calendar Billing Mechanics"
+doc_class: REF
+shelf: "Service Delivery & Client Accounts"
+subshelf: "Financial Reference"
+status: In Build
+version: "0.1"
+card_line: "The canonical money-model mechanics: the two models, post-SF invoice rate, service-fee structures, flat-fee vs per-meal, passthrough, KPI lens. Anchored by PB-009."
+summary: "The canonical money-model mechanics for the Service Calendar billing model - how KitchFix bills across all accounts. Covers the one-line model, source hierarchy, terminology (post-SF invoice rate, sticker, service fee), the per-topic model (projections, actuals, invoicing, service-fee structures, KPI/all-in lens, flat-fee accounts, passthrough, non-revenue, effective-dating, two-layer architecture), and named ancillary lines. This REF is canonical for money-model CONCEPTS and mechanics; per-account specimen figures are non-canonical (live values resolve from the Price Book). PB-009 is the financial hub and defers down to this REF for mechanics - it does not independently restate money-model figures. Restricted."
+keywords:
+  - money model
+  - service fee
+  - post-SF invoice rate
+  - sticker
+  - flat fee
+  - per-meal
+  - passthrough
+  - KPI
+  - billing mechanics
+  - two-layer
+  - REF-140
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+access_level: restricted
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 3
+sort_order: 140
+relationships:
+  - { to: PB-009, type: references, from_section: "PB-009 financial hub anchors and defers to this REF for money-model mechanics" }
+---
+
+> CANONICAL for money-model concepts and mechanics. PB-009 (Financial Operations) is the narrative hub that defers DOWN to this REF and does not independently restate money-model figures. Per-account specimen figures below are non-canonical - live values resolve from the Price Book (generated from PG).
+
+
+**This doc wins conflicts. Every other doc defers here.**
+
+Locked 2026-07-09 (Kevin + Chat-Claude + CC alignment). Supersedes the "RESOLVED BILLING
+DECISIONS" section in the SC working record, the "Pricing model in one line"
+statement at the SC working record line 33, and the canonical-price ruling at
+the SC working record line 66. Those docs remain valuable as contract-language
+extractions, per-account digests, and importer layout references respectively; on any
+money-model conflict, this doc rules.
+
+Plain-language first in every section. Mechanism + citation next. Written to be read cold
+by a chef, a director, a future Claude, or a KPI-dashboard implementer.
+
+---
+
+## The one-line model
+
+**Per-meal accounts:** the client's per-meal invoice equals `actual_count × post-SF invoice
+rate`. Any Service Fee (SF) is billed separately as a flat annual amount on its own
+schedule. On accounts where the SF discounts the per-meal rate (CIN-AZ, TXR-AZ,
+TBR-FL MiLB), the post-SF invoice rate is `sticker × (1 - SF%)`. On accounts where the SF
+does not discount per-meal (TBJ-FL) or where there's no SF at all (CIN-KY, TBJ-NY), the
+invoice rate equals the sticker. On flat_fee accounts (CIN-OH, STL-MO, STL-FL, TXR-TX-H,
+TXR-TX-V), the client is not per-meal-billed at all - the fee schedule is the money.
+
+**The operator's KPI target** is per-meal invoice revenue plus service-fee revenue,
+combined as two ADDITIVE lines per the P&L (2400.1 Meal Service (Home) + 2300 Service
+Charges + 2200 Catering Revenue). It is NOT sticker × count. There is no "sticker
+revenue" as a first-class computation anywhere in this model - sticker prices are a
+reference number that lives in the workbooks for planning-tab arithmetic, not a lens the
+KPI dashboard or app displays.
+
+---
+
+## Sources of truth (in priority order)
+
+1. **Price Review v3** (Joe Lessard + Kevin Fietek, week of 2026-06-16) - the operative
+   per-service price sheet for the 2026 season. This is the record that moved
+   `sc_service_prices` on 2026-06-16 from workbook projection-tab values to the post-SF
+   invoice rate. It is the authority on which number goes into `sc_service_prices` today.
+2. **Executed contracts** (see contract inventory in the SC working record
+   sections 1-2) - authority on Service Fee amounts, escalation clauses, billing
+   cadence, postseason rates.
+3. **The 2026 legacy Service Calendar workbooks** at
+   the finance workbooks - authority on
+   which per-service line items exist, what group they belong to, which are flat_fee /
+   tax_free / non_revenue. The workbook cells `=sticker * factor` on SF% accounts'
+   actuals tabs are the primary evidence that the actuals-tab price is the invoice-line
+   figure, not the projections-tab price. See `docs/the SC working record` Part A.
+4. **P&L structure** - the three-line revenue breakdown (2400.1 Meal Service (Home) /
+   2300 Service Charges / 2200 Catering Revenue) is fixed and non-negotiable; the KPI
+   dashboard consumes this exact shape.
+5. **`docs/the SC working record`** - the 2026-07-09 timeline + contradiction
+   register + rationale for this doc. Read that to understand *why* the model is the way
+   it is.
+
+---
+
+## Terminology (used consistently below)
+
+- **Sticker rate.** The workbook projection-tab price. Historical planning number. NOT the
+  invoice. Reference-only.
+- **Post-SF invoice rate.** The workbook actuals-tab price. What the client is billed
+  per meal on the per-meal invoice line. For SF% accounts this equals `sticker × (1 -
+  SF%)`; for flat-SF, no-SF, and flat_fee-tracking accounts, sticker equals post-SF
+  (the two rates are the same number). This is the ONE per-meal-price concept the app
+  displays.
+
+  Historical doc language sometimes called this "cost basis" (see
+  the SC working record line 33, older bible text, seed script comment
+  `scripts/_seed_sc_from_xlsx.mjs:440-445`). That name is misleading - it's not COGS,
+  it's the invoice line. Use "post-SF invoice rate" going forward.
+- **Service Fee (SF).** A separate contracted amount billed alongside per-meal (SF%
+  accounts and flat-SF accounts) or in place of per-meal (flat_fee accounts). Paid on
+  its own schedule per contract; typically flat annual.
+- **KPI / all-in revenue.** What operators are measured on: per-meal invoice + SF, as
+  two additive P&L lines. This is NOT `sticker × count`; it's `post-SF invoice ×
+  count + SF flat`. Both come from the same underlying `sticker × count` decomposition
+  when you re-derive the SF portion, but the model never uses sticker directly - it
+  uses the two additive contract-defined revenue lines.
+
+---
+
+## Per-topic model
+
+### (a) Projections - what a projected count and projected price mean
+
+**Plain:** A projection is a planning estimate for a day - "we think we'll serve 100 MiLB
+lunches." It is not billing; it is budgeting. The price attached to a projection is the
+**post-SF invoice rate** (`sc_service_prices` `price_kind = 'projected'` today - the name
+of the column is legacy from before the alignment; the price it holds is the invoice
+rate per Price Review v3). Projected revenue on the app equals `projected_count ×
+post-SF invoice rate`, which is what the client would be per-meal-invoiced if the
+projection came in exactly.
+
+**Mechanism:**
+- Sheet: workbook projection-tab row-2 price = sticker rate. Legacy artifact for
+  building an annual budget forecast.
+- PG: `sc_daily_projections(account_key, service_id, service_date, projected_count)`
+  holds the counts. `sc_service_prices(service_id, price_kind='projected',
+  effective_date, price)` holds the price valuing them. Since 2026-06-16, this price
+  is the post-SF invoice rate (Price Review v3), not the sticker.
+- View: `projected_revenue = projected_count × pr_proj.price` in
+  `sc_daily_revenue` (sc-8b line 241).
+- App: modal group header + tile rail + workspace strip all read this price.
+
+### (b) Actuals - what saving actuals means, which price values them
+
+**Plain:** When an operator saves 100 MiLB Lunch actuals, KitchFix served 100 meals that
+day. The per-meal invoice line for that day equals `100 × post-SF invoice rate`. On
+CIN-AZ MiLB that's `100 × $12.90 = $1,290`.
+
+**Mechanism:**
+- Sheet: workbook actuals-tab row-2 price = post-SF invoice rate. For SF% accounts
+  this appears in the sheet as a literal `=sticker * factor` formula (CIN-AZ:
+  `=29.00888*0.7`; TXR-AZ: `=35.72125*0.8`; TBR-FL MiLB: `=23.77*0.75`). For flat-SF
+  / no-SF accounts it equals the projection-tab price.
+- PG: `sc_daily_actuals(account_key, service_id, service_date, actual_count)` holds
+  counts. Post-sc-8c (this migration), NO `'actual'`-kind rows exist in
+  `sc_service_prices` - the view's `COALESCE(pr_act.price, pr_proj.price)` falls back
+  to `pr_proj.price` (the post-SF invoice rate) for every account.
+- View: `actual_revenue = actual_count × COALESCE(pr_act.price, pr_proj.price, 0)`
+  in `sc_daily_revenue` (sc-8b line 242). With sc-8c applied, this equals
+  `actual_count × post-SF invoice rate` for every account.
+- App: DayDetail toast / aggregate / week card echo this from the view via the #361
+  server-authoritative saved-totals path.
+
+### (c) Invoicing - the client's invoice math per account shape
+
+Four account shapes. The model for each:
+
+| Shape | Accounts | Per-meal invoice line (bi-weekly / weekly) | Service Fee line (separate) | Passthrough |
+|---|---|---|---|---|
+| **SF% (per-meal + SF discounts per-meal)** | CIN-AZ (30%), TXR-AZ (20%), TBR-FL MiLB (25%) | `actual_count × post-SF invoice rate` | Yes, flat annual on separate schedule (CIN-AZ $402,016 Feb+Mar; TXR-AZ 20% deposit Jan/Feb/Mar; TBR-FL front-loaded 2024) | None inside these accounts |
+| **Flat-SF (per-meal + SF independent)** | TBJ-FL ($452,812/yr) | `actual_count × post-SF invoice rate` (= sticker; no discount) | Yes, flat annual on separate schedule (Jan/Feb/Mar split per ABR OneSheeter) | None |
+| **No-SF (pure per-meal)** | CIN-KY, TBJ-NY | `actual_count × post-SF invoice rate` (= sticker; no discount, no SF) | None | None |
+| **Flat_fee** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | **Not per-meal.** Contracted flat fee via `sc_fee_schedule` | The flat fee IS the money | Yes on some accounts (see topic (h)) |
+
+**Important:** fee-account operators never had an actuals workflow before the Service
+Calendar. Their teams did not enter meal counts anywhere. The SC's actuals surface is
+the first place these accounts have per-meal telemetry - it exists for planning,
+ordering, labor, waste, and future analytics, not for billing. Their billing is the
+`sc_fee_schedule` fee, not `count × price`. This is why their per-meal prices are $0 in
+PG and their calendar revenue displays show zero-dollar / operational-only.
+
+**Reads and citations:**
+- SF% mechanic: workbook actuals tabs (formula evidence, see memo Part A) +
+  the SC working record §Resolved line 87 + the SC working record §5.2 line
+  109 + the SC working record lines 39-45 + the SC working record lines 471-472.
+- Flat-SF mechanic: the SC working record §TBJ-FL.
+- Flat_fee mechanic: the SC working record §"Fee schedule" + admin surface
+  seeded via sc-5 (PR #221).
+
+### (d) Service fees - three structures, per account
+
+| SF structure | Accounts | Amount | Billed how | On the SC calendar dollars? |
+|---|---|---|---|---|
+| **Percentage-based SF (discounts per-meal)** | CIN-AZ 30%, TXR-AZ 20% (deposit), TBR-FL MiLB 25% (amortization) | CIN-AZ $402,016; TXR-AZ 2025 deposit $297,419; TBR-FL 2024 one-time $382,448 | Flat annual, separate schedule; per-meal invoice arrives at the discounted rate | **No** - contract-revenue layer. The SC calendar displays per-meal invoice only |
+| **Flat SF (independent of per-meal)** | TBJ-FL $452,812/yr | Flat annual | Split monthly Jan/Feb/Mar per ABR OneSheeter; per-meal invoice runs in parallel at full rate | **No** - contract-revenue layer, `sc_fee_schedule` extension work not yet done |
+| **No SF** | CIN-KY, TBJ-NY | n/a | n/a | n/a |
+| **Flat_fee (fee IS the money)** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | See table (c) | Contract-defined installments | **No** - lives in `sc_fee_schedule`, seeded 2026-06-19 |
+
+### (e) The KPI / all-in lens
+
+**Plain:** Operators are measured on total revenue "all-in with service fees." Per the
+P&L that leadership reviews, revenue is three additive lines:
+
+- **2400.1 Meal Service (Home)** = per-meal invoice = `actual_count × post-SF invoice
+  rate`.
+- **2300 Service Charges** = Service Fee attributable to the review period. For an SF%
+  account this is the SF% component of the corresponding meal service (the flat-annual
+  SF, prorated per period per operator convention). For flat-SF it's the SF flat
+  prorated. For flat_fee it's the fee-schedule amount prorated to the period.
+- **2200 Catering Revenue** = smaller, account-specific extras (some contracts have
+  side revenue lines - see per-account digest in the SC working record).
+  - **Named ancillary line (out of SC scope): CIN-AZ Owners Week Caterings + Fantasy Camp** = the CIN-AZ P&L 2200 Catering Revenue line (~$52,000/yr). Discrete special-event caterings, billed separately, NOT part of the recurring service-calendar meal model - excluded from the SC per-meal export. Contrast with TBR-FL's BGC, which IS in-scope SC revenue. Do not treat the two 2200 lines the same. [A-10 CONFIRMED, LEDGER §T]
+
+**KPI total = 2400.1 + 2300 + 2200.**
+
+**Not** `sticker × count`. There is no reason for the KPI to compute `sticker × count`
+directly - the same figure lands via `2400.1 + 2300` because the SF and the per-meal
+discount are two sides of the same contract mechanic. This is why:
+
+- No `'sticker'` `price_kind` exists in `sc_service_prices` today.
+- The KPI dashboard consumes `sc_daily_revenue.actual_revenue` (= 2400.1) plus
+  `sc_fee_schedule` (= 2300) per the SC_KPI_PUSH_CONTRACT.
+- The SC calendar UI does NOT show the KPI/all-in figure. It shows the per-meal
+  invoice (2400.1). Operators mentally add the SF band; the KPI dashboard shows both
+  additively.
+
+If a future decision decides the SC calendar should ALSO show the all-in figure
+on-screen, the implementation reads both `sc_daily_revenue` and `sc_fee_schedule` and
+sums - no schema change needed.
+
+**Citations:** the SC working record §5.1 lines 97-104; the SC working record
+lines 17-29.
+
+### (f) Post-SF invoice rate terminology (Q5 rename)
+
+The 70% / 80% / 75% number is **the per-meal invoice line item**, not a COGS figure.
+True COGS (labor + food + supplies per meal) lives in downstream cost pipelines, out of
+SC scope (the SC working record §"What the SC does NOT push" lines 49-59;
+the SC working record §2 "Scope boundary").
+
+**Going forward:** use "post-SF invoice rate" or "contracted per-meal rate" everywhere
+this number is discussed. "Cost basis" is banned - it caused doc drift on the
+2026-06-16 → 2026-06-24 window and remains a misleading name.
+
+Doc + code cleanup:
+- the SC working record line 33 rewritten below (§Doc corrections).
+- the SC working record §Resolved line 87 rewritten inline (§Doc corrections).
+- `scripts/_seed_sc_from_xlsx.mjs:440-450` seed comment retains historical detail but
+  reframed as "post-SF invoice rate."
+- `the Service Calendar data-store module, :474` sibling comments updated (this PR).
+
+### (g) Flat-fee accounts - what the SC tracks vs where their money lives
+
+**Plain:** For CIN-OH / STL-MO / STL-FL / TXR-TX-H / TXR-TX-V, the operator still enters
+headcounts into the SC for planning (ordering, labor, waste, future analytics). The
+DOLLARS come from `sc_fee_schedule`, not from `count × price`. Per-meal prices in
+`sc_service_prices` are $0 for these accounts (STL-FL zeroed 2026-06-16; others by
+design). The SC calendar displays operational tracking only for these accounts - no
+dollar figure on the tile.
+
+**STL-FL per-meal-display-on-flat-fee rationale:** STL-FL is billing-model `flat_fee`
+but operationally a PDC (phases, camps, MiLB affiliates). Chefs enter meal counts for
+planning. The tile SHOULD show meals, not dollars - the calendar's `isFeeAccount &&
+hasHomestandMap` gate correctly falls through to per-meal display (`fee-no-dollar`
+variant) because STL-FL has no homestand schedule (it's a PDC, not an MLB). Chefs get
+the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for the
+KPI dashboard. Detail in the SC billing-model audit (repo-side).
+
+**STL-FL prorated allocation:** the $1.4M is spread PHASE-AWARE across the 13 periods
+per the P&L pattern (**P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 ·
+P5-P9 $98,915 each (FCL plateau) · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0**).
+Source: the PFS Service Fees 2026 workbook, Accrual Schedule (finance-owned), verified against
+the 2026 P&L appendix (repo-side) row R25 (2026-07-17); year total $1,400,000
+EXACT. Note: pricing-summit CONFLICT_REGISTER A-9 / D-3 (filed 2026-07-14) argued
+GOTCHAS was stale on P1 and peak-period, but that finding was based on a broken R25
+transcription (missing P1 cell); the appendix was corrected 2026-07-17 and the
+original GOTCHAS phrasing turned out to be right. `sc_fee_schedule` today holds the
+annual $1.4M; the per-period allocation is a future KPI-dashboard concern.
+
+**TXR-TX-V revenue flexibility:** the fee schedule entry for TXR-TX-V is $0 (marker:
+"covered by TXR-TX-H contract"). Real visiting-team direct-sales revenue is tracked in
+the Season Tracker workflow (sold-through revenue × 19.23% labor model), out of scope
+for the SC and the fee schedule.
+
+### (h) Passthrough - never revenue
+
+Some contracts include a "food, packaging, supplies" budget that KitchFix collects and
+pays straight to suppliers. Zero margin. **Excluded from all revenue figures.**
+
+Passthrough lines (excluded from `sc_fee_schedule` amounts):
+- CIN - OH: food and disposable supplies budget (at cost, Net 30)
+- STL - MO: $225,000 food/packaging/supplies budget
+- STL - FL: $900,000 food/packaging/supplies budget
+
+Detail: the SC working record §"Passthrough is never revenue" lines 44-70.
+
+### (i) Non-revenue services + tax-free / flat-fee add-ons
+
+Some line items look like services but are not billable per-meal revenue:
+
+- **`is_non_revenue`** (sc-1b, 2026-06-19): "Fun Money" / "Fun $$$$ Allocated" is an
+  internal team-event budget. View SUMs skip it for revenue rollup.
+- **`is_flat_fee`**: per-unit flat-fee add-ons (Extra Protein - Beef/Seafood, MLB
+  Extra MTO Sm/Med/Lrg, Coffee Service, Fountain Beverages). Not per-meal-discounted -
+  they always price at the flat unit rate whether they appear on projections tab or
+  actuals tab.
+- **`is_tax_free`**: subset of flat-fee (Coffee Service, Fountain Beverages) exempted
+  from sales tax per contract; the view excludes them from taxable revenue for the
+  billing pipeline downstream.
+
+Detail per account: the SC working record §per-account tables.
+
+### (j) Effective-dating - how price changes over time are represented
+
+**Plain:** Price history is preserved. A CPI bump or contract renegotiation is a NEW
+row in `sc_service_prices` with a later `effective_date` - the old row stays. Historic
+invoices continue to price at whatever rate was effective on the service date.
+
+**Mechanism:**
+- `sc_service_prices(service_id, effective_date, price_kind, price)` with UNIQUE
+  `(service_id, effective_date, price_kind)` after sc-8a.
+- View joins via LATERAL: latest row where `effective_date <= service_date`.
+
+**Escalations land in PG via the admin backdate flow, never in sheets.** The legacy
+workbooks carried in-cell escalation machinery (`=22.25*(1+$E$362)` in TBJ-FL,
+`=24.98*1.039` in CIN-KY etc.) - that was fine for the sheet era. PG is canonical
+now; a new escalated rate = a new `sc_service_prices` row, applied via the admin
+price editor (PR #224 for fenced backdate mode). This is a GOTCHAS entry as of this
+PR - if a future maintainer opens a workbook and sees the escalator formula, that's
+historical, not operative.
+
+### (k) Two-layer architecture (per-meal / operational vs contract revenue)
+
+**Plain:** SC calendar dollars = per-meal revenue only. Everything else (flat fees,
+service fees, postseason per-game) lives in a separate "contract revenue layer"
+managed via admin + `sc_fee_schedule`, read by the future KPI dashboard - NOT the
+calendar.
+
+**Mechanism:**
+- SC calendar reads: `sc_daily_revenue` (view). Per-meal invoice line item.
+- Admin surfaces: `sc_service_prices` (per-meal price editor) + `sc_fee_schedule`
+  (contract-revenue editor). Both managed one place.
+- KPI dashboard (future) reads: `sc_daily_revenue.actual_revenue` (= P&L 2400.1
+  Meal Service Home) + `sc_fee_schedule` (= P&L 2300 Service Charges), summed
+  additively per period.
+
+**Citation:** the SC working record §"The architecture" lines 17-42 +
+the SC working record §5.
+
+---
+
+<NonCanonical>
+
+## Per-account digest (money-only)
+
+> Specimen figures - live values resolve from the Price Book (generated from PG). Reference context, not the canonical price source.
+
+Full per-account contract detail lives in the SC working record (bible) +
+the SC working record. **Detail + current figures now live in `docs/the per-account records (11 accounts, complete; account file wins on any per-account disagreement).** This table is the money-model summary for cross-reference.
+
+| Account | Shape | Sticker MiLB / MLB (or fee) | Post-SF invoice MiLB / MLB | 2026 SF | On SC calendar |
+|---|---|---|---|---|---|
+| CIN - AZ | SF% 30% | $18.42 / $29.01 | **$12.90 / $20.31** | $402,016/yr | Yes, invoice-rate meal revenue |
+| CIN - KY | No-SF | $25.95 (uniform) | $25.95 | none | Yes, meal revenue |
+| CIN - OH | Flat_fee | n/a ($25.95 planning-only) | n/a | $362,500/yr [superseded: 2026 accrued/billed = $376,686; PG migration to escalated landed 2026-07-16; see the account record] | Operational counts only, no $ |
+| STL - FL | Flat_fee | n/a ($0 in PG) | n/a | $1,400,000/yr | Operational counts only, no $ (fee-no-dollar variant) |
+| STL - MO | Flat_fee | n/a | n/a | $473,000/yr [superseded: base $473K / billed $489,497 (2026 escalated actual); PG migration to escalated landed 2026-07-16; see the account record] | Operational counts only, no $ |
+| TBJ - FL | Flat SF | $11.55 / $23.12 | $11.55 / $23.12 (no discount) [superseded: MiLB is two groups - FCL $11.55 + FSL $16.51 - not a single $11.55 line; see the account record] | $452,812/yr [superseded: $515,712 billable per updated summit ledger; see the account record] | Yes, meal revenue (SF separate, not in `sc_fee_schedule` yet) |
+| TBJ - NY | No-SF | $27.34 assumption | $27.34 | none | Yes, meal revenue |
+| TBR - FL | SF% 25% on MiLB only | $27.95 MiLB / $39.48 MLB [superseded: MiLB is three rates - 17.83 / 21.68 / 20.96 - not a single line; see the account record] | **$20.96 MiLB** / $39.48 MLB [superseded: three MiLB post-SF rates apply (17.83 / 21.68 / 20.96)] | $382,448 one-time 2024 [superseded: recurring $200K + variable each year; see the account record] | Yes, meal revenue |
+| TXR - AZ | SF% 20% (deposit) | $17.87 / $35.72 | **$14.29 / $28.58** | $297,419/yr (2025 deposit) | Yes, meal revenue |
+| TXR - TX - H | Flat_fee | n/a | n/a | $604,032/yr | Operational counts only, no $ |
+| TXR - TX - V | Flat_fee | n/a | n/a | $0 (covered by H); direct sales via Season Tracker | Operational counts only, no $ |
+
+Bold entries = SF% accounts affected by sc-8c. Every other row was correct before sc-8c.
+
+**BGC (Boys & Girls Club).** In-scope under TBR-FL: after-school supper program, tax-exempt. Not a standalone account. See the account record §2d (BGC as the second-client stream on the same TBR-FL commissary) + the BGC digest (REF-121) for scope-and-classification detail.
+
+---
+
+</NonCanonical>
+
+## Open paperwork gaps (Q4 + Q6 register)
+
+Not resolved by this alignment. Tracked here so future work has a discoverable list.
+
+### CIN - AZ operative 2026 pricing paperwork (Q4)
+
+The 2023 CIN-AZ contract's base rates ($17.88 MLB Breakfast, $11.35 MiLB Breakfast)
+don't CPI-escalate to the operative 2026 rates ($29.01 / $18.42 sticker as recorded in
+the workbook). A 2026 SOW or contract amendment must exist and is not in the executed-
+contracts folder. Operationally not blocking (Price Review v3 confirmed the rates
+with Kevin + Joe); administratively worth chasing before the 2027 renewal decision.
+
+**Note added per Q4 ruling:** the operative 2026 rates are workbook-recorded + Price
+Review v3-confirmed; source contract amendment paperwork is TBD. Owner: Kevin (Ashley
+at the Reds is the counterparty).
+
+### TBJ - NY Buffalo Bisons (Q6)
+
+No contract in the package. Prices in workbook + PG ($27.34) are assumption-only. Not
+resolved this pass; parked. Bundle SC Bundle 3 candidate or a business-side chase for
+a contract + written confirmation of the operating model.
+
+---
+
+## Doc corrections applied in this PR
+
+Every money-touching doc reviewed 2026-07-09 (per the alignment report Part 3). Where
+correct as-is, a one-line pointer to this doc is added. Where wrong, corrected. Where
+superseded, banner + pointer added.
+
+- the SC working record (contract bible): correct on money model; adds
+  pointer here. §Resolved line 87 rewritten to use "post-SF invoice rate" language.
+- the SC working record: line 33 rewritten (was wrong on SF% invoice direction).
+  Top-of-doc banner added: money-model claims defer to this doc.
+- the SC working record: line 66 area gets a dated note that "canonical =
+  $29.01 the bill rate" was a pre-2026-06-16 ruling; superseded by Price Review v3.
+- the SC working record: correct; adds pointer.
+- the SC working record: correct; adds pointer.
+- the SC working record: existing money entries (lines 471-475) are correct; adds pointer +
+  three new entries (§10 below).
+- the Service Calendar data-store module: stale "planning/sticker price" comments at
+  the catalog-loader anchors updated to "post-SF invoice rate (per
+  this money model)."
+- the sc-8 migration (committed): dated postscript added noting
+  supersession by sc-8c and the shifted-input assumption failure.
+
+Historical artifacts committed to `docs/` as institutional memory:
+- `docs/the SC working record` (2026-07-09 workbook + PG audit)
+- `docs/the SC working record` (2026-07-09 three-way alignment report + timeline)
+
+---
+
+## Cross-references
+
+- Timeline + rationale: `docs/the SC working record` Part 4.
+- Workbook evidence (formula-level): `docs/the SC working record` Part A.
+- Per-account contract language: `docs/the SC working record`.
+- Per-account operational digest: `docs/the SC working record`.
+- Vision + lens strategy: `docs/the SC working record`.
+- KPI push spec (future dashboard): `docs/the SC working record`.
+- Fee schedule seed: the sc-5-fee-schedule (repo-side) + admin surface PR #221.
+- Price-fix data migration: the sc-8 migration (committed).
+
+**When this doc conflicts with any other doc: this doc wins.**

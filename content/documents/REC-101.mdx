@@ -1,0 +1,180 @@
+---
+id: REC-101
+title: "Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ)"
+doc_class: REC
+shelf: "Service Delivery & Client Accounts"
+subshelf: "Account Records"
+status: In Build
+version: "0.1"
+card_line: "Canonical per-account record for CIN-AZ: identity, contract, billing shape, operations, rulings, open items, history. Live prices via Price Book."
+summary: "The canonical Account Record for CIN-AZ (Cincinnati Reds player development complex, Goodyear AZ). Identity and aliases crosswalk (PG, QuickBooks, P&L, contract folder); contract pointer to CONTRACT_DIGEST_CIN-AZ; billing record (SF% 30% hybrid, per-meal MLB/MiLB/Rehab groups, CPI-U escalation, tax treatment, ancillary event catering out of scope); operations record (service phases, count/invoice mechanics, fee-model conversion watch); current rulings; open items with owners; and preserved history. Billing figures are specimens - live values resolve from the generated Price Book. Restricted."
+keywords:
+  - CIN-AZ
+  - Cincinnati Reds
+  - Goodyear
+  - account record
+  - PDC
+  - service fee
+  - escalation
+  - MLB
+  - MiLB
+  - rehab
+  - billing
+  - REC-101
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+access_level: restricted
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 3
+last_reviewed: 2026-07-17
+effective_date: 2026-07-17
+sort_order: 101
+relationships:
+  - { to: PB-009, type: references, from_section: "financial hub" }
+  - { to: PB-012, type: references, from_section: "section 3 operations / account management" }
+  - { to: TPL-020, type: implements, from_section: "built from the account-record template" }
+  - { to: REF-122, type: references, from_section: "section 1 Contract - verbatim source-of-record" }
+---
+
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-122).
+
+## 0. Identity & Aliases
+- **Primary key (intranet)**: `CIN-AZ`
+- **Team / entity**: Cincinnati Reds - Goodyear, AZ (Player Development Complex / Spring Training)
+- **Level / tier**: PDC (MLB Spring Training + year-round MiLB training + rehab)
+- **Search aliases** (how people actually look for this): "Reds AZ", "Goodyear", "GY", "Cincinnati Spring Training", "Reds Arizona", "Reds Goodyear"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `CIN-AZ` |
+  | PG `accounts` | team_key `CIN - AZ` · name "Cincinnati Reds" · level `PDC` · billing_model `actuals_drive_invoice` · has_homestand_schedule `false` · has_schedule_overlay `false` |
+  | PG `sc_service_prices` (via `sc_services`) | service rows: "Breakfast", "Lunch", "Dinner" (MLB + MiLB share names, distinguished by price), "Pre-Game Snack", "Continental Plus", "Coffee Service (tax-free)", "Fountain Bev (tax-free)" |
+  | QuickBooks (invoice `Item`) | "REDS MLB - Meal Service", "REDS MiLB - Meal Service", "REDS MiLB - Snack", "REDS Coffee Service", "REDS Fountain Beverages" |
+  | QuickBooks (invoice memo) | "This invoice is for the Cincinnati Reds @ Goodyear, AZ - 2026 [MLB|MiLB] Meal Service" |
+  | P&L file | Cincinnati Reds - GY / Goodyear rows (shares the "Cincinnati Reds" relationship with CIN-OH; P&L separates GY from the OH clubhouse) |
+  | ABR OneSheeter tab | "CINCINNATI REDS" (SHARED tab - also covers CIN-OH; the tab blends/distinguishes "ML"=OH from "MiLB ST"/"GY"=AZ) |
+  | Contract folder | `/Contracts/CIN AZ/` |
+  | Invoice recipients | sgrossman@reds.com [contract §V.D]; recent invoices show Bill-To "Sarah Vedder / Cincinnati Reds" (contract §V.D originally named Ashley Meuser ameuser@reds.com - now departed, see §6 History) |
+- **Client stakeholder**: **Rachel Sharley** - client dietitian for CIN-AZ (current primary contact) `[src: Kevin, 2026-07-15, high]`
+- **Capture completeness**: **PARTIAL (near-full)** - contract fully banked, all rates confirmed against PG + invoices, 2026 SF confirmed ($445,716), rulings closed. Remaining open (all non-blocking): 2026 renewal-notice paperwork, Joe #2 (2300 computed-vs-billed). One live watch: fee-model conversion.
+
+## 1. Contract
+- **Operative doc**: `Reds & Kitchfix Signed Agreement-2023 copy.docx` (native Word) / `.pdf` (scanned execution copy) - "Catering Services Agreement", effective **January 1, 2023**, executed January 3, 2023, Josh Katt (CEO, KitchFix).
+- **Verbatim source-of-record**: the Contract Digest (REF-122) (do NOT restate terms here; that file holds every clause block-quoted + page-cited).
+- **Term / renewal**: Initial Term Jan 1, 2023 → Dec 31, 2025. **Two 12-month Renewal Terms at the Club's option** (2026, 2027). Club exercises by written notice by Nov 1 of the prior year (§I.B). · as-of 2026.
+  - **2026 is governed by the first Renewal Term** - this is NOT a missing-SOW situation. One base agreement governs 2024–2027 by its CPI formula + renewal-option mechanic. `[LEDGER §P]`
+- **Paperwork status**: the 2026 renewal-notice *document* (Club's written notice) is not in the folder - a correspondence check, not a contract gap (§5). The base agreement itself is operative and complete.
+
+<NonCanonical>
+
+## 2. Billing Record
+
+> Specimen figures - the live values resolve from the Price Book (generated from PG). This block is reference context, not the canonical price source.
+
+### 2a. Money shape
+- **Shape**: **SF% (30%) hybrid** - a flat annual Service Fee PLUS per-meal Catering Fees. The Service Fee "covers" the 30% discount baked into the per-meal invoice rate; per-meal volume is the variable component billed on actuals. `[MONEY_MODEL: SF% 30%; billing_model actuals_drive_invoice]`
+- **Service Fee (2026, operative)**: **$445,716/yr** · as-of 2026 · source: 2026 P&L budget (Kevin-confirmed 2026-07-15). The CPI-escalated figure operative for 2026 (up from the 2023 base $402,016). Cadence unchanged (75% Feb 1 / 25% Mar 15), Kevin-confirmed.
+  - **2023 base = $402,016**, calculated as **30% of the pre-tax budget estimate** - verbatim Exhibit B chain: estimated budget $1,478,082 (tax-incl @ assumed 10.3% AZ) → $1,340,056 pre-tax cost → × 30% = $402,016. `[contract §Exhibit B, digest §B.3; superseded by 2026 escalation - see §6 History]`
+  - **NOTE - $445,716 coincides exactly with the P&L "2300 Service Charges" line for CIN-AZ** (LEDGER §N SF-component analysis predicted ~$445.7K; §S ABR corroboration showed $445,716). Whether this is the *billed* SF or the P&L's *computed* SF-component recognition is the open **Joe #2** question - but the number is confirmed operative for 2026 either way. `[LEDGER §N, §S; Joe #2]`
+- **SF cadence**: **75% due Feb 1 · 25% due March 15**, each year of the Term. KitchFix invoices the SF by Jan 15. · source: contract §IV.A.1 (verbatim). NOT monthly. `[digest §B.3]`
+- **SF in PG**: **no `sc_fee_schedule` row for CIN-AZ** (confirmed PG appendix). Correct - the SF is a percentage-based service-fee (contract-revenue layer), NOT a flat_fee. It is billed on its own Feb/Mar schedule, separate from the per-meal invoice; the per-meal rate already carries the 30% discount. `[MONEY_MODEL two-layer architecture]`
+- **Escalation regime**: **CPI-U Food Away from Home, October annual increase, 2% floor / 5% cap.** Begins CY2024, each year thereafter. · source: contract §IV.B.3 (verbatim). `[digest §B.4]`
+  - ⚠️ Distinct from CIN-OH (Aug, 1%/4%) - same team relationship, DIFFERENT escalator. Do not cross-apply.
+- **Tax treatment**: **10.3% Goodyear AZ** on prepared-meal + snack lines (SC emits pre-tax per R9; tax applied at invoice in QB). **Coffee Service + Fountain Bev are TAX-EXEMPT at the service level** (§IV.B.4: "No taxes will be assessed and/or collected in connection with the beverage service") → `is_tax_free=true` in PG. `[C-1 RESOLVED, LEDGER §O]`
+
+### 2b. Rate table (effective-dated; the retrievable price list)
+> Sticker = workbook projection-tab price (planning reference). Post-SF = the billed per-meal invoice rate (= sticker × 0.70 for SF% meals) - what PG stores as `price_kind='projected'` and what the client is invoiced. Coffee/Fountain are flat weekly units, NOT SF-discounted. All rates as-of 2026 unless noted. Prices sourced from the **signed Price Review v3 (Joe Lessard-attested)** and confirmed against PG + sampled invoices.
+
+| Group | Service | Post-SF (billed) | Sticker | Unit | as-of | Source | PG / invoice match |
+|---|---|---|---|---|---|---|---|
+| MLB (Spring Training only) | Breakfast | **$20.31** | $29.01 | per meal | 2026 | signed sheet | ⚠️ PG stores $20.32 - **fix pending to $20.31** (A-14); invoice K300168587 bills **$20.31** ✓ |
+| MLB | Lunch | $20.31 | $29.01 | per meal | 2026 | signed sheet | PG $20.30622 ✓ (matches signed; see §6 re: cent vs sub-cent) |
+| MLB | Dinner | $20.31 | $29.01 | per meal | 2026 | signed sheet | PG $20.30622 ✓ |
+| MiLB | Breakfast | **$12.90** | $18.42 | per meal | 2026 | signed sheet | PG $12.89503 ✓ · invoice K300168736 bills **$12.90** ✓ |
+| MiLB | Lunch | $12.90 | $18.42 | per meal | 2026 | signed sheet | PG $12.89503 ✓ |
+| MiLB | Dinner | $12.90 | $18.42 | per meal | 2026 | signed sheet | PG $12.89503 ✓ |
+| MiLB | Pre-Game Snack | **$5.12** | $7.31 | per snack | 2026 | signed sheet | PG $5.12019 ✓ · invoice K300168736 bills **$5.12** ✓ (2023 base $4.51 escalated) |
+| MiLB | Coffee Service | **$511.05** | $511.05 | per week (45-wk/yr cap) | 2026 | signed sheet | PG $511.05293, `is_flat_fee`+`is_tax_free` ✓ · invoice bills $511.05 non-taxable ✓ (2023 base $450) |
+| MiLB | Fountain Bev | **$283.92** | $283.92 | per week (45-wk/yr cap) | 2026 | signed sheet | PG $283.91714, `is_flat_fee`+`is_tax_free` ✓ · invoice bills $283.92 non-taxable ✓ (2023 base $250) |
+| Rehab | Continental Plus | **$6.36** | $9.08 | per meal | 2026 | signed sheet / brief | PG $6.3566 ✓ |
+| Rehab | Breakfast | $12.90 | $18.42 | per meal | 2026 | signed sheet / brief | same rate as MiLB Breakfast `[ACCOUNT_SERVICES_BRIEF]` |
+| Rehab | Lunch | $12.90 | $18.42 | per meal | 2026 | signed sheet / brief | same as MiLB |
+| Rehab | Dinner | $12.90 | $18.42 | per meal | 2026 | signed sheet / brief | same as MiLB |
+
+**Rate-table notes:**
+- Coffee/Fountain escalation factor ~1.135 is internally consistent across Coffee ($450→$511.05), Fountain ($250→$283.92), and Snack ($4.51→$5.12) - a coherent 2023→2026 escalation.
+- **Late Night meal** (contract option, §IV.B.3): $12.77/person if only two hot meals >8hr apart, else = Dinner rate. Conditional; appears only if the Club exercises it - track if it shows on an invoice.
+- The MLB and MiLB "Breakfast/Lunch/Dinner" share service *names* in PG but are distinct by price ($20.31 vs $12.90) and group. Bill export must key on group+service, not service name alone.
+
+### 2c. Passthrough / non-revenue lines
+- **NONE at CIN-AZ.** The contract explicitly assigns all food/beverage/equipment/supplies to KitchFix (§III.B.11-12) - there is no food-cost passthrough or clubhouse-extras reimbursement here (unlike CIN-OH/STL). `[digest §B.7, evidence §2.11]`
+- No `is_non_revenue` (Fun Money) line for CIN-AZ currently (though ABR notes a possible future "Fun Money" introduction - §3).
+
+### 2d. Ancillary revenue (OUT of SC meal-model scope)
+- **Owners Week Caterings + Fantasy Camp** → the P&L "2200 Catering Revenue" line, **~$52,000/yr**. These are discrete special-event caterings, **billed SEPARATELY**, NOT part of the recurring service-calendar meal model. **OUT of SC scope; does NOT flow through the per-period bill export.** `[A-10 CONFIRMED, LEDGER §T; source: ABR OneSheeter "Catering Revenue removed (Fantasy Camp, Hell week=Owners Week Caterings, etc.)"]`
+  - Contrast: unlike TBR-FL's BGC (which IS in-scope SC revenue), CIN-AZ's catering is genuinely separate. Do not treat the two 2200 lines the same.
+- **Educational services** (cooking classes/demos, §IV.C): **$1,000/class** + tax, mutually scheduled. A contract option, not recurring; if exercised, it's ancillary event revenue (likely a 2200-class line). Track if it appears. `[digest §B.2]`
+
+### 2e. Worked billing example (golden-test seed - to the penny)
+From **invoice K300168736** (2026-05-17, CIN-AZ MiLB, Goodyear), a real bi-weekly period:
+- 12 daily MiLB meal-service rows @ **$12.90** × 154/day (varies) → meal subtotal
+- 7 daily MiLB snack rows @ **$5.12** × 50 → snack subtotal
+- 2 Coffee Service @ **$511.05** (non-taxable) + 2 Fountain Bev @ **$283.92** (non-taxable) → beverage subtotal
+- **Pre-tax subtotal $27,221.14** · tax $2,640.01 (= 10.3% on the taxable base $25,631.20, i.e. excluding the $1,589.94 non-taxable beverages) · **total $29,861.15**
+- **The SC per-period export for this period should reproduce the $27,221.14 pre-tax subtotal** (meals + snacks + beverages, tax applied downstream in QB). This is the CIN-AZ golden-test target.
+- MLB parallel: invoice K300168587 (2026-03-22) - 14 daily "REDS MLB - Meal Service" rows @ $20.31, pre-tax $57,375.75, tax $5,909.70 (10.3%), total $63,285.45. **MLB and MiLB bill on SEPARATE invoices** even in overlapping months - the SC export must support the level-split invoice grouping. `[NEW FACT, LEDGER §K]`
+
+</NonCanonical>
+
+## 3. Operations Record
+- **Client stakeholders**: **Rachel Sharley** - client dietitian, current primary contact `[src: Kevin, 2026-07-15, high]`. Invoices Bill-To Sarah Vedder, sent to sgrossman@reds.com. (Ashley Meuser was the prior contact - left the Reds ~Apr/May 2026; see §6.)
+- **Service pattern / seasonal shape**: MLB Spring Training (~115 people) + year-round MiLB training across phases - Early Camp, MiLB ST, Extended ST, Arizona Summer League, Fall Instructs, First Year Player Camp - plus rehab. **Headcount swings ~75 to ~240 MiLB** depending on phase; the widest swings of any account type. `[ACCOUNT_SERVICES_BRIEF, med]`
+- **Service groups**: MLB (ST only), MiLB, Rehab (priced as MiLB), plus weekly Coffee/Fountain and Pre-Game Snack.
+- **Count/invoice mechanics**: Club provides preliminary weekly count → final count one day before Monday → KitchFix provides actual count day-after service (§V.A). Invoices every 15 days in arrears, Net 30 (§V.B-C). **Overage bills at actuals price; underage is NOT reconciled** (contract §V.C confirms "charge for the additional meals" over projection; no under-true-up). `[MONEY_MODEL R3/R4; evidence §2.10 "overage at actuals price CONFIRMED verbatim"]`
+- **Force-majeure proration**: fees (except the 75% Feb-1 SF installment) prorate by (days-not-served ÷ 240 service days). `[§IV.F]`
+- **Operational truth not in contracts**: MLB and MiLB are invoiced separately during ST (operational practice, not contract-required). `[evidence §3.3]`
+- **FEE-MODEL CONVERSION (watch item)**: a 2025 client conversation raised moving GY (CIN-AZ) to a flat_fee account, potentially tied to a contract extension. Originally surfaced by Ashley Meuser (now departed) - status with the current contact (Rachel Sharley) UNKNOWN; may or may not still be live. **Not executed.** If it lands, CIN-AZ's shape would change from SF%-hybrid to flat_fee (MONEY_MODEL + this file would need updating). Watch alongside the Nov 1, 2026 renewal decision. `[src: ABR Deeper Dive 2025 p18, med - originator departed; re-confirm currency]`
+
+## 4. Rulings & Decisions
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| C-1 | Coffee/Fountain are tax-EXEMPT at service level (contract §IV.B.4). Emit full agreed amount, no tax. Not a "back-out." `is_tax_free=true`. | CLOSED | 2026-07-14 | §K, §M, §O |
+| A-14 | MLB Breakfast billed rate = **$20.31** (Joe-approved). PG holds $20.32 (and $20.30622 on earlier rows) → fix effective-dated to $20.31, Phase 3. Invoice confirms $20.31. | CLOSED (fix pending in PG, Phase 3) | 2026-07-14 | §O, §Q audit-batch |
+| C-17 | Exhibit-B volume tier: once 72,890 MiLB meals billed in a year, rates step to $16.22 (snack $6.44). Decoded as SF-exhaustion, not a typo. Signed sheet governs SC billing (flat post-SF); no PG tier encoding. | **CLOSED** | Kevin ruling 2026-07-17 | §P (C-17), §Q, §T |
+
+## 5. Open Items
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| Exhibit-B volume tier (C-17) | **CLOSED** | Kevin | No | Kevin ruling 2026-07-17: annual projection billed at post-SF as floor; under-attendance bills full projection; overage stays post-SF. 2023 tier language outdated. Do not reopen. |
+| 2026 renewal notice document | OPEN | Kevin | No (risk-accepted) | Base agreement's renewal-option mechanic covers 2026 by formula; the Club's written renewal notice isn't in the folder. Correspondence check, not a contract gap. Chase via current contact (Rachel Sharley) - NOT Ashley (departed). Next: 2027 renewal notice due Nov 1, 2026. |
+| P&L 2300 computed-vs-billed (Joe #2) | OPEN (async, non-blocking) | Joe | No | 2026 SF ($445,716) is confirmed operative, but whether the P&L 2300 line is the *billed* fee or a *computed* SF-component recognition is still open. Doesn't block this file - the number is confirmed either way. |
+| Fee-model conversion watch | UNDER-REVIEW | Kevin | No | Ashley's GY→fee-account conversation. If executed, shape changes to flat_fee. Not yet contracted. |
+
+## 6. History
+
+<NonCanonical>
+
+> Superseded facts, preserved. Specimen figures; live values via Price Book.
+- **2023 base per-meal rates** (superseded by 2024–2026 CPI escalation): MLB $17.88 / MiLB $11.35 / Snack $4.51 (all B/L/D uniform). Coffee $450/wk, Fountain $250/wk. `[contract §IV.B, as-of 2023, superseded by escalation as-of each subsequent Jan]`
+- **A-14 PG price drift** (the STALE_PG story, in the data): CIN-AZ MLB "Breakfast" `sc_service_prices` rows - 2026-06-16 **$20.30622** → 2026-06-17 $20.30622 → 2026-06-18 **$20.32**. The 06-18 change to $20.32 introduced the drift; Kevin ruled the approved figure is **$20.31**, so both stored values are off. Fix effective-dated to $20.31 pending (Phase 3). `[PG appendix; A-14 ruling §O]`
+- **A-14 precision note**: the signed-sheet cell reads $20.30622 (sub-cent) while Joe-approved + invoice-billed = $20.31 (cent). Open storage-precision question (store cent vs sub-cent) folds into the Phase-3 PG fix + R10. `[§Q audit-batch]`
+- **Service Fee 2023 base $402,016** (superseded by 2026 escalated figure $445,716, as-of 2026). The 2023 base was 30% of the $1,340,056 pre-tax budget. `[contract §Exhibit B; superseded per Kevin 2026-07-15]`
+- **Prior client contact: Ashley Meuser** (ameuser@reds.com) - named in contract §V.D as invoice recipient and was the primary account contact through early 2026. **Left the Reds organization ~April/May 2026.** Current contact: Rachel Sharley (dietitian). Invoices now route to sgrossman@reds.com / Bill-To Sarah Vedder. `[src: Kevin, 2026-07-15]`
+- **A-4 (TBJ-FL, not this account, noted for cross-reference)**: was mis-framed as a "blend" in earlier docs; dissolved - two separate groups. CIN-AZ unaffected. `[§T]`
+
+</NonCanonical>
+
+## 7. Provenance & Attribution
+- **Contract facts**: page-cited in the Contract Digest (REF-122) (authoritative, verbatim).
+- **Per-service prices**: signed Price Review v3, **Joe Lessard**-attested. Confirmed against PG (`sc_service_prices`) + sampled invoices K300168587 (MLB) + K300168736 (MiLB).
+- **Money shape / two-layer architecture**: the Money Model (REF-140) (canonical; wins until amended - several 2026-07-14/15 rulings are pending amendments to it).
+- **Operational/tribal facts** (service groups, phases, personnel, fee-conversion conversation, stakeholders): the Account Services Brief (repo-side) (2026-06-16) + ABR OneSheeter/Deeper Dive 2025. Tagged inline with confidence; `[src: unattributed]` where person/date unknown (not researched).
+- **Rulings**: LEDGER (repo-side provenance) §K/§M/§O/§P/§Q/§T (C-1, A-14, C-17, A-10).
+- **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (pilot build).
+
+---
+*Completeness: PARTIAL (near-full). Contract banked + all rates confirmed (PG + invoice) + 2026 SF confirmed ($445,716) + rulings closed + operational detail + worked example. Remaining OPEN (all non-blocking): 2026 renewal-notice paperwork, Joe #2 (2300 computed-vs-billed). Live watch: fee-model conversion (originator departed - re-confirm currency).*

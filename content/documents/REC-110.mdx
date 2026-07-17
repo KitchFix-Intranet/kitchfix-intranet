@@ -1,0 +1,141 @@
+---
+id: REC-110
+title: "Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home))"
+doc_class: REC
+shelf: "Service Delivery & Client Accounts"
+subshelf: "Account Records"
+status: In Build
+version: "0.1"
+card_line: "Canonical per-account record for TXR-TX-H: identity, contract, billing shape, operations, rulings, open items, history. Live prices via Price Book."
+summary: "The canonical Account Record for TXR-TX-H (Texas Rangers MLB (Globe Life home)). Identity and aliases crosswalk; contract pointer to CONTRACT_DIGEST_TXR-TX-H; billing record (money shape, rate table, passthrough, ancillary, worked example); operations record; current rulings; open items with owners; and preserved history. Billing figures are specimens - live values resolve from the generated Price Book. Restricted."
+keywords:
+  - TXR-TX-H
+  - account record
+  - billing
+  - service fee
+  - REC-110
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+access_level: restricted
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 3
+last_reviewed: 2026-07-17
+effective_date: 2026-07-17
+sort_order: 110
+relationships:
+  - { to: PB-009, type: references, from_section: "financial hub" }
+  - { to: PB-012, type: references, from_section: "section 3 operations / account management" }
+  - { to: TPL-020, type: implements, from_section: "built from the account-record template" }
+  - { to: REF-131, type: references, from_section: "section 1 Contract - verbatim source-of-record" }
+---
+
+> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-131).
+
+## 0. Identity & Aliases
+- **Primary key (intranet)**: `TXR-TX-H`
+- **Team / entity**: Texas Rangers MLB - home clubhouse, Globe Life Field (Arlington, TX)
+- **Level / tier**: MLB
+- **Search aliases**: "Rangers home", "Globe Life", "Arlington", "TXR home", "Rangers MLB home", "Rangers Texas"
+- **Crosswalk to other systems**:
+  | System | How this account appears |
+  |---|---|
+  | Intranet (PRIMARY) | `TXR-TX-H` |
+  | PG `accounts` | team_key `TXR - TX - H` · name "Texas Rangers Home" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+  | PG `sc_fee_schedule` | $604,032 (2026-01-01, annual, monthly-6) |
+  | PG `sc_service_prices` | per-meal rows all $0 (flat-fee planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
+  | QuickBooks (invoice `Item`) | SF: Activity **"Service Fees (PFS)"**, Description "2026 Service Fee - N of 6" `[K300168474]` · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). `[Kevin, 2026-07-16]`|
+  | Finance schedule | **"TXR - HOME"** (their label) - accrued P4-P10, billed 6× $100,672 `[§W]` |
+  | P&L file | Texas Rangers - Globe Life / home rows |
+  | ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
+  | Contract folder | `/Contracts/TXR H&V/` (shared with TXR-TX-V) |
+- **Client stakeholders**: **Brandon Boyd** - Clubhouse Manager, main client (bboyd@texasrangers.com); **Katie McInnes** - RD/Dietitian (kmcinnis@texasrangers.com); Ross Fenstermaker - GM, contract signatory `[src: Kevin, 2026-07-16, high]`
+- **Capture completeness**: **FULLY-CAPTURED** - contract banked, $604,032 fee finance+contract-confirmed (exact), monthly cadence + 8.25% tax gross-up confirmed, postseason pro-rata mechanic banked. Non-blocking opens: the missing-§2(d) contract defect (cosmetic), SF invoice not sampled (Phase E), single-year contract (2027 TBD).
+
+## 1. Contract
+- **Operative doc**: `Food_Services_Agreement_-_KitchFix_(MLB_2026).pdf` - effective **Jan 21, 2026**, expires **Dec 31, 2026** (single-season). Ross Fenstermaker (GM) + Josh Katt. Covers the home clubhouse AND the visiting-clubhouse carve-in (see TXR-TX-V).
+- **Verbatim source-of-record**: the Contract Digest (REF-131).
+- **Term / renewal**: single-year 2026; renegotiated annually (no escalator clause; no renewal option). · as-of 2026. `[digest §B.1]`
+- **Prior years on file** (historical): 2024 ($528,000) + 2025 ($549,120). `[digest §C]`
+
+<NonCanonical>
+
+## 2. Billing Record
+
+> Specimen figures - live values resolve from the Price Book (generated from PG). Reference context, not the canonical price source.
+
+### 2a. Money shape
+- **Shape**: **Flat-fee** - a single fixed **Services Fee of $604,032** as "payment in full for the Services and all ingredients and supplies." NO per-meal billing (meals tracked for planning; PG stores $0). No separate passthrough (ingredients/supplies are baked into the fee - unlike CIN-OH/STL). `[MONEY_MODEL flat_fee]`
+- **2026 Services Fee = $604,032** (finance §W + contract, EXACT match). Billed **6 monthly installments of $100,672 pre-tax / $108,977.44 with-tax**. · as-of 2026 · `[§W, digest §B.3]`
+- **SF cadence**: 6 monthly installments, **April 1 → September 1, 2026** (contract table). Invoiced **30 days in advance** of each due date. Accrued **P4-P10** per finance. `[digest §B.3, §W]`
+- **SF TAX: TAXABLE at 8.25%** (Arlington TX). The contract's own payment table shows both columns: $100,672 pre-tax → **$108,977.44 with tax** (8.25% gross-up). `[digest §B.2, §B.5]`
+  - ⚠️ Per-account SF-tax attribute: TXR-TX-H **taxed** (like CIN-OH), unlike STL-FL (exempt). The contract states the with-tax amount explicitly. `[§X]`
+- **Escalation regime**: **NONE** (single-year contract, priced fresh annually). Note the YoY history: $528K (2024) → $549,120 (2025, +4%) → $604,032 (2026, **+10%**) - a negotiated jump, NOT a formula. `[digest §B.4]`
+  - ⚠️ Do NOT apply an escalator to TXR-TX-H, and do NOT assume the +10% recurs.
+
+### 2b. Rate table
+> **Flat-fee account - no per-meal rate table.** PG stores per-meal services (Arrival, Post BP, Post-Game, Umpire) at **$0** (planning only). Capacity: 3 meals/game for 60 people, ~81 games + 1 workout day (§1.b). The money is the Services Fee (§2a).
+> Implied per-meal (calc only, NOT billed): $604,032 / (81×3×60) ≈ $41.43/meal - a reference figure, not a rate.
+
+### 2c. Passthrough / reimbursables
+- **NONE as a separate line** - the Services Fee is "payment in full for the Services and all ingredients and supplies." Unlike CIN-OH/STL, there's no separate food/supplies passthrough budget. `[digest §B.3]`
+- **Catering passthrough (exception)**: 12 post-game outside catered meals/year - KitchFix coordinates/orders, **the Rangers pay the catering costs directly** (§2.b). Not a KitchFix revenue line; Rangers-borne. On those dates KitchFix still provides standard all-day food + an attendant. `[digest §B.7]`
+
+### 2d. Postseason
+- **Pro rata Services Fee per 2026 Postseason Game** (§2.a). The contract does NOT state a per-game denominator; MONEY_MODEL derives **~$7,457.19/game** = $604,032 / 81. `[digest §B.6]`
+- **Satisfies the flat-fee "same rate + additional days" doctrine** (R11): pro-rata-of-annual-fee per postseason game. `[LEDGER R11]`
+- Workout-day postseason rate: contract silent (UNKNOWN).
+
+### 2e. Worked billing example (golden-test seed)
+- **SF installment (invoice K300168474, 7/1/2026, "5 of 6")**: $100,672 pre-tax + $8,305.44 tax (8.25%) = **$108,977.44** - **invoice-confirmed**, matches the contract table to the penny. The SF export for a TXR-TX-H month = $100,672 pre-tax + 8.25% Arlington tax. `[K300168474]`
+
+</NonCanonical>
+
+## 3. Operations Record
+- **Client stakeholders**: **Brandon Boyd** (Clubhouse Manager, main client, bboyd@texasrangers.com); **Katie McInnes** (RD/Dietitian, kmcinnis@texasrangers.com); Ross Fenstermaker (GM, contract signatory). `[Kevin, high]`
+- **Service pattern**: MLB home clubhouse at Globe Life Field. ~81 home games + 1 workout day, 3 meals/game for 60 people. Daily offerings: G&G snacks, packaged snacks/condiments/beverages, coffee, MTO during the first two meals each home game. `[digest §B.9, §1.b]`
+- **Staffing requirement (unique)**: ≥75% of intended workforce hired+trained by Mar 1, 2026; ≥6 fully-trained staff at Globe Life Field throughout the season (§4.e). `[digest §B.9]`
+- **Background Check Letter (new 2026)**: Schedule A - all contractor personnel with player/staff contact must pass background checks at KitchFix's cost (auto-disqualifiers: felonies, sex offenses, DV, assault, weapons, drug offenses). Potential cost impact not in a passthrough line. `[digest §B.9]`
+- **Count mechanics**: scope cap (60 people, 3 meals/game), no sign-off gate. `[digest]`
+
+## 4. Rulings & Decisions
+| ID | Ruling (current state) | Status | as-of | LEDGER ref |
+|---|---|---|---|---|
+| R11 | Flat-fee postseason = pro-rata-of-fee mechanic (~$7,457.19/game). Satisfied. | CLOSED | 2026-07 | R11 |
+| SF-tax (per-account) | TXR-TX-H SF is **TAXABLE (8.25% Arlington)** - contract states the with-tax figure ($108,977.44). Per-account attribute. | CLOSED | 2026-07-16 | §X |
+| Fee figure | 2026 SF = $604,032 (finance + contract exact). No escalator; +10% YoY was negotiated. | CLOSED | 2026-07-16 | §W |
+
+## 5. Open Items
+| Item | Status | Owner | Blocking cert? | Note |
+|---|---|---|---|---|
+| Missing §2(d) contract reference | OPEN (defect) | Kevin | No | §1.c references "the budget set forth below in Section 2(d)" for kitchen setup, but §2 has NO subsection (d). Dangling reference / missing clause. Kitchen-setup budget amount undocumented. Chase / note the drafting defect. |
+| Postseason per-game denominator | OPEN (derivation) | - | No | Contract says "pro rata" without a $/game figure; ~$7,457.19 is derived ($604,032/81). Workout-day rate silent. |
+| 2027 contract | OPEN (future) | Kevin | No | Single-year 2026; 2027 renegotiated separately (annual model). |
+| Background-check cost | OPEN (minor) | - | No | New 2026 obligation at KitchFix cost; not in a passthrough line. Watch for cost impact. |
+
+## 6. History
+
+<NonCanonical>
+
+> Superseded facts, preserved. Specimen figures; live values via Price Book.
+- **Prior-year fees** (superseded): 2024 $528,000 → 2025 $549,120 (+4%) → 2026 $604,032 (+10%). Negotiated annually, no formula. `[digest §C]`
+- **Prior installments**: 2024 $88,000×6; 2025 $91,520×6; 2026 $100,672×6. `[digest §C]`
+- **Indemnitees change (2026)**: Metroplex Sportservice removed; Rangers Television LLC + Rangers Media and Entertainment LLC added. Unrelated to money. `[digest §C]`
+- **COVID-19 clause** present 2024/2025, REMOVED 2026. `[digest §C]`
+
+</NonCanonical>
+
+## 7. Provenance & Attribution
+- **Contract facts**: the Contract Digest (REF-131) (verbatim, page-cited; all three years).
+- **2026 fee + cadence + accrual**: finance schedule (labeled "TXR - HOME") (§W) - matches contract exactly.
+- **SF tax (8.25%)**: stated in the contract's own payment table. `[digest §B.2]`
+- **Money shape**: the Money Model (REF-140) (flat_fee).
+- **Stakeholders (Boyd/McInnes)**: Kevin, 2026-07-16.
+- **Rulings**: LEDGER (repo-side provenance) R11 (postseason), §W (fee), §X (SF-tax).
+- **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+
+---
+*Completeness: FULLY-CAPTURED. Flat-fee. Contract banked (all 3 years); $604,032 fee finance+contract+invoice-confirmed; monthly cadence + 8.25% tax gross-up invoice-confirmed (K300168474, $108,977.44 matches contract to the penny); postseason pro-rata mechanic banked. Note the ingredients/supplies are baked into the fee (no separate passthrough), unlike CIN-OH/STL. Non-blocking opens: the missing-§2(d) drafting defect, postseason denominator derivation, SF invoice unsampled (Phase E), single-year (2027 TBD).*
