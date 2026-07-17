@@ -1209,3 +1209,51 @@ CC extracted the BGC contract → `CONTRACT_DIGEST_BGC.md` (`Boys and Girls Club
 
 ### PLACEMENT NOTE (for the Batch-3 commit)
 `CONTRACT_DIGEST_BGC.md` should be committed alongside the other `CONTRACT_DIGEST_*.md` files IF those are tracked in the repo (CC to check `docs/pricing-summit/CONTRACT_DIGEST_*.md` and match the convention). TBR-FL's pointer (`../CONTRACT_DIGEST_BGC.md`) matches the sibling-digest convention used by all account files.
+
+---
+
+## A-9/D-3 SUSPECTED REVERSAL — the "GOTCHAS fix" may have been the artifact (2026-07-17, PR #447 review)
+CC found PL_2026_APPENDIX R25 (STL-FL 2400.1) is internally broken: **12 period cells under a 13-column header**, sums $1,354,446 vs stated total $1,400,000, gap **$45,554 ≈ the old P1 figure ($45,553, $1 rounding)**.
+**HYPOTHESIS (strong)**: the appendix extraction DROPPED the first cell (P1 $45,553) and shifted the row left. Restored vector — P1 45,553 · P2 171,367 · **P3 peak 407,375** · P4 132,755 · P5-P9 98,915×5 · P10 57,267 · P11 52,061 · P12 39,046 · P13 0 — sums to $1,399,999 ≈ $1,400,000 ✓.
+**Consequences if verified**: (1) the ORIGINAL GOTCHAS/MONEY_MODEL phrasing ("P1 $45,553 · P3 peak") was CORRECT all along; (2) **A-9/D-3 was a false conflict** created by comparing truth against a broken extraction — same error-species as A-1 (ruled from a summary, not the data); (3) line 210 prose + BILLING_TERMS_MATRIX:57 propagated the same shifted vector.
+**Corroboration**: §N logged "STL-FL 2400.1 = $1,400,000 exact ✓" at extraction time (sum check passed on source, drop happened at write). Operational timing: ST peak = March ≈ **P3**, not P2 — P3-peak fits the season.
+**✅ CONFIRMED (2026-07-17, finance source)**: Kevin gave CC `PFS Service Fees 2026.xlsx` directly; Accrual Schedule STL-FL row verbatim: P1 45,553 · P2 171,367 · P3 407,375 (PEAK) · P4 132,755 · P5-P9 98,915×5 · P10 57,267 · P11 52,061 · **P12 39,047** (not 39,046 — finance shows the odd number) · P13 0 = **$1,400,000 EXACT**. Hypothesis confirmed in full.
+**A-9 / D-3 REVERSED**: original GOTCHAS ("P1 $45,553 · P3 peak") was CORRECT all along; the appendix R25 transcription dropped the P1 cell and shifted everything left. Second instance of the A-1 error species — ruled from a broken extraction against the truth.
+**FIXED (PR #447, f844766)**: PL_2026_APPENDIX R25+R31+§Q3 (reversal note added) · BILLING_TERMS_MATRIX:57 · GOTCHAS (correct vector restored + reversal history) · MONEY_MODEL §g. All sum-verified.
+**STANDING LESSON (new)**: any per-period vector cited in a doc must SUM-CHECK against its stated total before being cited or used to rule. The sum-check is what caught this.
+**Side findings from the xlsx — BOTH already known, NO action**: (1) TXR-AZ $301,623 = the 2026 deposit; docs citing $297,419 are citing the LABELED 2025 figure — not an error. (2) STL-MO $64 accrual-vs-billed delta — already logged in §W as trivial rounding.
+**Remaining before merge**: CONFLICT_REGISTER A-9/D-3 + main-LEDGER §Q rows still carry the false "GOTCHAS stale" claims — surgical REVERSED annotations ride the same PR (#443 precedent for surgical ledger corrections).
+
+---
+
+## STAGE 1 CLOSED + STAGE 2 RESULTS — escalation verification (2026-07-17)
+**STAGE 1 ✅**: re-smoke 4/4 PASS (case-exact check fixed — CC's earlier smoke had a case-insensitive bug). PG now holds: CIN-AZ Breakfast $20.31 · Media Meals $16.00 · zero "(tax-free)" suffixes · "Extended Day Labor". A-14/C-12/B-10/B-11 EXECUTED. C-10: Snack/Shake out via legacy active=false (accepted; optional admin-panel re-archive open). TXR-V: catalog already operational-only (4 windows: Arrival/Post BP/Post-Game/Umpire, no buffet rows) — **A-7 catalog fix DISSOLVED, no action ever needed**.
+**STAGE 2 ✅ (ESCALATION_VERIFICATION_REPORT.md, 415L)**: **ZERO mismatches against signed.** 4 MATCH within 0.4% (CIN-OH −$67/0.018% · STL-MO −$134/0.027% · TBJ-FL per-meal+SF +0.36-0.43% · TXR-AZ exact, cleanest) · 5 N/A (no formula) · 2 NEGOTIATED (CIN-AZ Price Review v3 = operative; TBR-FL per A-1). Layer D price gate GREEN.
+**Notable**: TBJ-FL SF $515,712 is WITHIN 0.4% of 100% Q4 SEFV compound from $452,812 — negotiated AND formula-consistent; the escalation "mystery" is fully dead. Oct 2025 CPI UNAVAILABLE (BLS appropriations lapse) — future-ops note for CIN-AZ's Oct-basis clause (2027 derivations).
+**Spot-checks**: A-4 FSL = $16.51 on signed (16.50971) ✅ CLOSED · A-11/C-5 BGC $6.50 in signed AND PG ✅ — BUT 🟡 **is_tax_free drift: signed TRUE, PG FALSE → Stage 1-b micro-fix queued** · C-17 🔴 volume tier NOT encoded in signed or PG → KEVIN RULING NEEDED (options: signed-governs-flat + monitor volume + optional Joe clarify; encoding premature).
+**Log-only**: PG/signed name "B&G Lunch" vs ruled reality (after-school SUPPER) — naming drift, fold into future signed-v4 + PG rename together, not now (renaming PG alone would break four-way name match).
+
+---
+
+## C-17 DECODED — the volume tier is SF-EXHAUSTION, not a typo (2026-07-17, verbatim extract)
+**Digest = source verified** (space artifact only). Context: the tier lives INSIDE Exhibit B (Service Fee): budget $1,478,082 incl. 10.3% AZ tax → SF = 30% of pre-tax = $402,016; "§IV pricing combines with the Service Fee to reach these budget figures."
+**THE MATH**: step-up rates = base ÷ 0.70 exactly (MiLB $11.35→$16.22 ✓, Snack $4.51→$6.44 ✓). **72,890 = the 2023 budgeted meal volume.** Mechanic: the 30% SF prepays the buy-down on budgeted meals; overage meals have no SF cover → bill at FULL pre-SF rate. Same economics as TXR-AZ's deposit. **ASB's "probable typo" reading is WRONG** (ripple: ASB line + ACCOUNT_CIN-AZ §5 + digest note → post-cert 🟡 doc PR).
+**CC's sharper flag**: clause is worded "billed in 2023" — 2023-calibrated. NO 2026 threshold documented anywhere. Exposure: if 2026 volume exceeds the (unknown) 2026 budgeted count, overage should arguably bill at full sticker — revenue-protection gap, not PG gap.
+**RECOMMENDED RULING (pending Kevin)**: (1) signed governs SC billing — flat post-SF, no PG tier encoding; (2) NEW JOE QUESTION #6: does the SF-exhaustion threshold recalibrate annually + what's the 2026 budgeted meal count; (3) monitor CIN-AZ MiLB volume. C-17 reclassified: from "signed-completeness oddity" → "decoded mechanic + annual-recalibration question."
+
+## C-17 CLOSED — KEVIN RULING (2026-07-17, supersedes prior recommendation)
+**Operational reality (Kevin, authoritative)**: the 2023 clause language + 72,890 count are OLD. Current practice, annually: KitchFix provides a meal projection; billing = post-SF rate against it. If actuals run UNDER projection → full projected amount still billed (floor in KitchFix's favor). If actuals run OVER → rate STAYS post-SF (no step-up). Projections are accurate and deliberately favorable. Win-win; settled.
+**DISPOSITION**: NO PG change · NO Joe question (recommendation #6 WITHDRAWN) · NO monitoring workflow · SC flat post-SF billing already correct. Only ripple that survives: ACCOUNT_CIN-AZ §5 C-17 item flips to CLOSED with this ruling (rides the post-cert 🟡 doc PR). ASB annotation: optional one-liner, minimal. **Do not reopen.**
+
+---
+
+## STAGE 3 RESULT — FOUR-WAY AUDIT: CERTIFIED (2026-07-17)
+**Verdict: 🟢 CERTIFIED (with catalogued signed-side notes).** PG=Signed 103/105 at 2dp · **ZERO real PG failures** · Stage-1 fixes 5/5 confirmed in-audit (incl. BGC flag).
+**The 2 non-matches — BOTH signed-side, PG correct on every row:**
+1. TBJ-FL Media Meals: signed v3 cell still $15; PG $16 per Kevin's C-12 ruling → **signed v4 refresh queued** (fold into next Joe touchpoint; 2-cell edit, Joe re-attests).
+2. STL-FL MiLB Snack: signed cell literally "NEEDS PRICE"; PG $0 = **matches the C-8 ruling** ($0, fee account) → signed-side housekeeping only, rides v4.
+**AF-vs-Signed**: 13 match / **0 drift** / 92 no-§2b-entry — join-coverage limitation + by-design (fee-account $0 rows + add-ons not itemized in §2b). ZERO contradictions where joined; account files just passed the escalation pass independently. **§2b itemization sweep DECLINED** (by design; logged as accepted).
+**Workbook divergences: 16 catalogued** (⚪ expected: pre-sc-8c actuals values, in-cell formulas, old name suffixes) = the retire-the-sheets evidence.
+**CC's follow-up #3 (C-17)**: already CLOSED by Kevin's ruling earlier today — CC hadn't seen it; no action.
+**Artifacts**: scripts/audit-sc-prices.mjs = persistent (PRICE_BOOK seed) · /tmp/build_four_way.py = certification harness → PROMOTE to scripts/ (re-runnable after any price change / v4 refresh).
+**PRICE CERTIFICATION STAGES 1-3: COMPLETE. Gate = GREEN. Next: PRICE_BOOK generation → handoff refresh → phase-docs PR → Stage 4 (successor chat).**
