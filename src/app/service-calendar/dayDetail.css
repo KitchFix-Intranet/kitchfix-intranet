@@ -202,6 +202,13 @@
   border-bottom: var(--border-thin) solid var(--border-default);
   border-left: 3px solid var(--text-link);
   margin-bottom: 0;
+  /* SC Stage 4: push the segment tag inward so its right edge lands at
+     the same coordinate as the ledger's Amount column right edge
+     (ledger content max-width = 720px, left-anchored). Band + border
+     keep their full-width card footprint; only the content shifts left.
+     At <=720px containers the max() falls back to the normal
+     var(--space-4) padding, so mobile is unaffected. */
+  padding-right: max(var(--space-4), calc(100% - 720px));
 }
 .sc-day-group-name {
   flex: 1;
@@ -561,6 +568,11 @@
   font-size: var(--size-caption); font-weight: var(--wt-semibold);
   color: var(--accent-sc-dark);
   font-variant-numeric: var(--num-tabular);
+  /* SC Stage 4: foot the total under the Amount column - same
+     right-edge as the ledger content (max 720px, left-anchored). Band +
+     border keep their full-width card footprint. Mobile falls back to
+     the normal var(--space-4) padding when the container is <=720px. */
+  padding-right: max(var(--space-4), calc(100% - 720px));
 }
 
 /* SC-074 (render F3): collapsed off-group row uses the same elevation

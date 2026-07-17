@@ -1223,8 +1223,12 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               {extrasOpen && (isFeeAccount ? (
                 inactiveSvcs.map(svc => renderServiceRow(svc))
               ) : (
+                // No LEDGER_HEAD here - the primary/active ledger above
+                // already carries one in the same card; a second header
+                // directly above identical columns reads as noise.
+                // Subgrid still guarantees column alignment with the
+                // active ledger since both use .sc-day-ledger.
                 <div className="sc-day-ledger">
-                  {LEDGER_HEAD}
                   {inactiveSvcs.map(svc => renderServiceRow(svc))}
                 </div>
               ))}
