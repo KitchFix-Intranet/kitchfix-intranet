@@ -148,20 +148,39 @@ function deriveUnit(name, isFlatFee) {
   return isFlatFee ? "ea" : "meal";
 }
 
-// Rate-cell content for a service: "$X.XX / unit" plus flag tags.
-// Non-revenue shows "not billed" instead of a rate.
+// Rate-cell content for a service. Two-line stacked structure so the
+// flag pills sit side by side beneath the price, never inline next to
+// it, never wrapping individually. Non-revenue takes the price line's
+// place (there is no billable rate).
 function renderRate(svc, rate, unit) {
   if (svc.isNonRevenue) {
     return <span className="sc-day-svc-tag sc-day-svc-tag--nonrev">not billed</span>;
   }
+  const hasTags = svc.isFlatFee || svc.isTaxFree;
   return (
     <>
       <span className="sc-day-rate-amt">{fmt$(rate)} / {unit}</span>
-      {svc.isFlatFee && <span className="sc-day-svc-tag sc-day-svc-tag--flat">flat</span>}
-      {svc.isTaxFree && <span className="sc-day-svc-tag sc-day-svc-tag--tax">tax-free</span>}
+      {hasTags && (
+        <span className="sc-day-rate-tags">
+          {svc.isFlatFee && <span className="sc-day-svc-tag sc-day-svc-tag--flat">flat</span>}
+          {svc.isTaxFree && <span className="sc-day-svc-tag sc-day-svc-tag--tax">tax-free</span>}
+        </span>
+      )}
     </>
   );
 }
+
+// Column header for the ledger. Module scope so every mount uses the
+// same JSX ref - keeps subgrid alignment identical everywhere the head
+// appears (entry active groups, entry extras, review, expanded-off).
+const LEDGER_HEAD = (
+  <div className="sc-day-ledger-head" aria-hidden="true">
+    <span className="sc-lh-name">Service</span>
+    <span className="sc-lh-rate">Rate</span>
+    <span className="sc-lh-qty">Qty</span>
+    <span className="sc-lh-amount">Amount</span>
+  </div>
+);
 
 // In-service predicate: a (service, day) pair is in service iff the service
 // has no archive date OR the day is on or before its archive date. Mirrors
@@ -540,6 +559,22 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     return { meals, revenue: rev };
   }, [getVal, day.priceAtDate]);
 
+  // Projected group summary: what the group would sub-total to if the
+  // operator "Matched projections" today. Used for the ghost subtotal in
+  // the empty state (nothing in the group touched yet). Skips archived
+  // and non-revenue services - mirrors renderServiceRow's amount rule.
+  const projectedGroupSummary = useCallback((group) => {
+    let meals = 0, rev = 0;
+    for (const s of group.services) {
+      if (!isInServiceOnDay(s, day.date)) continue;
+      const v = day.projected[s.colIndex] ?? 0;
+      const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
+      meals += v;
+      if (!s.isNonRevenue) rev += v * price;
+    }
+    return { meals, revenue: rev };
+  }, [day.projected, day.priceAtDate, day.date]);
+
   const summary = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
@@ -858,7 +893,9 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             ? <span className="sc-day-amount-none" title="Not billed">—</span>
             : entered
               ? fmt$(Number(editVal) * rate)
-              : <span className="sc-day-amount-pending">–</span>}
+              : inService
+                ? <span className="sc-day-amount-ghost">{fmt$(projVal * rate)}</span>
+                : <span className="sc-day-amount-pending">–</span>}
         </span>
       </div>
     );
@@ -895,7 +932,40 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             if (svcs.length === 0) return null;
             const gs = {
               meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
-              revenue: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex) * sv.price, 0),
+              revenue: svcs.reduce((acc, sv) => {
+                if (sv.isNonRevenue) return acc;
+                return acc + getVal(sv.colIndex) * (day.priceAtDate?.[sv.colIndex] ?? sv.price ?? 0);
+              }, 0),
+            };
+            const renderReviewRow = (s) => {
+              const projVal = day.projected[s.colIndex] ?? 0;
+              const numVal = getVal(s.colIndex);
+              // SC-064: review adopts the same helper as entry so the
+              // direction/weight semantics stay identical.
+              const chip = deltaChip(numVal, projVal);
+              if (isFeeAccount) {
+                return (
+                  <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
+                    <span className="sc-day-row-name">{s.name}</span>
+                    <span className="sc-day-review-val2">{numVal}</span>
+                    <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+                  </div>
+                );
+              }
+              const rate = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
+              return (
+                <div key={s.colIndex} className="sc-day-row sc-day-review-row2 sc-day-row--ledger">
+                  <div className="sc-day-row-left"><span className="sc-day-row-name">{s.name}</span></div>
+                  <span className="sc-day-row-rate">{renderRate(s, rate, deriveUnit(s.name, s.isFlatFee))}</span>
+                  <div className="sc-day-row-right">
+                    <span className="sc-day-review-val2">{numVal}</span>
+                    <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
+                  </div>
+                  <span className="sc-day-row-amount">
+                    {s.isNonRevenue ? <span className="sc-day-amount-none">—</span> : fmt$(numVal * rate)}
+                  </span>
+                </div>
+              );
             };
             return (
               <div key={group.name} className="sc-day-group">
@@ -905,44 +975,14 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
                     <span className="sc-day-group-seg">{accountSegment}</span>
                   )}
                 </div>
-                {!isFeeAccount && svcs.length > 0 && (
-                  <div className="sc-day-ledger-head" aria-hidden="true">
-                    <span className="sc-lh-name">Service</span>
-                    <span className="sc-lh-rate">Rate</span>
-                    <span className="sc-lh-qty">Qty</span>
-                    <span className="sc-lh-amount">Amount</span>
+                {isFeeAccount ? (
+                  svcs.map(renderReviewRow)
+                ) : (
+                  <div className="sc-day-ledger">
+                    {LEDGER_HEAD}
+                    {svcs.map(renderReviewRow)}
                   </div>
                 )}
-                {svcs.map(s => {
-                  const projVal = day.projected[s.colIndex] ?? 0;
-                  const numVal = getVal(s.colIndex);
-                  // SC-064: review adopts the same helper as entry so
-                  // the direction/weight semantics stay identical.
-                  const chip = deltaChip(numVal, projVal);
-                  if (isFeeAccount) {
-                    return (
-                      <div key={s.colIndex} className="sc-day-row sc-day-review-row2">
-                        <span className="sc-day-row-name">{s.name}</span>
-                        <span className="sc-day-review-val2">{numVal}</span>
-                        <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
-                      </div>
-                    );
-                  }
-                  const rate = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
-                  return (
-                    <div key={s.colIndex} className="sc-day-row sc-day-review-row2 sc-day-row--ledger">
-                      <div className="sc-day-row-left"><span className="sc-day-row-name">{s.name}</span></div>
-                      <span className="sc-day-row-rate">{renderRate(s, rate, deriveUnit(s.name, s.isFlatFee))}</span>
-                      <div className="sc-day-row-right">
-                        <span className="sc-day-review-val2">{numVal}</span>
-                        <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
-                      </div>
-                      <span className="sc-day-row-amount">
-                        {s.isNonRevenue ? <span className="sc-day-amount-none">—</span> : fmt$(numVal * rate)}
-                      </span>
-                    </div>
-                  );
-                })}
                 <div className="sc-day-group-subtotal">{gs.meals} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>
               </div>
             );
@@ -1141,15 +1181,14 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
                 )}
               </div>
 
-              {!isFeeAccount && activeSvcs.length > 0 && (
-                <div className="sc-day-ledger-head" aria-hidden="true">
-                  <span className="sc-lh-name">Service</span>
-                  <span className="sc-lh-rate">Rate</span>
-                  <span className="sc-lh-qty">Qty</span>
-                  <span className="sc-lh-amount">Amount</span>
+              {isFeeAccount ? (
+                activeSvcs.map(svc => renderServiceRow(svc))
+              ) : (
+                <div className="sc-day-ledger">
+                  {activeSvcs.length > 0 && LEDGER_HEAD}
+                  {activeSvcs.map(svc => renderServiceRow(svc))}
                 </div>
               )}
-              {activeSvcs.map(svc => renderServiceRow(svc))}
 
               {/* Per-group "actuals match" button */}
               {!groupTouched && activeSvcs.length > 0 && (
@@ -1181,9 +1220,35 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
                   </span>
                 </button>
               )}
-              {extrasOpen && inactiveSvcs.map(svc => renderServiceRow(svc))}
+              {extrasOpen && (isFeeAccount ? (
+                inactiveSvcs.map(svc => renderServiceRow(svc))
+              ) : (
+                // No LEDGER_HEAD here - the primary/active ledger above
+                // already carries one in the same card; a second header
+                // directly above identical columns reads as noise.
+                // Subgrid still guarantees column alignment with the
+                // active ledger since both use .sc-day-ledger.
+                <div className="sc-day-ledger">
+                  {inactiveSvcs.map(svc => renderServiceRow(svc))}
+                </div>
+              ))}
 
-              {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
+              {(() => {
+                // Ghost subtotal (fully-empty state, non-fee): show projected
+                // group total with ~ prefix in muted style so the operator
+                // sees what the group would foot to at Match. On any touched
+                // row in the group, swap to the live entered totals.
+                const isGhost = !isFeeAccount && !groupTouched;
+                const sub = isGhost ? projectedGroupSummary(group) : gs;
+                if (!isGhost && sub.meals === 0) return null;
+                if (isGhost && sub.meals === 0) return null;
+                const tilde = isGhost ? "~" : "";
+                return (
+                  <div className={`sc-day-group-subtotal${isGhost ? " sc-day-group-subtotal--ghost" : ""}`}>
+                    {tilde}{sub.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${tilde}${fmt$(sub.revenue)}`}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -1199,7 +1264,14 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               </button>
               {isOpen && (
                 <div className="sc-day-group sc-day-group--expanded">
-                  {group.services.map(svc => renderServiceRow(svc))}
+                  {isFeeAccount ? (
+                    group.services.map(svc => renderServiceRow(svc))
+                  ) : (
+                    <div className="sc-day-ledger">
+                      {LEDGER_HEAD}
+                      {group.services.map(svc => renderServiceRow(svc))}
+                    </div>
+                  )}
                   {gs.meals > 0 && <div className="sc-day-group-subtotal">{gs.meals.toLocaleString()} meals{isFeeAccount ? "" : ` · ${fmt$(gs.revenue)}`}</div>}
                 </div>
               )}
