@@ -39,7 +39,7 @@ const RETIRED_IDS = new Set([
 
 // pr-7-8 dropped Draft. The 6-set is now canonical.
 const VALID_STATUSES = new Set(["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"]);
-const VALID_CLASSES = new Set(["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"]);
+const VALID_CLASSES = new Set(["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK", "REC"]);
 const VALID_SHELVES = new Set([
   "Safety, Health & Incident",
   "Operations & Leadership",
