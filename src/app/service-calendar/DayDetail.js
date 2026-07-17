@@ -553,9 +553,18 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     return Number(v);
   }, [editValues]);
 
+  // Stage 4 display polish: is_flat_fee services stay in the revenue
+  // math (they're billable line items) but are excluded from the
+  // headcount tally. A week of Coffee shouldn't count as 1 meal; 13
+  // Extra Protein pans shouldn't add 13 to "meals." Non-revenue keeps
+  // its existing meals-count behavior (documented; Kevin's ruling).
   const groupSummary = useCallback((group) => {
     let meals = 0, rev = 0;
-    for (const s of group.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0)); }
+    for (const s of group.services) {
+      const v = getVal(s.colIndex);
+      if (!s.isFlatFee) meals += v;
+      if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0));
+    }
     return { meals, revenue: rev };
   }, [getVal, day.priceAtDate]);
 
@@ -569,7 +578,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       if (!isInServiceOnDay(s, day.date)) continue;
       const v = day.projected[s.colIndex] ?? 0;
       const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
-      meals += v;
+      if (!s.isFlatFee) meals += v;
       if (!s.isNonRevenue) rev += round2(v * price);
     }
     return { meals, revenue: rev };
@@ -578,7 +587,11 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   const summary = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
-      for (const s of g.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0)); }
+      for (const s of g.services) {
+        const v = getVal(s.colIndex);
+        if (!s.isFlatFee) meals += v;
+        if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0));
+      }
     }
     return { meals, revenue: rev };
   }, [serviceGroups, getVal, day.priceAtDate]);
@@ -622,7 +635,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         if (editVal === "" || editVal === undefined) continue;  // SC-071
         const v = Number(editVal);
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
-        meals += v;
+        if (!s.isFlatFee) meals += v;
         if (!s.isNonRevenue) rev += round2(v * price);
       }
     }
@@ -641,7 +654,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         if (!isInServiceOnDay(s, day.date)) continue;
         const v = day.projected[s.colIndex] ?? 0;
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
-        meals += v;
+        if (!s.isFlatFee) meals += v;
         if (!s.isNonRevenue) rev += round2(v * price);
       }
     }
@@ -894,7 +907,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             : entered
               ? fmt$(Number(editVal) * rate)
               : inService
-                ? <span className="sc-day-amount-ghost">{fmt$(projVal * rate)}</span>
+                ? <span className="sc-day-amount-ghost">~{fmt$(projVal * rate)}</span>
                 : <span className="sc-day-amount-pending">–</span>}
         </span>
       </div>
@@ -931,7 +944,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
             const svcs = group.services.filter(s => touched.has(s.colIndex));
             if (svcs.length === 0) return null;
             const gs = {
-              meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
+              meals: svcs.reduce((acc, sv) => sv.isFlatFee ? acc : acc + getVal(sv.colIndex), 0),
               revenue: svcs.reduce((acc, sv) => {
                 if (sv.isNonRevenue) return acc;
                 return acc + round2(getVal(sv.colIndex) * (day.priceAtDate?.[sv.colIndex] ?? sv.price ?? 0));
