@@ -1212,17 +1212,31 @@
   color: var(--text-heading); font-variant-numeric: tabular-nums;
 }
 .sc-day-amount-pending,
-.sc-day-amount-none,
-.sc-day-amount-ghost { color: var(--text-subtle); font-weight: var(--wt-regular); font-variant-numeric: tabular-nums; }
+.sc-day-amount-none { color: var(--text-subtle); font-weight: var(--wt-regular); font-variant-numeric: tabular-nums; }
+
+/* Ghost line amount reads "not entered" not "another rate reference".
+   Same base color as the rate reference (--text-subtle) but faded via
+   the semantic muted-opacity token, so a rushed chef sees the
+   subordinate weight instantly. Paired with a ~ prefix in the JSX so
+   the projected-not-recorded intent is spelled out. First keystroke
+   swaps the row to bold live via the entered branch above - this class
+   only applies to the ghost preview. */
+.sc-day-amount-ghost {
+  color: var(--text-subtle);
+  opacity: var(--opacity-muted);
+  font-weight: var(--wt-regular);
+  font-variant-numeric: tabular-nums;
+}
 
 .sc-day-svc-tag {
   font-size: var(--size-caption); font-weight: var(--wt-bold); letter-spacing: .02em;
-  text-transform: uppercase; padding: 1px 6px; border-radius: var(--rad-4);
-  line-height: 1.4; white-space: nowrap;
+  text-transform: uppercase; padding: 0 6px; border-radius: var(--rad-4);
+  border: var(--border-thin) solid transparent;
+  line-height: 1.5; white-space: nowrap;
 }
-.sc-day-svc-tag--flat   { color: var(--sc-tag-flat-fg);   background: var(--sc-tag-flat-bg); }
-.sc-day-svc-tag--tax    { color: var(--sc-tag-tax-fg);    background: var(--sc-tag-tax-bg); }
-.sc-day-svc-tag--nonrev { color: var(--sc-tag-nonrev-fg); background: var(--sc-tag-nonrev-bg); }
+.sc-day-svc-tag--flat   { color: var(--sc-tag-flat-fg);   background: var(--sc-tag-flat-bg);   border-color: var(--sc-tag-flat-bd); }
+.sc-day-svc-tag--tax    { color: var(--sc-tag-tax-fg);    background: var(--sc-tag-tax-bg);    border-color: var(--sc-tag-tax-bd); }
+.sc-day-svc-tag--nonrev { color: var(--sc-tag-nonrev-fg); background: var(--sc-tag-nonrev-bg); border-color: var(--sc-tag-nonrev-bd); }
 
 .sc-day-group-seg { font-size: var(--size-caption); color: var(--text-subtle); font-weight: var(--wt-medium); }
 
