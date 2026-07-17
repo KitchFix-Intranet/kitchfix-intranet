@@ -1,8 +1,10 @@
-# Pricing Summit — Canonical Account & Billing Record
+# Pricing Summit - Canonical Account & Billing Record
 
 This folder is the **single source of record** for KitchFix Service Calendar pricing,
 billing terms, and per-account contract truth. When any system or person needs to know
-"what does this account bill, why, and on what authority" — the answer lives here.
+"what does this account bill, why, and on what authority" - the answer lives here.
+
+**This folder is the entry point for pricing / billing / account questions.** The per-account files under `accounts/ACCOUNT_<KEY>.md` are the canonical per-account truth; older docs (`ACCOUNT_SERVICES_BRIEF.md`, `SC_CONTRACT_BILLING_SUMMARY.md`, `SC_MONEY_MODEL.md`) remain as roster / narrative / money-shape overlays but defer here on any per-account disagreement.
 
 ## Source hierarchy (P-1, ratified)
 When sources conflict, this order wins:

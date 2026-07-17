@@ -1,6 +1,6 @@
 # SC Drilldown - Visual-Parity Decisions Log
 
-Running log for the section-by-section drilldown alignment (method: docs/HANDOFF_CHAT.md 7.4-7.6).
+Running log for the section-by-section drilldown alignment (method: docs/archive/handoffs/HANDOFF_CHAT.md 7.4-7.6; archived 2026-07-17).
 Rule: GLOBAL levers are decided by the FIRST section that touches them, logged here, and inherited
 by every later section. Never re-open a logged decision inside a later section; if one must change,
 that is its own explicit conversation with Kevin.

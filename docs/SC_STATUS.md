@@ -159,8 +159,8 @@ Filing target: paste into a GitHub issue (or Kevin ping CC) with the four boxes 
 
 These docs are session-log style or bundle-recon-style, superseded by shipped state + the new canonical docs above. Propose archive to `docs/archive/`.
 
-- `docs/HANDOFF_CC.md` (2026-07-02) - CC handoff for the pre-audit drill-in polish arc.
-- `docs/HANDOFF_CHAT.md` (2026-07-02) - chat-side handoff of the same arc.
+- `docs/archive/handoffs/HANDOFF_CC.md` (2026-07-02, archived 2026-07-17) - CC handoff for the pre-audit drill-in polish arc.
+- `docs/archive/handoffs/HANDOFF_CHAT.md` (2026-07-02, archived 2026-07-17) - chat-side handoff of the same arc.
 - `docs/SC_CC_HANDOFF.md` (2026-06-19) - SC-specific CC handoff from Bundle 1/2.
 - `docs/SC_BUNDLE1_RECON.md` (2026-06-19) - Bundle 1 recon (bundle shipped, closed).
 - `docs/SC_ADMIN_RECON_REPORT.md` (2026-06-18) - Admin Stage 1 recon (shipped).
