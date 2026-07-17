@@ -863,8 +863,11 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         if (s.projectedCount != null) projectedCount += s.projectedCount;
         if (s.actualCount    != null) actualCount    += s.actualCount;
         if (!s.isNonRevenue) {
-          projectedRevenue += s.projectedRevenue;
-          if (s.hasActuals) actualRevenue += s.actualRevenue;
+          // R13 round-then-sum: each per-service line rounds to 2dp
+          // before being summed so day totals foot to the visible line
+          // amounts in the modal + drill rail + week card.
+          projectedRevenue += Math.round((s.projectedRevenue || 0) * 100) / 100;
+          if (s.hasActuals) actualRevenue += Math.round((s.actualRevenue || 0) * 100) / 100;
         }
         if (s.hasActuals) hasAnyActuals = true;
         if (s.actualCount != null && Number(s.actualCount) > 0) anyNonZeroAct = true;
@@ -1664,7 +1667,12 @@ export async function readSavedDayTotals(accountKey, serviceDate) {
   for (const r of data || []) {
     if (!r.has_actuals) continue;
     meals += Number(r.actual_count) || 0;
-    if (!r.is_non_revenue) revenue += Number(r.actual_revenue) || 0;
+    // R13 round-then-sum: each per-service line rounds to 2dp before
+    // being summed so the toast foots to the lines the operator sees
+    // in the modal. The view returns exact products (actual_count *
+    // price with sub-cent price precision); sum-then-round drifts a
+    // penny on rates like $12.895 / $17.8275.
+    if (!r.is_non_revenue) revenue += Math.round((Number(r.actual_revenue) || 0) * 100) / 100;
   }
   return { meals, revenue };
 }

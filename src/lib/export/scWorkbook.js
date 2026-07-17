@@ -484,8 +484,11 @@ function buildPerDayIndex(viewRows, catalog, homestandMap) {
     bucket.services.push(svcRow);
     bucket.projectedMeals += svcRow.projectedCount || 0;
     bucket.actualMeals    += svcRow.actualCount    || 0;
-    bucket.projectedRevenue += svcRow.projectedRevenue;
-    bucket.actualRevenue    += svcRow.actualRevenue;
+    // R13 round-then-sum: each per-service line rounds to 2dp before
+    // being summed so the Daily-detail sheet's per-day rev column
+    // matches Σ of the visible rounded lines (invoice convention).
+    bucket.projectedRevenue += Math.round((svcRow.projectedRevenue || 0) * 100) / 100;
+    bucket.actualRevenue    += Math.round((svcRow.actualRevenue    || 0) * 100) / 100;
     if (svcRow.hasActuals) bucket.hasActuals = true;
     if (svcRow.actualCount != null && svcRow.actualCount > 0) bucket.anyNonZeroAct = true;
     if (svcRow.projectedCount != null && svcRow.projectedCount > 0) bucket.anyNonZeroProj = true;
@@ -746,7 +749,9 @@ function buildByGroupBlock(sheet, startRow, ctx) {
       const g = byGroup.get(s.groupName);
       if (!g) continue;
       if (s.priceAtDate) g.rates.add(Math.round(s.priceAtDate * 100) / 100);
-      g.enteredRev   += s.actualRevenue || 0;
+      // R13 round-then-sum: each per-service line rounds to 2dp before
+      // the group aggregation, matching the daily-detail bucket totals.
+      g.enteredRev   += Math.round((s.actualRevenue || 0) * 100) / 100;
       g.enteredMeals += s.actualCount   || 0;
     }
   }

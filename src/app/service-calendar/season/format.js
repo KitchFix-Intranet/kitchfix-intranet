@@ -19,6 +19,17 @@ export function fmt$(n, opts) {
   });
 }
 
+// R13 round-then-sum: each per-service extended amount rounds to 2dp,
+// and every total is the sum of those rounded lines. Matches the
+// invoice convention Stage-5 CSVs will use. Applied everywhere a
+// per-line revenue is accumulated for display (group subtotal,
+// scoreboard hero, entered-only hero, projected hero, review total,
+// post-save toast). Do NOT sum-then-round any revenue for display -
+// the drift shows up as pennies that fail to foot to the lines above.
+export function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
 // K/M-compacting money formatter for tight tiles + month cards.
 // Was: an identical local copy in MonthCard.js (`fmtK`) and
 // DaySquare.js (`fmt$`, with the same K/M rules). One shape now.
