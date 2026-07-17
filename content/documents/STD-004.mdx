@@ -3,37 +3,241 @@ id: STD-004
 title: Documentation Repository Standard
 doc_class: STD
 shelf: "Brand & Documentation Standards"
-status: Placeholder
-version: null
-card_line: null
-summary: |-
-  Defines the front-matter schema and repo structure for the OPD documentation library. Tracker shows In Review v0.1; on-disk file absent from Doc Set 1. Placeholder until Kevin places the source file or directs CC to author the content. Once authored, STD-004 becomes the source-of-truth for the docs-as-code convention this F0-F8 build runs on (which currently lives implicitly in content/schema/ and the v2 brief).
-
-  This is a test of MDX Edit.
+status: In Build
+version: "1.2"
+card_line: "How the OPD corpus is organized and governed - classes, shelves, access tiers, canonical sourcing, lifecycle, and IDs. The system-of-docs standard."
+summary: "The Documentation Repository Standard. Governs the OPD document library as a system: the corpus model (content/documents as the corpus vs docs/ as developer/provenance space), the document-class decision rubric (when to use PB/SOP/TPL/REF/STD/POL/CHK/AGR/FORM/POST), the six shelves and organization, the one-fact-one-home rule (Facts vs prose vs generated docs, and non-canonical handling), the access-tier rubric (unrestricted/restricted/slt), the provenance boundary (operator knowledge vs repo-side evidence), lifecycle and status (retire-not-delete, supersession, effective-dating), ID-space governance, and relationship rules. STD-001 governs format inside a doc; STD-004 governs the system of docs."
 keywords:
   - STD-004
   - documentation repository
-  - front-matter schema
-  - repo structure
-  - docs-as-code
+  - doc class
+  - access level
+  - restricted
+  - slt
+  - canonical
+  - Facts
+  - provenance
+  - lifecycle
+  - retired
+  - supersedes
+  - id space
+  - shelf
+  - in_corpus
 owner: "Senior Director of Operations"
 approver: "SLT"
 audience: corporate
 classification: "KitchFix Internal"
 lang: en
-in_corpus: false
+in_corpus: true
 applies_to: company-wide
+review_interval_months: 12
 sort_order: 20
 relationships:
-  - { to: STD-001, type: related, from_section: "STD-001 is the format standard; STD-004 is the repo / repo-structure standard" }
-  - { to: STD-002, type: related, from_section: "STD-002 is the visual standard companion" }
-  - { to: STD-003, type: related, from_section: "STD-003 is the comms standard companion" }
+  - { to: STD-001, type: references, from_section: "Purpose and Scope (format vs repository)" }
+  - { to: STD-002, type: related, from_section: "companion standard" }
+  - { to: STD-003, type: related, from_section: "companion standard" }
 ---
 
-# Placeholder
+# Purpose and Scope
 
-STD-004 Documentation Repository Standard exists in the tracker as In Review v0.1 but the source file is not in Doc Set 1. Surfaced for Kevin's call at F5: place the file (CC converts faithfully), or direct CC to author the canonical text from the v2 Content Foundation Brief plus `content/schema/*.schema.json`.
+STD-004 governs the OPD documentation library as a system - how documents are classified, organized, sourced, secured, and retired. It is the repository standard.
 
-Until then this is a catalog row only - no body content. Excluded from the SousAI corpus.
+> ANCHOR: STD-001 governs the inside of a document (typography, callouts, tables, page architecture). STD-004 governs the system of documents (classes, shelves, access, canonical sourcing, lifecycle, IDs). When a question is "how should this document look," read STD-001. When it is "where does this belong, what class is it, who can see it, and what is the one true source," read STD-004.
 
-TEST
+## In scope
+
+- The corpus model and the boundary between the operator corpus and developer/provenance material.
+- The rule for choosing a document class.
+- Shelf organization and sort order.
+- The one-fact-one-home rule, and when a value is a Fact, prose, or a generated document.
+- Access tiers and what each means.
+- The provenance boundary - what belongs in the corpus versus repo-side.
+- Lifecycle, status, supersession, and effective-dating.
+- ID-space governance and relationship rules.
+
+## Out of scope
+
+- Document formatting and visual design - STD-001.
+- Postings and signage - STD-002.
+- Internal communication - STD-003.
+- The content of any individual document - governed by that document's approval chain.
+
+# The Corpus Model
+
+There are two distinct bodies of Markdown in the repository, and they are not interchangeable.
+
+- **The corpus** lives in `content/documents/`. Each file is one document, authored in MDX with structured frontmatter. The corpus is projected to the database, rendered in the reader, and ingested by SousAI. This is the operator-facing knowledge base.
+- **Developer and provenance material** lives under `docs/`. It is not projected, not rendered to operators, and not ingested by SousAI. It includes architecture notes, audit trails, evidence records, and working ledgers.
+
+> CRITICAL: Only `content/documents/` is the corpus. Placing a Markdown file under `docs/` does nothing for the operator library or SousAI. "Make this a living OPD document" always means: author it as corpus MDX in `content/documents/`, to this standard.
+
+STD-004 governs the corpus. Developer and provenance material under `docs/` is out of scope by design - it is not governed by this standard, because it has no operator audience, no access tiers, and no lifecycle in the corpus sense. It is preserved and versioned by git, and referenced from the corpus as provenance, but it does not follow the rules below.
+
+The pipeline is: MDX source -> projection (writes the catalog, relationships, rendered content, and surfaces to the database) -> the reader renders from the database, and SousAI ingests eligible documents. A document's presence in the corpus is governed by its frontmatter, not by its folder - organization is by `shelf`, `doc_class`, `sort_order`, and `relationships`, in one flat directory.
+
+# Document Classes
+
+Every corpus document declares one `doc_class`. STD-001 defines the anatomy of each class; STD-004 defines how to choose.
+
+## The classes
+
+| Code | Class | Choose it when the document is... |
+|---|---|---|
+| PB | Playbook | Long-form reference for a domain or system, read for orientation and kept as standing reference. |
+| STD | Standard | A set of rules other documents must follow. Defines what gets enforced. |
+| POL | Policy | An HR- or legal-grade rule governing the employment relationship. |
+| SOP | Standard Operating Procedure | A repeatable, process-driven set of steps to perform a task. |
+| TPL | Template | A reusable form an operator fills in each cycle. |
+| CHK | Checklist | A sequence of checks for a defined operation. |
+| REF | Reference | Look-up material - catalogs, rate tables, quick-reference cards consulted for a fact rather than read cover to cover. |
+| REC | Record | A long-form, structured, canonical record for one real-world entity (an account, vendor, or facility), maintained over time and consulted for lookup. The record-of-record for that entity. |
+| AGR | Signed Agreement | An acknowledgement artifact where the signature is the point. |
+| FORM | Form | A structured intake or record form. |
+| POST | Posting | A wall-posting or signage-class artifact. |
+
+## Choosing between close classes (tie-breakers)
+
+- **REC vs REF.** If the document is the long-form canonical record OF a single entity - one account, one vendor, one facility - maintained over its life, it is a REC. If it is a short quick-reference card or a catalog/table consulted for a fact, it is a REF. A per-account account record is a REC; a pay-band table or a quick-reference card is a REF.
+- **REC vs PB.** If the document is about ONE entity, it is a REC. If it explains a domain or system across the company, it is a PB. A per-account record is a REC; the account-management playbook that governs all accounts is a PB.
+- **PB vs REF.** If the document is read for orientation and explains a domain or system, it is a PB. If it is consulted to look up a specific fact - a rate, a spec, a card - it is a REF.
+- **STD vs PB.** If the document sets rules other documents must obey, it is a STD. If it explains how a domain works, it is a PB. A standard enforces; a playbook orients.
+- **SOP vs CHK.** If it describes how to perform a process, it is an SOP. If it is the sequence of checks for that process, it is a CHK. They pair: an SOP may reference its CHK.
+- **TPL vs the record it produces.** The blank, reusable form is a TPL. A filled instance that becomes standing reference is a REF (or lives in the system that owns it). The template and its instances are different classes.
+- **REF vs AGR.** A record of contract terms is a REF. The executed, signed contract - where the signature is the artifact - is an AGR. A digest of a contract is reference; the countersigned document is an agreement.
+
+> NOTE: When two classes both seem to fit, name the primary consumer and the primary use. "Who reads this, and are they orienting or looking something up" resolves most cases.
+
+# Shelves and Organization
+
+Every corpus document declares one `shelf`. The shelves are the top-level taxonomy:
+
+- Operations & Leadership
+- People & Conduct
+- Safety, Health & Incident
+- Service Delivery & Client Accounts
+- Culinary & Kitchen Operations
+- Brand & Documentation Standards
+
+An optional `subshelf` groups documents within a shelf. `sort_order` orders documents within a shelf for display. There is no folder taxonomy - all corpus documents sit in one flat directory and are organized entirely by frontmatter.
+
+# One Fact, One Home
+
+A fact has exactly one canonical home. Every other place that needs it references that home rather than restating it.
+
+> ANCHOR: If a number, term, or rule appears in two documents as two independent statements, they will eventually disagree. The cure is not diligence - it is single-sourcing. State the fact once, reference it everywhere else.
+
+A value can live in one of three forms:
+
+- **A Fact** - a typed value in the Facts registry, referenced inline. Use a Fact when a value is load-bearing and appears in more than one place, or must stay consistent across documents. Facts support dimensions (for example account, state, role) so a single Fact can resolve to the right value per context.
+- **Prose** - a value stated in a document's body. Use prose for values that are local to one document and not referenced elsewhere.
+- **A generated document** - a `derived: true` document produced by a script from a system of record, never hand-edited. Use this when the authoritative values live in an operational system and must be projected, not authored. A generated document regenerates from its source on change; no one edits it by hand.
+
+## The Facts registry
+
+Facts are part of the database, not a document convenience - the resolver writes them into projected content, and SousAI uses resolved Fact values as knowledge. Because a Fact is shared infrastructure, it is governed:
+
+- **One registry.** All Facts live in the Facts registry (`content/facts/`). A value is not a Fact until it is registered there; inline prose is not a Fact.
+- **Ownership and change.** A Fact is added, changed, or retired only through the registry, as a deliberate edit - never by editing a document that references it. Changing a Fact changes it everywhere it resolves, so a Fact change is treated as a corpus-wide change.
+- **Dimensions.** A Fact may be dimensioned (for example by account, state, or role) so one Fact resolves to the right value per context. Use a dimension when the same concept has different correct values across contexts; do not create near-duplicate Facts that a dimension would cover.
+- **Non-canonical Facts.** A Fact that carries an example or specimen value is marked non-canonical so it is never resolved as a live value.
+- **Generated values.** Where the authoritative values live in an operational system, the Fact values are populated from the generated document (for example the Price Book from PG), not hand-entered. The registry holds the Fact shape; the system of record holds the values.
+
+## Non-canonical and specimen values
+
+A document may contain example or illustrative figures that are not the canonical value - a worked example, a specimen rate, a superseded figure preserved for history. These must be marked non-canonical so they are never treated as the live value.
+
+> CRITICAL: A specimen figure that is not marked non-canonical can be retrieved and cited as if it were current truth. Any example, illustrative, or superseded value in a corpus document must be flagged non-canonical. Load-bearing values come from the Facts registry or a generated document - never from a prose specimen.
+
+There are two mechanisms, and only one is enforced. Use the enforced one.
+
+- **`<NonCanonical>...</NonCanonical>` body markup - enforced, use this.** A block wrapped in this markup renders as an Example callout in the reader and is stripped entirely from SousAI ingestion, so it can never be retrieved or cited as a live value. This is the required way to mark a specimen.
+- **The `non_canonical_blocks` frontmatter field - not consumed, do not rely on it.** The field exists in the schema but nothing reads it. Listing a section there does not protect it. It is not a substitute for body markup.
+
+> CRITICAL: Mark specimens with `<NonCanonical>` markup in the body, not the frontmatter field. A figure listed only in `non_canonical_blocks` is still ingested and can be cited as fact.
+
+# Access Tiers
+
+Every corpus document carries an `access_level`:
+
+- **unrestricted** - visible to any authenticated KitchFix user. The default for operational knowledge that any operator may need.
+- **restricted** - limited to management and above. Use for sensitive operational content that is not for all-hands.
+- **slt** - limited to senior leadership. Use for the most sensitive commercial, financial, or personnel content - pricing and contract terms, compensation bands, and comparable material.
+
+## The rubric
+
+- Default to **unrestricted** - over-restricting operational truth defeats the purpose of the library for the people running the operation.
+- Use **restricted** when content is management-level context that should not be all-hands.
+- Use **slt** for anything carrying rates, fees, money terms, or compensation.
+- When a document is ambiguous, fail closed to the more restrictive tier.
+
+> CRITICAL: Access tier is set at authoring time, before a document is projected or ingested. A sensitive document must never enter the corpus at the wrong tier and be corrected later - by then it may already have been rendered or embedded.
+
+Enforcement status: the reader enforces `access_level` today - both the document list and the document detail filter on the viewer's tier, so a restricted or slt document is not shown to a user below that tier. SousAI retrieval does not yet exist, so there is no retrieval path to leak through; when the retrieval surface is built, it must always pass the viewer's tier so retrieval enforces access at the same standard as the reader.
+
+> ANCHOR: Because the reader already enforces access and no retrieval surface exists yet, restricted and slt documents - including pricing, contract, and compensation content - are safe to land now. The retrieval-side enforcement lands with the retrieval build, not before this content.
+
+> NOTE: OPD access is presently all-or-nothing within a tier - the reader enforces the tier, not per-account or per-document identity. Where a document set is sensitive but every OPD user (all salaried managers) legitimately needs it, the correct tier is `restricted` for the whole set, not slt. Per-account or per-user scoping within a tier is a future capability; until it exists, choose the tier on "which population needs this," not on finer-grained visibility.
+
+# The Provenance Boundary
+
+Not everything true belongs in the corpus. The corpus holds operator knowledge - what a person needs to run the operation. Provenance - how we know it, who ruled it, what reversed - belongs repo-side.
+
+- **In the corpus (`in_corpus: true`):** the current-state, operator-facing answer. Records, playbooks, standards, procedures, references.
+- **Repo-side (not `in_corpus`):** evidence files, audit trails, decision ledgers, conflict registers, and appendices. These are provenance - preserved, versioned, and reachable, but not operator knowledge and not ingested by SousAI.
+
+> NOTE: To make provenance reachable without importing it, a corpus document cites its sources in a provenance section. The reader who needs the proof follows the citation; SousAI never retrieves the raw evidence as an answer. This keeps forensic material - including superseded and reversed claims - out of the operator-facing knowledge base.
+
+# Lifecycle and Status
+
+Every document carries a `status`: Live, In Build, Pending, Placeholder, Blocked, or Retired.
+
+- **Live** - approved and operator-visible. Status is set in the cockpit; it is a database overlay, not an authored field. A document is Live when it has been flipped Live, regardless of what its MDX declares.
+- **In Build** - authored and staged, not yet flipped Live.
+- **Pending / Placeholder / Blocked** - awaiting content, a decision, or an external input.
+- **Retired** - removed from active use, preserved as a tombstone.
+
+## Retire, do not delete
+
+A document that leaves active use is Retired, never deleted. It is preserved as a tombstone, evicted from the SousAI index, and its ID is recorded so nothing references it as if it were live.
+
+## Supersession and effective-dating
+
+When a document replaces another, the replacement declares `supersedes` pointing at the old ID, and the old document is Retired. When a value inside a document changes, the prior value moves to a history section marked superseded with its date; the new value carries its effective date. Current truth is always on top; history is preserved, never overwritten.
+
+## Review cadence
+
+Every document carries a `review_interval_months`. Two rules set the minimum cadence:
+
+- **Client, billing, and finance documents are reviewed quarterly.** This content changes with contracts, renewals, and pricing, and stale money content is high-risk.
+- **All documents are reviewed at the start of the year (first period).** The annual pass catches anything the quarterly rule does not cover.
+
+A document past its review date is out of compliance and is surfaced for review. Review is also when a document is brought into line with the current version of this standard (see Governance).
+
+# ID-Space Governance
+
+Every document has an ID of the form `CLASS-NNN` (for example `PB-012`, `REF-006`), and the filename stem equals the ID. IDs are permanent - a Retired document keeps its ID forever so references remain resolvable.
+
+- New IDs are assigned in sequence within a class.
+- Related sets may be grouped in a reserved number block (for example a contiguous REF block for a per-account document family) so the set is recognizable at a glance.
+- A suffixed ID (for example `-ES` for a translation) denotes a variant of its base document.
+
+# Relationships
+
+Documents cross-link through typed `relationships` (references, related, implements, derived_from, supersedes). Cross-references use the document ID, which resolves to the current version.
+
+> CRITICAL: A relationship must never point at a Retired document. Before a document is landed, every relationship target is checked against the retired set. A live document that links to a retired one is a broken reference.
+
+# Governance of This Standard
+
+STD-004 is owned by the Senior Director of Operations. Approval of individual documents follows the per-class approval chain defined in STD-001 (Section 11) - STD-004 does not override it. In practice the Senior Director of Operations is the approver for most classes; classes with legal or HR exposure (POL, AGR) additionally require counsel/People Ops review, and the long-form system-level classes (PB, STD) require SLT approval, per STD-001. REC follows the REF chain (Senior Director of Operations, theme owner review). Where a document carries a serious, unexpected legal or HR exposure, it is escalated for legal/HR review before it goes Live regardless of class.
+
+When this standard changes, new documents comply immediately. Existing documents come into compliance at their next scheduled review rather than in a retroactive pass - the review cadence is the compliance mechanism, so a standard change is absorbed over one review cycle, not as a fire drill.
+
+> ANCHOR: When a new document set enters the library - a new domain, a migration, an acquisition - it is classed, shelved, tiered, and single-sourced against this standard before it is authored. The standard is applied first, not reconciled afterward.
+
+# Deferred (not yet in scope)
+
+The following are known and deliberately out of scope for this version, to be added when the supporting capability exists:
+
+- **Bilingual / translation governance.** How a translation relates to its source (the `translation_of` link, inherited tier and status, source-update handling) is parked until the translation set is built out.
+- **Audience assignment and compliance obligations.** The `audience`, `applies_to`, and `obligations` fields exist in the schema and will govern who must read what, on what cadence, when the OPD Academy (per-user read/review/sign-off) is built. Until then, this standard governs the repository, not per-user assignment.

@@ -1,0 +1,182 @@
+---
+id: TPL-020
+title: Account Record Template - Blank Fill-In
+doc_class: TPL
+shelf: "Service Delivery & Client Accounts"
+status: In Build
+version: "0.2"
+card_line: "The blank fill-in template every KitchFix per-account record is built against. One record per account, all sections in one doc."
+summary: "TPL-020 is the blank fill-in template every KitchFix per-account Account Record is built against. Eight sections in one document (single record, no operator/billing split): Identity & Aliases (the crosswalk), Contract (pointer to the digest, not duplication), Billing Record (money shape, rate table, passthrough, ancillary, worked example), Operations Record, Rulings & Decisions, Open Items, History, and Provenance. Access level is restricted (every OPD user is a salaried manager who needs account mastery; per-account scoping is a future add). Price values are never hand-authored here - the rate table carries context and effective-dating, but live values resolve from the generated Price Book via Facts; every specimen figure and blank write-in field is wrapped in NonCanonical so it is never cited as a live value. Superseded facts move to History marked, never deleted. Implements the Account File Spec; anchored by PB-009 (financial hub) and the money-model mechanics REF; references PB-005 (SLA), PB-012 (account management)."
+keywords:
+  - TPL-020
+  - account record
+  - account file
+  - blank fill-in
+  - crosswalk
+  - alias
+  - billing record
+  - rate table
+  - operations record
+  - rulings
+  - open items
+  - history
+  - provenance
+  - effective-dated
+  - Price Book
+  - restricted
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+access_level: restricted
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 12
+sort_order: 40
+relationships:
+  - { to: PB-009, type: references, from_section: "financial hub that anchors the account records" }
+  - { to: PB-005, type: references, from_section: "section 1 Contract / SLA structure" }
+  - { to: PB-012, type: references, from_section: "section 3 Operations / account management" }
+---
+
+# Purpose & How to Use
+
+TPL-020 is the blank shell for a KitchFix Account Record. Copy it, fill each section for one account, and the result is that account's canonical operator-facing record.
+
+> ANCHOR: One record per account, all eight sections in one document. There is no operator/billing split - every OPD user is a salaried manager who needs full account mastery (contract, pricing, history). The record is `restricted`.
+
+Rules for filling it:
+
+- **Every time-boxed fact carries an as-of date.** When a value changes, move the old one to Section 7 History marked superseded, and put the new one in current-state. Never overwrite silently.
+- **Never hand-author a live price.** The rate table (Section 2b) carries service context and effective-dating; the live dollar values resolve from the generated Price Book via Facts. Any dollar figure shown inline is a specimen and is wrapped in `<NonCanonical>`. Facts are governed by STD-004 (Documentation Repository Standard) - they live in the registry, are changed only there, and are dimensioned (account x group x service x rate_type x effective_date); never create or edit a Fact by editing this record.
+- **A section that does not apply is marked N/A with a reason** - never left blank.
+- **Section 5 Open Items is a living worklist.** Its rows flip as external paperwork lands - this is expected and does NOT go through supersede-to-History. Only substantive facts (prices, terms, rulings) follow the effective-dated supersession discipline; Open Items flips do not.
+- **Contract terms are not restated here** - Section 1 points to the verbatim digest.
+
+> CRITICAL: Wrap every bracketed write-in prompt, placeholder row, and specimen dollar figure in `<NonCanonical>` markup. This is a blank template; nothing in it is a live value. Unwrapped, a placeholder or specimen can be retrieved and cited as fact.
+
+**Completeness bar - when a record is done.** Mark the Section 0 completeness field against this bar:
+
+- **FULLY-CAPTURED** - contract linked (Section 1), rate table populated from the Price Book (Section 2b), rulings closed (Section 4), operations notes present (Section 3), and a worked billing example present (Section 2e).
+- **PARTIAL** - contract and rates solid, but some rulings open or operations thin.
+- **THIN** - known documentation gaps (for example, no operative contract on file).
+
+A record below FULLY-CAPTURED states why in one line and carries its open gaps in Section 5.
+
+# 0. Identity & Aliases
+
+The crosswalk - join everything on the primary key.
+
+<NonCanonical>
+- **Primary key (intranet):** [ACCOUNT-KEY, e.g. CIN-AZ]
+- **Team / entity:** [team, location, facility type]
+- **Level / tier:** [PDC | MLB | MiLB | commissary | other]
+- **Search aliases:** [how people actually look for this - nicknames, city, team]
+- **Crosswalk to other systems:** [Intranet key | PG service_name rows | QuickBooks Item | P&L filename | ABR OneSheeter tab | Contract folder]
+- **Capture completeness:** [FULLY-CAPTURED | PARTIAL | THIN - one line why. See the completeness bar in Purpose & How to Use.]
+</NonCanonical>
+
+# 1. Contract
+
+Pointer, not duplication.
+
+<NonCanonical>
+- **Operative doc:** [name + effective / execution dates]
+- **Verbatim source-of-record:** [link to CONTRACT_DIGEST_[KEY] - do not restate terms]
+- **Term / renewal:** [base term, renewal option, notice window] · as-of [year]
+- **Paperwork status:** [any missing paperwork -> Section 5 Open Items]
+</NonCanonical>
+
+# 2. Billing Record
+
+The money shape and the effective-dated rate list. Live values resolve from the Price Book; figures shown here are specimens.
+
+## 2a. Money shape
+
+<NonCanonical>
+- **Shape:** [flat-fee | per-meal | SF% buy-down | deposit-discount | opt-in]
+- **Service Fee:** [amount + how computed] · as-of [year] · source: [contract § / signed sheet]
+- **SF cadence:** [due dates] · source
+- **Escalation regime:** [index + month + floor/cap | fixed X% | none/renegotiated] · source: contract §
+- **Tax treatment:** [pre-tax always; exemptions if any]
+</NonCanonical>
+
+## 2b. Rate table
+
+The retrievable price list. Grain: account x group x service x rate_type x effective-date. Live values come from the Price Book (Facts); the table below carries context and is specimen.
+
+<NonCanonical>
+| Group | Service | Rate (post-SF/billed) | Unit | as-of | Source | PG match? |
+|---|---|---|---|---|---|---|
+| [group] | [service] | [$ specimen -> Price Book] | [per meal] | [year] | [signed sheet ref] | [yes/pending] |
+</NonCanonical>
+
+> NOTE: Populate live rate values from the Price Book (post-SF invoice rate only - sticker/full rates are not machine-sourced and stay in the digest). Group is required; service names collide across groups within an account.
+
+## 2c. Passthrough / non-revenue lines
+
+<NonCanonical>
+- [line: what it is, cadence, who pays, is it revenue?] · flag: [passthrough | is_non_revenue | is_flat_fee]
+</NonCanonical>
+
+## 2d. Ancillary revenue (out of SC meal-model scope)
+
+<NonCanonical>
+- [e.g. caterings, camps -> P&L account; note if NOT in SC export] · source
+</NonCanonical>
+
+## 2e. Worked billing example
+
+<NonCanonical>
+- [one period: services x counts x rates = pre-tax subtotal that should equal the invoice]
+</NonCanonical>
+
+# 3. Operations Record
+
+Consumer: account management and site leadership.
+
+<NonCanonical>
+- **Client stakeholders:** [names + role] · as-of [year] · source
+- **Service pattern / notes:** [meal windows, staffing model, seasonal shape]
+- **Operational truth not in contracts:** [the tribal knowledge - mix-shift, blend rationale, site quirks] · attribution
+- **Live conversations / asks:** [billback, flat-fee move, action stations, etc.]
+</NonCanonical>
+
+# 4. Rulings & Decisions
+
+Current dispositions. Full reasoning lives repo-side in the LEDGER; reference ruling IDs as plain text, not links.
+
+<NonCanonical>
+| ID | Ruling (current state) | Status | as-of |
+|---|---|---|---|
+| [A-##] | [current disposition] | [CLOSED | OPEN | NEEDS-DECISION] | [date] |
+</NonCanonical>
+
+# 5. Open Items
+
+What is not settled - owner and status. This is a living worklist: rows flip as paperwork lands, and those flips do not go to History (Section 6). Only substantive facts follow supersession.
+
+<NonCanonical>
+| Item | Status | Owner | Blocking? | Note |
+|---|---|---|---|---|
+| [item] | [OPEN | NEEDS-DECISION | UNDER-REVIEW] | [name] | [yes/no] | [note] |
+</NonCanonical>
+
+# 6. History
+
+Superseded facts - marked, never deleted.
+
+<NonCanonical>
+- [prior value or ruling, with what replaced it + superseded date]
+</NonCanonical>
+
+# 7. Provenance & Attribution
+
+<NonCanonical>
+- **Contract facts:** page-cited in the digest (authoritative).
+- **Prices:** Price Book (generated from certified PG), Joe Lessard-attested signed review.
+- **Rulings & reasoning:** LEDGER §Q, repo-side (provenance, not an in-corpus link).
+- **Operational / tribal facts:** tagged inline; `unattributed` where source unknown.
+- **Last reviewed:** [date] by [who].
+</NonCanonical>
