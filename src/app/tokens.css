@@ -95,6 +95,12 @@
   /* feedback */
   --feedback-success:var(--green-600); --feedback-warning:var(--amber-500); --feedback-danger:var(--red-500); --feedback-info:#2563EB;
   --feedback-info-subtle:#f0f5ff; --feedback-info-border:#bfdbfe;
+  /* SC per-service ledger flag tags (Stage 4). Derived from existing palette
+     primitives so density + dark theming inherit correctly. Palette lacks a
+     dedicated slate-blue tint; the slate n-scale carries it. */
+  --sc-tag-flat-fg:var(--n-700);    --sc-tag-flat-bg:var(--n-200);
+  --sc-tag-tax-fg:var(--green-700); --sc-tag-tax-bg:var(--green-100);
+  --sc-tag-nonrev-fg:var(--n-700);  --sc-tag-nonrev-bg:var(--n-100);
   /* radius roles */
   --radius-cell:var(--rad-4); --radius-control:var(--rad-10); --radius-container:var(--rad-10);
   --radius-container-lg:var(--rad-14); --radius-pill:var(--rad-pill); --radius-circle:var(--rad-circle);

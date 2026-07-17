@@ -1147,3 +1147,72 @@
   outline: var(--focus-ring-width) solid var(--feedback-danger);
   outline-offset: var(--focus-ring-offset);
 }
+
+/* ── SC Stage 4: per-service ledger row (Direction B) ────────────────
+   Desktop (Density): Service | Rate | Qty | Amount aligned columns.
+   Mobile (<1024, Comfortable): collapses to name+qty on top, rate+amount
+   below - never horizontal-scrolls. Fee accounts keep the pre-Stage-4
+   two-cell row (no .sc-day-row--ledger class). */
+.sc-day-row--ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "name rate qty amount";
+  align-items: center;
+  column-gap: var(--space-3);
+}
+.sc-day-row--ledger .sc-day-row-left          { grid-area: name; }
+.sc-day-row--ledger .sc-day-row-rate          { grid-area: rate; }
+.sc-day-row--ledger .sc-day-row-right,
+.sc-day-row--ledger .sc-day-row-archived-chip { grid-area: qty; }
+.sc-day-row--ledger .sc-day-row-amount        { grid-area: amount; }
+
+.sc-day-row-rate {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font-size: var(--size-caption); color: var(--text-subtle); white-space: nowrap;
+}
+.sc-day-rate-amt { font-weight: var(--wt-medium); }
+
+.sc-day-row-amount {
+  min-width: 84px; text-align: right;
+  font-size: var(--size-body); font-weight: var(--wt-bold);
+  color: var(--text-heading); font-variant-numeric: tabular-nums;
+}
+.sc-day-amount-pending,
+.sc-day-amount-none { color: var(--text-subtle); font-weight: var(--wt-regular); }
+
+.sc-day-svc-tag {
+  font-size: var(--size-caption); font-weight: var(--wt-bold); letter-spacing: .02em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: var(--rad-4);
+  line-height: 1.4; white-space: nowrap;
+}
+.sc-day-svc-tag--flat   { color: var(--sc-tag-flat-fg);   background: var(--sc-tag-flat-bg); }
+.sc-day-svc-tag--tax    { color: var(--sc-tag-tax-fg);    background: var(--sc-tag-tax-bg); }
+.sc-day-svc-tag--nonrev { color: var(--sc-tag-nonrev-fg); background: var(--sc-tag-nonrev-bg); }
+
+.sc-day-ledger-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "name rate qty amount";
+  column-gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  letter-spacing: .04em; text-transform: uppercase; color: var(--text-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sc-day-ledger-head .sc-lh-name   { grid-area: name; }
+.sc-day-ledger-head .sc-lh-rate   { grid-area: rate; }
+.sc-day-ledger-head .sc-lh-qty    { grid-area: qty; text-align: center; }
+.sc-day-ledger-head .sc-lh-amount { grid-area: amount; text-align: right; }
+
+.sc-day-group-seg { font-size: var(--size-caption); color: var(--text-subtle); font-weight: var(--wt-medium); }
+
+@media (max-width: 1023px) {
+  .sc-day-ledger-head { display: none; }
+  .sc-day-row--ledger {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name qty"
+      "rate amount";
+    row-gap: 2px;
+  }
+}
