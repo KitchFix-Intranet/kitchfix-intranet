@@ -680,15 +680,15 @@ One-line current status for every item above. This caps the frozen discovery rec
 | A-12 | RESOLVED (P&L 2300 TBR-FL $457,768 = real 2026 SF billing, not amortization/derivation) | LEDGER §Q · §W |
 | A-13 | DISSOLVED (TXR-V P&L $312K = opt-in direct sales, tracked in Season Tracker, out of SC scope) | LEDGER §Q · 2026-07-17 append |
 | A-14 | EXECUTED 2026-07-17 (Studio: CIN-AZ MLB Breakfast → $20.31, Joe-approved + invoice-confirmed) | LEDGER 2026-07-17 STAGE 1 |
-| B-1 | PENDING (batch doc-PR: TBR-FL MLB Breakfast rate add to digest) | LEDGER §Q Batch doc-PR |
-| B-2 | PENDING (batch doc-PR: TBR-FL MiLB Breakfast rate add to digest) | LEDGER §Q Batch doc-PR |
-| B-3 | PENDING (batch doc-PR: TXR-AZ ancillary snack rates — Pre-Game Hot / Regular) | LEDGER §Q Batch doc-PR |
-| B-4 | PENDING (batch doc-PR: TXR-AZ MLB Dinner in PG but not 2025 SOW) | LEDGER §Q Batch doc-PR |
-| B-5 | PENDING (batch doc-PR: TBR-FL add-on line items — Extra Protein pans) | LEDGER §Q Batch doc-PR |
-| B-6 | PENDING (batch doc-PR: CIN-AZ Coffee + Fountain in ASB but not MONEY_MODEL digest) | LEDGER §Q Batch doc-PR |
-| B-7 | PENDING (batch doc-PR: CIN-AZ 2200 Catering line — rides A-10 ruling) | LEDGER §Q · A-10 |
-| B-8 | PENDING (batch doc-PR: TBR-FL 2200 Catering line = BGC per A-11 §T reversal) | LEDGER §T |
-| B-9 | PENDING (batch doc-PR: STL-MO Road Food label alignment "Road Catering" vs "Road Food Management") | LEDGER §Q Batch doc-PR |
+| B-1 | SUPERSEDED (TBR-FL MLB Breakfast rate — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-2 | SUPERSEDED (TBR-FL MiLB Breakfast rate — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-3 | SUPERSEDED (TXR-AZ ancillary snack rates — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-4 | SUPERSEDED (TXR-AZ MLB Dinner — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-5 | SUPERSEDED (TBR-FL add-on line items — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-6 | SUPERSEDED (CIN-AZ Coffee + Fountain — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
+| B-7 | RIDES A-10 (the pending MONEY_MODEL one-liner for CIN-AZ 2200 IS this item) | LEDGER §Q · A-10 |
+| B-8 | SUPERSEDED (TBR-FL 2200 Catering line = BGC — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §T |
+| B-9 | SUPERSEDED (STL-MO Road Food label alignment "Road Catering" vs "Road Food Management" — rate substance canonical in accounts/ACCOUNT_*.md §2b + PRICE_BOOK; MONEY_MODEL digest figures annotated [superseded] in PR #447 — no digest-expansion PR planned) | LEDGER §Q Batch doc-PR |
 | B-10 | EXECUTED 2026-07-17 (Studio: '(tax-free)' suffixes removed from CIN-AZ Coffee + Fountain service names) | LEDGER 2026-07-17 STAGE 1 |
 | B-11 | EXECUTED 2026-07-17 (Studio: TBR-FL 'Extended Day Labor' case-exact rename from 'Extended Day labor') | LEDGER 2026-07-17 STAGE 1 |
 | C-1 | OPEN-ASYNC (CIN-AZ 2026 governed by 2023 Renewal Term; only the renewal-notice paperwork pending, owner Kevin) | ACCOUNT_CIN-AZ §5 · LEDGER §Q C-paperwork list |
@@ -710,7 +710,7 @@ One-line current status for every item above. This caps the frozen discovery rec
 | C-17 | CLOSED — Kevin ruling 2026-07-17 (annual meal projection billed at post-SF as FLOOR; under-attendance bills full projection; over-attendance stays post-SF; 2023 tier language + 72,890 count outdated; do not reopen) | LEDGER 2026-07-17 C-17 CLOSED · ACCOUNT_CIN-AZ §5 |
 | D-1 | EXECUTED (Fauzia → Lessard rename landed in SC_MONEY_MODEL §Sources) | PR #447 d1ed7b2 · MONEY_MODEL §Sources |
 | D-2 | EXECUTED (§U: TBR-FL 2026 invoice "2025" memo = cosmetic typo; Kevin: ignore, no template fix — closed as no-action) | LEDGER §U |
-| D-3 | EXECUTED (paired with A-9 reversal; ledger annotations landed via PR #447; substantive doc-fix reversed because appendix R25 was the artifact not GOTCHAS) | LEDGER 2026-07-17 append · PR #447 f844766 |
+| D-3 | REVERSED (paired with A-9; the GOTCHAS 'fix' was reversed — appendix R25 was the artifact) | LEDGER 2026-07-17 append · PR #447 f844766 |
 
 **Summary:** 45 items catalogued · **1 OPEN (A-10)** · **6 OPEN-ASYNC** (owner in pointer column) · **9 PENDING batch doc-PR** (B-1..B-9) · **5 EXECUTED 2026-07-17** (A-14, B-10, B-11, D-1, D-2, D-3) · **11 CLOSED / RESOLVED / DISSOLVED / REVERSED** · **4 LOG-ONLY** (C-13..C-16, cost-analysis / paperwork-only, no cert impact).
 
