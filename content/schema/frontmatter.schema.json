@@ -31,8 +31,8 @@
     },
     "subshelf": {
       "type": ["string", "null"],
-      "enum": ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F", null],
-      "description": "Optional sub-section inside the parent shelf. Used by People & Conduct (HR-A through HR-F) to expand the rail. Other shelves leave null."
+      "enum": ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F", "Account Records", "Contract Digests", "Financial Reference", null],
+      "description": "Optional sub-section inside the parent shelf. Used by People & Conduct (HR-A through HR-F) to expand the rail, and by Service Delivery & Client Accounts (Account Records, Contract Digests, Financial Reference). Other shelves leave null."
     },
     "status": {
       "type": "string",

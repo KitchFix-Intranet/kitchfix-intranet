@@ -1735,7 +1735,7 @@ const FM_SHELVES = [
   "Culinary & Kitchen Operations",
   "Brand & Documentation Standards",
 ];
-const FM_SUBSHELVES = ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F"];
+const FM_SUBSHELVES = ["HR-A", "HR-B", "HR-C", "HR-D", "HR-E", "HR-F", "Account Records", "Contract Digests", "Financial Reference"];
 const FM_AUDIENCES = ["operator", "corporate", "internal"];
 const FM_ACCESS_LEVELS = ["unrestricted", "restricted", "slt"];
 const FM_LANGS = ["en", "es"];

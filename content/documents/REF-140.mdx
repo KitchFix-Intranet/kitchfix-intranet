@@ -321,7 +321,7 @@ invoices continue to price at whatever rate was effective on the service date.
 **Mechanism:**
 - `sc_service_prices(service_id, effective_date, price_kind, price)` with UNIQUE
   `(service_id, effective_date, price_kind)` after sc-8a.
-- View joins via LATERAL: latest row where `effective_date <= service_date`.
+- View joins via LATERAL: latest row where `effective_date at or before service_date`.
 
 **Escalations land in PG via the admin backdate flow, never in sheets.** The legacy
 workbooks carried in-cell escalation machinery (`=22.25*(1+$E$362)` in TBJ-FL,
