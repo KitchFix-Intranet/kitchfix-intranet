@@ -32,8 +32,8 @@ const FACTS_FILE = join(CONTENT_DIR, "facts", "operational-facts.yaml");
 const RETIRED_IDS = new Set([
   "POL-005", "POL-012", "POL-016", "POL-017", "POL-018",
   "SOP-003", "SOP-011", "SOP-013", "SOP-016",
-  "REF-008", "REF-009",
-  "TPL-017",
+  "REF-005-A", "REF-005-B", "REF-008", "REF-009",
+  "TPL-015", "TPL-017",
   "LEGACY-PR", "LEGACY-WOW", "LEGACY-PFS-CONF",
 ]);
 
