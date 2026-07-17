@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - point-in-time handoff from the 2026-07-02 pre-audit drill-in polish arc. Kept for history; do not use as a live reference. Current SC state lives in `docs/SC_STATUS.md` + the SC design-audit ledger.
+
 # Project Handoff - CC (Claude Code) side
 
 **Audience:** the successor Chat-Claude project + future-me. This is the repo-side ground truth that chat cannot verify from a transcript. Companion: [HANDOFF_CHAT.md](HANDOFF_CHAT.md) (Chat-Claude's narrative handoff; pending import - see §8).

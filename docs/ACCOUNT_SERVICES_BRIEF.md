@@ -1,5 +1,7 @@
 # KitchFix Account Services Brief
 
+> **CANONICAL NOTICE (2026-07-16):** Per-account billing / pricing / contract truth now lives in `docs/pricing-summit/accounts/ACCOUNT_<KEY>.md` (11 accounts, complete). This brief remains as a cross-account roster + operational-context summary. Where this doc and an account file disagree, **the account file wins.**
+>
 > **Money-model claims in this doc are SUPERSEDED by [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md)
 > (2026-07-09 alignment).** This brief remains authoritative for per-account services,
 > contract dates, and business-context detail; on any question of which price is billed,
@@ -10,7 +12,7 @@
 
 Source-of-truth reference for how every KitchFix account's billing, pricing, service fees, and service calendar work. This brief is the canonical mental model for the Director of Operations (Kevin), VP Operations (Joe), site leads, and future Claude instances touching the billing module, service calendar tool, or finance stack. Last updated 2026-06-16.
 
-Sourcing: this doc folds together the executed-contract analysis in `docs/SC_CONTRACT_BILLING_SUMMARY.md`, the per-account spreadsheet layout in `docs/SC_SPREADSHEET_MAPPING.md`, and the projection-vs-actuals price audit in `docs/SC_PRICE_COMPARISON.md`, with Kevin's curated 2026-06-16 source-of-truth context overlaid on top and ABR 2025 inputs (`ABR Deeper Dive - 2025.pdf`, `ABR 2025 OneSheeter.xlsx`) cross-referenced. Where ABR data disagrees with the canonical context, the contradiction is flagged inline with `[CONTRADICTION - confirm with Kevin]`.
+Sourcing: this doc folds together the executed-contract analysis in `docs/SC_CONTRACT_BILLING_SUMMARY.md`, the per-account spreadsheet layout in `docs/SC_SPREADSHEET_MAPPING.md`, and the projection-vs-actuals price audit in `docs/archive/SC_PRICE_COMPARISON.md` (archived 2026-07-17; superseded by `docs/pricing-summit/PRICE_AUDIT.md` + per-account EVIDENCE files), with Kevin's curated 2026-06-16 source-of-truth context overlaid on top and ABR 2025 inputs (`ABR Deeper Dive - 2025.pdf`, `ABR 2025 OneSheeter.xlsx`) cross-referenced. Where ABR data disagrees with the canonical context, the contradiction is flagged inline with `[CONTRADICTION - confirm with Kevin]`.
 
 ## Executive Summary
 
@@ -70,7 +72,7 @@ Rewritten 2026-07-09 per [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). For `actuals_
 | Rehab | Lunch | $18.42 | $12.90 | |
 | Rehab | Dinner | $18.42 | $12.90 | |
 
-The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The operative 2026 projection rates above are significantly above either the floor or cap CPI escalation off 2023 base, indicating either a separately negotiated 2026 SOW or a renegotiation outside the 2023 contract document. The operative 2026 pricing document is not in the contracts folder on file (open question - see [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md) §Open paperwork gaps).
+The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The operative 2026 projection rates above are significantly above either the floor or cap CPI escalation off 2023 base, indicating either a separately negotiated 2026 SOW or a renegotiation outside the 2023 contract document. The operative 2026 pricing document is not in the contracts folder on file (open question - see [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md) §Open paperwork gaps). [superseded - see `pricing-summit/accounts/ACCOUNT_CIN-AZ.md`: Price Review v3 (Joe Lessard-attested, week of 2026-06-16) confirms $29.01 / $18.42 / $7.31 as the operative 2026 rates, PG-verified against sampled invoices K300168587 (MLB) + K300168736 (MiLB); no 2026 SOW is "missing", the Price Review v3 IS the operative pricing document.]
 
 **Payment schedule:**
 - Service Fee: 75% due Feb 1, remaining 25% due Mar 15 each year (per Section IV(B)(1)).
@@ -87,7 +89,7 @@ The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The op
 - Per ABR Deeper Dive 2025 p18: "Ashley has asked me about moving GY to a fee account. Could tie in nicely to an extension?" - active client conversation to convert CIN - AZ from `actuals_drive_invoice` (effectively hybrid) to `flat_fee`. Not yet executed.
 
 **Open notes / TBD:**
-- Operative 2026 pricing document for the $29.01 / $18.42 / $7.31 rates is not in the contracts folder - the 2023 base does not escalate via CPI to these numbers. Need the SOW or amendment that defines them.
+- Operative 2026 pricing document for the $29.01 / $18.42 / $7.31 rates is not in the contracts folder - the 2023 base does not escalate via CPI to these numbers. Need the SOW or amendment that defines them. [superseded - see `pricing-summit/accounts/ACCOUNT_CIN-AZ.md`: Price Review v3 IS the operative document.]
 - 2023 Exhibit B "volume threshold" rate construct.
 - Whether the Reds will exercise their 2027 renewal option (notice by Nov 1, 2026).
 
@@ -230,7 +232,7 @@ The implied per-meal rate from `$362,500 / ~12,150 meals = ~$29.84` is higher th
 
 **Billing model:** `flat_fee`. Service Calendar prices should be $0 in Postgres for revenue purposes; the per-meal $25.95 is a tracking convention.
 
-**Service fee structure:** Total Annual Service Fee = $698,000 per year. Split into Home Games Hospitality Management ($423,000) + Road Food Management ($50,000) + food/packaging/supplies budget ($225,000). 2026 figure quoted in source-of-truth context: $489,431 (the $423K + $50K + $11K equipment portions plus CPI; food/supplies budget billed separately). Plus $60K equipment investment by Contractor over the Term, becomes Cardinals property (Section 2(e)(i)).
+**Service fee structure:** Total Annual Service Fee = $698,000 per year. Split into Home Games Hospitality Management ($423,000) + Road Food Management ($50,000) + food/packaging/supplies budget ($225,000). 2026 figure = **base $473K / billed $489,497** (see `pricing-summit/accounts/ACCOUNT_STL-MO.md`: $473K base × CPI escalation lands at $489,497 as the operative 2026 billed figure; the earlier $489,431 phrasing was the same amount pre-escalation-rounding). Plus $60K equipment investment by Contractor over the Term, becomes Cardinals property (Section 2(e)(i)).
 
 **Per-meal projection prices (planning only, NOT billing):**
 
@@ -264,7 +266,7 @@ The implied per-meal rate from `$362,500 / ~12,150 meals = ~$29.84` is higher th
 - MLB subservience: full standard MLB clause (Section 9).
 
 **Open notes / TBD:**
-- The source-of-truth context cites a 2026 Annual Service Fee of $489,431, while the contract structure totals $698,000/yr. Reconcile - the $489,431 may be a subset (e.g., Home Games + Road only, excluding the food/supplies budget) or a CPI-adjusted figure. Confirm with Kevin which line item maps to "Flat Annual Service Fee" for 2026 billing. [CONTRADICTION - confirm with Kevin]
+- The source-of-truth context cites a 2026 Annual Service Fee of $489,431, while the contract structure totals $698,000/yr. [RESOLVED - see `pricing-summit/accounts/ACCOUNT_STL-MO.md`: 2026 operative billed fee = $489,497 (base $473K + CPI); the $489,431 figure was the same amount at a pre-escalation rounding, and the $698K contract-structure total is the pre-2026 gross before allocation. The PG fee-schedule migration to the escalated $489,497 landed 2026-07-16.]
 
 ### TBJ - FL (Toronto Blue Jays - Dunedin PDC)
 
@@ -361,11 +363,11 @@ The implied per-meal rate from `$362,500 / ~12,150 meals = ~$29.84` is higher th
 
 **Account type:** PDC. Tampa Bay Rays MLB ST + MiLB ST + MiLB regular season at Charlotte Sports Park. Also covers a separate Boys & Girls Club of Charlotte County lunch catering operation. Sources: TBR/Services Agreement Major League Foodservice CJK Foods LLC dba Kitchfix 2024 Josh.pdf + Major League SOW 2024 EXECUTION + Services Agreement Minor League Foodservice + Minor League SOW 2024 EXECUTION.
 
-**Billing model:** `actuals_drive_invoice`. ML is pure per-meal; MiLB historically had a one-time Service Fee front-load ($382,448 in 2024) that discounted MiLB per-meal rates by 25%.
+**Billing model:** `actuals_drive_invoice`. ML is pure per-meal; MiLB has a **recurring** annual Service Fee ($200K + variable) that discounts MiLB per-meal rates by 25%. [superseded - see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`: the "one-time 2024 front-load" reading is stale; the SF cadence recurs each year matching the 2024 structure.]
 
 **Service fee structure:**
 - **ML side:** No service fee.
-- **MiLB side:** $382,448 Service Fee, with $200,000 due upon SOW signing + $182,448 due Feb 1, 2024. Per source-of-truth context: 25% service fee credit reduces MiLB per-meal rates to 75% of the base. Whether this Service Fee renews in 2025/2026/2027 is unclear from the 2024 SOW alone - per ABR OneSheeter, the SF % is labeled 0.25 (25%) and S.F. Due Date(s) are "200k 'on the first day', Remaining due 2/1" - implying it does recur annually under the same structure. [CONTRADICTION - confirm with Kevin: SC_CONTRACT_BILLING_SUMMARY says "this Service Fee was a one-time front-load... Whether a renewed Service Fee applies for 2026 is unclear"; ABR OneSheeter shows recurring annual structure matching 2024 cadence.]
+- **MiLB side:** $382,448 Service Fee (2024 baseline), with $200,000 due upon SOW signing + $182,448 due Feb 1, 2024. Per source-of-truth context: 25% service fee credit reduces MiLB per-meal rates to 75% of the base. [RESOLVED - see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`: SF is **recurring** each year (structure: $200K + variable remainder due Feb 1), NOT a one-time 2024 front-load. The ABR OneSheeter reading (recurring annual) is correct; the SC_CONTRACT_BILLING_SUMMARY "one-time" reading is stale.]
 
 **Per-meal projection prices (operative 2026 billing rates):**
 
@@ -410,7 +412,7 @@ The implied per-meal rate from `$362,500 / ~12,150 meals = ~$29.84` is higher th
 - Insurance limits unusually high: $10M each occurrence / $10M aggregate on General Liability; $10M auto (reflects Tropicana Field exposure).
 
 **Open notes / TBD:**
-- **MiLB Service Fee continuation past 2024:** the 2024 SOW only documents the initial-year payment structure. ABR OneSheeter implies same structure recurs annually, but the contract text is silent. [CONTRADICTION - confirm with Kevin]
+- **MiLB Service Fee continuation past 2024:** [RESOLVED - see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`: SF recurs annually, structure $200K + variable remainder. Not one-time.]
 - Extra Protein, MLB Extra MTO, Extended Day Labor, AFTER HOURS MEALS, Road Sandwiches: not in 2024 SOW base list. Confirm canonical service list / SOW amendment.
 - TBR - FL MiLB Dinner spreadsheet rate $27.95 is significantly higher than the 2024 post-discount Dinner rate $19.40 - the $27.95 is a different service mapping than the 2024 SOW implies. Audit confirms 44% gap between contract Dinner and spreadsheet Dinner; the spreadsheet may be using a base rate, not the discounted rate.
 - B&G - whether the contract auto-renews for the 2026-2027 school year.
@@ -560,11 +562,11 @@ Reminder: for the five `flat_fee` accounts (CIN-OH, STL-FL, STL-MO, TXR-TX-H, TX
 | CIN - KY | None | $0 | No discount; per-meal billed full | n/a |
 | CIN - OH | Flat Services Fee | $362,500 (2026 base) + CPI | No per-meal billing - fee IS billing | 6 monthly Mar-Aug |
 | STL - FL | Flat Total Annual Fee | $2,300,000 | No per-meal billing - fee IS billing | Quarterly Nov/Feb/May/Aug + bi-monthly food budget |
-| STL - MO | Flat Annual Service Fee | $698,000 (2026 contract total); source-of-truth lists $489,431 [CONTRADICTION - confirm with Kevin] | No per-meal billing - fee IS billing | 6 monthly Mar-Aug |
-| TBJ - FL | Flat annual SF + per-meal on top | $452,812/yr | No discount; per-meal billed full alongside SF | 3 monthly Jan/Feb/Mar (per ABR) |
+| STL - MO | Flat Annual Service Fee | base $473K / billed $489,497 (2026 escalated actual, PG updated 2026-07-16); see `pricing-summit/accounts/ACCOUNT_STL-MO.md` | No per-meal billing - fee IS billing | 6 monthly Mar-Aug |
+| TBJ - FL | Flat annual SF + per-meal on top | $452,812/yr [superseded: $515,712 billable; see `pricing-summit/accounts/ACCOUNT_TBJ-FL.md`] | No discount; per-meal billed full alongside SF | 3 monthly Jan/Feb/Mar (per ABR) |
 | TBJ - NY | Unknown (no contract on file) | Unknown | Full per-meal assumed | Unknown |
 | TBR - FL ML | None | $0 | No discount; per-meal billed full | n/a |
-| TBR - FL MiLB | 25% credit from $382,448 SF (2024 base) | $382,448 (2024 only per contract; ABR implies recurring) [CONTRADICTION - confirm with Kevin] | Reduces MiLB per-meal to 75% of base | $200K signing + $182,448 Feb 1 |
+| TBR - FL MiLB | 25% credit from $382,448 SF (2024 baseline; **recurring annually**) | $200K + variable remainder, recurring each year (see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`) | Reduces MiLB per-meal to 75% of base | $200K on-first-day + remainder due Feb 1 |
 | TXR - AZ | 20% deposit triggers 20% discount | $297,419.26 (2025); 2026 TBD | Reduces per-meal to 80% of list | 3 installments Jan 1 / Feb 1 / Mar 1 |
 | TXR - TX - H | Flat annual | $604,032 (2026) | No per-meal billing - fee IS billing | 6 monthly Apr-Sep |
 | TXR - TX - V | Bundled in TXR - TX - H | $0 separately | No per-meal billing | Per TXR - TX - H schedule |
@@ -657,14 +659,14 @@ The Service Calendar (SC) tool tracks meal counts (projections + actuals) for ev
 
 Pulled from per-account "Open notes / TBD" sections plus ABR-surfaced items:
 
-1. **CIN - AZ operative 2026 pricing document.** The 2023 contract base ($17.88 MLB / $11.35 MiLB / $4.51 Snack) does not CPI-escalate to the 2026 projection rates ($29.01 / $18.42 / $7.31) even at the 5% cap for 3 years. The operative 2026 SOW or pricing amendment is not in the contracts folder.
+1. **CIN - AZ operative 2026 pricing document.** The 2023 contract base ($17.88 MLB / $11.35 MiLB / $4.51 Snack) does not CPI-escalate to the 2026 projection rates ($29.01 / $18.42 / $7.31) even at the 5% cap for 3 years. The operative 2026 SOW or pricing amendment is not in the contracts folder. [superseded - see `pricing-summit/accounts/ACCOUNT_CIN-AZ.md`: Price Review v3 (Joe Lessard-attested) IS the operative 2026 pricing document; PG + sampled invoices confirm.]
 2. **CIN - AZ Exhibit B volume threshold (72,890-meal trigger).** Reads as a probable typo since the "drop" rates are higher than base. Confirm intent.
 3. **CIN - AZ 2027 renewal option.** Reds notice by Nov 1, 2026.
 4. **CIN - AZ fee-model conversion.** Per ABR PDF p18: "Ashley has asked me about moving GY to a fee account." Not yet executed.
 5. **CIN - KY net payment terms** not stated in 2026 executed contract.
 6. **CIN - KY post-game service start date** ambiguity (contract says May; calendar says opening day).
 7. **CIN - OH 2027 extension option.** Reds notice by Oct 1, 2026.
-8. **STL - MO 2026 Service Fee amount.** Source-of-truth context says $489,431. Contract text totals $698,000. [CONTRADICTION - confirm with Kevin: which line item maps to "Annual Service Fee" for 2026 billing? $489,431 may be Home Games + Road only, excluding food/supplies budget.]
+8. **STL - MO 2026 Service Fee amount.** Source-of-truth context says $489,431. Contract text totals $698,000. [RESOLVED - see `pricing-summit/accounts/ACCOUNT_STL-MO.md`: base $473K + CPI escalation = $489,497 billed (2026); the earlier $489,431 figure was a rounding/typo of the same escalated amount. The $698K figure was the pre-2026 contract structure gross before allocation split.]
 9. **STL - FL MiLB Snack projection price missing** (no value in row 2 col S).
 10. **STL - FL Palm Beach Cardinals "Breakfast"** in actuals only - reconcile against canonical list.
 11. **STL - FL Fun Money allocation** ($25,000) source / contractual basis.
@@ -673,7 +675,7 @@ Pulled from per-account "Open notes / TBD" sections plus ABR-surfaced items:
 14. **TBJ - NY entire contract status.** No executed agreement on file. Buffalo Bisons may be on separate SOW #2 or oral / informal arrangement.
 15. **TBJ - NY Snack and Shake pricing** ($0 placeholders).
 16. **TBJ MFN cross-affiliate scope:** does the Section 12(d) Favored Pricing clause apply across the TBJ - NY relationship?
-17. **TBR - FL MiLB Service Fee continuation past 2024.** Contract text suggests one-time front-load; ABR OneSheeter implies same structure recurs annually. [CONTRADICTION - confirm with Kevin]
+17. **TBR - FL MiLB Service Fee continuation past 2024.** [RESOLVED - see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`: recurring $200K + variable each year.]
 18. **TBR - FL non-SOW services:** Extra Protein, MLB Extra MTO, Extended Day Labor, AFTER HOURS MEALS, Road Sandwiches.
 19. **TBR - FL MiLB Dinner price gap** (44% above 2024 post-discount Dinner rate).
 20. **TBR - FL B&G contract auto-renew status** for the 2026-2027 school year (current contract dated 2025-08-03).
@@ -707,8 +709,8 @@ The ABR Deeper Dive 2025 PDF and OneSheeter xlsx surface several items not in th
 
 Three distinct contradictions between the ABR documents (or contracts) and the source-of-truth context:
 
-1. **STL - MO 2026 Annual Service Fee figure** (see Open question 8). Source-of-truth says $489,431; contract totals $698,000. [CONTRADICTION - confirm with Kevin]
-2. **TBR - FL MiLB Service Fee continuation past 2024** (see Open question 17). Contract reads one-time; ABR implies annual recurrence. [CONTRADICTION - confirm with Kevin]
+1. **STL - MO 2026 Annual Service Fee figure** (see Open question 8). Source-of-truth says $489,431; contract totals $698,000. [RESOLVED - see `pricing-summit/accounts/ACCOUNT_STL-MO.md`: 2026 escalated actual = $489,497, base $473K.]
+2. **TBR - FL MiLB Service Fee continuation past 2024** (see Open question 17). Contract reads one-time; ABR implies annual recurrence. [RESOLVED - see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`: SF is recurring ($200K + variable), not a one-time 2024 front-load.]
 3. **TXR - TX - H "annual renewal *the push here would be to try and convert to a fee model"** (ABR PDF p4) - but TXR - TX - H IS already a flat-fee model. The ABR language likely refers to converting TXR - AZ (Surprise) to a fee model, not TXR - TX - H. Tag for Kevin to confirm interpretation. [CONTRADICTION - confirm with Kevin]
 
 ## Notes on this document
@@ -717,7 +719,7 @@ Three distinct contradictions between the ABR documents (or contracts) and the s
 - Source files: contracts in `/Users/kevinfietek/Documents/Claude /Service Calendars/drive-download-20260615T205813Z-3-001/`
 - Discovery docs:
   - `docs/SC_CONTRACT_BILLING_SUMMARY.md` (full contract analysis, 603 lines)
-  - `docs/SC_PRICE_COMPARISON.md` (projection vs actuals price audit, 188 lines)
+  - `docs/archive/SC_PRICE_COMPARISON.md` (projection vs actuals price audit, 188 lines; archived 2026-07-17)
   - `docs/SC_SPREADSHEET_MAPPING.md` (per-file spreadsheet layout, 1110 lines)
 - ABR 2025 inputs:
   - `/Users/kevinfietek/Downloads/ABR Deeper Dive - 2025.pdf` (19 pages; per-account narrative including risk assessments and "3 questions to ask")

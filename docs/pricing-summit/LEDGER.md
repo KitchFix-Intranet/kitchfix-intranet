@@ -230,7 +230,7 @@ CIN - AZ 2026 SOW missing · TBJ - NY contract absent (folder empty) · **TXR - 
 ## N. PHASE 0b RESULTS (P&L deep dive — PR #435 draft, 2026-07-14)
 **Delivered**: PL_2026_APPENDIX (11/11 sites mapped, 13-period vectors, row provenance) · BILLING_TERMS_MATRIX (3-way cadence spec) · A-8→A-13, B-7→B-9, D-3 appended to register · reproducible extractor.
 **Validations**: no tax lines on any P&L (R9 ✓) · passthrough excluded (§h ✓) · STL - FL 2400.1 = $1,400,000 exact ✓ · TXR - H $604,019 ≈ fee ✓ · 2400.1 sanity checks within a few % ✓ · FCL plateau $98,915 confirmed ✓.
-**New A's**: A-8 flat-fee SFs booked in 2400.1 not 2300 (systemic, 4 accounts) · A-9 GOTCHAS STL - FL P1 wrong ($171,367 not $45,553; peak P2 not P3) → D-3 · A-10 CIN - AZ 2200 $52K undocumented · A-11 TBR 2200 $79,950 undocumented · A-12 TBR 2300 $457,768 (C-2 evidence) · A-13 TXR - V 2400.1 $312K vs "$0 covered-by-H".
+**New A's**: A-8 flat-fee SFs booked in 2400.1 not 2300 (systemic, 4 accounts) · A-9 GOTCHAS STL - FL P1 wrong ($171,367 not $45,553; peak P2 not P3) → D-3 [REVERSED 2026-07-17 — see CONFLICT_REGISTER A-9; GOTCHAS was right, appendix R25 was the artifact] · A-10 CIN - AZ 2200 $52K undocumented · A-11 TBR 2200 $79,950 undocumented · A-12 TBR 2300 $457,768 (C-2 evidence) · A-13 TXR - V 2400.1 $312K vs "$0 covered-by-H".
 
 ### CHAT-CLAUDE ANALYSIS — the SF-component hypothesis (C-2 + A-12 + A-8, unified)
 **Arithmetic kill-shot on the amortization reading**: recognition of a past payment can never exceed the payment. 2026 alone books $457,768 > the entire $382,448. Amortization is DEAD as a full explanation.
@@ -477,7 +477,7 @@ The register accumulated across CC's four phases; several entries were written b
 - **A-6** → SEBASTIAN #1 (tax itemization vs 0.00; no SC impact).
 - **A-7** → RESOLVED: opt-in sales model, out of SC scope (SOP + contract carve-in confirm).
 - **A-8** → likely convention (flat-fee SFs book in 2400.1) → JOE #2 confirms; provisionally resolved.
-- **A-9 / D-3** → GOTCHAS stale (STL-FL P1 = $171,367 not $45,553; peak P2). Doc-fix, batched.
+- **A-9 / D-3** → GOTCHAS stale (STL-FL P1 = $171,367 not $45,553; peak P2). Doc-fix, batched. [REVERSED 2026-07-17 — see CONFLICT_REGISTER A-9; GOTCHAS was right, appendix R25 was the artifact]
 - **A-10 / A-11** → CIN-AZ 2200 ($52K) + TBR 2200 ($79,950) catering revenue undocumented in MONEY_MODEL. **Open** — Kevin classifies (educational classes? B&G? road sandwiches?).
 - **A-12** → RESOLVED by recurring-SF finding (real 2026 fee, not derivation).
 - **A-13** → RESOLVED: TXR-V $312K = opt-in direct sales, out of SC scope (A-7 sibling).
@@ -492,7 +492,7 @@ C-14 STL $60K vs $15K FL equipment · C-15 TXR-AZ $75K kitchen (2022 vs 2025 —
 ### The escalation-divergence (D-2) — now COMPLETE across all accounts, verbatim
 CIN-AZ Oct 2%/5% · CIN-OH Aug 1%/4% · CIN-KY none · STL-MO Aug SEFV no-cap · STL-FL flat · TBR 75%×SEFV01 Nov · TBJ 100%×SEFV Q4 · TXR-AZ fixed 2.5% · TXR-TX-H none (+10% negotiated). **NINE distinct escalation treatments.** → the post-digest ESCALATION-VERIFICATION PASS (re-derive each 2026 rate/fee from clause + real CPI, confirm signed sheet applied the right rule per-account) is now a firm recommended CC task. This is the last systematic check before Layer D fully greens.
 
-### Batch doc-PR (staged, post-digest): D-1 Lessard rename · D-3 GOTCHAS fix · B-1..B-9 digest rate expansions (TBR MLB/MiLB Breakfast splits, TBR/CIN-AZ 2200 lines, add-on line items, coffee/fountain rates) · B-10/B-11 naming.
+### Batch doc-PR (staged, post-digest): D-1 Lessard rename · D-3 GOTCHAS fix [REVERSED 2026-07-17 — see CONFLICT_REGISTER A-9; GOTCHAS was right, appendix R25 was the artifact] · B-1..B-9 digest rate expansions (TBR MLB/MiLB Breakfast splits, TBR/CIN-AZ 2200 lines, add-on line items, coffee/fountain rates) · B-10/B-11 naming.
 
 ### PRICE_AUDIT full doc reviewed (logged 2026-07-14) — confirms Phase 0c, sharpens A-14
 **Full audit doc confirms**: 99/105 MATCH · 1 STALE_PG (rounding) · 4 naming-only UNMAPPED · 1 UNKNOWN (Joe) · billing has NOT diverged from signed (all 9 invoices reconcile within rounding). Layer D price gate essentially GREEN. A-1 buried with receipts (PG stores all 5 TBR MiLB rates exactly; invoice bills Lunch $21.68 = signed $21.675; digest's $20.96 was the Dinner rate).

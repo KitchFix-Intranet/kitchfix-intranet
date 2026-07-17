@@ -35,7 +35,7 @@ KPI dashboard or app displays.
 
 ## Sources of truth (in priority order)
 
-1. **Price Review v3** (Joe Fauzia + Kevin Fietek, week of 2026-06-16) - the operative
+1. **Price Review v3** (Joe Lessard + Kevin Fietek, week of 2026-06-16) - the operative
    per-service price sheet for the 2026 season. This is the record that moved
    `sc_service_prices` on 2026-06-16 from workbook projection-tab values to the post-SF
    invoice rate. It is the authority on which number goes into `sc_service_prices` today.
@@ -231,8 +231,14 @@ the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for 
 KPI dashboard. Detail in `SC_BILLING_MODEL_AUDIT.md` §3, `SC_LENS_VISION.md` §2.
 
 **STL-FL prorated allocation:** the $1.4M is spread PHASE-AWARE across the 13 periods
-per the P&L pattern (P1 $45,553 ... P3 peak $407,375 ... FCL plateau $98,915 ...
-offseason $0). See `GOTCHAS.md` line 474-475. `sc_fee_schedule` today holds the
+per the P&L pattern (**P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 ·
+P5-P9 $98,915 each (FCL plateau) · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0**).
+Source: `PFS Service Fees 2026.xlsx` Accrual Schedule (finance-owned), verified against
+`docs/pricing-summit/PL_2026_APPENDIX.md` row R25 (2026-07-17); year total $1,400,000
+EXACT. Note: pricing-summit CONFLICT_REGISTER A-9 / D-3 (filed 2026-07-14) argued
+GOTCHAS was stale on P1 and peak-period, but that finding was based on a broken R25
+transcription (missing P1 cell); the appendix was corrected 2026-07-17 and the
+original GOTCHAS phrasing turned out to be right. `sc_fee_schedule` today holds the
 annual $1.4M; the per-period allocation is a future KPI-dashboard concern.
 
 **TXR-TX-V revenue flexibility:** the fee schedule entry for TXR-TX-V is $0 (marker:
@@ -310,23 +316,25 @@ calendar.
 ## Per-account digest (money-only)
 
 Full per-account contract detail lives in `SC_CONTRACT_BILLING_SUMMARY.md` (bible) +
-`ACCOUNT_SERVICES_BRIEF.md`. This table is the money-model summary for cross-reference.
+`ACCOUNT_SERVICES_BRIEF.md`. **Detail + current figures now live in `docs/pricing-summit/accounts/ACCOUNT_<KEY>.md` (11 accounts, complete; account file wins on any per-account disagreement).** This table is the money-model summary for cross-reference.
 
 | Account | Shape | Sticker MiLB / MLB (or fee) | Post-SF invoice MiLB / MLB | 2026 SF | On SC calendar |
 |---|---|---|---|---|---|
 | CIN - AZ | SF% 30% | $18.42 / $29.01 | **$12.90 / $20.31** | $402,016/yr | Yes, invoice-rate meal revenue |
 | CIN - KY | No-SF | $25.95 (uniform) | $25.95 | none | Yes, meal revenue |
-| CIN - OH | Flat_fee | n/a ($25.95 planning-only) | n/a | $362,500/yr | Operational counts only, no $ |
+| CIN - OH | Flat_fee | n/a ($25.95 planning-only) | n/a | $362,500/yr [superseded: 2026 accrued/billed = $376,686; PG migration to escalated landed 2026-07-16; see `pricing-summit/accounts/ACCOUNT_CIN-OH.md`] | Operational counts only, no $ |
 | STL - FL | Flat_fee | n/a ($0 in PG) | n/a | $1,400,000/yr | Operational counts only, no $ (fee-no-dollar variant) |
-| STL - MO | Flat_fee | n/a | n/a | $473,000/yr | Operational counts only, no $ |
-| TBJ - FL | Flat SF | $11.55 / $23.12 | $11.55 / $23.12 (no discount) | $452,812/yr | Yes, meal revenue (SF separate, not in `sc_fee_schedule` yet) |
+| STL - MO | Flat_fee | n/a | n/a | $473,000/yr [superseded: base $473K / billed $489,497 (2026 escalated actual); PG migration to escalated landed 2026-07-16; see `pricing-summit/accounts/ACCOUNT_STL-MO.md`] | Operational counts only, no $ |
+| TBJ - FL | Flat SF | $11.55 / $23.12 | $11.55 / $23.12 (no discount) [superseded: MiLB is two groups - FCL $11.55 + FSL $16.51 - not a single $11.55 line; see `pricing-summit/accounts/ACCOUNT_TBJ-FL.md`] | $452,812/yr [superseded: $515,712 billable per updated summit ledger; see `pricing-summit/accounts/ACCOUNT_TBJ-FL.md`] | Yes, meal revenue (SF separate, not in `sc_fee_schedule` yet) |
 | TBJ - NY | No-SF | $27.34 assumption | $27.34 | none | Yes, meal revenue |
-| TBR - FL | SF% 25% on MiLB only | $27.95 MiLB / $39.48 MLB | **$20.96 MiLB** / $39.48 MLB | $382,448 one-time 2024 | Yes, meal revenue |
+| TBR - FL | SF% 25% on MiLB only | $27.95 MiLB / $39.48 MLB [superseded: MiLB is three rates - 17.83 / 21.68 / 20.96 - not a single line; see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`] | **$20.96 MiLB** / $39.48 MLB [superseded: three MiLB post-SF rates apply (17.83 / 21.68 / 20.96)] | $382,448 one-time 2024 [superseded: recurring $200K + variable each year; see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`] | Yes, meal revenue |
 | TXR - AZ | SF% 20% (deposit) | $17.87 / $35.72 | **$14.29 / $28.58** | $297,419/yr (2025 deposit) | Yes, meal revenue |
 | TXR - TX - H | Flat_fee | n/a | n/a | $604,032/yr | Operational counts only, no $ |
 | TXR - TX - V | Flat_fee | n/a | n/a | $0 (covered by H); direct sales via Season Tracker | Operational counts only, no $ |
 
 Bold entries = SF% accounts affected by sc-8c. Every other row was correct before sc-8c.
+
+**BGC (Boys & Girls Club).** In-scope under TBR-FL: after-school supper program, tax-exempt. Not a standalone account. See `pricing-summit/accounts/ACCOUNT_TBR-FL.md` §2d (BGC as the second-client stream on the same TBR-FL commissary) + `pricing-summit/CONTRACT_DIGEST_BGC.md` for scope-and-classification detail.
 
 ---
 

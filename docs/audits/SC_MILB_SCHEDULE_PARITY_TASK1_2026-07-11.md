@@ -13,7 +13,7 @@ Bundle: Louisville Bats + Buffalo Bisons full-parity schedule (Path A).
 | Louisville Bats | `CIN - KY`    | AAA   | `actuals_drive_invoice`| America/New_York    | ET       |
 | Buffalo Bisons  | `TBJ - NY`    | AAA   | `actuals_drive_invoice`| America/New_York    | ET       |
 
-Verified against `docs/SHEETS_AUDIT_DATA_SIDE.md`, `docs/SC_ADMIN_RECON_REPORT.md`, `docs/SC_SPREADSHEET_MAPPING.md`, and `src/lib/dataStore/invoice.js`. Both use the same spaced-hyphen convention as the MLB fee accounts.
+Verified against `docs/archive/migration/SHEETS_AUDIT_DATA_SIDE.md` (archived 2026-07-17), `docs/SC_ADMIN_RECON_REPORT.md`, `docs/SC_SPREADSHEET_MAPPING.md`, and `src/lib/dataStore/invoice.js`. Both use the same spaced-hyphen convention as the MLB fee accounts.
 
 Neither is in the current `sc_homestand_schedule` table (loader gates on `billing_model = 'flat_fee'`).
 

@@ -222,7 +222,7 @@ The #368 banner said "older sections may still reflect the pre-2026-06-16 money 
 | CIN-AZ §"Pricing model in one line" | 63 | "The 2023 contract base rates... The operative 2026 projection rates above are significantly above either the floor or cap CPI escalation off 2023 base, indicating either a separately negotiated 2026 SOW or a renegotiation outside the 2023 contract document. The operative 2026 pricing document is not in the contracts folder on file (open question)." | Now covered by the alignment report's Q4 paperwork gap - point at `SC_MONEY_MODEL.md` §Open paperwork gaps. |
 | CIN-AZ §Special provisions bullet 3 | line ~76 | "The 2023 Exhibit B volume threshold (72,890-meal trigger dropping MiLB rates)" - fine, but "cost basis" language reappears in Notes column. | Q5 rename passes. |
 | TBR-FL §per-account table | 267+ | Uses "Cost basis" as a column header analogous to CIN-AZ. | Column header rename. |
-| TXR-AZ §per-account table | (not read this session, but same pattern per SC_PRICE_COMPARISON.md) | Same "Actuals (cost basis)" column. | Column header rename. |
+| TXR-AZ §per-account table | (not read this session, but same pattern per `archive/SC_PRICE_COMPARISON.md`, archived 2026-07-17) | Same "Actuals (cost basis)" column. | Column header rename. |
 
 **Scope only. No edits proposed.** Estimated effort: **S** (find-replace on "cost basis" + column headers, ~4 tables affected).
 

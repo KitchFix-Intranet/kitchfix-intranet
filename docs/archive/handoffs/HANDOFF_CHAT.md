@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - point-in-time handoff from the 2026-07-02 pre-audit drill-in polish arc. Kept for history; do not use as a live reference. Current SC state lives in `docs/SC_STATUS.md` + the SC design-audit ledger.
+
 # SC PROJECT HANDOFF - Chat-Claude to successor chat
 **Written 2026-07-02 · repo verified at `origin/main` HEAD `5addb1b` (Merge PR #316)**
 

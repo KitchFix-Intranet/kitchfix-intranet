@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - pre-Sheets-to-Postgres-migration trilogy (code side); the Supabase migration project closed 2026-06-12. Superseded operationally by `docs/MIGRATION_PROJECT_CLOSEOUT.md` + `docs/MIGRATION_STATUS.md`. Companion pieces `SHEETS_AUDIT_DATA_SIDE.md` + `SHEETS_AUDIT_SYNTHESIS.md` archived alongside.
+
 # Sheets Audit - Code Perspective
 
 **Generated:** 2026-05-26 (pre-news_interactions-cutover)

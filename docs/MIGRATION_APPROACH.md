@@ -3,7 +3,7 @@
 > **Status:** Current operating mode for the Sheets to Supabase migration.
 > **Updated:** 2026-05-26 (post Stage 1 PR 1 + Sheets audit complete).
 > **Supersedes:** the capacity-not-speed pacing assumption from earlier sessions / CLAUDE.md.
-> **Companion docs:** `docs/SUPABASE_MIGRATION.md` (strategic long-form plan, still canonical for the "what"), `docs/SHEETS_AUDIT*.md` (LIVE/DEAD/ORPHAN verdicts that drive what migrates).
+> **Companion docs:** `docs/SUPABASE_MIGRATION.md` (strategic long-form plan, still canonical for the "what"), `docs/archive/migration/SHEETS_AUDIT*.md` (archived 2026-07-17; LIVE/DEAD/ORPHAN verdicts that drove what migrates).
 
 ---
 
@@ -14,7 +14,7 @@ After two weeks of Stage 0 close-out and Stage 1 kickoff (28 PRs through 2026-05
 The old assumption (CLAUDE.md "Capacity, not speed, is the constraint" + MIGRATION.md "if finishing ahead of schedule, the right move is depth, not speed") produced multi-pass audits and per-table caution. That was the right mode when the questions were "what's actually in the sheets" and "is the dual-write pattern safe."
 
 Both questions are now answered:
-- **The audit answers "what."** `docs/SHEETS_AUDIT.md` (code side) + `docs/SHEETS_AUDIT_DATA_SIDE.md` (data side) + `docs/SHEETS_AUDIT_SYNTHESIS.md` (cross-reference + verdicts) inventory every read/write and produce per-tab LIVE / UNUSED-LIVE / DEAD / ORPHAN / REFERENCE / SCHEMA-ONLY / EXTERNAL-WRITTEN / BUG / MISLABELED verdicts. The 82-tab count collapses to ~25 LIVE tables of real substance.
+- **The audit answers "what."** `docs/archive/migration/SHEETS_AUDIT.md` (code side) + `docs/archive/migration/SHEETS_AUDIT_DATA_SIDE.md` (data side) + `docs/archive/migration/SHEETS_AUDIT_SYNTHESIS.md` (cross-reference + verdicts) inventory every read/write and produce per-tab LIVE / UNUSED-LIVE / DEAD / ORPHAN / REFERENCE / SCHEMA-ONLY / EXTERNAL-WRITTEN / BUG / MISLABELED verdicts. The 82-tab count collapses to ~25 LIVE tables of real substance. (Trilogy archived 2026-07-17 after migration project closed 2026-06-12.)
 - **The dual-write pattern answers "how safely."** Stage 1 PR 1 (`src/lib/supabase.js` + `src/lib/cutover.js` + `src/lib/dataStore.js`) shipped dormant + smoke-tested. The pattern survives merge with flags off and exercises live on the Wednesday cutover.
 
 With those two questions settled, re-asking them per module is gold-plating. The goal shifts from "be exhaustively careful at each step" to "finish the whole intranet migration to Supabase cleanly, before building new features."
@@ -32,7 +32,7 @@ With those two questions settled, re-asking them per module is gold-plating. The
 - **Reversible cutovers** - every read flip is preceded by dual-write proving PG mirror is accurate, and is reversible by flipping the flag back.
 - **Verify before flipping reads** - either by a divergence monitor, by comparing post-write counts, or by spot-checking specific records. Never flip reads on assumption.
 - **Prove pattern before scaling** - news_interactions is module 1 and proves the pattern live. Don't batch anything before the pattern is proven on a real cutover.
-- **Build schema from audit LIVE verdicts, never from sheet structure.** Dead columns / orphan tabs / empty tabs / reference-only columns (e.g. contacts H/I/J Kiosk Emails / Manager / Region) do NOT migrate. See `docs/SHEETS_AUDIT_SYNTHESIS.md` for per-tab verdicts.
+- **Build schema from audit LIVE verdicts, never from sheet structure.** Dead columns / orphan tabs / empty tabs / reference-only columns (e.g. contacts H/I/J Kiosk Emails / Manager / Region) do NOT migrate. See `docs/archive/migration/SHEETS_AUDIT_SYNTHESIS.md` for per-tab verdicts.
 
 ### DROP - gold-plating that does not change outcomes
 

@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - pre-Sheets-to-Postgres-migration trilogy (data side); the Supabase migration project closed 2026-06-12. Superseded operationally by `docs/MIGRATION_PROJECT_CLOSEOUT.md` + `docs/MIGRATION_STATUS.md`. Companion pieces `SHEETS_AUDIT.md` + `SHEETS_AUDIT_SYNTHESIS.md` archived alongside.
+
 # KitchFix Sheets Audit - DATA SIDE (sheet contents)
 
 Read from the four current spreadsheets 2026-05-26 (HUB v4.0(10), COLLECTION v4.0(7), INVENTORY Manager(10), AI line items 2026(8)). This is the DATA half of the two-source audit: what actually exists in the sheets, every tab, every column, fill rates, anomalies. The CODE half (what the app reads/writes) comes from CC and gets cross-referenced into this for final verdicts.

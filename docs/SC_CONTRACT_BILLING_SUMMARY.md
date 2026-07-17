@@ -1,5 +1,7 @@
 # Service Calendar - Contract Billing Summary
 
+> **CANONICAL NOTICE (2026-07-16):** This doc is the narrative cross-account contract summary. Per-account page-cited truth (contract clause + page number + resolved figures) now lives in `docs/pricing-summit/CONTRACT_DIGEST_<KEY>.md` (11 accounts, complete). Where this summary and a digest disagree, **the digest wins.**
+>
 > **Money-model authority note (2026-07-09):** the settled money model lives in
 > [`SC_MONEY_MODEL.md`](SC_MONEY_MODEL.md). This doc remains authoritative on
 > contract language, per-account contract extractions, dates, and clause detail.
@@ -141,7 +143,7 @@ No fee-schedule entry.
 Cross-account billing analysis from the 11-account Service Calendar portfolio,
 built from executed contracts at `/Users/kevinfietek/Documents/Claude /Service Calendars/drive-download-20260615T205813Z-3-001/`
 and cross-referenced to spreadsheet projection rates in
-[`SC_PRICE_COMPARISON.md`](./SC_PRICE_COMPARISON.md) and layout mapping in
+[`SC_PRICE_COMPARISON.md`](./archive/SC_PRICE_COMPARISON.md) (archived 2026-07-17) and layout mapping in
 [`SC_SPREADSHEET_MAPPING.md`](./SC_SPREADSHEET_MAPPING.md). Analysis date:
 2026-06-15.
 
@@ -407,7 +409,7 @@ The ~14% projection-vs-contract gap is internally consistent across all per-meal
 
 **No separate contract found in this drop.** The TBJ master Services Agreement and SOW #1 explicitly scope to Dunedin (TD Ballpark + 3031 Garrison Road), and Buffalo is not mentioned in the agreement text. **Flag for Kevin:** the Bisons relationship may be covered under a separate SOW #2 not included in the contract package, or by an informal arrangement, or by a different contracting entity entirely (Rogers Blue Jays partnership owns the MLB and PDC sides; Buffalo Bisons is the AAA affiliate but may be a separately contracted entity).
 
-**Spreadsheet evidence:** Buffalo Bisons services at $27.34/meal in projections. Two services (Snack, Shake) at $0 - likely placeholders pending pricing decision per `SC_PRICE_COMPARISON.md`.
+**Spreadsheet evidence:** Buffalo Bisons services at $27.34/meal in projections. Two services (Snack, Shake) at $0 - likely placeholders pending pricing decision per `archive/SC_PRICE_COMPARISON.md`.
 
 ### TBR - FL (Tampa Bay Rays - Port Charlotte PDC)
 
@@ -566,7 +568,7 @@ The MLB Dinner, Continental Breakfast, and Extra Protein services in the spreads
 
 ## Contract vs spreadsheet rate comparison
 
-Spreadsheet rates pulled from `SC_PRICE_COMPARISON.md` (Projection column). Mismatches flagged in the Match? column.
+Spreadsheet rates pulled from `archive/SC_PRICE_COMPARISON.md` (Projection column; archived 2026-07-17, superseded by pricing-summit PRICE_AUDIT + EVIDENCE_*). Mismatches flagged in the Match? column.
 
 | Account | Group | Service | Contract Rate (year) | Spreadsheet Projection | Match? | Notes |
 |---|---|---|---|---|---|---|

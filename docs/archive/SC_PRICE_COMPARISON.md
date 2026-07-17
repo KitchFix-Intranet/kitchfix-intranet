@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - pre-sc-8c, superseded by the pricing-summit `docs/pricing-summit/PRICE_AUDIT.md` + per-account `docs/pricing-summit/EVIDENCE_*.md`. Point-in-time projection-vs-actuals sheet delta; the summit ledger + evidence files replace it as the canonical price truth.
+
 # Service Calendar Price Comparison
 
 Cross-account projection vs actuals price comparison for all 11 Service

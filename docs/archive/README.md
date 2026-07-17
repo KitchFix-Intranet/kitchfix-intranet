@@ -4,9 +4,10 @@ Frozen artifacts that captured a moment in the project but are no longer the act
 
 Each subfolder groups by archive reason:
 
-- **`handoffs/`** - End-of-session handoff docs (`HANDOFF_YYYY-MM-DD*.md`). The handoff chain is preserved here so a future read can reconstruct what was happening on any given day in May 2026. The active narrative moved to `PROJECT_DASHBOARD.md` Item 11 + the captain's-log entries inside `SUPABASE_MIGRATION.md` and per-module READMEs.
-- **`migration/`** - Pre-Stage-1 snapshots superseded by the three-part `SHEETS_AUDIT*.md` trio (2026-05-26). Includes the original Phase 1-5 `MIGRATION.md` (now superseded by `SUPABASE_MIGRATION.md`), the 2026-05-14 sheet inventory, and the pre-Bundle-3 access inventory.
+- **`handoffs/`** - End-of-session handoff docs. The May 2026 chain is preserved so a future read can reconstruct any given day; the July 2026 additions (`HANDOFF_CC.md`, `HANDOFF_CHAT.md`) close out the pre-audit drill-in polish arc.
+- **`migration/`** - Pre-Stage-1 snapshots and the closed Sheets-to-Postgres migration project's reference set. Includes the original Phase 1-5 `MIGRATION.md`, the 2026-05-14 sheet inventory, the pre-Bundle-3 access inventory, and the three-part `SHEETS_AUDIT*.md` trio (2026-05-26) archived 2026-07-17 after the migration project closed 2026-06-12.
 - **`specs/`** - Seed-corpus and self-knowledge docs that were created with growth intent but never materialized into active references. Kept here in case the intent reactivates.
+- **Root-level dated snapshots** - Point-in-time documents that stood alone rather than belonging to a subfolder theme: `PROJECT_DASHBOARD_2026-05-28.md`, `DOC_AUDIT_2026-05-29.md` (docs-corpus audit, pre-summit + materially incomplete), `SC_PRICE_COMPARISON.md` (projection-vs-actuals price delta, superseded by `docs/pricing-summit/PRICE_AUDIT.md` + `EVIDENCE_*.md`).
 
 Archived items are still tracked under `git log --follow <path>`; the moves preserve history.
 

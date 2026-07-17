@@ -54,9 +54,9 @@ Cross-check: A-8 flags the P&L booking flat SF in 2400.1 rather than 2300 (MONEY
 
 **Invoice cadence**: **K300168343** confirms quarterly billing — dated 07/01/2026, due 08/01/2026, "Service Fees (PFS)" line "2026 Service Fee - 4 of 4 (Final)" @ $350,000. Prior partial payment $24,500 applied → balance $325,500. **Aug 1 installment invoiced 30 days in advance** — matches contract § 2.a.i and contract-standard "invoice 30 days in advance of due date" (verified in TXR-TX-H § 2.a p.2; STL-FL contract silent on Net-N, but observed practice is 30 days).
 
-**P&L recognition**: 2400.1 = $1,400,000/yr spread P1-P11 (P1 $171,367 · P2 $407,375 · P3 $132,755 · P4-P8 each $98,915 · P9 $57,267 · P10 $52,061 · P11 $39,046 · P12-13 $0). 2300 = $0.
+**P&L recognition** (finance-source verified `PFS Service Fees 2026.xlsx` 2026-07-17): 2400.1 = $1,400,000/yr spread P1-P12 (P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 · P5-P9 each $98,915 · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0). 2300 = $0.
 
-**Delta**: 4 quarterly invoices vs P&L 11-period recognition → **expected**. Recognition follows spring training peak → FCL plateau → offseason. Cash timing (quarterly) is decoupled from recognition (season-weighted). No flag on cadence.
+**Delta**: 4 quarterly invoices vs P&L 12-period recognition → **expected**. Recognition follows spring training peak → FCL plateau → offseason. Cash timing (quarterly) is decoupled from recognition (season-weighted). No flag on cadence.
 
 Cross-check: A-6 (invoice tax = $0 vs contract § 2.d "subject to local sales tax"), A-9 (P&L numbers contradict GOTCHAS' P1/P3 claim).
 

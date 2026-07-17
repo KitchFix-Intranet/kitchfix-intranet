@@ -29,7 +29,7 @@ commit. Docs that claim authority over the same territory are flagged.
 | `SC_BILLING_MODEL_AUDIT.md` | Per-account audit against PG state + code; STL-FL fee promotion; TBR-FL 25% discount confirmed empirically | Explicit derivative: "consolidates [the bible's] per-account findings against current PG state and the codebase" (line 8) | 2026-06-18 dated | Extends the bible, does not compete |
 | `SC_KPI_PUSH_CONTRACT.md` | What the SC pushes to the future KPI dashboard: 3-line P&L revenue breakdown (2400.1 Meal Service, 2300 Service Charges, 2200 Catering), forecast+actual, weekly->period grain | Contract for a future dashboard; downstream reader of the SC's revenue model | 2026-06-24 (`ae4b898`) | Reads the model, does not define it |
 | `SC_LENS_VISION.md` | The vision for the SC as the operators' planning tool + the KPI's revenue engine; section 5 covers revenue model + per-account billing mechanics | Vision doc / north star; not a spec | 2026-06-24 (`ae4b898`, same PR as KPI contract) | Overlaps with bible on billing mechanics; agrees with it |
-| `SC_PRICE_COMPARISON.md` | Table of projection-tab vs actuals-tab prices for every service, every account, from the workbooks | Data doc - report on the sheets. States facts, does not rule | 2026-06-15 (`1ac0e44`) | Feeds the bible + mapping doc |
+| `archive/SC_PRICE_COMPARISON.md` (archived 2026-07-17) | Table of projection-tab vs actuals-tab prices for every service, every account, from the workbooks | Data doc - report on the sheets. States facts, does not rule | 2026-06-15 (`1ac0e44`) | Fed the bible + mapping doc; superseded by pricing-summit PRICE_AUDIT + EVIDENCE_* |
 | `SC_SPREADSHEET_MAPPING.md` | Per-account sheet layout (which column is what service, dates, structure). Contains a ruling on canonical price direction | Data doc + one ruling ("canonical entry should be the bill rate," CIN-AZ line 66) | 2026-06-15 (`1ac0e44`) | **Line 66 ruling is now stale** vs 2026-06-16 manual correction + bible + PG |
 | `SC_REDESIGN_SPEC.md` | Redesign spec for the calendar UI; mentions revenue framing per lens | UI spec. Reads the money model, does not define it | Multiple recent | Not a money authority |
 | `SC_DRILLDOWN_DECISIONS.md` | Records design decisions for the drill-in flow | Not a money authority | Multiple recent | - |
@@ -38,7 +38,7 @@ commit. Docs that claim authority over the same territory are flagged.
 | `ARCHITECTURE.md` | Sheets + PG dual layer, module map | Architecture, general | Recent | Doesn't cover SC money specifically |
 | `GOTCHAS.md` | Lines 471-472 (SC actuals discount trap) + lines 474-475 (flat-fee not per-meal) | Hard-won lessons | 2026-06-24 (`ae4b898`) | Agrees with bible; reinforces it |
 | `PROJECT_DASHBOARD.md` | Current-state orientation | Not money-authoritative | Recent | - |
-| `HANDOFF_CC.md`, `HANDOFF_CHAT.md`, `SC_CC_HANDOFF.md` | Session handoffs | Snapshot docs | Recent | - |
+| `archive/handoffs/HANDOFF_CC.md`, `archive/handoffs/HANDOFF_CHAT.md` (archived 2026-07-17), `SC_CC_HANDOFF.md` | Session handoffs | Snapshot docs | Recent | - |
 | `/tmp/SC_REVENUE_LENSES_MEMO.md` | 2026-07-09 workbook-primary lens audit + PG dump audit; identifies sc-8b double-discount | NEW; not yet in repo; evidence for THIS report | 2026-07-09 | Supersedes SC_SPREADSHEET_MAPPING line 66 |
 | **THIS report** | The alignment across everything | Intended as the "shared model" for Kevin+ChatClaude+CC to review before any further money work | 2026-07-09 | If accepted, becomes the go-forward reference |
 
@@ -75,7 +75,7 @@ everything else. That's the doc drift Part 3 pins down.
 
 | PR / commit | What it did | When |
 |---|---|---|
-| `1ac0e44` | Doc set: SC_PRICE_COMPARISON + SC_SPREADSHEET_MAPPING + SC_CONTRACT_BILLING_SUMMARY | 2026-06-15 |
+| `1ac0e44` | Doc set: SC_PRICE_COMPARISON (archived 2026-07-17) + SC_SPREADSHEET_MAPPING + SC_CONTRACT_BILLING_SUMMARY | 2026-06-15 |
 | `62a3be5` | Doc: ACCOUNT_SERVICES_BRIEF | 2026-06-16 |
 | **out-of-band Supabase edit** | **Kevin corrected CIN-AZ prices via SQL to $20.31/$12.90 (bill rate)** | **2026-06-16** |
 | `560b757` | Seed: `ignoreDuplicates: true` on `sc_service_prices` to preserve the 2026-06-16 correction from re-imports | 2026-06-17ish |
@@ -331,7 +331,7 @@ explains the double-discount.
 
 Chat-Claude produced three docs off the executed contracts + workbook audit:
 
-- `SC_PRICE_COMPARISON.md` - data table of projection-tab vs actuals-tab prices for every account.
+- `SC_PRICE_COMPARISON.md` (archived 2026-07-17 to `docs/archive/`) - data table of projection-tab vs actuals-tab prices for every account.
 - `SC_SPREADSHEET_MAPPING.md` - per-account sheet layout for the seed importer.
 - `SC_CONTRACT_BILLING_SUMMARY.md` - the per-account contract-language extraction.
 

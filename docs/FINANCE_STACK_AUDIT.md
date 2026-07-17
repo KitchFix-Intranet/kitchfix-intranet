@@ -148,7 +148,7 @@ The 5 most important findings, in priority order for the planning artifact:
 **Undocumented behaviors:**
   - **CRITICAL DRIFT: `getAllVendors()` (line 79) reads vendor_master at positional indices that no longer match the schema.**
     - Code: `{ id: r[0], name: r[1], shortName: r[2] || r[1], active: r[3] !== "FALSE" }`
-    - Actual schema per SHEETS_AUDIT.md + VENDOR_WIDGET brief: `[0]=vendorId, [1]=name, [2]=category, [3]=website, [4]=notes, ...` No `shortName` column. No `active` column on vendor_master (active lives on vendor_accounts col S).
+    - Actual schema per `archive/migration/SHEETS_AUDIT.md` (archived 2026-07-17) + VENDOR_WIDGET brief: `[0]=vendorId, [1]=name, [2]=category, [3]=website, [4]=notes, ...` No `shortName` column. No `active` column on vendor_master (active lives on vendor_accounts col S).
     - Effect: `shortName` returns category. `active` check on `r[3] !== "FALSE"` is on website column - returns true unless website is literally "FALSE" (essentially always true).
     - **This means `getAllVendors()` filter never excludes anything, AND the returned `shortName` is wrong.**
     - Need to grep for callers - if anything depends on shortName being a shortName (not category), behavior is broken today.

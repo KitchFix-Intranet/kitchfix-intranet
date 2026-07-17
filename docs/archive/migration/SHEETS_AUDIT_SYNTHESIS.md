@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-07-17** - pre-Sheets-to-Postgres-migration trilogy (synthesis); the Supabase migration project closed 2026-06-12. Superseded operationally by `docs/MIGRATION_PROJECT_CLOSEOUT.md` + `docs/MIGRATION_STATUS.md`. Companion pieces `SHEETS_AUDIT.md` + `SHEETS_AUDIT_DATA_SIDE.md` archived alongside.
+
 # KitchFix Sheets Audit - SYNTHESIS (code x data cross-reference)
 
 Cross-references the CODE side (CC's docs/SHEETS_AUDIT.md, 1726 lines, what the app reads/writes) against the DATA side (the actual sheet contents, read 2026-05-26). This is where the two halves meet and produce verdicts. Neither side alone could produce these - the cross-reference is the point.

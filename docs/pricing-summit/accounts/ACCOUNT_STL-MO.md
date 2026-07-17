@@ -90,7 +90,7 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
 
-| PG fee-schedule migration to escalated | ACTION (decided) | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Update `sc_fee_schedule` $473,000 base → $489,497 escalated. Same migration as CIN-OH/others. Run in Supabase Studio. |
+| PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: STL-MO `sc_fee_schedule` flipped from $473,000 base → $489,497 escalated (changed_by `kf-fee-escalation-2026-07`). Companion CIN-OH migration ran same day ($362,500 → $376,686). |
 | $225K passthrough true-up | UNKNOWN | — | No | Savings revert to Cardinals, overage billable; SF-level true-up not specified. |
 
 ## 6. HISTORY (superseded facts — MARKED, never deleted)
