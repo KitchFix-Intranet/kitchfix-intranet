@@ -37,7 +37,7 @@ const SHELVES = [
   "Finance",
   "Site & Client",
 ];
-const CLASSES = ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"];
+const CLASSES = ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK", "REC"];
 
 function bar(label, n, total) {
   const pct = total ? ((n / total) * 100).toFixed(0).padStart(3) : "  -";

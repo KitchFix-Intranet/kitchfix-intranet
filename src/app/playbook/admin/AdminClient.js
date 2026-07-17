@@ -55,7 +55,7 @@ const STATUS_EDIT_OPTIONS = [
 
 // Class options - ordered by usage frequency in the seed catalog (rough).
 const CLASS_EDIT_OPTIONS = [
-  "PB", "SOP", "STD", "POL", "AGR", "TPL", "FORM", "CHK", "POST", "REF",
+  "PB", "SOP", "STD", "POL", "AGR", "TPL", "FORM", "CHK", "POST", "REF", "REC",
 ];
 
 // Access tier options (pr-7-11 hierarchical gate). Ordered widest -> narrowest
@@ -1725,7 +1725,7 @@ function SortHeader({ col, label, sortBy, sortDir, onSort }) {
 // Schema-driven enums (mirror content/schema/frontmatter.schema.json). Kept
 // here so the form does not need a runtime schema fetch. If the schema
 // changes, mirror it here.
-const FM_DOC_CLASSES = ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"];
+const FM_DOC_CLASSES = ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK", "REC"];
 const FM_STATUSES = ["Live", "In Build", "Pending", "Placeholder", "Blocked", "Retired"];
 const FM_SHELVES = [
   "Safety, Health & Incident",

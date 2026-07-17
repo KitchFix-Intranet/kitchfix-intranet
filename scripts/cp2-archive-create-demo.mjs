@@ -87,7 +87,7 @@ const VALID_SHELVES_SET = new Set([
   "Finance", "Site & Client",
 ]);
 const VALID_CLASSES = new Set([
-  "PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK",
+  "PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK", "REC",
 ]);
 const VALID_STATUSES = new Set([
   "Live", "In Build", "Draft", "Pending", "Placeholder", "Blocked", "Retired",

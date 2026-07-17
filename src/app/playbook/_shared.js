@@ -21,14 +21,15 @@ export const CLASS_LABELS = {
   FORM: "Form",
   POST: "Poster",
   CHK:  "Checklist",
+  REC:  "Record",
 };
 
 // Class chip color family - 4 grouped tints (CSS .pb-class-chip--{family})
-// for scan-by-color rather than 10 separate colors:
-//   gov  = STD, POL, AGR   (governance - navy family)
-//   proc = PB, SOP         (procedures - teal family, page house color)
-//   tool = TPL, FORM, CHK  (work tools - sand/amber)
-//   ref  = POST, REF       (postings & references - manilla/beige)
+// for scan-by-color rather than 11 separate colors:
+//   gov  = STD, POL, AGR        (governance - navy family)
+//   proc = PB, SOP              (procedures - teal family, page house color)
+//   tool = TPL, FORM, CHK       (work tools - sand/amber)
+//   ref  = POST, REF, REC       (postings, references, records - manilla/beige)
 export const CLASS_FAMILY = {
   STD:  "gov",
   POL:  "gov",
@@ -40,6 +41,7 @@ export const CLASS_FAMILY = {
   CHK:  "tool",
   POST: "ref",
   REF:  "ref",
+  REC:  "ref",
 };
 
 // Status palette - Pending is the ghost (transparent fill, faint border) so

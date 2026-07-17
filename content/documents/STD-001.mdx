@@ -4,7 +4,7 @@ title: Documentation Format Standard
 doc_class: STD
 shelf: "Brand & Documentation Standards"
 status: Live
-version: "1.2"
+version: "1.3"
 card_line: "The format every internal KitchFix document follows. Typography, color, callouts, tables, page architecture."
 summary: "The Standard that defines format for every KitchFix internal document, across both screen and print/PDF renderings of one MDX source. Covers classification, page architecture (print + screen), typography (Oswald display + Inter body), locked color palette, four callouts (Promise/Anchor/Critical/Note), tables, cross-references, naming/versioning/lifecycle, approval chains, and per-class anatomy. Word/DOCX retired. STD-001 governs format - content is governed by each doc's approval chain."
 keywords:
@@ -87,7 +87,7 @@ Three registers fall outside this Standard. Each will be governed by a sub-stand
 
 # Document Classification System
 
-*(Unchanged from v1.1.)*
+*(Updated in v1.3 - REC class added.)*
 
 Every document has a class. The class determines required elements, approval chain, and review cadence. The class prefix is the first part of every document ID.
 
@@ -100,6 +100,7 @@ Every document has a class. The class determines required elements, approval cha
 | TPL | Template | Reusable form. Filled in by an operator each cycle. |
 | CHK | Checklist | Sequential checks for a defined operation. |
 | REF | Reference card | Quick-reference one-pager. Visual-heavy, minimal text. |
+| REC | Record | Long-form, structured, canonical record for one real-world entity (account, vendor, facility), maintained over time; consulted for lookup rather than read cover to cover. Distinct from REF (a short quick-reference card), PB (system-level orientation), and TPL (the blank form a record is built from). |
 | AGR | Signed Agreement | Acknowledgement-required. The artifact is the signature. |
 
 ## Document IDs
@@ -288,7 +289,7 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 
 # Approval and Review Chain
 
-*(Unchanged from v1.1.)*
+*(Updated in v1.3 - REC class added.)*
 
 | Class | Approver | Required Reviewers |
 |---|---|---|
@@ -300,10 +301,11 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 | TPL | Senior Director of Operations | Theme owner |
 | CHK | Senior Director of Operations | Theme owner + end-user pilot |
 | REF | Senior Director of Operations | Theme owner |
+| REC | Senior Director of Operations | Theme owner |
 
 # Document Anatomy by Class
 
-*(Unchanged from v1.1. Universal skeleton + class-specific add-ons. These are the minimal per-class differences.)*
+*(Updated in v1.3 - REC class add-ons noted. Universal skeleton + class-specific add-ons. These are the minimal per-class differences.)*
 
 ## Universal - Every Class
 
@@ -324,6 +326,7 @@ The cover metadata block is **read directly from the document's MDX frontmatter*
 | TPL | Instructions block at top, sample/example row in tables |
 | CHK | One-page typical, checkbox formatting, signature line at bottom, no TOC |
 | REF | One-page, visual-heavy, minimal body text, no TOC |
+| REC | Long-form; structured sections; TOC if over 10 pages; NOT one-page (contrast REF). |
 
 ## [CHANGED v1.2] Table of Contents (print)
 
@@ -340,6 +343,10 @@ The TOC is **generated automatically** from the document's H1 section titles (H1
 # Approval
 
 This Standard is itself an STD-class document. Its approval chain follows Section 11.
+
+## Changes in v1.3
+
+- **[Added REC class]** New Record class for per-entity long-form canonical records (Section 2, 11, 12).
 
 ## Changes in v1.2
 

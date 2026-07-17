@@ -9,13 +9,13 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\\d{3}(-[A-Z]+)?$",
+      "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER|REC)-\\d{3}(-[A-Z]+)?$",
       "description": "Stable doc ID. POSTER-NNN maps to doc_class POST."
     },
     "title": { "type": "string", "minLength": 1 },
     "doc_class": {
       "type": "string",
-      "enum": ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK"]
+      "enum": ["PB", "SOP", "TPL", "REF", "STD", "POL", "AGR", "FORM", "POST", "CHK", "REC"]
     },
     "shelf": {
       "type": ["string", "null"],
@@ -159,7 +159,7 @@
         "properties": {
           "to": {
             "type": "string",
-            "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER)-\\d{3}(-[A-Z]+)?$"
+            "pattern": "^(PB|STD|POL|SOP|TPL|CHK|REF|AGR|FORM|POST|POSTER|REC)-\\d{3}(-[A-Z]+)?$"
           },
           "type": {
             "type": "string",
