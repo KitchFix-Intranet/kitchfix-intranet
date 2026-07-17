@@ -231,14 +231,15 @@ the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for 
 KPI dashboard. Detail in `SC_BILLING_MODEL_AUDIT.md` §3, `SC_LENS_VISION.md` §2.
 
 **STL-FL prorated allocation:** the $1.4M is spread PHASE-AWARE across the 13 periods
-per the P&L pattern (**peak at P2 (not P3, as the earlier phrasing had it); FCL plateau
-of ~$99K across P4-P8; zero in the two offseason periods**). The full per-period vector
-is sourced from `docs/pricing-summit/PL_2026_APPENDIX.md` row R25 (2400.1 Meal Service
-(Home)); this doc does not repeat the vector inline because the appendix's R25 row is
-the moving-source-of-truth. Directional supersede: the earlier "P1 $45,553 ... P3 peak"
-phrasing had P1 wrong AND mislabeled the peak period per pricing-summit CONFLICT_REGISTER
-A-9 / D-3. `sc_fee_schedule` today holds the annual $1.4M; the per-period allocation is
-a future KPI-dashboard concern.
+per the P&L pattern (**P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 ·
+P5-P9 $98,915 each (FCL plateau) · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0**).
+Source: `PFS Service Fees 2026.xlsx` Accrual Schedule (finance-owned), verified against
+`docs/pricing-summit/PL_2026_APPENDIX.md` row R25 (2026-07-17); year total $1,400,000
+EXACT. Note: pricing-summit CONFLICT_REGISTER A-9 / D-3 (filed 2026-07-14) argued
+GOTCHAS was stale on P1 and peak-period, but that finding was based on a broken R25
+transcription (missing P1 cell); the appendix was corrected 2026-07-17 and the
+original GOTCHAS phrasing turned out to be right. `sc_fee_schedule` today holds the
+annual $1.4M; the per-period allocation is a future KPI-dashboard concern.
 
 **TXR-TX-V revenue flexibility:** the fee schedule entry for TXR-TX-V is $0 (marker:
 "covered by TXR-TX-H contract"). Real visiting-team direct-sales revenue is tracked in

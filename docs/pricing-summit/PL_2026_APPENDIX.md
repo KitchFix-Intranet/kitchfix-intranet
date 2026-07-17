@@ -94,10 +94,10 @@ Contract estimate $186,462; P&L $180,237 = $6,225 lower. Reasonable for a per-me
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 2200 Catering Revenue | R21 | - | - | - | - | - | - | - | - | - | - | - | - | - | **0** |
 | 2300 Service Charges - Road Catering | R22 | - | - | - | - | - | - | - | - | - | - | - | 0 | - | **0** |
-| 2400.1 Meal Service (Home) | R25 | 171,367 | 407,375 | 132,755 | 98,915 | 98,915 | 98,915 | 98,915 | 98,915 | 57,267 | 52,061 | 39,046 | 0 | **1,400,000** |
-| Total Revenue | R31 | 171,367 | 407,375 | 132,755 | 98,915 | 98,915 | 98,915 | 98,915 | 98,915 | 57,267 | 52,061 | 39,046 | 0 | **1,400,000** |
+| 2400.1 Meal Service (Home) | R25 | 45,553 | 171,367 | 407,375 | 132,755 | 98,915 | 98,915 | 98,915 | 98,915 | 98,915 | 57,267 | 52,061 | 39,047 | 0 | **1,400,000** |
+| Total Revenue | R31 | 45,553 | 171,367 | 407,375 | 132,755 | 98,915 | 98,915 | 98,915 | 98,915 | 98,915 | 57,267 | 52,061 | 39,047 | 0 | **1,400,000** |
 
-**Full 13-period 2300 vector**: all zeros. **STL-FL's $1.4M fee is booked ENTIRELY in 2400.1** across P1-P11 with P12-P13 at $0. Year total = $1,400,000 EXACT MATCH to MONEY_MODEL SF.
+**Full 13-period 2300 vector**: all zeros. **STL-FL's $1.4M fee is booked ENTIRELY in 2400.1** across P1-P12 with P13 at $0. Year total = $1,400,000 EXACT MATCH to MONEY_MODEL SF. Row values re-verified against `PFS Service Fees 2026.xlsx` Accrual Schedule (2026-07-17); a prior transcription of R25 was missing the P1 cell — corrected 2026-07-17.
 
 ### 3.5 STL - MO (`R21..R27`)
 
@@ -207,17 +207,19 @@ No-SF as expected. $155K/yr per-meal budget on Buffalo Bisons AAA. Season patter
 ### Q3. STL - FL 13-period 2300 (all zeros) + confirm/extend/contradict GOTCHAS
 
 - **P&L 2300** vector: 0 for every period (verbatim from R22).
-- **P&L 2400.1** vector: **P1 $171,367 · P2 $407,375 · P3 $132,755 · P4-P8 all $98,915 (5 identical periods — the "FCL plateau") · P9 $57,267 · P10 $52,061 · P11 $39,046 · P12 $0 · P13 $0** — Year total $1,400,000 EXACT.
+- **P&L 2400.1** vector (re-verified against `PFS Service Fees 2026.xlsx` Accrual Schedule 2026-07-17): **P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 · P5-P9 all $98,915 (5 identical periods — the "FCL plateau") · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0** — Year total $1,400,000 EXACT.
 
 **GOTCHAS claim** (per MONEY_MODEL §g citation): "P1 $45,553 · P3 $407,375 · FCL plateau $98,915 · offseason $0"
 
-**Match / Contradict**:
-- ✓ **CONFIRMED**: FCL plateau at $98,915 (P4-P8 all show $98,915, 5 consecutive periods — this is the plateau)
-- ✓ **CONFIRMED**: offseason $0 (P12 + P13)
-- **CONTRADICT**: GOTCHAS says P1 = $45,553; P&L shows **P1 = $171,367** (3.76× higher)
-- **CONTRADICT**: GOTCHAS says P3 = $407,375; P&L shows **P2 = $407,375** and P3 = $132,755 (peak is P2 not P3)
+**Match / Contradict** (RE-VERIFIED 2026-07-17 against finance source):
+- ✓ **CONFIRMED**: P1 = $45,553 (matches GOTCHAS exactly)
+- ✓ **CONFIRMED**: P3 = $407,375 peak (matches GOTCHAS)
+- ✓ **CONFIRMED**: FCL plateau at $98,915 (P5-P9 all show $98,915, 5 consecutive periods)
+- ✓ **CONFIRMED**: offseason $0 (P13)
 
-**Extension**: GOTCHAS didn't publish full 13-period vector. Full vector now available above. See CONFLICT_REGISTER A-9 for the GOTCHAS-vs-P&L numerical delta.
+**REVERSAL NOTE (2026-07-17)**: an earlier revision of this appendix's R25 transcription was missing the P1 = $45,553 cell, which shifted every downstream period one column to the left and mislabeled the peak (P3 in truth) as P2. The prior "CONTRADICT" claims below the vector were based on that broken transcription, not on GOTCHAS. Finance-source verification restores the correct vector; GOTCHAS was right all along. `CONFLICT_REGISTER A-9 / D-3` and `LEDGER §Q A-9 / D-3` still need mechanical updates in a follow-up to reflect this reversal.
+
+**Extension**: GOTCHAS didn't publish the full 13-period vector. Full vector now available above (finance-source-verified). See CONFLICT_REGISTER A-9 for the original discovery record; the reversal-note above is the current status.
 
 ### Q4. Every-account annual 2300 vs known SF (mismatch table)
 
