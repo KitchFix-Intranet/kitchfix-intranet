@@ -298,6 +298,15 @@ export async function updateDocument(id, patch, opts = {}) {
   // canonical post-pr-7-9 truth (not the deprecated documents.pinned column).
   const { data: pin } = await sb.from(PINS_TABLE).select("doc_id").eq("doc_id", id).maybeSingle();
   data.pinned = !!pin;
+  // Decorate has_content so callers doing an optimistic row-replace (the admin
+  // worklist) don't blank the content chip on a status/pin write. Mirrors
+  // getDocument. has_content = at least one document_content row in any lang.
+  const { data: content } = await sb
+    .from(CONTENT_TABLE)
+    .select("doc_id")
+    .eq("doc_id", id)
+    .limit(1);
+  data.has_content = Array.isArray(content) && content.length > 0;
   return data;
 }
 
