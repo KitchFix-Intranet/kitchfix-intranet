@@ -231,12 +231,14 @@ the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for 
 KPI dashboard. Detail in `SC_BILLING_MODEL_AUDIT.md` §3, `SC_LENS_VISION.md` §2.
 
 **STL-FL prorated allocation:** the $1.4M is spread PHASE-AWARE across the 13 periods
-per the P&L pattern (**P1 $171,367 · P2 peak $407,375 · P3 $132,755 · P4-P8 $98,915
-each (FCL plateau) · P9 $57,267 · P10 $52,061 · P11 $39,046 · P12-P13 $0**).
-Sourced from `docs/pricing-summit/PL_2026_APPENDIX.md` row R25 (2400.1 Meal Service
-(Home), year total $1,400,000 exact); supersedes the earlier "P1 $45,553 ... P3 peak"
-figures per pricing-summit CONFLICT_REGISTER A-9 / D-3. `sc_fee_schedule` today holds
-the annual $1.4M; the per-period allocation is a future KPI-dashboard concern.
+per the P&L pattern (**peak at P2 (not P3, as the earlier phrasing had it); FCL plateau
+of ~$99K across P4-P8; zero in the two offseason periods**). The full per-period vector
+is sourced from `docs/pricing-summit/PL_2026_APPENDIX.md` row R25 (2400.1 Meal Service
+(Home)); this doc does not repeat the vector inline because the appendix's R25 row is
+the moving-source-of-truth. Directional supersede: the earlier "P1 $45,553 ... P3 peak"
+phrasing had P1 wrong AND mislabeled the peak period per pricing-summit CONFLICT_REGISTER
+A-9 / D-3. `sc_fee_schedule` today holds the annual $1.4M; the per-period allocation is
+a future KPI-dashboard concern.
 
 **TXR-TX-V revenue flexibility:** the fee schedule entry for TXR-TX-V is $0 (marker:
 "covered by TXR-TX-H contract"). Real visiting-team direct-sales revenue is tracked in
@@ -331,7 +333,7 @@ Full per-account contract detail lives in `SC_CONTRACT_BILLING_SUMMARY.md` (bibl
 
 Bold entries = SF% accounts affected by sc-8c. Every other row was correct before sc-8c.
 
-**BGC (Boys & Girls Club).** In-scope under TBR-FL: after-school supper program, tax-exempt. Not a standalone account. See `pricing-summit/accounts/ACCOUNT_BGC.md` for scope-and-classification detail.
+**BGC (Boys & Girls Club).** In-scope under TBR-FL: after-school supper program, tax-exempt. Not a standalone account. See `pricing-summit/accounts/ACCOUNT_TBR-FL.md` §2d (BGC as the second-client stream on the same TBR-FL commissary) + `pricing-summit/CONTRACT_DIGEST_BGC.md` for scope-and-classification detail.
 
 ---
 

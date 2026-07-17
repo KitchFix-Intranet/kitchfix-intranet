@@ -563,7 +563,7 @@ Reminder: for the five `flat_fee` accounts (CIN-OH, STL-FL, STL-MO, TXR-TX-H, TX
 | CIN - OH | Flat Services Fee | $362,500 (2026 base) + CPI | No per-meal billing - fee IS billing | 6 monthly Mar-Aug |
 | STL - FL | Flat Total Annual Fee | $2,300,000 | No per-meal billing - fee IS billing | Quarterly Nov/Feb/May/Aug + bi-monthly food budget |
 | STL - MO | Flat Annual Service Fee | base $473K / billed $489,497 (2026 escalated actual, PG updated 2026-07-16); see `pricing-summit/accounts/ACCOUNT_STL-MO.md` | No per-meal billing - fee IS billing | 6 monthly Mar-Aug |
-| TBJ - FL | Flat annual SF + per-meal on top | $452,812/yr | No discount; per-meal billed full alongside SF | 3 monthly Jan/Feb/Mar (per ABR) |
+| TBJ - FL | Flat annual SF + per-meal on top | $452,812/yr [superseded: $515,712 billable; see `pricing-summit/accounts/ACCOUNT_TBJ-FL.md`] | No discount; per-meal billed full alongside SF | 3 monthly Jan/Feb/Mar (per ABR) |
 | TBJ - NY | Unknown (no contract on file) | Unknown | Full per-meal assumed | Unknown |
 | TBR - FL ML | None | $0 | No discount; per-meal billed full | n/a |
 | TBR - FL MiLB | 25% credit from $382,448 SF (2024 baseline; **recurring annually**) | $200K + variable remainder, recurring each year (see `pricing-summit/accounts/ACCOUNT_TBR-FL.md`) | Reduces MiLB per-meal to 75% of base | $200K on-first-day + remainder due Feb 1 |
