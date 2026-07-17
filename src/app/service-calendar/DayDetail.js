@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { X, ChevronLeft, ChevronRight } from "./Icons";
-import { fmt$ } from "./season/format";
+import { fmt$, round2 } from "./season/format";
 import { isPastDate } from "./dayResolvers";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -555,7 +555,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
 
   const groupSummary = useCallback((group) => {
     let meals = 0, rev = 0;
-    for (const s of group.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0); }
+    for (const s of group.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0)); }
     return { meals, revenue: rev };
   }, [getVal, day.priceAtDate]);
 
@@ -570,7 +570,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
       const v = day.projected[s.colIndex] ?? 0;
       const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
       meals += v;
-      if (!s.isNonRevenue) rev += v * price;
+      if (!s.isNonRevenue) rev += round2(v * price);
     }
     return { meals, revenue: rev };
   }, [day.projected, day.priceAtDate, day.date]);
@@ -578,7 +578,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   const summary = useMemo(() => {
     let meals = 0, rev = 0;
     for (const g of serviceGroups) {
-      for (const s of g.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0); }
+      for (const s of g.services) { const v = getVal(s.colIndex); meals += v; if (!s.isNonRevenue) rev += round2(v * (day.priceAtDate?.[s.colIndex] ?? s.price ?? 0)); }
     }
     return { meals, revenue: rev };
   }, [serviceGroups, getVal, day.priceAtDate]);
@@ -623,7 +623,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         const v = Number(editVal);
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
-        if (!s.isNonRevenue) rev += v * price;
+        if (!s.isNonRevenue) rev += round2(v * price);
       }
     }
     return { meals, revenue: rev };
@@ -642,7 +642,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         const v = day.projected[s.colIndex] ?? 0;
         const price = day.priceAtDate?.[s.colIndex] ?? s.price ?? 0;
         meals += v;
-        if (!s.isNonRevenue) rev += v * price;
+        if (!s.isNonRevenue) rev += round2(v * price);
       }
     }
     return { meals, revenue: rev };
@@ -934,7 +934,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
               meals: svcs.reduce((acc, sv) => acc + getVal(sv.colIndex), 0),
               revenue: svcs.reduce((acc, sv) => {
                 if (sv.isNonRevenue) return acc;
-                return acc + getVal(sv.colIndex) * (day.priceAtDate?.[sv.colIndex] ?? sv.price ?? 0);
+                return acc + round2(getVal(sv.colIndex) * (day.priceAtDate?.[sv.colIndex] ?? sv.price ?? 0));
               }, 0),
             };
             const renderReviewRow = (s) => {
