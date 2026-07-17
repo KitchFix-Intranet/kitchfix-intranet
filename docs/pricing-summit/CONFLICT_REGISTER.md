@@ -401,6 +401,7 @@ New conflicts surfaced from the P&L extract. Same A/B/C/D/E taxonomy. Cross-refe
   - P12-P13 = $0 (confirms offseason)
 - **Delta**: GOTCHAS' P1 number is 3.76× too low; peak period is P2 not P3.
 - **Kevin rules**: `docs/GOTCHAS.md` (lines around the STL-FL allocation) should be updated to the P&L-verified values. Not a MONEY_MODEL conflict per se; a stale downstream doc.
+- **REVERSED 2026-07-17**: finance-source verification (`PFS Service Fees 2026.xlsx`) proved the appendix R25 transcription dropped the P1 cell; original GOTCHAS (P1 $45,553 · P3 peak) was correct. See PL_2026_APPENDIX §Q3 reversal note. GOTCHAS/MONEY_MODEL corrected in PR #447.
 
 ### A-10. CIN - AZ 2200 Catering Revenue not documented in MONEY_MODEL
 
@@ -457,6 +458,7 @@ None. All confirmed gaps were in Phase 0a.
 ### D-3. GOTCHAS STL - FL P1 number
 
 - Update `docs/GOTCHAS.md` (STL-FL prorated allocation entry) to: **P1 $171,367 · P2 peak $407,375 · P3 $132,755 · FCL plateau P4-P8 $98,915 · offseason P12-13 $0** (from P&L R25). Not applied here per Kevin's ruling; queue for a follow-up doc PR.
+- **REVERSED 2026-07-17**: finance-source verification (`PFS Service Fees 2026.xlsx`) proved the appendix R25 transcription dropped the P1 cell; original GOTCHAS (P1 $45,553 · P3 peak) was correct. See PL_2026_APPENDIX §Q3 reversal note. GOTCHAS/MONEY_MODEL corrected in PR #447.
 
 ## E. Non-conflicts / consistent (Phase 0b — Kevin's interpretation guard applied)
 
