@@ -85,7 +85,7 @@ The 2023 contract base rates were $17.88 MLB / $11.35 MiLB / $4.51 Snack. The op
 **Special provisions:**
 - Force Majeure (Section VII(B), IV(F)): Club may suspend; 75% Feb-1 SF installment not refundable on FM; remaining fees prorated by `days not served / 240`.
 - Educational services (cooking demos) at $1,000/class.
-- 2023 Exhibit B volume threshold (72,890-meal trigger dropping MiLB rates) reads as a probable typo / pricing-tier construct since the "drop" rates are higher than base - flag for Kevin.
+- 2023 Exhibit B volume threshold (72,890-meal trigger dropping MiLB rates) reads as a probable typo / pricing-tier construct since the "drop" rates are higher than base - flag for Kevin. [RESOLVED 2026-07-17 — not a typo: SF-exhaustion mechanic (step-up = base ÷ 0.70 = full pre-SF rate); operationally superseded by the annual projection-floor model. See ACCOUNT_CIN-AZ.md §5 + LEDGER 2026-07-17.]
 - Per ABR Deeper Dive 2025 p18: "Ashley has asked me about moving GY to a fee account. Could tie in nicely to an extension?" - active client conversation to convert CIN - AZ from `actuals_drive_invoice` (effectively hybrid) to `flat_fee`. Not yet executed.
 
 **Open notes / TBD:**

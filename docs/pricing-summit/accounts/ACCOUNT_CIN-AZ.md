@@ -103,7 +103,7 @@ From **invoice K300168736** (2026-05-17, CIN-AZ MiLB, Goodyear), a real bi-weekl
 ## 5. OPEN ITEMS (what's not settled — owner + status)
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
-| Exhibit-B volume tier (C-17) | NEEDS-DECISION | Kevin + Joe | No (risk-accepted) | Does the signed sheet encode the 72,890-meal step to $16.22, or assume flat MiLB? If flat, billing past the threshold could diverge. Direction (higher, not lower) suggests a possible contract typo. Verify against signed sheet; confirm intent with Joe. |
+| Exhibit-B volume tier (C-17) | **CLOSED** | Kevin | No | Kevin ruling 2026-07-17: annual projection billed at post-SF as floor; under-attendance bills full projection; overage stays post-SF. 2023 tier language outdated. Do not reopen. |
 | 2026 renewal notice document | OPEN | Kevin | No (risk-accepted) | Base agreement's renewal-option mechanic covers 2026 by formula; the Club's written renewal notice isn't in the folder. Correspondence check, not a contract gap. Chase via current contact (Rachel Sharley) — NOT Ashley (departed). Next: 2027 renewal notice due Nov 1, 2026. |
 | P&L 2300 computed-vs-billed (Joe #2) | OPEN (async, non-blocking) | Joe | No | 2026 SF ($445,716) is confirmed operative, but whether the P&L 2300 line is the *billed* fee or a *computed* SF-component recognition is still open. Doesn't block this file — the number is confirmed either way. |
 | Fee-model conversion watch | UNDER-REVIEW | Kevin | No | Ashley's GY→fee-account conversation. If executed, shape changes to flat_fee. Not yet contracted. |

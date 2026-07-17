@@ -657,3 +657,61 @@ None — Joe Lessard rename (D-1) still pending; GOTCHAS STL-FL P1 (D-3) still p
 
 **Phase 0d disposition**: 11 verbatim source-of-record files landed. Every account has a "read the contract, not the interpretation" doc that flips the failure mode Kevin diagnosed ("ruling built on ONE document from a multi-document contract history, later reversed"). Paperwork gaps remaining: TBR-FL 2025+2026 SOWs, TXR-AZ 2026 SOW, TBJ-NY 2020+ SOWs, CIN-AZ renewal notices.
 
+
+---
+
+# FINAL DISPOSITIONS (2026-07-17 — certification complete)
+
+One-line current status for every item above. This caps the frozen discovery record; details in LEDGER §Q + the 2026-07-17 appends + accounts/ACCOUNT_*.md §5.
+
+| ID | Status | Pointer |
+|---|---|---|
+| A-1 | REVERSED (false conflict; digest-flattening extraction artifact — signed carries 3 distinct TBR MiLB rates, PG matches) | LEDGER §Q · Phase 0c revision |
+| A-2 | RESOLVED (TBR MiLB SF recurring: $200K static + variable; 2026 = $457,768 finance-confirmed) | ACCOUNT_TBR-FL §2 · LEDGER §W |
+| A-3 | OPEN-ASYNC (Joe #1: TBJ-FL SF cadence — OneSheeter-sourced, non-blocking) | LEDGER §U remaining-async |
+| A-4 | DISSOLVED (§T: FSL/FCL are two distinct groups at two locations, not tiers of one blended population) | LEDGER §T |
+| A-5 | RESOLVED (STL-FL upkeep = Cardinals-paid passthrough per §2.b verbatim) | LEDGER §Q |
+| A-6 | CLOSED (§U: STL-FL SF non-taxable; TAX 0.00 satisfies §2.d itemization) | LEDGER §U |
+| A-7 | DISSOLVED (TXR-V PG catalog already operational-only: 4 windows, no buffet rows) | LEDGER 2026-07-17 append |
+| A-8 | OPEN-ASYNC (Joe #2: flat-fee SF booked in 2400.1 not 2300, computed-vs-billed clarification) | LEDGER §U remaining-async |
+| A-9 | REVERSED (false conflict; PL_2026_APPENDIX R25 dropped P1 cell — original GOTCHAS was correct) | LEDGER 2026-07-17 append · PR #447 f844766 |
+| A-10 | **OPEN** (CIN-AZ $52K 2200 = Owners Week + Fantasy Camp per §T; MONEY_MODEL one-liner pending Kevin) | LEDGER §T · ACCOUNT_CIN-AZ §5 |
+| A-11 | REVERSED (§T: BGC IS in-scope TBR-FL projected revenue as second-client commissary stream — inverse of A-10) | LEDGER §T · ACCOUNT_TBR-FL §2d |
+| A-12 | RESOLVED (P&L 2300 TBR-FL $457,768 = real 2026 SF billing, not amortization/derivation) | LEDGER §Q · §W |
+| A-13 | DISSOLVED (TXR-V P&L $312K = opt-in direct sales, tracked in Season Tracker, out of SC scope) | LEDGER §Q · 2026-07-17 append |
+| A-14 | EXECUTED 2026-07-17 (Studio: CIN-AZ MLB Breakfast → $20.31, Joe-approved + invoice-confirmed) | LEDGER 2026-07-17 STAGE 1 |
+| B-1 | PENDING (batch doc-PR: TBR-FL MLB Breakfast rate add to digest) | LEDGER §Q Batch doc-PR |
+| B-2 | PENDING (batch doc-PR: TBR-FL MiLB Breakfast rate add to digest) | LEDGER §Q Batch doc-PR |
+| B-3 | PENDING (batch doc-PR: TXR-AZ ancillary snack rates — Pre-Game Hot / Regular) | LEDGER §Q Batch doc-PR |
+| B-4 | PENDING (batch doc-PR: TXR-AZ MLB Dinner in PG but not 2025 SOW) | LEDGER §Q Batch doc-PR |
+| B-5 | PENDING (batch doc-PR: TBR-FL add-on line items — Extra Protein pans) | LEDGER §Q Batch doc-PR |
+| B-6 | PENDING (batch doc-PR: CIN-AZ Coffee + Fountain in ASB but not MONEY_MODEL digest) | LEDGER §Q Batch doc-PR |
+| B-7 | PENDING (batch doc-PR: CIN-AZ 2200 Catering line — rides A-10 ruling) | LEDGER §Q · A-10 |
+| B-8 | PENDING (batch doc-PR: TBR-FL 2200 Catering line = BGC per A-11 §T reversal) | LEDGER §T |
+| B-9 | PENDING (batch doc-PR: STL-MO Road Food label alignment "Road Catering" vs "Road Food Management") | LEDGER §Q Batch doc-PR |
+| B-10 | EXECUTED 2026-07-17 (Studio: '(tax-free)' suffixes removed from CIN-AZ Coffee + Fountain service names) | LEDGER 2026-07-17 STAGE 1 |
+| B-11 | EXECUTED 2026-07-17 (Studio: TBR-FL 'Extended Day Labor' case-exact rename from 'Extended Day labor') | LEDGER 2026-07-17 STAGE 1 |
+| C-1 | OPEN-ASYNC (CIN-AZ 2026 governed by 2023 Renewal Term; only the renewal-notice paperwork pending, owner Kevin) | ACCOUNT_CIN-AZ §5 · LEDGER §Q C-paperwork list |
+| C-2 | OPEN-ASYNC (TBJ-NY contract MISSING — highest doc-risk account; owner Kevin) | ACCOUNT_TBJ-NY §5 · LEDGER §Q |
+| C-3 | OPEN-ASYNC (TXR-AZ 2026 SOW MISSING — paperwork only; rates 2025 × 1.025 fully derivable + invoice-matched) | ACCOUNT_TXR-AZ §5 · LEDGER §Q |
+| C-4 | OPEN-ASYNC (TXR-TX-H §2(d) cited but absent — cosmetic contract defect, non-blocking) | ACCOUNT_TXR-TX-H §5 · LEDGER §Q |
+| C-5 | RESOLVED (BGC contract digest banked; $6.50 tax-exempt present in signed + PG under TBR-FL / Boys & Girls Club) | CONTRACT_DIGEST_BGC · ACCOUNT_TBR-FL §2d |
+| C-6 | CLOSED — same substance as C-17 (Kevin ruling 2026-07-17: projection-floor model supersedes tier language) | LEDGER 2026-07-17 C-17 CLOSED |
+| C-7 | OPEN-ASYNC (TXR-TX-H postseason per-game denominator absent from contract; low-priority paperwork) | ACCOUNT_TXR-TX-H §5 · LEDGER §Q |
+| C-8 | CLOSED (§U: STL-FL MiLB Snack is passthrough — PG $0 correct; signed "NEEDS PRICE" cell rides v4 refresh) | LEDGER §U · STAGE3_CERTIFICATION_AUDIT §3c |
+| C-9 | CLOSED (§U: STL-FL Palm Beach Cardinals Arrival + Breakfast are two distinct services; keep both) | LEDGER §U |
+| C-10 | CLOSED (§U: TBJ-NY Snack + Shake deactivate; PG carries active=false; optional active_until re-archive queued) | LEDGER §U · CC_HANDOFF §7.2 |
+| C-11 | CLOSED (§U: TBR-FL 'Breakfast - MiLB ST' vs 'Breakfast - MiLB' — no cost diff at 2026 signed values, both $17.83) | LEDGER §U |
+| C-12 | CLOSED (§U: TBJ-FL Media Meals = $16 — PG executed 2026-07-17; signed v4 refresh queued for the cell) | LEDGER §U · STAGE3_CERTIFICATION_AUDIT §3b |
+| C-13 | OPEN-ASYNC (STL-FL work-stoppage lock-in cash timing; low, paperwork/timing note) | LEDGER §Q new pointers |
+| C-14 | LOG-ONLY (STL $60K vs $15K FL equipment double-count risk — cost-analysis pointer, no billing/cert impact) | LEDGER §Q new pointers |
+| C-15 | LOG-ONLY (TXR-AZ $75K kitchen improvement — 2022 vs 2025 restatement question, no billing impact) | LEDGER §Q new pointers · TXR-AZ digest |
+| C-16 | LOG-ONLY (TXR-V H/V revenue split is internal, not contract-driven; opt-in sales already out of SC scope) | LEDGER §Q new pointers |
+| C-17 | CLOSED — Kevin ruling 2026-07-17 (annual meal projection billed at post-SF as FLOOR; under-attendance bills full projection; over-attendance stays post-SF; 2023 tier language + 72,890 count outdated; do not reopen) | LEDGER 2026-07-17 C-17 CLOSED · ACCOUNT_CIN-AZ §5 |
+| D-1 | EXECUTED (Fauzia → Lessard rename landed in SC_MONEY_MODEL §Sources) | PR #447 d1ed7b2 · MONEY_MODEL §Sources |
+| D-2 | EXECUTED (§U: TBR-FL 2026 invoice "2025" memo = cosmetic typo; Kevin: ignore, no template fix — closed as no-action) | LEDGER §U |
+| D-3 | EXECUTED (paired with A-9 reversal; ledger annotations landed via PR #447; substantive doc-fix reversed because appendix R25 was the artifact not GOTCHAS) | LEDGER 2026-07-17 append · PR #447 f844766 |
+
+**Summary:** 45 items catalogued · **1 OPEN (A-10)** · **6 OPEN-ASYNC** (owner in pointer column) · **9 PENDING batch doc-PR** (B-1..B-9) · **5 EXECUTED 2026-07-17** (A-14, B-10, B-11, D-1, D-2, D-3) · **11 CLOSED / RESOLVED / DISSOLVED / REVERSED** · **4 LOG-ONLY** (C-13..C-16, cost-analysis / paperwork-only, no cert impact).
+
+**Certification is not gated on any of the above.** Layer D price gate = GREEN; PG=Signed 103/105 at 2dp; zero real PG failures. Certification-arc closed 2026-07-17.

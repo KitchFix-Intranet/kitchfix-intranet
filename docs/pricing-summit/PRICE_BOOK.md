@@ -1,0 +1,360 @@
+# KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT
+
+**Generated:** 2026-07-17 12:02:13Z by `scripts/generate-price-book.mjs`  
+**PG snapshot:** 2026-07-17T12:02:13.434Z  
+**Certified as of:** 2026-07-17 (see `STAGE3_CERTIFICATION_AUDIT.md`, this folder)  
+**Regenerate:** `node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json && node scripts/generate-price-book.mjs`
+
+---
+
+## What this is
+
+The Price Book is the human-readable projection of PG's live SC price catalog under each account's contract terms. **PG owns the live prices; this book is PG's projection.** Regenerate on ANY change - Studio apply, admin backdate, Kevin directive.
+
+**Data policy:**
+- Prices, flags, effective_date, and active state come from PG only (via `scripts/audit-sc-prices.mjs`).
+- Per-account header lines (money shape / 2026 fee / escalation / notes) are static config maintained inside the generator, each cited to `docs/pricing-summit/accounts/ACCOUNT_<KEY>.md` §2.
+- Contract clauses, rulings, and rationale live in the account files. This book does not restate them - it points at them.
+
+**Scope:** 11 accounts, all services (active + inactive), all latest-effective prices. Snapshot line-count and per-account service counts appear in the summary below.
+
+## Snapshot summary
+
+- **Accounts covered:** 11 of 11
+- **Total services:** 105
+- **Services with a projected-price row in PG:** 105
+- **Flat-fee marked:** 16
+- **Non-revenue marked:** 2
+- **Tax-free marked:** 3
+- **Inactive (active=false or active_until in past):** 2
+
+| Account | Services | Notes |
+|---|---:|---|
+| CIN - AZ | 13 | Cincinnati Reds - Goodyear PDC |
+| CIN - KY | 5 | Louisville Bats (AAA affiliate of CIN) |
+| CIN - OH | 4 | Cincinnati Reds - Great American Ballpark (MLB) |
+| STL - FL | 11 | St. Louis Cardinals - Jupiter PDC |
+| STL - MO | 4 | St. Louis Cardinals - Busch Stadium (MLB) |
+| TBJ - FL | 21 | Toronto Blue Jays - Dunedin PDC |
+| TBJ - NY | 6 | Buffalo Bisons (AAA affiliate of TBJ) |
+| TBR - FL | 20 | Tampa Bay Rays - Charlotte Sports Park PDC + BGC second-client stream |
+| TXR - AZ | 13 | Texas Rangers - Surprise PDC |
+| TXR - TX - H | 4 | Texas Rangers - Globe Life Field (MLB Home) |
+| TXR - TX - V | 4 | Texas Rangers - Globe Life Field (MLB Visiting) |
+
+---
+
+## CIN - AZ
+
+**Account:** Cincinnati Reds - Goodyear PDC
+
+**Money shape:** actuals_drive_invoice (per-meal count x post-SF rate = invoice; SF billed separately)  
+**2026 Service Fee / deposit:** Service Fee **$445,716** (2026 accrued; 2023 base $402,016 = 30% of pre-tax budget). Billed 75% Feb 1 / 25% Mar 15.  
+**Escalation:** CPI-U Food Away from Home (CUUR0000SEFV), October reset, 2% floor / 5% cap.  
+**Notes:** MLB rates carry a 30% SF discount (billed = full x 0.70). Two flat-fee ancillary lines (Coffee Service, Fountain Bev) at 45-week/yr cap, tax-exempt.
+
+Source: [`accounts/ACCOUNT_CIN-AZ.md` §2](accounts/ACCOUNT_CIN-AZ.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League | Breakfast | $20.31 | per meal | - | 2026-06-18 | active |
+| Major League | Dinner | $20.31 | per meal | - | 2026-06-16 | active |
+| Major League | Lunch | $20.31 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast | $12.90 | per meal | - | 2026-06-16 | active |
+| Minor League | Coffee Service | $511.05 | per week (flat) | flat, tax-free | 2026-01-01 | active |
+| Minor League | Dinner | $12.90 | per meal | - | 2026-06-16 | active |
+| Minor League | Fountain Bev | $283.92 | per week (flat) | flat, tax-free | 2026-01-01 | active |
+| Minor League | Lunch | $12.90 | per meal | - | 2026-06-26 | active |
+| Minor League | Pre-Game Snack | $5.12 | per meal | - | 2026-06-16 | active |
+| Rehab | Breakfast | $12.90 | per meal | - | 2026-06-16 | active |
+| Rehab | Continental Plus | $6.36 | per meal | - | 2026-06-16 | active |
+| Rehab | Dinner | $12.90 | per meal | - | 2026-06-16 | active |
+| Rehab | Lunch | $12.90 | per meal | - | 2026-06-16 | active |
+
+---
+
+## CIN - KY
+
+**Account:** Louisville Bats (AAA affiliate of CIN)
+
+**Money shape:** actuals_drive_invoice (uniform per-meal rate; no SF, no discount).  
+**2026 Service Fee / deposit:** **None** (per-meal, no SF). Estimated annual investment ~$186,462 (§4.b contract).  
+**Escalation:** None - renegotiated yearly.  
+**Notes:** Two contract categories - Type 1 ($25.95, Breakfast/Lunch/Post-Game/Umpire) and Type 2 ($8.64, Snack).
+
+Source: [`accounts/ACCOUNT_CIN-KY.md` §2](accounts/ACCOUNT_CIN-KY.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Louisville Bats | Breakfast | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Lunch | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Post-Game | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Snack | $8.64 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Umpire | $25.95 | per meal | - | 2026-01-01 | active |
+
+---
+
+## CIN - OH
+
+**Account:** Cincinnati Reds - Great American Ballpark (MLB)
+
+**Money shape:** flat_fee (fee IS the money; per-meal rows are operational counts only, $0 billing).  
+**2026 Service Fee / deposit:** Service Fee **$376,686** (2026 escalated; base $362,500). 6 monthly Mar-Aug (installments $61,907.08 pre-tax). Fee is tax-TAXABLE at 7.80%.  
+**Escalation:** CPI-U Food Away from Home (CUUR0000SEFV), August reset, 1% floor / 4% cap. PG carries the escalated figure (migration 2026-07-16).  
+**Notes:** Postseason mechanic: 1/81-of-fee per game = $4,413.58/game if the Reds qualify.
+
+Source: [`accounts/ACCOUNT_CIN-OH.md` §2](accounts/ACCOUNT_CIN-OH.md)
+
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Cincinnati Reds | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+
+---
+
+## STL - FL
+
+**Account:** St. Louis Cardinals - Jupiter PDC
+
+**Money shape:** flat_fee, fee-no-dollar variant (per-meal rows $0 by design; SC displays operational counts).  
+**2026 Service Fee / deposit:** Florida Services Fee **$1,400,000 flat** (quarterly Nov/Feb/May/Aug, 4x $350,000). $900K food budget = passthrough, excluded. SF is tax-EXEMPT (invoice-confirmed).  
+**Escalation:** None (flat annual). Amendment explicitly does NOT extend the STL-MO CPI clause to FL.  
+**Notes:** $900K food/packaging passthrough + $30K equipment upkeep run out-of-band, NOT part of the $1.4M fee.
+
+Source: [`accounts/ACCOUNT_STL-FL.md` §2](accounts/ACCOUNT_STL-FL.md)
+
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Fun Money | Fun Money allocation | $0.00 | non-revenue | flat, non-revenue | 2026-06-16 | active |
+| MiLB | Breakfast | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Breakfast - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Lunch | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Lunch - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Snack | $0.00 | per meal | - | 2026-06-16 | active |
+| MLB | Breakfast - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MLB | Lunch - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Pre-game | $0.00 | per meal | - | 2026-06-16 | active |
+
+---
+
+## STL - MO
+
+**Account:** St. Louis Cardinals - Busch Stadium (MLB)
+
+**Money shape:** flat_fee (per-meal rows $0; revenue = fee).  
+**2026 Service Fee / deposit:** Service Fee **$489,497 billed** (base $473,000 = $423K meal-services + $50K Road Food). 6 monthly Mar-Aug (meal-services 6x $73,249.50 + $50K annual March). SF is tax-NON-TAXABLE (invoice-confirmed).  
+**Escalation:** CPI-U parent CUUR0000SEFV (Food Away from Home), August reset, no cap. Only the $423K meal-services portion escalates; $50K Road Food held flat. PG carries the escalated figure (migration 2026-07-16).  
+**Notes:** Postseason mechanic: flat per-game (Game $5,222.22 / Workout $2,777.78 / Road Food $600), NOT escalated. Differs from CIN-OH postseason.
+
+Source: [`accounts/ACCOUNT_STL-MO.md` §2](accounts/ACCOUNT_STL-MO.md)
+
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| St. Louis Cardinals | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+
+---
+
+## TBJ - FL
+
+**Account:** Toronto Blue Jays - Dunedin PDC
+
+**Money shape:** actuals_drive_invoice + flat SF (per-meal invoiced weekly, SF billed on its own schedule).  
+**2026 Service Fee / deposit:** Service Fee **$515,712 negotiated billable** (3x $171,904 Jan/Feb/Mar; contract's $452,812 base is outdated, superseded by finance).  
+**Escalation:** 100% CPI-U Food Away from Home (CUUR0000SEFV parent), Q4 basis. Provider-initiated, gated on documented cost basis + Club written approval per §12(c). (2026 operative SF is negotiated, not formula-derived.)  
+**Notes:** Five groups: Major League - PDC, Minor League - PDC (FCL), Single A Jays (FSL), SSM, Other. 'Fun $$$$ Allocated' is non-revenue.
+
+Source: [`accounts/ACCOUNT_TBJ-FL.md` §2](accounts/ACCOUNT_TBJ-FL.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League - PDC | Breakfast | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Dinner | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Lunch | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Post Game Meal | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Snack | $1.70 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Umpire | $23.12 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Breakfast | $11.55 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Dinner | $11.55 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Lunch | $11.55 | per meal | - | 2026-01-01 | active |
+| Other | Fun $$$$ Allocated | $0.00 | non-revenue | flat, non-revenue | 2026-06-17 | active |
+| Other | Media Meals | $16.00 | per meal | - | 2026-06-16 | active |
+| Other | MiLB G&G - Pantry | $1.70 | per meal | - | 2026-01-01 | active |
+| Other | MLB - Catering | $38.00 | per meal | - | 2026-01-01 | active |
+| Other | MLB G&G - Pantry | $1.70 | per meal | - | 2026-01-01 | active |
+| Other | Scout Meals | $11.55 | per meal | - | 2026-01-01 | active |
+| Other | Team Canada | $11.55 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Breakfast | $16.51 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Post-Game | $16.51 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Pre-Game | $16.51 | per meal | - | 2026-01-01 | active |
+| SSM | Florida Ops - PDC | $11.55 | per meal | - | 2026-01-01 | active |
+| SSM | Stadium Staff Meals | $16.51 | per meal | - | 2026-01-01 | active |
+
+---
+
+## TBJ - NY
+
+**Account:** Buffalo Bisons (AAA affiliate of TBJ)
+
+**Money shape:** actuals_drive_invoice (uniform per-meal rate).  
+**2026 Service Fee / deposit:** **None** (no documented Service Fee).  
+**Escalation:** None documented. $27.34 uniform rate is Kevin+invoice-confirmed.  
+**Notes:** Snack/Shake service lines exist in the catalog but are deactivated (active=false).
+
+Source: [`accounts/ACCOUNT_TBJ-NY.md` §2](accounts/ACCOUNT_TBJ-NY.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Buffalo Bisons | Breakfast | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Lunch | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Post-Game | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Shake | $0.00 | per meal | - | 2026-01-01 | INACTIVE |
+| Buffalo Bisons | Snack | $0.00 | per meal | - | 2026-01-01 | INACTIVE |
+| Buffalo Bisons | Umpire | $27.34 | per meal | - | 2026-01-01 | active |
+
+---
+
+## TBR - FL
+
+**Account:** Tampa Bay Rays - Charlotte Sports Park PDC + BGC second-client stream
+
+**Money shape:** actuals_drive_invoice on both MLB and MiLB sides (separate cost centers). Boys & Girls Club runs as a second-client stream on the same commissary.  
+**2026 Service Fee / deposit:** Recurring MiLB Service Fee **$457,768** (2026 = $200,000 static installment 1 + $257,768 variable installment 2). MLB has no SF. 25% MiLB rate credit reduces MiLB per-meal to 75% of base.  
+**Escalation:** 75% x CPI-U Food Away - Full Service Meals & Snacks (CUUR0000SEFV01, sub-index), November reset. Per-meal rates auto-escalate; SF is SOW-gated (variable second installment set per year).  
+**Notes:** BGC (Boys & Girls Club of Charlotte County) B&G Lunch = tax-exempt after-school supper program; contract runs Aug 2025 - May 2026 school year. See ACCOUNT_TBR-FL.md §2d.
+
+Source: [`accounts/ACCOUNT_TBR-FL.md` §2](accounts/ACCOUNT_TBR-FL.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Boys & Girls Club | **B&G Lunch** _(BGC second-client stream)_ | $6.50 | per meal | tax-free | 2026-01-01 | active |
+| Major League | Breakfast | $35.63 | per meal | - | 2026-01-01 | active |
+| Major League | Dinner | $39.48 | per meal | - | 2026-01-01 | active |
+| Major League | Extra Protein - Beef/Seafood | $162.17 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Extra Protein - Chicken/Pork | $111.84 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Lunch | $39.48 | per meal | - | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Lrg | $15.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Med | $10.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Sm | $5.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | Umpire Meal | $39.48 | per meal | - | 2026-01-01 | active |
+| Minor League | AFTER HOURS MEALS | $20.96 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast - MiLB | $17.83 | per meal | - | 2026-01-01 | active |
+| Minor League | Breakfast - MiLB ST | $17.83 | per meal | - | 2026-06-16 | active |
+| Minor League | Dinner | $20.96 | per meal | - | 2026-06-16 | active |
+| Minor League | Extended Day Labor | $280.00 | per day (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Beef/Seafood | $162.17 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Chicken/Pork | $111.84 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Lunch - MiLB | $21.68 | per meal | - | 2026-01-01 | active |
+| Minor League | Lunch - MiLB ST | $21.68 | per meal | - | 2026-06-16 | active |
+| Minor League | Road Sandwiches - MiLB | $15.00 | per meal | - | 2026-01-01 | active |
+
+---
+
+## TXR - AZ
+
+**Account:** Texas Rangers - Surprise PDC
+
+**Money shape:** actuals_drive_invoice + 20% deposit-triggered discount (billed = full x 0.80).  
+**2026 Service Fee / deposit:** 2026 deposit **$301,623** (3x $100,541 Jan/Feb/Mar; triggers the 20% discount). Escalated from 2025 deposit $297,419 at fixed 2.5%.  
+**Escalation:** Fixed 2.5%/yr per §2.a (NOT CPI). Cleanest escalator of all 11 accounts.  
+**Notes:** 5 rate lines: MLB (Breakfast/Lunch/Dinner), MiLB (Breakfast/Lunch/Dinner), plus 3 MiLB add-ons (Continental Breakfast, Pre-Game Hot Snack, Regular Snack). Extra Protein pans flat.
+
+Source: [`accounts/ACCOUNT_TXR-AZ.md` §2](accounts/ACCOUNT_TXR-AZ.md)
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League | Breakfast | $28.58 | per meal | - | 2026-06-16 | active |
+| Major League | Dinner | $28.58 | per meal | - | 2026-06-16 | active |
+| Major League | Extra Protein - Beef/Seafood | $165.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Extra Protein - Chicken/Pork | $115.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Lunch | $28.58 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Continental Breakfast | $6.56 | per meal | - | 2026-06-16 | active |
+| Minor League | Dinner | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Extra Protein - Beef/Seafood | $165.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Chicken/Pork | $115.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Lunch | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Pre-Game Hot Snack | $10.93 | per meal | - | 2026-06-16 | active |
+| Minor League | Regular Snack | $5.89 | per meal | - | 2026-06-16 | active |
+
+---
+
+## TXR - TX - H
+
+**Account:** Texas Rangers - Globe Life Field (MLB Home)
+
+**Money shape:** flat_fee (per-meal rows $0; revenue = fee).  
+**2026 Service Fee / deposit:** Service Fee **$604,032** (6x $100,672 Apr-Sep pre-tax; $108,977.44 with-tax). SF is tax-TAXABLE at 8.25% (Arlington TX, contract-stated gross-up).  
+**Escalation:** None - annual negotiation. Contract text notes +10% negotiated for 2026 (2024 $528K -> 2025 $549,120 +4% -> 2026 $604,032 +10%).  
+**Notes:** Companion account TXR - TX - V (visiting) is operationally paired but billed separately - see below.
+
+Source: [`accounts/ACCOUNT_TXR-TX-H.md` §2](accounts/ACCOUNT_TXR-TX-H.md)
+
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Texas Rangers | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+
+---
+
+## TXR - TX - V
+
+**Account:** Texas Rangers - Globe Life Field (MLB Visiting)
+
+**Money shape:** operational-only (no billing prices by design; fee-schedule $0 marker).  
+**2026 Service Fee / deposit:** **None** (covered by TXR-TX-H's $604,032 contract carve-in for G&G/snacks/coffee). Opt-in direct sales to visiting teams (catering menu) is out of SC scope; tracked in Season Tracker.  
+**Escalation:** None applicable.  
+**Notes:** Included here for catalog completeness. All 4 rows carry $0 in PG by design; the SC UI displays operational counts only.
+
+Source: [`accounts/ACCOUNT_TXR-TX-V.md` §2](accounts/ACCOUNT_TXR-TX-V.md)
+
+> **Operational-only:** no billing prices by design. Every row is $0; the SC UI shows operational counts only. Direct-sales revenue is tracked in the Season Tracker workflow.
+
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Texas Rangers | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+
+---
+
+## Source of truth
+
+- **PG (`sc_service_prices` join `sc_services` join `sc_service_groups`)** = LIVE PRICE AUTHORITY. Every price shown above is the latest-effective-date row per `(service_id, price_kind='projected')` at the PG snapshot time.
+- **This book** = PG's projection at the moment of generation. It is intentionally read-only. If a rate changes in PG (Studio apply, admin edit, backdate), this book is stale until regenerated.
+- **`docs/pricing-summit/accounts/ACCOUNT_<KEY>.md`** = per-account CONTRACT + RULING context (money-shape decisions, SF cadence, escalation clauses, per-account rulings). This book cites those files for terms but does not restate them.
+- **`docs/pricing-summit/CONTRACT_DIGEST_*.md`** = verbatim contract clauses with page cites.
+- **`KitchFix_Service_Calendar_Price_Review_v3_FINAL.xlsx` → "Billing Price"** = ATTESTED authority (Joe Lessard-signed). PG matches signed at 2dp on 103/105 rows as of the certification audit; the 2 catalogued signed-side notes are documented in `STAGE3_CERTIFICATION_AUDIT.md` §3.
+
+**Regeneration triggers:**
+- Any Studio apply to `sc_service_prices`, `sc_services`, or `sc_service_groups`.
+- Any admin-panel price edit or fenced-backdate write.
+- Any signed-sheet refresh (v3 -> v4) that shifts the certification denominator.
+- Any per-account contract renewal that changes a header line above.
+
+**To regenerate:**
+
+```sh
+set -a && source .env.local && set +a
+node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json
+node scripts/generate-price-book.mjs
+```
+
+_Generated 2026-07-17T12:02:13.483Z from PG snapshot 2026-07-17T12:02:13.434Z._
