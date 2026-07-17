@@ -712,6 +712,6 @@ One-line current status for every item above. This caps the frozen discovery rec
 | D-2 | EXECUTED (§U: TBR-FL 2026 invoice "2025" memo = cosmetic typo; Kevin: ignore, no template fix — closed as no-action) | LEDGER §U |
 | D-3 | REVERSED (paired with A-9; the GOTCHAS 'fix' was reversed — appendix R25 was the artifact) | LEDGER 2026-07-17 append · PR #447 f844766 |
 
-**Summary:** 45 items catalogued · **1 OPEN (A-10)** · **6 OPEN-ASYNC** (owner in pointer column) · **9 PENDING batch doc-PR** (B-1..B-9) · **5 EXECUTED 2026-07-17** (A-14, B-10, B-11, D-1, D-2, D-3) · **11 CLOSED / RESOLVED / DISSOLVED / REVERSED** · **4 LOG-ONLY** (C-13..C-16, cost-analysis / paperwork-only, no cert impact).
+**Summary** (counts grep-derived from the status column; sums to 45): **1 OPEN** (A-10) · **8 OPEN-ASYNC** (A-3, A-8, C-1, C-2, C-3, C-4, C-7, C-13) · **8 SUPERSEDED** (B-1..B-6, B-8, B-9) · **1 RIDES A-10** (B-7) · **5 EXECUTED 2026-07-17** (A-14, B-10, B-11, D-1, D-2) · **4 REVERSED** (A-1, A-9, A-11, D-3) · **15 CLOSED / RESOLVED / DISSOLVED** (CLOSED: A-6, C-6, C-8, C-9, C-10, C-11, C-12, C-17 · RESOLVED: A-2, A-5, A-12, C-5 · DISSOLVED: A-4, A-7, A-13) · **3 LOG-ONLY** (C-14, C-15, C-16, cost-analysis / paperwork-only, no cert impact). Checksum: 1+8+8+1+5+4+15+3 = **45** ✓.
 
 **Certification is not gated on any of the above.** Layer D price gate = GREEN; PG=Signed 103/105 at 2dp; zero real PG failures. Certification-arc closed 2026-07-17.
