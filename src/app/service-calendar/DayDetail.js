@@ -7,7 +7,12 @@ import { isPastDate } from "./dayResolvers";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-function formatDate(dateStr) {
+// W7 (2026-07-18): the pure helpers below were module-private since
+// stage 4. Exported as named exports so v2/entry/DayEntryV2 can reuse
+// them VERBATIM without duplication or drift. The default export
+// (DayDetail forwardRef) is unchanged; the helpers themselves are
+// unchanged - only their visibility. Zero behavior touch.
+export function formatDate(dateStr) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DOWS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
@@ -15,7 +20,7 @@ function formatDate(dateStr) {
 // render in the operator's local timezone with the "Jul 9 · 10:05 AM"
 // shape the render pack specifies. Falls back to the raw string if the
 // value can't be parsed.
-function formatEntryStamp(iso) {
+export function formatEntryStamp(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
@@ -42,7 +47,7 @@ function formatEntryStamp(iso) {
 //     note      -> { note }
 //     edit      -> { serviceName, oldValue, newValue }
 //     edit sys  -> { systemPhrasing: true }  (all-zero batch)
-function mergeActivity(noteEntries, historyEntries) {
+export function mergeActivity(noteEntries, historyEntries) {
   const rows = [];
   for (const n of (noteEntries || [])) {
     rows.push({
@@ -107,7 +112,7 @@ function mergeActivity(noteEntries, historyEntries) {
 // prefix when the group name already trails the segment. Cheap
 // case-insensitive endsWith on the two forms the data uses
 // (`- SEGMENT` with hyphen-space, or bare `SEGMENT`).
-function groupNameCarriesSegment(name, segment) {
+export function groupNameCarriesSegment(name, segment) {
   if (!name || !segment) return false;
   const n = name.trim().toLowerCase();
   const s = segment.trim().toLowerCase();
@@ -124,7 +129,7 @@ function groupNameCarriesSegment(name, segment) {
 // The "strong" weight kicks in on genuine outliers (|d| >= max(15,
 // round(proj*0.5))) for under + over so the CVD-safe direction cue
 // picks up an emphasis when the miss is big. Sign is always rendered.
-function deltaChip(numVal, projVal) {
+export function deltaChip(numVal, projVal) {
   const delta = numVal - projVal;
   if (delta === 0) {
     return { text: "✓", cls: "sc-day-row-delta--match sc-day-row-delta--strong" };
@@ -139,7 +144,7 @@ function deltaChip(numVal, projVal) {
 
 // Unit label for the rate line. PG has no unit column, so infer from the
 // service name + flat flag (mirrors scripts/generate-price-book.mjs).
-function deriveUnit(name, isFlatFee) {
+export function deriveUnit(name, isFlatFee) {
   const n = (name || "").toLowerCase();
   if (/coffee|fountain|bev/.test(n)) return "wk";
   if (/extra protein/.test(n))       return "pan";
@@ -152,7 +157,7 @@ function deriveUnit(name, isFlatFee) {
 // flag pills sit side by side beneath the price, never inline next to
 // it, never wrapping individually. Non-revenue takes the price line's
 // place (there is no billable rate).
-function renderRate(svc, rate, unit) {
+export function renderRate(svc, rate, unit) {
   if (svc.isNonRevenue) {
     return <span className="sc-day-svc-tag sc-day-svc-tag--nonrev">not billed</span>;
   }
@@ -173,7 +178,7 @@ function renderRate(svc, rate, unit) {
 // Column header for the ledger. Module scope so every mount uses the
 // same JSX ref - keeps subgrid alignment identical everywhere the head
 // appears (entry active groups, entry extras, review, expanded-off).
-const LEDGER_HEAD = (
+export const LEDGER_HEAD = (
   <div className="sc-day-ledger-head" aria-hidden="true">
     <span className="sc-lh-name">Service</span>
     <span className="sc-lh-rate">Rate</span>
@@ -191,7 +196,7 @@ const LEDGER_HEAD = (
 // entry where the view will never surface a result. Pure YYYY-MM-DD
 // string compare; both inputs are already in that form (day.date from
 // loadMonthData, activeUntil from sc_services.active_until DATE).
-function isInServiceOnDay(svc, dayDate) {
+export function isInServiceOnDay(svc, dayDate) {
   if (!svc.activeUntil) return true;
   return dayDate <= String(svc.activeUntil).slice(0, 10);
 }

@@ -18,12 +18,13 @@ import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivatio
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
-import { useScV2 } from "./v2/flags";
+import { useScV2, useScEntryV2 } from "./v2/flags";
 import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
+import DayEntryV2 from "./v2/entry/DayEntryV2";
 import "./v2/overview.css";
 import "./v2/drill.css";
 import {
@@ -270,6 +271,7 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
+  const scEntryV2 = useScEntryV2();
   const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -2559,18 +2561,40 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             aria-labelledby="sc-day-detail-title"
             tabIndex={-1}
           >
-            <DayDetail ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
-              overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
-              onSave={handleSave} onAddNote={handleAddNote} saving={saving}
-              dayIndex={focusIdx} totalDays={dayList.length}
-              monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
-              scopeLabel="period"
-              accountName={acctObj?.name || ""}
-              accountSegment={acctObj?.category || ""}
-              isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
-              onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
-              onNextException={onNextExceptionHandler}
-              onClose={() => setFocusDay(null)} />
+            {/* W7 mount matrix (scope §5 + standing law 3):
+                scV2 OFF                          -> DayDetail v1 always (pixel parity).
+                scV2 ON  + entry OFF              -> DayDetail v1 inside v2 chrome (today's shipped state).
+                scV2 ON  + entry ON + per-meal    -> DayEntryV2.
+                scV2 ON  + entry ON + isFeeAccount-> DayDetail v1 (live bill meaningless without per-meal $;
+                                                    fee accounts locked to v1 in scope §7).
+                Note: the mount matrix lives here to keep the flag gate load-bearing and one-place-only. */}
+            {(scV2 && scEntryV2 && !isFeeAccount) ? (
+              <DayEntryV2 ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
+                overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
+                onSave={handleSave} onAddNote={handleAddNote} saving={saving}
+                dayIndex={focusIdx} totalDays={dayList.length}
+                monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
+                scopeLabel="period"
+                accountName={acctObj?.name || ""}
+                accountSegment={acctObj?.category || ""}
+                isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
+                onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
+                onNextException={onNextExceptionHandler}
+                onClose={() => setFocusDay(null)} />
+            ) : (
+              <DayDetail ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
+                overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
+                onSave={handleSave} onAddNote={handleAddNote} saving={saving}
+                dayIndex={focusIdx} totalDays={dayList.length}
+                monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
+                scopeLabel="period"
+                accountName={acctObj?.name || ""}
+                accountSegment={acctObj?.category || ""}
+                isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
+                onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
+                onNextException={onNextExceptionHandler}
+                onClose={() => setFocusDay(null)} />
+            )}
           </div>
         </div>
       )}
