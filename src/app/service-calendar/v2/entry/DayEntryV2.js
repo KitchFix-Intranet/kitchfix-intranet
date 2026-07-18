@@ -319,8 +319,15 @@ function DayEntryV2({
     // Motion: Match-projections cascade. Each newly-solid row gets a
     // staggered flash - 60ms per row from top - so the sequence reads
     // as ONE gesture rather than a rain of independent events. The
-    // total hero pulses once at the tail; the CSS handles the row-
-    // level animation, JS just sets the timing.
+    // total hero pulses ONCE at the cascade start - React batches the
+    // setEditValues call, heroValue changes in one render, the
+    // hero-change effect fires exactly one pulse. The pulse runs
+    // CONCURRENTLY with the row cascade (both are ~280ms, hero
+    // starts at 0ms, last row's flash starts at 60ms * (N-1)). This
+    // reads as the cascade IS the totalization - one gesture, one
+    // beat. Chosen over "defer pulse to cascade tail" (which would
+    // add a second beat and a timer) for feel simplicity - see PR
+    // #466 F3b.
     let staggerIdx = 0;
     for (const s of group.services) {
       if (!isInServiceOnDay(s, day.date)) continue;
@@ -476,18 +483,19 @@ function DayEntryV2({
     });
   });
 
-  // Focus a target input with roving-scroll: bring it into view via
-  // the shared reduced-motion-aware helper so the row is visible
-  // BEFORE the caret lands (avoids the browser's default scroll on
-  // focus, which lands the row at a random edge). preventScroll: true
-  // on the focus call keeps the browser out of the scroll math.
-  const focusInputScrolled = useCallback((el) => {
+  // Focus a target input with intent-scoped scroll (W7 PR 2/3 F1 split):
+  //   sequential=true  -> block: "nearest" (Enter, ArrowUp, ArrowDown).
+  //     Browser scrolls ONLY when the target is outside the viewport,
+  //     minimally. This keeps rapid entry stable - the viewport
+  //     doesn't swim under the operator's hands during fast keying.
+  //   sequential=false -> block: "center" (PageUp/PageDown group jump).
+  //     A teleport SHOULD reorient the viewport.
+  // Same helper, options pass-through - no second scroll helper.
+  const focusInputScrolled = useCallback((el, { sequential = true } = {}) => {
     if (!el || typeof el.focus !== "function") return;
-    // Find the row wrapper so we center the whole ledger row, not
-    // just the input cell. .sc-day-row is the shared row class from
-    // the v1 atom CSS reused by ServiceRow.
+    // Find the row wrapper so the scroll targets the whole ledger row.
     const row = el.closest ? (el.closest(".sc-day-row") || el) : el;
-    scrollIntoViewRM(row, { block: "center" });
+    scrollIntoViewRM(row, { block: sequential ? "nearest" : "center" });
     el.focus({ preventScroll: true });
   }, []);
 
@@ -560,26 +568,27 @@ function DayEntryV2({
     if (e.key === "PageDown" || e.key === "PageUp") {
       e.preventDefault();
       const forward = e.key === "PageDown";
-      // Find the input's containing group (.sc-v2-entry-group). Then
-      // walk siblings for the previous / next group and focus the
-      // first .sc-day-input inside.
+      // Find the input's containing group (.sc-v2-entry-group), then
+      // LOOP through subsequent groups in the chosen direction until
+      // one containing a focusable input is found (W7 PR 2/3 F2 fix).
+      // A group whose services are all archived / out-of-service renders
+      // no `.sc-day-input`; the pre-fix ±1 logic dead-ended there. This
+      // loop skips input-less groups until it finds a real target or
+      // hits the end of the list (no-op then).
       const group = el.closest ? el.closest(".sc-v2-entry-group") : null;
       if (!group) return;
-      const nextGroup = forward
-        ? group.nextElementSibling
-        : group.previousElementSibling;
-      // Skip over inactiveGroups <details> wrapper - it's a peer with
-      // .sc-v2-entry-group children INSIDE. Query the whole list at
-      // the top for the target group.
       const allGroups = Array.from(bodyRef.current.querySelectorAll(".sc-v2-entry-group"));
       const groupIdx = allGroups.indexOf(group);
       if (groupIdx < 0) return;
-      const targetGroup = forward
-        ? allGroups[groupIdx + 1]
-        : allGroups[groupIdx - 1];
-      if (!targetGroup) return;
-      const targetInput = targetGroup.querySelector(".sc-day-input");
-      if (targetInput) focusInputScrolled(targetInput);
+      const step = forward ? 1 : -1;
+      for (let i = groupIdx + step; i >= 0 && i < allGroups.length; i += step) {
+        const targetInput = allGroups[i].querySelector(".sc-day-input");
+        if (targetInput) {
+          focusInputScrolled(targetInput, { sequential: false });
+          return;
+        }
+      }
+      // No target found in that direction - no-op.
       return;
     }
   }, [touched, saving, executeConfirm, focusInputScrolled]);
