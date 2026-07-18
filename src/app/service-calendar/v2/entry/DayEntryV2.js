@@ -53,6 +53,7 @@ import {
 } from "../../DayDetail";
 import useAnimatedNumber from "../../useAnimatedNumber";
 import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
+import MobileBooksBar from "../MobileBooksBar";
 import "./dayEntryV2.css";
 
 function DayEntryV2({
@@ -848,49 +849,42 @@ function DayEntryV2({
       </div>
 
       {/*
-        W7 PR 3/3 Phase 5 - mobile sticky footer. Visible at ≤767 via
-        CSS only. The bar shows the same live total the rail hero
-        does + entered/total count + an expand affordance; Confirm
-        remains one-thumb reachable below. Tapping the bar's expand
-        row flips `mobileBillOpen`; the rail slides in as the second
-        sheet stage covering the list (rules in dayEntryV2.css).
-        aria-expanded/aria-controls wire the summary row to the rail.
-        Reuses executeConfirm - law 1 write-path untouched.
+        W9 PR 1/2 - the entry's mobile footer is unified into the
+        shared MobileBooksBar shell (bar + stickyAction). Bar-only
+        mode (no `children` passed) so no aside/backdrop is emitted -
+        entry's rail overlay is still the pre-existing
+        `.sc-v2-entry-rail` aside inside `.sc-v2-entry-pane`, toggled
+        by the `sc-v2-entry--mobile-bill-open` root class + CSS. What
+        changed vs W7 PR 3: the bar + Confirm markup + CSS are the
+        SHARED shell now; `mobileBillOpen` is threaded through
+        MobileBooksBar's controlled `open`/`onOpenChange` so the
+        day-nav reset effect still clears it. All figures pass
+        through unchanged (Entered/Projected label + revenue +
+        entered count + Confirm through executeConfirm with the same
+        `!hasTouchedAny || saving` disable + saving label).
+
+        Bar label formatting matches the pre-unification voice:
+        "Entered $X.XX" vs "Projected ~$X.XX". The bar-status slot
+        carries the entered/total count.
       */}
-      <div className="sc-v2-entry-mobile-footer" aria-hidden={false}>
-        <button
-          type="button"
-          className="sc-v2-entry-mobile-bar"
-          onClick={() => setMobileBillOpen(v => !v)}
-          aria-expanded={mobileBillOpen}
-          aria-controls="sc-v2-entry-rail-mobile"
-          aria-label={mobileBillOpen ? "Collapse bill" : "Expand bill"}
-        >
-          <span className="sc-v2-entry-mobile-bar-total">
-            <span className="sc-v2-entry-mobile-bar-label">
-              {hasTouchedAny ? "Entered" : "Projected"}
-            </span>
-            <span className="sc-v2-entry-mobile-bar-amount">
-              {hasTouchedAny ? "" : "~"}
-              {fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}
-            </span>
-          </span>
-          <span className="sc-v2-entry-mobile-bar-count">
-            {enteredCount} of {totalToEnter} entered
-          </span>
-          <span className="sc-v2-entry-mobile-bar-chevron" aria-hidden="true">
-            {mobileBillOpen ? "▾" : "▴"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="sc-v2-entry-mobile-confirm"
-          onClick={executeConfirm}
-          disabled={!hasTouchedAny || saving}
-        >
-          {saving ? "Saving..." : "Confirm & save"}
-        </button>
-      </div>
+      <MobileBooksBar
+        barLabel={hasTouchedAny ? "Entered" : "Projected"}
+        barValue={`${hasTouchedAny ? "" : "~"}${fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}`}
+        barStatus={`${enteredCount} of ${totalToEnter} entered`}
+        open={mobileBillOpen}
+        onOpenChange={setMobileBillOpen}
+        controlsId="sc-v2-entry-rail-mobile"
+        stickyAction={(
+          <button
+            type="button"
+            className="sc-v2-entry-mobile-confirm"
+            onClick={executeConfirm}
+            disabled={!hasTouchedAny || saving}
+          >
+            {saving ? "Saving..." : "Confirm & save"}
+          </button>
+        )}
+      />
     </div>
   );
 }

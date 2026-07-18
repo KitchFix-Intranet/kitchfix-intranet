@@ -822,10 +822,17 @@
   display: none;
 }
 
-/* Mobile footer - hidden on desktop by default via base rule */
-.sc-v2-entry-mobile-footer {
-  display: none;
-}
+/* W9 PR 1/2 - the .sc-v2-entry-mobile-footer + -mobile-bar +
+   -mobile-confirm rules are RETIRED. DayEntryV2's mobile footer is
+   now the shared v2/MobileBooksBar shell (bar + stickyAction). The
+   sticky Confirm CTA that used to carry the .sc-v2-entry-mobile-
+   confirm class STILL carries that class name - the caller passes
+   it to MobileBooksBar's stickyAction slot for CSS parity - but
+   its layout rules live in mobileBooksBar.css now (the
+   .sc-mobile-books-action > * width:100% rule fills the row). The
+   in-CTA visuals (cta bg, min-height, hover, focus, disabled) are
+   preserved below since they're .sc-v2-entry-mobile-confirm-scoped
+   styling of the caller's own button. */
 
 @media (max-width: 767px) {
   /* Sheet feel: overlay card fills the viewport. Rides the
@@ -857,11 +864,16 @@
   }
   .sc-v2-entry-title { font-size: var(--sc2-size-h3); }
 
-  /* Pane -> single column, no rail on rest state */
+  /* Pane -> single column, no rail on rest state. Padding-bottom
+     clears the shared MobileBooksBar footer (bar + Confirm =
+     --sc2-mobile-footer-h) PLUS the one-safe-area inset (F3 - the
+     action row's height/padding grows by env(safe-area-inset-bottom),
+     so the pane must grow too or trailing content is hidden on
+     notched devices). Same token pattern the sheet inset below uses. */
   .sc-v2-entry-pane {
     grid-template-columns: 1fr;
     position: relative;
-    padding-bottom: 116px; /* room for the mobile footer */
+    padding-bottom: calc(var(--sc2-mobile-footer-h) + env(safe-area-inset-bottom, 0px));
     border-radius: 0;
   }
   .sc-v2-entry-list {
@@ -882,7 +894,11 @@
   .sc-v2-entry--mobile-bill-open .sc-v2-entry-rail {
     display: block;
     position: absolute;
-    inset: 0 0 116px 0;
+    /* One-safe-area law: the footer's real height is
+       --sc2-mobile-footer-h + env(safe-area-inset-bottom), so the
+       overlay must clip by both or it'll cover the visible footer
+       on notched devices. */
+    inset: 0 0 calc(var(--sc2-mobile-footer-h) + env(safe-area-inset-bottom, 0px)) 0;
     z-index: 3;
     overflow-y: auto;
   }
@@ -896,77 +912,12 @@
     }
   }
 
-  /* Mobile footer: sticky pair of a summary bar + Confirm CTA.
-     `position: fixed` locks it to the viewport bottom regardless of
-     list scroll; env(safe-area-inset-bottom) respects the iOS home
-     indicator. Height matches the pane's padding-bottom above so
-     scrolled content never hides beneath it. */
-  .sc-v2-entry-mobile-footer {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sc2-space-2);
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 4;
-    padding: var(--sc2-space-3) var(--sc2-space-4);
-    padding-bottom: calc(var(--sc2-space-3) + env(safe-area-inset-bottom, 0px));
-    background: var(--sc2-surface-card);
-    border-top: var(--sc2-border-thin) solid var(--sc2-line);
-    box-shadow: var(--sc2-elevation-raised);
-  }
-  .sc-v2-entry-mobile-bar {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    align-items: center;
-    gap: var(--sc2-space-3);
-    padding: var(--sc2-space-2) var(--sc2-space-3);
-    background: var(--sc2-surface-sunken);
-    border: var(--sc2-border-thin) solid var(--sc2-line);
-    border-radius: var(--sc2-radius-control);
-    cursor: pointer;
-    font: inherit;
-    color: var(--sc2-ink);
-    text-align: left;
-    min-height: 44px;
-  }
-  .sc-v2-entry-mobile-bar:focus-visible {
-    outline: 2px solid var(--sc2-accent-green);
-    outline-offset: 2px;
-  }
-  .sc-v2-entry-mobile-bar-total {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .sc-v2-entry-mobile-bar-label {
-    font-size: var(--sc2-size-micro);
-    font-weight: var(--sc2-wt-bold);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--sc2-ink-muted);
-  }
-  .sc-v2-entry-mobile-bar-amount {
-    font-size: var(--sc2-size-body);
-    font-weight: var(--sc2-wt-display);
-    color: var(--sc2-ink-strong);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-  }
-  .sc-v2-entry-mobile-bar-count {
-    font-size: var(--sc2-size-caption);
-    color: var(--sc2-ink-muted);
-    font-weight: var(--sc2-wt-semibold);
-    font-variant-numeric: tabular-nums;
-  }
-  .sc-v2-entry-mobile-bar-chevron {
-    font-size: var(--sc2-size-body);
-    color: var(--sc2-ink-muted);
-  }
+  /* W9 PR 1/2 - the shared MobileBooksBar owns the sticky bar +
+     backdrop + action layout (v2/mobileBooksBar.css). The
+     .sc-v2-entry-mobile-confirm caller-provided button carries its
+     own visual style below; MobileBooksBar's .sc-mobile-books-action
+     wrapper handles positioning + safe-area inset. */
   .sc-v2-entry-mobile-confirm {
-    width: 100%;
     min-height: 48px;
     background: var(--sc2-rail-cta-bg);
     color: var(--sc2-rail-cta-text);

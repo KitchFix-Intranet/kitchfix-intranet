@@ -1,29 +1,56 @@
 /* ══════════════════════════════════════════════════════════════
-   SC v2 W8 - mobile books-bar + sheet host.
+   SC v2 W8+W9 - mobile books-bar + sheet host.
 
    Semantics:
-     - Desktop (≥768): the aside is BYTE-IDENTICAL to pre-W8. The bar
-       and backdrop are display:none. The `sc-mobile-books-host` class
-       collides only with the ≤767 rules below - at ≥768 it has zero
-       effect.
-     - Mobile (≤767): the aside becomes a bottom sheet, translated
-       off-screen unless `sc-mobile-books-host--open` is set. Bar sticks
-       to the viewport bottom. Backdrop overlays the main content.
+     - Desktop (>=768): the aside (if any children were passed) is
+       BYTE-IDENTICAL to pre-W8. The bar, backdrop, and stickyAction
+       are display:none. The `sc-mobile-books-host` class collides
+       only with the <=767 rules below - at >=768 it has zero effect.
+     - Mobile (<=767): the aside becomes a bottom sheet, translated
+       off-screen unless `sc-mobile-books-host--open` is set. Bar
+       sticks to the viewport bottom. When `stickyAction` is present
+       (DayEntryV2 use case), the action row stacks BELOW the bar
+       and both together form the entry footer.
 
-   Structure is a mirror of dayEntryV2's mobile block - one grammar
-   across the whole v2 mobile experience (see MobileBooksBar.js law 1).
-   Structural unification of the two footer shells (books-bar +
-   entry-footer) is a W9 demolition task.
+   W9 - the two footer heights are TOKENIZED (resolves V3_HOPPER seed
+   "mobile footer height as a magic number"):
+
+     --sc2-mobile-bar-h      = read-surface footer (bar only, ~60px)
+     --sc2-mobile-footer-h   = entry-surface footer (bar + Confirm, ~116px)
+
+   The tokens are declared in tokens.css.
+
+   W9 F3 - geometry hardening after live measurement showed the
+   pre-fix `.sc-mobile-books-bar--with-action { bottom: calc(...) }`
+   cascade losing to the base rule in the browser under test:
+
+   1. Base bar consumes `bottom: var(--_sc-bar-bottom, 0)` (custom
+      property indirection so cascade order cannot lose - a
+      variable-value can't be "beaten" by a static rule of equal
+      specificity because the base rule ITSELF resolves through the
+      variable).
+   2. `.sc-mobile-books-bar--with-action` sets ONLY the custom
+      property; the modifier does not restate `bottom`.
+   3. Action row height is `calc(footer-h - bar-h)` explicit, so the
+      stack totals exactly --sc2-mobile-footer-h before the safe-area
+      inset is added.
+   4. ONE safe-area law: `env(safe-area-inset-bottom)` is added
+      EXACTLY ONCE per stack. The action row's bottom padding grows
+      by it. The bar-with-action's own bottom offset grows by it (so
+      the bar stays above the safe-area inset padding on the action
+      row). The pane padding-bottom grows by it. Read-surface
+      (bar-only) mode: the bar's bottom padding grows by it.
    ══════════════════════════════════════════════════════════════ */
 
 /* Desktop defaults - hide the mobile-only pieces */
 .sc-mobile-books-bar { display: none; }
 .sc-mobile-books-backdrop { display: none; }
+.sc-mobile-books-action { display: none; }
 
 @media (max-width: 767px) {
   /* ─── Sheet host (the aside) ──────────────────────────────
      Fixed above the sticky bar. Translated off-screen when closed.
-     When open, `--open` puts it at bottom:72px above the bar.
+     When open, `--open` puts it at bottom:{bar-h} above the bar.
      Height caps at 70vh so short screens keep some grid visible
      behind the sheet.
   */
@@ -31,7 +58,7 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 72px;              /* sits above the bar */
+    bottom: var(--sc2-mobile-bar-h);
     z-index: 46;
     max-height: 70vh;
     background: var(--sc2-surface-card);
@@ -40,14 +67,11 @@
     box-shadow: var(--sc2-elevation-raised);
     overflow-y: auto;
     padding: var(--sc2-space-3);
-    transform: translateY(calc(100% + 72px));
-    /* Sticky positioning inherited from .sc-overview-rail /
-       .sc-drill-rail is overridden here because we're fixed. */
+    transform: translateY(calc(100% + var(--sc2-mobile-bar-h)));
     max-width: none;
     align-self: initial;
   }
 
-  /* Motion: rise + settle. RM-gated via prefers-reduced-motion. */
   @media (prefers-reduced-motion: no-preference) {
     .sc-mobile-books-host {
       transition: transform var(--duration-base) var(--ease-emphasized);
@@ -59,9 +83,7 @@
   }
 
   /* Rail-in-sheet: strip the desktop rail's own sticky/max-height
-     rules so the sheet's overflow works. The rail's INTERNAL
-     RailScroll region still scrolls; the OUTER aside just becomes a
-     positioned container. */
+     rules so the sheet's overflow works. */
   .sc-mobile-books-host .sc-rail {
     position: static;
     max-height: none;
@@ -74,7 +96,7 @@
   .sc-mobile-books-backdrop {
     display: block;
     position: fixed;
-    inset: 0 0 72px 0;              /* bar visible under the veil */
+    inset: 0 0 var(--sc2-mobile-bar-h) 0;   /* bar visible under the veil */
     background: rgba(18, 34, 56, 0.45);
     z-index: 45;
     opacity: 0;
@@ -90,7 +112,10 @@
     pointer-events: auto;
   }
 
-  /* ─── Sticky bar ──────────────────────────────────────── */
+  /* ─── Sticky bar ──────────────────────────────────────────
+     F3 - custom-property indirection so the modifier cannot lose
+     the cascade. Base declares the fallback; the modifier only
+     sets the variable value. */
   .sc-mobile-books-bar {
     display: grid;
     grid-template-columns: 1fr auto auto;
@@ -99,19 +124,37 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--_sc-bar-bottom, 0px);
     z-index: 47;
     padding: var(--sc2-space-2) var(--sc2-space-4);
+    /* Bar-only mode: this rule's padding-bottom carries the
+       one-safe-area-law inset. Overridden inside --with-action so
+       the inset moves to the action row (it's the outer row when
+       both are present, per the one-safe-area law). */
     padding-bottom: calc(var(--sc2-space-2) + env(safe-area-inset-bottom, 0px));
     background: var(--sc2-cmd-bg);          /* navy anchor: reads as "books" */
     color: var(--sc2-cmd-text);
     border: none;
     border-top: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.08);
-    min-height: 60px;              /* ≥44 with padding + inset */
+    min-height: var(--sc2-mobile-bar-h);
     font: inherit;
     text-align: left;
     cursor: pointer;
   }
+
+  /*
+     --with-action modifier: the bar sits ABOVE the action row. It
+     is offset by exactly the action-row height so the stack totals
+     var(--sc2-mobile-footer-h) before any safe-area inset. The
+     action row is the OUTER row, so it owns the inset per the
+     one-safe-area law - the bar's padding-bottom is trimmed here
+     so we don't double-count.
+  */
+  .sc-mobile-books-bar--with-action {
+    --_sc-bar-bottom: calc(var(--sc2-mobile-footer-h) - var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--sc2-space-2);
+  }
+
   .sc-mobile-books-bar:focus-visible {
     outline: 2px solid var(--sc2-rail-accent-warn);
     outline-offset: -2px;
@@ -150,14 +193,38 @@
     line-height: 1;
   }
 
-  /* Layout accommodation: the pane above the bar needs padding-bottom
-     so its trailing content isn't hidden under the bar. Applied to
-     the SC v2 grid roots (.sc-overview + .sc-drill). Value tracks
-     the bar height (60px) + inset padding. Coupled with the same
-     concern in dayEntryV2.css - see V3_HOPPER "mobile footer height
-     as a magic number" seed for the tokenization plan. */
+  /* ─── Sticky action row (W9 - entry Confirm) ──────────── */
+  .sc-mobile-books-action {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 47;
+    /* F3 - explicit height = footer-h - bar-h. Content sized to fit
+       inside; the safe-area inset is added to padding-bottom (owns
+       the one-safe-area law), and the height GROWS by the same
+       inset so the visible action row still fits inside a
+       footer-h + inset viewport-bottom band. */
+    height: calc(var(--sc2-mobile-footer-h) - var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
+    padding: var(--sc2-space-2) var(--sc2-space-4);
+    padding-bottom: calc(var(--sc2-space-2) + env(safe-area-inset-bottom, 0px));
+    background: var(--sc2-surface-card);
+    border-top: var(--sc2-border-thin) solid var(--sc2-line);
+    box-sizing: border-box;
+  }
+  /* The caller-provided button fills the row's content area. */
+  .sc-mobile-books-action > * {
+    width: 100%;
+  }
+
+  /* Layout accommodation: the pane above the footer needs
+     padding-bottom so its trailing content isn't hidden. Read
+     surfaces use the bar-h + inset; entry uses the footer-h + inset
+     (declared inside dayEntryV2.css against .sc-v2-entry-pane so
+     the two mounts don't accidentally share a value). */
   .scv2 .sc-overview,
   .scv2 .sc-drill {
-    padding-bottom: 84px;
+    padding-bottom: calc(var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
   }
 }

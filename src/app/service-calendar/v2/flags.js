@@ -67,7 +67,13 @@ function writeStored(name, value) {
 // The tri-state is what enables Phase 6 account cutover: the mount site
 // composes stored-off (kill) vs stored-on (durable on) vs absent
 // (fall through to env default OR account-cutover-list membership).
-function useFlagState(name, qsParam, envName) {
+//
+// `defaultOn` (W9 PR 1/2 - the defaults flip): when both storage AND
+// env are absent, `defaultOn=true` resolves to true. Used by scV2 to
+// flip its default from OFF to ON pre-soak; entry-v2 keeps
+// `defaultOn=false` because the cutover list is what governs the
+// per-account default (see ENTRY_V2_ACCOUNTS + useScEntryV2Effective).
+function useFlagState(name, qsParam, envName, defaultOn = false) {
   const [state, setState] = useState({ resolved: false, stored: null, envDef: false });
   const searchParams = useSearchParams();
   const qsRaw = searchParams?.get(qsParam);
@@ -79,7 +85,10 @@ function useFlagState(name, qsParam, envName) {
 
     const stored = readStored(name);
     const envDef = envDefault(envName);
-    const resolved = stored !== null ? stored : envDef;
+    // When storage is absent, resolve to env-on OR the flag's own
+    // baked-in default. Storage still wins (both stored=true and
+    // stored=false override this fallback - kill switch stays intact).
+    const resolved = stored !== null ? stored : (envDef || defaultOn);
     setState({ resolved, stored, envDef });
   }, [qsRaw]);
 
@@ -87,12 +96,19 @@ function useFlagState(name, qsParam, envName) {
 }
 
 // Back-compat: returns the boolean the callers used before Phase 6.
-function useFlag(name, qsParam, envName) {
-  return useFlagState(name, qsParam, envName).resolved;
+function useFlag(name, qsParam, envName, defaultOn = false) {
+  return useFlagState(name, qsParam, envName, defaultOn).resolved;
 }
 
+// W9 PR 1/2 - scV2 default flips ON. Effective for the admin
+// audience (page.js SC_ADMINS gate stays put; §9 W9's audience
+// scoping is enforced there, not here). `?v2=0` remains the durable
+// kill switch during soak - it persists STORAGE_OFF and beats the
+// new default via the `stored !== null ? stored : (envDef ||
+// defaultOn)` order above. Kill switch sunsets in W9 PR 2/2 when the
+// flag-off world is removed.
 export function useScV2() {
-  return useFlag("v2", "v2", "NEXT_PUBLIC_SC_V2");
+  return useFlag("v2", "v2", "NEXT_PUBLIC_SC_V2", /* defaultOn = */ true);
 }
 
 // ─── Entry v2 sub-flag (W7) ───────────────────────────────────
@@ -114,18 +130,43 @@ export function useScEntryV2() {
 // account when the operator has NOT set a stored preference. Removing
 // a key reverts that account to v1 as the default.
 //
-// SEEDED with "CIN - AZ" (2026-07-18 - Kevin's home account; his real
-// daily entry is the shakedown). Kevin can empty the list at merge if
-// he prefers a beat later before flipping his own account.
+// W9 PR 1/2 - EXPANDED to every per-meal account (2026-07-18).
+// Kevin's home account (CIN - AZ) shipped as the first cutover in
+// PR #468 and has soaked through W8. W9 PR 1/2 seeds every per-meal
+// key so that on pure defaults (no URL params, empty storage) every
+// per-meal account opens DayEntryV2 by default. Fee accounts remain
+// outside the list AND cut hard by the isFeeAccount fence in
+// useScEntryV2Effective (belt-and-braces preserved). `?entry2=0` on
+// any account is the durable operator kill switch during soak -
+// load-bearing as the per-account rollback path.
+//
+// Every seeded key is grepped from a canonical source, never typed.
+// The CIN - AZ lesson is institutional. Citations below:
+//
+//   "CIN - AZ"    ServiceCalendar.js:478 - URL hydration fallback
+//                 default ([urlAccount, d.defaultAccount, "CIN - AZ"])
+//   "TXR - AZ"    season/phaseCalendar.js:118 - PER_ACCOUNT_2026 key
+//   "TBR - FL"    season/phaseCalendar.js:134 - PER_ACCOUNT_2026 key
+//   "TBJ - FL"    season/phaseCalendar.js:158 - PER_ACCOUNT_2026 key
+//   "CIN - KY"    lib/scheduleDrift.js:41 - MLB Stats API account map
+//   "TBJ - NY"    lib/scheduleDrift.js:42 - MLB Stats API account map
+//
+// Cross-check: docs/modules/SERVICE_CALENDAR.md lists exactly these
+// six as `billing_model IN ('per_meal', 'actuals_drive_invoice')`
+// (per-meal + MLB-adjacent AAA). Fee accounts (CIN - OH, STL - FL,
+// STL - MO, TXR - TX - H, TXR - TX - V) intentionally omitted per
+// scope §7 fence.
 //
 // Key format: canonical account key with spaces around the hyphen -
-// proven by `ServiceCalendar.js:463` which falls back to `"CIN - AZ"`
-// as the hydration default, by every `?account=CIN+-+AZ` URL, and by
-// every `loadMonthData("CIN - AZ", ...)` call site. `selectedAccount`
-// holds exactly this string, so the Set.has() check at the mount is
-// a same-shape compare - no normalization at either end.
+// `selectedAccount` holds exactly this string, so the Set.has()
+// check at the mount is a same-shape compare.
 export const ENTRY_V2_ACCOUNTS = new Set([
   "CIN - AZ",
+  "TXR - AZ",
+  "TBR - FL",
+  "TBJ - FL",
+  "CIN - KY",
+  "TBJ - NY",
 ]);
 
 // ─── Effective entry-v2 gate for a specific account ───────────
