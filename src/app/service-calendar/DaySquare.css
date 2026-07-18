@@ -942,7 +942,7 @@
 
 .scv2 .sc-daysq-notebubble { opacity: 0.55; }
 
-.scv2 .sc-daysq-mid { color: var(--sc2-ink-soft); font-size: var(--sc2-size-caption); }
+.scv2 .sc-daysq-mid { color: var(--sc2-ink); font-size: var(--sc2-size-caption); }
 .scv2 .sc-daysq--sm .sc-daysq-mid { font-size: var(--sc2-size-micro); }
 
 .scv2 .sc-daysq-mid-rev--actual    { color: var(--sc2-state-entered-fg); }

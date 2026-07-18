@@ -525,7 +525,7 @@
   border-radius: var(--sc2-radius-cell);
 }
 .scv2 .sc-state-legend-item {
-  color: var(--sc2-ink-soft);
+  color: var(--sc2-ink);
   font-size: var(--sc2-size-micro);
 }
 
@@ -586,7 +586,7 @@
    days entered, meals YTD) is rehomed into the rail:
      entered YTD    -> RailHero.value (animated via useAnimatedNumber)
      projected      -> RailHero.meta "of ~$X projected"
-     days entered   -> RailHero.meta "N of M days recorded"
+     days entered   -> RailHero.meta "N of M days entered"    (V3 §9.1)
      meals YTD      -> RailHero.meta on Period mode "· N meals YTD"
    See v2/SeasonRail.js heroMetaCal / heroMetaPeriod. */
 

@@ -47,14 +47,15 @@ export default function SeasonRail({
 }) {
   const today = todayISO();
   const totals = deriveHeroTotals(yearData);
-  // Calendar hero meta = projected + days recorded (money-forward).
-  // Period hero meta = projected + days recorded + meals YTD. The
-  // meals-YTD figure is the FullSeasonCard's fourth stat rehomed here
-  // (per bundle F4: every FullSeasonCard figure must live in the rail
-  // before the card retires). totals.mealsYTD is computed by the
-  // shared derive module - no new derivation path.
-  const heroMetaCal = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days recorded`;
-  const heroMetaPeriod = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days recorded · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
+  // V3 §9.1 - vocabulary canon: verb "entered" everywhere; "recorded"
+  // retired. Calendar hero meta = projected + days entered
+  // (money-forward). Period hero meta = projected + days entered +
+  // meals YTD. The meals-YTD figure is the FullSeasonCard's fourth
+  // stat rehomed here (per bundle F4: every FullSeasonCard figure
+  // must live in the rail before the card retires). totals.mealsYTD
+  // is computed by the shared derive module - no new derivation path.
+  const heroMetaCal = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
+  const heroMetaPeriod = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
 
   if (mode === "calendar") {
