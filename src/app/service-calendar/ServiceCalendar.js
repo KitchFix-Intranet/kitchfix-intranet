@@ -19,6 +19,10 @@ import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
 import { useScV2 } from "./v2/flags";
+import { useDensity } from "./v2/useDensity";
+import Ribbon from "./v2/Ribbon";
+import SeasonRail from "./v2/SeasonRail";
+import "./v2/overview.css";
 import {
   queueKey as scQueueKey,
   getAll as scGetAll,
@@ -256,6 +260,7 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
+  const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -1959,56 +1964,76 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   return (
     <>
-      <div
-        className="oh-hero"
-        style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
-      >
-        <div className="oh-hero-overlay" />
-        <div className="oh-hero-content">
-          <h1 className="oh-hero-title">Service Calendar</h1>
-          <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+      {!scV2 && (
+        <div
+          className="oh-hero"
+          style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
+        >
+          <div className="oh-hero-overlay" />
+          <div className="oh-hero-content">
+            <h1 className="oh-hero-title">Service Calendar</h1>
+            <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+          </div>
+          {/* Redesign PR 1A: admin entry in the hero's top-right corner.
+              Bundle 1 (Section A) makes the button a TOGGLE - it now
+              renders in admin view too, switching to a back-arrow icon
+              so the operator has an exit path (the previous gate hid the
+              button in admin view, leaving no way back). Wires to the
+              same handleAdminToggle the old ChromeBar button used;
+              isAdminView state + URL sync are unchanged. */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="sc-hero-admin"
+              onClick={handleAdminToggle}
+              aria-label={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+              title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+              aria-pressed={isAdminView}
+            >
+              {isAdminView ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 12H5" />
+                  <path d="m12 19-7-7 7-7" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="10" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              )}
+            </button>
+          )}
+          {/* As-of pill relocated from the ChromeBar into the hero's
+              bottom-right corner so the bar can sit on one row at
+              desktop widths. Reuses the existing .sc-chrome-bar-asof
+              base styling and layers an on-photo .sc-hero-asof modifier
+              that mirrors the .sc-hero-admin treatment above. Hidden on
+              phones via the modifier; StickyContext carries freshness
+              context there. */}
+          {asOf && (
+            <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
+          )}
         </div>
-        {/* Redesign PR 1A: admin entry in the hero's top-right corner.
-            Bundle 1 (Section A) makes the button a TOGGLE - it now
-            renders in admin view too, switching to a back-arrow icon
-            so the operator has an exit path (the previous gate hid the
-            button in admin view, leaving no way back). Wires to the
-            same handleAdminToggle the old ChromeBar button used;
-            isAdminView state + URL sync are unchanged. */}
-        {isAdmin && (
-          <button
-            type="button"
-            className="sc-hero-admin"
-            onClick={handleAdminToggle}
-            aria-label={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-            title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-            aria-pressed={isAdminView}
-          >
-            {isAdminView ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M19 12H5" />
-                <path d="m12 19-7-7 7-7" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="10" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            )}
-          </button>
-        )}
-        {/* As-of pill relocated from the ChromeBar into the hero's
-            bottom-right corner so the bar can sit on one row at
-            desktop widths. Reuses the existing .sc-chrome-bar-asof
-            base styling and layers an on-photo .sc-hero-asof modifier
-            that mirrors the .sc-hero-admin treatment above. Hidden on
-            phones via the modifier; StickyContext carries freshness
-            context there. */}
-        {asOf && (
-          <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
-        )}
-      </div>
-    <div className={`sc-root${scV2 ? " scv2" : ""}`} data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
+      )}
+    <div
+      className={`sc-root${scV2 ? " scv2" : ""}`}
+      data-density="compact"
+      data-sc2-density={scV2 ? scV2Density : undefined}
+      data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
+      data-category={data?.account?.category || ""}
+    >
+      {scV2 && (
+        <Ribbon
+          firstName={firstName}
+          asOf={asOf}
+          onRefresh={handleRefresh}
+          isAdmin={isAdmin}
+          isAdminView={isAdminView}
+          onAdminToggle={handleAdminToggle}
+          density={scV2Density}
+          onDensityChange={setScV2Density}
+        />
+      )}
       <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
@@ -2110,48 +2135,90 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       )}
 
       <div className="sc-body">
-        {isYearView && (
-          <SeasonShell
-            account={data?.account}
-            year={year}
-            yearData={yearData}
-            yearToday={yearToday}
-            yearBannerStats={yearBannerStats}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            isMilb={isMilb}
-            springDateSet={springDateSet}
-            loading={loading || !data || !yearData}
-            loadState={
-              // SC-033: debug hook - dev + ?debug=failed forces the
-              // failed-atom render across the overview so the state is
-              // visually testable without a real fetch failure.
-              (isDev && searchParams?.get("debug") === "failed")
-                ? "failed"
-                : yearLoadState
-            }
-            // Calendar month-card drill: opens the MONTH scope drill-in
-            // (un-deprecates the month view). Prior behavior forwarded
-            // to the containing fiscal period; the two scopes now
-            // coexist - month click opens ?month=, period click opens
-            // ?period= (below).
-            onMonthClick={(mi) => {
-              const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
-              router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
-              setFocusDay(null);
-              setBulkMode(false);
-            }}
-            periodRanges={periodRanges}
-            onPeriodClick={(periodLabel) => {
-              router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
-            }}
-            // Lifted view toggle (the action signal moved to the chrome
-            // bar, so the season shell no longer carries jump props).
-            view={seasonView}
-            onViewChange={handleSeasonViewChange}
-            syncingDates={syncingDates}
-          />
-        )}
+        {isYearView && (() => {
+          const seasonShell = (
+            <SeasonShell
+              account={data?.account}
+              year={year}
+              yearData={yearData}
+              yearToday={yearToday}
+              yearBannerStats={yearBannerStats}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              isMilb={isMilb}
+              springDateSet={springDateSet}
+              loading={loading || !data || !yearData}
+              loadState={
+                // SC-033: debug hook - dev + ?debug=failed forces the
+                // failed-atom render across the overview so the state is
+                // visually testable without a real fetch failure.
+                (isDev && searchParams?.get("debug") === "failed")
+                  ? "failed"
+                  : yearLoadState
+              }
+              // Calendar month-card drill: opens the MONTH scope drill-in
+              // (un-deprecates the month view). Prior behavior forwarded
+              // to the containing fiscal period; the two scopes now
+              // coexist - month click opens ?month=, period click opens
+              // ?period= (below).
+              onMonthClick={(mi) => {
+                const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+                router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+                setFocusDay(null);
+                setBulkMode(false);
+              }}
+              periodRanges={periodRanges}
+              onPeriodClick={(periodLabel) => {
+                router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
+              }}
+              // Lifted view toggle (the action signal moved to the chrome
+              // bar, so the season shell no longer carries jump props).
+              view={seasonView}
+              onViewChange={handleSeasonViewChange}
+              syncingDates={syncingDates}
+              scV2={scV2}
+            />
+          );
+          // v2 two-pane: SeasonShell left, SeasonRail right. Guarded by
+          // scV2 + non-fee (bundle scope §4) + non-admin. Below 1280px
+          // the rail leaves the side (overview.css media query) and
+          // stacks under the grid full width.
+          const useTwoPane = scV2 && !isFeeAccount && !isAdminView && !!yearData;
+          if (!useTwoPane) return seasonShell;
+          return (
+            <div className="sc-overview">
+              <div className="sc-overview-main">{seasonShell}</div>
+              <aside className="sc-overview-rail" aria-label="Season books">
+                <SeasonRail
+                  mode={seasonView === "period" ? "period" : "calendar"}
+                  year={year}
+                  yearData={yearData}
+                  periodRanges={periodRanges}
+                  onDrillToDay={(date, period /*, source */) => {
+                    // Pinned rule (bundle scope §2 for queue rows): drill
+                    // to the containing period; do NOT auto-open the
+                    // DayDetail modal. focusDay stays null - opening
+                    // entry is an explicit second click on the day.
+                    // Note: within-period scroll-into-view for the target
+                    // date is a W5 responsibility (touches PeriodWorkspace).
+                    if (period) {
+                      router.push(buildScUrl({ account: selectedAccount || undefined, period }), { scroll: false });
+                    }
+                  }}
+                  onDrillToMonth={(mi) => {
+                    const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+                    router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+                    setFocusDay(null);
+                    setBulkMode(false);
+                  }}
+                  onDrillToPeriod={(periodLabel) => {
+                    router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
+                  }}
+                />
+              </aside>
+            </div>
+          );
+        })()}
 
 
         {isPeriodView && (

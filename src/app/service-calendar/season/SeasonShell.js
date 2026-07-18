@@ -57,6 +57,12 @@ export default function SeasonShell({
   // queued locally. Threaded down to MonthCard + PeriodCard so their
   // DaySquare cells overlay the SYNCING badge on the right dates.
   syncingDates,
+  // SC v2 (W2-W4): when true, the Period grid skips the FullSeasonCard
+  // render at the summary slot - every figure it carried (entered YTD,
+  // projected, days entered, meals YTD) has been rehomed into the
+  // v2 SeasonRail hero + season lines + period-mode hero meta. Card
+  // stays on v1 unchanged.
+  scV2 = false,
   // sc-19 (2026-07-12): Set<string> of dates inside a Spring Training
   // phase block for the current account (phaseCalendar.js). Threaded
   // to MonthCard + PeriodCard so their sm cells can render the
@@ -212,6 +218,7 @@ export default function SeasonShell({
           onPeriodClick={onPeriodClick}
           syncingDates={syncingDates}
           springDateSet={springDateSet}
+          scV2={scV2}
         />
       )}
       </div>
@@ -280,6 +287,7 @@ function PeriodGrid({
   onPeriodClick,
   syncingDates,
   springDateSet,
+  scV2 = false,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -309,14 +317,16 @@ function PeriodGrid({
           />
         </div>
       ))}
-      <div role="listitem" className="sc-season-period-grid-summary">
-        <FullSeasonCard
-          yearData={yearData}
-          yearBannerStats={yearBannerStats}
-          isFeeAccount={isFeeAccount}
-          hasHomestandSchedule={hasHomestandSchedule}
-        />
-      </div>
+      {!scV2 && (
+        <div role="listitem" className="sc-season-period-grid-summary">
+          <FullSeasonCard
+            yearData={yearData}
+            yearBannerStats={yearBannerStats}
+            isFeeAccount={isFeeAccount}
+            hasHomestandSchedule={hasHomestandSchedule}
+          />
+        </div>
+      )}
     </div>
   );
 }

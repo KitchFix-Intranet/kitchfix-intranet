@@ -127,23 +127,28 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
       >
         {timeline.status === "recorded" && (
           <div className="sc-season-strip-blocks" aria-hidden="true">
-            {blockPositions.map((b, i) => (
-              <div
-                key={`${b.phase}-${i}`}
-                className="sc-season-strip-block"
-                style={{
-                  left: `${b.left}%`,
-                  width: `${b.width}%`,
-                }}
-                title={`${b.label} · ${b.start} to ${b.end}`}
-              >
-                {b.width >= 6 && (
-                  <span className="sc-season-strip-block-label">
-                    {b.width >= 9 ? b.label : b.short}
-                  </span>
-                )}
-              </div>
-            ))}
+            {blockPositions.map((b, i) => {
+              const isCurrent = todayPhase && b.phase === todayPhase.phase
+                && todayDate >= b.start && todayDate <= b.end;
+              return (
+                <div
+                  key={`${b.phase}-${i}`}
+                  className="sc-season-strip-block"
+                  data-current={isCurrent ? "true" : undefined}
+                  style={{
+                    left: `${b.left}%`,
+                    width: `${b.width}%`,
+                  }}
+                  title={`${b.label} · ${b.start} to ${b.end}`}
+                >
+                  {b.width >= 6 && (
+                    <span className="sc-season-strip-block-label">
+                      {b.width >= 9 ? b.label : b.short}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
