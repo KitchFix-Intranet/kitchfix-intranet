@@ -631,7 +631,12 @@
   background: var(--sc2-surface-page);
 }
 .scv2 .sc-v2-entry-list .sc-day-input--ghost::placeholder {
-  color: var(--sc2-ghost);
+  /* F2 fix: --sc2-ghost (#a49c8a) on --sc2-surface-page (#e8e3d8)
+     measured 2.13:1 - below the 3.27 placeholder floor. --sc2-ink-muted
+     (#6d737c) on the same ground measures 3.74:1 - passes the floor +
+     matches v1's --text-muted placeholder pattern (dayDetail.css:290-294
+     paired --text-muted at 4.52:1 for the same reason). */
+  color: var(--sc2-ink-muted);
   opacity: 1;
 }
 .scv2 .sc-v2-entry-list .sc-day-input--touched {

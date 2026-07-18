@@ -114,11 +114,18 @@ export function useScEntryV2() {
 // account when the operator has NOT set a stored preference. Removing
 // a key reverts that account to v1 as the default.
 //
-// SEEDED with CIN-AZ (2026-07-18 - Kevin's home account; his real
+// SEEDED with "CIN - AZ" (2026-07-18 - Kevin's home account; his real
 // daily entry is the shakedown). Kevin can empty the list at merge if
 // he prefers a beat later before flipping his own account.
+//
+// Key format: canonical account key with spaces around the hyphen -
+// proven by `ServiceCalendar.js:463` which falls back to `"CIN - AZ"`
+// as the hydration default, by every `?account=CIN+-+AZ` URL, and by
+// every `loadMonthData("CIN - AZ", ...)` call site. `selectedAccount`
+// holds exactly this string, so the Set.has() check at the mount is
+// a same-shape compare - no normalization at either end.
 export const ENTRY_V2_ACCOUNTS = new Set([
-  "CIN-AZ",
+  "CIN - AZ",
 ]);
 
 // ─── Effective entry-v2 gate for a specific account ───────────

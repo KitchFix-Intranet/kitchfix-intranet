@@ -14,11 +14,12 @@ V3 arc, not to seed either audit with prior conclusions.
 
 ## Design-ish items (parked from W7 build)
 
-- **Entry ghost-placeholder ink step-up.** The dashed ghost `placeholder` on the count input
-  reads slightly too pale against the row background at default density. Look at nudging up the
-  ink or dropping the dash weight; the target is "visibly the projection, but never confusable
-  with a solid entry." (Surfaced during W7 PR 3/3 polish; parked because the ghost-ink token is
-  used by the bill rail's ghost lines too - any change ripples and deserves a fresh audit.)
+- **Entry ghost-placeholder ink step-up.** (Resolved in #468 F2.) The initial P1.1 write set
+  `.sc-day-input--ghost::placeholder` to `--sc2-ghost` (#a49c8a) on `--sc2-surface-page`
+  (#e8e3d8), measuring 2.13:1 - below the 3.27 placeholder floor. F2 relanded on
+  `--sc2-ink-muted` (#6d737c) at 3.74:1, above the floor and matching v1's `--text-muted`
+  placeholder pattern. The wider `--sc2-ghost` token still governs the bill rail's ghost lines
+  (rail palette) - that surface is a separate audit target from the entry input.
 
 - **Modal edge treatment alignment.** DayEntryV2's overlay card has a `--sc2-radius-container`
   corner treatment; the coaching band, the two-pane divider, and the sticky group headers use
@@ -35,6 +36,12 @@ V3 arc, not to seed either audit with prior conclusions.
   rail language; the surface it's on is dense with other micro-labels (ENTERED / PROJECTED,
   section names). The audit should decide if the note label needs a distinct treatment or if the
   section is right to homogenize.
+
+- **Mobile footer height as a magic number.** `.sc-v2-entry-pane` has `padding-bottom: 116px`
+  at ≤767 to clear the fixed `.sc-v2-entry-mobile-footer`, and the second-stage rail overlay
+  uses `inset: 0 0 116px 0` for the same reason. The value is coupled across three sites but
+  isn't token-backed. Tokenize as `--sc2-mobile-footer-h` (or a token pair for the two
+  sub-heights: summary bar + confirm) so any adjustment stays coherent. V3 job.
 
 ## PR #467 body nits (post-merge cleanup, W7.5)
 

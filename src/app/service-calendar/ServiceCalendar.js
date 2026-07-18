@@ -320,18 +320,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [hasHomeAccount, setHasHomeAccount] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
+  // Account-level fee-branch derivation. Hoisted from its former home
+  // in the account-mode block (was ~line 1072) so the Phase 6 cutover
+  // hook below can consume it directly - one source for the fee-branch
+  // signal across the whole component. Byte-identical predicate.
+  const isFeeAccount = data?.account?.billingModel === "flat_fee";
   // W7 PR 3/3 Phase 6 cutover - the effective entry-v2 gate for the
   // account currently loaded. Precedence handled inside the hook
   // (stored-off wins; storedOn wins over cutover list; absent falls
   // through to env default OR ENTRY_V2_ACCOUNTS membership). Hook is
-  // called unconditionally per React rules; both args are safe when
-  // data is null (accountKey=undefined, isFeeAccount=false ->
-  // envDefault only). Recomputes when data loads or the account is
-  // switched, matching the existing account-switch teardown.
-  const scEntryV2 = useScEntryV2Effective(
-    data?.account?.key,
-    data?.account?.billingModel === "flat_fee",
-  );
+  // called unconditionally per React rules. Consumes the CANONICAL
+  // mount-site variables: `selectedAccount` (the URL / picker /
+  // hydration source of truth - the key that every fetch already
+  // uses) and `isFeeAccount` (the guard every other branch reads).
+  // No second derivation of a load-bearing gate. Safe when
+  // selectedAccount is "" (hydration not run yet) - the hook sees
+  // undefined and returns envDefault only.
+  const scEntryV2 = useScEntryV2Effective(selectedAccount || undefined, isFeeAccount);
   const [yearData, setYearData] = useState(null);
   // SC-033: track the year-summary fetch state so a whole-fetch failure
   // renders the failed atoms on every overview cell instead of silently
@@ -1069,7 +1074,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   //   2. !hasHomestandSchedule && isFeeAccount -> operational-only (STL-FL)
   //   3. !isFeeAccount                     -> per-meal (everyone else)
   // MiLB is hybrid: per-meal financially + schedule rhythm operationally.
-  const isFeeAccount = data?.account?.billingModel === "flat_fee";
+  // (isFeeAccount hoisted upstream to feed the Phase 6 cutover hook -
+  // one source for the fee-branch signal across the component.)
   const hasHomestandSchedule = !!data?.homestandMap;
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
