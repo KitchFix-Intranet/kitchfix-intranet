@@ -269,7 +269,8 @@
 
 /* Below the two-pane min: rail leaves the side and stacks below the
    grid full width. W8 owns the real responsive frame; this is the
-   interim pattern for W2-W4. */
+   768-1279 interim pattern (768+ = stacked-below rail; ≤767 = bar+
+   sheet via MobileBooksBar - see v2/mobileBooksBar.css). */
 @media (max-width: 1279px) {
   .scv2 .sc-overview {
     grid-template-columns: minmax(0, 1fr);
@@ -278,6 +279,76 @@
     position: static;
     max-height: none;
     overflow: visible;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   W8 - chrome at ≤767: ribbon + chrome-bar wrap to two-line
+   arrangements. Every desktop action still reachable (law 4);
+   nothing hides.
+   ══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* Ribbon: brand row on top, controls row (as-of + density + admin)
+     wrapping below. Reduces the h-space demand so 375 fits without
+     h-scroll while keeping every affordance visible. */
+  .scv2 .sc-ribbon {
+    flex-wrap: wrap;
+    gap: var(--sc2-space-2);
+    padding: var(--sc2-space-3) var(--sc2-space-3);
+    border-radius: 0;
+  }
+  .scv2 .sc-ribbon-brand {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .scv2 .sc-ribbon-title {
+    font-size: var(--sc2-size-h3);
+  }
+  .scv2 .sc-ribbon-welcome {
+    display: none;              /* keeps the top row calm; hidden here, not deleted */
+  }
+  .scv2 .sc-ribbon-right {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    gap: var(--sc2-space-1);
+    flex-wrap: wrap;
+  }
+
+  /* Density toggle keeps its two-button segment control per law 4 -
+     compressed to shorter labels + tighter padding rather than
+     iconified so the affordance remains legible. */
+  .scv2 .sc-ribbon-density-btn {
+    padding: 4px 8px;
+    font-size: var(--sc2-size-micro);
+  }
+
+  /* ChromeBar: two-row layout via native flex-wrap. Every child gets
+     min-height ≥44px so tap targets are floor-compliant. h-scroll
+     containment is on the parent; children wrap rather than push. */
+  .scv2 .sc-chrome-bar {
+    flex-wrap: wrap;
+    gap: var(--sc2-space-2);
+    padding: var(--sc2-space-2) var(--sc2-space-3);
+    row-gap: var(--sc2-space-2);
+  }
+  .scv2 .sc-chrome-bar > * {
+    min-height: 40px;
+  }
+
+  /* PhaseStrip at mobile: current-phase emphasis MUST survive; the
+     block row scrolls horizontally as a fallback (better than a
+     truncated timeline) with scroll-snap tuned so a swipe lands on
+     a whole phase. Label wraps if needed. Contained h-scroll: the
+     strip is a rare exception to "no h-scroll" because the timeline
+     is a horizontal-by-nature artifact; contained inside a fixed
+     card so the PAGE-level scroll stays clean. Documented in the
+     drift log. */
+  .scv2 .sc-season-strip {
+    padding: 0 0 var(--sc2-space-2) 0;
+  }
+  .scv2 .sc-season-strip-title {
+    font-size: var(--sc2-size-micro);
   }
 }
 

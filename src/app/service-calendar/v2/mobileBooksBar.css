@@ -1,0 +1,163 @@
+/* ══════════════════════════════════════════════════════════════
+   SC v2 W8 - mobile books-bar + sheet host.
+
+   Semantics:
+     - Desktop (≥768): the aside is BYTE-IDENTICAL to pre-W8. The bar
+       and backdrop are display:none. The `sc-mobile-books-host` class
+       collides only with the ≤767 rules below - at ≥768 it has zero
+       effect.
+     - Mobile (≤767): the aside becomes a bottom sheet, translated
+       off-screen unless `sc-mobile-books-host--open` is set. Bar sticks
+       to the viewport bottom. Backdrop overlays the main content.
+
+   Structure is a mirror of dayEntryV2's mobile block - one grammar
+   across the whole v2 mobile experience (see MobileBooksBar.js law 1).
+   Structural unification of the two footer shells (books-bar +
+   entry-footer) is a W9 demolition task.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Desktop defaults - hide the mobile-only pieces */
+.sc-mobile-books-bar { display: none; }
+.sc-mobile-books-backdrop { display: none; }
+
+@media (max-width: 767px) {
+  /* ─── Sheet host (the aside) ──────────────────────────────
+     Fixed above the sticky bar. Translated off-screen when closed.
+     When open, `--open` puts it at bottom:72px above the bar.
+     Height caps at 70vh so short screens keep some grid visible
+     behind the sheet.
+  */
+  .sc-mobile-books-host {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 72px;              /* sits above the bar */
+    z-index: 46;
+    max-height: 70vh;
+    background: var(--sc2-surface-card);
+    border-top: var(--sc2-border-thin) solid var(--sc2-line);
+    border-radius: 12px 12px 0 0;
+    box-shadow: var(--sc2-elevation-raised);
+    overflow-y: auto;
+    padding: var(--sc2-space-3);
+    transform: translateY(calc(100% + 72px));
+    /* Sticky positioning inherited from .sc-overview-rail /
+       .sc-drill-rail is overridden here because we're fixed. */
+    max-width: none;
+    align-self: initial;
+  }
+
+  /* Motion: rise + settle. RM-gated via prefers-reduced-motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .sc-mobile-books-host {
+      transition: transform var(--duration-base) var(--ease-emphasized);
+    }
+  }
+
+  .sc-mobile-books-host--open {
+    transform: translateY(0);
+  }
+
+  /* Rail-in-sheet: strip the desktop rail's own sticky/max-height
+     rules so the sheet's overflow works. The rail's INTERNAL
+     RailScroll region still scrolls; the OUTER aside just becomes a
+     positioned container. */
+  .sc-mobile-books-host .sc-rail {
+    position: static;
+    max-height: none;
+  }
+  .sc-mobile-books-host .sc-rail-scroll {
+    max-height: none;
+  }
+
+  /* ─── Backdrop ─────────────────────────────────────────── */
+  .sc-mobile-books-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0 0 72px 0;              /* bar visible under the veil */
+    background: rgba(18, 34, 56, 0.45);
+    z-index: 45;
+    opacity: 0;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .sc-mobile-books-backdrop {
+      transition: opacity var(--duration-base) var(--ease-standard);
+    }
+  }
+  .sc-mobile-books-backdrop--open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ─── Sticky bar ──────────────────────────────────────── */
+  .sc-mobile-books-bar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--sc2-space-3);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 47;
+    padding: var(--sc2-space-2) var(--sc2-space-4);
+    padding-bottom: calc(var(--sc2-space-2) + env(safe-area-inset-bottom, 0px));
+    background: var(--sc2-cmd-bg);          /* navy anchor: reads as "books" */
+    color: var(--sc2-cmd-text);
+    border: none;
+    border-top: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.08);
+    min-height: 60px;              /* ≥44 with padding + inset */
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sc-mobile-books-bar:focus-visible {
+    outline: 2px solid var(--sc2-rail-accent-warn);
+    outline-offset: -2px;
+  }
+  .sc-mobile-books-bar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .sc-mobile-books-bar-label {
+    font-size: var(--sc2-size-micro);
+    font-weight: var(--sc2-wt-bold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sc2-cmd-text-muted);
+  }
+  .sc-mobile-books-bar-value {
+    font-size: var(--sc2-size-body);
+    font-weight: var(--sc2-wt-display);
+    color: var(--sc2-cmd-text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .sc-mobile-books-bar-status {
+    font-size: var(--sc2-size-caption);
+    color: var(--sc2-rail-accent-warn);
+    font-weight: var(--sc2-wt-bold);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .sc-mobile-books-bar-chevron {
+    font-size: var(--sc2-size-body);
+    color: var(--sc2-cmd-text-muted);
+    line-height: 1;
+  }
+
+  /* Layout accommodation: the pane above the bar needs padding-bottom
+     so its trailing content isn't hidden under the bar. Applied to
+     the SC v2 grid roots (.sc-overview + .sc-drill). Value tracks
+     the bar height (60px) + inset padding. Coupled with the same
+     concern in dayEntryV2.css - see V3_HOPPER "mobile footer height
+     as a magic number" seed for the tokenization plan. */
+  .scv2 .sc-overview,
+  .scv2 .sc-drill {
+    padding-bottom: 84px;
+  }
+}

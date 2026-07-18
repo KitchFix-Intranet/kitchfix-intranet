@@ -44,6 +44,56 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   W8 - drill at ≤767: FinancialFrame stats stack; workspace
+   padding tightens; DayGrid tiles compress but keep ≥44px min
+   tap targets. SC-036 mitigation: urgency signals reinforce with
+   glyph pairing (see the SC-036 block inside the media query).
+   ══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  .scv2 .sc-workspace-frame {
+    border-radius: 0;
+  }
+  /* FinancialFrame stat pairs: from row to stacked pair on narrow
+     widths so each figure has room to breathe. */
+  .scv2 .sc-workspace-frame-stats {
+    flex-wrap: wrap;
+    gap: var(--sc2-space-3);
+  }
+  .scv2 .sc-workspace-frame-stat {
+    min-width: 45%;
+  }
+  /* Grid + week bands full-width; day cells inherit their season.css
+     sizing (season.css handles the 4→3→2→1 stack via its own
+     breakpoints at 1023 / 767 / 479). */
+  .scv2 .sc-workspace-grid {
+    gap: 6px;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     SC-036 CLOSURE (parked audit finding, promoted W8).
+
+     At <640 the urgency signals on small-tile states (needs-entry
+     amber; overdue red-brick) risked reading as similarly-toned
+     warm neutrals rather than distinct urgency levels. Fix here
+     reinforces urgency with pairing:
+       1. Weight bump on the DaySquare border for overdue
+          (from --sc2-border-thin to 1.5px) so the red-brick
+          reads as harder-edged than the amber needs-entry.
+       2. Overdue tile carries an inner subtle glyph dot (via
+          box-shadow inset ring) that the needs-entry tile
+          does NOT. Two-signal urgency (color + line-weight +
+          ring) survives at 6mm tile scale.
+     Tokens only, no new colors. Audit closure text lands in
+     DESIGN_AUDIT_LEDGER.md.
+     ══════════════════════════════════════════════════════════ */
+  .scv2 .sc-daysq--overdue {
+    border-width: 1.5px;
+    box-shadow: inset 0 0 0 1px var(--sc2-state-overdue-bd);
+  }
+}
+
 /* ─── Workspace chrome retint (drill header, band area) ─────
    The financial-frame band + progress region rendered by
    PeriodWorkspace inherits calmer W1 tokens under scv2. v1 rules

@@ -4,11 +4,30 @@
 warrant a fresh look during the V3 audit arc after `sc-v2-complete` ships. It is deliberately
 kept slim - each entry is a *seed*, not a resolution. The audit arc turns seeds into findings.
 
-**SEALED.** The V3 audit arc runs as two independent audits against sealed hoppers - each
-auditor keeps their pre-audit findings in a hopper the other cannot read until both audits
-complete, then the two hoppers are exchanged and reconciled. **Do not read this hopper during
-the independent audit passes.** It exists to prevent items from being lost between W7 and the
-V3 arc, not to seed either audit with prior conclusions.
+**SEALED (findings) + SHARED (lenses).** The V3 audit arc runs as two independent audits
+against sealed hoppers - each auditor keeps their pre-audit findings in a hopper the other
+cannot read until both audits complete, then the two hoppers are exchanged and reconciled.
+**Do not read the design-ish / hopper findings sections during the independent audit passes.**
+The "V3 lenses (owner-stated, pre-audit)" section BELOW, by contrast, is intentionally shared
+with both auditors - it captures owner-stated intent that shapes the brief without seeding
+either audit's findings. Audit independence applies to findings; not to owner intent.
+
+---
+
+## V3 lenses (owner-stated, pre-audit)
+
+Shared with both auditors. These are brief-level directions from the owner that shape the audit
+without pre-deciding its findings.
+
+- **Mobile is a companion, not a mirror** (Kevin, 2026-07-18). The mobile experience should be
+  purpose-built around the floor jobs - glance the books, see the queue, enter a day, check a
+  day - rather than reproducing desktop's full capability. Gen-1 (W8) deliberately shipped
+  reachability-parity as a floor so the subset decision can be made from evidence; V3 audits
+  mobile with a SUBTRACTION BIAS - every desktop-inherited affordance must justify its place on
+  the phone or be cut/relocated. Candidates surfaced during W8, to be audited rather than
+  pre-decided: density toggle, full Jan-Dec phase timeline, bulk mode, export, admin lock at
+  mobile widths. Scope note: this lens is brief-level and intentionally shared with both
+  auditors; audit independence applies to findings, not to owner intent.
 
 ---
 
