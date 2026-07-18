@@ -2447,17 +2447,30 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onEnterOldest={targetDay}
             />
           );
-          // W8 - drill mobile books-bar. Per-meal: periodMetrics.actRev
-          // is the SAME value DrillRail.js:71 assigns to heroActRev.
-          // Fee: deriveOpsHeroTotals over yearData windowed by
-          // periodRange - matches OpsRail's drill-mode hero.
+          // W8 - drill mobile books-bar.
+          //
+          // Per-meal: periodMetrics.actRev is the SAME value
+          // DrillRail.js:71 assigns to heroActRev. Bar scope = drill
+          // scope (period).
+          //
+          // Fee: OpsRail's hero is SEASON-scoped even in drill mode
+          // (OpsRail.js:79 calls deriveOpsHeroTotals(yearData,
+          // hasHomestandSchedule, iso) with FULL yearData - no
+          // periodRange filter; its meta at :90-91 reads "meals YTD").
+          // The bar therefore mirrors the rail's season-scoped hero
+          // by calling the same derive with the same inputs. Not a
+          // period window - explicit season scope. Whether drill-mode
+          // OpsRail SHOULD scope its hero to the drill window is an
+          // upstream design question logged for W9/V3; the bar
+          // matches whatever the rail shows so bar vs sheet stay in
+          // truth-agreement (F1 verdict, PR #469).
           const drillBar = isFeeAccount
             ? (() => {
                 const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
                 const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
                 const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
                 return {
-                  label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}`,
+                  label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""} · SEASON BOOKS`,
                   value: `${num} of ${den}`,
                   status: null,
                 };
@@ -2596,15 +2609,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             />
           );
           // W8 - month-drill mobile books-bar. Mirrors the period-drill
-          // pattern (see the period drill mount above). monthMetrics is
-          // the SAME metrics object DrillRail reads when scope="month"
-          // (see DrillRail.js:71 heroActRev = m?.actRev).
+          // pattern (see the period drill mount above). Per-meal:
+          // monthMetrics.actRev = DrillRail.js:71 heroActRev when
+          // scope="month". Fee: season-scoped, matching OpsRail.js:79
+          // (yearData, no window; meta reads "meals YTD"). Bar vs
+          // sheet stay in truth-agreement.
           const monthBar = isFeeAccount
             ? (() => {
                 const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
                 const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
                 const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
-                return { label: monthLabel.toUpperCase() || "MONTH", value: `${num} of ${den}`, status: null };
+                return {
+                  label: `${monthLabel.toUpperCase() || "MONTH"} · SEASON BOOKS`,
+                  value: `${num} of ${den}`,
+                  status: null,
+                };
               })()
             : {
                 label: monthLabel.toUpperCase() || "MONTH",
