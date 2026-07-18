@@ -18,7 +18,7 @@ import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivatio
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
-import { useScV2, useScEntryV2 } from "./v2/flags";
+import { useScV2, useScEntryV2Effective } from "./v2/flags";
 import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
@@ -272,7 +272,6 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
-  const scEntryV2 = useScEntryV2();
   const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -321,6 +320,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [hasHomeAccount, setHasHomeAccount] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
+  // Account-level fee-branch derivation. Hoisted from its former home
+  // in the account-mode block (was ~line 1072) so the Phase 6 cutover
+  // hook below can consume it directly - one source for the fee-branch
+  // signal across the whole component. Byte-identical predicate.
+  const isFeeAccount = data?.account?.billingModel === "flat_fee";
+  // W7 PR 3/3 Phase 6 cutover - the effective entry-v2 gate for the
+  // account currently loaded. Precedence handled inside the hook
+  // (stored-off wins; storedOn wins over cutover list; absent falls
+  // through to env default OR ENTRY_V2_ACCOUNTS membership). Hook is
+  // called unconditionally per React rules. Consumes the CANONICAL
+  // mount-site variables: `selectedAccount` (the URL / picker /
+  // hydration source of truth - the key that every fetch already
+  // uses) and `isFeeAccount` (the guard every other branch reads).
+  // No second derivation of a load-bearing gate. Safe when
+  // selectedAccount is "" (hydration not run yet) - the hook sees
+  // undefined and returns envDefault only.
+  const scEntryV2 = useScEntryV2Effective(selectedAccount || undefined, isFeeAccount);
   const [yearData, setYearData] = useState(null);
   // SC-033: track the year-summary fetch state so a whole-fetch failure
   // renders the failed atoms on every overview cell instead of silently
@@ -1058,7 +1074,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   //   2. !hasHomestandSchedule && isFeeAccount -> operational-only (STL-FL)
   //   3. !isFeeAccount                     -> per-meal (everyone else)
   // MiLB is hybrid: per-meal financially + schedule rhythm operationally.
-  const isFeeAccount = data?.account?.billingModel === "flat_fee";
+  // (isFeeAccount hoisted upstream to feed the Phase 6 cutover hook -
+  // one source for the fee-branch signal across the component.)
   const hasHomestandSchedule = !!data?.homestandMap;
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
@@ -2592,7 +2609,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 onNextException: onNextExceptionHandler,
                 onClose: () => setFocusDay(null),
               };
-              return (scV2 && scEntryV2 && !isFeeAccount)
+              // W7 PR 3/3 Phase 6 - scEntryV2 is now the effective gate
+              // (scV2 && !isFeeAccount already folded in via
+              // useScEntryV2Effective at the top of the component). The
+              // stored-off kill switch beats the cutover list; storedOn
+              // beats the cutover list too; absent falls through to env
+              // default OR ENTRY_V2_ACCOUNTS.has(accountKey).
+              return scEntryV2
                 ? <DayEntryV2 {...dayEntryProps} />
                 : <DayDetail {...dayEntryProps} />;
             })()}

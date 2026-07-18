@@ -100,6 +100,11 @@ function DayEntryV2({
   // the animation window is ~360ms (adds a 80ms tail so overlapping
   // flashes reset cleanly without visible reflow).
   const [flashMap, setFlashMap] = useState(new Map());
+  // W7 PR 3/3 Phase 5 mobile - single boolean toggling the second
+  // sheet stage (bill open over list). Same component tree; the class
+  // hooks CSS layout, no behavior fork. Desktop (>=768) ignores this
+  // entirely - the media query gates every rule that reads it.
+  const [mobileBillOpen, setMobileBillOpen] = useState(false);
   const flashTimeoutsRef = useRef(new Map());
   useEffect(() => () => {
     // Cleanup on unmount: cancel any pending flash clears so we
@@ -164,6 +169,7 @@ function DayEntryV2({
     setShowDiscardConfirm(false);
     setShowNoServiceConfirm(false);
     setStandaloneDraft("");
+    setMobileBillOpen(false);
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // isDirty - matches DayDetail.js:316-335. Value comparison + note drafts.
@@ -483,6 +489,22 @@ function DayEntryV2({
     });
   });
 
+  // W7 PR 3/3 Phase 5 mobile - onFocus handler at the list level so
+  // TAPPING an input on mobile scrolls its row into view (the on-screen
+  // keyboard would otherwise bury the focused row). React's onFocus
+  // bubbles from descendants; the guard checks the target is a
+  // .sc-day-input so composer/other-focus events pass through. Uses
+  // scrollIntoViewRM block:"nearest" - the mobile analog of the F1
+  // sequential-scroll intent. Desktop is unaffected because the
+  // viewport already sits above the keyboard and `nearest` is a no-op
+  // when the row is already in view.
+  const handleListFocus = useCallback((e) => {
+    const el = e.target;
+    if (!el?.classList?.contains?.("sc-day-input")) return;
+    const row = el.closest ? el.closest(".sc-day-row") : null;
+    if (row) scrollIntoViewRM(row, { block: "nearest" });
+  }, []);
+
   // Focus a target input with intent-scoped scroll (W7 PR 2/3 F1 split):
   //   sequential=true  -> block: "nearest" (Enter, ArrowUp, ArrowDown).
   //     Browser scrolls ONLY when the target is outside the viewport,
@@ -650,7 +672,13 @@ function DayEntryV2({
   }
 
   return (
-    <div className="sc-v2-entry">
+    <div className={`sc-v2-entry${mobileBillOpen ? " sc-v2-entry--mobile-bill-open" : ""}`}>
+      {/* W7 PR 3/3 Phase 5 - drag-handle affordance. Visible at
+          ≤767 only via CSS. Not a drag-to-dismiss target - it's a
+          visual "this is a sheet" cue. Dismiss stays on the header
+          close (attemptClose -> requestClose guard) so the discard
+          flow is the same one gesture, everywhere. */}
+      <div className="sc-v2-entry-drag-handle" aria-hidden="true" />
       {showDiscardConfirm && (
         <DiscardConfirm
           onKeepEditing={() => setShowDiscardConfirm(false)}
@@ -728,6 +756,7 @@ function DayEntryV2({
           ref={bodyRef}
           className="sc-v2-entry-list"
           onKeyDown={handleBodyKeyDown}
+          onFocus={handleListFocus}
           aria-keyshortcuts="Enter ArrowUp ArrowDown PageUp PageDown Control+Enter Meta+Enter"
         >
           {activeGroups.map(group => (
@@ -793,7 +822,7 @@ function DayEntryV2({
         </div>
 
         {/* ─── Right: live-bill rail ─── */}
-        <aside className="sc-v2-entry-rail" aria-label="Forming invoice">
+        <aside id="sc-v2-entry-rail-mobile" className="sc-v2-entry-rail" aria-label="Forming invoice">
           <BillRail
             summary={summary}
             enteredTotals={enteredTotals}
@@ -816,6 +845,51 @@ function DayEntryV2({
             confirmBtnRef={primaryBtnRef}
           />
         </aside>
+      </div>
+
+      {/*
+        W7 PR 3/3 Phase 5 - mobile sticky footer. Visible at ≤767 via
+        CSS only. The bar shows the same live total the rail hero
+        does + entered/total count + an expand affordance; Confirm
+        remains one-thumb reachable below. Tapping the bar's expand
+        row flips `mobileBillOpen`; the rail slides in as the second
+        sheet stage covering the list (rules in dayEntryV2.css).
+        aria-expanded/aria-controls wire the summary row to the rail.
+        Reuses executeConfirm - law 1 write-path untouched.
+      */}
+      <div className="sc-v2-entry-mobile-footer" aria-hidden={false}>
+        <button
+          type="button"
+          className="sc-v2-entry-mobile-bar"
+          onClick={() => setMobileBillOpen(v => !v)}
+          aria-expanded={mobileBillOpen}
+          aria-controls="sc-v2-entry-rail-mobile"
+          aria-label={mobileBillOpen ? "Collapse bill" : "Expand bill"}
+        >
+          <span className="sc-v2-entry-mobile-bar-total">
+            <span className="sc-v2-entry-mobile-bar-label">
+              {hasTouchedAny ? "Entered" : "Projected"}
+            </span>
+            <span className="sc-v2-entry-mobile-bar-amount">
+              {hasTouchedAny ? "" : "~"}
+              {fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}
+            </span>
+          </span>
+          <span className="sc-v2-entry-mobile-bar-count">
+            {enteredCount} of {totalToEnter} entered
+          </span>
+          <span className="sc-v2-entry-mobile-bar-chevron" aria-hidden="true">
+            {mobileBillOpen ? "▾" : "▴"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="sc-v2-entry-mobile-confirm"
+          onClick={executeConfirm}
+          disabled={!hasTouchedAny || saving}
+        >
+          {saving ? "Saving..." : "Confirm & save"}
+        </button>
       </div>
     </div>
   );
@@ -995,12 +1069,34 @@ function BillRail({
 
   const pctComplete = totalToEnter > 0 ? Math.round((enteredCount / totalToEnter) * 100) : 0;
 
+  // W7 PR 3/3 P1.2 pristine-rail anchor - the affordance line names the
+  // first ghost input the auto-focus effect will land on. Derived
+  // inline from the SAME predicate the effect uses
+  // (`querySelector(".sc-day-input--ghost")`), which matches an input
+  // NOT (isTouched && !isEmpty). Pure prop-derived - no memo, no state,
+  // recomputed each render but N is small and skipped once anything is
+  // entered.
+  let firstGhostName = null;
+  if (!hasTouchedAny && totalToEnter > 0) {
+    outer: for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        const editVal = editValues[s.colIndex] ?? "";
+        const isTouched = touched.has(s.colIndex);
+        if (!(isTouched && editVal !== "")) {
+          firstGhostName = s.name;
+          break outer;
+        }
+      }
+    }
+  }
+
   return (
     <div className="sc-v2-entry-rail-shell">
       <div className="sc-v2-entry-rail-label">
         {hasTouchedAny ? "ENTERED" : "PROJECTED"}
       </div>
-      <div ref={heroRef} className="sc-v2-entry-rail-hero">
+      <div ref={heroRef} className={`sc-v2-entry-rail-hero${!hasTouchedAny ? " sc-v2-entry-rail-hero--pristine" : ""}`}>
         {/*
           W7 PR 2/3 aria-live note: the visible value ticks through
           useAnimatedNumber's ~250ms ease. Modern SR implementations
@@ -1020,6 +1116,11 @@ function BillRail({
         <span className="sc-v2-entry-rail-hero-meta">
           {summary.meals.toLocaleString()} meals · {enteredCount} of {totalToEnter} services entered
         </span>
+        {firstGhostName && (
+          <span className="sc-v2-entry-rail-affordance">
+            0 of {totalToEnter} entered - start with <strong>{firstGhostName}</strong>
+          </span>
+        )}
       </div>
 
       <div className="sc-v2-entry-rail-progress" role="progressbar" aria-valuenow={pctComplete} aria-valuemin={0} aria-valuemax={100}>

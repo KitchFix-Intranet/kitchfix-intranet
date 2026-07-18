@@ -227,16 +227,19 @@ mobile per Entry v2 Phase 5. One breakpoint system, `env(safe-area-inset)` respe
 Acceptance: no horizontal scroll anywhere; every desktop action reachable; the quick-edits-vs-full-
 entry framing decision (Entry scope decision #4) honored.
 
-**W9 - Decommission + cleanup (the phase that keeps us honest).** Flag defaults flip; one release of
-soak; then: legacy hero/season-summary/old skins deleted; `v2/` promoted into `season/`;
-ServiceCalendar.js decomposed to a thin router (target: **1,400-1,700 lines** per W0 Q1
-ownership-map math - the bulk overlays stay in-file and a BulkModeProvider refactor is explicitly
-out of scope); CSS net-zero-or-better vs the 5,919-line entry baseline verified by count;
-`sc-day-group-price` retired once W7 ports bulk-review pricing; docs updated
-(`DESIGN_SYSTEM_REFERENCE.md` tokens/roles, `ARCHITECTURE.md` component map, `GOTCHAS.md`
-additions, `PROJECT_DASHBOARD.md` closeout, `DESIGN_AUDIT_LEDGER.md` SC-### entries for the
-program). Acceptance: `grep` proves zero references to removed components; the 4-part design
-audit run on the final system; stranded branches gone.
+**W9 - Decommission + cleanup (the phase that keeps us honest).** Flag defaults flip **for the
+admin audience only** - `page.js` SC_ADMINS gate stays put; the tool remains behind Coming Soon
+for the rest of the org. Then one release of soak; then: legacy hero/season-summary/old skins
+deleted; `v2/` promoted into `season/`; ServiceCalendar.js decomposed to a thin router (target:
+**1,400-1,700 lines** per W0 Q1 ownership-map math - the bulk overlays stay in-file and a
+BulkModeProvider refactor is explicitly out of scope); CSS net-zero-or-better vs the 5,919-line
+entry baseline verified by count; `sc-day-group-price` retired once W7 ports bulk-review
+pricing; docs updated (`DESIGN_SYSTEM_REFERENCE.md` tokens/roles, `ARCHITECTURE.md` component
+map, `GOTCHAS.md` additions, `PROJECT_DASHBOARD.md` closeout, `DESIGN_AUDIT_LEDGER.md` SC-###
+entries for the program). Acceptance: `grep` proves zero references to removed components; the
+4-part design audit run on the final system; stranded branches gone. **Wrap tag:
+`sc-v2-complete`** on the commit that closes W9. Gate-widening is NOT part of W9 - it moves to
+the post-program road in §18.
 
 ## 10. Behavior-parity master checklist (acceptance spine; W0 may extend, never shrink)
 
@@ -375,6 +378,30 @@ Section 16's decision list, resolved:
    `[data-density]` hook (Compact/Comfortable) *without* the toggle UI - the toggle ships with the
    ribbon in the W2-W4 bundle. Effective-viewport floor is ~1024px; layout compaction below it
    lands in W8. This is an accessibility posture, on record.
+
+## 18. Post-program road (2026-07-18 amendment)
+
+W9 leaves SC in this shape: v2 is the code path for the admin audience, `page.js` still gates the
+tool at SC_ADMINS, and the commit that closes W9 carries the `sc-v2-complete` tag. What comes
+after the tag - the road to actual users - is a separate arc, sequenced below. This section
+supersedes decision-log entry #5 on the timing of the site-lead flip.
+
+1. **V3 audit arc.** Two independent audits of the v2-complete system run against sealed hoppers
+   (each auditor keeps their pre-audit findings in a hopper doc that the other cannot read until
+   both audits complete; see `docs/V3_HOPPER.md`). The audits reconcile into a single findings
+   set, which feeds a Render C design pass, which feeds the build sequence for the remaining
+   deltas. Structure mirrors the W0 audit shape.
+2. **Engine shakedown + feature tier.** Stress the engine on realistic loads under the admin
+   audience; land the deferred feature tier (Admin Dashboard, Fun Money Tracker, Close Day
+   button; F4 notifications when scoped) and any deltas Render C surfaces.
+3. **LAUNCH-1: reseed with actuals.** Named milestone, scoped later. Load-bearing treatment when
+   scoped: backup-first, transactional, verified against source before the gate opens. Nothing
+   else in this list matters if the reseed isn't clean.
+4. **Gate widens.** Only after LAUNCH-1 clears do we flip `page.js` from `SC_ADMINS` to
+   `SC_DEV_EMAILS` (and later site-wide). This is where the "new users only ever meet v2"
+   promise from decision #5 is honored.
+
+---
 
 ## TLDR
 

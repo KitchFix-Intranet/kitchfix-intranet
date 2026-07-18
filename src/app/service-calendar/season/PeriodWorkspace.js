@@ -745,24 +745,45 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
   // fallback (the browser respects it for scrollIntoView too). Does
   // NOT auto-open DayDetail per contract - opening entry stays an
   // explicit click / Enter.
+  //
+  // W7 PR 3/3 I-1 harden. Chat-Claude observed once (post-#466) that
+  // ?day=2026-07-14 opened the modal on July 15 (the oldest-overdue
+  // post-entry). Trace verdict: the code path itself is defensively
+  // correct - focusable is captured after cellRefs populate; keys are
+  // stable per d.date so React reuses the DaySquare DOM node across
+  // data-phase re-renders; nothing rewrites ?day= on modal open. What
+  // remains as a plausible race: if the effect ran during initial
+  // "loading" load-state (focusIdx = -1 because cells was empty), the
+  // early return fired and no focus was placed; then loadState
+  // transitioned to "loaded" and cells populated but focusIdx moved
+  // via the setFocusIdx bridge without re-firing this effect (the
+  // effect deps didn't watch loadState). Two additions here:
+  //   1. loadState is now a dep. When the drill flips loading->loaded,
+  //      the effect re-fires with the now-valid focusIdx.
+  //   2. The rAF callback checks document.activeElement before
+  //      stealing focus. If the active element is body (no landing)
+  //      OR still inside the workspace grid (user hasn't tabbed
+  //      away), we assert focus on the ?day= tile - respecting the
+  //      user's explicit URL-signaled intent. If the user has tabbed
+  //      into the rail or elsewhere, we don't yank them back.
   useEffect(() => {
     if (!focusTargetDate) return;
     if (focusIdx < 0) return;
     const cell = cellRefs.current[focusIdx];
     if (!cell) return;
     const focusable = cell.firstElementChild;
-    // Two-phase: scroll first, then move keyboard focus. rAF ensures
-    // the tile's grid slot is laid out before scroll math runs.
-    // W7 PR 2/3 migration: route through the shared scrollIntoViewRM
-    // helper so the reduce-motion branch is one implementation across
-    // every v2 surface (was: inline el.scrollIntoView call here).
+    const gridRoot = cell.closest ? cell.closest(".sc-workspace-grid") : null;
     requestAnimationFrame(() => {
       scrollIntoViewRM(cell, { block: "center" });
-      if (focusable && typeof focusable.focus === "function") {
+      if (!focusable || typeof focusable.focus !== "function") return;
+      const active = typeof document !== "undefined" ? document.activeElement : null;
+      const activeIsBody = !active || active === (typeof document !== "undefined" ? document.body : null);
+      const activeIsInGrid = gridRoot ? gridRoot.contains(active) : false;
+      if (activeIsBody || activeIsInGrid) {
         focusable.focus({ preventScroll: true });
       }
     });
-  }, [focusTargetDate, focusIdx]);
+  }, [focusTargetDate, focusIdx, loadState]);
 
   const focusRealCell = (idx) => {
     setFocusIdx(idx);
