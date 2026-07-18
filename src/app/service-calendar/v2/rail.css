@@ -7,12 +7,16 @@
    rule in overview.css.
    ══════════════════════════════════════════════════════════════ */
 
-/* Container: navy panel matching the ribbon */
+/* V3 §S8.1 - L2-equivalent elevation on rail-bg; width 336
+   (sized by parent grid); radius 12 (T-table cards). Elevation
+   swaps from a border to --sc2-el-card so the rail reads as
+   layered above the L1 surface (was: border alone). */
 .scv2 .sc-rail {
   background: var(--sc2-rail-bg);
   color: var(--sc2-rail-text);
-  border-radius: var(--sc2-radius-container);
-  border: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  border-radius: 12px;
+  border: none;
+  box-shadow: var(--sc2-el-card);
   padding: var(--sc2-space-4) var(--sc2-space-4);
   display: flex;
   flex-direction: column;
