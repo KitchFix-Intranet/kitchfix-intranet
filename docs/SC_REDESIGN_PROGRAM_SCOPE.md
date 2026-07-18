@@ -262,6 +262,12 @@ Parity checklist additions (W0 findings):
 1. Stranded branches dispositioned (W0). 2. Hero JSX/CSS + `sc-hero` SC usage removed (W2/W9).
 3. ServiceCalendar.js decomposed to router (W2 starts, W9 finishes; W0 sets the cut lines).
 4. Dead-CSS sweep from W0's map, executed across W1-W9 with per-PR counts in the PR body.
+   **Cadence expectation (revised at W1 per PR #460 correction):** interim workstream passes will
+   harvest small (~50-line) batches - most of the W0 Q8 table was false positives from static-grep
+   scanning that missed template-literal producers. The bulk of the net-count comes at W9 via
+   whole-block deletions (legacy hero, retired skins, decommissioned overlays), not incremental
+   class-by-class cleanup. Producer-grep verification before every deletion is mandatory (see
+   `GOTCHAS.md` "CSS dead-class analysis MUST verify dynamic producers").
 5. Legacy month-view remnants retired if W0 shows PeriodWorkspace superseded them.
 6. `sc-day-group-price` + `/plate` literal retired after bulk-review ports (W7).
 7. Duplicate local formatters (admin `fmtPrice` copies) consolidated onto `season/format.js` where

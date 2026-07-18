@@ -906,8 +906,12 @@
      (dashed border, never renders as zero) / today ring / selected /
      focused / exhibition / away / notes bubble / game-day corner /
      ST corner
-   - tokens only (.scv2 primitives from tokens.css); no raw hex in
-     this block
+   - solid colors come from tokens (.scv2 primitives in tokens.css);
+     no raw hex for solid fills / borders / text
+   - EXCEPTION: alpha variants of token-family colors may be
+     inlined via rgba() (shadows, hatch overlays, badge/chip washes)
+     because the CSS custom-property layer has no clean "add alpha
+     to a hex token" primitive. Solid colors must remain tokens
    - no layout changes vs v1 (position, box sizing, flex direction
      preserved). This is a skin, not a re-layout.
    ══════════════════════════════════════════════════════════════ */
@@ -1109,7 +1113,7 @@
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
-  background: #4338CA;   /* indigo-700 - promotable to a future token */
+  background: var(--sc2-mark-gameday);
 }
 .scv2 .sc-daysq--sm.sc-daysq--spring::after {
   background: var(--sc2-accent-copper);

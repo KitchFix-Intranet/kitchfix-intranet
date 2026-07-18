@@ -148,9 +148,13 @@
 
    Scale + density (Program §17 Decision 7, "absorb zoom, never
    counter it"): type + spacing tokens are FLUID via clamp(),
-   easing down ~8-12% as the effective viewport narrows so a
-   Windows user at 150% display scaling (effective ~910px on a
-   1366 laptop) sees the theme compact instead of inflate.
+   easing down as the effective viewport narrows so a Windows
+   user at 150% display scaling (effective ~910px on a 1366
+   laptop) sees the theme compact instead of inflate.
+   Reference window: **1024-1440**. Each token hits its floor at
+   viewports <=1024px and its ceiling at viewports >=1440px, with
+   a linear interpolation between. Slopes solved for value=min
+   @1024 and value=max @1440 - do not eyeball-tune, recompute.
    `--sc2-scale` is one multiplier flowing through every size
    token so the future compact / comfortable toggle is a one-
    variable change. `.scv2[data-density="compact"]` remaps
@@ -163,34 +167,34 @@
   --sc2-scale: 1;
 
   /* ---------- Fluid type ---------- */
-  /* Each token: clamp(narrow-floor, viewport-relative, wide-ceiling),
-     then multiplied by --sc2-scale. The vw-relative middle assumes
-     a ~1440px reference viewport - the ceiling; narrows toward the
-     ~1024px floor with ~8-12% shrink. Under 1024px the min clamps. */
-  --sc2-size-micro:    calc(clamp(9.5px, calc(9.25px + 0.05vw), 10px)   * var(--sc2-scale));
-  --sc2-size-caption:  calc(clamp(11px,  calc(10.4px + 0.06vw), 12px)   * var(--sc2-scale));
-  --sc2-size-body:     calc(clamp(12.5px,calc(11.7px + 0.1vw),  14px)   * var(--sc2-scale));
-  --sc2-size-subhead:  calc(clamp(15px,  calc(13.8px + 0.11vw), 17px)   * var(--sc2-scale));
-  --sc2-size-h3:       calc(clamp(17.5px,calc(15.9px + 0.13vw), 20px)   * var(--sc2-scale));
-  --sc2-size-h2:       calc(clamp(21px,  calc(19px + 0.17vw),   24px)   * var(--sc2-scale));
-  --sc2-size-h1:       calc(clamp(25px,  calc(22.5px + 0.21vw), 29px)   * var(--sc2-scale));
-  --sc2-size-display:  calc(clamp(29px,  calc(26px + 0.31vw),   35px)   * var(--sc2-scale));
+  /* Each token: clamp(1024-floor, linear-interpolation, 1440-ceiling),
+     then multiplied by --sc2-scale. Slopes solved so value = min at
+     viewport 1024 and value = max at viewport 1440 - a real ease-down
+     inside the design window, not a math-y ceiling at 7000px. */
+  --sc2-size-micro:      calc(clamp(9.5px,  calc(8.27px  + 0.12vw), 10px)  * var(--sc2-scale));
+  --sc2-size-caption:    calc(clamp(11px,   calc(8.54px  + 0.24vw), 12px)  * var(--sc2-scale));
+  --sc2-size-body:       calc(clamp(12.5px, calc(8.81px  + 0.36vw), 14px)  * var(--sc2-scale));
+  --sc2-size-subhead:    calc(clamp(15px,   calc(10.08px + 0.48vw), 17px)  * var(--sc2-scale));
+  --sc2-size-h3:         calc(clamp(17.5px, calc(11.35px + 0.60vw), 20px)  * var(--sc2-scale));
+  --sc2-size-h2:         calc(clamp(21px,   calc(13.62px + 0.72vw), 24px)  * var(--sc2-scale));
+  --sc2-size-h1:         calc(clamp(25px,   calc(15.15px + 0.96vw), 29px)  * var(--sc2-scale));
+  --sc2-size-display:    calc(clamp(29px,   calc(14.23px + 1.44vw), 35px)  * var(--sc2-scale));
 
   /* Rail-total display (large numeric hero on rail): step above display. */
-  --sc2-size-rail-total: calc(clamp(26px, calc(23px + 0.35vw), 31px)   * var(--sc2-scale));
+  --sc2-size-rail-total: calc(clamp(26px,   calc(13.69px + 1.20vw), 31px)  * var(--sc2-scale));
 
   /* ---------- Fluid spacing ---------- */
-  /* Same clamp pattern applied to a 4px-base scale. Small units
-     stay integer to keep pixel snapping predictable at the tile
-     grid. Larger units use the vw-relative middle. */
-  --sc2-space-1:  calc(clamp(3px, calc(2.75px + 0.02vw), 4px)   * var(--sc2-scale));
-  --sc2-space-2:  calc(clamp(6px, calc(5.5px + 0.03vw), 8px)    * var(--sc2-scale));
-  --sc2-space-3:  calc(clamp(9px, calc(8.25px + 0.05vw), 12px)  * var(--sc2-scale));
-  --sc2-space-4:  calc(clamp(12px,calc(11px + 0.07vw), 16px)    * var(--sc2-scale));
-  --sc2-space-5:  calc(clamp(15px,calc(13.5px + 0.1vw), 20px)   * var(--sc2-scale));
-  --sc2-space-6:  calc(clamp(18px,calc(16px + 0.14vw), 24px)    * var(--sc2-scale));
-  --sc2-space-7:  calc(clamp(24px,calc(21px + 0.19vw), 32px)    * var(--sc2-scale));
-  --sc2-space-8:  calc(clamp(30px,calc(26px + 0.28vw), 40px)    * var(--sc2-scale));
+  /* Same 1024->1440 window applied to a 4px-base scale. Small units
+     stay integer floors so pixel snapping at the tile grid stays
+     predictable. */
+  --sc2-space-1:         calc(clamp(3px,    calc(0.54px  + 0.24vw), 4px)   * var(--sc2-scale));
+  --sc2-space-2:         calc(clamp(6px,    calc(1.08px  + 0.48vw), 8px)   * var(--sc2-scale));
+  --sc2-space-3:         calc(clamp(9px,    calc(1.62px  + 0.72vw), 12px)  * var(--sc2-scale));
+  --sc2-space-4:         calc(clamp(12px,   calc(2.15px  + 0.96vw), 16px)  * var(--sc2-scale));
+  --sc2-space-5:         calc(clamp(15px,   calc(2.69px  + 1.20vw), 20px)  * var(--sc2-scale));
+  --sc2-space-6:         calc(clamp(18px,   calc(3.23px  + 1.44vw), 24px)  * var(--sc2-scale));
+  --sc2-space-7:         calc(clamp(24px,   calc(4.31px  + 1.92vw), 32px)  * var(--sc2-scale));
+  --sc2-space-8:         calc(clamp(30px,   calc(5.38px  + 2.40vw), 40px)  * var(--sc2-scale));
 
   /* ---------- Radii + border widths ---------- */
   --sc2-radius-cell:      6px;
@@ -342,6 +346,14 @@
   --sc2-accent-green-bright:#37a866;
   --sc2-accent-green-wash: #f1f9f4;
   --sc2-accent-green-line: #cae3d6;
+
+  /* ---------- Corner-mark family ----------
+     Two-color grammar preserved from v1: top-right game wedge
+     (indigo), bottom-left season wedge (copper - shares
+     --sc2-accent-copper above). Indigo has no dedicated ramp yet;
+     token holds the single value used by both the sm wedge and
+     the (future) lg game-day accents. */
+  --sc2-mark-gameday: #4338CA;   /* indigo-700 - promotable to a --sc2-indigo-* ramp */
 
   /* ---------- Structural lines ---------- */
   --sc2-line:   #eae4d6;
