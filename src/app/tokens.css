@@ -468,21 +468,64 @@
    generic `--type-*` and `--space-*` tokens for v1 modules. Values
    chosen to hit a visibly denser but fully legible grid without
    breaking the semantic scale relationships. */
-/* V3 §S4.1 - Standard scale + Comfortable step-up. The legacy
-   Compact branch is RECALIBRATED INTO Standard (--sc2-scale: 1 is
-   the new default). Comfortable steps UP to 1.10 for the
-   "less-dense" preference. Any `data-sc2-density="compact"`
-   attribute value written before V3 is normalized to "standard"
-   at read time in useDensity.js. */
-.scv2[data-sc2-density="comfortable"] {
-  --sc2-scale: 1.10;
+/* V3 §S4 - REAL Standard scale (F5 correction).
+   -------------------------------------------------
+   Live-probe finding: `--sc2-scale: 1` under Standard equalled the
+   OLD Comfortable base - visually nothing stepped down. The owner's
+   #1 density ask was unshipped in effect.
+
+   Fix: pin the sc2 size + control tokens to EXPLICIT T-table
+   Standard values at the .scv2 scope (overrides the fluid clamps
+   from :root while keeping them intact for non-scv2 surfaces).
+   Line-heights stay on the 4px grid; body floor 14 >= 13 ✓.
+
+   T-table Standard values:
+     micro       11 / 14
+     caption     12 / 16
+     body        14 / 20
+     month-name  15 / 20   (rail-hero label pair tier; NEW slot)
+     chrome-title 18 / 24 (landed in Step 2 as inline size)
+     rail-hero   30 / 36
+     controls  36 (standard) / 32 (icon)   -- consumed in overview.css
+
+   Comfortable = step UP one tier per token so the ratios match the
+   pre-V3 defaults (the "less-dense" preference). Multiplier
+   distorts line-heights off-grid, so per-token overrides here. */
+.scv2 {
+  /* Standard type scale */
+  --sc2-size-micro:      11px;
+  --sc2-size-caption:    12px;
+  --sc2-size-body:       14px;
+  --sc2-size-subhead:    15px;   /* month-name / rail label-pair */
+  --sc2-size-h3:         18px;   /* chrome title tier */
+  --sc2-size-h2:         20px;   /* card headings */
+  --sc2-size-h1:         24px;
+  --sc2-size-display:    30px;
+  --sc2-size-rail-total: 30px;
+  /* Standard control heights (consumed in overview.css / rail.css) */
+  --sc2-control-h:       36px;
+  --sc2-control-h-icon:  32px;
+  /* Line-height ramps kept on 4px grid; consumed as `line-height`
+     literals in the components (or via existing calc()s). */
 }
 
-/* Legacy no-op branch: reads the migrated preference. useDensity.js
-   normalizes on read; a stale localStorage value cannot reach this
-   attribute at runtime. Kept as an explicit no-op rule for safety
-   in case a stored value survives migration - resolves to the same
-   Standard --sc2-scale: 1. */
+.scv2[data-sc2-density="comfortable"] {
+  --sc2-size-micro:      12px;
+  --sc2-size-caption:    13px;
+  --sc2-size-body:       15px;
+  --sc2-size-subhead:    16px;
+  --sc2-size-h3:         20px;
+  --sc2-size-h2:         22px;
+  --sc2-size-h1:         26px;
+  --sc2-size-display:    33px;
+  --sc2-size-rail-total: 33px;
+  --sc2-control-h:       40px;
+  --sc2-control-h-icon:  36px;
+}
+
+/* Legacy no-op branch: safety net for any pre-V3 stored value.
+   useDensity.js normalize() intercepts at read; this rule ensures
+   the attribute never leaves the shell in a broken state. */
 .scv2[data-sc2-density="compact"] {
-  --sc2-scale: 1;
+  /* falls through to the .scv2 Standard defaults above */
 }
