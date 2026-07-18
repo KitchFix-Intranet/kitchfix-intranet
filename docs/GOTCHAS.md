@@ -557,6 +557,12 @@ Two more incidents in the same class landed inside 48h. Both are captured here s
 
 **Lesson**: a rule that depends on a single flip is a rule that will break exactly when it matters. Turn the check into something the CI can enforce.
 
+### SC account-switch abort semantics: six-cache clear + `inFlightControllersRef.abort()` move as a unit
+`src/app/service-calendar/ServiceCalendar.js:489-505` clears six caches on account change (`data`, `yearData`, `monthCache`, `periodRanges`, etc.) and calls `inFlightControllersRef.current.abort()` in the same effect. This is the account-switch race defense: without it, a stale in-flight sc-load resolves after the switch and repopulates the new account's month view with the previous account's data. **Rule:** if a future refactor (e.g. the W9 `useScData` hook extraction planned in `SC_REDESIGN_PROGRAM_SCOPE.md`) splits these fetches into a hook, the abort + cache-clear block MUST move as one unit. Splitting them - abort in one place, cache-clear in another - reopens the race. The block is small, high-signal, and documented; do not "clean it up" by scattering it.
+
+### SC `?clientToday=YYYY-MM-DD` is load-bearing for isPast / isLocked anchoring
+Both `sc-load` and `sc-year-summary` accept a `?clientToday=YYYY-MM-DD` query param carrying the operator's local calendar date. It anchors the server's `isPast` / `isLocked` classification (route.js:78-94 parses; the loaders consume it via `parseClientToday`). Without it, the server uses its own UTC clock and misclassifies days for operators west of UTC around the midnight boundary. **Rule:** any new SC data-fetch path (a refactor into a hook, a new endpoint, a redesign shell) MUST forward `?clientToday=` on the request. Missing it will not produce a hard error - it produces silent wrong-day classification for a few hours around midnight, which is precisely the class of bug that ships and gets caught by an operator two weeks later.
+
 ---
 
 ## Captain's log

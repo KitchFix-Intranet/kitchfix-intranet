@@ -109,11 +109,12 @@ skins); code cleanup that these touches unlock.
   never disagree with its own list.
 - **Rail interaction law:** rows navigate (chevron), exactly one footer button acts. Queue rows are
   whole-row targets.
-- **CSS budget:** SC currently carries ~4,600 CSS lines across 8 files (`DaySquare.css` 893,
-  `season.css` 1,003, `dayDetail.css` 1,272, `periodWorkspace.css` 767, `chromeBar.css` 429,
-  `ops-sc.css` 439, + legend/stepper). Program exit criterion: net CSS does not exceed entry count
-  after decommission - every skin added is paid for by dead rules removed (W0 produces the
-  dead-rule map).
+- **CSS budget:** SC carries **5,919 CSS lines across 12 files** (W0 baseline per
+  `SC_REDESIGN_AUDIT.md`): `dayDetail.css` 1,272, `season.css` 1,003, `DaySquare.css` 893,
+  `periodWorkspace.css` 767, `ops-sc.css` 439, `chromeBar.css` 429, `stateLegend.css` 271,
+  `legendInfoPopup.css` 237, `seasonStepper.css` 194, `exportControl.css` 181,
+  `submissionToast.css` 150, `stickyContext.css` 83. Program exit criterion: net CSS does not
+  exceed 5,919 after decommission - every skin added is paid for by dead rules removed.
 - **No new dependencies.** Motion is CSS + rAF (as in the prototypes). Subgrid et al. are cleared by
   the Chrome-latest-2 + recent-mobile matrix already documented.
 - **Accessibility floor:** WCAG 2.1/2.2 AA on every new surface; rail totals get `aria-live=polite`;
@@ -128,7 +129,7 @@ skins); code cleanup that these touches unlock.
 | Season month lines | same source, formatted `$K` (compact surface - the parked `sc_month_summary` sum-then-round drift is invisible here by design; documented, not fixed) | none |
 | Needs-attention queue + aging | client filter/sort over classified days + `isPastDate` | none |
 | Period rail total + week lines | PeriodWorkspace's existing week sums (already R13 via #456's client aggregation) | low - W0 verifies the week sums flow through a round2 path |
-| Homestand ledger (games, meal sums per HS, next/future) | `sc_homestand_schedule` + month payload actuals bucketed by homestand | **the one candidate for new work** - if per-homestand meal sums are not derivable from already-loaded payloads without an N+1 month-fetch, W0 proposes either a tiny read extension to an existing action or a season-scope aggregation; decision gate before W6, engine otherwise untouched |
+| Homestand ledger (games, meal sums per HS, next/future) | client-side `deriveHomestands(days)` in `season/homestandDerivation.js`, bucketing already-loaded `days[]` on `homestandId` and summing `actualMeals` per bucket. AWAY rows carry `homestand_id=NULL` and EXH-prefixed IDs are excluded from homestand counts - both filters are **load-bearing** and must be reproduced by any new summation | **closed - program is zero-engine-change.** W0 audit Q5 confirmed the client-side derivation. Decision 3 pre-authorized a smallest read-only extension; not needed |
 | Notes-this-period row | existing noteEntries in day payloads | none |
 
 ## 8. Flag + transition strategy (sized for a 2-person audience)
@@ -190,11 +191,14 @@ tiles, Enter opens day). Acceptance: hero equals sum of its own week lines to th
 equal rail lines; tile click-through to DayDetail unchanged; bulk update reachable and unchanged;
 export output byte-identical to pre-move.
 
-**W6 - MLB surface.** Homestand ledger rail (pending the W0 data answer), strip restyle, month
-stepper, away/non-game quieting, MLB legend. Acceptance: fee-account discipline enforced in code
-review (no `$` formatting imports on this surface's rail; no amber/red tokens); EXH display-only;
-0/81 counter parity; whatever W0 says Period mode does for MLB is preserved or explicitly redesigned
-with Kevin's sign-off.
+**W6 - MLB surface.** Homestand ledger rail (client-side `deriveHomestands` per W0 Q5 - no engine
+touch), strip restyle, month stepper, away/non-game quieting, MLB legend. "MLB Period mode" is
+**feature-flag paths inside the shared `PeriodWorkspace`** (`hasHomestandSchedule` /
+`isFeeAccount` / `isMilb`) per W0 Q6 - NOT a separate view. W6 applies to those flag paths.
+Acceptance: fee-account discipline enforced in code review (no `$` formatting imports on this
+surface's rail; no amber/red tokens); EXH display-only; 0/81 counter parity; **SC-073 week cards
+stay HIDDEN for `hasHomestandSchedule` accounts** (owner ruling 2026-07-09; must not silently
+return).
 
 **W7 - Entry v2.** Executes SC_ENTRY_V2_SCOPE.md phases 0-6 as written (Option A save model, fee
 accounts stay v1, behavior-parity list is that doc's section 7), now consuming the shared Rail from
@@ -209,12 +213,14 @@ entry framing decision (Entry scope decision #4) honored.
 
 **W9 - Decommission + cleanup (the phase that keeps us honest).** Flag defaults flip; one release of
 soak; then: legacy hero/season-summary/old skins deleted; `v2/` promoted into `season/`;
-ServiceCalendar.js decomposed to a thin router (target: under ~800 lines, exact target set by W0's
-ownership map); CSS net-zero-or-better vs entry baseline verified by count; `sc-day-group-price`
-retired once W7 ports bulk-review pricing; docs updated (`DESIGN_SYSTEM_REFERENCE.md` tokens/roles,
-`ARCHITECTURE.md` component map, `GOTCHAS.md` additions, `PROJECT_DASHBOARD.md` closeout,
-`DESIGN_AUDIT_LEDGER.md` SC-### entries for the program). Acceptance: `grep` proves zero references
-to removed components; the 4-part design audit run on the final system; stranded branches gone.
+ServiceCalendar.js decomposed to a thin router (target: **1,400-1,700 lines** per W0 Q1
+ownership-map math - the bulk overlays stay in-file and a BulkModeProvider refactor is explicitly
+out of scope); CSS net-zero-or-better vs the 5,919-line entry baseline verified by count;
+`sc-day-group-price` retired once W7 ports bulk-review pricing; docs updated
+(`DESIGN_SYSTEM_REFERENCE.md` tokens/roles, `ARCHITECTURE.md` component map, `GOTCHAS.md`
+additions, `PROJECT_DASHBOARD.md` closeout, `DESIGN_AUDIT_LEDGER.md` SC-### entries for the
+program). Acceptance: `grep` proves zero references to removed components; the 4-part design
+audit run on the final system; stranded branches gone.
 
 ## 10. Behavior-parity master checklist (acceptance spine; W0 may extend, never shrink)
 
@@ -235,6 +241,21 @@ discard guard, offline queue + SYNCING, noteFailed partial, ride-along + Activit
 merged ledger, day-nav reseed, focus management).
 Cross-cutting: R13 footing on every money surface; keyboard + focus visible; reduced-motion;
 contrast numbers on record.
+
+Parity checklist additions (W0 findings):
+- `?clientToday=YYYY-MM-DD` param is **load-bearing** for `isPast`/`isLocked` anchoring on the
+  operator's local calendar. Any new data-fetch path introduced by a workstream must forward it
+  intact on both `sc-load` and `sc-year-summary` (see GOTCHAS).
+- `?reset=1` TopNav-intercept behavior (TopNav.js:429-430): clicking Service Calendar while
+  already on SC pushes `?reset=1` instead of navigating. Any ribbon or shell rework in W2 must
+  preserve this behavior.
+- **SC-073 week-cards HIDDEN for `hasHomestandSchedule`** (season/PeriodWorkspace.js:1029, owner
+  ruling 2026-07-09): must not silently return in W5 (drill) or W6 (MLB). The week grid still
+  exists in `weekMetrics` and may resurface for a future dashboard - the removal is the *render*,
+  not the data.
+- **Account-switch abort semantics** (ServiceCalendar.js:489-505): six caches cleared as a unit
+  plus `inFlightControllersRef.abort()`. Must move intact as one block if W9 splits fetches into
+  a `useScData` hook (see GOTCHAS).
 
 ## 11. Cleanup ledger (specific, tracked per PR)
 
@@ -301,6 +322,31 @@ v2 system rather than restyled after. OPD workstream unaffected and parallel.
    SC-only for now (recommended) or a future site convention to note in docs?
 5. Site-lead rollout holds until W9 so new users only ever meet v2 - confirm.
 6. Roadmap slot: after Stage 5, before Admin Dashboard / Fun Money / Close Day - confirm or reorder.
+
+## 17. Decision log (2026-07-17)
+
+Section 16's decision list, resolved:
+
+1. **Approved** as scoped. Program proceeds from W1.
+2. **Entry v2 = Option A** save model. Coexists per-account via a per-account cutover; fee
+   accounts stay on v1 (STL-FL flat_fee + fee-no-dollar preserves its discipline); mobile is
+   framed as **quick-edits, not full entry** - W8 honors this (any full-entry mobile flow is
+   parked).
+3. **Homestand ledger derivation: closed as client-side.** W0 Q5 confirmed
+   `deriveHomestands(days)` in `season/homestandDerivation.js` derives per-homestand sums
+   from already-loaded `days[]`; no engine touch needed. AWAY (homestand_id=NULL) and EXH-prefixed
+   IDs are load-bearing filters.
+4. **Ribbon replaces the hero, SC-only.** Not a site-wide convention yet; other module heroes
+   (ops, financial) keep theirs.
+5. **Rollout holds until W9.** Site-lead flip in `page.js` (SC_ADMINS -> SC_DEV_EMAILS) happens
+   only after decommission so new users only ever meet v2.
+6. **Roadmap slot confirmed.** Program proceeds now; Stage 5 finance CSVs interleave in parallel
+   (orthogonal - no shared surface).
+7. **Display-scaling posture.** Absorb zoom, never counter it - no `zoom`/`transform` compensation
+   hacks. W1 lands fluid `clamp()`-based type/spacing tokens plus a `--sc2-scale` variable and a
+   `[data-density]` hook (Compact/Comfortable) *without* the toggle UI - the toggle ships with the
+   ribbon in the W2-W4 bundle. Effective-viewport floor is ~1024px; layout compaction below it
+   lands in W8. This is an accessibility posture, on record.
 
 ## TLDR
 
