@@ -77,12 +77,16 @@ account-type polymorphism · skeleton motion + reduced-motion guards.
 - fmtK dead branch in PeriodCard (CC A3) - cleanup-phase fodder.
 
 ## Candidates (new issues found during fixes land here)
-- SC-036 (candidate, from #354 review): the promoted urgent chips live in the chrome stats cluster,
-  which hides below 640px (chromeBar.css ~:235). The CSS comment claims mobile urgency is carried by
-  the StickyContext bar + InfoCard ActionBand, but the ActionBand was replaced BY these chips - the
-  fallback claim may be stale. Under the all-devices ruling, verify what urgency affordance exists
-  on <640px phones (Kevin phone-check in the runtime pass, or a CC read of StickyContext). If none,
-  this promotes to a real finding.
+- **SC-036 (promoted + resolved 2026-07-18 in W8, PR #469):** at <640 the drill-tile urgency
+  signals (needs-entry amber; overdue red-brick) risked reading as similarly-toned warm neutrals
+  rather than distinct urgency levels. Under the v2 program the promoted urgent chips were
+  already re-homed to the MobileBooksBar's status slot (bar renders "N need entry" at ≤767 via
+  `deriveQueue(...).length`), so the mobile urgency AFFORDANCE ships alongside W8. In parallel
+  the small-tile SIGNAL got a pairing bump: `.scv2 .sc-daysq--overdue` at ≤767 (`drill.css`)
+  gains `border-width: 1.5px` + `box-shadow: inset 0 0 0 1px var(--sc2-state-overdue-bd)` -
+  needs-entry stays at the base border-thin. Two-signal urgency (color + line-weight + inner
+  ring) survives at 6mm tile scale; tokens-only fix, no new colors. Findings-to-resolution trail
+  closes here.
 
 ## Section 2 - Drill-in Month + Period (PDC / MLB / MiLB) · audited 2026-07-08
 

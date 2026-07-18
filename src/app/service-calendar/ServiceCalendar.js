@@ -24,6 +24,16 @@ import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
+import MobileBooksBar from "./v2/MobileBooksBar";
+// W8 - the bar figures are read from the SAME derives the rails
+// consume internally. Not a new derivation path: SeasonRail also calls
+// deriveHeroTotals(yearData) + deriveQueue(...) at its top; the bar
+// call at the mount site passes the same yearData in, guaranteeing
+// identical outputs by construction. See MobileBooksBar.js law 2.
+import { deriveHeroTotals, deriveQueue, fmtOverviewMoney } from "./v2/overviewDerive";
+import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
+// fmt$ already imported at line 15 for the bulk-review rows; reused
+// at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
 import "./v2/shell.css";
 import "./v2/overview.css";
@@ -2284,15 +2294,44 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onDrillToPeriod={overviewDrillPeriod}
             />
           );
+          // W8 - shared mobile books-bar figures. Read from the SAME
+          // derives the rails consume internally (law 2). Per-meal:
+          // deriveHeroTotals + deriveQueue over yearData; the rail
+          // calls the same two functions with the same input, so the
+          // values are identical by construction. Fee: OpsRail's
+          // deriveOpsHeroTotals, same input.
+          const overviewBar = isFeeAccount
+            ? (() => {
+                const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
+                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
+                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                return {
+                  label: hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED",
+                  value: `${num} of ${den}`,
+                  status: null,
+                };
+              })()
+            : (() => {
+                const totals = deriveHeroTotals(yearData);
+                const q = deriveQueue(yearData, periodRanges, today);
+                return {
+                  label: "SEASON BOOKS",
+                  value: fmtOverviewMoney(totals.actualRevenue || 0),
+                  status: q.length > 0 ? `${q.length} need entry` : null,
+                };
+              })();
           return (
             <div className="sc-overview">
               <div className="sc-overview-main">{seasonShell}</div>
-              <aside
+              <MobileBooksBar
                 className="sc-overview-rail"
-                aria-label={isFeeAccount ? "Season books - fee account" : "Season books"}
+                ariaLabel={isFeeAccount ? "Season books - fee account" : "Season books"}
+                barLabel={overviewBar.label}
+                barValue={overviewBar.value}
+                barStatus={overviewBar.status}
               >
                 {rail}
-              </aside>
+              </MobileBooksBar>
             </div>
           );
         })()}
@@ -2408,10 +2447,40 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onEnterOldest={targetDay}
             />
           );
+          // W8 - drill mobile books-bar. Per-meal: periodMetrics.actRev
+          // is the SAME value DrillRail.js:71 assigns to heroActRev.
+          // Fee: deriveOpsHeroTotals over yearData windowed by
+          // periodRange - matches OpsRail's drill-mode hero.
+          const drillBar = isFeeAccount
+            ? (() => {
+                const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
+                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
+                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                return {
+                  label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}`,
+                  value: `${num} of ${den}`,
+                  status: null,
+                };
+              })()
+            : {
+                label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}`,
+                value: fmt$(periodMetrics?.actRev || 0),
+                status: periodMetrics?.total && periodMetrics?.complete != null
+                  ? `${periodMetrics.complete} of ${periodMetrics.total} entered`
+                  : null,
+              };
           return (
             <div className="sc-drill">
               <div className="sc-drill-main">{workspace}</div>
-              <aside className="sc-drill-rail" aria-label="Period books">{rail}</aside>
+              <MobileBooksBar
+                className="sc-drill-rail"
+                ariaLabel="Period books"
+                barLabel={drillBar.label}
+                barValue={drillBar.value}
+                barStatus={drillBar.status}
+              >
+                {rail}
+              </MobileBooksBar>
             </div>
           );
         })()}
@@ -2526,10 +2595,36 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onEnterOldest={targetDay}
             />
           );
+          // W8 - month-drill mobile books-bar. Mirrors the period-drill
+          // pattern (see the period drill mount above). monthMetrics is
+          // the SAME metrics object DrillRail reads when scope="month"
+          // (see DrillRail.js:71 heroActRev = m?.actRev).
+          const monthBar = isFeeAccount
+            ? (() => {
+                const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
+                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
+                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                return { label: monthLabel.toUpperCase() || "MONTH", value: `${num} of ${den}`, status: null };
+              })()
+            : {
+                label: monthLabel.toUpperCase() || "MONTH",
+                value: fmt$(monthMetrics?.actRev || 0),
+                status: monthMetrics?.total && monthMetrics?.complete != null
+                  ? `${monthMetrics.complete} of ${monthMetrics.total} entered`
+                  : null,
+              };
           return (
             <div className="sc-drill">
               <div className="sc-drill-main">{workspace}</div>
-              <aside className="sc-drill-rail" aria-label="Month books">{rail}</aside>
+              <MobileBooksBar
+                className="sc-drill-rail"
+                ariaLabel="Month books"
+                barLabel={monthBar.label}
+                barValue={monthBar.value}
+                barStatus={monthBar.status}
+              >
+                {rail}
+              </MobileBooksBar>
             </div>
           );
         })()}
