@@ -47,8 +47,14 @@ export default function SeasonRail({
 }) {
   const today = todayISO();
   const totals = deriveHeroTotals(yearData);
-  const heroValue = fmtOverviewMoney(totals.actualRevenue);
-  const heroMeta = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days recorded`;
+  // Calendar hero meta = projected + days recorded (money-forward).
+  // Period hero meta = projected + days recorded + meals YTD. The
+  // meals-YTD figure is the FullSeasonCard's fourth stat rehomed here
+  // (per bundle F4: every FullSeasonCard figure must live in the rail
+  // before the card retires). totals.mealsYTD is computed by the
+  // shared derive module - no new derivation path.
+  const heroMetaCal = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days recorded`;
+  const heroMetaPeriod = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days recorded · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
 
   if (mode === "calendar") {
@@ -56,8 +62,7 @@ export default function SeasonRail({
       <CalendarRail
         year={year}
         totals={totals}
-        heroValue={heroValue}
-        heroMeta={heroMeta}
+        heroMeta={heroMetaCal}
         yearData={yearData}
         periodRanges={periodRanges}
         today={today}
@@ -72,8 +77,7 @@ export default function SeasonRail({
     <PeriodRail
       year={year}
       totals={totals}
-      heroValue={heroValue}
-      heroMeta={heroMeta}
+      heroMeta={heroMetaPeriod}
       yearData={yearData}
       periodRanges={periodRanges}
       today={today}
@@ -89,7 +93,7 @@ export default function SeasonRail({
 // Calendar mode - 12 month lines + flat needs queue.
 // ═══════════════════════════════════════════════════════════════
 function CalendarRail({
-  year, totals, heroValue, heroMeta,
+  year, totals, heroMeta,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToMonth,
   showAllQueue, setShowAllQueue,
@@ -103,7 +107,8 @@ function CalendarRail({
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
-        value={heroValue}
+        value={totals.actualRevenue}
+        format={fmtOverviewMoney}
         label="ENTERED YTD"
         meta={heroMeta}
         ariaSuffix={`${totals.actualRevenue > 0 ? "" : "no revenue entered yet, "}${totals.pctComplete}% complete`}
@@ -190,7 +195,7 @@ function MonthRailLine({ line, onClick }) {
 // Period mode - 13 period lines + period-grouped queue.
 // ═══════════════════════════════════════════════════════════════
 function PeriodRail({
-  year, totals, heroValue, heroMeta,
+  year, totals, heroMeta,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToPeriod,
   showAllQueue, setShowAllQueue,
@@ -204,7 +209,8 @@ function PeriodRail({
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
-        value={heroValue}
+        value={totals.actualRevenue}
+        format={fmtOverviewMoney}
         label="ENTERED YTD"
         meta={heroMeta}
       />

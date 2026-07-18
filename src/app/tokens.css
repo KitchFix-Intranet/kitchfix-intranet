@@ -156,10 +156,18 @@
    a linear interpolation between. Slopes solved for value=min
    @1024 and value=max @1440 - do not eyeball-tune, recompute.
    `--sc2-scale` is one multiplier flowing through every size
-   token so the future compact / comfortable toggle is a one-
-   variable change. `.scv2[data-density="compact"]` remaps
-   `--sc2-scale` (and tightens spacing tokens) - no toggle UI
-   in W1; the control ships with the ribbon in W2-W4.
+   token so the compact / comfortable toggle is a one-variable
+   change. `.scv2[data-sc2-density="compact"]` remaps
+   `--sc2-scale` (and tightens spacing tokens). The v2-scoped
+   attribute is intentionally separate from the site-wide
+   `data-density` attribute (globals.css lines 1596-1618): the
+   sc-root always ships `data-density="compact"` so v1's generic
+   `--type-*` and `--space-*` tokens stay pinned at their
+   established SC values; `data-sc2-density` is what the v2
+   toggle actually flips. Split introduced in the W2-W4 fix pass
+   after the trap surfaced (v2 Comfortable was silently swinging
+   generic globals tokens for any v1 component that happened to
+   share the sc-root).
    ============================================================ */
 .scv2 {
   /* ---------- Fluid scale multiplier ---------- */
@@ -367,11 +375,13 @@
 }
 
 /* Compact density branch: remaps --sc2-scale down + tightens spacing.
-   No toggle UI in W1 - manually appliable via devtools for the W1
-   acceptance check; the operator control ships with the ribbon
-   (W2-W4). Values chosen to hit a visibly denser but fully legible
-   grid without breaking the semantic scale relationships. */
-.scv2[data-density="compact"] {
+   Selector reads `data-sc2-density`, not `data-density`, so the flip
+   does not disturb the site-wide `[data-density="comfortable"]` /
+   `[data-density="compact"]` rules in globals.css that own the
+   generic `--type-*` and `--space-*` tokens for v1 modules. Values
+   chosen to hit a visibly denser but fully legible grid without
+   breaking the semantic scale relationships. */
+.scv2[data-sc2-density="compact"] {
   --sc2-scale: 0.88;
   --sc2-space-3: calc(8px * var(--sc2-scale));
   --sc2-space-4: calc(10px * var(--sc2-scale));

@@ -2017,7 +2017,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       )}
     <div
       className={`sc-root${scV2 ? " scv2" : ""}`}
-      data-density={scV2 ? scV2Density : "compact"}
+      data-density="compact"
+      data-sc2-density={scV2 ? scV2Density : undefined}
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
@@ -2175,6 +2176,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               view={seasonView}
               onViewChange={handleSeasonViewChange}
               syncingDates={syncingDates}
+              scV2={scV2}
             />
           );
           // v2 two-pane: SeasonShell left, SeasonRail right. Guarded by

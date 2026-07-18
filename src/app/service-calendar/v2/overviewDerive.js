@@ -10,7 +10,7 @@
 // sc-year-summary payload, `periodRanges` is the fiscal-period map.
 // No new fetches, no engine changes.
 
-import { countActionableDays, countEnteredActionable, isActionableDay } from "../season/dayPredicates";
+import { countActionableDays, countEnteredActionable, isActionableDay } from "../season/dayPredicates.js";
 
 // Client-local today derivation (matches season/dayResolvers.isPastDate
 // and audit Q5 policy - anchor pastness against local midnight, never

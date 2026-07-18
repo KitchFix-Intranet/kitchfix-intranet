@@ -15,6 +15,7 @@
 // overviewDerive.js.
 
 import { useEffect, useRef, useState } from "react";
+import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
 
 // ─── Shell wrapper ─────────────────────────────────────────────
@@ -29,15 +30,27 @@ export function RailShell({ label, children }) {
   );
 }
 
-// ─── Hero: big value + meta line ───────────────────────────────
-// Caller supplies a pre-formatted string (money via overviewDerive
-// fmtOverviewMoney) so this component stays presentation-only.
-// aria-live keeps SR users abreast when the total changes.
-export function RailHero({ value, label, meta, ariaSuffix }) {
+// ─── Hero: big animated value + meta line ─────────────────────
+// Two call patterns:
+//   1. Numeric  - pass `value` (number) + `format` (fn). The number
+//      runs through useAnimatedNumber (250ms ease-out; upward only)
+//      and each frame is passed to `format` so the display ticks
+//      $1.02M -> $1.03M -> $1.05M through the settle. Reduced-motion
+//      snaps to the final value.
+//   2. String   - pass `value` (pre-formatted string) with no
+//      `format`; the hero renders it verbatim (no animation).
+//
+// aria-live="polite" announces on text change, so the SR reads the
+// settled value once ticking finishes (React only re-announces when
+// the text node's content actually differs from the previous read).
+export function RailHero({ value, format, label, meta, ariaSuffix }) {
+  const isNumeric = typeof value === "number" && typeof format === "function";
+  const animated = useAnimatedNumber(isNumeric ? value : 0);
+  const displayed = isNumeric ? format(animated) : value;
   return (
     <div className="sc-rail-hero">
       <span className="sc-rail-hero-value" aria-live="polite">
-        {value}
+        {displayed}
       </span>
       {label && <span className="sc-rail-hero-label">{label}</span>}
       {meta && <span className="sc-rail-hero-meta">{meta}</span>}

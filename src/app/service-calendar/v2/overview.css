@@ -191,29 +191,54 @@
   color: var(--sc2-rail-accent-warn);
 }
 
-/* Category tag on the navy band - retint chip fills over navy */
-.scv2 .sc-cat {
+/* Category tag on the navy band - retint scoped to the chrome bar
+   container ONLY. The .sc-cat family is also rendered inside the
+   admin editors (AccountsOverview / AccountEditor / FeeAccountEditor),
+   which are white/cream light surfaces - a bare `.scv2 .sc-cat` would
+   leak the navy retint onto admin chips. Scoping to
+   .scv2 .sc-chrome-bar keeps the retint contained to the ribbon band. */
+.scv2 .sc-chrome-bar .sc-cat {
   background: rgba(255, 255, 255, 0.10);
   color: var(--sc2-cmd-text);
   border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
 }
-.scv2 .sc-cat--pdc {
+.scv2 .sc-chrome-bar .sc-cat--pdc {
   background: rgba(61, 90, 128, 0.35);
   color: var(--sc2-chip-pdc-fg);
   border-color: rgba(223, 233, 245, 0.20);
 }
-.scv2 .sc-cat--mlb {
+.scv2 .sc-chrome-bar .sc-cat--mlb {
   background: var(--sc2-chip-mlb-bg);
   color: var(--sc2-chip-mlb-fg);
   border-color: transparent;
 }
 
-/* Account dropdown control retinted for navy */
-.scv2 .sc-account-dropdown-btn,
-.scv2 button[class*="account"]:not([class*="active"]) {
+/* AccountDropdown retinted for navy - real class names off the
+   ServiceCalendar AccountDropdown component (`.sc-dropdown-*`), NOT
+   the earlier bogus `button[class*="account"]` wildcard which
+   matched nothing. Scoped to the chrome bar so the admin-editor
+   dropdowns stay v1. */
+.scv2 .sc-chrome-bar .sc-dropdown-trigger {
   background: rgba(255, 255, 255, 0.10);
   color: var(--sc2-cmd-text);
-  border-color: rgba(255, 255, 255, 0.20);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  border-radius: var(--sc2-radius-control);
+}
+.scv2 .sc-chrome-bar .sc-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.scv2 .sc-chrome-bar .sc-dropdown-arrow {
+  color: var(--sc2-cmd-text-muted);
+}
+/* Dropdown menu itself pops OUT of the chrome bar's overflow at
+   render time (position: absolute) - retint the surface to a light
+   card so the item list stays legible against page bg. Kept plain
+   so the admin dropdown behavior stays undisturbed. */
+.scv2 .sc-chrome-bar .sc-dropdown-menu {
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  box-shadow: var(--sc2-elevation-raised);
 }
 
 /* ─── Two-pane overview layout ─────────────────────────────── */
@@ -290,11 +315,19 @@
   border: var(--sc2-border-thin) solid var(--sc2-line);
   overflow: hidden;
 }
+/* Phase block label - v2 label baseline is medium weight (calm),
+   the CURRENT phase gets bold + brighter ink. PhaseStrip attaches
+   `data-current="true"` on the block containing today's date; the
+   marker is presentation-only, derivation logic is untouched. */
 .scv2 .sc-season-strip-block-label {
-  color: var(--sc2-ink-strong);
+  color: var(--sc2-ink-muted);
   font-size: 10px;
-  font-weight: var(--sc2-wt-bold);
+  font-weight: var(--sc2-wt-medium);
   letter-spacing: 0.05em;
+}
+.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-bold);
 }
 /* Today tick - the v1 today-line becomes a more distinct vertical
    tick under v2. Slightly wider, extends above/below the rail, uses
@@ -361,11 +394,13 @@
   background: var(--sc2-accent-green-bright);
 }
 
-/* ─── Retire FullSeasonCard on the v2 path ─────────────────── */
-/* The card's figures (entered YTD, projected, days entered, meals YTD)
-   are all rehomed into the rail hero + season lines. Under v2 the
-   Period grid's summary slot renders empty and the period cards
-   naturally fill the space. */
-.scv2 .sc-season-period-grid-summary {
-  display: none;
-}
+/* FullSeasonCard retirement on v2 - handled at the render level in
+   SeasonShell.js (the summary <div> + <FullSeasonCard/> both skip on
+   the scV2 code path) so the component simply does not mount. No CSS
+   display:none hack. Every figure it carried (entered YTD, projected,
+   days entered, meals YTD) is rehomed into the rail:
+     entered YTD    -> RailHero.value (animated via useAnimatedNumber)
+     projected      -> RailHero.meta "of ~$X projected"
+     days entered   -> RailHero.meta "N of M days recorded"
+     meals YTD      -> RailHero.meta on Period mode "· N meals YTD"
+   See v2/SeasonRail.js heroMetaCal / heroMetaPeriod. */

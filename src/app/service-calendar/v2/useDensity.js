@@ -2,9 +2,15 @@
 
 // SC v2 density toggle - Comfortable / Compact.
 //
-// Applies as `data-density="compact"` on the `.scv2` root when active
-// (the token layer's compact override remaps --sc2-scale + spacing).
-// Comfortable is the base .scv2 state - no data attribute.
+// Applies as `data-sc2-density="compact"` on the `.scv2` root when
+// compact is active (the token layer's compact override remaps
+// --sc2-scale + spacing). Comfortable is the base .scv2 state.
+//
+// IMPORTANT: this attribute is `data-sc2-density`, NOT `data-density`.
+// The site-wide `[data-density]` selector in globals.css owns generic
+// `--type-*` / `--space-*` tokens for every v1 module; writing v2's
+// density value there would silently swing v1 components sharing the
+// sc-root. See tokens.css comment for the split's history.
 //
 // Persists per user in localStorage under a distinct key from the flag
 // itself so a user's density preference survives independent of the
