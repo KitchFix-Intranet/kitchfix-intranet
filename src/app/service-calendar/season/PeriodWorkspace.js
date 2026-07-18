@@ -36,6 +36,7 @@ import { CheckCircle } from "../Icons";
 import { fmt$ } from "./format";
 import ProgressBar from "./ProgressBar";
 import { formatMlbHomeGameTime, formatMilbHomeGameTime } from "../gameTimeFormat";
+import { scrollIntoViewRM } from "../v2/motion";
 import "./periodWorkspace.css";
 
 export default function PeriodWorkspace({
@@ -752,8 +753,11 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
     const focusable = cell.firstElementChild;
     // Two-phase: scroll first, then move keyboard focus. rAF ensures
     // the tile's grid slot is laid out before scroll math runs.
+    // W7 PR 2/3 migration: route through the shared scrollIntoViewRM
+    // helper so the reduce-motion branch is one implementation across
+    // every v2 surface (was: inline el.scrollIntoView call here).
     requestAnimationFrame(() => {
-      cell.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      scrollIntoViewRM(cell, { block: "center" });
       if (focusable && typeof focusable.focus === "function") {
         focusable.focus({ preventScroll: true });
       }

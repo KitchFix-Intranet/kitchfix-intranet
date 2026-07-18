@@ -52,6 +52,7 @@ import {
   isInServiceOnDay,
 } from "../../DayDetail";
 import useAnimatedNumber from "../../useAnimatedNumber";
+import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
 import "./dayEntryV2.css";
 
 function DayEntryV2({
@@ -90,6 +91,43 @@ function DayEntryV2({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
   const [standaloneDraft, setStandaloneDraft] = useState("");
+  // W7 PR 2/3 motion: colIndexes currently mid-flash. Populated by
+  // handleChange (ghost -> solid transition) and by fillGroupWithProjections
+  // (Match-projections cascade). Each colIndex is a Map key -> stagger
+  // delay in ms so the ServiceRow can apply `animation-delay` for the
+  // cascade. Set-alone (no stagger) for single-input flash. Cleared per
+  // colIndex on a token-tied setTimeout; --duration-slow = 280ms so
+  // the animation window is ~360ms (adds a 80ms tail so overlapping
+  // flashes reset cleanly without visible reflow).
+  const [flashMap, setFlashMap] = useState(new Map());
+  const flashTimeoutsRef = useRef(new Map());
+  useEffect(() => () => {
+    // Cleanup on unmount: cancel any pending flash clears so we
+    // don't call setState on an unmounted component.
+    for (const t of flashTimeoutsRef.current.values()) clearTimeout(t);
+    flashTimeoutsRef.current.clear();
+  }, []);
+  const markFlash = useCallback((colIndex, delayMs = 0) => {
+    setFlashMap(prev => {
+      const next = new Map(prev);
+      next.set(colIndex, delayMs);
+      return next;
+    });
+    // Clear this flash after animation window + stagger delay.
+    const existing = flashTimeoutsRef.current.get(colIndex);
+    if (existing) clearTimeout(existing);
+    const totalMs = delayMs + 400;
+    const timer = setTimeout(() => {
+      setFlashMap(prev => {
+        if (!prev.has(colIndex)) return prev;
+        const next = new Map(prev);
+        next.delete(colIndex);
+        return next;
+      });
+      flashTimeoutsRef.current.delete(colIndex);
+    }, totalMs);
+    flashTimeoutsRef.current.set(colIndex, timer);
+  }, []);
   const keepEditingBtnRef = useRef(null);
   const nsCancelBtnRef = useRef(null);
   const standaloneInputRef = useRef(null);
@@ -175,7 +213,17 @@ function DayEntryV2({
 
   const handleChange = useCallback((colIndex, value) => {
     const clean = value.replace(/[^0-9]/g, "");
-    setEditValues(prev => ({ ...prev, [colIndex]: clean }));
+    setEditValues(prev => {
+      const was = prev[colIndex] ?? "";
+      // Motion: on the ghost -> solid transition, mark this row for
+      // a brief flash. Empty-to-empty and same-value edits get no
+      // flash. Reduced-motion honored via CSS (the .sc-v2-entry-row--flash
+      // rule collapses its animation to 0ms under prefers-reduced-motion).
+      if (was === "" && clean !== "") {
+        markFlash(colIndex, 0);
+      }
+      return { ...prev, [colIndex]: clean };
+    });
     setTouched(prev => {
       const n = new Set(prev);
       if (clean === "" && day.actual[colIndex] == null) {
@@ -185,7 +233,7 @@ function DayEntryV2({
       }
       return n;
     });
-  }, [day.actual]);
+  }, [day.actual, markFlash]);
 
   const toggleGroup = useCallback((name) => {
     setExpandedGroups(prev => {
@@ -268,14 +316,32 @@ function DayEntryV2({
   const fillGroupWithProjections = useCallback((group) => {
     const newVals = { ...editValues };
     const newTouched = new Set(touched);
+    // Motion: Match-projections cascade. Each newly-solid row gets a
+    // staggered flash - 60ms per row from top - so the sequence reads
+    // as ONE gesture rather than a rain of independent events. The
+    // total hero pulses ONCE at the cascade start - React batches the
+    // setEditValues call, heroValue changes in one render, the
+    // hero-change effect fires exactly one pulse. The pulse runs
+    // CONCURRENTLY with the row cascade (both are ~280ms, hero
+    // starts at 0ms, last row's flash starts at 60ms * (N-1)). This
+    // reads as the cascade IS the totalization - one gesture, one
+    // beat. Chosen over "defer pulse to cascade tail" (which would
+    // add a second beat and a timer) for feel simplicity - see PR
+    // #466 F3b.
+    let staggerIdx = 0;
     for (const s of group.services) {
       if (!isInServiceOnDay(s, day.date)) continue;
+      const wasEmpty = (newVals[s.colIndex] ?? "") === "";
       newVals[s.colIndex] = String(day.projected[s.colIndex] ?? 0);
       newTouched.add(s.colIndex);
+      if (wasEmpty) {
+        markFlash(s.colIndex, staggerIdx * 60);
+        staggerIdx++;
+      }
     }
     setEditValues(newVals);
     setTouched(newTouched);
-  }, [editValues, touched, day.projected, day.date]);
+  }, [editValues, touched, day.projected, day.date, markFlash]);
 
   // getVal + memos - byte-identical to DayDetail (see DayDetail.js:549-662).
   const getVal = useCallback((colIndex) => {
@@ -417,21 +483,115 @@ function DayEntryV2({
     });
   });
 
+  // Focus a target input with intent-scoped scroll (W7 PR 2/3 F1 split):
+  //   sequential=true  -> block: "nearest" (Enter, ArrowUp, ArrowDown).
+  //     Browser scrolls ONLY when the target is outside the viewport,
+  //     minimally. This keeps rapid entry stable - the viewport
+  //     doesn't swim under the operator's hands during fast keying.
+  //   sequential=false -> block: "center" (PageUp/PageDown group jump).
+  //     A teleport SHOULD reorient the viewport.
+  // Same helper, options pass-through - no second scroll helper.
+  const focusInputScrolled = useCallback((el, { sequential = true } = {}) => {
+    if (!el || typeof el.focus !== "function") return;
+    // Find the row wrapper so the scroll targets the whole ledger row.
+    const row = el.closest ? (el.closest(".sc-day-row") || el) : el;
+    scrollIntoViewRM(row, { block: sequential ? "nearest" : "center" });
+    el.focus({ preventScroll: true });
+  }, []);
+
+  // Keyboard grid handler (W7 PR 2/3):
+  //   Enter      - advance to next input (or blur -> Confirm on last).
+  //                Preserves the PR-1 body-level Enter-advance verbatim.
+  //   ArrowDown  - next input across the whole list (skips read-only rows).
+  //   ArrowUp    - previous input.
+  //   PageDown   - first input of the next group.
+  //   PageUp     - first input of the previous group.
+  //   Cmd/Ctrl+Enter - fire Confirm from anywhere in the workspace.
+  //                    Routed through the SAME confirmDisabled check
+  //                    the button uses (!hasTouchedAny || saving), so
+  //                    a chord while pristine is a no-op (law 1).
+  //
+  // Law 2 verdict: DayEntryV2's count inputs are type="text" +
+  // inputMode="numeric" (ServiceRow @ 740-741). Arrow keys carry no
+  // input-native increment/decrement semantics on text inputs; binding
+  // them for row navigation is safe. Mobile numeric keyboard still
+  // opens via inputMode="numeric"; digit-only input still enforced via
+  // handleChange's [^0-9] replace.
   const handleBodyKeyDown = useCallback((e) => {
-    if (e.key !== "Enter") return;
+    // Cmd/Ctrl+Enter Confirm from anywhere (except when the composer
+    // input has focus - Enter there posts a note; the chord is not
+    // treated specially inside the composer, so the composer's own
+    // handler wins).
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      const target = e.target;
+      if (target?.classList?.contains?.("sc-v2-entry-activity-input")) return;
+      e.preventDefault();
+      // Law 1: same guarded path the button uses. confirmDisabled at
+      // the button site = !hasTouchedAny || saving. hasTouchedAny is
+      // touched.size > 0; inlined here to avoid the TDZ (declaration
+      // sits below in the render body).
+      const hasTouched = touched.size > 0;
+      if (!hasTouched || saving) return;
+      executeConfirm();
+      return;
+    }
+
     const el = e.target;
     if (!el?.classList?.contains?.("sc-day-input")) return;
-    e.preventDefault();
     if (!bodyRef.current) return;
     const inputs = Array.from(bodyRef.current.querySelectorAll(".sc-day-input"));
     const idx = inputs.indexOf(el);
-    if (idx >= 0 && idx < inputs.length - 1) {
-      inputs[idx + 1].focus({ preventScroll: true });
-    } else {
-      el.blur();
-      primaryBtnRef.current?.focus({ preventScroll: true });
+    if (idx < 0) return;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (idx < inputs.length - 1) {
+        focusInputScrolled(inputs[idx + 1]);
+      } else {
+        el.blur();
+        primaryBtnRef.current?.focus({ preventScroll: true });
+      }
+      return;
     }
-  }, []);
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (idx < inputs.length - 1) focusInputScrolled(inputs[idx + 1]);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (idx > 0) focusInputScrolled(inputs[idx - 1]);
+      return;
+    }
+
+    if (e.key === "PageDown" || e.key === "PageUp") {
+      e.preventDefault();
+      const forward = e.key === "PageDown";
+      // Find the input's containing group (.sc-v2-entry-group), then
+      // LOOP through subsequent groups in the chosen direction until
+      // one containing a focusable input is found (W7 PR 2/3 F2 fix).
+      // A group whose services are all archived / out-of-service renders
+      // no `.sc-day-input`; the pre-fix ±1 logic dead-ended there. This
+      // loop skips input-less groups until it finds a real target or
+      // hits the end of the list (no-op then).
+      const group = el.closest ? el.closest(".sc-v2-entry-group") : null;
+      if (!group) return;
+      const allGroups = Array.from(bodyRef.current.querySelectorAll(".sc-v2-entry-group"));
+      const groupIdx = allGroups.indexOf(group);
+      if (groupIdx < 0) return;
+      const step = forward ? 1 : -1;
+      for (let i = groupIdx + step; i >= 0 && i < allGroups.length; i += step) {
+        const targetInput = allGroups[i].querySelector(".sc-day-input");
+        if (targetInput) {
+          focusInputScrolled(targetInput, { sequential: false });
+          return;
+        }
+      }
+      // No target found in that direction - no-op.
+      return;
+    }
+  }, [touched, saving, executeConfirm, focusInputScrolled]);
 
   // Coaching per-meal branch - DayDetail.js:829-835 (fee branch omitted
   // because DayEntryV2 never receives a fee-account day).
@@ -568,6 +728,7 @@ function DayEntryV2({
           ref={bodyRef}
           className="sc-v2-entry-list"
           onKeyDown={handleBodyKeyDown}
+          aria-keyshortcuts="Enter ArrowUp ArrowDown PageUp PageDown Control+Enter Meta+Enter"
         >
           {activeGroups.map(group => (
             <GroupBlock
@@ -576,6 +737,7 @@ function DayEntryV2({
               day={day}
               editValues={editValues}
               touched={touched}
+              flashMap={flashMap}
               accountSegment={accountSegment}
               onChange={handleChange}
               onFillProjections={fillGroupWithProjections}
@@ -594,6 +756,7 @@ function DayEntryV2({
                   day={day}
                   editValues={editValues}
                   touched={touched}
+                  flashMap={flashMap}
                   accountSegment={accountSegment}
                   onChange={handleChange}
                   onFillProjections={fillGroupWithProjections}
@@ -664,7 +827,7 @@ function DayEntryV2({
 // with the same input/chip/rate/amount composition.
 // ═════════════════════════════════════════════════════════════════
 function GroupBlock({
-  group, day, editValues, touched, accountSegment,
+  group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
   groupSummary, projectedGroupSummary,
   expanded,
@@ -703,6 +866,7 @@ function GroupBlock({
             day={day}
             editValues={editValues}
             touched={touched}
+            flashDelay={flashMap?.get(s.colIndex)}
             onChange={onChange}
           />
         ))}
@@ -721,13 +885,18 @@ function GroupBlock({
 
 // One service row - reuses the v1 CSS class names so the atom style
 // inherits automatically. See DayDetail.js:837-914 for the shape.
-function ServiceRow({ svc, day, editValues, touched, onChange }) {
+function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange }) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
   const isEmpty = editVal === "";
   const inService = isInServiceOnDay(svc, day.date);
   const archiveDate = !inService ? String(svc.activeUntil).slice(0, 10) : null;
+  // W7 PR 2/3 motion: `flashDelay` is a stagger delay in ms (0 for
+  // single-input flash; N*60 for the Match-projections cascade). When
+  // defined, the row gets the `sc-v2-entry-row--flash` class + inline
+  // animation-delay style. Undefined = no class = no animation.
+  const isFlashing = flashDelay != null;
 
   let chip = null;
   if (inService && isTouched && !isEmpty) {
@@ -763,7 +932,10 @@ function ServiceRow({ svc, day, editValues, touched, onChange }) {
   const entered = inService && isTouched && !isEmpty;
 
   return (
-    <div className={`sc-day-row sc-day-row--ledger${!inService ? " sc-day-row--archived" : ""}`}>
+    <div
+      className={`sc-day-row sc-day-row--ledger${!inService ? " sc-day-row--archived" : ""}${isFlashing ? " sc-v2-entry-row--flash" : ""}`}
+      style={isFlashing ? { animationDelay: `${flashDelay}ms` } : undefined}
+    >
       <div className="sc-day-row-left">
         <span className="sc-day-row-name">{svc.name}</span>
       </div>
@@ -801,6 +973,26 @@ function BillRail({
   const heroValue = hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue;
   const heroAnimated = useAnimatedNumber(heroValue);
 
+  // W7 PR 2/3 motion: total pulse. A brief scale/glow tick when the
+  // hero value changes. Toggled via a `sc-v2-entry-rail-hero--pulse`
+  // class that CSS keyframes for --duration-slow, then clears via a
+  // timeout. Same reduced-motion behavior at the token layer (rules
+  // wrapped in a prefers-reduced-motion: no-preference query).
+  const heroRef = useRef(null);
+  const lastHeroRef = useRef(heroValue);
+  useEffect(() => {
+    if (lastHeroRef.current === heroValue) return;
+    lastHeroRef.current = heroValue;
+    const el = heroRef.current;
+    if (!el) return;
+    el.classList.remove("sc-v2-entry-rail-hero--pulse");
+    // eslint-disable-next-line no-unused-expressions
+    void el.offsetWidth; // force reflow so animation re-triggers
+    el.classList.add("sc-v2-entry-rail-hero--pulse");
+    const timer = setTimeout(() => el?.classList.remove("sc-v2-entry-rail-hero--pulse"), 400);
+    return () => clearTimeout(timer);
+  }, [heroValue]);
+
   const pctComplete = totalToEnter > 0 ? Math.round((enteredCount / totalToEnter) * 100) : 0;
 
   return (
@@ -808,9 +1000,22 @@ function BillRail({
       <div className="sc-v2-entry-rail-label">
         {hasTouchedAny ? "ENTERED" : "PROJECTED"}
       </div>
-      <div className="sc-v2-entry-rail-hero">
-        <span className="sc-v2-entry-rail-hero-value" aria-live="polite">
+      <div ref={heroRef} className="sc-v2-entry-rail-hero">
+        {/*
+          W7 PR 2/3 aria-live note: the visible value ticks through
+          useAnimatedNumber's ~250ms ease. Modern SR implementations
+          debounce polite announcements to the settled reading, but to
+          make the guarantee explicit we hoist the announcement onto
+          a SEPARATE sc-visually-hidden span that carries the settled
+          value only (updates when heroValue - the target - changes,
+          not per animation frame). The visible span keeps the visual
+          tick without a live-region tag on it.
+        */}
+        <span className="sc-v2-entry-rail-hero-value" aria-hidden="true">
           {hasTouchedAny ? "" : "~"}{fmt$(heroAnimated)}
+        </span>
+        <span className="sc-visually-hidden" aria-live="polite">
+          {hasTouchedAny ? "Entered total " : "Projected total "}{fmt$(heroValue)}
         </span>
         <span className="sc-v2-entry-rail-hero-meta">
           {summary.meals.toLocaleString()} meals · {enteredCount} of {totalToEnter} services entered

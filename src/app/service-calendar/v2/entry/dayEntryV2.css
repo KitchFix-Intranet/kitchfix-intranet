@@ -553,6 +553,93 @@
   justify-content: flex-end;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   W7 PR 2/3 - MOTION VOCABULARY
+
+   Every animation:
+   - token-timed via --duration-fast/base/slow + --ease-standard
+   - wrapped in @media (prefers-reduced-motion: no-preference) so it
+     collapses to instant/none under reduced-motion. Tokens.css also
+     zeros the durations under RM at the :root layer as a belt-and-
+     braces safeguard.
+
+   Vocabulary: row flash, cascade fill (via row flash + stagger delay
+   set on the row style), total pulse, seal/success, confirm-press.
+   Nothing else animates. Restraint is the design system's posture.
+   ══════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Row flash - the ghost-to-solid transition. Green-wash bg tick,
+     ease-out over --duration-slow. Also used by the Match-projections
+     cascade with animation-delay set inline on the row. */
+  @keyframes sc-v2-entry-row-flash {
+    0%   { background: rgba(47, 125, 79, 0.15); }
+    60%  { background: rgba(47, 125, 79, 0.08); }
+    100% { background: transparent; }
+  }
+  .sc-v2-entry-row--flash {
+    animation: sc-v2-entry-row-flash var(--duration-slow) var(--ease-standard) forwards;
+  }
+
+  /* Total pulse - hero container gets a subtle scale tick when the
+     revenue value changes. Small (2%) so it reads as emphasis, not
+     bounce. */
+  @keyframes sc-v2-entry-rail-hero-pulse {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.02); }
+    100% { transform: scale(1); }
+  }
+  .sc-v2-entry-rail-hero--pulse {
+    animation: sc-v2-entry-rail-hero-pulse var(--duration-slow) var(--ease-emphasized);
+    transform-origin: left center;
+  }
+
+  /* Confirm-press - subtle scale on the primary rail CTA. Fast so the
+     button feels crisp under finger + Enter alike. */
+  .sc-v2-entry-rail-cta {
+    transition: transform var(--duration-fast) var(--ease-standard),
+                background var(--duration-fast) var(--ease-standard);
+  }
+  .sc-v2-entry-rail-cta:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Seal - the success moment. The check circle drops in with a soft
+     scale-up, the hero fades in from below. Once per mount (justSaved
+     effect renders the whole success shell fresh, so animations fire
+     exactly at the seal moment). */
+  @keyframes sc-v2-entry-seal-check {
+    0%   { transform: scale(0.6); opacity: 0; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes sc-v2-entry-seal-hero {
+    0%   { transform: translateY(8px); opacity: 0; }
+    100% { transform: translateY(0);   opacity: 1; }
+  }
+  .sc-v2-entry--success .sc-v2-entry-success-check {
+    animation: sc-v2-entry-seal-check var(--duration-slow) var(--ease-emphasized);
+  }
+  .sc-v2-entry--success .sc-v2-entry-success-hero {
+    animation: sc-v2-entry-seal-hero var(--duration-base) var(--ease-standard) both;
+    animation-delay: var(--duration-fast);
+  }
+}
+
+/* Screen-reader-only utility class - used by the hero's live region
+   so the settled value is announced without visual duplication. */
+.sc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ─── Success state ──────────────────────────────────────── */
 .sc-v2-entry--success {
   align-items: center;
