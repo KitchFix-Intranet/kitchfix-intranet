@@ -866,11 +866,14 @@
 
   /* Pane -> single column, no rail on rest state. Padding-bottom
      clears the shared MobileBooksBar footer (bar + Confirm =
-     --sc2-mobile-footer-h). Same token the sheet inset below uses. */
+     --sc2-mobile-footer-h) PLUS the one-safe-area inset (F3 - the
+     action row's height/padding grows by env(safe-area-inset-bottom),
+     so the pane must grow too or trailing content is hidden on
+     notched devices). Same token pattern the sheet inset below uses. */
   .sc-v2-entry-pane {
     grid-template-columns: 1fr;
     position: relative;
-    padding-bottom: var(--sc2-mobile-footer-h);
+    padding-bottom: calc(var(--sc2-mobile-footer-h) + env(safe-area-inset-bottom, 0px));
     border-radius: 0;
   }
   .sc-v2-entry-list {
@@ -891,7 +894,11 @@
   .sc-v2-entry--mobile-bill-open .sc-v2-entry-rail {
     display: block;
     position: absolute;
-    inset: 0 0 var(--sc2-mobile-footer-h) 0;
+    /* One-safe-area law: the footer's real height is
+       --sc2-mobile-footer-h + env(safe-area-inset-bottom), so the
+       overlay must clip by both or it'll cover the visible footer
+       on notched devices. */
+    inset: 0 0 calc(var(--sc2-mobile-footer-h) + env(safe-area-inset-bottom, 0px)) 0;
     z-index: 3;
     overflow-y: auto;
   }

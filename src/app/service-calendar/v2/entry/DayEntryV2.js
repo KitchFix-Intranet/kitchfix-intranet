@@ -873,6 +873,7 @@ function DayEntryV2({
         barStatus={`${enteredCount} of ${totalToEnter} entered`}
         open={mobileBillOpen}
         onOpenChange={setMobileBillOpen}
+        controlsId="sc-v2-entry-rail-mobile"
         stickyAction={(
           <button
             type="button"

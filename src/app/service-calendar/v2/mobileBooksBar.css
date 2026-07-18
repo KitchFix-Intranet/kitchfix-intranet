@@ -18,13 +18,28 @@
      --sc2-mobile-bar-h      = read-surface footer (bar only, ~60px)
      --sc2-mobile-footer-h   = entry-surface footer (bar + Confirm, ~116px)
 
-   The tokens are declared in tokens.css. Every coupled site (fixed
-   bar bottom, pane padding-bottom, sheet inset) reads them so a
-   redesign at either surface stays coherent.
+   The tokens are declared in tokens.css.
 
-   Structural unification of this shell with DayEntryV2's mobile
-   footer is what this file implements. See the DayEntryV2 usage in
-   its render block.
+   W9 F3 - geometry hardening after live measurement showed the
+   pre-fix `.sc-mobile-books-bar--with-action { bottom: calc(...) }`
+   cascade losing to the base rule in the browser under test:
+
+   1. Base bar consumes `bottom: var(--_sc-bar-bottom, 0)` (custom
+      property indirection so cascade order cannot lose - a
+      variable-value can't be "beaten" by a static rule of equal
+      specificity because the base rule ITSELF resolves through the
+      variable).
+   2. `.sc-mobile-books-bar--with-action` sets ONLY the custom
+      property; the modifier does not restate `bottom`.
+   3. Action row height is `calc(footer-h - bar-h)` explicit, so the
+      stack totals exactly --sc2-mobile-footer-h before the safe-area
+      inset is added.
+   4. ONE safe-area law: `env(safe-area-inset-bottom)` is added
+      EXACTLY ONCE per stack. The action row's bottom padding grows
+      by it. The bar-with-action's own bottom offset grows by it (so
+      the bar stays above the safe-area inset padding on the action
+      row). The pane padding-bottom grows by it. Read-surface
+      (bar-only) mode: the bar's bottom padding grows by it.
    ══════════════════════════════════════════════════════════════ */
 
 /* Desktop defaults - hide the mobile-only pieces */
@@ -97,7 +112,10 @@
     pointer-events: auto;
   }
 
-  /* ─── Sticky bar ──────────────────────────────────────── */
+  /* ─── Sticky bar ──────────────────────────────────────────
+     F3 - custom-property indirection so the modifier cannot lose
+     the cascade. Base declares the fallback; the modifier only
+     sets the variable value. */
   .sc-mobile-books-bar {
     display: grid;
     grid-template-columns: 1fr auto auto;
@@ -106,9 +124,13 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--_sc-bar-bottom, 0px);
     z-index: 47;
     padding: var(--sc2-space-2) var(--sc2-space-4);
+    /* Bar-only mode: this rule's padding-bottom carries the
+       one-safe-area-law inset. Overridden inside --with-action so
+       the inset moves to the action row (it's the outer row when
+       both are present, per the one-safe-area law). */
     padding-bottom: calc(var(--sc2-space-2) + env(safe-area-inset-bottom, 0px));
     background: var(--sc2-cmd-bg);          /* navy anchor: reads as "books" */
     color: var(--sc2-cmd-text);
@@ -120,12 +142,17 @@
     cursor: pointer;
   }
 
-  /* When a sticky action rides below the bar, the bar itself sits
-     ABOVE the action - so the bar's `bottom:0` becomes wrong. Push
-     it up by the action row's height so the bar+action pair reads
-     as one stacked footer of --sc2-mobile-footer-h total height. */
+  /*
+     --with-action modifier: the bar sits ABOVE the action row. It
+     is offset by exactly the action-row height so the stack totals
+     var(--sc2-mobile-footer-h) before any safe-area inset. The
+     action row is the OUTER row, so it owns the inset per the
+     one-safe-area law - the bar's padding-bottom is trimmed here
+     so we don't double-count.
+  */
   .sc-mobile-books-bar--with-action {
-    bottom: calc(var(--sc2-mobile-footer-h) - var(--sc2-mobile-bar-h));
+    --_sc-bar-bottom: calc(var(--sc2-mobile-footer-h) - var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--sc2-space-2);
   }
 
   .sc-mobile-books-bar:focus-visible {
@@ -173,24 +200,31 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 47;              /* same layer as the bar; sits under it */
+    z-index: 47;
+    /* F3 - explicit height = footer-h - bar-h. Content sized to fit
+       inside; the safe-area inset is added to padding-bottom (owns
+       the one-safe-area law), and the height GROWS by the same
+       inset so the visible action row still fits inside a
+       footer-h + inset viewport-bottom band. */
+    height: calc(var(--sc2-mobile-footer-h) - var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
     padding: var(--sc2-space-2) var(--sc2-space-4);
     padding-bottom: calc(var(--sc2-space-2) + env(safe-area-inset-bottom, 0px));
     background: var(--sc2-surface-card);
     border-top: var(--sc2-border-thin) solid var(--sc2-line);
+    box-sizing: border-box;
   }
-  /* The caller-provided button fills the row - inherit fill so the
-     entry's `.sc-v2-entry-mobile-confirm` (or whatever the caller
-     passes) sits at min 48px height with `width:100%`. */
+  /* The caller-provided button fills the row's content area. */
   .sc-mobile-books-action > * {
     width: 100%;
   }
 
   /* Layout accommodation: the pane above the footer needs
-     padding-bottom so its trailing content isn't hidden. Applied
-     to the SC v2 read-surface roots (.sc-overview + .sc-drill). */
+     padding-bottom so its trailing content isn't hidden. Read
+     surfaces use the bar-h + inset; entry uses the footer-h + inset
+     (declared inside dayEntryV2.css against .sc-v2-entry-pane so
+     the two mounts don't accidentally share a value). */
   .scv2 .sc-overview,
   .scv2 .sc-drill {
-    padding-bottom: calc(var(--sc2-mobile-bar-h) + var(--sc2-space-4));
+    padding-bottom: calc(var(--sc2-mobile-bar-h) + env(safe-area-inset-bottom, 0px));
   }
 }
