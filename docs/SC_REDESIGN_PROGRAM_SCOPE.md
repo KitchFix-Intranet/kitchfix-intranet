@@ -256,6 +256,12 @@ Parity checklist additions (W0 findings):
 - **Account-switch abort semantics** (ServiceCalendar.js:489-505): six caches cleared as a unit
   plus `inFlightControllersRef.abort()`. Must move intact as one block if W9 splits fetches into
   a `useScData` hook (see GOTCHAS).
+- **`?day=YYYY-MM-DD` tile-targeting param (W5)**: drill-only; scrolls the targeted tile into
+  view and adopts it as the roving-focus target of the WAI-ARIA keyboard grid so keyboard Enter
+  opens intentionally. **Never auto-opens DayDetail** - entry stays an explicit user action
+  (click or Enter). Ignored in year view. Cleared by `?reset=1` and on leaving the drill. Any
+  future rail source that targets a specific day (drill queue rows, notes line, cross-module
+  deep links) MUST route through this param and honor its "target-only, never open" contract.
 
 ## 11. Cleanup ledger (specific, tracked per PR)
 

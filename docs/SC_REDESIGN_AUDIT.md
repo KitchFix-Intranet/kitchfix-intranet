@@ -349,6 +349,7 @@ Query-param contract (inherited by W2-W3):
 | `?period=`       | `P1`...`P13`                | Drill-in to period view. Wins over `?month=` if both set.             | ServiceCalendar.js:680-681         |
 | `?reset=`        | `1`                         | Clears drill state; returns to year view. TopNav intercept fires it.  | ServiceCalendar.js:747             |
 | `?clientToday=`  | `YYYY-MM-DD`                | Anchors isPast/isLocked on operator's local calendar (not UTC).       | route.js:78-94                     |
+| `?day=`          | `YYYY-MM-DD`                | **Added W5.** Drill-only tile-targeting: scrolls the tile into view + adopts it as the roving-focus target so keyboard Enter opens intentionally. NEVER auto-opens DayDetail. Ignored in year view. Cleared by `?reset=1` and on leaving the drill. Introduced for rail queue rows + footer CTAs. | ServiceCalendar.js drill URL-sync effect |
 
 Nav entries:
 
