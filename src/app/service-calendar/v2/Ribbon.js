@@ -33,9 +33,9 @@ export default function Ribbon({
     <div className="sc-ribbon" role="banner">
       <div className="sc-ribbon-brand">
         <h1 className="sc-ribbon-title">Service Calendar</h1>
-        {firstName && (
-          <p className="sc-ribbon-welcome">Welcome back, {firstName}.</p>
-        )}
+        {/* V3 §3.2 - "Welcome back" string DELETED from DOM per spec.
+            firstName prop retained on the component signature so
+            callers don't break during the sweep; unused here. */}
       </div>
 
       <div className="sc-ribbon-right">

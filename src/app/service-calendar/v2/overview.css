@@ -1,21 +1,45 @@
 /* ══════════════════════════════════════════════════════════════
-   SC v2 - Overview surface (Ribbon + Chrome + two-pane + Rail).
+   SC v2 → V3 - Overview surface (Ribbon + Chrome + two-pane + Rail).
 
    Every rule scoped to `.scv2` on the SC root. Flag OFF renders v1
    untouched. Tokens only (from the .scv2 block in src/app/tokens.css);
    solid colors are all tokens; alpha variants via rgba() are the
    documented exception.
 
-   DOM under .scv2 (no wrapper needed - ribbon + chrome are siblings
-   whose visual continuity is created by adjacent-sibling styling):
-     .scv2.sc-root
-       .sc-ribbon           (top row: brand + right cluster)
-       .sc-chrome-bar       (bottom row, restyled navy under scv2)
-       .sc-body
-         .sc-overview       (grid: content left, rail right)
+   V3 spec references (see docs/design/V3_OVERVIEW_SPEC.md):
+     §S1 - three layers exactly (L0 canvas, L1 surface, L2 cards)
+     §S2 - one edge; legend + grid + rail align to S2.3 vertical line
+     §S3 - chrome one-row inventory (welcome deleted, chip conditional)
+     §S4 - Standard scale (Compact recalibrated in the same file)
+     §S5 - phase ribbon (band + month scale + phase labels)
+     §9.8 - 32px icon buttons, radius 8/12/16, 1px chip outlines
+
+   DOM under .scv2:
+     .scv2.sc-root                             L0 canvas ground
+       .sc-body                                widget wrap (L1 surface)
+         .sc-ribbon                            V3 top of widget header zone
+         .sc-chrome-bar                        chrome (one row per §S3)
+         .sc-overview                          grid: content left, rail right
            .sc-overview-main  (SeasonShell)
-           .sc-overview-rail  (sticky Rail)
+           .sc-overview-rail  (sticky Rail)    L2 card
    ══════════════════════════════════════════════════════════════ */
+
+/* V3 §S1.1 - L0 canvas: SC page ground. Applied at the .scv2 root so
+   flag-off pages stay on the site-level ground. */
+.scv2 {
+  background: var(--sc2-canvas);
+}
+/* V3 §S1.2 - Widget: L1 surface, radius 16, --sc2-el-widget shadow,
+   margin-top 24 (sp-6) below the site nav. `.scv2 .sc-body` is the
+   widget wrap in this DOM (contains ribbon + chrome + grid/rail
+   region). One continuous plane. */
+.scv2 .sc-body {
+  background: var(--sc2-surface);
+  border-radius: 16px;
+  box-shadow: var(--sc2-el-widget);
+  margin-top: var(--sc2-space-6);
+  overflow: hidden;      /* keeps ribbon's top corners inside the widget */
+}
 
 /* ─── Ribbon (identity row above ChromeBar) ─────────────────
    The ribbon + ChromeBar together form one continuous navy band:
@@ -43,11 +67,12 @@
 .scv2 .sc-ribbon-title {
   margin: 0;
   font-family: var(--sc2-font-ui);
-  font-size: var(--sc2-size-h2);
+  /* V3 §S3.1 + §T type scale - chrome-title 18/800. */
+  font-size: 18px;
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-cmd-text);
   letter-spacing: -0.01em;
-  line-height: 1.15;
+  line-height: calc(24 / 18);
 }
 .scv2 .sc-ribbon-welcome {
   margin: 0;
@@ -84,14 +109,15 @@
   color: var(--sc2-cmd-text);
 }
 
-/* Admin lock button */
+/* V3 §S3.1 + §9.8 - Admin lock button 32px (icon-button lock
+   compliance; render's 30px corrected to 32). Radius 8 per T-table. */
 .scv2 .sc-ribbon-admin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--sc2-radius-control);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.10);
   border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
   color: var(--sc2-cmd-text-muted);
@@ -241,12 +267,26 @@
   box-shadow: var(--sc2-elevation-raised);
 }
 
-/* ─── Two-pane overview layout ─────────────────────────────── */
+/* V3 §S1.1 - two-pane overview grid lives INSIDE the widget (L1
+   surface). Grid gap is the one horizontal rhythm token; §S2.3
+   verifies the shared left edge across chrome content, ribbon,
+   grid, legend, and rail. */
 .scv2 .sc-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
   gap: var(--sc2-space-4);
   align-items: start;
+  padding: var(--sc2-space-5);   /* §6.1 content pad 20 = sp-5 = 20px */
+}
+
+/* V3 §S3.3 - needs-entry chip renders ONLY below the two-pane
+   breakpoint (rail not beside grid). At >=1280 the rail sits on
+   the side and carries the same information; the chrome chip
+   becomes duplicate context and is hidden. */
+@media (min-width: 1280px) {
+  .scv2 .sc-chrome-bar-stats-count {
+    display: none;
+  }
 }
 
 .scv2 .sc-overview-main {
