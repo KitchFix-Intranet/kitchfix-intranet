@@ -69,6 +69,12 @@ export function deriveHomestandSegments(yearData, todayDate) {
           dayTypes: {},
           gameCount: 0,
           gameEntered: 0,
+          // W6 (2026-07-18): per-homestand meal accumulation added for
+          // the fee/ops rail's HOMESTANDS section. Same load-bearing
+          // filters (skip !homestandId + EXH + AWAY) as everything else
+          // in this loop - this is one more accumulator on the same
+          // bucket, NOT a parallel derivation path (audit Q5 policy).
+          meals: 0,
         };
         buckets.set(d.homestandId, bucket);
       }
@@ -79,6 +85,12 @@ export function deriveHomestandSegments(yearData, todayDate) {
           bucket.gameCount += 1;
           if (d.status === "entered") bucket.gameEntered += 1;
         }
+      }
+      // Meals sum across all HS-attached days (PREP/CLEAN/OPEN/CLOSE
+      // contribute 0 by nature; GAME days carry the actualMeals). Zero-
+      // meal contribution from non-game rows is a no-op.
+      if (d.actualMeals != null) {
+        bucket.meals += Number(d.actualMeals) || 0;
       }
       if (d.opponent && d.dayType === "GAME") {
         if (!bucket.opponentSet.has(d.opponent)) {
@@ -110,6 +122,7 @@ export function deriveHomestandSegments(yearData, todayDate) {
       endDate,
       gameCount: bucket.gameCount,
       gameEntered: bucket.gameEntered,
+      meals: bucket.meals,
       dayTypes: bucket.dayTypes,
       status,
     });

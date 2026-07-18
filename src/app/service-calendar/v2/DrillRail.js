@@ -38,6 +38,7 @@ import {
   RailFooter,
 } from "./Rail";
 import { fmt$ } from "../season/format";
+import { deriveOpsHomestandLedgerScoped } from "./opsRailDerive";
 
 const QUEUE_TOP_N = 4;
 
@@ -48,6 +49,11 @@ export default function DrillRail({
   periodDays,        // per-day array for queue + notes derivation
   periodRange,       // { start, end } - drill window
   hasHomestandSchedule,
+  yearData,          // W6: for the optional HOMESTANDS section on
+                     // per-meal accounts w/ hasHomestandSchedule=true
+                     // (CIN-KY). The ledger derives from the year
+                     // records so the section is stable across drill
+                     // navigation. Omit for accounts without schedule.
   today,             // YYYY-MM-DD (client-local)
   loading,           // bool - workspace fetch in-flight
   incomplete,        // bool - partial fetch (some days failed)
@@ -182,6 +188,51 @@ export default function DrillRail({
             />
           )}
         </RailSection>
+
+        {/* W6: HOMESTANDS section for per-meal accounts w/
+            hasHomestandSchedule=true (CIN-KY is the proof case).
+            Sits BELOW queue, ABOVE notes per bundle scope. Uses the
+            same deriveOpsHomestandLedgerScoped from opsRailDerive
+            (which extends deriveHomestandSegments; same load-bearing
+            filters). Only ledger rows overlapping the drill range
+            are shown. */}
+        {hasHomestandSchedule && yearData && periodRange && (() => {
+          const ledger = deriveOpsHomestandLedgerScoped(
+            yearData,
+            today,
+            periodRange.start,
+            periodRange.end
+          );
+          if (!ledger.length) return null;
+          return (
+            <RailSection
+              label="Homestands"
+              meta={`${ledger.length} in scope`}
+            >
+              {ledger.map(hs => {
+                const isDone = hs.status === "done";
+                const isCurrent = hs.status === "current";
+                const tone = isDone
+                  ? "done"
+                  : (isCurrent ? "current" : (hs.status === "in-progress" ? "in-progress" : "upcoming"));
+                const value = `${hs.gameEntered}/${hs.gameCount} games`;
+                const sub = hs.meals > 0
+                  ? `${hs.meals.toLocaleString("en-US")} meals`
+                  : null;
+                return (
+                  <RailLine
+                    key={hs.key}
+                    label={`${hs.homestandId} vs ${hs.opponentLabel}`}
+                    value={value}
+                    sublabel={sub}
+                    tone={tone}
+                    onClick={() => onTargetDay?.(hs.startDate)}
+                  />
+                );
+              })}
+            </RailSection>
+          );
+        })()}
 
         {/* Notes line - single row, count + first-day target. Omitted
             when there are zero notes. */}
