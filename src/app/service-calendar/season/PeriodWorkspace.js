@@ -25,7 +25,7 @@
 // surgical DayDetail change keeps legacy callers working (default
 // scopeLabel="month").
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import DaySquare from "../DaySquare";
 import {
   resolveDayStatus,
@@ -93,6 +93,17 @@ export default function PeriodWorkspace({
   // in the current account; each matching cell overlays a SYNCING badge
   // on the DaySquare below.
   syncingDates,
+  // SC v2 (W5): when true, WeekSubtotals cards do NOT render (the same
+  // component-non-render pattern used to retire FullSeasonCard in
+  // W2-W4). Their figures move to slim in-grid bands (this same
+  // component renders them, guarded by !hasHomestandSchedule per
+  // SC-073) and to the drill rail (composed at the caller in
+  // ServiceCalendar.js under scV2). Flag off = every v1 render survives.
+  scV2 = false,
+  // W5: focus target from the ?day= URL param. When present + inside the
+  // period, the DayGrid adopts it as the initial roving position and
+  // scrolls the tile into view. NEVER auto-opens DayDetail (contract).
+  focusTargetDate = null,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -233,9 +244,16 @@ export default function PeriodWorkspace({
         onDayClick={onDayClick}
         onBulkTileClick={onBulkTileClick}
         syncingDates={syncingDates}
+        scV2={scV2}
+        weekMetrics={m.weeks}
+        focusTargetDate={focusTargetDate}
       />
 
-      {scope !== "month" && (
+      {/* W5: WeekSubtotals cards do not render under scV2 - their
+          figures moved to in-grid bands (rendered by DayGrid) + the
+          drill rail. SC-073 (hasHomestandSchedule guard) is still
+          honored inside WeekSubtotals for v1 too. */}
+      {scope !== "month" && !scV2 && (
         <WeekSubtotals
           weekLabels={weekLabels}
           weekMetrics={m.weeks}
@@ -682,7 +700,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -694,15 +712,23 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
     return weeks;
   }, [cells]);
 
-  // Roving focus target = flat index into `cells`. Initialize to today's
-  // real-day cell when present, else the first real-day cell. Resets on
-  // period change (cells / today swap in a fresh set).
+  // Roving focus target = flat index into `cells`. Precedence:
+  //   1. focusTargetDate (?day= URL param, W5) - the tile is scrolled +
+  //      focused, but DayDetail is NOT auto-opened (contract per scope
+  //      §10 addition). The click OR Enter is still an explicit action.
+  //   2. Today's real-day cell.
+  //   3. First real-day cell.
+  // Resets on period change (cells / today swap in a fresh set).
   const initialFocusIdx = useMemo(() => {
     if (!cells?.length) return -1;
+    if (focusTargetDate) {
+      const targetIdx = cells.findIndex(c => c.day && c.day.date === focusTargetDate);
+      if (targetIdx >= 0) return targetIdx;
+    }
     const todayIdx = cells.findIndex(c => c.day && c.day.date === today);
     if (todayIdx >= 0) return todayIdx;
     return cells.findIndex(c => c.day);
-  }, [cells, today]);
+  }, [cells, today, focusTargetDate]);
 
   const [focusIdx, setFocusIdx] = useState(initialFocusIdx);
   useEffect(() => { setFocusIdx(initialFocusIdx); }, [initialFocusIdx]);
@@ -711,6 +737,28 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
   // the DaySquare (span's firstElementChild). Callback ref pattern -
   // React 19 handles null on unmount, so stale entries auto-clear.
   const cellRefs = useRef([]);
+
+  // W5: when a ?day= target lands, scroll the tile into view. This is
+  // a one-shot on mount / on the target-date change. Uses smooth
+  // scrolling; prefers-reduced-motion honored via CSS scroll-behavior
+  // fallback (the browser respects it for scrollIntoView too). Does
+  // NOT auto-open DayDetail per contract - opening entry stays an
+  // explicit click / Enter.
+  useEffect(() => {
+    if (!focusTargetDate) return;
+    if (focusIdx < 0) return;
+    const cell = cellRefs.current[focusIdx];
+    if (!cell) return;
+    const focusable = cell.firstElementChild;
+    // Two-phase: scroll first, then move keyboard focus. rAF ensures
+    // the tile's grid slot is laid out before scroll math runs.
+    requestAnimationFrame(() => {
+      cell.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      if (focusable && typeof focusable.focus === "function") {
+        focusable.focus({ preventScroll: true });
+      }
+    });
+  }, [focusTargetDate, focusIdx]);
 
   const focusRealCell = (idx) => {
     setFocusIdx(idx);
@@ -788,9 +836,40 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
         aria-label="Days in this period"
         onKeyDown={handleGridKeyDown}
       >
-        {rows.map((week, weekIdx) => (
-          <div key={weekIdx} role="row" className="sc-workspace-grid-row">
-            {week.map((cell, colIdx) => {
+        {rows.map((week, weekIdx) => {
+          // W5: derive the fiscal-week label from the first real day in
+          // the row; the workspace grid IS week-aligned (Mon-Sun rows),
+          // so one row = one fiscal week. Bands render under
+          // scV2 && !hasHomestandSchedule (SC-073 - MLB homestand
+          // accounts never see week cards or bands, ever). weekMetrics
+          // comes from aggregateWorkspaceMetrics's `weeks` slot -
+          // SAME source the retired WeekSubtotals cards read + the
+          // drill rail composes below.
+          const firstDayCell = week.find(c => c.day);
+          const weekLabel = firstDayCell?.day?.meta?.week || null;
+          const wm = weekLabel && weekMetrics ? weekMetrics[weekLabel] : null;
+          // Two-guard model (bundle scope §3):
+          //  - !hasHomestandSchedule (SC-073 - MLB homestand accounts
+          //    never see week cards or bands)
+          //  - !isFeeAccount (fee accounts' drill is otherwise untouched;
+          //    STL-FL's actRev is structurally $0 so the band would read
+          //    "$0.00" every week - not helpful, and out of policy)
+          const showBand = scV2 && !hasHomestandSchedule && !isFeeAccount && weekLabel && wm;
+          return (
+            <React.Fragment key={weekIdx}>
+              {showBand && (
+                <div
+                  className="sc-workspace-band"
+                  data-week={weekLabel}
+                  aria-hidden="true"
+                >
+                  <span className="sc-workspace-band-label">{weekLabel}</span>
+                  <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
+                  <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
+                </div>
+              )}
+              <div role="row" className="sc-workspace-grid-row">
+                {week.map((cell, colIdx) => {
               const flatIdx = weekIdx * 7 + colIdx;
               if (cell.ghost) {
                 // P1 item 6 (render R4b): in-period date with no
@@ -881,8 +960,10 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 </span>
               );
             })}
-          </div>
-        ))}
+              </div>
+            </React.Fragment>
+          );
+        })}
       </div>
     </div>
   );
