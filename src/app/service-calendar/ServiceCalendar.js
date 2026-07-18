@@ -2567,34 +2567,34 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 scV2 ON  + entry ON + per-meal    -> DayEntryV2.
                 scV2 ON  + entry ON + isFeeAccount-> DayDetail v1 (live bill meaningless without per-meal $;
                                                     fee accounts locked to v1 in scope §7).
-                Note: the mount matrix lives here to keep the flag gate load-bearing and one-place-only. */}
-            {(scV2 && scEntryV2 && !isFeeAccount) ? (
-              <DayEntryV2 ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
-                overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
-                onSave={handleSave} onAddNote={handleAddNote} saving={saving}
-                dayIndex={focusIdx} totalDays={dayList.length}
-                monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
-                scopeLabel="period"
-                accountName={acctObj?.name || ""}
-                accountSegment={acctObj?.category || ""}
-                isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
-                onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
-                onNextException={onNextExceptionHandler}
-                onClose={() => setFocusDay(null)} />
-            ) : (
-              <DayDetail ref={dayDetailRef} day={focusDayData} serviceGroups={data?.serviceGroups || periodServiceGroups}
-                overrides={data?.overrides?.filter(o => o.date === focusDay) || []}
-                onSave={handleSave} onAddNote={handleAddNote} saving={saving}
-                dayIndex={focusIdx} totalDays={dayList.length}
-                monthRevenue={periodMetrics?.actRev || periodMetrics?.projRev || 0}
-                scopeLabel="period"
-                accountName={acctObj?.name || ""}
-                accountSegment={acctObj?.category || ""}
-                isFeeAccount={isFeeAccount} homestandContext={(periodHomestandMap || homestandMap)[focusDay] || null}
-                onPrev={canPrev ? () => navDay(-1) : null} onNext={canNext ? () => navDay(1) : null}
-                onNextException={onNextExceptionHandler}
-                onClose={() => setFocusDay(null)} />
-            )}
+                Note: the mount matrix lives here to keep the flag gate load-bearing and one-place-only.
+                W7 PR 1/3 fix F3: props hoisted to a single object so PRs 2/3 edit ONE list, not two. */}
+            {(() => {
+              const dayEntryProps = {
+                ref: dayDetailRef,
+                day: focusDayData,
+                serviceGroups: data?.serviceGroups || periodServiceGroups,
+                overrides: data?.overrides?.filter(o => o.date === focusDay) || [],
+                onSave: handleSave,
+                onAddNote: handleAddNote,
+                saving,
+                dayIndex: focusIdx,
+                totalDays: dayList.length,
+                monthRevenue: periodMetrics?.actRev || periodMetrics?.projRev || 0,
+                scopeLabel: "period",
+                accountName: acctObj?.name || "",
+                accountSegment: acctObj?.category || "",
+                isFeeAccount,
+                homestandContext: (periodHomestandMap || homestandMap)[focusDay] || null,
+                onPrev: canPrev ? () => navDay(-1) : null,
+                onNext: canNext ? () => navDay(1) : null,
+                onNextException: onNextExceptionHandler,
+                onClose: () => setFocusDay(null),
+              };
+              return (scV2 && scEntryV2 && !isFeeAccount)
+                ? <DayEntryV2 {...dayEntryProps} />
+                : <DayDetail {...dayEntryProps} />;
+            })()}
           </div>
         </div>
       )}
