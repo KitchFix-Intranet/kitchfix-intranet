@@ -18,7 +18,7 @@ import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivatio
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
-import { useScV2, useScEntryV2 } from "./v2/flags";
+import { useScV2, useScEntryV2Effective } from "./v2/flags";
 import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
@@ -272,7 +272,6 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
-  const scEntryV2 = useScEntryV2();
   const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -321,6 +320,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const [hasHomeAccount, setHasHomeAccount] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
+  // W7 PR 3/3 Phase 6 cutover - the effective entry-v2 gate for the
+  // account currently loaded. Precedence handled inside the hook
+  // (stored-off wins; storedOn wins over cutover list; absent falls
+  // through to env default OR ENTRY_V2_ACCOUNTS membership). Hook is
+  // called unconditionally per React rules; both args are safe when
+  // data is null (accountKey=undefined, isFeeAccount=false ->
+  // envDefault only). Recomputes when data loads or the account is
+  // switched, matching the existing account-switch teardown.
+  const scEntryV2 = useScEntryV2Effective(
+    data?.account?.key,
+    data?.account?.billingModel === "flat_fee",
+  );
   const [yearData, setYearData] = useState(null);
   // SC-033: track the year-summary fetch state so a whole-fetch failure
   // renders the failed atoms on every overview cell instead of silently
@@ -2592,7 +2603,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 onNextException: onNextExceptionHandler,
                 onClose: () => setFocusDay(null),
               };
-              return (scV2 && scEntryV2 && !isFeeAccount)
+              // W7 PR 3/3 Phase 6 - scEntryV2 is now the effective gate
+              // (scV2 && !isFeeAccount already folded in via
+              // useScEntryV2Effective at the top of the component). The
+              // stored-off kill switch beats the cutover list; storedOn
+              // beats the cutover list too; absent falls through to env
+              // default OR ENTRY_V2_ACCOUNTS.has(accountKey).
+              return scEntryV2
                 ? <DayEntryV2 {...dayEntryProps} />
                 : <DayDetail {...dayEntryProps} />;
             })()}
