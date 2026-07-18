@@ -56,11 +56,14 @@ without pre-deciding its findings.
   section names). The audit should decide if the note label needs a distinct treatment or if the
   section is right to homogenize.
 
-- **Mobile footer height as a magic number.** `.sc-v2-entry-pane` has `padding-bottom: 116px`
-  at ≤767 to clear the fixed `.sc-v2-entry-mobile-footer`, and the second-stage rail overlay
-  uses `inset: 0 0 116px 0` for the same reason. The value is coupled across three sites but
-  isn't token-backed. Tokenize as `--sc2-mobile-footer-h` (or a token pair for the two
-  sub-heights: summary bar + confirm) so any adjustment stays coherent. V3 job.
+- **Mobile footer height as a magic number.** (Resolved in W9 PR 1/2.) `tokens.css` now
+  declares a token PAIR: `--sc2-mobile-bar-h` (60px, read-surface footer = bar only) and
+  `--sc2-mobile-footer-h` (116px, entry-surface footer = bar + Confirm CTA stacked). Every
+  coupled site reads the token: read-surface pane `padding-bottom` and `MobileBooksBar` fixed
+  offsets consume `--sc2-mobile-bar-h`; entry pane `padding-bottom` + sheet inset consume
+  `--sc2-mobile-footer-h`; MobileBooksBar's `.sc-mobile-books-bar--with-action` variant offsets
+  itself by the difference to preserve the stack. The two heights intentionally differ; V3 may
+  collapse them if the design unifies further.
 
 ## PR #467 body nits (post-merge cleanup, W7.5)
 

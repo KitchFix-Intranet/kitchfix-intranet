@@ -391,6 +391,27 @@
   --sc2-elevation-card:    0 1px 2px rgba(18,34,56,0.045);
   --sc2-elevation-raised:  0 3px 8px rgba(18,34,56,0.10), 0 24px 64px rgba(18,34,56,0.18);
   --sc2-elevation-inset-top: inset 0 1px 0 rgba(255,255,255,0.4);
+
+  /* ---------- Mobile footer heights (W9 PR 1/2) ----------
+     Resolves the V3_HOPPER "mobile footer height as a magic number"
+     seed. The two heights are load-bearing across three coupled
+     sites each (bar/pane-padding/sheet-inset in read surfaces;
+     bar/pane-padding/sheet-inset in entry) - now token-backed so a
+     redesign at either surface stays coherent.
+
+     --sc2-mobile-bar-h    = read-surface footer (bar only,
+                             ~60px w/ safe-area inset room)
+     --sc2-mobile-footer-h = entry-surface footer (bar + Confirm CTA
+                             stacked, ~116px w/ safe-area inset room)
+
+     The two intentionally differ - the read surface footer is a
+     glance-and-open surface (one row); the entry footer stacks a
+     summary bar over a sticky Confirm because the write action
+     needs to be one-thumb reachable independently of the
+     bar-tap-to-expand gesture. V3 may collapse them if the design
+     unifies further; for now they are distinct tokens. */
+  --sc2-mobile-bar-h:      60px;
+  --sc2-mobile-footer-h:  116px;
 }
 
 /* Compact density branch: remaps --sc2-scale down + tightens spacing.
