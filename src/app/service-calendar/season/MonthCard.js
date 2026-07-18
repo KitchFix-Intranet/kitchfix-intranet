@@ -54,6 +54,7 @@ export default function MonthCard({
   onClick,                   // (monthIndex) => void
   syncingDates,              // F3: Set<YYYY-MM-DD> for the current account; overlays SYNCING badge on matching tiles
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
+  currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -181,7 +182,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet, currentPeriodRange,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -309,7 +310,7 @@ function indexDays(monthSummary) {
   return m;
 }
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet }) {
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
@@ -347,6 +348,10 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       // the ServiceCalendar level; non-PDC accounts get an empty Set
       // -> false, no wedge.
       isSpringPhase={!!springDateSet?.has(cell.dateStr)}
+      // V3 §6.7 - the current-period wash on in-period day tiles
+      // (period-scope orientation, not alarm). Range comes from
+      // SeasonShell (periodRanges + today).
+      isInPeriod={!!(currentPeriodRange && cell.dateStr >= currentPeriodRange.start && cell.dateStr <= currentPeriodRange.end)}
     />
   );
 }
