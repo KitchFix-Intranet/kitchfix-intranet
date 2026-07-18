@@ -139,6 +139,17 @@
   line-height: 1.5;
 }
 
+/* F1 (law 4): "totals incomplete" tag rendered inside the Weeks
+   section header meta slot. Warn family, subordinate but distinct
+   from the hero's dashed incomplete treatment above. */
+.scv2 .sc-drill-rail .sc-rail-section-meta--warn {
+  color: var(--sc2-rail-accent-warn);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--sc2-size-micro);
+}
+
 /* Incomplete/failed money treatment - rail hero region shows a
    muted dashed border + "Data incomplete" copy instead of a summed
    figure. Reachable retry via the ribbon's AsOf refresh which is

@@ -197,12 +197,28 @@ export default function DrillRail({
         )}
 
         {/* Week lines - identical source as the in-grid bands (m.weeks).
-            SC-073: rendered ONLY when !hasHomestandSchedule. */}
+            SC-073: rendered ONLY when !hasHomestandSchedule.
+            F1 (law 4 fix): when `incomplete`, every week's `wm.actRev`
+            is a partial sum (one or more contributing days failed to
+            fetch). Rather than showing a possibly-wrong penny total
+            styled as complete money, we swap the money value out for
+            `--` and force `attention` tone across the line; the count
+            (entered/total) still displays via sublabel because that
+            data is day-status, not money. The section header carries
+            an explicit "totals incomplete" marker so the operator
+            reads the whole block as pending. */}
         {showWeekLines && weekLines.length > 0 && (
-          <RailSection label="Weeks">
+          <RailSection
+            label="Weeks"
+            meta={incomplete
+              ? <span className="sc-rail-section-meta--warn">totals incomplete</span>
+              : null}
+          >
             {weekLines.map(({ label, wm, isCurrent }) => {
-              const money = fmt$(wm.actRev);
-              const tone = isCurrent ? "current" : "in-progress";
+              const money = incomplete ? "--" : fmt$(wm.actRev);
+              const tone = incomplete
+                ? "attention"
+                : (isCurrent ? "current" : "in-progress");
               const sub = wm.total > 0 ? `${wm.complete}/${wm.total}` : null;
               return (
                 <RailLine
