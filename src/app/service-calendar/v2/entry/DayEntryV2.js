@@ -995,12 +995,34 @@ function BillRail({
 
   const pctComplete = totalToEnter > 0 ? Math.round((enteredCount / totalToEnter) * 100) : 0;
 
+  // W7 PR 3/3 P1.2 pristine-rail anchor - the affordance line names the
+  // first ghost input the auto-focus effect will land on. Derived
+  // inline from the SAME predicate the effect uses
+  // (`querySelector(".sc-day-input--ghost")`), which matches an input
+  // NOT (isTouched && !isEmpty). Pure prop-derived - no memo, no state,
+  // recomputed each render but N is small and skipped once anything is
+  // entered.
+  let firstGhostName = null;
+  if (!hasTouchedAny && totalToEnter > 0) {
+    outer: for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        const editVal = editValues[s.colIndex] ?? "";
+        const isTouched = touched.has(s.colIndex);
+        if (!(isTouched && editVal !== "")) {
+          firstGhostName = s.name;
+          break outer;
+        }
+      }
+    }
+  }
+
   return (
     <div className="sc-v2-entry-rail-shell">
       <div className="sc-v2-entry-rail-label">
         {hasTouchedAny ? "ENTERED" : "PROJECTED"}
       </div>
-      <div ref={heroRef} className="sc-v2-entry-rail-hero">
+      <div ref={heroRef} className={`sc-v2-entry-rail-hero${!hasTouchedAny ? " sc-v2-entry-rail-hero--pristine" : ""}`}>
         {/*
           W7 PR 2/3 aria-live note: the visible value ticks through
           useAnimatedNumber's ~250ms ease. Modern SR implementations
@@ -1020,6 +1042,11 @@ function BillRail({
         <span className="sc-v2-entry-rail-hero-meta">
           {summary.meals.toLocaleString()} meals · {enteredCount} of {totalToEnter} services entered
         </span>
+        {firstGhostName && (
+          <span className="sc-v2-entry-rail-affordance">
+            0 of {totalToEnter} entered - start with <strong>{firstGhostName}</strong>
+          </span>
+        )}
       </div>
 
       <div className="sc-v2-entry-rail-progress" role="progressbar" aria-valuenow={pctComplete} aria-valuemin={0} aria-valuemax={100}>

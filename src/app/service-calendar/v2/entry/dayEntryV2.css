@@ -554,6 +554,157 @@
 }
 
 /* ══════════════════════════════════════════════════════════════
+   W7 PR 3/3 - POLISH P1 sweep (skin-only; no handler/memo/state
+   changes).
+
+   P1.1  v1-atom seam. The row/input/ledger atoms in DayEntryV2 reuse
+         v1 classes (.sc-day-row--ledger, .sc-day-input, .sc-day-row-*)
+         so their v1 CSS applies by default. Under .scv2 we retint the
+         row rhythm/height, ledger-head typography, and chip family to
+         v2's density scale + micro-label + tones. v1 rules stay
+         byte-identical (flag-off flip test in the PR).
+
+   P1.3  Match-projections buttons to the quiet-tier language. Existing
+         .scv2 .sc-drill-rail .sc-rail-footer-quiet tokens
+         (--sc2-rail-cta-quiet-*) are the system-wide quiet tier;
+         mirrored here on light ground so count inputs (green-touched
+         when solid) become the loudest interactive elements per group.
+
+   P1.4  Sticky elevation cue. Sticky group headers adopt the same
+         box-shadow the drill's sticky chrome uses
+         (var(--sc2-elevation-card)) - one "stick" language system-wide.
+         The shadow reads calm against the sunken header bg when at
+         rest and reads as elevated against scrolling content behind
+         it when the header is stuck at top.
+   ══════════════════════════════════════════════════════════════ */
+
+/* P1.1 - v1-atom seam under .scv2 --------------------------------- */
+.scv2 .sc-v2-entry-list .sc-day-ledger {
+  gap: 0;
+}
+.scv2 .sc-v2-entry-list .sc-day-ledger-head {
+  padding: 6px var(--sc2-space-4);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--sc2-surface-card);
+}
+.scv2 .sc-v2-entry-list .sc-day-row--ledger {
+  padding: 8px var(--sc2-space-4);
+  min-height: 44px;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-v2-entry-list .sc-day-row--ledger:last-child {
+  border-bottom: none;
+}
+.scv2 .sc-v2-entry-list .sc-day-row-name {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-body);
+}
+.scv2 .sc-v2-entry-list .sc-day-row-rate {
+  color: var(--sc2-ink-soft);
+  font-size: var(--sc2-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-v2-entry-list .sc-day-row-amount {
+  color: var(--sc2-ink-strong);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-v2-entry-list .sc-day-amount-ghost {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-v2-entry-list .sc-day-input {
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-control);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-v2-entry-list .sc-day-input--ghost {
+  color: var(--sc2-ink-muted);
+  background: var(--sc2-surface-page);
+}
+.scv2 .sc-v2-entry-list .sc-day-input--ghost::placeholder {
+  color: var(--sc2-ghost);
+  opacity: 1;
+}
+.scv2 .sc-v2-entry-list .sc-day-input--touched {
+  background: var(--sc2-accent-green-wash);
+  border-color: var(--sc2-accent-green-line);
+  color: var(--sc2-accent-green-deep);
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-v2-entry-list .sc-day-input:focus-visible {
+  outline: 2px solid var(--sc2-accent-green);
+  outline-offset: -1px;
+  border-color: var(--sc2-accent-green);
+}
+.scv2 .sc-v2-entry-list .sc-day-row-delta {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+}
+.scv2 .sc-v2-entry-list .sc-day-row-archived-chip {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-medium);
+}
+
+/* P1.3 - Match-projections quiet tier ------------------------------
+   Replace the mid-weight green-tinted button with the same quiet-tier
+   language the drill rail's secondary CTA uses. On light ground the
+   quiet border + muted ink render as calm; hover promotes to the
+   green wash accent to signal action without shouting. */
+.scv2 .sc-v2-entry-group-match {
+  background: transparent;
+  border: var(--sc2-border-thin) solid var(--sc2-line-2);
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-semibold);
+  letter-spacing: 0.04em;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-v2-entry-group-match:hover {
+  background: var(--sc2-accent-green-wash);
+  color: var(--sc2-accent-green-deep);
+  border-color: var(--sc2-accent-green-line);
+}
+
+/* P1.4 - Sticky elevation cue -------------------------------------- */
+.scv2 .sc-v2-entry-group-header {
+  box-shadow: var(--sc2-elevation-card);
+}
+
+/* P1.2 - Pristine-rail anchor + affordance line -------------------
+   Hero steps up one weight/size tier when nothing is entered yet -
+   the pristine hero anchors the eye and the affordance directs it to
+   the first count. The affordance disappears the moment anything is
+   entered (rendered conditionally in the tree). Text sits under the
+   hero at rail-text-muted so it reads as coaching, not a heading. */
+.sc-v2-entry-rail-hero--pristine .sc-v2-entry-rail-hero-value {
+  font-size: calc(var(--sc2-size-rail-total) * 1.08);
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: -0.025em;
+}
+.sc-v2-entry-rail-affordance {
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-caption);
+  padding-top: var(--sc2-space-1);
+  line-height: 1.45;
+}
+.sc-v2-entry-rail-affordance strong {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-semibold);
+}
+
+/* ══════════════════════════════════════════════════════════════
    W7 PR 2/3 - MOTION VOCABULARY
 
    Every animation:
