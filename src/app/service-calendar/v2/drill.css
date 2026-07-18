@@ -1,0 +1,237 @@
+/* ══════════════════════════════════════════════════════════════
+   SC v2 - Drill workspace + week bands + drill rail.
+
+   Scoped exclusively to `.scv2`. Flag OFF renders v1 untouched. Uses
+   W1 tokens only; solid colors are all tokens; alpha variants of
+   token colors may be inlined via rgba() (documented exception).
+
+   Structure under .scv2 on the drill:
+     .scv2.sc-root
+       .sc-ribbon + .sc-chrome-bar   (from W2-W4)
+       .sc-body
+         .sc-drill                   (drill two-pane wrapper)
+           .sc-drill-main            (existing .sc-workspace lives here)
+           .sc-drill-rail            (sticky Rail on the right)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Two-pane drill layout (same skeleton as .sc-overview) ── */
+.scv2 .sc-drill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: var(--sc2-space-4);
+  align-items: start;
+}
+.scv2 .sc-drill-main {
+  min-width: 0;
+}
+.scv2 .sc-drill-rail {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+  max-height: calc(100vh - 108px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 1279px) {
+  .scv2 .sc-drill {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scv2 .sc-drill-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* ─── Workspace chrome retint (drill header, band area) ─────
+   The financial-frame band + progress region rendered by
+   PeriodWorkspace inherits calmer W1 tokens under scv2. v1 rules
+   in periodWorkspace.css continue to define layout - we only
+   restyle color/typography/spacing hairlines here. */
+.scv2 .sc-workspace {
+  padding-top: 0;
+}
+.scv2 .sc-workspace-frame {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  box-shadow: var(--sc2-elevation-card);
+}
+.scv2 .sc-workspace-frame-band {
+  border-radius: var(--sc2-radius-container) var(--sc2-radius-container) 0 0;
+}
+.scv2 .sc-workspace-frame-stat-num {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-display);
+}
+.scv2 .sc-workspace-frame-stat-label {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.scv2 .sc-workspace-frame-stat-divider {
+  background: var(--sc2-line);
+}
+.scv2 .sc-workspace-frame-progress-label span {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ─── Week bands (in-grid, above each week's tiles) ───────
+   The .sc-workspace-band elements sit inside .sc-workspace-grid as
+   siblings of the row wrappers. `grid-column: 1/-1` spans them
+   across the full 7-column width. Quiet annotation - three-column
+   flex reading `W1 · 5 of 7 entered · $2,412.00`. Only rendered
+   when scV2 && !hasHomestandSchedule (SC-073 preserved).
+   aria-hidden="true" is applied at the render level so screen
+   readers hear the tile-level totals instead of the annotation. */
+.scv2 .sc-workspace-band {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sc2-space-3);
+  padding: 6px var(--sc2-space-2);
+  margin-top: var(--sc2-space-2);
+  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+  font-size: var(--sc2-size-micro);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-workspace-band:first-child {
+  margin-top: 0;
+  border-top: none;
+}
+.scv2 .sc-workspace-band-label {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.scv2 .sc-workspace-band-count {
+  color: var(--sc2-ink-soft);
+  font-weight: var(--sc2-wt-medium);
+  flex: 1 1 auto;
+  text-align: center;
+}
+.scv2 .sc-workspace-band-sum {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* ─── Drill rail overrides ────────────────────────────────
+   The drill rail reuses every .sc-rail-* primitive from
+   rail.css but has slightly different content proportions
+   (hero is exact-2dp so the value line runs longer;
+   week-lines fit tighter than season-lines). Small overrides
+   only - no new geometry. */
+.scv2 .sc-drill-rail .sc-rail-hero-value {
+  /* Exact-2dp values are wider than compact overview values;
+     shrink to fit while staying prominent. */
+  font-size: var(--sc2-size-h3);
+}
+.scv2 .sc-drill-rail .sc-rail-hero-meta {
+  line-height: 1.5;
+}
+
+/* F1 (law 4): "totals incomplete" tag rendered inside the Weeks
+   section header meta slot. Warn family, subordinate but distinct
+   from the hero's dashed incomplete treatment above. */
+.scv2 .sc-drill-rail .sc-rail-section-meta--warn {
+  color: var(--sc2-rail-accent-warn);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--sc2-size-micro);
+}
+
+/* Incomplete/failed money treatment - rail hero region shows a
+   muted dashed border + "Data incomplete" copy instead of a summed
+   figure. Reachable retry via the ribbon's AsOf refresh which is
+   always visible above the rail. */
+.scv2 .sc-drill-rail .sc-rail-hero--incomplete {
+  padding: var(--sc2-space-3);
+  border-radius: var(--sc2-radius-cell);
+  background: rgba(255, 255, 255, 0.03);
+  border: var(--sc2-border-thin) dashed rgba(220, 160, 100, 0.45);
+}
+.scv2 .sc-drill-rail .sc-rail-hero--incomplete .sc-rail-hero-value {
+  color: var(--sc2-rail-accent-warn);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.02em;
+}
+.scv2 .sc-drill-rail .sc-rail-hero--incomplete .sc-rail-hero-meta {
+  color: var(--sc2-rail-text-muted);
+}
+
+/* Secondary export button in the rail footer (quiet).
+   Sibling of the primary CTA. Uses the rail-cta-quiet tokens the W1
+   token block ships. */
+.scv2 .sc-drill-rail .sc-rail-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-drill-rail .sc-rail-footer-quiet {
+  width: 100%;
+  background: transparent;
+  color: var(--sc2-rail-cta-quiet-text);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-cta-quiet-border);
+  border-radius: var(--sc2-radius-control);
+  padding: 8px var(--sc2-space-4);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-drill-rail .sc-rail-footer-quiet:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc2-rail-text);
+}
+.scv2 .sc-drill-rail .sc-rail-footer-quiet:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* Export button inside the rail footer needs its OWN small
+   presentational tune - the ExportControl root emits a
+   .sc-export-control span that shows a 32px square. Under the
+   rail footer we let it expand to a labeled button matching the
+   quiet CTA. Layout-only adjustments; export handler untouched. */
+.scv2 .sc-drill-rail .sc-export-control {
+  width: 100%;
+}
+.scv2 .sc-drill-rail .sc-export-control-trigger {
+  width: 100%;
+  min-height: 36px;
+  background: transparent;
+  color: var(--sc2-rail-cta-quiet-text);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-cta-quiet-border);
+  border-radius: var(--sc2-radius-control);
+  padding: 6px var(--sc2-space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.scv2 .sc-drill-rail .sc-export-control-trigger:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc2-rail-text);
+}
+.scv2 .sc-drill-rail .sc-export-control-menu {
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  box-shadow: var(--sc2-elevation-raised);
+}

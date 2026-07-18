@@ -189,7 +189,13 @@ figure it showed exists in the rail.
 hero + week lines + notes row, Export relocated to rail footer, grid keyboard nav (arrows between
 tiles, Enter opens day). Acceptance: hero equals sum of its own week lines to the penny; week bands
 equal rail lines; tile click-through to DayDetail unchanged; bulk update reachable and unchanged;
-export output byte-identical to pre-move.
+export output byte-identical to pre-move. **Band + rail-week-line guard set (locked in the
+PR #463 drift log)**: in-grid week bands render only when `scV2 && !hasHomestandSchedule &&
+!isFeeAccount` - both the SC-073 homestand exclusion AND the fee-account exclusion apply. STL-FL
+(flat_fee, no homestand) sits in the fee-guard branch because its per-day `actual_revenue` is
+structurally $0 (contract-only billing, no per-meal $ recorded); bands would render "$0.00" every
+week, violating the fee-account no-$ discipline (§3). This matches "fee accounts drill is
+otherwise untouched until W6" for STL-FL and all four MLB-fee accounts.
 
 **W6 - MLB surface.** Homestand ledger rail (client-side `deriveHomestands` per W0 Q5 - no engine
 touch), strip restyle, month stepper, away/non-game quieting, MLB legend. "MLB Period mode" is
@@ -256,6 +262,12 @@ Parity checklist additions (W0 findings):
 - **Account-switch abort semantics** (ServiceCalendar.js:489-505): six caches cleared as a unit
   plus `inFlightControllersRef.abort()`. Must move intact as one block if W9 splits fetches into
   a `useScData` hook (see GOTCHAS).
+- **`?day=YYYY-MM-DD` tile-targeting param (W5)**: drill-only; scrolls the targeted tile into
+  view and adopts it as the roving-focus target of the WAI-ARIA keyboard grid so keyboard Enter
+  opens intentionally. **Never auto-opens DayDetail** - entry stays an explicit user action
+  (click or Enter). Ignored in year view. Cleared by `?reset=1` and on leaving the drill. Any
+  future rail source that targets a specific day (drill queue rows, notes line, cross-module
+  deep links) MUST route through this param and honor its "target-only, never open" contract.
 
 ## 11. Cleanup ledger (specific, tracked per PR)
 

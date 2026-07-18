@@ -22,7 +22,9 @@ import { useScV2 } from "./v2/flags";
 import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
+import DrillRail from "./v2/DrillRail";
 import "./v2/overview.css";
+import "./v2/drill.css";
 import {
   queueKey as scQueueKey,
   getAll as scGetAll,
@@ -78,12 +80,19 @@ const CAT_LABELS = { PDC: "Player Development", MLB: "Major League", MiLB: "Mino
 // URL-sync re-fire that follows the push sees no scope/lens/etc
 // change and no-ops. This is the unidirectional flow that #399
 // tried and failed to achieve.
-function buildScUrl({ account, period, month, view } = {}) {
+function buildScUrl({ account, period, month, view, day } = {}) {
   const params = new URLSearchParams();
   if (view)    params.set("view", view);
   if (account) params.set("account", account);
   if (period)  params.set("period", period);
   if (month)   params.set("month", month);
+  // W5: ?day=YYYY-MM-DD is a drill-only tile-targeting param. Scrolls
+  // + focuses the tile; NEVER opens DayDetail. Ignored in year view
+  // (no drill = no target). Cleared on leaving drill + on ?reset=1
+  // (below). Simple YYYY-MM-DD shape check to keep junk out.
+  if (day && (period || month) && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    params.set("day", day);
+  }
   const qs = params.toString();
   return qs ? `/service-calendar?${qs}` : "/service-calendar";
 }
@@ -2034,6 +2043,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           onDensityChange={setScV2Density}
         />
       )}
+      {(() => { /* extracted so the DrillRail can re-render the same instance in its footer under v2 drill scope */ })()}
       <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
@@ -2041,22 +2051,27 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         onViewChange={handleSeasonViewChange}
         showToggle={!isAdminView && isYearView}
         showStats={!isAdminView && isYearView}
-        exportControl={!isAdminView && selectedAccount ? (
-          <ExportControl
-            scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
-            year={year}
-            periodKey={isPeriodView ? periodKey : null}
-            monthKey={isMonthView ? monthKey : null}
-            accountKey={selectedAccount}
-            showToast={showToast}
-            // #419 (Wave 1): gate the "PDF - season schedule" menu item
-            // to schedule-carrying accounts only. Both flags default to
-            // false in ExportControl; per-meal PDCs without a schedule
-            // simply don't see the item.
-            hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-            hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-          />
-        ) : null}
+        exportControl={
+          // Extract v2-drill: when scV2 + drill scope + !fee + !admin,
+          // the ExportControl moves to the DrillRail footer (bundle
+          // scope: one primary CTA, Export as quiet secondary in same
+          // footer). ChromeBar's export slot goes null in that case;
+          // v1 and overview + fee under v2 keep the ChromeBar export.
+          !isAdminView && selectedAccount
+          && !(scV2 && (isPeriodView || isMonthView) && !isFeeAccount)
+            ? (
+              <ExportControl
+                scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
+                year={year}
+                periodKey={isPeriodView ? periodKey : null}
+                monthKey={isMonthView ? monthKey : null}
+                accountKey={selectedAccount}
+                showToast={showToast}
+                hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+                hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+              />
+            ) : null
+        }
         drillNav={
           isPeriodView ? (
             <PeriodHeaderNav
@@ -2199,10 +2214,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     // to the containing period; do NOT auto-open the
                     // DayDetail modal. focusDay stays null - opening
                     // entry is an explicit second click on the day.
-                    // Note: within-period scroll-into-view for the target
-                    // date is a W5 responsibility (touches PeriodWorkspace).
+                    // W5: append &day=<date> so the drill scrolls the
+                    // target tile into view + adopts it as the roving-
+                    // focus target. Contract in scope §10: target-only,
+                    // never open.
                     if (period) {
-                      router.push(buildScUrl({ account: selectedAccount || undefined, period }), { scroll: false });
+                      router.push(buildScUrl({
+                        account: selectedAccount || undefined,
+                        period,
+                        day: date,
+                      }), { scroll: false });
                     }
                   }}
                   onDrillToMonth={(mi) => {
@@ -2221,48 +2242,103 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         })()}
 
 
-        {isPeriodView && (
-          <PeriodWorkspace
-            account={data?.account}
-            year={year}
-            periodKey={periodKey}
-            periodRange={drillPeriodRange}
-            periodRanges={periodRanges}
-            periodDays={periodDays}
-            periodMetrics={periodMetrics}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            isMilb={isMilb}
-            homestandMap={periodHomestandMap || homestandMap}
-            scheduleOverlay={periodScheduleOverlay || scheduleOverlay}
-            springDateSet={springDateSet}
-            phaseTimeline={phaseTimeline}
-            today={today}
-            loading={loading && !periodDays}
-            loadState={
-              // SC-047: drill-in debug hook - extends the SC-033 pattern
-              // to period + month scopes so ?debug=failed forces the
-              // dashed atom render on drill-in cells too.
-              (isDev && searchParams?.get("debug") === "failed")
-                ? "failed"
-                : drillLoadState
-            }
-            partialError={partialError}
-            onDayClick={(date) => setFocusDay(date)}
-            bulkMode={bulkMode}
-            onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
-            bulkSelected={bulkSelected}
-            onBulkTileClick={toggleBulkSelect}
-            onBulkOpenPanel={() => setBulkPanelOpen(true)}
-            onBulkReview={() => setBulkReviewOpen(true)}
-            onBulkConfirmAsProjected={handleBulkConfirm}
-            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
-            saving={saving}
-            onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
-            onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
-            syncingDates={syncingDates}
-          />
-        )}
+        {isPeriodView && (() => {
+          // Read the ?day= target once; only meaningful when the
+          // target date falls inside the current drill window
+          // (URL-cleared per Step 0 contract on ?reset=1 / leaving drill).
+          const dayTarget = searchParams?.get("day") || null;
+          const focusTargetDate = (
+            dayTarget && drillPeriodRange
+            && dayTarget >= drillPeriodRange.start
+            && dayTarget <= drillPeriodRange.end
+          ) ? dayTarget : null;
+          const workspaceLoadState = (isDev && searchParams?.get("debug") === "failed")
+            ? "failed"
+            : drillLoadState;
+          const workspace = (
+            <PeriodWorkspace
+              account={data?.account}
+              year={year}
+              periodKey={periodKey}
+              periodRange={drillPeriodRange}
+              periodRanges={periodRanges}
+              periodDays={periodDays}
+              periodMetrics={periodMetrics}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              isMilb={isMilb}
+              homestandMap={periodHomestandMap || homestandMap}
+              scheduleOverlay={periodScheduleOverlay || scheduleOverlay}
+              springDateSet={springDateSet}
+              phaseTimeline={phaseTimeline}
+              today={today}
+              loading={loading && !periodDays}
+              loadState={workspaceLoadState}
+              partialError={partialError}
+              onDayClick={(date) => setFocusDay(date)}
+              bulkMode={bulkMode}
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
+              bulkSelected={bulkSelected}
+              onBulkTileClick={toggleBulkSelect}
+              onBulkOpenPanel={() => setBulkPanelOpen(true)}
+              onBulkReview={() => setBulkReviewOpen(true)}
+              onBulkConfirmAsProjected={handleBulkConfirm}
+              onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
+              saving={saving}
+              onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
+              onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
+              syncingDates={syncingDates}
+              scV2={scV2}
+              focusTargetDate={focusTargetDate}
+            />
+          );
+          // Two-guard rail: scV2 && !isFeeAccount && !isAdminView (fee
+          // accounts get no rail; homestand accounts still get the rail
+          // but the rail's week-lines gate on !hasHomestandSchedule too).
+          const useDrillRail = scV2 && !isFeeAccount && !isAdminView && !!periodMetrics;
+          if (!useDrillRail) return workspace;
+          const targetDay = (date) => {
+            router.push(buildScUrl({
+              account: selectedAccount || undefined,
+              period: periodKey,
+              day: date,
+            }), { scroll: false });
+          };
+          const rail = (
+            <DrillRail
+              scope="period"
+              scopeLabel={periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}
+              periodMetrics={periodMetrics}
+              periodDays={periodDays}
+              periodRange={drillPeriodRange}
+              hasHomestandSchedule={hasHomestandSchedule}
+              today={today}
+              loading={loading && !periodDays}
+              incomplete={!!partialError}
+              exportControl={selectedAccount ? (
+                <ExportControl
+                  scope="period"
+                  year={year}
+                  periodKey={periodKey}
+                  monthKey={null}
+                  accountKey={selectedAccount}
+                  showToast={showToast}
+                  hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+                  hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+                />
+              ) : null}
+              onTargetDay={targetDay}
+              onEnterToday={targetDay}
+              onEnterOldest={targetDay}
+            />
+          );
+          return (
+            <div className="sc-drill">
+              <div className="sc-drill-main">{workspace}</div>
+              <aside className="sc-drill-rail" aria-label="Period books">{rail}</aside>
+            </div>
+          );
+        })()}
 
         {/* Month drill: reuses the same range-based PeriodWorkspace body
             with a calendar-month range (start = mk-01, end = mk-<last>).
@@ -2270,41 +2346,100 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             monthCache directly (single-month payload; no cross-month
             merge). Header nav swaps to MonthHeaderNav via ChromeBar's
             drillNav slot above. */}
-        {isMonthView && (
-          <PeriodWorkspace
-            scope="month"
-            account={data?.account}
-            year={year}
-            periodKey={null}
-            periodRange={monthRange}
-            periodRanges={null}
-            periodDays={monthDays}
-            periodMetrics={monthMetrics}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            isMilb={isMilb}
-            homestandMap={monthHomestandMap || homestandMap}
-            scheduleOverlay={monthScheduleOverlay || scheduleOverlay}
-            springDateSet={springDateSet}
-            phaseTimeline={phaseTimeline}
-            today={today}
-            loading={loading && !monthDays}
-            partialError={partialError}
-            onDayClick={(date) => setFocusDay(date)}
-            bulkMode={bulkMode}
-            onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
-            bulkSelected={bulkSelected}
-            onBulkTileClick={toggleBulkSelect}
-            onBulkOpenPanel={() => setBulkPanelOpen(true)}
-            onBulkReview={() => setBulkReviewOpen(true)}
-            onBulkConfirmAsProjected={handleBulkConfirm}
-            onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
-            saving={saving}
-            onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
-            onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
-            syncingDates={syncingDates}
-          />
-        )}
+        {isMonthView && (() => {
+          const dayTarget = searchParams?.get("day") || null;
+          const focusTargetDate = (
+            dayTarget && monthRange
+            && dayTarget >= monthRange.start
+            && dayTarget <= monthRange.end
+          ) ? dayTarget : null;
+          const workspace = (
+            <PeriodWorkspace
+              scope="month"
+              account={data?.account}
+              year={year}
+              periodKey={null}
+              periodRange={monthRange}
+              periodRanges={null}
+              periodDays={monthDays}
+              periodMetrics={monthMetrics}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              isMilb={isMilb}
+              homestandMap={monthHomestandMap || homestandMap}
+              scheduleOverlay={monthScheduleOverlay || scheduleOverlay}
+              springDateSet={springDateSet}
+              phaseTimeline={phaseTimeline}
+              today={today}
+              loading={loading && !monthDays}
+              partialError={partialError}
+              onDayClick={(date) => setFocusDay(date)}
+              bulkMode={bulkMode}
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
+              bulkSelected={bulkSelected}
+              onBulkTileClick={toggleBulkSelect}
+              onBulkOpenPanel={() => setBulkPanelOpen(true)}
+              onBulkReview={() => setBulkReviewOpen(true)}
+              onBulkConfirmAsProjected={handleBulkConfirm}
+              onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
+              saving={saving}
+              onJumpFirstOverdue={handleJumpFirstOverdueInDrill}
+              onJumpFirstNeeds={handleJumpFirstNeedsInDrill}
+              syncingDates={syncingDates}
+              scV2={scV2}
+              focusTargetDate={focusTargetDate}
+            />
+          );
+          const useDrillRail = scV2 && !isFeeAccount && !isAdminView && !!monthMetrics;
+          if (!useDrillRail) return workspace;
+          const targetDay = (date) => {
+            router.push(buildScUrl({
+              account: selectedAccount || undefined,
+              month: monthKey,
+              day: date,
+            }), { scroll: false });
+          };
+          // Human month label ("Jul 2026") for the rail section header
+          const monthLabel = monthKey ? (() => {
+            const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const [y, m] = monthKey.split("-").map(Number);
+            return m >= 1 && m <= 12 ? `${MON[m-1]} ${y}` : monthKey;
+          })() : "";
+          const rail = (
+            <DrillRail
+              scope="month"
+              scopeLabel={monthLabel}
+              periodMetrics={monthMetrics}
+              periodDays={monthDays}
+              periodRange={monthRange}
+              hasHomestandSchedule={hasHomestandSchedule}
+              today={today}
+              loading={loading && !monthDays}
+              incomplete={!!partialError}
+              exportControl={selectedAccount ? (
+                <ExportControl
+                  scope="month"
+                  year={year}
+                  periodKey={null}
+                  monthKey={monthKey}
+                  accountKey={selectedAccount}
+                  showToast={showToast}
+                  hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+                  hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+                />
+              ) : null}
+              onTargetDay={targetDay}
+              onEnterToday={targetDay}
+              onEnterOldest={targetDay}
+            />
+          );
+          return (
+            <div className="sc-drill">
+              <div className="sc-drill-main">{workspace}</div>
+              <aside className="sc-drill-rail" aria-label="Month books">{rail}</aside>
+            </div>
+          );
+        })()}
 
         {/* Drill-in state legend as a direct child of .sc-body, matching
             the overview's SeasonShell pattern - the .sc-body >
