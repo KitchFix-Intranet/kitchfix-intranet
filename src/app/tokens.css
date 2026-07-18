@@ -128,3 +128,253 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --duration-fast:0ms; --duration-base:0ms; --duration-slow:0ms; }
 }
+
+/* ============================================================
+   .scv2 - SC Redesign v2 theme layer (Program W1 foundation).
+
+   Scoped exclusively to `.scv2` on the SC root. Flag OFF = zero
+   effect (this block only activates under the class). Palette
+   sourced from the committed v2 render at
+   docs/design/sc-v2/SC_FullApp_Redesign_v2.html, translated to
+   semantic role-based names. Component CSS consumes these
+   tokens; components never carry raw hex.
+
+   Contrast (WCAG 2.1 §1.4.3): every text-role token below is
+   verified >=4.5 on its intended surface, or >=3.0 with an
+   explicit large-text cite. Full table in the W1 PR body.
+   Two render values were tuned to hit AA:
+     rail-text-section  #6f88a5 -> #88a5c2 (4.14 -> 5.92)
+     rail-text-ghost    #5f7ea3 -> #7391b5 (3.60 -> 4.65)
+
+   Scale + density (Program §17 Decision 7, "absorb zoom, never
+   counter it"): type + spacing tokens are FLUID via clamp(),
+   easing down as the effective viewport narrows so a Windows
+   user at 150% display scaling (effective ~910px on a 1366
+   laptop) sees the theme compact instead of inflate.
+   Reference window: **1024-1440**. Each token hits its floor at
+   viewports <=1024px and its ceiling at viewports >=1440px, with
+   a linear interpolation between. Slopes solved for value=min
+   @1024 and value=max @1440 - do not eyeball-tune, recompute.
+   `--sc2-scale` is one multiplier flowing through every size
+   token so the future compact / comfortable toggle is a one-
+   variable change. `.scv2[data-density="compact"]` remaps
+   `--sc2-scale` (and tightens spacing tokens) - no toggle UI
+   in W1; the control ships with the ribbon in W2-W4.
+   ============================================================ */
+.scv2 {
+  /* ---------- Fluid scale multiplier ---------- */
+  /* Comfortable = 1.0. Compact branch remaps below. */
+  --sc2-scale: 1;
+
+  /* ---------- Fluid type ---------- */
+  /* Each token: clamp(1024-floor, linear-interpolation, 1440-ceiling),
+     then multiplied by --sc2-scale. Slopes solved so value = min at
+     viewport 1024 and value = max at viewport 1440 - a real ease-down
+     inside the design window, not a math-y ceiling at 7000px. */
+  --sc2-size-micro:      calc(clamp(9.5px,  calc(8.27px  + 0.12vw), 10px)  * var(--sc2-scale));
+  --sc2-size-caption:    calc(clamp(11px,   calc(8.54px  + 0.24vw), 12px)  * var(--sc2-scale));
+  --sc2-size-body:       calc(clamp(12.5px, calc(8.81px  + 0.36vw), 14px)  * var(--sc2-scale));
+  --sc2-size-subhead:    calc(clamp(15px,   calc(10.08px + 0.48vw), 17px)  * var(--sc2-scale));
+  --sc2-size-h3:         calc(clamp(17.5px, calc(11.35px + 0.60vw), 20px)  * var(--sc2-scale));
+  --sc2-size-h2:         calc(clamp(21px,   calc(13.62px + 0.72vw), 24px)  * var(--sc2-scale));
+  --sc2-size-h1:         calc(clamp(25px,   calc(15.15px + 0.96vw), 29px)  * var(--sc2-scale));
+  --sc2-size-display:    calc(clamp(29px,   calc(14.23px + 1.44vw), 35px)  * var(--sc2-scale));
+
+  /* Rail-total display (large numeric hero on rail): step above display. */
+  --sc2-size-rail-total: calc(clamp(26px,   calc(13.69px + 1.20vw), 31px)  * var(--sc2-scale));
+
+  /* ---------- Fluid spacing ---------- */
+  /* Same 1024->1440 window applied to a 4px-base scale. Small units
+     stay integer floors so pixel snapping at the tile grid stays
+     predictable. */
+  --sc2-space-1:         calc(clamp(3px,    calc(0.54px  + 0.24vw), 4px)   * var(--sc2-scale));
+  --sc2-space-2:         calc(clamp(6px,    calc(1.08px  + 0.48vw), 8px)   * var(--sc2-scale));
+  --sc2-space-3:         calc(clamp(9px,    calc(1.62px  + 0.72vw), 12px)  * var(--sc2-scale));
+  --sc2-space-4:         calc(clamp(12px,   calc(2.15px  + 0.96vw), 16px)  * var(--sc2-scale));
+  --sc2-space-5:         calc(clamp(15px,   calc(2.69px  + 1.20vw), 20px)  * var(--sc2-scale));
+  --sc2-space-6:         calc(clamp(18px,   calc(3.23px  + 1.44vw), 24px)  * var(--sc2-scale));
+  --sc2-space-7:         calc(clamp(24px,   calc(4.31px  + 1.92vw), 32px)  * var(--sc2-scale));
+  --sc2-space-8:         calc(clamp(30px,   calc(5.38px  + 2.40vw), 40px)  * var(--sc2-scale));
+
+  /* ---------- Radii + border widths ---------- */
+  --sc2-radius-cell:      6px;
+  --sc2-radius-control:   9px;
+  --sc2-radius-container: 11px;
+  --sc2-radius-pill:      9999px;
+  --sc2-border-thin:      1px;
+  --sc2-border-medium:    1.5px;
+
+  /* ---------- Font + weight roles ---------- */
+  --sc2-font-ui: var(--font-ui);
+  --sc2-font-mono: var(--font-mono);
+  --sc2-wt-regular:  400;
+  --sc2-wt-medium:   500;
+  --sc2-wt-semibold: 600;
+  --sc2-wt-bold:     700;
+  --sc2-wt-display:  800;
+
+  /* ---------- Page surfaces ---------- */
+  --sc2-surface-page:   #e8e3d8;   /* render --page */
+  --sc2-surface-app:    #f7f3ea;   /* render --cream (app frame) */
+  --sc2-surface-card:   #ffffff;
+  --sc2-surface-band:   #efe9dc;   /* render --band (period-card header) */
+  --sc2-surface-sunken: #f0ede4;
+
+  /* ---------- Ink (text on light surfaces) ---------- */
+  /* ink-muted brightened from render #8b95a1 (3.04 on card, AA-large
+     only) to #6d737c so regular-size text passes AA everywhere. */
+  --sc2-ink-strong: #122238;    /* AAA on card (16.01) */
+  --sc2-ink:        #1f2d3d;    /* AAA on card (13.99) */
+  --sc2-ink-soft:   #46525f;    /* AAA on card (7.98)  */
+  --sc2-ink-muted:  #6d737c;    /* AA  on card (4.78) - render #8b95a1 was AA-large only */
+  --sc2-ink-inverse:#ffffff;
+
+  /* ---------- Command bar (top navy band) ---------- */
+  --sc2-cmd-bg:            #1a3050;   /* render --navy */
+  --sc2-cmd-bg-deep:       #122238;   /* render --navy-deep */
+  --sc2-cmd-text:          #ffffff;   /* AAA (13.27) */
+  --sc2-cmd-text-muted:    #c8d4e2;   /* AAA (8.83)  */
+  --sc2-cmd-meta:          #b7c4d4;   /* AAA (7.49)  */
+  --sc2-cmd-pill-text:     #eef2f7;   /* AAA (11.80) */
+  --sc2-cmd-pill-border:   rgba(255,255,255,0.22);
+  --sc2-cmd-pill-hover-bg: rgba(255,255,255,0.07);
+
+  /* ---------- Rail (navy right-hand panel) ---------- */
+  --sc2-rail-bg:            #15273c;   /* render --navy-rail */
+  --sc2-rail-bg-shade:      #23405f;   /* rbar track */
+  --sc2-rail-divider:       #1c3149;   /* ln separator */
+  --sc2-rail-border:        #2c4867;   /* --navy-2 family (structural) */
+
+  /* Text roles on rail-bg (all >=4.5 verified) */
+  --sc2-rail-text:          #e8edf3;   /* AAA (12.86) - body text */
+  --sc2-rail-text-strong:   #eafff2;   /* AAA (14.48) - rail total */
+  --sc2-rail-text-item:     #c9d7e8;   /* AAA (10.36) - ln.n name */
+  --sc2-rail-text-muted:    #8fa4bd;   /* AA  (5.92)  - rmeta */
+  --sc2-rail-text-subtle:   #7f95af;   /* AA  (4.92)  - rlbl */
+  --sc2-rail-text-section:  #88a5c2;   /* AA  (5.92)  - AA-FIX from render #6f88a5 (4.14) */
+  --sc2-rail-text-ghost:    #7391b5;   /* AA  (4.65)  - AA-FIX from render #5f7ea3 (3.60) */
+
+  /* Rail accents (highlighted line values) */
+  --sc2-rail-accent-success:#8fd6ab;   /* AAA (8.92) - ln .a .ok, queue chevron */
+  --sc2-rail-accent-warn:   #f2d49a;   /* AAA (10.57) - ln.att attention line */
+
+  /* Rail CTA (primary footer button + quiet secondary) */
+  --sc2-rail-cta-bg:        #37a866;   /* render --green-bright */
+  --sc2-rail-cta-bg-hover:  #2f7d4f;
+  --sc2-rail-cta-text:      #04220f;   /* AA (5.61) on green-bright */
+  --sc2-rail-cta-quiet-border:#2c4867;
+  --sc2-rail-cta-quiet-text:#c4d3e5;
+
+  /* ---------- Cell states (DaySquare skin foundation) ---------- */
+  /* Bg / border / fg per status. Every text-role >=4.5 on its
+     bg-role. upcoming-fg + off-fg tuned darker than the render's
+     values so tile-content text passes AA. Rendered values kept
+     for bg/border (background contrast is not a text rule). */
+
+  /* entered - teal-green pastel */
+  --sc2-state-entered-bg: #d9ecdf;
+  --sc2-state-entered-bd: #a9d4ba;
+  --sc2-state-entered-fg: #1f6b41;   /* AA on entered-bg (5.26) */
+  --sc2-state-entered-strong: #1f6b41;
+
+  /* upcoming - whisper green, distinct from entered */
+  --sc2-state-upcoming-bg: #f0f7f2;
+  --sc2-state-upcoming-bd: #dcebe1;
+  --sc2-state-upcoming-fg: #1f6b41;   /* TUNED from render #7ba38b (2.59 FAIL) to 5.96 AA */
+
+  /* needs-entry - amber pastel */
+  --sc2-state-needs-bg: #fbeed3;
+  --sc2-state-needs-bd: #e7cb8e;
+  --sc2-state-needs-fg: #8a611a;      /* AA (4.80) */
+
+  /* overdue - brick pastel */
+  --sc2-state-overdue-bg: #fbe3dd;
+  --sc2-state-overdue-bd: #e5a496;
+  --sc2-state-overdue-fg: #a03b28;    /* AA (5.44) */
+
+  /* off / off-season - warm neutral */
+  --sc2-state-off-bg: #f1ede2;
+  --sc2-state-off-bd: #ddd7ca;
+  --sc2-state-off-fg: #6b6455;        /* TUNED from render #b3ab99 (1.95 FAIL) to 5.02 AA */
+
+  /* failed - dashed brick, never renders as zero */
+  --sc2-state-failed-bg: #fdf1ee;
+  --sc2-state-failed-bd: #d98070;
+  --sc2-state-failed-fg: #a03b28;     /* AA (6.03) */
+
+  /* loading - neutral skeleton track (shimmer painted by component) */
+  --sc2-state-loading-bg: #f1ede2;
+  --sc2-state-loading-shimmer: #ddd7ca;
+
+  /* Overlay rings */
+  --sc2-today-ring:      #1a3050;     /* navy - outermost */
+  --sc2-selected-ring:   #2f7d4f;     /* green - middle */
+  --sc2-focus-ring:      #1a3050;
+
+  /* ---------- Category chips (top command bar tag) ---------- */
+  --sc2-chip-pdc-bg:  #3d5a80;
+  --sc2-chip-pdc-fg:  #dfe9f5;        /* AA (5.76) */
+  --sc2-chip-mlb-bg:  #e9b45b;
+  --sc2-chip-mlb-fg:  #4a3308;        /* AA (6.30) */
+  --sc2-chip-milb-bg: #cffafe;
+  --sc2-chip-milb-fg: #155e75;
+  --sc2-chip-flat-bg: #e8edf3;
+  --sc2-chip-flat-fg: #3f5169;        /* AA (6.88) */
+  --sc2-chip-flat-bd: #a9b6c6;
+
+  /* ---------- Phase strip (season/development phases) ---------- */
+  --sc2-phase-off-bg:  #eee9dd;
+  --sc2-phase-st-bg:   #f3ddc4;   /* spring training - warm */
+  --sc2-phase-st-fg:   #8a5426;
+  --sc2-phase-ext-bg:  #dbe5ee;   /* extended */
+  --sc2-phase-ext-fg:  #3f5169;
+  --sc2-phase-cx-bg:   #cfe0da;   /* complex ACL/FCL */
+  --sc2-phase-cx-fg:   #2f5c4a;
+  --sc2-phase-br-bg:   #e8d9c2;   /* break */
+  --sc2-phase-br-fg:   #7a5a22;
+  --sc2-phase-ins-bg:  #e6dcec;   /* instructs */
+  --sc2-phase-ins-fg:  #5d4a72;
+  --sc2-phase-camp-bg: #f0e6cf;   /* camp */
+  --sc2-phase-camp-fg: #7a5a22;
+  --sc2-phase-now-underline: var(--sc2-cmd-bg);
+
+  /* ---------- Accent families ---------- */
+  --sc2-accent-amber:      #a9761f;
+  --sc2-accent-copper:     #c15b2e;
+  --sc2-accent-green:      #2f7d4f;
+  --sc2-accent-green-deep: #1f6b41;
+  --sc2-accent-green-bright:#37a866;
+  --sc2-accent-green-wash: #f1f9f4;
+  --sc2-accent-green-line: #cae3d6;
+
+  /* ---------- Corner-mark family ----------
+     Two-color grammar preserved from v1: top-right game wedge
+     (indigo), bottom-left season wedge (copper - shares
+     --sc2-accent-copper above). Indigo has no dedicated ramp yet;
+     token holds the single value used by both the sm wedge and
+     the (future) lg game-day accents. */
+  --sc2-mark-gameday: #4338CA;   /* indigo-700 - promotable to a --sc2-indigo-* ramp */
+
+  /* ---------- Structural lines ---------- */
+  --sc2-line:   #eae4d6;
+  --sc2-line-2: #e2dccd;
+  --sc2-ghost:  #a49c8a;
+
+  /* ---------- Shadow ---------- */
+  --sc2-elevation-card:    0 1px 2px rgba(18,34,56,0.045);
+  --sc2-elevation-raised:  0 3px 8px rgba(18,34,56,0.10), 0 24px 64px rgba(18,34,56,0.18);
+  --sc2-elevation-inset-top: inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+/* Compact density branch: remaps --sc2-scale down + tightens spacing.
+   No toggle UI in W1 - manually appliable via devtools for the W1
+   acceptance check; the operator control ships with the ribbon
+   (W2-W4). Values chosen to hit a visibly denser but fully legible
+   grid without breaking the semantic scale relationships. */
+.scv2[data-density="compact"] {
+  --sc2-scale: 0.88;
+  --sc2-space-3: calc(8px * var(--sc2-scale));
+  --sc2-space-4: calc(10px * var(--sc2-scale));
+  --sc2-space-5: calc(13px * var(--sc2-scale));
+  --sc2-space-6: calc(16px * var(--sc2-scale));
+}

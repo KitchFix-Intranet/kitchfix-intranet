@@ -574,3 +574,60 @@ carry into W1 semantic-token mapping:
 
 Non-text pairs (borders, dividers, decorative gradients) are exempt from
 AA text-contrast rules.
+
+---
+
+## Q8 correction (post-W1, 2026-07-18)
+
+W1 (PR #460) landed the first dead-CSS deletion pass. At deletion time,
+grep-verifying producers against JSX exposed a methodology flaw in the
+Q8 table above: the dead-class scan was built on a static-string grep
+that did not cover template-literal class construction. The `sc-{block}
+--${var}` pattern is used liberally throughout the SC surface, so any
+class whose modifier is produced by an iteration or a `type`/`kind`
+prop looked "dead" to the audit scan but is fully live.
+
+Concretely, the following audit "dead" families were verified LIVE at
+W1 deletion time and skipped:
+
+- `stateLegend.css` all 10 modifiers - built by
+  `` `sc-state-legend-swatch--${mod}` `` at StateLegend.js:120 +
+  LegendInfoPopup.js:226.
+- `seasonStepper.css` all 13 modifiers - built by
+  `--${kind}` / `--${cls}` template literals at SeasonStepper.js:69,
+  99, 104, 144.
+- `DaySquare.css` `.sc-daysq--{state}` all 10 modifiers - built by
+  `` `sc-daysq--${meta.mod}` `` at DaySquare.js:199.
+- `DaySquare.css` `.sc-daysq-badge--*` family - built by
+  `` `sc-daysq-badge--${meta.mod}` `` at DaySquare.js:286.
+- `DaySquare.css` `.sc-daysq-milb-glyph--*` +
+  `.sc-daysq-dn-pill--*` - built by `--${type}` at DaySquare.js:662,
+  687.
+- `ops-sc.css` `.oh-sc-coming-*` - LIVE: it IS the production Coming
+  Soon gate (page.js:101-112) rendered for every non-SC_ADMIN user.
+- `ops-sc.css` `.sc-cat--*` - built by
+  `` `sc-cat--${category.toLowerCase()}` `` at ChromeBar.js:70 + four
+  admin editor sites.
+
+**Numeric correction**: the audit's per-file "dead %" and the
+"~124 dead classes total" summary above are overstated by roughly 90%.
+The single genuinely-dead batch found at W1 deletion time was the
+`.sc-season-banner*` family in `season.css` - 10 selectors +
+one `@keyframes` block + two media-query overrides, totalling 49
+lines. Every other flagged class either has a dynamic producer, a
+gating consumer (Coming Soon), or a runtime attribute selector the
+static grep did not follow.
+
+**Authoritative record**: PR #460's dead-CSS ledger is authoritative
+for W1. Future workstream deletion passes MUST verify producers at
+deletion time, per the W1 prompt's "moment of truth" rule - do NOT
+trust the Q8 table above as a deletion checklist. It captures the
+1:1-name-match subset only.
+
+**Ledger impact on the W9 net-count criterion**: interim workstreams
+will harvest little from Q8-style scanning. The bulk of the net-count
+comes at W9 when whole v1 blocks (hero, legacy skins, retired
+overlays) are deleted as coherent units, not class-by-class from the
+existing files. This does not change the exit criterion; it does
+change the expected cadence (small quarterly cleanup deltas, then
+one large delete at decommission).

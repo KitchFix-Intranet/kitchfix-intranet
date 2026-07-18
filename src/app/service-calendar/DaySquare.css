@@ -891,3 +891,336 @@
   font-size: var(--size-h3);
   line-height: 1;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   .scv2 skin - SC Redesign v2 (Program W1).
+
+   Applies ONLY under the .scv2 flag on the SC root. Every rule
+   below is a two-class selector (.scv2 .sc-daysq...) so specificity
+   beats the v1 base rules above without editing any of them.
+
+   Design contract (repeated for the record):
+   - all legend states remain visually distinct: entered / needs /
+     overdue / upcoming / off / off-season (diagonal hatch preserved
+     as the non-color cue) / loading (skeleton pulse) / failed
+     (dashed border, never renders as zero) / today ring / selected /
+     focused / exhibition / away / notes bubble / game-day corner /
+     ST corner
+   - solid colors come from tokens (.scv2 primitives in tokens.css);
+     no raw hex for solid fills / borders / text
+   - EXCEPTION: alpha variants of token-family colors may be
+     inlined via rgba() (shadows, hatch overlays, badge/chip washes)
+     because the CSS custom-property layer has no clean "add alpha
+     to a hex token" primitive. Solid colors must remain tokens
+   - no layout changes vs v1 (position, box sizing, flex direction
+     preserved). This is a skin, not a re-layout.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Container: cream card ground, softer border, tighter radius */
+.scv2 .sc-daysq {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-cell);
+  color: var(--sc2-ink);
+  box-shadow: var(--sc2-elevation-card);
+}
+.scv2 .sc-daysq--interactive:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(18,34,56,0.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scv2 .sc-daysq--interactive:hover {
+    transform: none;
+    box-shadow: var(--sc2-elevation-card);
+  }
+}
+
+/* Date + badge typography */
+.scv2 .sc-daysq-date { color: inherit; font-weight: var(--sc2-wt-display); }
+.scv2 .sc-daysq--sm .sc-daysq-date { font-size: var(--sc2-size-body); }
+.scv2 .sc-daysq--lg .sc-daysq-date { font-size: var(--sc2-size-h3); }
+
+.scv2 .sc-daysq-notebubble { opacity: 0.55; }
+
+.scv2 .sc-daysq-mid { color: var(--sc2-ink-soft); font-size: var(--sc2-size-caption); }
+.scv2 .sc-daysq--sm .sc-daysq-mid { font-size: var(--sc2-size-micro); }
+
+.scv2 .sc-daysq-mid-rev--actual    { color: var(--sc2-state-entered-fg); }
+.scv2 .sc-daysq-mid-rev--projected { color: var(--sc2-ink-muted); }
+.scv2 .sc-daysq-mid-meals          { color: var(--sc2-ink); }
+.scv2 .sc-daysq-mid-opponent       { color: var(--sc2-ink-strong); }
+
+.scv2 .sc-daysq-mid-unit { color: var(--sc2-ink-muted); font-size: var(--sc2-size-micro); }
+
+/* ── Cell state fills ─────────────────────────────────────────
+   Bg + border + fg per status. Tuned to WCAG AA per W1 contrast
+   table (see PR body). Every fg-on-bg pair is >=4.5. */
+.scv2 .sc-daysq--entered {
+  background: var(--sc2-state-entered-bg);
+  border: var(--sc2-border-medium) solid var(--sc2-state-entered-bd);
+  color: var(--sc2-state-entered-fg);
+}
+.scv2 .sc-daysq--needs-entry {
+  background: var(--sc2-state-needs-bg);
+  border-color: var(--sc2-state-needs-bd);
+  color: var(--sc2-state-needs-fg);
+}
+.scv2 .sc-daysq--overdue {
+  background: var(--sc2-state-overdue-bg);
+  border-color: var(--sc2-state-overdue-bd);
+  color: var(--sc2-state-overdue-fg);
+}
+.scv2 .sc-daysq--upcoming {
+  background: var(--sc2-state-upcoming-bg);
+  border: var(--sc2-border-medium) solid var(--sc2-state-upcoming-bd);
+  color: var(--sc2-state-upcoming-fg);
+}
+.scv2 .sc-daysq--off {
+  background: var(--sc2-state-off-bg);
+  border-color: var(--sc2-state-off-bd);
+  color: var(--sc2-state-off-fg);
+}
+
+/* Off-season: same warm neutral fill as .off PLUS a diagonal hatch
+   overlay as the non-color cue (audit non-negotiable #2, preserved
+   from the v1 design intent). Rendered via a repeating-linear-
+   gradient on the tile background. */
+.scv2 .sc-daysq--off-season {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 6px,
+      rgba(107, 100, 85, 0.10) 6px,
+      rgba(107, 100, 85, 0.10) 8px
+    ),
+    var(--sc2-state-off-bg);
+  border-color: var(--sc2-state-off-bd);
+  color: var(--sc2-state-off-fg);
+}
+
+/* Loading: neutral pulse over the off palette. Never a number. */
+.scv2 .sc-daysq--loading {
+  background: linear-gradient(90deg,
+    var(--sc2-state-loading-bg) 0%,
+    var(--sc2-state-loading-shimmer) 50%,
+    var(--sc2-state-loading-bg) 100%);
+  background-size: 200% 100%;
+  border-color: var(--sc2-state-off-bd);
+  color: transparent;
+  /* animation continues to inherit from the v1 keyframes at file top */
+}
+
+/* Failed: dashed border + muted brick fill + alert glyph.
+   Non-negotiable: never renders as zero. Component gates .mid out
+   on failed already; this rule only paints the frame. */
+.scv2 .sc-daysq--failed {
+  background: var(--sc2-state-failed-bg);
+  border: var(--sc2-border-medium) dashed var(--sc2-state-failed-bd);
+  color: var(--sc2-state-failed-fg);
+}
+
+/* Badge accent inheritance */
+.scv2 .sc-daysq-badge--entered      { color: var(--sc2-state-entered-fg); }
+.scv2 .sc-daysq-badge--needs-entry  { color: var(--sc2-state-needs-fg); }
+.scv2 .sc-daysq-badge--overdue      { color: var(--sc2-state-overdue-fg); }
+.scv2 .sc-daysq-badge--upcoming     { color: var(--sc2-ink-muted); }
+.scv2 .sc-daysq-badge--off,
+.scv2 .sc-daysq-badge--off-season   { color: var(--sc2-ink-muted); }
+.scv2 .sc-daysq-badge--failed       { color: var(--sc2-state-failed-fg); }
+
+/* Muted mid + date on off / off-season */
+.scv2 .sc-daysq--off .sc-daysq-mid,
+.scv2 .sc-daysq--off-season .sc-daysq-mid {
+  color: var(--sc2-ink-muted);
+}
+.scv2 .sc-daysq--off .sc-daysq-date,
+.scv2 .sc-daysq--off-season .sc-daysq-date {
+  color: var(--sc2-state-off-fg);
+}
+
+/* Failed hides mid (matches v1 rule) */
+.scv2 .sc-daysq--failed .sc-daysq-mid { display: none; }
+
+/* ── Exhibition + Away ─────────────────────────────────────────
+   Exhibition: cream base w/ copper ribbon (already positioned by v1).
+   Away: teal-tint fill w/ hollow @OPP tag + plane glyph. */
+.scv2 .sc-daysq--exhibition {
+  background: var(--sc2-surface-app);
+  border-color: var(--sc2-line-2);
+  color: var(--sc2-ink);
+}
+.scv2 .sc-daysq--exhibition .sc-daysq-date { color: var(--sc2-ink); }
+.scv2 .sc-daysq-exh-ribbon {
+  background: var(--sc2-accent-copper);
+  color: var(--sc2-ink-inverse);
+}
+.scv2 .sc-daysq-mid-opponent--exh {
+  background: var(--sc2-accent-green-wash);
+  color: var(--sc2-accent-green-deep);
+}
+.scv2 .sc-daysq-mid-headcount--exh { color: var(--sc2-ink-muted); }
+
+.scv2 .sc-daysq--away {
+  background: var(--sc2-state-upcoming-bg);
+  border-color: var(--sc2-accent-green-line);
+  color: var(--sc2-accent-green-deep);
+}
+.scv2 .sc-daysq--away .sc-daysq-date {
+  color: var(--sc2-accent-green-deep);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-daysq--away .sc-daysq-mid { color: var(--sc2-accent-green-deep); }
+.scv2 .sc-daysq-mid-opponent--away {
+  background: transparent;
+  color: var(--sc2-accent-green-deep);
+  border-color: var(--sc2-accent-green-line);
+}
+.scv2 .sc-daysq-mid-noservice--away { color: var(--sc2-ghost); font-style: italic; }
+.scv2 .sc-daysq-away-glyph { color: var(--sc2-accent-green-line); }
+
+/* ── MLB fee chip pill ─────────────────────────────────────────
+   Filled navy chip - reads as brand-anchored on the tile. */
+.scv2 .sc-daysq-mid--mlb .sc-daysq-mid-opponent {
+  background: rgba(21, 39, 60, 0.08);
+  color: var(--sc2-cmd-bg);
+  font-weight: var(--sc2-wt-display);
+}
+.scv2 .sc-daysq-mid-headcount { color: var(--sc2-ink-strong); }
+
+/* Day/night pill on the .scv2 skin.
+   Same "filled, not ghost" treatment as v1, but sourced from
+   .scv2 chip tokens so the copy-through is clean. Amber for day,
+   navy family for night. */
+.scv2 .sc-daysq-dn-pill--day {
+  background: var(--sc2-chip-mlb-bg);
+  border-color: transparent;
+  color: var(--sc2-chip-mlb-fg);
+}
+.scv2 .sc-daysq-dn-pill--night {
+  background: var(--sc2-chip-flat-bg);
+  border-color: var(--sc2-chip-flat-bd);
+  color: var(--sc2-chip-flat-fg);
+}
+
+/* MiLB legend glyph (bare sun/moon in the legend, not the tile).
+   Colors inherited from the day-night chip family for consistency. */
+.scv2 .sc-daysq-milb-glyph--day   { color: var(--sc2-accent-amber); }
+.scv2 .sc-daysq-milb-glyph--night { color: var(--sc2-cmd-bg); }
+
+/* ── Corner marks ─────────────────────────────────────────────
+   Corner grammar preserved from v1 (top-right = game/event,
+   bottom-left = season). Recolored via .scv2 chip tokens so
+   they inherit the theme's accent families cleanly. */
+.scv2 .sc-daysq--sm.sc-daysq--game-day::before {
+  background: var(--sc2-mark-gameday);
+}
+.scv2 .sc-daysq--sm.sc-daysq--spring::after {
+  background: var(--sc2-accent-copper);
+}
+.scv2 .sc-daysq-st-pill {
+  background: var(--sc2-chip-mlb-bg);
+  border-color: var(--sc2-state-needs-bd);
+  color: var(--sc2-chip-mlb-fg);
+}
+
+/* ── Overlay rings ─────────────────────────────────────────────
+   Composition preserved from v1 (today outermost, selected middle,
+   focused inset). Tokens swapped for the .scv2 family so the rings
+   read on the theme's navy identity. */
+.scv2 .sc-daysq--focused {
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--selected {
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring);
+}
+.scv2 .sc-daysq--today {
+  box-shadow: 0 0 0 2px var(--sc2-today-ring);
+}
+.scv2 .sc-daysq--today.sc-daysq--focused {
+  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--today.sc-daysq--selected {
+  box-shadow: 0 0 0 2px var(--sc2-today-ring), 0 0 0 5px var(--sc2-selected-ring);
+}
+.scv2 .sc-daysq--focused.sc-daysq--selected {
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  box-shadow:
+    0 0 0 2px var(--sc2-today-ring),
+    0 0 0 5px var(--sc2-selected-ring),
+    inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--interactive:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--today.sc-daysq--interactive:focus-visible {
+  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+
+/* Today pill hidden per v1 (kept for structure) */
+.scv2 .sc-daysq-today-pill {
+  background: var(--sc2-today-ring);
+  color: var(--sc2-surface-card);
+}
+
+/* ── Syncing badge (F3) ─────────────────────────────────────── */
+.scv2 .sc-daysq-syncing {
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg);
+  border-color: var(--sc2-state-needs-bd);
+}
+.scv2 .sc-daysq-syncing-spinner {
+  border-color: var(--sc2-state-needs-bg);
+  border-top-color: var(--sc2-state-needs-fg);
+}
+
+/* ── Drill-in polish (lg-only) ─────────────────────────────── */
+.scv2 .sc-daysq--lg {
+  border-radius: var(--sc2-radius-container);
+  box-shadow: var(--sc2-elevation-inset-top), var(--sc2-elevation-card);
+}
+.scv2 .sc-daysq--lg .sc-daysq-badge {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+/* Selection ring specificity (drill-in) */
+.scv2 .sc-daysq--lg.sc-daysq--selected {
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring), var(--sc2-elevation-inset-top);
+}
+.scv2 .sc-daysq--lg.sc-daysq--selected.sc-daysq--focused {
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+
+/* Selection check badge - swapped to scv2 green family */
+.scv2 .sc-daysq-check {
+  background: var(--sc2-accent-green);
+  color: var(--sc2-surface-card);
+}
+
+/* Today cell (drill-in): thicker navy frame + navy date chip */
+.scv2 .sc-daysq--lg.sc-daysq--today {
+  box-shadow: 0 0 0 2.5px var(--sc2-cmd-bg);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--focused {
+  box-shadow: 0 0 0 2.5px var(--sc2-cmd-bg), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--selected {
+  box-shadow: 0 0 0 2.5px var(--sc2-cmd-bg), 0 0 0 5.5px var(--sc2-selected-ring);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  box-shadow:
+    0 0 0 2.5px var(--sc2-cmd-bg),
+    0 0 0 5.5px var(--sc2-selected-ring),
+    inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--interactive:focus-visible {
+  box-shadow: 0 0 0 2.5px var(--sc2-cmd-bg), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today .sc-daysq-date {
+  background: var(--sc2-cmd-bg);
+  color: var(--sc2-surface-card);
+  font-size: var(--sc2-size-h3);
+}
