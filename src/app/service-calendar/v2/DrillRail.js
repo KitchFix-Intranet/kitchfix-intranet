@@ -39,6 +39,7 @@ import {
 } from "./Rail";
 import { fmt$ } from "../season/format";
 import { deriveOpsHomestandLedgerScoped } from "./opsRailDerive";
+import { scrollIntoViewRM } from "./motion";
 
 const QUEUE_TOP_N = 4;
 
@@ -338,10 +339,11 @@ function weekContainsToday(periodDays, weekLabel, today) {
 // bands are rendered by DayGrid with `data-week="<label>"` so a
 // simple attribute selector locates the right one. Falls back
 // silently if the band isn't found.
+// W7 PR 2/3 migration: route through the shared scrollIntoViewRM
+// helper so the reduce-motion branch is one implementation across
+// every v2 surface (was: inline el.scrollIntoView call here).
 function scrollToBand(weekLabel) {
   if (typeof document === "undefined") return;
   const el = document.querySelector(`.sc-workspace-band[data-week="${weekLabel}"]`);
-  if (el?.scrollIntoView) {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  scrollIntoViewRM(el, { block: "center" });
 }
