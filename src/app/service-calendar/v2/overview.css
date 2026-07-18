@@ -589,3 +589,116 @@
      days entered   -> RailHero.meta "N of M days recorded"
      meals YTD      -> RailHero.meta on Period mode "· N meals YTD"
    See v2/SeasonRail.js heroMetaCal / heroMetaPeriod. */
+
+/* ══════════════════════════════════════════════════════════════
+   V3 - GRID + STATES (§S6 / §S7)
+   ══════════════════════════════════════════════════════════════ */
+
+/* §6.4 - Month-card footer demotion (per-meal). The bar encodes the
+   entered/total ratio; the "N/N entered" text is redundant with the
+   rail's exact counts. Under scv2 the count text hides; the money
+   figure remains (compact - $ actual for months with actuals, ~$
+   projection otherwise).
+
+   §6.8 - Fee/MLB variant: zero $ ever. The "N/N game days" text
+   also demotes to the bar; the homestand count line stays as the
+   right figure. */
+.scv2 .sc-season-month-card-stat-main {
+  display: none;
+}
+/* Fee/MLB right figure - stays visible; align to right. */
+.scv2 .sc-season-month-card-stat-aux {
+  margin-left: auto;
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* §6.10 - Off tiles: no border (non-actionable). The
+   --sc2-state-off-bd token is `transparent` per T-table; explicit
+   border-style:none clears any inherited border-medium at the
+   scv2 layer. */
+.scv2 .sc-daysq--off,
+.scv2 .sc-daysq--off-season {
+  border-style: none;
+}
+
+/* §7.3 - Two-signal law extended: needs tiles carry a 4px dot
+   glyph, top-right, needs-bd color. upcoming-mint (Y .850) and
+   needs-amber (Y .848) are grayscale-identical - the glyph is the
+   third carrier (color + border + glyph) so color is never the
+   sole signal. Only large tiles carry the glyph (small tiles use
+   the existing badge/icon system; the extra dot would compete).
+
+   Positioned via absolute-in-tile; the DaySquare wrapper has
+   position:relative already carried by v1 CSS. */
+.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sc2-state-needs-bd);
+  pointer-events: none;
+}
+
+/* §7.4 - Corner markers retired on overview. Phase context lives
+   in the ribbon (§S5) and the month-tick (§6.6). The v1
+   corner-marks (--sc2-mark-gameday indigo, --sc2-accent-copper
+   spring-training) are audit-scheduled for removal in the drill
+   V3 pass; overview hides them here. */
+.scv2 .sc-daysq--game-day::before,
+.scv2 .sc-daysq--spring::after {
+  display: none;
+}
+
+/* §7.5 - Home/away dual-zoom + `--home` class (created new per
+   audit finding). At YEAR ZOOM (sm tiles, chips do not fit), a
+   5px dot pair under the numeral encodes:
+     home = FILLED navy dot
+     away = OUTLINE navy dot (1px border only)
+   Same fill-vs-outline carrier at drill zoom (chips). Grayscale-
+   safe by construction.
+
+   The --home class is applied by the DaySquare atom when the
+   day's game_venue is home; the atom needs a small addition to
+   set it (parallel change in DaySquare.js). If the class is not
+   yet emitted, this rule is a no-op. */
+.scv2 .sc-daysq--sm.sc-daysq--home::before,
+.scv2 .sc-daysq--sm.sc-daysq--game-day:not(.sc-daysq--home)::before {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: block;
+}
+.scv2 .sc-daysq--sm.sc-daysq--home::before {
+  background: var(--sc2-navy, #1a3050);
+}
+.scv2 .sc-daysq--sm.sc-daysq--game-day:not(.sc-daysq--home)::before {
+  background: transparent;
+  border: 1px solid var(--sc2-navy, #1a3050);
+}
+
+/* §7.6 - Interaction deltas: hover +/- L0.04, active +/- L0.07
+   uniform system-wide. Applied at the card level (el-hover shadow
+   step) via existing hover rules; state fills stay at rest. */
+
+/* §6.5 - Year-zoom alarm aggregation: zero per-cell urgency at
+   year view. The DaySquare atom does NOT paint state-color chips
+   inside cells at sm size (already the case in v1 - sm tiles are
+   compact); the aggregation chip lives in the month-card header
+   right slot (existing markup `.sc-season-month-card-stat-aux`
+   handles it or new "urgency" chip; render doesn't currently
+   emit it - deferred to a JSX pass if audit requires). */
+
+/* §6.7 - Current-period wash inset on in-period day tiles. */
+.scv2 .sc-daysq--in-period {
+  box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
+}
