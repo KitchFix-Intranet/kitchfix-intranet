@@ -70,8 +70,9 @@ export default function Ribbon({
   );
 }
 
-// Density toggle - two-segment control (Comfortable / Compact). Value
-// is a controlled prop; parent owns the useDensity() state. Keyboard
+// Density toggle - V3 §S4.1 two-segment control (Standard / Comfortable).
+// Legacy Compact recalibrated INTO Standard - no third mode. Value is
+// a controlled prop; parent owns the useDensity() state. Keyboard
 // navigable via native <button>; each side reports its pressed state
 // via aria-pressed for the SR announcement.
 function DensityToggle({ value, onChange }) {
@@ -79,21 +80,21 @@ function DensityToggle({ value, onChange }) {
     <div className="sc-ribbon-density" role="group" aria-label="View density">
       <button
         type="button"
-        className={`sc-ribbon-density-btn ${value === "comfortable" ? "sc-ribbon-density-btn--active" : ""}`}
-        aria-pressed={value === "comfortable"}
-        onClick={() => onChange?.("comfortable")}
-        title="Comfortable spacing"
+        className={`sc-ribbon-density-btn ${value === "standard" ? "sc-ribbon-density-btn--active" : ""}`}
+        aria-pressed={value === "standard"}
+        onClick={() => onChange?.("standard")}
+        title="Standard (denser, enterprise default)"
       >
-        Comfortable
+        Standard
       </button>
       <button
         type="button"
-        className={`sc-ribbon-density-btn ${value === "compact" ? "sc-ribbon-density-btn--active" : ""}`}
-        aria-pressed={value === "compact"}
-        onClick={() => onChange?.("compact")}
-        title="Compact spacing"
+        className={`sc-ribbon-density-btn ${value === "comfortable" ? "sc-ribbon-density-btn--active" : ""}`}
+        aria-pressed={value === "comfortable"}
+        onClick={() => onChange?.("comfortable")}
+        title="Comfortable (larger spacing)"
       >
-        Compact
+        Comfortable
       </button>
     </div>
   );

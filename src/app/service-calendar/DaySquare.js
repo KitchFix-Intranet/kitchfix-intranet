@@ -202,6 +202,14 @@ export default function DaySquare({
     isFocused && "sc-daysq--focused",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
+    /* V3 §7.5 - `--home` alias for the year-zoom dot pair. Emitted
+       from the same signal as `--game-day` (isGameDayOverlay =
+       day.hasScheduleGame from the sc-17/sc-17b overlay path). A
+       future homestand-account emit will set this from dayType
+       === "GAME" via the year-summary payload; documented in the
+       drift log. Away already has its own class via status="away"
+       (STATUS_META maps to `sc-daysq--away`). */
+    isGameDayOverlay && "sc-daysq--home",
     isSpringPhase && "sc-daysq--spring",
   ].filter(Boolean).join(" ");
 

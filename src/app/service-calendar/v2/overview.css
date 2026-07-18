@@ -24,10 +24,25 @@
            .sc-overview-rail  (sticky Rail)    L2 card
    ══════════════════════════════════════════════════════════════ */
 
-/* V3 §S1.1 - L0 canvas: SC page ground. Applied at the .scv2 root so
-   flag-off pages stay on the site-level ground. */
-.scv2 {
+/* V3 §S1.1 - L0 canvas: SC page ground.
+
+   A4 fix (live-probe): the pre-fix .scv2 rule was single-class
+   specificity (010), same as `.sc-root { background:
+   var(--surface-card) }` in ops-sc.css:14. Even though overview.css
+   should load after ops-sc.css and win by source order, Next.js's
+   prod CSS bundling reordered them and the white ground beat the
+   canvas at runtime. Fix: use compound `.sc-root.scv2` (specificity
+   020) to guarantee the win regardless of load order, AND zero out
+   the .sc-root's own radius + shadow (they belong to the L1 widget
+   now, not to the outermost L0 ground).
+
+   Semantic: .sc-root.scv2 IS the L0 canvas node - a plain ground
+   with no widget rounding or shadow. The .sc-body inside is the
+   L1 widget (radius 16 + --sc2-el-widget shadow). */
+.sc-root.scv2 {
   background: var(--sc2-canvas);
+  border-radius: 0;
+  box-shadow: none;
 }
 /* V3 §S1.2 - Widget: L1 surface, radius 16, --sc2-el-widget shadow,
    margin-top 24 (sp-6) below the site nav. `.scv2 .sc-body` is the
@@ -594,24 +609,48 @@
    V3 - GRID + STATES (§S6 / §S7)
    ══════════════════════════════════════════════════════════════ */
 
-/* §6.4 - Month-card footer demotion (per-meal). The bar encodes the
-   entered/total ratio; the "N/N entered" text is redundant with the
-   rail's exact counts. Under scv2 the count text hides; the money
-   figure remains (compact - $ actual for months with actuals, ~$
-   projection otherwise).
+/* §6.4 / §6.8 - Month-card footer demotion (both grammars).
 
-   §6.8 - Fee/MLB variant: zero $ ever. The "N/N game days" text
-   also demotes to the bar; the homestand count line stays as the
-   right figure. */
+   A1 fix (live-probe): the pre-fix rule hid .stat-main via
+   display:none, but `.sc-season-month-card-stats` is flex with
+   justify-content:space-between - with one remaining child, that
+   pins it to the LEFT. Land the fix at the flex parent + the
+   remaining child so the single right-aligned figure actually
+   sits right on both grammars:
+
+     per-meal grammar:  .stat-main (N/N entered)  hidden ;
+                        .stat-rev  ($ actual OR ~$ projection) right.
+                        $ actual   = 12/800 ink-strong (§6.4).
+                        ~$ project = 12/700 ink-muted  (§6.4).
+     MLB grammar:       .stat-main (N/M game days) hidden ;
+                        .stat-aux  (N homestand)    right (§6.8).
+     STL-FL grammar:    .stat-main (N/M entered)   hidden ;
+                        stats row collapses (bar encodes; zero $).
+
+   Flex justify moves to flex-end so any single remaining child
+   sits right regardless of class. */
+.scv2 .sc-season-month-card-stats {
+  justify-content: flex-end;
+}
 .scv2 .sc-season-month-card-stat-main {
   display: none;
 }
-/* Fee/MLB right figure - stays visible; align to right. */
+/* §6.8 MLB right figure - N homestand(s). */
 .scv2 .sc-season-month-card-stat-aux {
-  margin-left: auto;
   color: var(--sc2-ink-muted);
-  font-size: var(--sc2-size-caption);
+  font-size: 12px;
   font-weight: var(--sc2-wt-bold);
+}
+/* §6.4 per-meal right figures - money-forward per state. */
+.scv2 .sc-season-month-card-stat-rev {
+  font-size: 12px;
+  font-weight: var(--sc2-wt-bold);           /* projection = 700 (spec says 700 for ~$) */
+  color: var(--sc2-ink-muted);               /* projection tone */
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-season-month-card-stat-rev--actual {
+  font-weight: var(--sc2-wt-display);        /* actual = 800 */
+  color: var(--sc2-ink-strong);              /* actual tone (money-forward, not green - spec §6.4) */
 }
 
 /* §6.10 - Off tiles: no border (non-actionable). The
@@ -627,21 +666,28 @@
    glyph, top-right, needs-bd color. upcoming-mint (Y .850) and
    needs-amber (Y .848) are grayscale-identical - the glyph is the
    third carrier (color + border + glyph) so color is never the
-   sole signal. Only large tiles carry the glyph (small tiles use
-   the existing badge/icon system; the extra dot would compete).
+   sole signal.
 
-   Positioned via absolute-in-tile; the DaySquare wrapper has
-   position:relative already carried by v1 CSS. */
-.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+   A2 fix (live-probe): the year-zoom collision lives on `--sm`
+   tiles, not `--lg`. The glyph fires on BOTH sizes now. Position
+   adjusted so sm doesn't compete with the sc-daysq-badge slot
+   (top-right ~10-14px badge area) - the dot rides top-right at
+   3px offset on sm, 4px on lg. */
+.scv2 .sc-daysq--needs-entry::after {
   content: "";
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   width: 4px;
   height: 4px;
   border-radius: 50%;
   background: var(--sc2-state-needs-bd);
   pointer-events: none;
+  z-index: 1;
+}
+.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+  top: 4px;
+  right: 4px;
 }
 
 /* §7.4 - Corner markers retired on overview. Phase context lives
@@ -654,36 +700,38 @@
   display: none;
 }
 
-/* §7.5 - Home/away dual-zoom + `--home` class (created new per
-   audit finding). At YEAR ZOOM (sm tiles, chips do not fit), a
-   5px dot pair under the numeral encodes:
-     home = FILLED navy dot
-     away = OUTLINE navy dot (1px border only)
-   Same fill-vs-outline carrier at drill zoom (chips). Grayscale-
-   safe by construction.
+/* §7.5 - Home/away dual-zoom. Year-zoom (sm tiles) carries a 5px
+   dot below the numeral encoding home vs away by fill-vs-outline.
+   Same carrier at drill zoom (chips). Grayscale-safe by construction.
 
-   The --home class is applied by the DaySquare atom when the
-   day's game_venue is home; the atom needs a small addition to
-   set it (parallel change in DaySquare.js). If the class is not
-   yet emitted, this rule is a no-op. */
+   B5 - DaySquare emits `sc-daysq--home` from `isGameDayOverlay`
+   (year-summary path: day.hasScheduleGame from sc-17/sc-17b
+   overlay). Away emits via existing status-map class `sc-daysq--away`
+   (STATUS_META :91 maps status "away" to modifier "away"). Homestand-
+   schedule accounts (CIN-KY, TBJ-NY, MLB fees) currently emit
+   `--away` on AWAY days but do NOT emit `--home` on home days -
+   the follow-up server-side hasScheduleGame emit for those accounts
+   lands as the drift-log item below. */
 .scv2 .sc-daysq--sm.sc-daysq--home::before,
-.scv2 .sc-daysq--sm.sc-daysq--game-day:not(.sc-daysq--home)::before {
+.scv2 .sc-daysq--sm.sc-daysq--away::before {
   content: "";
   position: absolute;
-  bottom: 4px;
+  bottom: 3px;
   left: 50%;
   transform: translateX(-50%);
   width: 5px;
   height: 5px;
   border-radius: 50%;
   display: block;
+  z-index: 1;
 }
 .scv2 .sc-daysq--sm.sc-daysq--home::before {
-  background: var(--sc2-navy, #1a3050);
+  background: var(--sc2-cmd-bg);   /* --sc2-cmd-bg = navy */
+  border: 0;
 }
-.scv2 .sc-daysq--sm.sc-daysq--game-day:not(.sc-daysq--home)::before {
+.scv2 .sc-daysq--sm.sc-daysq--away::before {
   background: transparent;
-  border: 1px solid var(--sc2-navy, #1a3050);
+  border: 1px solid var(--sc2-cmd-bg);
 }
 
 /* §7.6 - Interaction deltas: hover +/- L0.04, active +/- L0.07

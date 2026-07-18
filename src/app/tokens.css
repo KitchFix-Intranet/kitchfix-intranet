@@ -468,10 +468,21 @@
    generic `--type-*` and `--space-*` tokens for v1 modules. Values
    chosen to hit a visibly denser but fully legible grid without
    breaking the semantic scale relationships. */
+/* V3 §S4.1 - Standard scale + Comfortable step-up. The legacy
+   Compact branch is RECALIBRATED INTO Standard (--sc2-scale: 1 is
+   the new default). Comfortable steps UP to 1.10 for the
+   "less-dense" preference. Any `data-sc2-density="compact"`
+   attribute value written before V3 is normalized to "standard"
+   at read time in useDensity.js. */
+.scv2[data-sc2-density="comfortable"] {
+  --sc2-scale: 1.10;
+}
+
+/* Legacy no-op branch: reads the migrated preference. useDensity.js
+   normalizes on read; a stale localStorage value cannot reach this
+   attribute at runtime. Kept as an explicit no-op rule for safety
+   in case a stored value survives migration - resolves to the same
+   Standard --sc2-scale: 1. */
 .scv2[data-sc2-density="compact"] {
-  --sc2-scale: 0.88;
-  --sc2-space-3: calc(8px * var(--sc2-scale));
-  --sc2-space-4: calc(10px * var(--sc2-scale));
-  --sc2-space-5: calc(13px * var(--sc2-scale));
-  --sc2-space-6: calc(16px * var(--sc2-scale));
+  --sc2-scale: 1;
 }
