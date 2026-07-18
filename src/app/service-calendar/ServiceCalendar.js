@@ -18,6 +18,7 @@ import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivatio
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
+import { useScV2 } from "./v2/flags";
 import {
   queueKey as scQueueKey,
   getAll as scGetAll,
@@ -254,6 +255,7 @@ function AccountDropdown({ accounts, value, onChange }) {
 }
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
+  const scV2 = useScV2();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -2006,7 +2008,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
         )}
       </div>
-    <div className="sc-root" data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
+    <div className={`sc-root${scV2 ? " scv2" : ""}`} data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
       <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
