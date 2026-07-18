@@ -21,6 +21,7 @@ import { tierFromRoles, computeInitialView } from "./computeInitialView";
 import { useScV2 } from "./v2/flags";
 import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
+import SeasonRail from "./v2/SeasonRail";
 import "./v2/overview.css";
 import {
   queueKey as scQueueKey,
@@ -2133,48 +2134,89 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       )}
 
       <div className="sc-body">
-        {isYearView && (
-          <SeasonShell
-            account={data?.account}
-            year={year}
-            yearData={yearData}
-            yearToday={yearToday}
-            yearBannerStats={yearBannerStats}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            isMilb={isMilb}
-            springDateSet={springDateSet}
-            loading={loading || !data || !yearData}
-            loadState={
-              // SC-033: debug hook - dev + ?debug=failed forces the
-              // failed-atom render across the overview so the state is
-              // visually testable without a real fetch failure.
-              (isDev && searchParams?.get("debug") === "failed")
-                ? "failed"
-                : yearLoadState
-            }
-            // Calendar month-card drill: opens the MONTH scope drill-in
-            // (un-deprecates the month view). Prior behavior forwarded
-            // to the containing fiscal period; the two scopes now
-            // coexist - month click opens ?month=, period click opens
-            // ?period= (below).
-            onMonthClick={(mi) => {
-              const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
-              router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
-              setFocusDay(null);
-              setBulkMode(false);
-            }}
-            periodRanges={periodRanges}
-            onPeriodClick={(periodLabel) => {
-              router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
-            }}
-            // Lifted view toggle (the action signal moved to the chrome
-            // bar, so the season shell no longer carries jump props).
-            view={seasonView}
-            onViewChange={handleSeasonViewChange}
-            syncingDates={syncingDates}
-          />
-        )}
+        {isYearView && (() => {
+          const seasonShell = (
+            <SeasonShell
+              account={data?.account}
+              year={year}
+              yearData={yearData}
+              yearToday={yearToday}
+              yearBannerStats={yearBannerStats}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              isMilb={isMilb}
+              springDateSet={springDateSet}
+              loading={loading || !data || !yearData}
+              loadState={
+                // SC-033: debug hook - dev + ?debug=failed forces the
+                // failed-atom render across the overview so the state is
+                // visually testable without a real fetch failure.
+                (isDev && searchParams?.get("debug") === "failed")
+                  ? "failed"
+                  : yearLoadState
+              }
+              // Calendar month-card drill: opens the MONTH scope drill-in
+              // (un-deprecates the month view). Prior behavior forwarded
+              // to the containing fiscal period; the two scopes now
+              // coexist - month click opens ?month=, period click opens
+              // ?period= (below).
+              onMonthClick={(mi) => {
+                const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+                router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+                setFocusDay(null);
+                setBulkMode(false);
+              }}
+              periodRanges={periodRanges}
+              onPeriodClick={(periodLabel) => {
+                router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
+              }}
+              // Lifted view toggle (the action signal moved to the chrome
+              // bar, so the season shell no longer carries jump props).
+              view={seasonView}
+              onViewChange={handleSeasonViewChange}
+              syncingDates={syncingDates}
+            />
+          );
+          // v2 two-pane: SeasonShell left, SeasonRail right. Guarded by
+          // scV2 + non-fee (bundle scope §4) + non-admin. Below 1280px
+          // the rail leaves the side (overview.css media query) and
+          // stacks under the grid full width.
+          const useTwoPane = scV2 && !isFeeAccount && !isAdminView && !!yearData;
+          if (!useTwoPane) return seasonShell;
+          return (
+            <div className="sc-overview">
+              <div className="sc-overview-main">{seasonShell}</div>
+              <aside className="sc-overview-rail" aria-label="Season books">
+                <SeasonRail
+                  mode={seasonView === "period" ? "period" : "calendar"}
+                  year={year}
+                  yearData={yearData}
+                  periodRanges={periodRanges}
+                  onDrillToDay={(date, period /*, source */) => {
+                    // Pinned rule (bundle scope §2 for queue rows): drill
+                    // to the containing period; do NOT auto-open the
+                    // DayDetail modal. focusDay stays null - opening
+                    // entry is an explicit second click on the day.
+                    // Note: within-period scroll-into-view for the target
+                    // date is a W5 responsibility (touches PeriodWorkspace).
+                    if (period) {
+                      router.push(buildScUrl({ account: selectedAccount || undefined, period }), { scroll: false });
+                    }
+                  }}
+                  onDrillToMonth={(mi) => {
+                    const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+                    router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+                    setFocusDay(null);
+                    setBulkMode(false);
+                  }}
+                  onDrillToPeriod={(periodLabel) => {
+                    router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
+                  }}
+                />
+              </aside>
+            </div>
+          );
+        })()}
 
 
         {isPeriodView && (

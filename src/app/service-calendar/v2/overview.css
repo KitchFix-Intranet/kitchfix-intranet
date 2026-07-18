@@ -256,6 +256,64 @@
   }
 }
 
+/* ─── PhaseStrip restyle (slim under scv2, bolder current) ── */
+/* The PhaseStrip already renders a today-line + phase blocks +
+   labels. Under v2 we (a) tighten the strip vertically, (b) make
+   the today-line read like a proper tick (thicker, subtle glow
+   above the rail), and (c) bold the label of the current phase
+   block via aria-tracking that's already in the DOM. All strictly
+   presentational - the derivation logic (phaseDerivation) is
+   untouched. */
+.scv2 .sc-season-strip {
+  background: transparent;
+  border: none;
+  padding: 0 0 var(--sc2-space-3) 0;
+  margin-bottom: var(--sc2-space-3);
+}
+.scv2 .sc-season-strip-header {
+  padding-bottom: var(--sc2-space-2);
+}
+.scv2 .sc-season-strip-title {
+  color: var(--sc2-ink-strong);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.scv2 .sc-season-strip-subtitle {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+}
+.scv2 .sc-season-strip-rail {
+  height: 12px;
+  border-radius: 8px;
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  overflow: hidden;
+}
+.scv2 .sc-season-strip-block-label {
+  color: var(--sc2-ink-strong);
+  font-size: 10px;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.05em;
+}
+/* Today tick - the v1 today-line becomes a more distinct vertical
+   tick under v2. Slightly wider, extends above/below the rail, uses
+   the navy identity. */
+.scv2 .sc-season-strip-today-line {
+  width: 3px;
+  top: -3px;
+  bottom: -3px;
+  background: var(--sc2-cmd-bg);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  z-index: 3;
+}
+.scv2 .sc-season-strip-ticks {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  padding-top: 4px;
+}
+
 /* ─── Retire FullSeasonCard on the v2 path ─────────────────── */
 /* The card's figures (entered YTD, projected, days entered, meals YTD)
    are all rehomed into the rail hero + season lines. Under v2 the

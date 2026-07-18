@@ -1,0 +1,358 @@
+/* ══════════════════════════════════════════════════════════════
+   SC v2 Rail - .scv2-scoped rail primitives styling.
+
+   Only text/color/spacing tokens; no raw hex outside rgba() alpha
+   variants of token-family colors. Layout is column-flex; the rail's
+   sticky positioning + max-height come from the .sc-overview-rail
+   rule in overview.css.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Container: navy panel matching the ribbon */
+.scv2 .sc-rail {
+  background: var(--sc2-rail-bg);
+  color: var(--sc2-rail-text);
+  border-radius: var(--sc2-radius-container);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  padding: var(--sc2-space-4) var(--sc2-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+  min-height: 0;
+  height: 100%;
+}
+
+/* Section label above the hero (e.g. SEASON · 2026 BOOKS) */
+.scv2 .sc-rail-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-subtle);
+}
+
+/* ─── Hero ─────────────────────────────────────────────────── */
+.scv2 .sc-rail-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scv2 .sc-rail-hero-value {
+  font-size: var(--sc2-size-rail-total);
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: -0.02em;
+  color: var(--sc2-rail-text-strong);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.scv2 .sc-rail-hero-label {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-subtle);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.scv2 .sc-rail-hero-meta {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* ─── Progress ─────────────────────────────────────────────── */
+.scv2 .sc-rail-progress {
+  height: 6px;
+  background: var(--sc2-rail-bg-shade);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.scv2 .sc-rail-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--sc2-accent-green) 0%, var(--sc2-accent-green-bright) 100%);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+.scv2 .sc-rail-progress--complete .sc-rail-progress-fill {
+  background: var(--sc2-rail-accent-success);
+}
+
+/* ─── Section headings ─────────────────────────────────────── */
+.scv2 .sc-rail-section {
+  padding-top: var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+  min-height: 0;
+}
+.scv2 .sc-rail-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-rail-section-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-section);
+}
+.scv2 .sc-rail-section-meta {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+}
+
+/* ─── Scroll region + fade ────────────────────────────────── */
+.scv2 .sc-rail-scroll-wrap {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+}
+.scv2 .sc-rail-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar { width: 8px; }
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb {
+  background: var(--sc2-rail-border);
+  border-radius: 6px;
+  border: 2px solid var(--sc2-rail-bg);
+}
+.scv2 .sc-rail-scroll-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32px;
+  background: linear-gradient(180deg, rgba(21, 39, 60, 0) 0%, var(--sc2-rail-bg) 100%);
+  pointer-events: none;
+}
+
+/* ─── Queue row (whole-row button) ────────────────────────── */
+.scv2 .sc-rail-queue-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  padding: 8px var(--sc2-space-2);
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--sc2-radius-cell);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-rail-queue-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.scv2 .sc-rail-queue-row:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.scv2 .sc-rail-queue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.scv2 .sc-rail-queue-dot--needs { background: var(--sc2-rail-accent-warn); }
+.scv2 .sc-rail-queue-dot--overdue { background: var(--sc2-state-overdue-bd); }
+.scv2 .sc-rail-queue-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+.scv2 .sc-rail-queue-date {
+  color: var(--sc2-rail-text-item);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-caption);
+}
+.scv2 .sc-rail-queue-status {
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-micro);
+}
+.scv2 .sc-rail-queue-row--overdue .sc-rail-queue-status {
+  color: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-rail-queue-chevron {
+  color: var(--sc2-rail-text-ghost);
+  display: inline-flex;
+}
+.scv2 .sc-rail-queue-row:hover .sc-rail-queue-chevron,
+.scv2 .sc-rail-queue-row:focus-visible .sc-rail-queue-chevron {
+  color: var(--sc2-rail-text-item);
+}
+
+/* Overflow "+ N more" row */
+.scv2 .sc-rail-queue-more {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px var(--sc2-space-2);
+  background: transparent;
+  border: none;
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-caption);
+  cursor: pointer;
+  border-radius: var(--sc2-radius-cell);
+  width: 100%;
+}
+.scv2 .sc-rail-queue-more:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc2-rail-text-item);
+}
+
+/* Empty queue message */
+.scv2 .sc-rail-queue-empty {
+  padding: var(--sc2-space-2);
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-caption);
+  font-style: italic;
+}
+
+/* ─── Line rows (season month/period lines) ───────────────── */
+.scv2 .sc-rail-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  padding: 7px var(--sc2-space-2);
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+  color: inherit;
+  text-align: left;
+  border-radius: 0;
+}
+.scv2 .sc-rail-line--clickable {
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-rail-line--clickable:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.scv2 .sc-rail-line--clickable:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.scv2 .sc-rail-line-label {
+  color: var(--sc2-rail-text-item);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scv2 .sc-rail-line-body {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-rail-line-value {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-bold);
+  font-size: var(--sc2-size-caption);
+}
+.scv2 .sc-rail-line-value--ghost {
+  color: var(--sc2-rail-text-ghost);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-rail-line-value--attention {
+  color: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-rail-line-check {
+  color: var(--sc2-rail-accent-success);
+  display: inline-flex;
+}
+.scv2 .sc-rail-line-sub {
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-micro);
+}
+.scv2 .sc-rail-line-chevron {
+  color: var(--sc2-rail-text-ghost);
+  display: inline-flex;
+}
+.scv2 .sc-rail-line--clickable:hover .sc-rail-line-chevron,
+.scv2 .sc-rail-line--clickable:focus-visible .sc-rail-line-chevron {
+  color: var(--sc2-rail-text-item);
+}
+.scv2 .sc-rail-line--off .sc-rail-line-label,
+.scv2 .sc-rail-line--off .sc-rail-line-value {
+  color: var(--sc2-rail-text-ghost);
+}
+.scv2 .sc-rail-line--current {
+  background: rgba(255, 255, 255, 0.05);
+}
+.scv2 .sc-rail-line--current .sc-rail-line-label {
+  color: var(--sc2-rail-text);
+}
+
+/* ─── Footer action ───────────────────────────────────────── */
+.scv2 .sc-rail-footer {
+  padding-top: var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  flex-shrink: 0;
+}
+.scv2 .sc-rail-footer-cta {
+  width: 100%;
+  background: var(--sc2-rail-cta-bg);
+  color: var(--sc2-rail-cta-text);
+  border: none;
+  border-radius: var(--sc2-radius-control);
+  padding: 10px var(--sc2-space-4);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-rail-footer-cta:hover {
+  background: var(--sc2-rail-cta-bg-hover);
+}
+.scv2 .sc-rail-footer-cta:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+.scv2 .sc-rail-footer--caught-up {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sc2-space-2);
+  color: var(--sc2-rail-accent-success);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  padding-top: var(--sc2-space-3);
+}
+.scv2 .sc-rail-footer-glyph {
+  display: inline-flex;
+}
+.scv2 .sc-rail-footer-caught-up-label {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* ─── Utility ─────────────────────────────────────────────── */
+.scv2 .sc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
