@@ -130,6 +130,12 @@ export default function MonthCard({
       {expanded ? (
         <header className="sc-season-month-card-header">
           <span className="sc-season-month-card-name">{monthName}</span>
+          {/* V3 §6.5 - month-level urgency chip: worst wins.
+              Aggregated from the month's day states in monthSummary. */}
+          <MonthUrgencyChip
+            monthSummary={monthSummary}
+            hasHomestandSchedule={hasHomestandSchedule}
+          />
           {!isDesktop && (
             <button
               type="button"
@@ -308,6 +314,43 @@ function indexDays(monthSummary) {
     for (const d of monthSummary.days) m.set(d.date, d);
   }
   return m;
+}
+
+/*
+  V3 §6.5 - MonthUrgencyChip. Aggregates the month's day states
+  worst-wins: red "N overdue" outranks amber "N need entry".
+  Nothing rendered when both counts are zero. Chip tokens per
+  state (fill/bd/text ride --sc2-state-* which the T-table
+  Option B values shipped in Step 1). 11/800 radius full.
+  Suppressed on fee/homestand accounts - urgency is a per-meal
+  operator signal; fee accounts have their own contract-status
+  band elsewhere.
+*/
+function MonthUrgencyChip({ monthSummary, hasHomestandSchedule }) {
+  if (hasHomestandSchedule) return null;
+  if (!monthSummary?.days) return null;
+  let overdue = 0;
+  let needs = 0;
+  for (const d of monthSummary.days) {
+    const s = d?.status;
+    if (s === "overdue") overdue++;
+    else if (s === "needs-entry") needs++;
+  }
+  if (overdue > 0) {
+    return (
+      <span className="sc-season-month-card-chip sc-season-month-card-chip--overdue">
+        {overdue} overdue
+      </span>
+    );
+  }
+  if (needs > 0) {
+    return (
+      <span className="sc-season-month-card-chip sc-season-month-card-chip--needs">
+        {needs} need entry
+      </span>
+    );
+  }
+  return null;
 }
 
 function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange }) {

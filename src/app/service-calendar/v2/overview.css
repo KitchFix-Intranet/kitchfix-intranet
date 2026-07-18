@@ -772,6 +772,32 @@
   box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
 }
 
+/* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
+   inside the expanded MonthCard header right slot. 11/800 radius
+   full; state tokens (T-table Option B) drive fill/bd/text. */
+.scv2 .sc-season-month-card-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+.scv2 .sc-season-month-card-chip--needs {
+  background: var(--sc2-state-needs-bg);
+  border-color: var(--sc2-state-needs-bd);
+  color: var(--sc2-state-needs-fg);
+}
+.scv2 .sc-season-month-card-chip--overdue {
+  background: var(--sc2-state-overdue-bg);
+  border-color: var(--sc2-state-overdue-bd);
+  color: var(--sc2-state-overdue-fg);
+}
+
 /* §6.1 - Square tiles. aspect-ratio: 1 on sm tiles inside the
    overview month grid. Whole-px math shakes out at the browser
    layer; --sc2-shell-max stays at 1520 unless Chat-Claude's
