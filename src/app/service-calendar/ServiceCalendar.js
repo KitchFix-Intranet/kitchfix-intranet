@@ -25,6 +25,7 @@ import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
 import DayEntryV2 from "./v2/entry/DayEntryV2";
+import "./v2/shell.css";
 import "./v2/overview.css";
 import "./v2/drill.css";
 import {

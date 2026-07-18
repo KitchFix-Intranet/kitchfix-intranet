@@ -59,6 +59,28 @@
 
 ---
 
+## Shell width scale (SC v2)
+
+Canvas widths for the Service Calendar v2 surfaces. Published as `:root` tokens with the
+`--sc2-` prefix so they never collide with v1 module widths (which stay bound by `.oh-bound`'s
+1024px max-width in `ops-shared.css`).
+
+| Token | Value | Consumer |
+|---|---|---|
+| `--sc2-shell-max` | `1520px` | Overview + drill two-pane shells (`.oh-bound:has(.scv2)` override) |
+| `--sc2-entry-max` | `1240px` | DayEntryV2 overlay card (`.sc-overlay-backdrop:has(.sc-v2-entry) .sc-overlay-card`) |
+
+Values chosen to give v2 the working canvas the render frames imply (~1440-1600 workspace) while
+preserving Decision 7 zoom posture (`SC_REDESIGN_PROGRAM_SCOPE.md` §17): at 150% display scaling
+the compact fit still lands with zero horizontal scroll, because the two-pane rail-stacks below
+1280 CSS px and 1535 physical × 150% = 1023 CSS px which is below that breakpoint. Wider maxima
+stop binding on small effective viewports, they don't overflow them.
+
+Every non-v2 Ops Hub module keeps `.oh-bound`'s 1024px byte-identically. Flag OFF for SC also
+uses the shared 1024px (no `.scv2` descendant → `:has(.scv2)` doesn't match).
+
+---
+
 ## Radius scale
 
 > Canonical values live in `src/app/tokens.css`; the system is documented in
