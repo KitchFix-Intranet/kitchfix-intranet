@@ -1,0 +1,266 @@
+/* ══════════════════════════════════════════════════════════════
+   SC v2 - Overview surface (Ribbon + Chrome + two-pane + Rail).
+
+   Every rule scoped to `.scv2` on the SC root. Flag OFF renders v1
+   untouched. Tokens only (from the .scv2 block in src/app/tokens.css);
+   solid colors are all tokens; alpha variants via rgba() are the
+   documented exception.
+
+   DOM under .scv2 (no wrapper needed - ribbon + chrome are siblings
+   whose visual continuity is created by adjacent-sibling styling):
+     .scv2.sc-root
+       .sc-ribbon           (top row: brand + right cluster)
+       .sc-chrome-bar       (bottom row, restyled navy under scv2)
+       .sc-body
+         .sc-overview       (grid: content left, rail right)
+           .sc-overview-main  (SeasonShell)
+           .sc-overview-rail  (sticky Rail)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Ribbon (identity row above ChromeBar) ─────────────────
+   The ribbon + ChromeBar together form one continuous navy band:
+   the ribbon paints the top gradient with rounded top corners; the
+   .scv2 .sc-chrome-bar rule below inherits the deeper navy shade
+   with a hairline top divider so they read as one band. */
+.scv2 .sc-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc2-space-4);
+  padding: var(--sc2-space-3) var(--sc2-space-5);
+  background: linear-gradient(180deg, var(--sc2-cmd-bg) 0%, var(--sc2-cmd-bg-deep) 100%);
+  color: var(--sc2-cmd-text);
+  border-radius: var(--sc2-radius-container) var(--sc2-radius-container) 0 0;
+}
+
+/* Left cluster: title + welcome */
+.scv2 .sc-ribbon-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-3);
+  min-width: 0;
+}
+.scv2 .sc-ribbon-title {
+  margin: 0;
+  font-family: var(--sc2-font-ui);
+  font-size: var(--sc2-size-h2);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-cmd-text);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.scv2 .sc-ribbon-welcome {
+  margin: 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-cmd-text-muted);
+  font-weight: var(--sc2-wt-medium);
+}
+
+/* Right cluster: as-of pill, density toggle, admin lock */
+.scv2 .sc-ribbon-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  flex: 0 0 auto;
+}
+
+/* AsOf pill on the ribbon - reuses .sc-chrome-bar-asof base class
+   with the .sc-ribbon-asof modifier the AsOf component wires up. */
+.scv2 .sc-chrome-bar-asof.sc-ribbon-asof {
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  color: var(--sc2-cmd-text-muted);
+  padding: 4px 10px;
+  border-radius: var(--sc2-radius-pill);
+  font-size: var(--sc2-size-micro);
+}
+.scv2 .sc-chrome-bar-asof.sc-ribbon-asof .sc-chrome-bar-asof-dot {
+  background: var(--sc2-rail-accent-success);
+}
+.scv2 .sc-chrome-bar-asof.sc-ribbon-asof .sc-chrome-bar-asof-refresh {
+  color: var(--sc2-cmd-text-muted);
+}
+.scv2 .sc-chrome-bar-asof.sc-ribbon-asof .sc-chrome-bar-asof-refresh:hover {
+  color: var(--sc2-cmd-text);
+}
+
+/* Admin lock button */
+.scv2 .sc-ribbon-admin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--sc2-radius-control);
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  color: var(--sc2-cmd-text-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-ribbon-admin:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-admin:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+.scv2 .sc-ribbon-admin[aria-pressed="true"] {
+  background: var(--sc2-rail-accent-warn);
+  color: var(--sc2-cmd-bg-deep);
+  border-color: transparent;
+}
+
+/* Density toggle - two-segment control */
+.scv2 .sc-ribbon-density {
+  display: inline-flex;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  border-radius: var(--sc2-radius-control);
+}
+.scv2 .sc-ribbon-density-btn {
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--sc2-cmd-text-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-ribbon-density-btn:hover {
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-density-btn--active {
+  background: var(--sc2-surface-app);
+  color: var(--sc2-cmd-bg-deep);
+}
+.scv2 .sc-ribbon-density-btn:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* ─── ChromeBar under scv2 (navy band) ─────────────────────── */
+.scv2 .sc-chrome-bar {
+  background: var(--sc2-cmd-bg-deep);
+  border-top: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.10);
+  border-radius: 0 0 var(--sc2-radius-container) var(--sc2-radius-container);
+  padding: var(--sc2-space-2) var(--sc2-space-5);
+  color: var(--sc2-cmd-text-muted);
+  margin-bottom: var(--sc2-space-3);
+}
+.scv2 .sc-chrome-bar-left,
+.scv2 .sc-chrome-bar-right {
+  gap: var(--sc2-space-3);
+}
+.scv2 .sc-chrome-bar-toggle {
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+}
+.scv2 .sc-chrome-bar-toggle-btn {
+  color: var(--sc2-cmd-text-muted);
+  background: transparent;
+}
+.scv2 .sc-chrome-bar-toggle-btn--active {
+  background: var(--sc2-surface-app);
+  color: var(--sc2-cmd-bg-deep);
+}
+.scv2 .sc-chrome-bar-stats-label {
+  color: var(--sc2-cmd-text-muted);
+}
+.scv2 .sc-chrome-bar-stats-value {
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-chrome-bar-stats-sep {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Urgency chips: keep amber/red identity but tuned for navy bg */
+.scv2 .sc-chrome-bar-stats-count--overdue {
+  background: rgba(220, 38, 38, 0.18);
+  border: var(--sc2-border-thin) solid rgba(220, 38, 38, 0.40);
+  color: #ffbfb6;
+}
+.scv2 .sc-chrome-bar-stats-count--needs {
+  background: rgba(217, 119, 6, 0.18);
+  border: var(--sc2-border-thin) solid rgba(217, 119, 6, 0.40);
+  color: var(--sc2-rail-accent-warn);
+}
+
+/* Category tag on the navy band - retint chip fills over navy */
+.scv2 .sc-cat {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--sc2-cmd-text);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+}
+.scv2 .sc-cat--pdc {
+  background: rgba(61, 90, 128, 0.35);
+  color: var(--sc2-chip-pdc-fg);
+  border-color: rgba(223, 233, 245, 0.20);
+}
+.scv2 .sc-cat--mlb {
+  background: var(--sc2-chip-mlb-bg);
+  color: var(--sc2-chip-mlb-fg);
+  border-color: transparent;
+}
+
+/* Account dropdown control retinted for navy */
+.scv2 .sc-account-dropdown-btn,
+.scv2 button[class*="account"]:not([class*="active"]) {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--sc2-cmd-text);
+  border-color: rgba(255, 255, 255, 0.20);
+}
+
+/* ─── Two-pane overview layout ─────────────────────────────── */
+.scv2 .sc-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: var(--sc2-space-4);
+  align-items: start;
+}
+
+.scv2 .sc-overview-main {
+  min-width: 0;
+}
+
+/* Rail sticks below the ribbon band as the user scrolls the page.
+   The offset covers the intranet TopNav (~50px) + the ribbon band
+   (~90-100px) - the site pattern is page-level scroll; the rail is
+   its own scroll region within the sticky slot. */
+.scv2 .sc-overview-rail {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+  max-height: calc(100vh - 108px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Below the two-pane min: rail leaves the side and stacks below the
+   grid full width. W8 owns the real responsive frame; this is the
+   interim pattern for W2-W4. */
+@media (max-width: 1279px) {
+  .scv2 .sc-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scv2 .sc-overview-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* ─── Retire FullSeasonCard on the v2 path ─────────────────── */
+/* The card's figures (entered YTD, projected, days entered, meals YTD)
+   are all rehomed into the rail hero + season lines. Under v2 the
+   Period grid's summary slot renders empty and the period cards
+   naturally fill the space. */
+.scv2 .sc-season-period-grid-summary {
+  display: none;
+}

@@ -19,6 +19,9 @@ import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
 import { useScV2 } from "./v2/flags";
+import { useDensity } from "./v2/useDensity";
+import Ribbon from "./v2/Ribbon";
+import "./v2/overview.css";
 import {
   queueKey as scQueueKey,
   getAll as scGetAll,
@@ -256,6 +259,7 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
+  const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -1959,56 +1963,75 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   return (
     <>
-      <div
-        className="oh-hero"
-        style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
-      >
-        <div className="oh-hero-overlay" />
-        <div className="oh-hero-content">
-          <h1 className="oh-hero-title">Service Calendar</h1>
-          <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+      {!scV2 && (
+        <div
+          className="oh-hero"
+          style={heroImage ? { backgroundImage: `url(${heroImage})` } : {}}
+        >
+          <div className="oh-hero-overlay" />
+          <div className="oh-hero-content">
+            <h1 className="oh-hero-title">Service Calendar</h1>
+            <p className="oh-hero-subtitle">Welcome back, {firstName}.</p>
+          </div>
+          {/* Redesign PR 1A: admin entry in the hero's top-right corner.
+              Bundle 1 (Section A) makes the button a TOGGLE - it now
+              renders in admin view too, switching to a back-arrow icon
+              so the operator has an exit path (the previous gate hid the
+              button in admin view, leaving no way back). Wires to the
+              same handleAdminToggle the old ChromeBar button used;
+              isAdminView state + URL sync are unchanged. */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="sc-hero-admin"
+              onClick={handleAdminToggle}
+              aria-label={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+              title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
+              aria-pressed={isAdminView}
+            >
+              {isAdminView ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 12H5" />
+                  <path d="m12 19-7-7 7-7" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="10" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              )}
+            </button>
+          )}
+          {/* As-of pill relocated from the ChromeBar into the hero's
+              bottom-right corner so the bar can sit on one row at
+              desktop widths. Reuses the existing .sc-chrome-bar-asof
+              base styling and layers an on-photo .sc-hero-asof modifier
+              that mirrors the .sc-hero-admin treatment above. Hidden on
+              phones via the modifier; StickyContext carries freshness
+              context there. */}
+          {asOf && (
+            <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
+          )}
         </div>
-        {/* Redesign PR 1A: admin entry in the hero's top-right corner.
-            Bundle 1 (Section A) makes the button a TOGGLE - it now
-            renders in admin view too, switching to a back-arrow icon
-            so the operator has an exit path (the previous gate hid the
-            button in admin view, leaving no way back). Wires to the
-            same handleAdminToggle the old ChromeBar button used;
-            isAdminView state + URL sync are unchanged. */}
-        {isAdmin && (
-          <button
-            type="button"
-            className="sc-hero-admin"
-            onClick={handleAdminToggle}
-            aria-label={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-            title={isAdminView ? "Return to the calendar" : "Service Calendar admin (corporate only)"}
-            aria-pressed={isAdminView}
-          >
-            {isAdminView ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M19 12H5" />
-                <path d="m12 19-7-7 7-7" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="10" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            )}
-          </button>
-        )}
-        {/* As-of pill relocated from the ChromeBar into the hero's
-            bottom-right corner so the bar can sit on one row at
-            desktop widths. Reuses the existing .sc-chrome-bar-asof
-            base styling and layers an on-photo .sc-hero-asof modifier
-            that mirrors the .sc-hero-admin treatment above. Hidden on
-            phones via the modifier; StickyContext carries freshness
-            context there. */}
-        {asOf && (
-          <AsOf asOf={asOf} onRefresh={handleRefresh} className="sc-hero-asof" />
-        )}
-      </div>
-    <div className={`sc-root${scV2 ? " scv2" : ""}`} data-density="compact" data-billing={isFeeAccount ? "flat_fee" : "per_meal"} data-category={data?.account?.category || ""}>
+      )}
+    <div
+      className={`sc-root${scV2 ? " scv2" : ""}`}
+      data-density={scV2 ? scV2Density : "compact"}
+      data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
+      data-category={data?.account?.category || ""}
+    >
+      {scV2 && (
+        <Ribbon
+          firstName={firstName}
+          asOf={asOf}
+          onRefresh={handleRefresh}
+          isAdmin={isAdmin}
+          isAdminView={isAdminView}
+          onAdminToggle={handleAdminToggle}
+          density={scV2Density}
+          onDensityChange={setScV2Density}
+        />
+      )}
       <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
