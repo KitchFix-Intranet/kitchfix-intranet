@@ -1,0 +1,57 @@
+/* ══════════════════════════════════════════════════════════════
+   SC v2 shell width overrides (W7.5).
+
+   Standing law 1: any container shared with other Ops Hub pages is
+   untouchable. The binding constraints for v2 both live on shared
+   containers:
+     .oh-bound         ops-shared.css:52-56  (max-width: 1024px)
+                       used by every Ops Hub module page
+     .sc-overlay-card  ops-sc.css:150-157    (max-width: 640px)
+                       used by DayDetail v1 + bulk overlay + any
+                       future SC modal
+
+   Fix: additive :has() selectors that fire ONLY when a `.scv2`
+   descendant is present. Every non-v2 module + v1 SC (flag off)
+   reads the shared rule byte-identically; only v2 SC opens up.
+
+   :has() browser support: Chrome 105+, Safari 15.4+, Firefox 121+.
+   ops-shared.css already uses `body:has(.oh-app)` (line 39) so
+   :has() is an accepted primitive in this codebase.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Overview + drill shell - widen the outer bound. sc-root fills its
+   parent naturally (no width constraint of its own); everything else
+   inherits the new canvas via the existing flex/grid rules. */
+.oh-bound:has(.scv2) {
+  max-width: var(--sc2-shell-max);
+}
+
+/* DayEntryV2 overlay - the shared .sc-overlay-card caps at 640px so
+   v1 modals (DayDetail v1, bulk overlay, no-service confirm) stay put.
+   Under .scv2, an overlay containing DayEntryV2 opens to entry-max.
+   The child selector matches only the specific overlay that contains
+   the entry component; other overlays (bulk overlay inside the same
+   .scv2 root) keep 640px because their card doesn't contain
+   .sc-v2-entry. */
+.scv2 .sc-overlay-backdrop:has(.sc-v2-entry) .sc-overlay-card {
+  max-width: var(--sc2-entry-max);
+}
+
+/* Also widen the confirmation-dialog inner max-width relative to the
+   larger overlay it now lives in. The v1 confirm dialog inside the
+   entry (discard-confirm, no-service-confirm) still caps at 440px
+   naturally per its own rule. This applies only to the OVERLAY CARD,
+   not the confirms inside it. */
+
+/* Sanity: below 1280 the two-pane rail leaves the side and stacks
+   under the grid (per overview.css:273 + drill.css:36). That
+   breakpoint governs the layout regardless of --sc2-shell-max.
+   150% zoom on a 1535px physical viewport yields ~1023 CSS px, which
+   is BELOW 1280, so the compact-fit rail-stacked layout kicks in
+   automatically and zero horizontal scroll is guaranteed (Decision 7
+   posture preserved). */
+
+/* Ribbon + ChromeBar + StateLegend already have `border-radius` +
+   flex-fill semantics that span sc-root; widening the outer bound
+   naturally aligns them at the same edge. No per-child override
+   needed. */

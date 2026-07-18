@@ -116,6 +116,25 @@
   /* density-aware semantic spacing (Comfortable defaults) */
   --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);
   --control-height:40px; --control-pad-x:var(--space-4); --row-height:48px; --cell-size:34px;
+
+  /* ---------- SC v2 shell width system (W7.5) ----------
+     Published at :root (with sc2- prefix so no v1 module collides -
+     v1 modules do not consume any sc2-* token) so both the .scv2
+     descendant tree AND the outer .oh-bound:has(.scv2) override can
+     read them without token redefinition. Values chosen to give v2
+     the working canvas the render frames imply (~1440-1600 workspace)
+     while preserving the decision-7 zoom posture (150% scaling still
+     yields the compact fit; wider maxima stop binding on small
+     effective viewports, they don't overflow them).
+       --sc2-shell-max  1520px  overview + drill two-pane shells
+       --sc2-entry-max  1240px  DayEntryV2 overlay - narrower because
+                                the modal is a focused billing surface,
+                                not a landing dashboard
+     v1 .oh-bound (max-width: 1024px in ops-shared.css) stays
+     byte-identical for every non-v2 module + for v1 SC (flag off) via
+     the :has() selector's ':has(.scv2)' scope. */
+  --sc2-shell-max: 1520px;
+  --sc2-entry-max: 1240px;
 }
 
 /* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */
