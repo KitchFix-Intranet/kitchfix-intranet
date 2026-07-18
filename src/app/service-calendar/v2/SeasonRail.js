@@ -118,7 +118,7 @@ function CalendarRail({
 
       <RailScroll>
         <RailSection
-          label="Needs attention"
+          label="NEEDS ENTRY"
           meta={queue.length > 0 ? `${queue.length}` : null}
         >
           {queue.length === 0 && (
@@ -219,7 +219,7 @@ function PeriodRail({
 
       <RailScroll>
         <RailSection
-          label="Needs attention"
+          label="NEEDS ENTRY"
           meta={groupedQueue.length > 0 ? `${groupedQueue.length}` : null}
         >
           {groupedQueue.length === 0 && (

@@ -167,7 +167,7 @@ export default function DrillRail({
             queue but limited to the drill range. Rows target the
             day (?day= param via caller's onTargetDay). */}
         <RailSection
-          label="Needs attention"
+          label="NEEDS ENTRY"
           meta={queueRows.length > 0 ? `${queueRows.length}` : null}
         >
           {queueRows.length === 0 && (

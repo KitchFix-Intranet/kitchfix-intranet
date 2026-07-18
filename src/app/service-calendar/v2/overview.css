@@ -750,3 +750,68 @@
 .scv2 .sc-daysq--in-period {
   box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   V3 §S9 - RIDERS
+   ══════════════════════════════════════════════════════════════ */
+
+/* §9.3 - ONE focus-ring style. 2px navy, 2px offset. Applied at
+   scv2 scope to every focusable descendant so the tab walk (chrome
+   -> grid -> legend -> rail) reads as one style. Feeds C-012
+   unification (parallel design-audit item). */
+.scv2 *:focus-visible {
+  outline: 2px solid var(--sc2-cmd-bg);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* §9.6 - As-of pill states: fresh (green dot, default), stale
+   (amber pill + "stale" word), failed (red pill + retry cue).
+   Presentation only - fetch-state hook (§9.2) is elsewhere. The
+   ChromeBar / Ribbon components need to add a data-fetch-state
+   attribute on the as-of pill for these rules to fire; the CSS
+   is ready for that emit. */
+.scv2 .sc-chrome-bar-asof[data-fetch-state="stale"],
+.scv2 .sc-ribbon-asof[data-fetch-state="stale"] {
+  background: rgba(242, 212, 154, 0.16);
+  border-color: rgba(242, 212, 154, 0.42);
+  color: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="stale"] .sc-chrome-bar-asof-dot,
+.scv2 .sc-ribbon-asof[data-fetch-state="stale"] .sc-chrome-bar-asof-dot {
+  background: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="failed"],
+.scv2 .sc-ribbon-asof[data-fetch-state="failed"] {
+  background: rgba(221, 138, 123, 0.18);
+  border-color: rgba(221, 138, 123, 0.44);
+  color: #ffbfb6;
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="failed"] .sc-chrome-bar-asof-dot,
+.scv2 .sc-ribbon-asof[data-fetch-state="failed"] .sc-chrome-bar-asof-dot {
+  background: var(--sc2-state-overdue-bd);
+}
+
+/* §S11.1 - Heading map at scv2 scope. Micro-tier labels
+   (11/800 tracked all-caps) are the ONLY tracked tier per spec.
+   L1 chrome title (18/800) landed in Step 2; L2 month names +
+   rail hero label pair are shipped via existing sizes. */
+.scv2 .sc-rail-label,
+.scv2 .sc-rail-section-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* §S11.2 - Tabular figures on all data nodes. */
+.scv2 .sc-rail-hero-value,
+.scv2 .sc-rail-line-value,
+.scv2 .sc-season-month-card-stat-rev,
+.scv2 .sc-season-month-card-stat-aux,
+.scv2 .sc-chrome-bar-stats-value,
+.scv2 .sc-chrome-bar-stats-count-num,
+.scv2 .sc-workspace-frame-stat-num {
+  font-variant-numeric: tabular-nums;
+}

@@ -146,7 +146,7 @@ export default function OpsRail({
             urgency (amber/red rendered by the RailQueueRow via the
             row's status semantic). */}
         <RailSection
-          label={hasHomestandSchedule ? "To enter" : "Needs attention"}
+          label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
           meta={queueRows.length > 0 ? `${queueRows.length}` : null}
         >
           {queueRows.length === 0 && (
