@@ -241,6 +241,14 @@ entries for the program). Acceptance: `grep` proves zero references to removed c
 `sc-v2-complete`** on the commit that closes W9. Gate-widening is NOT part of W9 - it moves to
 the post-program road in §18.
 
+**Two-PR execution (2026-07-18 amendment).** W9 ships as two PRs honoring the "one release of
+soak" clause above: PR 1/2 flips the defaults + unifies the two mobile footers (nothing
+deleted); Kevin soaks on pure defaults for ≥1 real entry day; PR 2/2 (demolition + docs sweep)
+runs on his explicit go and carries the `sc-v2-complete` tag. This is an execution structure,
+not a scope change - the total demolition/docs/tag deliverable is unchanged. DayDetail survives
+BOTH PRs as the permanent fee-account entry surface (§7 fence) and the per-meal kill-switch
+fallback (`?entry2=0`).
+
 ## 10. Behavior-parity master checklist (acceptance spine; W0 may extend, never shrink)
 
 Chrome/global: account switcher incl. all 11 accounts; PDC/MLB/MiLB tag logic; Calendar/Period
