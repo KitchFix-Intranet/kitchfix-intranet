@@ -23,6 +23,7 @@ import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
+import OpsRail from "./v2/OpsRail";
 import "./v2/overview.css";
 import "./v2/drill.css";
 import {
@@ -2052,13 +2053,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         showToggle={!isAdminView && isYearView}
         showStats={!isAdminView && isYearView}
         exportControl={
-          // Extract v2-drill: when scV2 + drill scope + !fee + !admin,
-          // the ExportControl moves to the DrillRail footer (bundle
-          // scope: one primary CTA, Export as quiet secondary in same
-          // footer). ChromeBar's export slot goes null in that case;
-          // v1 and overview + fee under v2 keep the ChromeBar export.
+          // W5 (v5) + W6 update: ExportControl moves to the rail
+          // footer whenever a drill rail is being rendered. W6 opens
+          // the drill rail to fee accounts too (OpsRail path), so the
+          // ChromeBar export slot must suppress for scV2 + drill +
+          // !admin, regardless of fee vs per-meal. Overview year view
+          // and v1 keep the ChromeBar export.
           !isAdminView && selectedAccount
-          && !(scV2 && (isPeriodView || isMonthView) && !isFeeAccount)
+          && !(scV2 && (isPeriodView || isMonthView))
             ? (
               <ExportControl
                 scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
@@ -2194,48 +2196,82 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               scV2={scV2}
             />
           );
-          // v2 two-pane: SeasonShell left, SeasonRail right. Guarded by
-          // scV2 + non-fee (bundle scope §4) + non-admin. Below 1280px
-          // the rail leaves the side (overview.css media query) and
-          // stacks under the grid full width.
-          const useTwoPane = scV2 && !isFeeAccount && !isAdminView && !!yearData;
+          // v2 two-pane: SeasonShell left, rail right. W6: drop the
+          // !isFeeAccount gate - fee accounts now enter the two-pane
+          // with the OpsRail (games/meals-forward, zero dollars).
+          // Non-admin still applies. Below 1280px the rail leaves the
+          // side and stacks under the grid full width.
+          const useTwoPane = scV2 && !isAdminView && !!yearData;
           if (!useTwoPane) return seasonShell;
+          // Rail selection by account shape:
+          //   fee -> OpsRail (MLB fee variant if hasHomestandSchedule,
+          //     else STL-FL variant)
+          //   per-meal -> SeasonRail (money rail, W2-W4 shape)
+          // CIN-KY (per-meal + hasHomestandSchedule=true) stays on the
+          // money rail per bundle scope; its drill money rail gains
+          // the HS section (Step 2).
+          const overviewTargetDay = (date, period /*, source */) => {
+            if (period) {
+              router.push(buildScUrl({
+                account: selectedAccount || undefined,
+                period,
+                day: date,
+              }), { scroll: false });
+            }
+          };
+          const overviewDrillMonth = (mi) => {
+            const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
+            router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
+            setFocusDay(null);
+            setBulkMode(false);
+          };
+          const overviewDrillPeriod = (periodLabel) => {
+            router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
+          };
+          // W6: the OpsRail queue+footer target a bare `?day=` on a
+          // year-view URL - but ?day= is drill-only. Route through
+          // the containing period so the target lands on a drill.
+          const feeTargetDay = (date) => {
+            const containingPeriod = periodRanges?.find(r => date >= r.start && date <= r.end);
+            if (containingPeriod) {
+              router.push(buildScUrl({
+                account: selectedAccount || undefined,
+                period: containingPeriod.period,
+                day: date,
+              }), { scroll: false });
+            }
+          };
+          const rail = isFeeAccount ? (
+            <OpsRail
+              mode="overview"
+              scopeLabel={`SEASON · ${year} BOOKS`}
+              hasHomestandSchedule={hasHomestandSchedule}
+              year={year}
+              yearData={yearData}
+              today={today}
+              onTargetDay={feeTargetDay}
+              onDrillToMonth={overviewDrillMonth}
+              onDrillToPeriod={overviewDrillPeriod}
+            />
+          ) : (
+            <SeasonRail
+              mode={seasonView === "period" ? "period" : "calendar"}
+              year={year}
+              yearData={yearData}
+              periodRanges={periodRanges}
+              onDrillToDay={overviewTargetDay}
+              onDrillToMonth={overviewDrillMonth}
+              onDrillToPeriod={overviewDrillPeriod}
+            />
+          );
           return (
             <div className="sc-overview">
               <div className="sc-overview-main">{seasonShell}</div>
-              <aside className="sc-overview-rail" aria-label="Season books">
-                <SeasonRail
-                  mode={seasonView === "period" ? "period" : "calendar"}
-                  year={year}
-                  yearData={yearData}
-                  periodRanges={periodRanges}
-                  onDrillToDay={(date, period /*, source */) => {
-                    // Pinned rule (bundle scope §2 for queue rows): drill
-                    // to the containing period; do NOT auto-open the
-                    // DayDetail modal. focusDay stays null - opening
-                    // entry is an explicit second click on the day.
-                    // W5: append &day=<date> so the drill scrolls the
-                    // target tile into view + adopts it as the roving-
-                    // focus target. Contract in scope §10: target-only,
-                    // never open.
-                    if (period) {
-                      router.push(buildScUrl({
-                        account: selectedAccount || undefined,
-                        period,
-                        day: date,
-                      }), { scroll: false });
-                    }
-                  }}
-                  onDrillToMonth={(mi) => {
-                    const mk = `${year}-${String(mi + 1).padStart(2, "0")}`;
-                    router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
-                    setFocusDay(null);
-                    setBulkMode(false);
-                  }}
-                  onDrillToPeriod={(periodLabel) => {
-                    router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
-                  }}
-                />
+              <aside
+                className="sc-overview-rail"
+                aria-label={isFeeAccount ? "Season books - fee account" : "Season books"}
+              >
+                {rail}
               </aside>
             </div>
           );
@@ -2292,10 +2328,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               focusTargetDate={focusTargetDate}
             />
           );
-          // Two-guard rail: scV2 && !isFeeAccount && !isAdminView (fee
-          // accounts get no rail; homestand accounts still get the rail
-          // but the rail's week-lines gate on !hasHomestandSchedule too).
-          const useDrillRail = scV2 && !isFeeAccount && !isAdminView && !!periodMetrics;
+          // W6: drop !isFeeAccount from the drill guard - fee accounts
+          // now enter the two-pane with OpsRail. Rail selection:
+          //   fee -> OpsRail drill mode (games/meals; ZERO $)
+          //   per-meal -> DrillRail (money hero + weeks) with an
+          //     optional HOMESTANDS section when hasHomestandSchedule
+          //     (CIN-KY is the proof case).
+          const useDrillRail = scV2 && !isAdminView && !!periodMetrics;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
             router.push(buildScUrl({
@@ -2304,7 +2343,34 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               day: date,
             }), { scroll: false });
           };
-          const rail = (
+          const exportControlEl = selectedAccount ? (
+            <ExportControl
+              scope="period"
+              year={year}
+              periodKey={periodKey}
+              monthKey={null}
+              accountKey={selectedAccount}
+              showToast={showToast}
+              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+            />
+          ) : null;
+          const rail = isFeeAccount ? (
+            <OpsRail
+              mode="drill"
+              scopeLabel={periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : "PERIOD"}
+              hasHomestandSchedule={hasHomestandSchedule}
+              year={year}
+              yearData={yearData}
+              today={today}
+              periodDays={periodDays}
+              periodRange={drillPeriodRange}
+              loading={loading && !periodDays}
+              incomplete={!!partialError}
+              exportControl={exportControlEl}
+              onTargetDay={targetDay}
+            />
+          ) : (
             <DrillRail
               scope="period"
               scopeLabel={periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}
@@ -2312,21 +2378,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodDays={periodDays}
               periodRange={drillPeriodRange}
               hasHomestandSchedule={hasHomestandSchedule}
+              yearData={yearData}
               today={today}
               loading={loading && !periodDays}
               incomplete={!!partialError}
-              exportControl={selectedAccount ? (
-                <ExportControl
-                  scope="period"
-                  year={year}
-                  periodKey={periodKey}
-                  monthKey={null}
-                  accountKey={selectedAccount}
-                  showToast={showToast}
-                  hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-                  hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-                />
-              ) : null}
+              exportControl={exportControlEl}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
@@ -2390,7 +2446,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               focusTargetDate={focusTargetDate}
             />
           );
-          const useDrillRail = scV2 && !isFeeAccount && !isAdminView && !!monthMetrics;
+          const useDrillRail = scV2 && !isAdminView && !!monthMetrics;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
             router.push(buildScUrl({
@@ -2405,7 +2461,34 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             const [y, m] = monthKey.split("-").map(Number);
             return m >= 1 && m <= 12 ? `${MON[m-1]} ${y}` : monthKey;
           })() : "";
-          const rail = (
+          const exportControlEl = selectedAccount ? (
+            <ExportControl
+              scope="month"
+              year={year}
+              periodKey={null}
+              monthKey={monthKey}
+              accountKey={selectedAccount}
+              showToast={showToast}
+              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+            />
+          ) : null;
+          const rail = isFeeAccount ? (
+            <OpsRail
+              mode="drill"
+              scopeLabel={monthLabel}
+              hasHomestandSchedule={hasHomestandSchedule}
+              year={year}
+              yearData={yearData}
+              today={today}
+              periodDays={monthDays}
+              periodRange={monthRange}
+              loading={loading && !monthDays}
+              incomplete={!!partialError}
+              exportControl={exportControlEl}
+              onTargetDay={targetDay}
+            />
+          ) : (
             <DrillRail
               scope="month"
               scopeLabel={monthLabel}
@@ -2413,21 +2496,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodDays={monthDays}
               periodRange={monthRange}
               hasHomestandSchedule={hasHomestandSchedule}
+              yearData={yearData}
               today={today}
               loading={loading && !monthDays}
               incomplete={!!partialError}
-              exportControl={selectedAccount ? (
-                <ExportControl
-                  scope="month"
-                  year={year}
-                  periodKey={null}
-                  monthKey={monthKey}
-                  accountKey={selectedAccount}
-                  showToast={showToast}
-                  hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-                  hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-                />
-              ) : null}
+              exportControl={exportControlEl}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}

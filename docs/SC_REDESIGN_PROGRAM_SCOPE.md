@@ -204,7 +204,17 @@ touch), strip restyle, month stepper, away/non-game quieting, MLB legend. "MLB P
 Acceptance: fee-account discipline enforced in code review (no `$` formatting imports on this
 surface's rail; no amber/red tokens); EXH display-only; 0/81 counter parity; **SC-073 week cards
 stay HIDDEN for `hasHomestandSchedule` accounts** (owner ruling 2026-07-09; must not silently
-return).
+return). **CIN-KY drill HOMESTANDS section behavior (locked at PR #464)**: CIN-KY has
+`has_homestand_schedule=true` and 149 rows in `sc_homestand_schedule`, but every row has
+`homestand_id = NULL` (only `dayType` / `opponent` / `dayNight` / `gameTime` populated).
+Homestand GROUPING is a fee-account concept; the AAA per-meal accounts (CIN-KY / TBJ-NY) use the
+same table purely for game-context signal. The `deriveHomestandSegments` filter `if
+(!d.homestandId) continue;` (audit Q5, load-bearing) correctly drops these NULL rows, so the
+drill HS section is empty for CIN-KY by design. This is NOT a seed-pipeline gap - the section
+mounts conditionally (returns `null` when the ledger is empty), so a future change in the DB
+shape (populating `homestand_id` for MiLB) would activate it automatically. The `hasScheduleGame`
+overlay mechanism (sc-18) is the alternative signal path for per-meal overlay accounts, distinct
+from homestand grouping.
 
 **W7 - Entry v2.** Executes SC_ENTRY_V2_SCOPE.md phases 0-6 as written (Option A save model, fee
 accounts stay v1, behavior-parity list is that doc's section 7), now consuming the shared Rail from

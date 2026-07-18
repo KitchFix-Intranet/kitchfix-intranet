@@ -347,6 +347,80 @@
   padding-top: 4px;
 }
 
+/* ─── W6: MLB chrome under .scv2 (token pass; taxonomy + copy untouched) ─ */
+
+/* SeasonStepper reskin - slim navy segments matching the .scv2
+   identity. Behavior + segment logic untouched; token-only overrides. */
+.scv2 .sc-stepper {
+  background: transparent;
+  padding-bottom: var(--sc2-space-3);
+}
+.scv2 .sc-stepper-caption {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  letter-spacing: 0.05em;
+}
+.scv2 .sc-stepper-caption-tag {
+  color: var(--sc2-cmd-bg);
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.scv2 .sc-stepper-caption-id,
+.scv2 .sc-stepper-caption-opponents {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-stepper-caption-range,
+.scv2 .sc-stepper-caption-count,
+.scv2 .sc-stepper-caption-ordinal {
+  color: var(--sc2-ink-muted);
+}
+.scv2 .sc-stepper-bar-segment {
+  border-radius: var(--sc2-radius-cell);
+}
+.scv2 .sc-stepper-bar-segment--done .sc-stepper-bar-segment-button {
+  background: var(--sc2-cmd-bg);
+}
+.scv2 .sc-stepper-bar-segment--focus .sc-stepper-bar-segment-button {
+  background: var(--sc2-accent-amber);
+  color: var(--sc2-cmd-bg-deep);
+}
+.scv2 .sc-stepper-bar-segment--next .sc-stepper-bar-segment-button {
+  background: var(--sc2-line-2);
+}
+.scv2 .sc-stepper-bar-segment-label {
+  color: inherit;
+  font-weight: var(--sc2-wt-display);
+  font-size: var(--sc2-size-micro);
+  letter-spacing: 0.06em;
+}
+
+/* MLB fee status band on MonthCard (season/MonthCard.js:388-401) -
+   the "N/M game days" + "K homestands" footer for fee accounts.
+   Token pass only; no logic changes. */
+.scv2 .sc-season-month-card-stat-main strong {
+  color: var(--sc2-ink-strong);
+}
+.scv2 .sc-season-month-card-stat-aux {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+}
+
+/* MLB / MiLB legend (legendItems + LegendInfoPopup) - token pass
+   only; the isMilb + hasHomestandSchedule branches keep their
+   taxonomy verbatim. */
+.scv2 .sc-legend-popup-swatch {
+  border-radius: var(--sc2-radius-cell);
+}
+.scv2 .sc-state-legend-item {
+  color: var(--sc2-ink-soft);
+  font-size: var(--sc2-size-micro);
+}
+
+/* Card polish under .scv2 (hover lift + banded header) - was §above,
+   moved here to sit with the W6 chrome pass. */
+
 /* ─── Card polish under .scv2 (hover lift + banded header) ── */
 /* Small hover-lift on month + period cards - matches the render's
    sense of tactility. Card-level animation, not tile-level. */

@@ -163,6 +163,17 @@
 }
 .scv2 .sc-rail-queue-dot--needs { background: var(--sc2-rail-accent-warn); }
 .scv2 .sc-rail-queue-dot--overdue { background: var(--sc2-state-overdue-bd); }
+/* W6: MLB "to enter" - neutral navy identity, no amber/red per
+   law 3 (MLB category-gated urgency = no amber/red anywhere on
+   the surface). Uses the rail-text-item color so the dot reads
+   as "here's a row, not an alarm". */
+.scv2 .sc-rail-queue-dot--ops-neutral {
+  background: var(--sc2-rail-text-item);
+}
+.scv2 .sc-rail-queue-row--ops-neutral .sc-rail-queue-status {
+  /* Opponent copy inherits the muted text color - no warn tint. */
+  color: var(--sc2-rail-text-muted);
+}
 .scv2 .sc-rail-queue-body {
   display: flex;
   flex-direction: column;
