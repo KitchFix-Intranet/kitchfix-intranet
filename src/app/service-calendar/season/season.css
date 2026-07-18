@@ -42,52 +42,6 @@
 .sc-progress-fill--fullseason { display: block; background: var(--accent-sc); }
 .sc-progress-fill--fullseason.sc-progress-fill--complete { background: var(--accent-sc-dark); }
 
-/* ───────── BANNER ───────── */
-.sc-season-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
-  border-radius: var(--radius-container);
-  font-size: var(--size-body);
-  margin-bottom: var(--space-3);
-}
-.sc-season-banner-today { color: var(--text-default); }
-.sc-season-banner-period {
-  font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--border-subtle);
-  color: var(--accent-text);
-  padding: 3px var(--space-2);
-  border-radius: var(--radius-container-lg);
-}
-.sc-season-banner-stat { color: var(--text-default); }
-.sc-season-banner-stat strong { color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
-.sc-season-banner-stat--warn strong { color: var(--accent-text); }
-.sc-season-banner-stat--alert strong { color: var(--status-overdue-fg); }
-.sc-season-banner-sep { color: var(--text-subtle); }
-.sc-season-banner--loading { gap: var(--space-3); }
-.sc-season-banner-skel {
-  display: inline-block;
-  height: 14px;
-  background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
-  background-size: 200% 100%;
-  animation: sc-season-shimmer 1.6s linear infinite;
-  border-radius: var(--radius-cell);
-}
-@keyframes sc-season-shimmer {
-  from { background-position: 200% 0; }
-  to   { background-position: -200% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-banner-skel { animation: none; background: var(--border-subtle); }
-}
-
 /* ───────── STRIP (Design Batch 3 rebuild) ───────── */
 .sc-season-strip {
   background: var(--surface-card);
@@ -992,9 +946,6 @@
   /* Card chrome scales down */
   .sc-season-month-card,
   .sc-season-period-card { min-height: 180px; }
-  /* Banner wraps cleanly */
-  .sc-season-banner { padding: var(--space-2) 14px; font-size: var(--size-caption); gap: var(--space-2); }
-  .sc-season-banner-sep { display: none; }
   /* Strip: shrink the tag text + tighter spacing */
   .sc-season-strip { padding: var(--space-2) var(--space-3) var(--space-3); }
   .sc-season-strip-tag { font-size: var(--size-micro); }
