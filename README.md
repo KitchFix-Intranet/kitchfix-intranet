@@ -45,11 +45,12 @@ Everything beyond "what is this" lives in [`/docs/`](./docs/):
 ## Local development
 
 ```bash
+cp .env.example .env.local   # fill in real values from the Vercel dashboard
 npm install
-npm run dev
+npm run dev                  # http://localhost:3000
 ```
 
-Requires a `.env.local` with all required environment variables. See `docs/ENV_VARS.md` (forthcoming) or the working production environment in Vercel for the canonical list.
+Full quickstart in [`docs/LOCAL_DEV.md`](./docs/LOCAL_DEV.md), including the prod-data warning, the one-time Google OAuth localhost redirect, the SC v2 flag, and troubleshooting. `.env.example` in the repo root is the authoritative scaffold; every var carries a comment explaining what it is and where to copy the value from.
 
 ## Deploying
 
