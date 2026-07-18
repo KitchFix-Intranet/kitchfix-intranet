@@ -240,20 +240,31 @@
   --sc2-wt-bold:     700;
   --sc2-wt-display:  800;
 
-  /* ---------- Page surfaces ---------- */
-  --sc2-surface-page:   #e8e3d8;   /* render --page */
-  --sc2-surface-app:    #f7f3ea;   /* render --cream (app frame) */
-  --sc2-surface-card:   #ffffff;
-  --sc2-surface-band:   #efe9dc;   /* render --band (period-card header) */
-  --sc2-surface-sunken: #f0ede4;
+  /* ---------- V3 Overview grounds (T table) ----------
+     Three layers exactly on overview: L0 canvas -> L1 surface ->
+     L2 card. Elevation is the separator; hairlines in-card only.
+     Legacy surface-page / surface-app / surface-band / surface-sunken
+     RETIRED on overview per T-table; kept declared here for
+     non-overview surfaces (drill/entry) until each section's own
+     V3 sweep runs. Zero overview usage of the retired names is
+     enforced by the ripple-ledger check. */
+  --sc2-canvas:         #edeff2;   /* NEW - L0 (spec T-table: replaces surface-app role on SC pages) */
+  --sc2-surface:        #f7f8fa;   /* NEW - L1 (the one widget plane) */
+  --sc2-surface-card:   #ffffff;   /* L2 (unchanged) */
+  --sc2-surface-page:   #e8e3d8;   /* legacy; scheduled for retirement in downstream V3 sweeps */
+  --sc2-surface-app:    #f7f3ea;   /* legacy */
+  --sc2-surface-band:   #efe9dc;   /* legacy */
+  --sc2-surface-sunken: #f0ede4;   /* legacy; may survive as input-well tint elsewhere */
 
-  /* ---------- Ink (text on light surfaces) ---------- */
-  /* ink-muted brightened from render #8b95a1 (3.04 on card, AA-large
-     only) to #6d737c so regular-size text passes AA everywhere. */
-  --sc2-ink-strong: #122238;    /* AAA on card (16.01) */
-  --sc2-ink:        #1f2d3d;    /* AAA on card (13.99) */
-  --sc2-ink-soft:   #46525f;    /* AAA on card (7.98)  */
-  --sc2-ink-muted:  #6d737c;    /* AA  on card (4.78) - render #8b95a1 was AA-large only */
+  /* ---------- Ink (V3 T-table: exactly three levels, R11) ----------
+     ink-soft RETIRED per R11; every consumer moves to ink. The
+     token declaration is preserved briefly as an alias so the CSS
+     doesn't 404 during downstream sweeps; a repo-wide grep sweep
+     retires the last usages progressively. */
+  --sc2-ink-strong: #122238;                /* L1 chrome/hero    (AAA on card) */
+  --sc2-ink:        #1f2d3d;                /* L2 body/data      (AAA on card) */
+  --sc2-ink-muted:  #697077;                /* L3 micro-labels (AA, spec T-table) */
+  --sc2-ink-soft:   var(--sc2-ink);         /* R11 RETIRED - aliased to ink during sweep */
   --sc2-ink-inverse:#ffffff;
 
   /* ---------- Command bar (top navy band) ---------- */
@@ -276,7 +287,7 @@
   --sc2-rail-text:          #e8edf3;   /* AAA (12.86) - body text */
   --sc2-rail-text-strong:   #eafff2;   /* AAA (14.48) - rail total */
   --sc2-rail-text-item:     #c9d7e8;   /* AAA (10.36) - ln.n name */
-  --sc2-rail-text-muted:    #8fa4bd;   /* AA  (5.92)  - rmeta */
+  --sc2-rail-text-muted:    #aebfd4;   /* V3 T-table CHANGED (Lc 64.6) - closes audit C-022 (prior #8fa4bd measured 48.7 FAIL) */
   --sc2-rail-text-subtle:   #7f95af;   /* AA  (4.92)  - rlbl */
   --sc2-rail-text-section:  #88a5c2;   /* AA  (5.92)  - AA-FIX from render #6f88a5 (4.14) */
   --sc2-rail-text-ghost:    #7391b5;   /* AA  (4.65)  - AA-FIX from render #5f7ea3 (3.60) */
@@ -292,37 +303,44 @@
   --sc2-rail-cta-quiet-border:#2c4867;
   --sc2-rail-cta-quiet-text:#c4d3e5;
 
-  /* ---------- Cell states (DaySquare skin foundation) ---------- */
-  /* Bg / border / fg per status. Every text-role >=4.5 on its
-     bg-role. upcoming-fg + off-fg tuned darker than the render's
-     values so tile-content text passes AA. Rendered values kept
-     for bg/border (background contrast is not a text rule). */
+  /* ---------- Cell states (V3 T-table, Option B palette) ----------
+     Option B: upcoming wears LIGHT MINT (spec §0.1). Done/not-yet
+     boundary rides measured intensity within the family PLUS
+     non-color carriers (border strength + numeral tone + glyph
+     for actionable states). Measured basis: entered vs upcoming
+     dE 19.0; grayscale Y 0.65 vs 0.85 (boundary survives
+     desaturation). Two-signal law extended (§7.3): needs tiles
+     carry a 4px dot glyph because upcoming-mint and needs-amber
+     are grayscale-identical (Y .850 vs .848). Every actionable
+     state is now fill + border + glyph. */
 
-  /* entered - teal-green pastel */
-  --sc2-state-entered-bg: #d9ecdf;
-  --sc2-state-entered-bd: #a9d4ba;
-  --sc2-state-entered-fg: #1f6b41;   /* AA on entered-bg (5.26) */
-  --sc2-state-entered-strong: #1f6b41;
+  /* entered - saturated green pole (DONE owns intensity) */
+  --sc2-state-entered-bg: #a9dfc0;             /* T-table fill */
+  --sc2-state-entered-bd: #5cbf8b;             /* T-table border */
+  --sc2-state-entered-fg: #14532d;             /* T-table numeral (Lc 65.0) */
+  --sc2-state-entered-strong: #14532d;
 
-  /* upcoming - whisper green, distinct from entered */
-  --sc2-state-upcoming-bg: #f0f7f2;
-  --sc2-state-upcoming-bd: #dcebe1;
-  --sc2-state-upcoming-fg: #1f6b41;   /* TUNED from render #7ba38b (2.59 FAIL) to 5.96 AA */
+  /* upcoming - Option B light mint (R4) */
+  --sc2-state-upcoming-bg: #dff2e7;            /* T-table fill (Option B) */
+  --sc2-state-upcoming-bd: #b9e2cc;            /* T-table border */
+  --sc2-state-upcoming-fg: #3e6b52;            /* T-table numeral (Lc 70.0) */
 
-  /* needs-entry - amber pastel */
-  --sc2-state-needs-bg: #fbeed3;
-  --sc2-state-needs-bd: #e7cb8e;
-  --sc2-state-needs-fg: #8a611a;      /* AA (4.80) */
+  /* needs-entry - amber pastel + glyph carrier (§7.3) */
+  --sc2-state-needs-bg: #fcecc7;               /* T-table fill */
+  --sc2-state-needs-bd: #e4b45e;               /* T-table border */
+  --sc2-state-needs-fg: #7a5a17;               /* T-table numeral (Lc 70.9) */
 
-  /* overdue - brick pastel */
-  --sc2-state-overdue-bg: #fbe3dd;
-  --sc2-state-overdue-bd: #e5a496;
-  --sc2-state-overdue-fg: #a03b28;    /* AA (5.44) */
+  /* overdue - brick + "!" glyph */
+  --sc2-state-overdue-bg: #f8d9d3;             /* T-table fill */
+  --sc2-state-overdue-bd: #dd8a7b;             /* T-table border */
+  --sc2-state-overdue-fg: #8a3a2c;             /* T-table numeral (Lc 67.8) */
 
-  /* off / off-season - warm neutral */
-  --sc2-state-off-bg: #f1ede2;
-  --sc2-state-off-bd: #ddd7ca;
-  --sc2-state-off-fg: #6b6455;        /* TUNED from render #b3ab99 (1.95 FAIL) to 5.02 AA */
+  /* off - warm neutral, non-actionable (no border per 6.10). Numeral
+     bumped from prior #a9a69d (Lc 39.0 FAIL) to spec T-table #8f8b80
+     (verify Lc >= 45 at build; spec 7.7 rider). */
+  --sc2-state-off-bg: #f1f0ec;                 /* T-table fill */
+  --sc2-state-off-bd: transparent;             /* 6.10 - no border */
+  --sc2-state-off-fg: #8f8b80;                 /* T-table numeral */
 
   /* failed - dashed brick, never renders as zero */
   --sc2-state-failed-bg: #fdf1ee;
@@ -387,10 +405,39 @@
   --sc2-line-2: #e2dccd;
   --sc2-ghost:  #a49c8a;
 
-  /* ---------- Shadow ---------- */
-  --sc2-elevation-card:    0 1px 2px rgba(18,34,56,0.045);
+  /* ---------- V3 T-table Elevation trio + legacy shadows ----------
+     Exactly three elevations on the overview surface per spec T-table:
+       --sc2-el-widget   = the SC widget (L1 → over canvas L0)
+       --sc2-el-card     = an L2 card at rest
+       --sc2-el-hover    = an L2 card on interactive hover (one tier up)
+     Overlay elevation (--sc2-elevation-raised) exists globally for
+     modals and is out of scope here. Legacy names kept as aliases
+     during the sweep so existing consumers don't break; the
+     downstream V3 pass retires them. */
+  --sc2-el-widget:  0 2px 8px rgba(18,34,56,0.08), 0 12px 32px rgba(18,34,56,0.06);
+  --sc2-el-card:    0 1px 3px rgba(18,34,56,0.08), 0 2px 8px rgba(18,34,56,0.05);
+  --sc2-el-hover:   0 2px 6px rgba(18,34,56,0.10), 0 6px 16px rgba(18,34,56,0.07);
+  --sc2-elevation-card:    var(--sc2-el-card);       /* legacy alias */
   --sc2-elevation-raised:  0 3px 8px rgba(18,34,56,0.10), 0 24px 64px rgba(18,34,56,0.18);
   --sc2-elevation-inset-top: inset 0 1px 0 rgba(255,255,255,0.4);
+
+  /* ---------- V3 T-table Phase family (semantic slots) ----------
+     Per-account phase NAMES map onto these slots (CIN-AZ complex
+     set, STL-FL camps set, MLB homestand strip shares the family).
+     Zero per-account colors. Consumed by S5 ribbon + S6.6 month
+     tick. */
+  --sc2-ph-spring:  #d3b06a;
+  --sc2-ph-ext:     #9db8c9;
+  --sc2-ph-complex: #78a892;
+  --sc2-ph-bridge:  #c9986f;
+  --sc2-ph-instr:   #a58fc0;
+  --sc2-ph-off:     #b9b3a6;
+
+  /* ---------- V3 T-table state carriers (§7.3 two-signal law) ---
+     Period-wash inset (§6.7) and today-ring (§T Borders); used by
+     the tile atom to render current-period orientation. */
+  --sc2-period-wash: rgba(26,48,80,0.05);
+  --sc2-today-ring-width: 2px;
 
   /* ---------- Mobile footer heights (W9 PR 1/2) ----------
      Resolves the V3_HOPPER "mobile footer height as a magic number"
