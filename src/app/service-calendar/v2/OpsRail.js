@@ -16,7 +16,7 @@
 //   !hasHomestandSchedule -> STL-FL variant (days hero + urgency
 //     queue; STL-FL is PDC-family so amber/red are policy)
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
@@ -141,10 +141,10 @@ export default function OpsRail({
       {heroBlock}
       {!incomplete && <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />}
 
-      <RailScroll>
-        {/* Queue - MLB uses "to enter" neutral tone; STL-FL keeps
-            urgency (amber/red rendered by the RailQueueRow via the
-            row's status semantic). */}
+      {/* V3 §S8.3 F-E2 - OpsRail also pins the queue above the season
+          scroll region. Same structure as SeasonRail so fee accounts
+          (STL - FL, MLB fees) get the §S8.3 behavior too. */}
+      <div className="sc-rail-pinned">
         <RailSection
           label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
           meta={queueRows.length > 0 ? `${queueRows.length}` : null}
@@ -169,7 +169,9 @@ export default function OpsRail({
             />
           )}
         </RailSection>
+      </div>
 
+      <RailScroll>
         {/* Homestand ledger - MLB fee variant only */}
         {hasHomestandSchedule && ledger.length > 0 && (
           <RailSection
@@ -205,16 +207,12 @@ export default function OpsRail({
         {/* Season list - overview only (per-month game-day or days-entered summary) */}
         {mode === "overview" && seasonListMonths.length > 0 && (
           <RailSection label="Season">
-            {seasonListMonths.map(line => (
-              <RailLine
-                key={line.key}
-                label={line.label}
-                value={line.value}
-                sublabel={line.sub}
-                tone={line.tone}
-                onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
-              />
-            ))}
+            <OpsSeasonList
+              lines={seasonListMonths}
+              todayMonth={new Date().getMonth()}
+              year={new Date().getFullYear()}
+              onDrillToMonth={onDrillToMonth}
+            />
           </RailSection>
         )}
       </RailScroll>
@@ -242,6 +240,57 @@ export default function OpsRail({
 // tags - law 3).
 // STL-FL: uses the RailQueueRow directly with needs-entry/overdue
 // semantics (amber/red per PDC family - law 3).
+/*
+  V3 §S8.3 F-E2 - OpsSeasonList: mirror SeasonRail's SeasonList so
+  fee accounts (STL - FL, MLB fees) also auto-scroll the current
+  month row into view on mount. RM-gated via prefers-reduced-motion.
+*/
+function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
+  const currentRef = useRef(null);
+  useEffect(() => {
+    /* F-E5 - direct-math scroll on .sc-rail-scroll only (see
+       SeasonList block in SeasonRail.js for the diagnosis). */
+    const el = currentRef.current;
+    if (!el) return;
+    const scrollNode = el.closest(".sc-rail-scroll");
+    if (!scrollNode) return;
+    const rm = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const rafId = requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top
+        - scrollNode.getBoundingClientRect().top
+        + scrollNode.scrollTop;
+      scrollNode.scrollTo({
+        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
+        behavior: rm ? "auto" : "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, todayMonth, lines.length]);
+  return (
+    <>
+      {lines.map((line) => (
+        <div
+          key={line.key}
+          className="sc-season-list-row"
+          data-month-index={line.monthIndex}
+          data-current={line.monthIndex === todayMonth ? "true" : undefined}
+          ref={line.monthIndex === todayMonth ? currentRef : null}
+        >
+          <RailLine
+            label={line.label}
+            value={line.value}
+            sublabel={line.sub}
+            tone={line.tone}
+            onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
 function OpsQueueRow({ row, hasHomestandSchedule, onClick }) {
   if (hasHomestandSchedule) {
     const opp = row.opponent ? `vs ${row.opponent}` : "TBD";

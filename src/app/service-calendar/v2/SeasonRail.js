@@ -9,7 +9,7 @@
 //
 // This component is inert to fetches - it only reads what's in memory.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
@@ -44,7 +44,34 @@ export default function SeasonRail({
   onDrillToDay,   // (date, period, source) => void - queue rows + footer CTA
   onDrillToMonth, // (monthIndex) => void - Calendar-mode season lines
   onDrillToPeriod,// (periodLabel) => void - Period-mode season lines
+  /* V3 §9.2 - fetch health for the year-summary payload; when
+     "failed" the rail replaces its normal body with a banner + retry
+     button so the operator can recover without a full page reload.
+     `onRetry` fires the same handler AsOf's refresh button uses. */
+  loadState,
+  onRetry,
 }) {
+  if (loadState === "failed") {
+    return (
+      <RailShell label={`SEASON · ${year} BOOKS`}>
+        <div className="sc-rail-failed" role="alert">
+          <div className="sc-rail-failed-title">Books unavailable</div>
+          <p className="sc-rail-failed-body">
+            The season summary failed to load. Try again.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              className="sc-rail-failed-retry"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </RailShell>
+    );
+  }
   const today = todayISO();
   const totals = deriveHeroTotals(yearData);
   // V3 §9.1 - vocabulary canon: verb "entered" everywhere; "recorded"
@@ -105,6 +132,27 @@ function CalendarRail({
   const visibleQueue = showAllQueue ? queue : queue.slice(0, QUEUE_TOP_N);
   const overflow = queue.length - visibleQueue.length;
 
+  /* V3 §S8.5 F-F - Aug-Dec collapse row. Session-local toggle:
+     collapsed (default) shows primary lines + a single "AUG - DEC
+     · ~$X" toggle row; expanded shows ALL monthLines + a
+     "Show less" toggle row at the end. Same button toggles either
+     direction. F-D2: hyphen not em-dash in labels. */
+  const [showAllMonths, setShowAllMonths] = useState(false);
+  const todayMonth = new Date().getMonth();     /* 0-11 */
+  const tailEligible = todayMonth < 11;
+  const tailStartIdx = todayMonth + 2;          /* first slim-tail month */
+  const tailAllLines = tailEligible ? monthLines.slice(tailStartIdx) : [];
+  const tailSumProjected = tailAllLines.reduce(
+    (acc, l) => acc + (Number(l.displayRev) || 0),
+    0
+  );
+  const tailFirstShort = tailAllLines[0]?.short || "";
+  const tailLastShort = tailAllLines[tailAllLines.length - 1]?.short || "";
+  const visibleMonthLines = (tailEligible && !showAllMonths)
+    ? monthLines.slice(0, tailStartIdx)
+    : monthLines;
+  const toggleTail = () => setShowAllMonths((v) => !v);
+
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
@@ -116,7 +164,9 @@ function CalendarRail({
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
 
-      <RailScroll>
+      {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
+          The queue stays visible while the season list inner-scrolls. */}
+      <div className="sc-rail-pinned">
         <RailSection
           label="NEEDS ENTRY"
           meta={queue.length > 0 ? `${queue.length}` : null}
@@ -141,15 +191,23 @@ function CalendarRail({
             />
           )}
         </RailSection>
+      </div>
 
+      <RailScroll>
         <RailSection label="Season">
-          {monthLines.map(line => (
-            <MonthRailLine
-              key={line.key}
-              line={line}
-              onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
-            />
-          ))}
+          <SeasonList
+            year={year}
+            visibleMonthLines={visibleMonthLines}
+            todayMonth={todayMonth}
+            onDrillToMonth={onDrillToMonth}
+            tailEligible={tailEligible}
+            tailAllLines={tailAllLines}
+            tailFirstShort={tailFirstShort}
+            tailLastShort={tailLastShort}
+            tailSumProjected={tailSumProjected}
+            showAllMonths={showAllMonths}
+            toggleTail={toggleTail}
+          />
         </RailSection>
       </RailScroll>
 
@@ -162,6 +220,72 @@ function CalendarRail({
         }}
       />
     </RailShell>
+  );
+}
+
+/*
+  V3 §S8.3 - SeasonList: auto-scroll the current month row into view
+  on mount. Uses a ref on the current month's line + a rAF scroll.
+  RM-gated via `scrollIntoView({ behavior: "auto" })` under
+  prefers-reduced-motion; else smooth.
+*/
+function SeasonList({
+  year, visibleMonthLines, todayMonth, onDrillToMonth,
+  tailEligible, tailAllLines, tailFirstShort, tailLastShort,
+  tailSumProjected, showAllMonths, toggleTail,
+}) {
+  const currentRef = useRef(null);
+  useEffect(() => {
+    /* F-E5 (2026-07-19) - swap scrollIntoView({ block: "center" })
+       for direct math on the scroll container. Live probe showed
+       scrollIntoView bubbled up to `<html>` and scrolled the whole
+       page ~351 on load. The direct-math version scrolls ONLY
+       .sc-rail-scroll and leaves the document untouched. Verified
+       live at rail.scrollTop 96 with July centered, html untouched.
+       F-E4 deps preserved. */
+    const el = currentRef.current;
+    if (!el) return;
+    const scrollNode = el.closest(".sc-rail-scroll");
+    if (!scrollNode) return;
+    const rm = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const rafId = requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top
+        - scrollNode.getBoundingClientRect().top
+        + scrollNode.scrollTop;
+      scrollNode.scrollTo({
+        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
+        behavior: rm ? "auto" : "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, todayMonth, visibleMonthLines.length]);
+  return (
+    <>
+      {visibleMonthLines.map((line) => (
+        <div
+          key={line.key}
+          className="sc-season-list-row"
+          data-month-index={line.monthIndex}
+          data-current={line.monthIndex === todayMonth ? "true" : undefined}
+          ref={line.monthIndex === todayMonth ? currentRef : null}
+        >
+          <MonthRailLine
+            line={line}
+            onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
+          />
+        </div>
+      ))}
+      {tailEligible && tailAllLines.length > 0 && (
+        <RailLine
+          label={showAllMonths ? "Show less" : `${tailFirstShort} - ${tailLastShort}`}
+          value={showAllMonths ? "" : `~${fmtOverviewMoney(tailSumProjected)}`}
+          tone="upcoming"
+          onClick={toggleTail}
+        />
+      )}
+    </>
   );
 }
 
@@ -217,7 +341,14 @@ function PeriodRail({
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
 
-      <RailScroll>
+      {/* V3 §S8.3 F-E2 - PeriodRail also pins NEEDS ENTRY above the
+          season scroll region. Same structure as CalendarRail so
+          both landing modes get the pinned queue + inner-scrolling
+          season list. Auto-scroll (SeasonList's current-month
+          rAF) is calendar-specific; period lines don't have a
+          per-month current-target concept, so PeriodRail's scroll
+          region uses the plain RailScroll without a ref. */}
+      <div className="sc-rail-pinned">
         <RailSection
           label="NEEDS ENTRY"
           meta={groupedQueue.length > 0 ? `${groupedQueue.length}` : null}
@@ -239,7 +370,9 @@ function PeriodRail({
             />
           )}
         </RailSection>
+      </div>
 
+      <RailScroll>
         <RailSection label="Season">
           {periodLines.map(line => (
             <PeriodRailLine

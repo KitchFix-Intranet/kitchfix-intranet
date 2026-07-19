@@ -21,25 +21,36 @@
 // the per-account labels closely enough that an operator reading the
 // strip sees their phase by name, not by abstraction.
 //
-// Color tints (Decision 3 - color-load audit):
-// - Each tint is a desaturated WASH (lightness >=80%) so dark navy
-//   text reads at >=9:1 contrast on top.
-// - Hue families intentionally span warm-neutral / sky-blue / sea-green
-//   / mauve so no two canonical phases sit on the same hue family.
-// - NO tint shares the day-square palette's hue (entered=#A8E5C9 teal;
-//   needs-entry=#FCD9A0 amber; overdue=#F4B5AC brick; upcoming=#E0F1E7
-//   whisper-green; off=#F1EFE8). The phase tints all sit on warm-or-
-//   blue-or-mauve rails so they cannot be mistaken for day-status.
+// Color tints - V3 §5.5 phase family (T-table).
+// -------------------------------------------------
+// 2026-07-19 (OV-2 C2): tints re-authored to the V3 T-table phase
+// family. Six semantic slots per spec:
+//   spring         #d3b06a
+//   extended       #9db8c9
+//   complex        #78a892
+//   bridge         #c9986f
+//   instructional  #a58fc0
+//   off            #b9b3a6
+// Prior tints (pastel washes in warm-neutral / sky-blue / sea-green /
+// mauve rails) were exactly what the owner rejected in the V3 review.
+//
+// Cross-surface note: PeriodCard / SeasonStepper / v1 PhaseStrip also
+// read from this constant, so the recolor is visible on flag-off too.
+// This is INTENTIONAL and listed in the ripple ledger - the T-table
+// phase family is the one source across every consumer.
+//
+// Legacy phase slots (prep, rehab, unknown) that don't have a direct
+// T-table analog fall through to the neutral off/family tone.
 export const CANONICAL_PHASES = {
-  off:              { label: "Off-season",        tint: "#E6E2D6", textTint: "#5C5440", short: "OFF" },
-  prep:             { label: "Camps",             tint: "#F4E4C2", textTint: "#7A5C28", short: "Camp" },
-  "spring-training":{ label: "Spring Training",   tint: "#C7D9EA", textTint: "#274A78", short: "ST"   },
-  extended:         { label: "Extended",          tint: "#C8DEDC", textTint: "#2D5350", short: "Ext"  },
-  "complex-league": { label: "Complex League",    tint: "#A8C5C0", textTint: "#26494A", short: "ACL/FCL" },
-  bridge:           { label: "Bridge",            tint: "#E4C9A8", textTint: "#7A4B17", short: "Bridge" },
-  instructional:    { label: "Instructional",     tint: "#D9C7DC", textTint: "#5E3F66", short: "Instr" },
-  rehab:            { label: "Rehab / Staff",     tint: "#D6D2C8", textTint: "#5C5440", short: "Rehab" },
-  unknown:          { label: "Phase pending",     tint: "#EBE9E2", textTint: "#6B6754", short: "?"   },
+  off:              { label: "Off-season",        tint: "#b9b3a6", textTint: "#5C5440", short: "OFF" },
+  prep:             { label: "Camps",             tint: "#c9986f", textTint: "#7A4B17", short: "Camp" },      /* bridge family */
+  "spring-training":{ label: "Spring Training",   tint: "#d3b06a", textTint: "#5C4218", short: "ST"   },
+  extended:         { label: "Extended",          tint: "#9db8c9", textTint: "#2B4A62", short: "Ext"  },
+  "complex-league": { label: "Complex League",    tint: "#78a892", textTint: "#1F3E33", short: "ACL/FCL" },
+  bridge:           { label: "Bridge",            tint: "#c9986f", textTint: "#7A4B17", short: "Bridge" },
+  instructional:    { label: "Instructional",     tint: "#a58fc0", textTint: "#3F2F5A", short: "Instr" },
+  rehab:            { label: "Rehab / Staff",     tint: "#b9b3a6", textTint: "#5C5440", short: "Rehab" },     /* off family */
+  unknown:          { label: "Phase pending",     tint: "#b9b3a6", textTint: "#5C5440", short: "?"   },       /* off family */
 };
 
 // ─── Alias map ─────────────────────────────────────────────────────

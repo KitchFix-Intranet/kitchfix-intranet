@@ -23,6 +23,10 @@ export default function Ribbon({
   firstName,
   asOf,
   onRefresh,
+  /* V3 §9.6 - fetchState (fresh / stale / failed) plumbed through
+     to AsOf so the pill's data-fetch-state attribute reflects the
+     year-summary fetch health. */
+  fetchState = "fresh",
   isAdmin,
   isAdminView,
   onAdminToggle,
@@ -40,7 +44,7 @@ export default function Ribbon({
 
       <div className="sc-ribbon-right">
         {asOf && (
-          <AsOf asOf={asOf} onRefresh={onRefresh} className="sc-ribbon-asof" />
+          <AsOf asOf={asOf} onRefresh={onRefresh} className="sc-ribbon-asof" fetchState={fetchState} />
         )}
         <DensityToggle value={density} onChange={onDensityChange} />
         {isAdmin && (

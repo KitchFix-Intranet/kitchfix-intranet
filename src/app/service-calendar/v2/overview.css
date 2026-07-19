@@ -56,7 +56,13 @@
   border-radius: 16px;
   box-shadow: var(--sc2-el-widget);
   margin-top: var(--sc2-space-6);
-  overflow: hidden;      /* keeps ribbon's top corners inside the widget */
+  /* F-E fix (Chat-Claude sweep): `overflow: hidden` REMOVED. Any
+     overflow-hidden ancestor disables position:sticky for all
+     descendants; the rail's `top: 96px` sticky was failing
+     silently because of it. The ribbon's own border-radius
+     (§S3.1) clips its top corners; the ChromeBar shares the
+     same navy background so no bleed occurs. Verified: widget
+     top corners still clean without the overflow clip. */
 }
 /* .sc-body inside the widget: pure layout, no ground. */
 .scv2 .sc-body {
@@ -436,84 +442,162 @@
   }
 }
 
-/* ─── PhaseStrip restyle (slim under scv2, bolder current) ── */
-/* The PhaseStrip already renders a today-line + phase blocks +
-   labels. Under v2 we (a) tighten the strip vertically, (b) make
-   the today-line read like a proper tick (thicker, subtle glow
-   above the rail), and (c) bold the label of the current phase
-   block via aria-tracking that's already in the DOM. All strictly
-   presentational - the derivation logic (phaseDerivation) is
-   untouched. */
+/* V3 §S5 - PhaseStrip rebuild (CSS reshape of v1 DOM).
+   Total height ≤ 44px per §S5.1. Reads: band 8px (TRUE date
+   proportions from account's phase calendar - existing inline
+   linear-gradient) → month scale row (12 labels 10/700 ink-muted)
+   → phase label row (current = navy 800 + NOW dot); 2px today
+   tick breaks the band. Consumes --sc2-ph-* semantically (phase
+   family tints come from CANONICAL_PHASES data model in v1 -
+   documented in the drift log).
+
+   Legacy consumers hidden under scv2:
+   - "PHASE TIMELINE" micro-label header (§S5 - "self-evident once
+     months show")
+   - Mobile "current -> next" chip (overview is desktop scope)
+   - Subtitle "Phase calendar pending confirmation" (kept for v1)
+*/
 .scv2 .sc-season-strip {
+  position: relative;
   background: transparent;
   border: none;
-  padding: 0 0 var(--sc2-space-3) 0;
-  margin-bottom: var(--sc2-space-3);
+  /* F3 - trim padding to keep the strip <= 44 per §S5.1. With F1
+     unlocking the block overflow, labels paint outside their 8px
+     parent; padding-bottom reserves visual room for them in the
+     strip's containing block. 14px lands the strip ~43 (band 8 +
+     gap 6 + ticks 12 + label row ~13 + margin) - under the cap.
+     Adjust ±2 if measurement shows drift. */
+  padding: 0 0 14px 0;
+  margin: 0 0 var(--sc2-space-4) 0;
 }
+/* §S5 - delete "PHASE TIMELINE" label */
 .scv2 .sc-season-strip-header {
-  padding-bottom: var(--sc2-space-2);
+  display: none;
 }
-.scv2 .sc-season-strip-title {
-  color: var(--sc2-ink-strong);
-  font-size: var(--sc2-size-caption);
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.scv2 .sc-season-strip-mobile-chip {
+  display: none;
 }
-.scv2 .sc-season-strip-subtitle {
-  color: var(--sc2-ink-muted);
-  font-size: var(--sc2-size-micro);
-}
+
+/* Rail: 8px band with the phase-family gradient painted inline.
+   Borders come off - the band edges bleed into the widget surface. */
 .scv2 .sc-season-strip-rail {
-  height: 12px;
-  border-radius: 8px;
-  border: var(--sc2-border-thin) solid var(--sc2-line);
-  overflow: hidden;
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  overflow: visible;
 }
-/* Phase block label - v2 label baseline is medium weight (calm),
-   the CURRENT phase gets bold + brighter ink. PhaseStrip attaches
-   `data-current="true"` on the block containing today's date; the
-   marker is presentation-only, derivation logic is untouched. */
+
+/* Phase labels move BELOW the band. Blocks stay positioned; the
+   label rides absolute below its block. Current phase = navy 800
+   + a NOW dot.
+
+   OV-2 C3 fix: overflow was `hidden` to clip the band's rounded
+   ends, but that clipped the labels (top:26px puts them outside
+   the 8px-high box). Fix: unlock overflow on the blocks container;
+   move the band's end-rounding to the segments themselves so the
+   left/right ends round while the labels can extend below. */
+.scv2 .sc-season-strip-blocks {
+  position: relative;
+  height: 8px;
+  overflow: visible;
+}
+.scv2 .sc-season-strip-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* F1 - the real clip: v1 base sets .sc-season-strip-block to
+     overflow:hidden + flex + h:8 (labels used to live INSIDE the
+     12px band). Under scv2 labels sit at top:26 - clipped by their
+     own 8px parent. Unlock: */
+  overflow: visible;
+}
+.scv2 .sc-season-strip-block:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.scv2 .sc-season-strip-block:last-child {
+  border-radius: 0 4px 4px 0;
+}
 .scv2 .sc-season-strip-block-label {
+  position: absolute;
+  top: 26px;              /* below the band + month scale row */
+  left: 0;
+  right: 0;
+  padding: 0 4px;
   color: var(--sc2-ink-muted);
-  font-size: 10px;
-  font-weight: var(--sc2-wt-medium);
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.03em;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label {
-  color: var(--sc2-ink-strong);
-  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-cmd-bg);       /* navy identity */
+  font-weight: var(--sc2-wt-display);
 }
-/* Today tick - the v1 today-line becomes a more distinct vertical
-   tick under v2. Slightly wider, extends above/below the rail, uses
-   the navy identity. */
+.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sc2-cmd-bg);
+  vertical-align: middle;
+  margin-right: 4px;
+  transform: translateY(-1px);
+}
+
+/* Today tick - 2px navy breaking the band per §S5.1. */
 .scv2 .sc-season-strip-today-line {
-  width: 3px;
+  width: 2px;
   top: -3px;
   bottom: -3px;
   background: var(--sc2-cmd-bg);
-  border-radius: 2px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  border-radius: 1px;
   z-index: 3;
 }
+
+/* Month scale row - 12 labels, 10/700, ink-muted, evenly spaced
+   across the strip. Rides the existing .sc-season-strip-ticks
+   grid; retinted per T-table. */
 .scv2 .sc-season-strip-ticks {
-  font-size: var(--sc2-size-micro);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  margin-top: 6px;
+  padding: 0;
+}
+.scv2 .sc-season-strip-tick {
+  font-size: 10px;
+  font-weight: var(--sc2-wt-bold);
   color: var(--sc2-ink-muted);
-  padding-top: 4px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
-/* ─── W6: MLB chrome under .scv2 (token pass; taxonomy + copy untouched) ─ */
-
-/* SeasonStepper reskin - slim navy segments matching the .scv2
-   identity. Behavior + segment logic untouched; token-only overrides. */
+/* ─── V3 §5.4 - Homestand strip L2 grammar (SeasonStepper reskin)
+   L2 white card with --sc2-el-card, radius 12; blocks 16px tall,
+   radius 8. Block track colors per spec:
+     completed  #2b466b  (deeper navy)
+     current    #c8a24a  (amber, with HS{n} label)
+     future     #e6e9ed  (subtle line-2 tone)
+   Meta line (NEXT · HS{n} · opponents · dates · games · homestand
+   n of 13) rides the caption row above the bar. */
 .scv2 .sc-stepper {
-  background: transparent;
-  padding-bottom: var(--sc2-space-3);
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  padding: var(--sc2-space-3);
+  margin-bottom: var(--sc2-space-4);
 }
 .scv2 .sc-stepper-caption {
   color: var(--sc2-ink-muted);
-  font-size: var(--sc2-size-micro);
-  letter-spacing: 0.05em;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  letter-spacing: 0.03em;
+  margin-bottom: var(--sc2-space-2);
 }
 .scv2 .sc-stepper-caption-tag {
   color: var(--sc2-cmd-bg);
@@ -532,22 +616,23 @@
   color: var(--sc2-ink-muted);
 }
 .scv2 .sc-stepper-bar-segment {
-  border-radius: var(--sc2-radius-cell);
+  border-radius: 8px;
+  height: 16px;
 }
 .scv2 .sc-stepper-bar-segment--done .sc-stepper-bar-segment-button {
-  background: var(--sc2-cmd-bg);
+  background: #2b466b;                       /* completed */
 }
 .scv2 .sc-stepper-bar-segment--focus .sc-stepper-bar-segment-button {
-  background: var(--sc2-accent-amber);
-  color: var(--sc2-cmd-bg-deep);
+  background: #c8a24a;                       /* current, HS label */
+  color: #241d0c;
 }
 .scv2 .sc-stepper-bar-segment--next .sc-stepper-bar-segment-button {
-  background: var(--sc2-line-2);
+  background: #e6e9ed;                       /* future */
 }
 .scv2 .sc-stepper-bar-segment-label {
   color: inherit;
   font-weight: var(--sc2-wt-display);
-  font-size: var(--sc2-size-micro);
+  font-size: 10px;
   letter-spacing: 0.06em;
 }
 
@@ -797,6 +882,36 @@
   box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
 }
 
+/* V3 §6.6 - Month header phase tick + period tag.
+   M5 flag-off inertness: base rule hides both; scv2 rule below
+   shows them. Nothing else keys on these classes (grep-verified). */
+.sc-season-month-card-phase-tick,
+.sc-season-month-card-period-tag {
+  display: none;
+}
+.scv2 .sc-season-month-card-phase-tick {
+  display: inline-block;
+  width: 3px;
+  height: 15px;                 /* month-name line-height for visual balance */
+  border-radius: 2px;
+  margin-right: var(--sc2-space-2);
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.scv2 .sc-season-month-card-period-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  margin-left: var(--sc2-space-2);
+  background: rgba(26, 48, 80, 0.08);
+  color: var(--sc2-cmd-bg);
+  font-size: 11px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
    inside the expanded MonthCard header right slot.
 
@@ -919,6 +1034,231 @@
   font-weight: var(--sc2-wt-display);
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OV-2 POLISH SET (B1-B5)
+   ══════════════════════════════════════════════════════════════ */
+
+/* B1 - Footers pinned to card bottoms so uneven month heights
+   produce aligned bottoms (kills the ragged March-row look).
+   Card is column flex; footer margin-top: auto pushes it. */
+.scv2 .sc-season-month-card {
+  display: flex;
+  flex-direction: column;
+}
+.scv2 .sc-season-month-card-footer {
+  margin-top: auto;
+}
+
+/* B2 - Today-ring breathing room. Tile gap bumps to 4px at Standard
+   so the 2px navy ring never kisses neighbor tiles. Documented
+   choice: tile-gap adjustment (vs ring-inset) keeps the ring's
+   visual weight identical and gives an extra 2px of breathing
+   between EVERY tile pair, not just today-ring neighbors. */
+.scv2 .sc-season-month-card-grid {
+  gap: 4px;
+}
+
+/* B3 - Needs-dot punch. Bumped 4->5px + tone to needs-fg (darker,
+   more optical presence on low-DPI). Grayscale math still holds
+   (both fill and glyph are family-consistent). */
+.scv2 .sc-daysq--needs-entry::after {
+  width: 5px;
+  height: 5px;
+  background: var(--sc2-state-needs-fg);
+}
+.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+  width: 5px;
+  height: 5px;
+}
+
+/* B4 - Month-card drill affordance. cursor:pointer + subtle title
+   -> navy shift on hover (rides the existing el-hover step). */
+.scv2 .sc-season-month-card {
+  cursor: pointer;
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-season-month-card:hover .sc-season-month-card-name {
+  color: var(--sc2-cmd-bg);
+}
+.scv2 .sc-season-month-card:hover {
+  box-shadow: var(--sc2-el-hover);
+}
+
+/* §6.9 - Progressive detail slim rows. Months beyond current+1
+   collapse to a compact one-row view: header only (name + phase
+   tick + P-tag).
+
+   F-A fix (Chat-Claude sweep): when slim, the header IS a real
+   `<button class="sc-season-month-card-slim-expand">` (§9.3 F-B
+   folds it into the roving list). Clicking expands via
+   userExpanded; the normal drill overlay returns.
+
+   Session-local: userExpanded resets on remount but survives
+   view changes within the session. RM-gated height transition
+   on the article for the expand animation. */
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-dow,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-grid,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-footer,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-drill {
+  display: none;
+}
+.scv2 .sc-season-month-card[data-slim="true"] {
+  min-height: 0;
+}
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-header {
+  padding-bottom: var(--sc2-space-2);
+}
+
+/* Slim-expand header button: same layout as the plain header,
+   button reset so it doesn't inherit browser button styles. */
+.scv2 .sc-season-month-card-slim-expand {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: var(--sc2-space-3);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.scv2 .sc-season-month-card-slim-expand:focus-visible {
+  outline: 2px solid var(--sc2-cmd-bg);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scv2 .sc-season-month-card {
+    transition: min-height var(--duration-base) var(--ease-standard);
+  }
+}
+
+/* §9.5 - Skeletons: month-card + rail. v1 already renders
+   MonthSkeleton via `.sc-season-grid--loading`; scv2 re-skins to
+   match the final layout tokens (surface-card, radius, tile ghost
+   grid at 4px gap, footer bar height ≈ progress bar). Zero-shift
+   diff acceptance: skeleton shape mirrors the final render.
+
+   Includes the DOW-header ghost row so 7x5 tile grid + dow above =
+   7x6 total, matching the real MonthCard's grid + dow strip. */
+.scv2 .sc-season-month-skeleton {
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  padding: var(--sc2-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-season-month-skeleton-title {
+  height: 20px;                                /* card heading tier */
+  width: 40%;
+  background: var(--sc2-line);
+  border-radius: 4px;
+}
+.scv2 .sc-season-month-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.scv2 .sc-season-month-skeleton-dot {
+  aspect-ratio: 1 / 1;
+  background: var(--sc2-line);
+  border-radius: 8px;
+}
+.scv2 .sc-season-month-skeleton-footer {
+  height: 8px;                                 /* progress bar tier */
+  background: var(--sc2-line);
+  border-radius: 4px;
+}
+
+/* Rail skeleton: mirrors the RailShell layout (label + hero + section
+   blocks). Renders when SeasonRail is invoked with yearData falsy in
+   the loaded path (the failed banner from H1 handles the failed
+   state). Static, no animation - matches the calm hero + progress
+   rhythm of the final render. */
+.scv2 .sc-rail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-3) 0;
+}
+.scv2 .sc-rail-skeleton-hero {
+  height: 30px;
+  width: 60%;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+}
+.scv2 .sc-rail-skeleton-meta {
+  height: 12px;
+  width: 80%;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+.scv2 .sc-rail-skeleton-block {
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+/* §9.2 - Rail failed banner + retry. Rendered inside the RailShell
+   when yearLoadState === "failed"; SeasonRail early-returns this
+   variant instead of the normal hero + queue + season list. */
+.scv2 .sc-rail-failed {
+  padding: var(--sc2-space-3) var(--sc2-space-2) var(--sc2-space-4);
+  color: var(--sc2-rail-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-rail-failed-title {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-state-overdue-bd);   /* attention red-brick */
+}
+.scv2 .sc-rail-failed-body {
+  margin: 0;
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-caption);
+}
+.scv2 .sc-rail-failed-retry {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sc2-rail-text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-rail-failed-retry:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* B5 - Rail inner-scroll scrollbar (thin, navy-tinted). Replaces
+   the OS default inside the navy rail. Firefox scrollbar-color
+   support + WebKit ::-webkit-scrollbar-* to hit both engines. */
+.scv2 .sc-rail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.20) transparent;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 3px;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.30);
 }
 
 /* §S11.2 - Tabular figures on all data nodes. */

@@ -21,7 +21,7 @@
 // legacy lens/scope path remains intact alongside this new shell
 // (spec 11.4).
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./season.css";
 import PhaseStrip from "./PhaseStrip";
 import SeasonStepper from "./SeasonStepper";
@@ -105,6 +105,33 @@ export default function SeasonShell({
 
   const todayDate = yearToday?.date || null;
 
+  /* V3 §9.3 F-C - real roving tabindex management. Track the
+     currently-focused card index in state; on every render (data
+     shape may change slim-vs-expanded), a ref-based effect walks
+     the current card list and sets tabIndex=0 on the roving target
+     and tabIndex=-1 on the rest. Initial roving = 0 (first card).
+     Tab enters the grid once (lands on the roving card), next Tab
+     exits to legend/rail. */
+  const calendarGridRef = useRef(null);
+  const [rovingIndex, setRovingIndex] = useState(0);
+  useEffect(() => {
+    const grid = calendarGridRef.current;
+    if (!grid) return;
+    /* F-B2: filter to VISIBLE elements. Slim cards contribute BOTH
+       their visible slim-expand AND their display:none drill; the
+       hidden drill can't accept focus, so including it in the
+       roving list desyncs tabIndex from focus. `offsetParent`
+       returns null for display:none elements (per HTML spec). */
+    const cards = Array.from(grid.querySelectorAll(
+      ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+    )).filter((c) => c.offsetParent !== null);
+    if (!cards.length) return;
+    const target = Math.min(rovingIndex, cards.length - 1);
+    cards.forEach((c, i) => {
+      c.tabIndex = i === target ? 0 : -1;
+    });
+  });
+
   // Bundle 1 (Section D1): the all-expanded-on-desktop layout needs
   // one matchMedia listener for the 12 cards instead of one per card.
   // SSR-safe: default true so the desktop layout (dominant case) is
@@ -177,12 +204,69 @@ export default function SeasonShell({
       )}
 
       {effectiveView === "calendar" ? (
-        <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
+        <div
+          className="sc-season-grid"
+          role="grid"
+          aria-label={`${year} months`}
+          ref={calendarGridRef}
+          onFocus={(e) => {
+            /* V3 §9.3 F-C - track the currently-focused card so
+               the tabindex ref-effect can maintain ONE tabstop.
+               F-B2: filter to visible so slim's hidden drill can't
+               enter the index and desync tabindex from focus. */
+            const card = e.target.closest(
+              ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+            );
+            if (!card) return;
+            const cards = Array.from(
+              e.currentTarget.querySelectorAll(
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+              )
+            ).filter((c) => c.offsetParent !== null);
+            const idx = cards.indexOf(card);
+            if (idx !== -1) setRovingIndex(idx);
+          }}
+          onKeyDown={(e) => {
+            /* V3 §9.3 - roving keyboard nav across the month grid.
+               ONE tabstop (whichever button currently has focus);
+               arrows move focus by 1 (Left/Right) or by 4-col row
+               (Up/Down); Home/End jump to first/last card. Enter
+               is left to the native <button> click. No preventDefault
+               unless we successfully move focus so v1 fallbacks
+               (mobile chevron expand, form submit) survive.
+
+               F-B: the roving list includes slim-expand + collapsed-
+               trigger + drill (whichever the current card renders). */
+            const key = e.key;
+            if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(key)) return;
+            const cards = Array.from(
+              e.currentTarget.querySelectorAll(
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+              )
+            ).filter((c) => c.offsetParent !== null);
+            if (!cards.length) return;
+            const active = document.activeElement;
+            const idx = cards.indexOf(active);
+            if (idx === -1) return;
+            let next = idx;
+            if (key === "ArrowRight") next = Math.min(cards.length - 1, idx + 1);
+            else if (key === "ArrowLeft") next = Math.max(0, idx - 1);
+            else if (key === "ArrowDown") next = Math.min(cards.length - 1, idx + 4);
+            else if (key === "ArrowUp") next = Math.max(0, idx - 4);
+            else if (key === "Home") next = 0;
+            else if (key === "End") next = cards.length - 1;
+            if (next !== idx) {
+              e.preventDefault();
+              setRovingIndex(next);
+              cards[next]?.focus();
+            }
+          }}
+        >
           {MONTH_SHORT.map((_, monthIndex) => {
             const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
             const monthSummary = effectiveYearData.find(m => m.month === monthKey) || null;
             return (
-              <div role="listitem" key={monthIndex}>
+              <div role="gridcell" key={monthIndex}>
                 <MonthCard
                   year={year}
                   monthIndex={monthIndex}
@@ -205,6 +289,18 @@ export default function SeasonShell({
                     (periodRanges || []).find(
                       (r) => todayDate && todayDate >= r.start && todayDate <= r.end
                     )
+                  }
+                  /* V3 §6.6 - phase timeline for the header 3px tick
+                     (phase-family tint of the month's dominant phase). */
+                  phaseTimeline={phaseTimeline}
+                  /* V3 §6.9 - progressive detail: months beyond
+                     current+1 default to slim (compact one-row) so
+                     the eye reads the current arc first. Click/Enter
+                     on the header expands (userExpanded takes over). */
+                  slimByDefault={
+                    todayDate
+                      ? (monthIndex > Number(todayDate.slice(5, 7)) - 1 + 1)
+                      : false
                   }
                 />
               </div>

@@ -33,6 +33,7 @@ import { mlbMonthPhaseLabel } from "./mlbSeasonPhase";
 import { fmt$K } from "./format";
 import ProgressBar from "./ProgressBar";
 import { countActionableDays, countEnteredActionable } from "./dayPredicates";
+import { findPhaseAtDate } from "./phaseDerivation";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -55,6 +56,8 @@ export default function MonthCard({
   syncingDates,              // F3: Set<YYYY-MM-DD> for the current account; overlays SYNCING badge on matching tiles
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
   currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
+  phaseTimeline,             // V3 §6.6 - derived phase timeline; used to resolve the month's dominant phase for the header tick tint
+  slimByDefault = false,     // V3 §6.9 - months beyond current+1 default to slim rows; click/Enter expands (userExpanded overrides)
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -121,15 +124,58 @@ export default function MonthCard({
   //             above it via z-index so tapping the chevron collapses
   //             instead of drilling). Mirrors the period-card click
   //             pattern; resolves audit CC-4.
+  /* V3 §6.9 F-A - Slim mode is an interactive collapsed state, not a
+     dead-end. When slim, the header itself is a real <button>
+     (`.sc-season-month-card-slim-expand`) that flips userExpanded on
+     click / Enter / Space, and participates in the SeasonShell roving
+     grid nav (§9.3 F-B - the roving list collects both
+     `-slim-expand` and `-collapsed-trigger` plus the drill overlay).
+     Once expanded, the normal header + drill overlay return. */
+  const isSlim = slimByDefault && !userExpanded;
   return (
     <article
       className={cardClass}
       aria-label={`${monthName} ${year}`}
       data-state={monthState}
+      data-slim={isSlim ? "true" : undefined}
     >
-      {expanded ? (
-        <header className="sc-season-month-card-header">
+      {expanded && isSlim ? (
+        <button
+          type="button"
+          className="sc-season-month-card-header sc-season-month-card-slim-expand"
+          onClick={handleExpand}
+          aria-label={`Expand ${monthName}`}
+          aria-expanded={false}
+        >
+          <MonthPhaseTick monthIndex={monthIndex} year={year} phaseTimeline={phaseTimeline} />
           <span className="sc-season-month-card-name">{monthName}</span>
+          <MonthPeriodTag
+            monthIndex={monthIndex}
+            year={year}
+            currentPeriodRange={currentPeriodRange}
+          />
+          <MonthUrgencyChip
+            monthSummary={monthSummary}
+            hasHomestandSchedule={hasHomestandSchedule}
+          />
+        </button>
+      ) : expanded ? (
+        <header className="sc-season-month-card-header">
+          {/* V3 §6.6 - 3px phase tick left of month name; tint from
+              the month's dominant phase (mid-month lookup, per spec
+              §5.5 mapping-onto-family). Rendered as an inline span
+              so it flows before the name in a CSS flex row; the
+              tint comes from the phase timeline's block.tint (data-
+              model palette, mirroring PhaseStrip). Undefined when
+              no timeline / no phase found; renders neutral. */}
+          <MonthPhaseTick monthIndex={monthIndex} year={year} phaseTimeline={phaseTimeline} />
+          <span className="sc-season-month-card-name">{monthName}</span>
+          {/* V3 §6.6 - P{n} tag when month intersects currentPeriodRange. */}
+          <MonthPeriodTag
+            monthIndex={monthIndex}
+            year={year}
+            currentPeriodRange={currentPeriodRange}
+          />
           {/* V3 §6.5 - month-level urgency chip: worst wins.
               Aggregated from the month's day states in monthSummary. */}
           <MonthUrgencyChip
@@ -375,6 +421,53 @@ function MonthUrgencyChip({ monthSummary, hasHomestandSchedule }) {
     );
   }
   return null;
+}
+
+/*
+  V3 §6.6 - MonthPhaseTick. 3px vertical tick left of month name,
+  tinted per the month's dominant phase (mid-month lookup). Emits a
+  data-attr so the scv2 CSS can style height + width; base rule
+  hides it on flag-off (v1 CSS keys nothing on this element).
+*/
+function MonthPhaseTick({ monthIndex, year, phaseTimeline }) {
+  if (!phaseTimeline?.blocks?.length) return null;
+  const midMonthDay = 15;
+  const dateStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(midMonthDay).padStart(2, "0")}`;
+  const phase = findPhaseAtDate(phaseTimeline, dateStr);
+  if (!phase) return null;
+  return (
+    <span
+      className="sc-season-month-card-phase-tick"
+      style={{ background: phase.tint }}
+      aria-hidden="true"
+      data-phase={phase.phase}
+    />
+  );
+}
+
+/*
+  V3 §6.6 - MonthPeriodTag. "P{n}" tag when the month intersects
+  the current period range. Overlap check: month range [Y-M-01, Y-M-last]
+  vs currentPeriodRange.start / .end.
+*/
+function MonthPeriodTag({ monthIndex, year, currentPeriodRange }) {
+  if (!currentPeriodRange?.period) return null;
+  const monthStart = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+  const nextMonthIndex = monthIndex + 1;
+  const nextYear = nextMonthIndex >= 12 ? year + 1 : year;
+  const nextMonth = nextMonthIndex >= 12 ? 1 : nextMonthIndex + 1;
+  const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+  // Overlap: !(monthEnd <= rangeStart || monthStart >= rangeEnd)
+  const overlaps = !(monthEnd <= currentPeriodRange.start || monthStart > currentPeriodRange.end);
+  if (!overlaps) return null;
+  const periodLabel = String(currentPeriodRange.period).startsWith("P")
+    ? currentPeriodRange.period
+    : `P${currentPeriodRange.period}`;
+  return (
+    <span className="sc-season-month-card-period-tag" aria-label={`Current period ${periodLabel}`}>
+      {periodLabel}
+    </span>
+  );
 }
 
 function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange }) {
