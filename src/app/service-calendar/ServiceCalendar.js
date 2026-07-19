@@ -2067,6 +2067,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           firstName={firstName}
           asOf={asOf}
           onRefresh={handleRefresh}
+          /* V3 §9.2 + §9.6 - fetchState from yearLoadState. "failed"
+             maps directly; other states resolve to "fresh". A future
+             §9.6 stale check (past a refresh interval) can flip
+             "loaded" to "stale" - hook lives here, not in ChromeBar,
+             so the same yearLoadState feeds both grid failed atoms
+             and the as-of pill status. */
+          fetchState={yearLoadState === "failed" ? "failed" : "fresh"}
           isAdmin={isAdmin}
           isAdminView={isAdminView}
           onAdminToggle={handleAdminToggle}

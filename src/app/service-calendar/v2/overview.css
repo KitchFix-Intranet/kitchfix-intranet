@@ -1008,6 +1008,77 @@
   text-transform: uppercase;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   OV-2 POLISH SET (B1-B5)
+   ══════════════════════════════════════════════════════════════ */
+
+/* B1 - Footers pinned to card bottoms so uneven month heights
+   produce aligned bottoms (kills the ragged March-row look).
+   Card is column flex; footer margin-top: auto pushes it. */
+.scv2 .sc-season-month-card {
+  display: flex;
+  flex-direction: column;
+}
+.scv2 .sc-season-month-card-footer {
+  margin-top: auto;
+}
+
+/* B2 - Today-ring breathing room. Tile gap bumps to 4px at Standard
+   so the 2px navy ring never kisses neighbor tiles. Documented
+   choice: tile-gap adjustment (vs ring-inset) keeps the ring's
+   visual weight identical and gives an extra 2px of breathing
+   between EVERY tile pair, not just today-ring neighbors. */
+.scv2 .sc-season-month-card-grid {
+  gap: 4px;
+}
+
+/* B3 - Needs-dot punch. Bumped 4->5px + tone to needs-fg (darker,
+   more optical presence on low-DPI). Grayscale math still holds
+   (both fill and glyph are family-consistent). */
+.scv2 .sc-daysq--needs-entry::after {
+  width: 5px;
+  height: 5px;
+  background: var(--sc2-state-needs-fg);
+}
+.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+  width: 5px;
+  height: 5px;
+}
+
+/* B4 - Month-card drill affordance. cursor:pointer + subtle title
+   -> navy shift on hover (rides the existing el-hover step). */
+.scv2 .sc-season-month-card {
+  cursor: pointer;
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-season-month-card:hover .sc-season-month-card-name {
+  color: var(--sc2-cmd-bg);
+}
+.scv2 .sc-season-month-card:hover {
+  box-shadow: var(--sc2-el-hover);
+}
+
+/* B5 - Rail inner-scroll scrollbar (thin, navy-tinted). Replaces
+   the OS default inside the navy rail. Firefox scrollbar-color
+   support + WebKit ::-webkit-scrollbar-* to hit both engines. */
+.scv2 .sc-rail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.20) transparent;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 3px;
+}
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.30);
+}
+
 /* §S11.2 - Tabular figures on all data nodes. */
 .scv2 .sc-rail-hero-value,
 .scv2 .sc-rail-line-value,
