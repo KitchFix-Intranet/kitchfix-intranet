@@ -1112,29 +1112,34 @@
    Corner grammar preserved from v1 (top-right = game/event,
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
-/* OV-3 Item 1d + G10 (2026-07-19) - enlarge corner wedges from
-   15px legs (v1 base at line 264-273 / 294-304, clip-path polygons
-   on a sized box) to 22px legs. Owner ruling: previous render "too
-   subtle" - grow meaningfully so game-day (STL - FL / TBJ - FL AAA
-   overlay dates included) + spring-training PDC dates read at a
-   glance in the year overview. Whole-px legs; visual ratio ~50%
-   of the 44px sm-tile min-height. v1 SC keeps 15px for stability;
-   the size uplift is scv2-scoped.
-   G10 companion: overview.css:1072 (§7.4 "corner markers retired")
-   was HIDING these under display:none since OV-1, so the Wave-1
-   uplift landed a bigger clipped box that never painted. That hide
-   rule is now DELETED in the G10 commit; the width/height/
-   background overrides below take effect against the base
-   clip-path unchanged. */
+/* OV-3 Item 1d + G10 + F2(a) (2026-07-19) - wedge history:
+   Wave 1d enlarged base 15px legs to 22px under scv2. G10 caught +
+   deleted an OV-1 §7.4 display:none that had been suppressing the
+   entire pseudo. F2 caught the second suppressor (Wave 3c home-
+   hide, overview.css - see the F2(b) block there for the full
+   diagnosis) and deleted it.
+   F2(a) OWNER NEUTRALIZATION (2026-07-19): the 22px filled wedges
+   are owner-rejected (devour numerals; raw copper clashes). Both
+   wedges hide via `display: none` here pending the F9 marker pick
+   (Option 6 outline notch under a separate commit - REPLACES this
+   block once the notch construction lands). Width/height/background
+   overrides are RETAINED so the F2(b) acceptance can verify content
+   generation via computed values on a hidden pseudo:
+      computed content: '""'  (from base rule at line 265-276)
+      computed background:  from --sc2-mark-gameday (Wave 1d override)
+   The base clip-path stays applied; nothing paints because display:
+   none skips box generation. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
   width: 22px;
   height: 22px;
   background: var(--sc2-mark-gameday);
+  display: none;   /* F2(a) - pending F9 marker pick */
 }
 .scv2 .sc-daysq--sm.sc-daysq--spring::after {
   width: 22px;
   height: 22px;
   background: var(--sc2-accent-copper);
+  display: none;   /* F2(a) - pending F9 marker pick */
 }
 .scv2 .sc-daysq-st-pill {
   background: var(--sc2-chip-mlb-bg);

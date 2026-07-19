@@ -1143,17 +1143,31 @@ body:has(.scv2) {
    305), not border-drawn triangles - so the Wave-1 width/height
    uplift is structurally correct once the hide rule leaves. */
 
-/* OV-3 Wave 3c/3d - year-zoom home/away DOT PAIR REMOVED.
-   Away days on MLB + MiLB render the new ghost-purple TILE STATE
-   (--sc2-state-away-bg/fg) instead of an extra glyph. Home days
-   render the base entered/needs/upcoming palette per §7.2 - no
-   dot, no additional carrier. The hasScheduleGame emit lands from
-   #474 and is retained for drill use. */
-.scv2 .sc-daysq--sm.sc-daysq--home::before,
-.scv2 .sc-daysq--sm.sc-daysq--away::before {
-  content: none;
-  display: none;
-}
+/* OV-3 Wave 3c/3d + F2(b) (2026-07-19) - year-zoom home/away DOT
+   PAIR REMOVED. Away days on MLB + MiLB render the new ghost-purple
+   TILE STATE (--sc2-state-away-bg/fg) instead of an extra glyph.
+   Home days render the base entered/needs/upcoming palette per §7.2 -
+   no dot, no additional carrier. The hasScheduleGame emit lands from
+   #474 and is retained for drill use.
+
+   F2(b) DIAGNOSIS: the Wave-3c `content: none; display: none` hide
+   rule on `.scv2 .sc-daysq--sm.sc-daysq--home::before` was the
+   killer. DaySquare.js:220 emits `sc-daysq--home` from the SAME
+   signal that emits `sc-daysq--game-day` (both from
+   isGameDayOverlay). Every game-day tile (CIN-KY, TBJ-NY, MLB fee)
+   carries BOTH classes. The Wave-3c rule and my Wave-1d rule
+   (`.scv2 .sc-daysq--sm.sc-daysq--game-day::before`) TIE at (0,3,1);
+   Wave 3c set `content: none` and Wave 1d didn't - so the ::before
+   never generated, background token was moot. CIN-KY spring tiles
+   only carry --spring (no --home), so the Wave-3c rule never
+   matched them and their ::after painted.
+   Fix: DELETE the hide rule. The dot-painting rules it was written
+   to neutralize are gone (Wave 3c/3d dot-pair removal covered
+   them); leaving it kept ::before slot suppressed on every
+   game-day tile.
+   For F2(a) neutralization the display:none moves down under the
+   game-day::before rule so it applies where it actually needs to
+   (see F2(a) block below). */
 
 /* OV-3 Wave 3d - away tile state. Ghost-purple fill + fg for
    MLB + MiLB away days. Delta from off-grey preserved via the
