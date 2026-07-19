@@ -1080,6 +1080,34 @@
   box-shadow: var(--sc2-el-hover);
 }
 
+/* §6.9 - Progressive detail slim rows. Months beyond current+1
+   collapse to a compact one-row view: header only (name + phase
+   tick + P-tag). Grid, dow, footer are hidden. Click on the
+   collapsed-trigger button expands via userExpanded (MonthCard's
+   own state) which flips data-slim off.
+
+   Session-local: userExpanded resets on remount but survives
+   view changes within the session. RM-gated height transition
+   on the article for the expand animation. Flag-off inertness:
+   base rule doesn't key on data-slim; only scv2 sees it. */
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-dow,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-grid,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-footer,
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-drill {
+  display: none;
+}
+.scv2 .sc-season-month-card[data-slim="true"] {
+  min-height: 0;
+}
+.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-header {
+  padding-bottom: var(--sc2-space-2);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scv2 .sc-season-month-card {
+    transition: min-height var(--duration-base) var(--ease-standard);
+  }
+}
+
 /* §9.5 - Skeletons: month-card + rail. v1 already renders
    MonthSkeleton via `.sc-season-grid--loading`; scv2 re-skins to
    match the final layout tokens (surface-card, radius, tile ghost

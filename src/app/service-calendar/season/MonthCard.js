@@ -57,6 +57,7 @@ export default function MonthCard({
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
   currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
   phaseTimeline,             // V3 §6.6 - derived phase timeline; used to resolve the month's dominant phase for the header tick tint
+  slimByDefault = false,     // V3 §6.9 - months beyond current+1 default to slim rows; click/Enter expands (userExpanded overrides)
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -128,6 +129,12 @@ export default function MonthCard({
       className={cardClass}
       aria-label={`${monthName} ${year}`}
       data-state={monthState}
+      /* V3 §6.9 - Slim mode: months beyond current+1 hide the tile
+         grid + footer + drill overlay via CSS (data-slim="true").
+         User can expand by clicking the collapsed-trigger header
+         (which flips userExpanded and, via slim's evaluation below,
+         removes the attribute). Session-local per userExpanded state. */
+      data-slim={slimByDefault && !userExpanded ? "true" : undefined}
     >
       {expanded ? (
         <header className="sc-season-month-card-header">

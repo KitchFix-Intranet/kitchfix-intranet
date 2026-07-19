@@ -242,6 +242,15 @@ export default function SeasonShell({
                   /* V3 §6.6 - phase timeline for the header 3px tick
                      (phase-family tint of the month's dominant phase). */
                   phaseTimeline={phaseTimeline}
+                  /* V3 §6.9 - progressive detail: months beyond
+                     current+1 default to slim (compact one-row) so
+                     the eye reads the current arc first. Click/Enter
+                     on the header expands (userExpanded takes over). */
+                  slimByDefault={
+                    todayDate
+                      ? (monthIndex > Number(todayDate.slice(5, 7)) - 1 + 1)
+                      : false
+                  }
                 />
               </div>
             );
