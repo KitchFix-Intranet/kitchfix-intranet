@@ -1064,15 +1064,20 @@ body:has(.scv2) {
    The date numeral color + weight for needs tiles is set below
    (search: OV-3 Wave 3b needs-numeral). */
 
-/* §7.4 - Corner markers retired on overview. Phase context lives
-   in the ribbon (§S5) and the month-tick (§6.6). The v1
-   corner-marks (--sc2-mark-gameday indigo, --sc2-accent-copper
-   spring-training) are audit-scheduled for removal in the drill
-   V3 pass; overview hides them here. */
-.scv2 .sc-daysq--game-day::before,
-.scv2 .sc-daysq--spring::after {
-  display: none;
-}
+/* OV-3 G10 (2026-07-19) - §7.4 "corner markers retired" rule
+   DELETED. That rule was written in OV-1 when phase context lived
+   only in the ribbon; the OV-3 spec explicitly RESTORES + enlarges
+   the wedges (Item 1d). My Wave-1 uplift at DaySquare.css:1122-1131
+   overrode width/height/background but not display - the OV-1
+   `display: none` at (specificity 0,2,1) beat nothing on the
+   display property, so wedges never painted despite the
+   uplift landing.
+   Diagnosis (owner's eyes overturned my Wave-1 computed-size gate):
+   the box was 22x22 with the clip-path still applied - the render
+   was suppressed at the display level, not the geometry level. The
+   wedges are clip-path polygons on a sized box (DaySquare.css:264-
+   305), not border-drawn triangles - so the Wave-1 width/height
+   uplift is structurally correct once the hide rule leaves. */
 
 /* OV-3 Wave 3c/3d - year-zoom home/away DOT PAIR REMOVED.
    Away days on MLB + MiLB render the new ghost-purple TILE STATE

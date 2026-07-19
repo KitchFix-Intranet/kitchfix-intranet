@@ -1112,13 +1112,20 @@
    Corner grammar preserved from v1 (top-right = game/event,
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
-/* OV-3 Item 1d - enlarge corner wedges from 15px legs (v1 base at
-   line 264-273 / 294-304) to 22px legs. Owner ruling: previous
-   render "too subtle" - grow meaningfully so game-day (STL - FL /
-   TBJ - FL AAA overlay dates included) + spring-training PDC dates
-   read at a glance in the year overview. Whole-px legs; visual
-   ratio ~50% of the 44px sm-tile min-height. v1 SC keeps 15px for
-   stability; the size uplift is scv2-scoped. */
+/* OV-3 Item 1d + G10 (2026-07-19) - enlarge corner wedges from
+   15px legs (v1 base at line 264-273 / 294-304, clip-path polygons
+   on a sized box) to 22px legs. Owner ruling: previous render "too
+   subtle" - grow meaningfully so game-day (STL - FL / TBJ - FL AAA
+   overlay dates included) + spring-training PDC dates read at a
+   glance in the year overview. Whole-px legs; visual ratio ~50%
+   of the 44px sm-tile min-height. v1 SC keeps 15px for stability;
+   the size uplift is scv2-scoped.
+   G10 companion: overview.css:1072 (§7.4 "corner markers retired")
+   was HIDING these under display:none since OV-1, so the Wave-1
+   uplift landed a bigger clipped box that never painted. That hide
+   rule is now DELETED in the G10 commit; the width/height/
+   background overrides below take effect against the base
+   clip-path unchanged. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
   width: 22px;
   height: 22px;
