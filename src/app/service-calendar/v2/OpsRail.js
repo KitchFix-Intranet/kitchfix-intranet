@@ -233,6 +233,12 @@ export default function OpsRail({
               lines={seasonListMonths}
               todayMonth={new Date().getMonth()}
               year={new Date().getFullYear()}
+              /* F3 - forward pinned-queue + homestand-ledger counts
+                 so OpsSeasonList's auto-scroll re-runs when either
+                 lands after mount and pushes the season list past
+                 clientHeight. */
+              queueLength={queueRows.length}
+              ledgerLength={ledger.length}
               onDrillToMonth={onDrillToMonth}
             />
           </RailSection>
@@ -267,16 +273,17 @@ export default function OpsRail({
   fee accounts (STL - FL, MLB fees) also auto-scroll the current
   month row into view on mount. RM-gated via prefers-reduced-motion.
 */
-function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
+function OpsSeasonList({ lines, todayMonth, year, queueLength, ledgerLength, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* OV-3 P3 + G8 (2026-07-19) - same guard + ResizeObserver
-       backstop as SeasonRail.SeasonList (see block comment there
-       for full diagnosis). Kept parallel so the two rail paths
-       behave identically. G8 fix: observe scrollNode.firstElementChild
-       (the .sc-rail-section) rather than scrollNode itself, so the
-       observer fires when CONTENT grows (data arrival) - not just
-       when the scroll container's own box resizes. */
+    /* OV-3 F3 (2026-07-19) - matches SeasonRail.SeasonList exactly.
+       Three attempts (rAF + 300ms + 900ms) with the overflow guard
+       + done latch. Ripped: no ResizeObserver. Real content sources
+       in deps so React re-runs on every data-arrival growth
+       (queueLength for the pinned queue, ledgerLength for the
+       homestand ledger above the season list, lines.length for the
+       season list itself). See F3 commit body for the three-strike
+       history. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
@@ -297,15 +304,15 @@ function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
       });
     };
     const rafId = requestAnimationFrame(tryScroll);
-    const observed = scrollNode.firstElementChild || scrollNode;
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
-    if (ro) ro.observe(observed);
+    const t1 = setTimeout(tryScroll, 300);
+    const t2 = setTimeout(tryScroll, 900);
     return () => {
       cancelAnimationFrame(rafId);
-      if (ro) ro.disconnect();
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth, lines.length]);
+  }, [year, todayMonth, lines.length, queueLength, ledgerLength]);
   return (
     <>
       {lines.map((line) => (

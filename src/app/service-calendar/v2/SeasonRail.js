@@ -226,6 +226,11 @@ function CalendarRail({
             year={year}
             visibleMonthLines={visibleMonthLines}
             todayMonth={todayMonth}
+            /* F3 (2026-07-19) - forward the pinned-queue count so
+               the SeasonList's auto-scroll effect can re-fire when
+               the queue rows push the season list past clientHeight
+               after data arrival. */
+            queueLength={queue.length}
             onDrillToMonth={onDrillToMonth}
             tailEligible={tailEligible}
             tailAllLines={tailAllLines}
@@ -257,43 +262,23 @@ function CalendarRail({
   prefers-reduced-motion; else smooth.
 */
 function SeasonList({
-  year, visibleMonthLines, todayMonth, onDrillToMonth,
+  year, visibleMonthLines, todayMonth, queueLength, onDrillToMonth,
   tailEligible, tailAllLines, tailFirstShort, tailLastShort,
   tailSumProjected, showAllMonths, toggleTail,
 }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* OV-3 P3 diagnosis (2026-07-19) - the F-E5 direct-math scroll
-       (below) was firing correctly on per-meal CalendarRail too, but
-       reading as a no-op because `scrollNode.scrollHeight` was
-       <= `clientHeight`. CalendarRail's scroll region on per-meal
-       accounts (CIN, AZ) has ONLY the season list inside RailScroll -
-       no homestand ledger above the season list like OpsRail's fee
-       variant. Twelve month lines + one collapse toggle fit within
-       the rail scroller's natural clientHeight at typical viewport
-       heights, so `scrollTo({top: X})` clamps to 0 and July renders
-       at its natural row position (mid-bottom edge). OpsRail's fee
-       path added ~5-10 homestand ledger rows above the season list,
-       pushing content past clientHeight so its `scrollTop=224`
-       succeeded.
-       Fix: guard the scroll on `scrollHeight > clientHeight` (skip
-       when content fits - the "auto-scroll to today" is moot in that
-       case, natural row order already places today mid-list). Also
-       add a ResizeObserver so an incremental layout expansion (data
-       arrives after mount, container size changes) re-runs the scroll
-       once the overflow condition is met. Deps unchanged: reacts to
-       year/todayMonth/list-length as before.
-
-       G8 (2026-07-19) - RO now observes scrollNode.firstElementChild
-       (the .sc-rail-section that wraps the season list rows),
-       NOT scrollNode itself. A container's border-box only resizes
-       when its OWN width/height changes; when data lands and the
-       section rows are appended, only the CONTENT (section child)
-       grows, so an observer bound to scrollNode never fires and the
-       overflow condition is never re-checked. STL-FL regressed to
-       scrollTop 0 for this reason. Observing the content wrapper
-       fires on every data-arrival growth. Overflow guard + done
-       latch retained. */
+    /* OV-3 F3 (2026-07-19) - auto-scroll goes deterministic. Three
+       strikes on RO cleverness (G8 observed the container - never
+       fired; G8-second-iteration observed firstElementChild - never
+       fired on STL-FL either). Ripped: use three scheduled attempts
+       (rAF + 300ms + 900ms) with the guard + done latch. Real
+       content sources go into deps so React re-runs the effect on
+       every data-arrival growth (queueLength for the CalendarRail
+       pinned queue). Overflow guard still short-circuits the
+       content-fits case (CIN-AZ per-meal), so no work happens
+       there.
+       Full history in the OV-3 F3 commit body. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
@@ -314,19 +299,15 @@ function SeasonList({
       });
     };
     const rafId = requestAnimationFrame(tryScroll);
-    /* G8 - observe the content wrapper, not the scroll container.
-       scrollNode.firstElementChild is the .sc-rail-section that
-       React re-renders on data arrival (or falls back to the
-       scroll node itself if the tree isn't yet populated). */
-    const observed = scrollNode.firstElementChild || scrollNode;
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
-    if (ro) ro.observe(observed);
+    const t1 = setTimeout(tryScroll, 300);
+    const t2 = setTimeout(tryScroll, 900);
     return () => {
       cancelAnimationFrame(rafId);
-      if (ro) ro.disconnect();
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth, visibleMonthLines.length]);
+  }, [year, todayMonth, visibleMonthLines.length, queueLength]);
   return (
     <>
       {visibleMonthLines.map((line) => (
