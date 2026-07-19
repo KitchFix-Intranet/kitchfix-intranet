@@ -267,7 +267,18 @@ function SeasonList({
        add a ResizeObserver so an incremental layout expansion (data
        arrives after mount, container size changes) re-runs the scroll
        once the overflow condition is met. Deps unchanged: reacts to
-       year/todayMonth/list-length as before. */
+       year/todayMonth/list-length as before.
+
+       G8 (2026-07-19) - RO now observes scrollNode.firstElementChild
+       (the .sc-rail-section that wraps the season list rows),
+       NOT scrollNode itself. A container's border-box only resizes
+       when its OWN width/height changes; when data lands and the
+       section rows are appended, only the CONTENT (section child)
+       grows, so an observer bound to scrollNode never fires and the
+       overflow condition is never re-checked. STL-FL regressed to
+       scrollTop 0 for this reason. Observing the content wrapper
+       fires on every data-arrival growth. Overflow guard + done
+       latch retained. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
@@ -288,8 +299,13 @@ function SeasonList({
       });
     };
     const rafId = requestAnimationFrame(tryScroll);
+    /* G8 - observe the content wrapper, not the scroll container.
+       scrollNode.firstElementChild is the .sc-rail-section that
+       React re-renders on data arrival (or falls back to the
+       scroll node itself if the tree isn't yet populated). */
+    const observed = scrollNode.firstElementChild || scrollNode;
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
-    if (ro) ro.observe(scrollNode);
+    if (ro) ro.observe(observed);
     return () => {
       cancelAnimationFrame(rafId);
       if (ro) ro.disconnect();

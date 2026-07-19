@@ -248,10 +248,13 @@ export default function OpsRail({
 function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* OV-3 P3 (2026-07-19) - same guard + ResizeObserver backstop
-       as SeasonRail.SeasonList (see block comment there for full
-       diagnosis). Kept parallel so the two rail paths behave
-       identically. */
+    /* OV-3 P3 + G8 (2026-07-19) - same guard + ResizeObserver
+       backstop as SeasonRail.SeasonList (see block comment there
+       for full diagnosis). Kept parallel so the two rail paths
+       behave identically. G8 fix: observe scrollNode.firstElementChild
+       (the .sc-rail-section) rather than scrollNode itself, so the
+       observer fires when CONTENT grows (data arrival) - not just
+       when the scroll container's own box resizes. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
@@ -272,8 +275,9 @@ function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
       });
     };
     const rafId = requestAnimationFrame(tryScroll);
+    const observed = scrollNode.firstElementChild || scrollNode;
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
-    if (ro) ro.observe(scrollNode);
+    if (ro) ro.observe(observed);
     return () => {
       cancelAnimationFrame(rafId);
       if (ro) ro.disconnect();
