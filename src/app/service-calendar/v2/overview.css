@@ -740,21 +740,36 @@ body:has(.scv2) {
      future     #e6e9ed  (subtle line-2 tone)
    Meta line (NEXT · HS{n} · opponents · dates · games · homestand
    n of 13) rides the caption row above the bar. */
-/* OV-3 Wave 5b (item 12) - homestand strip hierarchy + breathing.
-   Meta row: NEXT as a small navy chip, HS{n} bold 13px, dot
-   separators between opponent/date/games, "homestand n of 13"
-   right-aligned muted. Card centers its bar vertically (kill the
-   bottom-hug); height fits content. */
+/* OV-3 Wave 5b + G5 (2026-07-19) - homestand strip hierarchy +
+   breathing. G5 fix: Wave 5b set gap on .sc-stepper (the outer
+   section) but the caption + bar are siblings INSIDE
+   .sc-stepper-desktop (display:block at desktop), so the flex gap
+   never applied between them - caption sat flush with the bar.
+   Also the bar sat on the card's bottom border because the
+   sp-4 padding on the outer container was competing with the
+   bar's own 16px height and no bottom breathing.
+   Fix (three-part):
+   1. Move the flex layout down onto .sc-stepper-desktop so the gap
+      applies between Caption and SeasonBar (the two real siblings).
+   2. Bump the vertical padding on .sc-stepper to sp-5 top + sp-5
+      bottom so the caption sits >=10px from the top border and the
+      bar sits >=10px from the bottom border (measured).
+   3. Increase the caption -> bar gap to sp-4 so it visually
+      matches the bar -> bottom-border gap. */
 .scv2 .sc-stepper {
   background: var(--sc2-surface-card);
   border-radius: 12px;
   box-shadow: var(--sc2-el-card);
-  padding: var(--sc2-space-4);
+  padding: var(--sc2-space-5) var(--sc2-space-4);
   margin-bottom: var(--sc2-space-4);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--sc2-space-3);
+}
+.scv2 .sc-stepper-desktop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-4);
 }
 .scv2 .sc-stepper-caption {
   display: flex;
