@@ -236,28 +236,29 @@ function SeasonList({
 }) {
   const currentRef = useRef(null);
   useEffect(() => {
+    /* F-E5 (2026-07-19) - swap scrollIntoView({ block: "center" })
+       for direct math on the scroll container. Live probe showed
+       scrollIntoView bubbled up to `<html>` and scrolled the whole
+       page ~351 on load. The direct-math version scrolls ONLY
+       .sc-rail-scroll and leaves the document untouched. Verified
+       live at rail.scrollTop 96 with July centered, html untouched.
+       F-E4 deps preserved. */
     const el = currentRef.current;
     if (!el) return;
+    const scrollNode = el.closest(".sc-rail-scroll");
+    if (!scrollNode) return;
     const rm = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    /* Delay one rAF so the layout settles before scrollIntoView
-       computes offsets. Block: "center" places the current month
-       mid-viewport of the scroll region. */
     const rafId = requestAnimationFrame(() => {
-      el.scrollIntoView({
-        block: "center",
+      const top = el.getBoundingClientRect().top
+        - scrollNode.getBoundingClientRect().top
+        + scrollNode.scrollTop;
+      scrollNode.scrollTo({
+        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
         behavior: rm ? "auto" : "smooth",
       });
     });
     return () => cancelAnimationFrame(rafId);
-    /* F-E4: include the data-arrival signal (visibleMonthLines.length)
-       in the deps. Pre-fix the effect fired ONCE on mount before the
-       lines array populated - currentRef.current was null, early-
-       returned, and never re-ran when data arrived. scrollTop stayed
-       0 forever. Adding length triggers a re-run when the lines
-       actually land; the null-ref early-return keeps redundant runs
-       harmless. Intentionally NOT depending on the full lines array
-       identity (would fire on every session interaction). */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, todayMonth, visibleMonthLines.length]);
   return (
@@ -265,6 +266,9 @@ function SeasonList({
       {visibleMonthLines.map((line) => (
         <div
           key={line.key}
+          className="sc-season-list-row"
+          data-month-index={line.monthIndex}
+          data-current={line.monthIndex === todayMonth ? "true" : undefined}
           ref={line.monthIndex === todayMonth ? currentRef : null}
         >
           <MonthRailLine

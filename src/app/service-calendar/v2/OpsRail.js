@@ -248,22 +248,24 @@ export default function OpsRail({
 function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
+    /* F-E5 - direct-math scroll on .sc-rail-scroll only (see
+       SeasonList block in SeasonRail.js for the diagnosis). */
     const el = currentRef.current;
     if (!el) return;
+    const scrollNode = el.closest(".sc-rail-scroll");
+    if (!scrollNode) return;
     const rm = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const rafId = requestAnimationFrame(() => {
-      el.scrollIntoView({
-        block: "center",
+      const top = el.getBoundingClientRect().top
+        - scrollNode.getBoundingClientRect().top
+        + scrollNode.scrollTop;
+      scrollNode.scrollTo({
+        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
         behavior: rm ? "auto" : "smooth",
       });
     });
     return () => cancelAnimationFrame(rafId);
-    /* F-E4: include the data-arrival signal (lines.length) in the
-       deps so the effect re-runs when data arrives. Pre-fix the
-       effect fired ONCE on mount before `lines` populated -
-       currentRef was null, early-returned, never re-ran.
-       scrollTop stayed 0 forever. Same pattern as SeasonList. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, todayMonth, lines.length]);
   return (
@@ -271,6 +273,9 @@ function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
       {lines.map((line) => (
         <div
           key={line.key}
+          className="sc-season-list-row"
+          data-month-index={line.monthIndex}
+          data-current={line.monthIndex === todayMonth ? "true" : undefined}
           ref={line.monthIndex === todayMonth ? currentRef : null}
         >
           <RailLine
