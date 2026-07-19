@@ -896,6 +896,19 @@ body:has(.scv2) {
 .scv2 .sc-legend-popup-swatch {
   border-radius: var(--sc2-radius-cell);
 }
+/* OV-3 F8 (2026-07-19) - FIGURES section removed under scv2.
+   The Projected / Estimate / Entered explainer block explained
+   the OV-2 tile notation ("~$3K" / "est. $3K" / "$3K") which the
+   OV-3 rebuild retired in favor of state fills + numerals. The
+   block now reads as noise on the info popup. Hide the entire
+   section via :has() so nothing empty renders. The FigureRow
+   component is exclusive to this section (LegendInfoPopup.js:206-
+   215 - the only user of --figure modifier), so :has() targets
+   only this section cleanly. v1 unchanged (LegendInfoPopup is
+   shared component; scoping to .scv2 leaves flag-off intact). */
+.scv2 .sc-legend-popup-section:has(.sc-legend-popup-row--figure) {
+  display: none;
+}
 .scv2 .sc-state-legend-item {
   color: var(--sc2-ink);
   font-size: var(--sc2-size-micro);
