@@ -437,6 +437,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  /* V3 §9.2 H1 - effective load-state resolves the ?debug=failed
+     hook ONCE for every consumer. SC-033 wired the hook only at the
+     SeasonShell mount below (line ~2205); the rail + as-of pill kept
+     reading raw yearLoadState so those surfaces never went failed on
+     the test URL. Zero write-path: test-hook only, gated on isDev
+     per SC-033; production fetch behavior is unchanged (real
+     failures still set yearLoadState = "failed" via the fetch
+     effect). */
+  const effectiveYearLoadState = (isDev && searchParams?.get("debug") === "failed")
+    ? "failed"
+    : yearLoadState;
+
   // Bulk mode
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState(new Set());
@@ -2067,13 +2079,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           firstName={firstName}
           asOf={asOf}
           onRefresh={handleRefresh}
-          /* V3 §9.2 + §9.6 - fetchState from yearLoadState. "failed"
-             maps directly; other states resolve to "fresh". A future
-             §9.6 stale check (past a refresh interval) can flip
-             "loaded" to "stale" - hook lives here, not in ChromeBar,
-             so the same yearLoadState feeds both grid failed atoms
-             and the as-of pill status. */
-          fetchState={yearLoadState === "failed" ? "failed" : "fresh"}
+          /* V3 §9.2 + §9.6 - fetchState from effectiveYearLoadState
+             (yearLoadState + ?debug=failed hook, H1). "failed" maps
+             directly; other states resolve to "fresh". A future §9.6
+             stale check (past a refresh interval) can flip "loaded"
+             to "stale" - hook lives at the effective derivation, so
+             every consumer (grid, rail, as-of pill) reads one signal. */
+          fetchState={effectiveYearLoadState === "failed" ? "failed" : "fresh"}
           isAdmin={isAdmin}
           isAdminView={isAdminView}
           onAdminToggle={handleAdminToggle}
@@ -2202,14 +2214,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               isMilb={isMilb}
               springDateSet={springDateSet}
               loading={loading || !data || !yearData}
-              loadState={
-                // SC-033: debug hook - dev + ?debug=failed forces the
-                // failed-atom render across the overview so the state is
-                // visually testable without a real fetch failure.
-                (isDev && searchParams?.get("debug") === "failed")
-                  ? "failed"
-                  : yearLoadState
-              }
+              loadState={effectiveYearLoadState /* SC-033 + V3 H1: hook derived once at effectiveYearLoadState above */}
               // Calendar month-card drill: opens the MONTH scope drill-in
               // (un-deprecates the month view). Prior behavior forwarded
               // to the containing fiscal period; the two scopes now
@@ -2302,8 +2307,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               /* V3 §9.2 - failed-state signal + retry hook. Rail
                  renders a banner + retry button when the year-summary
                  fetch failed; kicks reload via handleRefresh (same
-                 signal the AsOf pill uses). Zero write-path. */
-              loadState={yearLoadState}
+                 signal the AsOf pill uses). Reads
+                 effectiveYearLoadState so ?debug=failed hits here too
+                 (H1). Zero write-path. */
+              loadState={effectiveYearLoadState}
               onRetry={handleRefresh}
             />
           );
