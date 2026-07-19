@@ -14,6 +14,27 @@ either audit's findings. Audit independence applies to findings; not to owner in
 
 ---
 
+## OV ship residue
+
+Post-merge trackers from the V3 OVERVIEW ship (#471 / #472 / #473 / #474, 2026-07-19). Not
+findings - just items to remember when V3 DRILL starts or during a followup pass.
+
+- **P3: CalendarRail auto-scroll no-fire on per-meal calendar rail.** OpsRail path verified
+  working (STL scrollTop 224 + centered); CIN - AZ effect doesn't fire, July rests visible at
+  viewport edge - low impact. Diagnose before fixing; do not guess. Likely candidates: ref
+  attachment timing (July's ref may set after the effect runs on per-meal path), F-E4 dep
+  identity (`visibleMonthLines.length` may not change between renders when data lands via
+  incremental update), or a `.closest(".sc-rail-scroll")` mismatch under Calendar mode's DOM.
+  Read the render chain before changing code.
+
+- **OWNER CALL open: December rail null glyph renders em-dash "—"** (`SeasonRail.js:286` /
+  `:291` / `:390` convention). Off/zero rows across the rail show em-dash as the null-value
+  placeholder. Not touched in the OV-2 F-D2 hyphen sweep (which targeted LABEL copy).
+  **Kevin decides**: keep as typographic convention or switch to hyphen for house-rule
+  consistency.
+
+---
+
 ## V3 lenses (owner-stated, pre-audit)
 
 Shared with both auditors. These are brief-level directions from the owner that shape the audit
