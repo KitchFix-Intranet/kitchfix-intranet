@@ -44,7 +44,34 @@ export default function SeasonRail({
   onDrillToDay,   // (date, period, source) => void - queue rows + footer CTA
   onDrillToMonth, // (monthIndex) => void - Calendar-mode season lines
   onDrillToPeriod,// (periodLabel) => void - Period-mode season lines
+  /* V3 §9.2 - fetch health for the year-summary payload; when
+     "failed" the rail replaces its normal body with a banner + retry
+     button so the operator can recover without a full page reload.
+     `onRetry` fires the same handler AsOf's refresh button uses. */
+  loadState,
+  onRetry,
 }) {
+  if (loadState === "failed") {
+    return (
+      <RailShell label={`SEASON · ${year} BOOKS`}>
+        <div className="sc-rail-failed" role="alert">
+          <div className="sc-rail-failed-title">Books unavailable</div>
+          <p className="sc-rail-failed-body">
+            The season summary failed to load. Try again.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              className="sc-rail-failed-retry"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </RailShell>
+    );
+  }
   const today = todayISO();
   const totals = deriveHeroTotals(yearData);
   // V3 §9.1 - vocabulary canon: verb "entered" everywhere; "recorded"

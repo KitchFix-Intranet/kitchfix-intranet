@@ -1080,6 +1080,42 @@
   box-shadow: var(--sc2-el-hover);
 }
 
+/* §9.2 - Rail failed banner + retry. Rendered inside the RailShell
+   when yearLoadState === "failed"; SeasonRail early-returns this
+   variant instead of the normal hero + queue + season list. */
+.scv2 .sc-rail-failed {
+  padding: var(--sc2-space-3) var(--sc2-space-2) var(--sc2-space-4);
+  color: var(--sc2-rail-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-rail-failed-title {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-state-overdue-bd);   /* attention red-brick */
+}
+.scv2 .sc-rail-failed-body {
+  margin: 0;
+  color: var(--sc2-rail-text-muted);
+  font-size: var(--sc2-size-caption);
+}
+.scv2 .sc-rail-failed-retry {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sc2-rail-text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-rail-failed-retry:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 /* B5 - Rail inner-scroll scrollbar (thin, navy-tinted). Replaces
    the OS default inside the navy rail. Firefox scrollbar-color
    support + WebKit ::-webkit-scrollbar-* to hit both engines. */

@@ -2299,6 +2299,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onDrillToDay={overviewTargetDay}
               onDrillToMonth={overviewDrillMonth}
               onDrillToPeriod={overviewDrillPeriod}
+              /* V3 §9.2 - failed-state signal + retry hook. Rail
+                 renders a banner + retry button when the year-summary
+                 fetch failed; kicks reload via handleRefresh (same
+                 signal the AsOf pill uses). Zero write-path. */
+              loadState={yearLoadState}
+              onRetry={handleRefresh}
             />
           );
           // W8 - shared mobile books-bar figures. Read from the SAME
