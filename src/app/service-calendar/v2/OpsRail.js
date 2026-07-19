@@ -141,35 +141,57 @@ export default function OpsRail({
       {heroBlock}
       {!incomplete && <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />}
 
-      {/* V3 §S8.3 F-E2 - OpsRail also pins the queue above the season
-          scroll region. Same structure as SeasonRail so fee accounts
-          (STL - FL, MLB fees) get the §S8.3 behavior too. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
-          meta={queueRows.length > 0 ? `${queueRows.length}` : null}
-        >
-          {queueRows.length === 0 && (
-            <p className="sc-rail-queue-empty">
-              {hasHomestandSchedule ? "No unentered game days." : "Nothing needs entry right now."}
-            </p>
-          )}
-          {visibleQueue.map(row => (
-            <OpsQueueRow
-              key={row.date}
-              row={row}
-              hasHomestandSchedule={hasHomestandSchedule}
-              onClick={() => onTargetDay?.(row.date)}
-            />
-          ))}
-          {overflow > 0 && (
-            <RailQueueMore
-              count={overflow}
-              onClick={() => setShowAllQueue(true)}
-            />
-          )}
-        </RailSection>
-      </div>
+      {/* V3 §S8.3 F-E2 + OV-3 G13 - OpsRail pinned queue.
+          hasHomestandSchedule=true (MLB fee, MiLB AAA): "To enter"
+          queue is game-day rows carrying no per-day severity; meta
+          stays as the plain count.
+          hasHomestandSchedule=false (STL - FL fee non-homestand):
+          per-day needs / overdue apply - severity pill (amber
+          "{n} need" / red "{n} overdue"). Worst-state wins. */}
+      {(() => {
+        let railMeta = queueRows.length > 0 ? `${queueRows.length}` : null;
+        let railMetaTone;
+        if (!hasHomestandSchedule) {
+          const overdueCount = queueRows.filter(r => r.status === "overdue").length;
+          const needsCount = queueRows.filter(r => r.status === "needs-entry").length;
+          if (overdueCount > 0) {
+            railMeta = `${overdueCount} overdue`;
+            railMetaTone = "overdue";
+          } else if (needsCount > 0) {
+            railMeta = `${needsCount} need`;
+            railMetaTone = "needs";
+          }
+        }
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
+              {queueRows.length === 0 && (
+                <p className="sc-rail-queue-empty">
+                  {hasHomestandSchedule ? "No unentered game days." : "Nothing needs entry right now."}
+                </p>
+              )}
+              {visibleQueue.map(row => (
+                <OpsQueueRow
+                  key={row.date}
+                  row={row}
+                  hasHomestandSchedule={hasHomestandSchedule}
+                  onClick={() => onTargetDay?.(row.date)}
+                />
+              ))}
+              {overflow > 0 && (
+                <RailQueueMore
+                  count={overflow}
+                  onClick={() => setShowAllQueue(true)}
+                />
+              )}
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         {/* Homestand ledger - MLB fee variant only */}

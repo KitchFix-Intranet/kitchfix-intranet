@@ -145,6 +145,33 @@
   font-size: var(--sc2-size-micro);
   color: var(--sc2-rail-text-muted);
 }
+/* OV-3 G13 (2026-07-19) - severity pill tones for the NEEDS ENTRY
+   meta. Callers supply metaTone="needs" or "overdue"; the pill
+   surface + text color mirror the tile-state semantics (amber for
+   needs, red for overdue) so the rail header reads the same
+   language as the tiles below. Worst-state wins is a caller
+   concern - CSS only paints the pill. */
+.scv2 .sc-rail-section-meta--needs,
+.scv2 .sc-rail-section-meta--overdue {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--sc2-radius-pill);
+  font-weight: var(--sc2-wt-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.scv2 .sc-rail-section-meta--needs {
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong, #5c4310);
+  border: var(--sc2-border-thin) solid var(--sc2-state-needs-bd);
+}
+.scv2 .sc-rail-section-meta--overdue {
+  background: var(--sc2-state-overdue-bg);
+  color: var(--sc2-state-overdue-fg);
+  border: var(--sc2-border-thin) solid var(--sc2-state-overdue-bd);
+}
 
 /* ─── Scroll region + fade ────────────────────────────────── */
 .scv2 .sc-rail-scroll-wrap {

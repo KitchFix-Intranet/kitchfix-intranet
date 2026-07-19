@@ -90,12 +90,24 @@ export function RailProgress({ pct, complete }) {
 }
 
 // ─── Section header ────────────────────────────────────────────
-export function RailSection({ label, meta, children }) {
+// OV-3 G13: metaTone optional prop drives the pill's tone class.
+//   metaTone="needs"    -> amber "{n} need" pill
+//   metaTone="overdue"  -> red   "{n} overdue" pill
+//   default (undefined) -> plain muted text (pre-G13 behavior)
+// Callers compute the pill copy + tone from their own worst-state
+// count (Rail is presentational; no derivation lives here).
+export function RailSection({ label, meta, metaTone, children }) {
   return (
     <div className="sc-rail-section">
       <div className="sc-rail-section-head">
         <span className="sc-rail-section-label">{label}</span>
-        {meta && <span className="sc-rail-section-meta">{meta}</span>}
+        {meta && (
+          <span
+            className={`sc-rail-section-meta${metaTone ? ` sc-rail-section-meta--${metaTone}` : ""}`}
+          >
+            {meta}
+          </span>
+        )}
       </div>
       {children}
     </div>

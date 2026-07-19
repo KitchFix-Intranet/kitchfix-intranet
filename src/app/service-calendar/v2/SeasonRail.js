@@ -177,12 +177,25 @@ function CalendarRail({
       <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
       {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
-          The queue stays visible while the season list inner-scrolls. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label="NEEDS ENTRY"
-          meta={queue.length > 0 ? `${queue.length}` : null}
-        >
+          The queue stays visible while the season list inner-scrolls.
+          OV-3 G13: meta becomes the severity pill - amber "{n} need"
+          when only needs-entry present; red "{n} overdue" when any
+          overdue exists. Worst-state wins; the count shown is that
+          state's count. */}
+      {(() => {
+        const overdueCount = queue.filter(r => r.status === "overdue").length;
+        const needsCount = queue.filter(r => r.status === "needs-entry").length;
+        const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+        const railMeta = overdueCount > 0
+          ? `${overdueCount} overdue`
+          : needsCount > 0 ? `${needsCount} need` : null;
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label="NEEDS ENTRY"
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
           {queue.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry right now.</p>
           )}
@@ -202,8 +215,10 @@ function CalendarRail({
               onClick={() => setShowAllQueue(true)}
             />
           )}
-        </RailSection>
-      </div>
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         <RailSection label="Season">
@@ -393,36 +408,44 @@ function PeriodRail({
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
       <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
-      {/* V3 §S8.3 F-E2 - PeriodRail also pins NEEDS ENTRY above the
-          season scroll region. Same structure as CalendarRail so
-          both landing modes get the pinned queue + inner-scrolling
-          season list. Auto-scroll (SeasonList's current-month
-          rAF) is calendar-specific; period lines don't have a
-          per-month current-target concept, so PeriodRail's scroll
-          region uses the plain RailScroll without a ref. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label="NEEDS ENTRY"
-          meta={groupedQueue.length > 0 ? `${groupedQueue.length}` : null}
-        >
-          {groupedQueue.length === 0 && (
-            <p className="sc-rail-queue-empty">Every period is caught up.</p>
-          )}
-          {visibleGroups.map(g => (
-            <PeriodQueueRow
-              key={g.period}
-              group={g}
-              onClick={() => onDrillToPeriod?.(g.period)}
-            />
-          ))}
-          {overflow > 0 && (
-            <RailQueueMore
-              count={overflow}
-              onClick={() => setShowAllQueue(true)}
-            />
-          )}
-        </RailSection>
-      </div>
+      {/* V3 §S8.3 F-E2 + OV-3 G13 - PeriodRail pins NEEDS ENTRY with
+          the same severity-pill meta as CalendarRail. groupedQueue
+          rows carry per-period overdue + needs counts (see
+          PeriodQueueRow); the meta aggregates across all groups. */}
+      {(() => {
+        const overdueCount = groupedQueue.reduce((n, g) => n + (g.overdue || 0), 0);
+        const needsCount = groupedQueue.reduce((n, g) => n + (g.needs || 0), 0);
+        const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+        const railMeta = overdueCount > 0
+          ? `${overdueCount} overdue`
+          : needsCount > 0 ? `${needsCount} need` : null;
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label="NEEDS ENTRY"
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
+              {groupedQueue.length === 0 && (
+                <p className="sc-rail-queue-empty">Every period is caught up.</p>
+              )}
+              {visibleGroups.map(g => (
+                <PeriodQueueRow
+                  key={g.period}
+                  group={g}
+                  onClick={() => onDrillToPeriod?.(g.period)}
+                />
+              ))}
+              {overflow > 0 && (
+                <RailQueueMore
+                  count={overflow}
+                  onClick={() => setShowAllQueue(true)}
+                />
+              )}
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         <RailSection label="Season">
