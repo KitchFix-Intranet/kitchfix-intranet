@@ -1259,7 +1259,27 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     // sm-tile game-day wedge. Purely presentational; never touches
     // classify/kind/counters. Non-overlay accounts pass through with
     // no field set (undefined -> the sm renderer treats as false).
-    if (scheduleOverlayDates && scheduleOverlayDates.has(s.date)) {
+    //
+    // V3 §7.5 (2026-07-19): extended to HOMESTAND-schedule accounts
+    // (CIN - KY, TBJ - NY, and the 4 MLB fee accounts) so their HOME
+    // game days emit the same field. The v2 DaySquare converts
+    // `hasScheduleGame: true` into the `sc-daysq--home` class + the
+    // year-zoom filled navy dot per §7.5. Homestand accounts already
+    // emit AWAY days via the `status === "away"` classification path
+    // (unchanged); the missing side was home-day emission.
+    //
+    // Signal source: `hs.dayType === "GAME"` is a HOME game (fee
+    // classify branch at line 267 already treats it as home). AWAY
+    // days flow through `hs.dayType === "AWAY"` and are handled by
+    // the existing status path - no change to that emit.
+    //
+    // Guards: field is read-only, purely presentational (no classify
+    // / counter / write-path change). Legacy consumers pass through
+    // untouched (undefined -> false in the sm renderer). v1 CSS
+    // doesn't key on `--home`, so flag-off is inert.
+    const isOverlayGame = scheduleOverlayDates && scheduleOverlayDates.has(s.date);
+    const isHomestandHomeGame = hs?.dayType === "GAME";
+    if (isOverlayGame || isHomestandHomeGame) {
       dayEntry.hasScheduleGame = true;
     }
     daysByMonth.get(monthKey).push(dayEntry);
