@@ -1096,7 +1096,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // MiLB is hybrid: per-meal financially + schedule rhythm operationally.
   // (isFeeAccount hoisted upstream to feed the Phase 6 cutover hook -
   // one source for the fee-branch signal across the component.)
-  const hasHomestandSchedule = !!data?.homestandMap;
+  //
+  // G6 (2026-07-19): the gate READS FROM the account-level flag, not
+  // the current-month map presence. Prior derivation
+  // `!!data?.homestandMap` only fired true when the SC-load month
+  // had homestand context rows. On an off-week / between-homestand
+  // month, `data.homestandMap` was null even for MLB fee - and for
+  // MiLB AAA (CIN-KY / TBJ-NY, hasHomestandSchedule flag=true per
+  // sc-16) the map was frequently null too because year-summary
+  // populates homestandId onto yearData days, not sc-load's
+  // homestandMap. SeasonShell got hasHomestandSchedule=false and
+  // rendered PhaseStrip instead of SeasonStepper. Fix: read the DB
+  // flag directly via data.account.hasHomestandSchedule (set at
+  // route.js:453 from the accounts.has_homestand_schedule column).
+  // Downstream: SeasonStepper's own deriveHomestandSegments returns
+  // [] and the component returns null if yearData has no
+  // homestandId anywhere, so the render still self-guards. Loosening
+  // the gate lets MiLB accounts render the strip when their data
+  // supports it. Item 18 carve-out guards still satisfied.
+  const hasHomestandSchedule = !!data?.account?.hasHomestandSchedule;
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
   // sc-load payload. Non-flagged accounts NEVER see a scheduleOverlay
