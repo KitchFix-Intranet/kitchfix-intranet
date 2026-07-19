@@ -1080,6 +1080,74 @@
   box-shadow: var(--sc2-el-hover);
 }
 
+/* §9.5 - Skeletons: month-card + rail. v1 already renders
+   MonthSkeleton via `.sc-season-grid--loading`; scv2 re-skins to
+   match the final layout tokens (surface-card, radius, tile ghost
+   grid at 4px gap, footer bar height ≈ progress bar). Zero-shift
+   diff acceptance: skeleton shape mirrors the final render.
+
+   Includes the DOW-header ghost row so 7x5 tile grid + dow above =
+   7x6 total, matching the real MonthCard's grid + dow strip. */
+.scv2 .sc-season-month-skeleton {
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  padding: var(--sc2-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-season-month-skeleton-title {
+  height: 20px;                                /* card heading tier */
+  width: 40%;
+  background: var(--sc2-line);
+  border-radius: 4px;
+}
+.scv2 .sc-season-month-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.scv2 .sc-season-month-skeleton-dot {
+  aspect-ratio: 1 / 1;
+  background: var(--sc2-line);
+  border-radius: 8px;
+}
+.scv2 .sc-season-month-skeleton-footer {
+  height: 8px;                                 /* progress bar tier */
+  background: var(--sc2-line);
+  border-radius: 4px;
+}
+
+/* Rail skeleton: mirrors the RailShell layout (label + hero + section
+   blocks). Renders when SeasonRail is invoked with yearData falsy in
+   the loaded path (the failed banner from H1 handles the failed
+   state). Static, no animation - matches the calm hero + progress
+   rhythm of the final render. */
+.scv2 .sc-rail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-3) 0;
+}
+.scv2 .sc-rail-skeleton-hero {
+  height: 30px;
+  width: 60%;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+}
+.scv2 .sc-rail-skeleton-meta {
+  height: 12px;
+  width: 80%;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+.scv2 .sc-rail-skeleton-block {
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
 /* §9.2 - Rail failed banner + retry. Rendered inside the RailShell
    when yearLoadState === "failed"; SeasonRail early-returns this
    variant instead of the normal hero + queue + season list. */

@@ -177,12 +177,45 @@ export default function SeasonShell({
       )}
 
       {effectiveView === "calendar" ? (
-        <div className="sc-season-grid" role="list" aria-label={`${year} months`}>
+        <div
+          className="sc-season-grid"
+          role="grid"
+          aria-label={`${year} months`}
+          onKeyDown={(e) => {
+            /* V3 §9.3 - roving keyboard nav across the month grid.
+               ONE tabstop (whichever button currently has focus);
+               arrows move focus by 1 (Left/Right) or by 4-col row
+               (Up/Down); Home/End jump to first/last card. Enter
+               is left to the native <button> click. No preventDefault
+               unless we successfully move focus so v1 fallbacks
+               (mobile chevron expand, form submit) survive. */
+            const key = e.key;
+            if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(key)) return;
+            const cards = Array.from(
+              e.currentTarget.querySelectorAll(".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger")
+            );
+            if (!cards.length) return;
+            const active = document.activeElement;
+            const idx = cards.indexOf(active);
+            if (idx === -1) return;
+            let next = idx;
+            if (key === "ArrowRight") next = Math.min(cards.length - 1, idx + 1);
+            else if (key === "ArrowLeft") next = Math.max(0, idx - 1);
+            else if (key === "ArrowDown") next = Math.min(cards.length - 1, idx + 4);
+            else if (key === "ArrowUp") next = Math.max(0, idx - 4);
+            else if (key === "Home") next = 0;
+            else if (key === "End") next = cards.length - 1;
+            if (next !== idx) {
+              e.preventDefault();
+              cards[next]?.focus();
+            }
+          }}
+        >
           {MONTH_SHORT.map((_, monthIndex) => {
             const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
             const monthSummary = effectiveYearData.find(m => m.month === monthKey) || null;
             return (
-              <div role="listitem" key={monthIndex}>
+              <div role="gridcell" key={monthIndex}>
                 <MonthCard
                   year={year}
                   monthIndex={monthIndex}

@@ -132,6 +132,26 @@ function CalendarRail({
   const visibleQueue = showAllQueue ? queue : queue.slice(0, QUEUE_TOP_N);
   const overflow = queue.length - visibleQueue.length;
 
+  /* V3 §S8.5 - Aug-Dec collapse row. Months whose state is
+     "upcoming" (or "off" past the current arc) fold into ONE row
+     "AUG - DEC · ~$X" - click expands in place. Session-local state
+     hoisted to CalendarRail (RailSection is presentational). */
+  const [showAllMonths, setShowAllMonths] = useState(false);
+  const todayMonth = new Date().getMonth();     /* 0-11 */
+  const shouldCollapseTail = !showAllMonths && todayMonth < 11;
+  const primaryLines = shouldCollapseTail
+    ? monthLines.filter((_, i) => i <= todayMonth + 1)
+    : monthLines;
+  const tailLines = shouldCollapseTail
+    ? monthLines.filter((_, i) => i > todayMonth + 1)
+    : [];
+  const tailSumProjected = tailLines.reduce(
+    (acc, l) => acc + (Number(l.displayRev) || 0),
+    0
+  );
+  const tailFirstShort = tailLines[0]?.short || "";
+  const tailLastShort = tailLines[tailLines.length - 1]?.short || "";
+
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
@@ -170,13 +190,21 @@ function CalendarRail({
         </RailSection>
 
         <RailSection label="Season">
-          {monthLines.map(line => (
+          {primaryLines.map(line => (
             <MonthRailLine
               key={line.key}
               line={line}
               onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
             />
           ))}
+          {shouldCollapseTail && tailLines.length > 0 && (
+            <RailLine
+              label={`${tailFirstShort} — ${tailLastShort}`}
+              value={`~${fmtOverviewMoney(tailSumProjected)}`}
+              tone="upcoming"
+              onClick={() => setShowAllMonths(true)}
+            />
+          )}
         </RailSection>
       </RailScroll>
 
