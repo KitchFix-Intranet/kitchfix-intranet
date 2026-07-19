@@ -916,7 +916,16 @@ body:has(.scv2) {
   border: var(--sc2-border-thin) solid var(--sc2-line);
   border-radius: 12px;
   box-shadow: var(--sc2-el-inset);
-  margin: 0;
+  /* F4 (2026-07-19) - inline edges land on the region's inline
+     edges. The .sc-season shell (v1 base at season.css:12-17) adds
+     horizontal padding of var(--space-4) = 16px around
+     .sc-season-grid (the inner-card region). The legend is a
+     SIBLING of the shell (both children of .sc-overview-main), so
+     it has no shell padding on its side; without a margin the
+     legend extends 16px past the region on each side. Match the
+     shell's horizontal padding with a matching margin-inline so
+     the legend's inline edges align with the region's. */
+  margin: 0 var(--space-4);
   padding: var(--sc2-space-4);
 }
 .scv2 .sc-body > .sc-state-legend {
