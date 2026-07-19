@@ -862,27 +862,60 @@ body:has(.scv2) {
   }
 }
 
-/* PeriodCard banded header - navy left accent per render B. The
-   header already carries the phase tint (inline style from
-   PhaseStrip); we add a navy left-accent stripe under .scv2 so the
-   card reads as an anchored ledger entry rather than a floating
-   tile. Preserves the phase color as a slim strip (annotation, not
-   decoration). */
+/* OV-3 Wave 6 (item 13) - PeriodCard adopts month-card language:
+   white card + el-card, calm header (no phase-tint fill), 3px phase
+   tick inline before "P{n}", muted date-range caption. Heavy full-
+   color header suppressed by neutralizing the inline background.
+   The banded-header ::before accent is retired (Wave 6 rebuild). */
+.scv2 .sc-season-period-card {
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  border-color: transparent;
+}
 .scv2 .sc-season-period-card-header {
   position: relative;
-  padding-left: calc(var(--space-3) + 3px);
+  background: transparent !important;   /* defeats inline phase-tint */
+  color: var(--sc2-ink-strong) !important;
+  padding: var(--sc2-space-3);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
 }
 .scv2 .sc-season-period-card-header::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--sc2-cmd-bg);
+  content: none;                        /* retire the banded accent */
 }
-.scv2 .sc-season-period-card--current .sc-season-period-card-header::before {
-  background: var(--sc2-accent-green-bright);
+.scv2 .sc-season-period-card-title {
+  align-items: center;
+  gap: var(--sc2-space-2);
+}
+/* 3px phase tick left of P{n} - hidden on v1 base, shown here. */
+.sc-season-period-card-phase-tick {
+  display: none;
+}
+.scv2 .sc-season-period-card-phase-tick {
+  display: inline-block;
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+/* Calm "P{n}" - month-name scale (15px, wt-display). */
+.scv2 .sc-season-period-card-num {
+  font-size: var(--sc2-size-subhead);   /* month-name / rail label-pair tier */
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-ink-strong);
+  letter-spacing: -0.01em;
+}
+/* Muted date-range caption. */
+.scv2 .sc-season-period-card-anchor {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  color: var(--sc2-ink-muted);
+  opacity: 1;
+}
+.scv2 .sc-season-period-card-subtitle {
+  color: var(--sc2-ink-muted);
+  opacity: 1;
 }
 
 /* FullSeasonCard retirement on v2 - handled at the render level in
