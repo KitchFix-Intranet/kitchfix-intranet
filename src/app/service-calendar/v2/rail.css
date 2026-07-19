@@ -43,24 +43,32 @@
   color: var(--sc2-rail-text-subtle);
 }
 
-/* ─── Hero (OV-3 Wave 4a rebuild) ─────────────────────────────
+/* ─── Hero (OV-3 Wave 4a + G2 2026-07-19) ─────────────────────
    Inline baseline: value + label + projection sit on ONE row.
+   G2: nowrap + hero size 30 -> 27 (--sc2-size-rail-total scv2
+   floor) so the projection ALWAYS fits inline next to the label
+   at the rail's min-width. Copy also shortened to "of ~$X" (drop
+   "projected"; see SeasonRail.js heroProjection). Row wrap
+   disabled - if the row still can't fit, we'd rather show a
+   truncated projection than break to two lines.
    The "N of M days entered" caption moved to
    .sc-rail-hero-progress-caption BELOW the progress bar. */
 .scv2 .sc-rail-hero {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: var(--sc2-space-2);
-  row-gap: 2px;
+  min-width: 0;
 }
 .scv2 .sc-rail-hero-value {
-  font-size: var(--sc2-size-rail-total);
+  font-size: 27px;                       /* G2: 30 -> 27 to fit projection inline */
   font-weight: var(--sc2-wt-display);
   letter-spacing: -0.02em;
   color: var(--sc2-rail-text-strong);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .scv2 .sc-rail-hero-label {
   font-size: var(--sc2-size-micro);
@@ -68,12 +76,18 @@
   font-weight: var(--sc2-wt-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .scv2 .sc-rail-hero-projection {
   font-size: var(--sc2-size-caption);
   color: var(--sc2-rail-text-muted);
   font-weight: var(--sc2-wt-medium);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .scv2 .sc-rail-hero-meta {
   font-size: var(--sc2-size-micro);

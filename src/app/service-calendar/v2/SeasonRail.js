@@ -82,11 +82,14 @@ export default function SeasonRail({
   // stat rehomed here (per bundle F4: every FullSeasonCard figure
   // must live in the rail before the card retires). totals.mealsYTD
   // is computed by the shared derive module - no new derivation path.
-  /* OV-3 Wave 4a - hero rebuild: projection joins the value line
-     (RailHero.projection); "N of M days entered" moves BELOW the
-     progress bar via RailHeroProgressCaption. Meals YTD stays on
-     the caption line only in Period mode. */
-  const heroProjection = `· ~${fmtOverviewMoney(totals.projectedRevenue)} projected`;
+  /* OV-3 Wave 4a + G2 (2026-07-19) - hero rebuild: projection joins
+     the value line (RailHero.projection); "N of M days entered"
+     moves BELOW the progress bar via RailHeroProgressCaption.
+     G2 shortening: "of ~$1.38M" (drop "projected" and the leading
+     dot separator) so the projection fits inline next to the label
+     at rail min-width. Meals YTD stays on the caption line only in
+     Period mode. */
+  const heroProjection = `of ~${fmtOverviewMoney(totals.projectedRevenue)}`;
   const heroCaptionCal = `${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
   const heroCaptionPeriod = `${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
