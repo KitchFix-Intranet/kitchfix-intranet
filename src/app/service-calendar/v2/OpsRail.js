@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -77,33 +78,38 @@ export default function OpsRail({
 
   // ─── Hero ─────────────────────────────────────────────────
   const totals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
-  // MLB fee hero: game days entered / total; count numeric so RailHero
-  // can animate the tick via useAnimatedNumber (the RailHero API from
-  // W2-W4 F3). STL-FL hero: days entered / total. Meta lines carry
-  // meals + homestand-progress or projected + counts.
+  // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
+  // grammar. Prior construction stacked value + long-label + long-meta
+  // to three ragged lines. Now:
+  //   Line 1: big value + short label on one baseline (matches
+  //           SeasonRail.RailHero's inline shape from G2/Wave 4a).
+  //   Progress bar.
+  //   Caption line: secondary facts (of X · meals · homestands)
+  //           as a single tidy row via RailHeroProgressCaption.
+  // Match the per-meal hero's type scale + spacing so the two
+  // account families read identically.
   const heroValue = hasHomestandSchedule
     ? totals.gameDaysEntered
     : totals.daysEntered;
-  const heroDenominator = hasHomestandSchedule ? totals.totalGameDays : totals.totalActionableDays;
-  const heroLabelText = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
-  const meta = hasHomestandSchedule
-    ? `of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
-    : `of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
+  const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED";
+  const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
+  // Caption line - the secondary facts. MLB fee: entered/total +
+  // meals + homestands. STL-FL: entered/total + meals.
+  const heroCaption = hasHomestandSchedule
+    ? `${totals.gameDaysEntered} of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
+    : `${totals.daysEntered} of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals`;
 
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
-      <span className="sc-rail-hero-label">{heroLabelText}</span>
+      <span className="sc-rail-hero-label">{heroLongLabel}</span>
       <span className="sc-rail-hero-meta">Use the refresh button in the header to retry the fetch.</span>
     </div>
   ) : (
     <RailHero
       value={heroValue}
       format={(n) => String(Math.round(n))}
-      label={hasHomestandSchedule
-        ? `OF ${totals.totalGameDays} GAME DAYS ENTERED`
-        : `OF ${totals.totalActionableDays} DAYS ENTERED`}
-      meta={meta}
+      label={heroLabelText}
     />
   );
 
@@ -140,6 +146,7 @@ export default function OpsRail({
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
       {!incomplete && <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />}
+      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       {/* V3 §S8.3 F-E2 + OV-3 G13 - OpsRail pinned queue.
           hasHomestandSchedule=true (MLB fee, MiLB AAA): "To enter"
