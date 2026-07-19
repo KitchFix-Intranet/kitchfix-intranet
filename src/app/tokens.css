@@ -446,6 +446,11 @@
   --sc2-el-widget:  0 2px 8px rgba(18,34,56,0.08), 0 12px 32px rgba(18,34,56,0.06);
   --sc2-el-card:    0 1px 3px rgba(18,34,56,0.08), 0 2px 8px rgba(18,34,56,0.05);
   --sc2-el-hover:   0 2px 6px rgba(18,34,56,0.10), 0 6px 16px rgba(18,34,56,0.07);
+  /* OV-3 Wave 5a - half-step inset shadow, lighter than el-card.
+     Used by the calendar + period inner-card region (§17) so the
+     region reads as its own defined surface without competing with
+     the L2 month cards inside it. */
+  --sc2-el-inset:   0 1px 2px rgba(18,34,56,0.04), 0 1px 4px rgba(18,34,56,0.03);
   --sc2-elevation-card:    var(--sc2-el-card);       /* legacy alias */
   --sc2-elevation-raised:  0 3px 8px rgba(18,34,56,0.10), 0 24px 64px rgba(18,34,56,0.18);
   --sc2-elevation-inset-top: inset 0 1px 0 rgba(255,255,255,0.4);

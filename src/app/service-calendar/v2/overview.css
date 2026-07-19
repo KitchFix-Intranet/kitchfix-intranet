@@ -466,6 +466,20 @@ body:has(.scv2) {
   grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
 }
 
+/* OV-3 Wave 5a (§17) - inner-card region wrapping the calendar +
+   period grids. Hairline border + radius 12 + the new half-step
+   --sc2-el-inset shadow so the region reads as its own defined
+   surface without competing with the L2 month cards inside it.
+   Padding gives breathing room between the border and the grid. */
+.scv2 .sc-season-grid,
+.scv2 .sc-season-period-grid {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-inset);
+  padding: var(--sc2-space-4);
+}
+
 /* Rail sticks below the ribbon band as the user scrolls the page.
    The offset covers the intranet TopNav (~50px) + the ribbon band
    (~90-100px) - the site pattern is page-level scroll; the rail is
@@ -714,35 +728,69 @@ body:has(.scv2) {
      future     #e6e9ed  (subtle line-2 tone)
    Meta line (NEXT · HS{n} · opponents · dates · games · homestand
    n of 13) rides the caption row above the bar. */
+/* OV-3 Wave 5b (item 12) - homestand strip hierarchy + breathing.
+   Meta row: NEXT as a small navy chip, HS{n} bold 13px, dot
+   separators between opponent/date/games, "homestand n of 13"
+   right-aligned muted. Card centers its bar vertically (kill the
+   bottom-hug); height fits content. */
 .scv2 .sc-stepper {
   background: var(--sc2-surface-card);
   border-radius: 12px;
   box-shadow: var(--sc2-el-card);
-  padding: var(--sc2-space-3);
+  padding: var(--sc2-space-4);
   margin-bottom: var(--sc2-space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sc2-space-3);
 }
 .scv2 .sc-stepper-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
   color: var(--sc2-ink-muted);
   font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-medium);
   letter-spacing: 0.03em;
-  margin-bottom: var(--sc2-space-2);
+  margin-bottom: 0;
 }
+/* NEXT / NOW / LAST verb - small navy chip */
 .scv2 .sc-stepper-caption-tag {
-  color: var(--sc2-cmd-bg);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--sc2-cmd-bg);
+  color: var(--sc2-cmd-text);
   font-weight: var(--sc2-wt-display);
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  border-radius: 6px;
+  flex: 0 0 auto;
 }
-.scv2 .sc-stepper-caption-id,
+/* HS{n} - bold 13px */
+.scv2 .sc-stepper-caption-id {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-display);
+  font-size: 13px;
+}
 .scv2 .sc-stepper-caption-opponents {
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
 .scv2 .sc-stepper-caption-range,
-.scv2 .sc-stepper-caption-count,
+.scv2 .sc-stepper-caption-count {
+  color: var(--sc2-ink-muted);
+}
+/* "homestand n of 13" - right-aligned muted */
 .scv2 .sc-stepper-caption-ordinal {
   color: var(--sc2-ink-muted);
+  margin-left: auto;
+}
+/* Hide the last inline `·` that immediately precedes the pushed-
+   right ordinal so the auto-margin acts on a clean edge. */
+.scv2 .sc-stepper-caption-sep:last-of-type {
+  display: none;
 }
 .scv2 .sc-stepper-bar-segment {
   border-radius: 8px;
