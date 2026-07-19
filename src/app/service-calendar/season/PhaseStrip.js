@@ -128,8 +128,13 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
         {timeline.status === "recorded" && (
           <div className="sc-season-strip-blocks" aria-hidden="true">
             {blockPositions.map((b, i) => {
-              const isCurrent = todayPhase && b.phase === todayPhase.phase
-                && todayDate >= b.start && todayDate <= b.end;
+              /* V3 OV-2 C1: simplify to pure date-range check so the
+                 attribute emits even when findPhaseAtDate returns null
+                 (edge case at block boundaries / gaps). The prior AND
+                 with `todayPhase.phase` matched the same block by
+                 identity but silently no-op'd when today fell outside
+                 every block. Zero derive change - same source values. */
+              const isCurrent = !!(todayDate && todayDate >= b.start && todayDate <= b.end);
               return (
                 <div
                   key={`${b.phase}-${i}`}

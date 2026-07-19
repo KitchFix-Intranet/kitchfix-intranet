@@ -455,7 +455,10 @@
   position: relative;
   background: transparent;
   border: none;
-  padding: 0;
+  padding: 0 0 18px 0;   /* reserve room for the phase labels row
+                             which is absolute-positioned via the
+                             blocks container and paints below the
+                             strip's normal flow (band + ticks). */
   margin: 0 0 var(--sc2-space-4) 0;
 }
 /* §S5 - delete "PHASE TIMELINE" label */
@@ -478,17 +481,28 @@
 
 /* Phase labels move BELOW the band. Blocks stay positioned; the
    label rides absolute below its block. Current phase = navy 800
-   + a NOW dot. */
+   + a NOW dot.
+
+   OV-2 C3 fix: overflow was `hidden` to clip the band's rounded
+   ends, but that clipped the labels (top:26px puts them outside
+   the 8px-high box). Fix: unlock overflow on the blocks container;
+   move the band's end-rounding to the segments themselves so the
+   left/right ends round while the labels can extend below. */
 .scv2 .sc-season-strip-blocks {
   position: relative;
   height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
+  overflow: visible;
 }
 .scv2 .sc-season-strip-block {
   position: absolute;
   top: 0;
   bottom: 0;
+}
+.scv2 .sc-season-strip-block:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.scv2 .sc-season-strip-block:last-child {
+  border-radius: 0 4px 4px 0;
 }
 .scv2 .sc-season-strip-block-label {
   position: absolute;
