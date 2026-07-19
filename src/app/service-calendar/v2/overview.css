@@ -641,36 +641,9 @@ body:has(.scv2) {
 .scv2 .sc-season-strip-block:last-child {
   border-radius: 0 4px 4px 0;
 }
-.scv2 .sc-season-strip-block-label {
-  position: absolute;
-  top: 26px;              /* below the band + month scale row */
-  left: 0;
-  right: 0;
-  padding: 0 4px;
-  color: var(--sc2-ink-muted);
-  font-size: 11px;
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.03em;
-  text-transform: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label {
-  color: var(--sc2-cmd-bg);       /* navy identity */
-  font-weight: var(--sc2-wt-display);
-}
-.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label::before {
-  content: "";
-  display: inline-block;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--sc2-cmd-bg);
-  vertical-align: middle;
-  margin-right: 4px;
-  transform: translateY(-1px);
-}
+/* OV-3 Wave 3a - the in-band block labels are gone (JSX no longer
+   renders them). Phase titles moved to the new
+   .sc-season-strip-phase-labels row BELOW the rail. */
 
 /* Today tick - 2px navy breaking the band per §S5.1. */
 .scv2 .sc-season-strip-today-line {
@@ -682,13 +655,21 @@ body:has(.scv2) {
   z-index: 3;
 }
 
-/* Month scale row - 12 labels, 10/700, ink-muted, evenly spaced
-   across the strip. Rides the existing .sc-season-strip-ticks
-   grid; retinted per T-table. */
+/* OV-3 Wave 3a - MONTHS ROW ABOVE the rail (spec v4 flip: months
+   above, phase titles below). */
+.scv2 .sc-season-strip-ticks--above {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  margin: 0 0 6px 0;
+  padding: 0;
+}
+/* Legacy `.sc-season-strip-ticks` (no --above modifier) is unused
+   under scv2 after Wave 3a - JSX only emits the --above variant now.
+   Kept the base rule below for any residual v1 render paths. */
 .scv2 .sc-season-strip-ticks {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  margin-top: 6px;
+  margin: 0 0 6px 0;
   padding: 0;
 }
 .scv2 .sc-season-strip-tick {
@@ -698,6 +679,31 @@ body:has(.scv2) {
   letter-spacing: 0.02em;
   text-align: center;
   text-transform: uppercase;
+}
+
+/* OV-3 Wave 3a - PHASE TITLES BELOW the rail. Absolutely positioned
+   spans mirror the block positions (left% + width%). Current phase
+   = navy + 800; NO dot (owner ruling). Non-current = ink-muted. */
+.scv2 .sc-season-strip-phase-labels {
+  position: relative;
+  height: 16px;
+  margin-top: 6px;
+}
+.scv2 .sc-season-strip-phase-label {
+  position: absolute;
+  top: 0;
+  padding: 0 4px;
+  color: var(--sc2-ink-muted);
+  font-size: 11px;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scv2 .sc-season-strip-phase-label[data-current="true"] {
+  color: var(--sc2-cmd-bg);
+  font-weight: var(--sc2-wt-display);
 }
 
 /* ─── V3 §5.4 - Homestand strip L2 grammar (SeasonStepper reskin)
@@ -916,33 +922,13 @@ body:has(.scv2) {
   border-style: none;
 }
 
-/* §7.3 - Two-signal law extended: needs tiles carry a 4px dot
-   glyph, top-right, needs-bd color. upcoming-mint (Y .850) and
-   needs-amber (Y .848) are grayscale-identical - the glyph is the
-   third carrier (color + border + glyph) so color is never the
-   sole signal.
-
-   A2 fix (live-probe): the year-zoom collision lives on `--sm`
-   tiles, not `--lg`. The glyph fires on BOTH sizes now. Position
-   adjusted so sm doesn't compete with the sc-daysq-badge slot
-   (top-right ~10-14px badge area) - the dot rides top-right at
-   3px offset on sm, 4px on lg. */
-.scv2 .sc-daysq--needs-entry::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--sc2-state-needs-bd);
-  pointer-events: none;
-  z-index: 1;
-}
-.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
-  top: 4px;
-  right: 4px;
-}
+/* OV-3 Wave 3b - Two-signal law: needs-entry second signal is now
+   the HEAVY NUMERAL (weight + darker one step of needs-fg). The
+   ::after dot glyph is deleted. Color + weight/darkness carries
+   the pair; grayscale delta test survives via the numeral weight
+   step (heaviest available) plus the darker foreground.
+   The date numeral color + weight for needs tiles is set below
+   (search: OV-3 Wave 3b needs-numeral). */
 
 /* §7.4 - Corner markers retired on overview. Phase context lives
    in the ribbon (§S5) and the month-tick (§6.6). The v1
@@ -954,38 +940,30 @@ body:has(.scv2) {
   display: none;
 }
 
-/* §7.5 - Home/away dual-zoom. Year-zoom (sm tiles) carries a 5px
-   dot below the numeral encoding home vs away by fill-vs-outline.
-   Same carrier at drill zoom (chips). Grayscale-safe by construction.
-
-   B5 - DaySquare emits `sc-daysq--home` from `isGameDayOverlay`
-   (year-summary path: day.hasScheduleGame from sc-17/sc-17b
-   overlay). Away emits via existing status-map class `sc-daysq--away`
-   (STATUS_META :91 maps status "away" to modifier "away"). Homestand-
-   schedule accounts (CIN-KY, TBJ-NY, MLB fees) currently emit
-   `--away` on AWAY days but do NOT emit `--home` on home days -
-   the follow-up server-side hasScheduleGame emit for those accounts
-   lands as the drift-log item below. */
+/* OV-3 Wave 3c/3d - year-zoom home/away DOT PAIR REMOVED.
+   Away days on MLB + MiLB render the new ghost-purple TILE STATE
+   (--sc2-state-away-bg/fg) instead of an extra glyph. Home days
+   render the base entered/needs/upcoming palette per §7.2 - no
+   dot, no additional carrier. The hasScheduleGame emit lands from
+   #474 and is retained for drill use. */
 .scv2 .sc-daysq--sm.sc-daysq--home::before,
 .scv2 .sc-daysq--sm.sc-daysq--away::before {
-  content: "";
-  position: absolute;
-  bottom: 3px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  display: block;
-  z-index: 1;
+  content: none;
+  display: none;
 }
-.scv2 .sc-daysq--sm.sc-daysq--home::before {
-  background: var(--sc2-cmd-bg);   /* --sc2-cmd-bg = navy */
-  border: 0;
+
+/* OV-3 Wave 3d - away tile state. Ghost-purple fill + fg for
+   MLB + MiLB away days. Delta from off-grey preserved via the
+   distinct hue at similar lightness (grayscale delta verified in
+   sweep). Applies at both sm and lg zoom; SeasonRail tiles inherit
+   the palette by class. */
+.scv2 .sc-daysq--away {
+  background: var(--sc2-state-away-bg);
+  border-color: transparent;
+  color: var(--sc2-state-away-fg);
 }
-.scv2 .sc-daysq--sm.sc-daysq--away::before {
-  background: transparent;
-  border: 1px solid var(--sc2-cmd-bg);
+.scv2 .sc-daysq--away .sc-daysq-date {
+  color: var(--sc2-state-away-fg);
 }
 
 /* §7.6 - Interaction deltas: hover +/- L0.04, active +/- L0.07
@@ -1005,11 +983,9 @@ body:has(.scv2) {
   box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
 }
 
-/* V3 §6.6 - Month header phase tick + period tag.
-   M5 flag-off inertness: base rule hides both; scv2 rule below
-   shows them. Nothing else keys on these classes (grep-verified). */
-.sc-season-month-card-phase-tick,
-.sc-season-month-card-period-tag {
+/* V3 §6.6 - Month header phase tick (P{n} tag REMOVED, OV-3 Wave 3e).
+   M5 flag-off inertness: base rule hides; scv2 rule below shows. */
+.sc-season-month-card-phase-tick {
   display: none;
 }
 .scv2 .sc-season-month-card-phase-tick {
@@ -1020,19 +996,6 @@ body:has(.scv2) {
   margin-right: var(--sc2-space-2);
   flex: 0 0 auto;
   vertical-align: middle;
-}
-.scv2 .sc-season-month-card-period-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  margin-left: var(--sc2-space-2);
-  background: rgba(26, 48, 80, 0.08);
-  color: var(--sc2-cmd-bg);
-  font-size: 11px;
-  font-weight: var(--sc2-wt-display);
-  letter-spacing: 0.03em;
-  border-radius: 8px;
-  font-variant-numeric: tabular-nums;
 }
 
 /* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
@@ -1183,17 +1146,16 @@ body:has(.scv2) {
   gap: 4px;
 }
 
-/* B3 - Needs-dot punch. Bumped 4->5px + tone to needs-fg (darker,
-   more optical presence on low-DPI). Grayscale math still holds
-   (both fill and glyph are family-consistent). */
-.scv2 .sc-daysq--needs-entry::after {
-  width: 5px;
-  height: 5px;
-  background: var(--sc2-state-needs-fg);
-}
-.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
-  width: 5px;
-  height: 5px;
+/* OV-3 Wave 3b - needs-numeral (HEAVY NUMERAL, replaces the removed
+   dot glyph). Needs-entry date numeral bumps to the heaviest weight
+   available (--sc2-wt-display 800) and one step darker than the
+   normal --sc2-state-needs-fg. The two-signal law survives via
+   (color amber-fill) + (weight + darker step of ink). Applies at
+   both sm and lg. --sc2-state-needs-fg-strong is defined in the
+   tokens delta below. */
+.scv2 .sc-daysq--needs-entry .sc-daysq-date {
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-state-needs-fg-strong, #7a4b00);
 }
 
 /* B4 - Month-card drill affordance. cursor:pointer + subtle title
@@ -1209,55 +1171,11 @@ body:has(.scv2) {
   box-shadow: var(--sc2-el-hover);
 }
 
-/* §6.9 - Progressive detail slim rows. Months beyond current+1
-   collapse to a compact one-row view: header only (name + phase
-   tick + P-tag).
-
-   F-A fix (Chat-Claude sweep): when slim, the header IS a real
-   `<button class="sc-season-month-card-slim-expand">` (§9.3 F-B
-   folds it into the roving list). Clicking expands via
-   userExpanded; the normal drill overlay returns.
-
-   Session-local: userExpanded resets on remount but survives
-   view changes within the session. RM-gated height transition
-   on the article for the expand animation. */
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-dow,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-grid,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-footer,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-drill {
-  display: none;
-}
-.scv2 .sc-season-month-card[data-slim="true"] {
-  min-height: 0;
-}
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-header {
-  padding-bottom: var(--sc2-space-2);
-}
-
-/* Slim-expand header button: same layout as the plain header,
-   button reset so it doesn't inherit browser button styles. */
-.scv2 .sc-season-month-card-slim-expand {
-  display: flex;
-  align-items: center;
-  gap: var(--sc2-space-2);
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: var(--sc2-space-3);
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.scv2 .sc-season-month-card-slim-expand:focus-visible {
-  outline: 2px solid var(--sc2-cmd-bg);
-  outline-offset: 2px;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .scv2 .sc-season-month-card {
-    transition: min-height var(--duration-base) var(--ease-standard);
-  }
-}
+/* OV-3 Wave 3f - §6.9 progressive detail (slim rows) REMOVED.
+   All 12 months render full; roving list simplifies back to
+   drill + collapsed-trigger. See MonthCard.js + SeasonShell.js
+   companion deletions. Sep-Dec fold on the rail is KEPT (owner
+   explicitly kept it). */
 
 /* §9.5 - Skeletons: month-card + rail. v1 already renders
    MonthSkeleton via `.sc-season-grid--loading`; scv2 re-skins to
