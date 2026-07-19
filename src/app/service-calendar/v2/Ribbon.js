@@ -1,52 +1,88 @@
 "use client";
 
-// SC v2 Ribbon - the navy identity band that replaces the v1 hero.
+// SC v2 -> V3 Ribbon - OV-3 rebuild: ONE navy row combining identity,
+// account selection, view toggle, TODAY/PERIOD/WEEK meta, and the
+// right cluster (as-of pill, admin lock, export).
 //
-// Fuses page title + welcome + AsOf pill + admin lock + density toggle
-// into a single slim band above the (restyled) ChromeBar. Together the
-// two rows form one navy region at the top of the SC surface per
-// Render Section 0.
+// Comfortable density removed in OV-3 - Standard is the only scale.
+// The two-segment density control is gone; useDensity is deleted.
 //
-// Rehomes (audit Q9):
-//   - AsOf pill (was bottom-right of hero) - reuses AsOf from ChromeBar
-//     verbatim; only the containing element and styling change
-//   - admin lock button (was top-right of hero) - identical wire to
-//     handleAdminToggle; renders enter/exit states via isAdminView
+// PRESENTATIONAL: takes resolved props in, emits onClick out.
 //
-// The heroImage prop stays unused in v2 (retirement happens at W9).
+// Layout (left -> right):
+//   "Service Calendar" | account | kind chip | Calendar|Period | TODAY .. PERIOD .. WEEK ..
+//   ..spacer..  as-of pill | admin lock | export
 //
-// PRESENTATIONAL: consumes resolved props, emits onClick.
+// Responsive:
+//   <=1360: TODAY/PERIOD/WEEK inner separators drop (labels stay).
+//   <=1280: as-of pill collapses to dot + time (item 22 acceptance -
+//   failed state remains visible via the red-tinted status dot).
 
 import { AsOf } from "../season/ChromeBar";
 
 export default function Ribbon({
-  firstName,
   asOf,
   onRefresh,
-  /* V3 §9.6 - fetchState (fresh / stale / failed) plumbed through
-     to AsOf so the pill's data-fetch-state attribute reflects the
-     year-summary fetch health. */
   fetchState = "fresh",
   isAdmin,
   isAdminView,
   onAdminToggle,
-  density,
-  onDensityChange,
+  /* NEW OV-3 chrome props (moved off ChromeBar into the single row) */
+  accountDropdown,
+  category,
+  view,
+  onViewChange,
+  showToggle = false,
+  todayLabel,
+  periodNum,
+  weekNum,
+  exportControl,
 }) {
   return (
     <div className="sc-ribbon" role="banner">
-      <div className="sc-ribbon-brand">
+      <div className="sc-ribbon-left">
         <h1 className="sc-ribbon-title">Service Calendar</h1>
-        {/* V3 §3.2 - "Welcome back" string DELETED from DOM per spec.
-            firstName prop retained on the component signature so
-            callers don't break during the sweep; unused here. */}
+        <RibbonSep />
+        {accountDropdown && (
+          <div className="sc-ribbon-account">
+            {accountDropdown}
+          </div>
+        )}
+        {category && (
+          <span className={`sc-cat sc-cat--${String(category).toLowerCase()}`}>{category}</span>
+        )}
+        {showToggle && (
+          <div className="sc-ribbon-toggle" role="group" aria-label="View by">
+            <button
+              type="button"
+              className={`sc-ribbon-toggle-btn ${view === "calendar" ? "sc-ribbon-toggle-btn--active" : ""}`}
+              aria-pressed={view === "calendar"}
+              onClick={() => onViewChange?.("calendar")}
+            >
+              Calendar
+            </button>
+            <button
+              type="button"
+              className={`sc-ribbon-toggle-btn ${view === "period" ? "sc-ribbon-toggle-btn--active" : ""}`}
+              aria-pressed={view === "period"}
+              onClick={() => onViewChange?.("period")}
+            >
+              Period
+            </button>
+          </div>
+        )}
+        <RibbonSep />
+        <RibbonMeta
+          todayLabel={todayLabel}
+          periodNum={periodNum}
+          weekNum={weekNum}
+        />
       </div>
 
       <div className="sc-ribbon-right">
         {asOf && (
           <AsOf asOf={asOf} onRefresh={onRefresh} className="sc-ribbon-asof" fetchState={fetchState} />
         )}
-        <DensityToggle value={density} onChange={onDensityChange} />
         {isAdmin && (
           <button
             type="button"
@@ -69,37 +105,44 @@ export default function Ribbon({
             )}
           </button>
         )}
+        {exportControl && (
+          <div className="sc-ribbon-export">
+            {exportControl}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Density toggle - V3 §S4.1 two-segment control (Standard / Comfortable).
-// Legacy Compact recalibrated INTO Standard - no third mode. Value is
-// a controlled prop; parent owns the useDensity() state. Keyboard
-// navigable via native <button>; each side reports its pressed state
-// via aria-pressed for the SR announcement.
-function DensityToggle({ value, onChange }) {
+// Thin vertical separator ("|") - white, low-opacity per spec.
+function RibbonSep() {
+  return <span className="sc-ribbon-sep" aria-hidden="true" />;
+}
+
+// TODAY {date} PERIOD {n} WEEK {n} meta cluster. Internal separators
+// collapse at <=1360; the labels + values remain readable.
+function RibbonMeta({ todayLabel, periodNum, weekNum }) {
   return (
-    <div className="sc-ribbon-density" role="group" aria-label="View density">
-      <button
-        type="button"
-        className={`sc-ribbon-density-btn ${value === "standard" ? "sc-ribbon-density-btn--active" : ""}`}
-        aria-pressed={value === "standard"}
-        onClick={() => onChange?.("standard")}
-        title="Standard (denser, enterprise default)"
-      >
-        Standard
-      </button>
-      <button
-        type="button"
-        className={`sc-ribbon-density-btn ${value === "comfortable" ? "sc-ribbon-density-btn--active" : ""}`}
-        aria-pressed={value === "comfortable"}
-        onClick={() => onChange?.("comfortable")}
-        title="Comfortable (larger spacing)"
-      >
-        Comfortable
-      </button>
+    <div className="sc-ribbon-meta">
+      <span className="sc-ribbon-meta-seg">
+        <span className="sc-ribbon-meta-label">TODAY</span>
+        <span className="sc-ribbon-meta-value">{todayLabel || "-"}</span>
+      </span>
+      <span className="sc-ribbon-meta-sep" aria-hidden="true" />
+      <span className="sc-ribbon-meta-seg">
+        <span className="sc-ribbon-meta-label">PERIOD</span>
+        <span className="sc-ribbon-meta-value">{periodNum || "-"}</span>
+      </span>
+      {weekNum && (
+        <>
+          <span className="sc-ribbon-meta-sep" aria-hidden="true" />
+          <span className="sc-ribbon-meta-seg">
+            <span className="sc-ribbon-meta-label">WEEK</span>
+            <span className="sc-ribbon-meta-value">{weekNum}</span>
+          </span>
+        </>
+      )}
     </div>
   );
 }

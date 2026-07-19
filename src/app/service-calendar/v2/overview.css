@@ -115,36 +115,117 @@ body:has(.scv2) {
   border-bottom: 0;
 }
 
-/* Left cluster: title + welcome */
-.scv2 .sc-ribbon-brand {
+/* OV-3 Wave 2 - single-row header: left cluster carries identity,
+   account, kind chip, Calendar|Period toggle, and TODAY/PERIOD/WEEK
+   meta. Density toggle deleted (Comfortable removed). Right cluster
+   holds as-of pill, admin lock, export (far edge). */
+.scv2 .sc-ribbon-left {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sc2-space-3);
   min-width: 0;
+  flex: 1 1 auto;
 }
 .scv2 .sc-ribbon-title {
   margin: 0;
   font-family: var(--sc2-font-ui);
-  /* V3 §S3.1 + §T type scale - chrome-title 18/800. */
-  font-size: 18px;
+  /* OV-3 §S3 - chrome title 19/800 (per spec v4 delta: "~19-20px 800"). */
+  font-size: 19px;
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-cmd-text);
   letter-spacing: -0.01em;
-  line-height: calc(24 / 18);
+  line-height: calc(24 / 19);
+  white-space: nowrap;
 }
-.scv2 .sc-ribbon-welcome {
-  margin: 0;
-  font-size: var(--sc2-size-caption);
-  color: var(--sc2-cmd-text-muted);
-  font-weight: var(--sc2-wt-medium);
+.scv2 .sc-ribbon-account {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
-/* Right cluster: as-of pill, density toggle, admin lock */
+/* Thin vertical separator "|" between segments - white, low-opacity. */
+.scv2 .sc-ribbon-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.20);
+  flex: 0 0 auto;
+}
+
+/* Calendar|Period toggle - reuses the same pill treatment as the
+   chrome-bar toggle it replaces. Segmented control on the navy band. */
+.scv2 .sc-ribbon-toggle {
+  display: inline-flex;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  border-radius: var(--sc2-radius-control);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-toggle-btn {
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--sc2-cmd-text-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-ribbon-toggle-btn:hover {
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-toggle-btn--active {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-toggle-btn:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* TODAY {date} PERIOD {n} WEEK {n} meta cluster. */
+.scv2 .sc-ribbon-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  color: var(--sc2-cmd-text-muted);
+  font-size: var(--sc2-size-micro);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-meta-seg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.scv2 .sc-ribbon-meta-label {
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+}
+.scv2 .sc-ribbon-meta-value {
+  color: var(--sc2-cmd-text);
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-ribbon-meta-sep {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Right cluster: as-of pill, admin lock, export - far edge order. */
 .scv2 .sc-ribbon-right {
   display: inline-flex;
   align-items: center;
   gap: var(--sc2-space-2);
   flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-export {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* AsOf pill on the ribbon - reuses .sc-chrome-bar-asof base class
@@ -196,36 +277,35 @@ body:has(.scv2) {
   border-color: transparent;
 }
 
-/* Density toggle - two-segment control */
-.scv2 .sc-ribbon-density {
-  display: inline-flex;
-  padding: 2px;
-  background: rgba(255, 255, 255, 0.10);
-  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
-  border-radius: var(--sc2-radius-control);
+/* OV-3 Wave 2 - .sc-ribbon-density* rules REMOVED. Comfortable
+   density deleted; Standard is the only scale. See tokens.css delta. */
+
+/* OV-3 Wave 2 - responsive tripwires. Item 22 acceptance: the as-of
+   failed-state signal (data-fetch-state="failed" -> red dot) survives
+   every collapse; the dot itself is not shrunk to invisibility. */
+
+/* <=1360: TODAY / PERIOD / WEEK inner separators drop. Labels + values
+   stay legible; the group tightens visually. */
+@media (max-width: 1360px) {
+  .scv2 .sc-ribbon-meta-sep {
+    display: none;
+  }
+  .scv2 .sc-ribbon-meta {
+    gap: var(--sc2-space-3);
+  }
 }
-.scv2 .sc-ribbon-density-btn {
-  padding: 4px 10px;
-  border: none;
-  background: transparent;
-  color: var(--sc2-cmd-text-muted);
-  font-size: var(--sc2-size-micro);
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.04em;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
-}
-.scv2 .sc-ribbon-density-btn:hover {
-  color: var(--sc2-cmd-text);
-}
-.scv2 .sc-ribbon-density-btn--active {
-  background: var(--sc2-surface-app);
-  color: var(--sc2-cmd-bg-deep);
-}
-.scv2 .sc-ribbon-density-btn:focus-visible {
-  outline: 2px solid var(--sc2-rail-accent-warn);
-  outline-offset: 2px;
+
+/* <=1280: as-of pill compacts. Refresh button hides; the status dot
+   remains (fresh green / stale amber / failed red) so item 22
+   acceptance holds. The pill's text collapses tighter but the dot
+   is the load-bearing status signal in the collapsed shape. */
+@media (max-width: 1280px) {
+  .scv2 .sc-chrome-bar-asof.sc-ribbon-asof {
+    padding: 3px 8px;
+  }
+  .scv2 .sc-chrome-bar-asof.sc-ribbon-asof .sc-chrome-bar-asof-refresh {
+    display: none;
+  }
 }
 
 /* V3 §S3.1 - ChromeBar adjoins the Ribbon in ONE navy band.
@@ -422,24 +502,24 @@ body:has(.scv2) {
    ══════════════════════════════════════════════════════════════ */
 
 @media (max-width: 767px) {
-  /* Ribbon: brand row on top, controls row (as-of + density + admin)
-     wrapping below. Reduces the h-space demand so 375 fits without
-     h-scroll while keeping every affordance visible. */
+  /* Ribbon: identity row on top, controls wrap below. OV-3 rebuild:
+     left-cluster becomes the wrap-first band; right-cluster wraps to
+     line 2. Density toggle gone; welcome deleted; brand class
+     replaced by sc-ribbon-left. */
   .scv2 .sc-ribbon {
     flex-wrap: wrap;
     gap: var(--sc2-space-2);
     padding: var(--sc2-space-3) var(--sc2-space-3);
     border-radius: 0;
   }
-  .scv2 .sc-ribbon-brand {
+  .scv2 .sc-ribbon-left {
     flex: 1 1 100%;
     min-width: 0;
+    flex-wrap: wrap;
+    gap: var(--sc2-space-2);
   }
   .scv2 .sc-ribbon-title {
     font-size: var(--sc2-size-h3);
-  }
-  .scv2 .sc-ribbon-welcome {
-    display: none;              /* keeps the top row calm; hidden here, not deleted */
   }
   .scv2 .sc-ribbon-right {
     flex: 1 1 100%;

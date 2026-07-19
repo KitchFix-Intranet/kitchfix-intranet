@@ -527,23 +527,8 @@
      literals in the components (or via existing calc()s). */
 }
 
-.scv2[data-sc2-density="comfortable"] {
-  --sc2-size-micro:      12px;
-  --sc2-size-caption:    13px;
-  --sc2-size-body:       15px;
-  --sc2-size-subhead:    16px;
-  --sc2-size-h3:         20px;
-  --sc2-size-h2:         22px;
-  --sc2-size-h1:         26px;
-  --sc2-size-display:    33px;
-  --sc2-size-rail-total: 33px;
-  --sc2-control-h:       40px;
-  --sc2-control-h-icon:  36px;
-}
-
-/* Legacy no-op branch: safety net for any pre-V3 stored value.
-   useDensity.js normalize() intercepts at read; this rule ensures
-   the attribute never leaves the shell in a broken state. */
-.scv2[data-sc2-density="compact"] {
-  /* falls through to the .scv2 Standard defaults above */
-}
+/* OV-3 Wave 2 - Comfortable density REMOVED. Standard is the only
+   scale; the `.scv2[data-sc2-density="comfortable"]` remap block and
+   the legacy `compact` no-op branch are both deleted. The
+   `data-sc2-density` attribute is no longer emitted by ServiceCalendar
+   and `useDensity()` is deleted. */
