@@ -125,16 +125,25 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
         className="sc-season-strip-rail"
         style={railBackground ? { background: railBackground } : undefined}
       >
-        {timeline.status === "recorded" && (
+        {/* V3 OV-2 F2: resolve the current PHASE key once (from the
+            sliver segment that actually contains today), then mark
+            every segment sharing that phase as current. Rationale:
+            derivePhaseTimeline splits a phase into multiple date
+            segments (e.g. Complex League Jun 15-Jul 15 + Jul 21-Aug 30
+            around a Draft break). The segment containing today may be
+            a 1-2% sliver, dropped by the `b.width >= 6` label gate at
+            line 149 - so lighting only that segment lit nothing.
+            Lighting the whole phase catches the WIDE, LABELED segment.
+            Zero derive change - `b.phase` + `b.start` + `b.end` are
+            existing block fields. */}
+        {timeline.status === "recorded" && (() => {
+          const currentPhaseKey = blockPositions.find(
+            (b) => todayDate && todayDate >= b.start && todayDate <= b.end
+          )?.phase ?? null;
+          return (
           <div className="sc-season-strip-blocks" aria-hidden="true">
             {blockPositions.map((b, i) => {
-              /* V3 OV-2 C1: simplify to pure date-range check so the
-                 attribute emits even when findPhaseAtDate returns null
-                 (edge case at block boundaries / gaps). The prior AND
-                 with `todayPhase.phase` matched the same block by
-                 identity but silently no-op'd when today fell outside
-                 every block. Zero derive change - same source values. */
-              const isCurrent = !!(todayDate && todayDate >= b.start && todayDate <= b.end);
+              const isCurrent = !!(currentPhaseKey && b.phase === currentPhaseKey);
               return (
                 <div
                   key={`${b.phase}-${i}`}
@@ -155,7 +164,8 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
               );
             })}
           </div>
-        )}
+          );
+        })()}
 
         {todayFraction != null && (
           <div

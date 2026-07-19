@@ -455,10 +455,13 @@
   position: relative;
   background: transparent;
   border: none;
-  padding: 0 0 18px 0;   /* reserve room for the phase labels row
-                             which is absolute-positioned via the
-                             blocks container and paints below the
-                             strip's normal flow (band + ticks). */
+  /* F3 - trim padding to keep the strip <= 44 per §S5.1. With F1
+     unlocking the block overflow, labels paint outside their 8px
+     parent; padding-bottom reserves visual room for them in the
+     strip's containing block. 14px lands the strip ~43 (band 8 +
+     gap 6 + ticks 12 + label row ~13 + margin) - under the cap.
+     Adjust ±2 if measurement shows drift. */
+  padding: 0 0 14px 0;
   margin: 0 0 var(--sc2-space-4) 0;
 }
 /* §S5 - delete "PHASE TIMELINE" label */
@@ -497,6 +500,11 @@
   position: absolute;
   top: 0;
   bottom: 0;
+  /* F1 - the real clip: v1 base sets .sc-season-strip-block to
+     overflow:hidden + flex + h:8 (labels used to live INSIDE the
+     12px band). Under scv2 labels sit at top:26 - clipped by their
+     own 8px parent. Unlock: */
+  overflow: visible;
 }
 .scv2 .sc-season-strip-block:first-child {
   border-radius: 4px 0 0 4px;
