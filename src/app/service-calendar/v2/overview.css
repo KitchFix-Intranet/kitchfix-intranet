@@ -854,6 +854,36 @@
   box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
 }
 
+/* V3 §6.6 - Month header phase tick + period tag.
+   M5 flag-off inertness: base rule hides both; scv2 rule below
+   shows them. Nothing else keys on these classes (grep-verified). */
+.sc-season-month-card-phase-tick,
+.sc-season-month-card-period-tag {
+  display: none;
+}
+.scv2 .sc-season-month-card-phase-tick {
+  display: inline-block;
+  width: 3px;
+  height: 15px;                 /* month-name line-height for visual balance */
+  border-radius: 2px;
+  margin-right: var(--sc2-space-2);
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.scv2 .sc-season-month-card-period-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  margin-left: var(--sc2-space-2);
+  background: rgba(26, 48, 80, 0.08);
+  color: var(--sc2-cmd-bg);
+  font-size: 11px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
    inside the expanded MonthCard header right slot.
 

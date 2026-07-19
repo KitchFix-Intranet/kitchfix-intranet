@@ -206,6 +206,9 @@ export default function SeasonShell({
                       (r) => todayDate && todayDate >= r.start && todayDate <= r.end
                     )
                   }
+                  /* V3 §6.6 - phase timeline for the header 3px tick
+                     (phase-family tint of the month's dominant phase). */
+                  phaseTimeline={phaseTimeline}
                 />
               </div>
             );
