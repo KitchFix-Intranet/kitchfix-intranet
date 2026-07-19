@@ -2092,6 +2092,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           todayLabel={yearBannerStats?.todayLabel}
           periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
           weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
+          /* G4 (2026-07-19) - fee / homestand accounts render
+             GAME DAYS n/m in place of PERIOD | WEEK. Per-meal
+             accounts pass hasHomestandSchedule=false so RibbonMeta
+             renders the calendar variant unchanged. */
+          hasHomestandSchedule={hasHomestandSchedule}
+          gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
+          totalGameDays={yearBannerStats?.totalGameDays || 0}
           exportControl={
             !isAdminView && selectedAccount && isYearView
               ? (

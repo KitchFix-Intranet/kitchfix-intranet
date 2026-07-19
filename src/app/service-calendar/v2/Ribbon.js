@@ -36,6 +36,14 @@ export default function Ribbon({
   todayLabel,
   periodNum,
   weekNum,
+  /* G4 (2026-07-19): fee / homestand accounts render "TODAY | GAME
+     DAYS {n}/{m}" instead of TODAY | PERIOD | WEEK. When
+     hasHomestandSchedule=true, RibbonMeta swaps to the game-days
+     variant. Per-meal accounts pass hasHomestandSchedule=false
+     (default) and see the calendar meta unchanged. */
+  hasHomestandSchedule = false,
+  gameDaysEntered,
+  totalGameDays,
   exportControl,
 }) {
   return (
@@ -76,6 +84,9 @@ export default function Ribbon({
           todayLabel={todayLabel}
           periodNum={periodNum}
           weekNum={weekNum}
+          hasHomestandSchedule={hasHomestandSchedule}
+          gameDaysEntered={gameDaysEntered}
+          totalGameDays={totalGameDays}
         />
       </div>
 
@@ -120,27 +131,51 @@ function RibbonSep() {
   return <span className="sc-ribbon-sep" aria-hidden="true" />;
 }
 
-// TODAY {date} PERIOD {n} WEEK {n} meta cluster. Internal separators
-// collapse at <=1360; the labels + values remain readable.
-function RibbonMeta({ todayLabel, periodNum, weekNum }) {
+// TODAY {date} PERIOD {n} WEEK {n} meta cluster (per-meal), OR
+// TODAY {date} | GAME DAYS {n}/{m} (fee / homestand) per G4.
+// Internal separators collapse at <=1360; labels + values readable.
+function RibbonMeta({
+  todayLabel,
+  periodNum,
+  weekNum,
+  hasHomestandSchedule,
+  gameDaysEntered,
+  totalGameDays,
+}) {
   return (
     <div className="sc-ribbon-meta">
       <span className="sc-ribbon-meta-seg">
         <span className="sc-ribbon-meta-label">TODAY</span>
         <span className="sc-ribbon-meta-value">{todayLabel || "-"}</span>
       </span>
-      <span className="sc-ribbon-meta-sep" aria-hidden="true" />
-      <span className="sc-ribbon-meta-seg">
-        <span className="sc-ribbon-meta-label">PERIOD</span>
-        <span className="sc-ribbon-meta-value">{periodNum || "-"}</span>
-      </span>
-      {weekNum && (
+      {hasHomestandSchedule ? (
+        (totalGameDays || 0) > 0 && (
+          <>
+            <span className="sc-ribbon-meta-sep" aria-hidden="true" />
+            <span className="sc-ribbon-meta-seg">
+              <span className="sc-ribbon-meta-label">GAME DAYS</span>
+              <span className="sc-ribbon-meta-value">
+                {gameDaysEntered || 0}/{totalGameDays}
+              </span>
+            </span>
+          </>
+        )
+      ) : (
         <>
           <span className="sc-ribbon-meta-sep" aria-hidden="true" />
           <span className="sc-ribbon-meta-seg">
-            <span className="sc-ribbon-meta-label">WEEK</span>
-            <span className="sc-ribbon-meta-value">{weekNum}</span>
+            <span className="sc-ribbon-meta-label">PERIOD</span>
+            <span className="sc-ribbon-meta-value">{periodNum || "-"}</span>
           </span>
+          {weekNum && (
+            <>
+              <span className="sc-ribbon-meta-sep" aria-hidden="true" />
+              <span className="sc-ribbon-meta-seg">
+                <span className="sc-ribbon-meta-label">WEEK</span>
+                <span className="sc-ribbon-meta-value">{weekNum}</span>
+              </span>
+            </>
+          )}
         </>
       )}
     </div>
