@@ -1217,10 +1217,16 @@ body:has(.scv2) {
    handles it or new "urgency" chip; render doesn't currently
    emit it - deferred to a JSX pass if audit requires). */
 
-/* §6.7 - Current-period wash inset on in-period day tiles. */
-.scv2 .sc-daysq--in-period {
-  box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
-}
+/* OV-3 F7 (2026-07-19) - §6.7 in-period wash REMOVED.
+   The inset wash added a third green rendering to upcoming tiles
+   inside the current period range (upcoming pale mint + wash = a
+   variant that read as noise post-OV-3). Removing the CSS rule
+   is sufficient: DaySquare.js:212 still emits the
+   `sc-daysq--in-period` class from isInPeriod, but no style keys
+   on it under scv2 anymore. If the class ever needs to drive a
+   future signal, the emit is preserved; today it's inert.
+   Owner default ruling: veto by comment if the wash should
+   return. */
 
 /* V3 §6.6 - Month header phase tick (P{n} tag REMOVED, OV-3 Wave 3e).
    M5 flag-off inertness: base rule hides; scv2 rule below shows. */
