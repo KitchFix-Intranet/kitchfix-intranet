@@ -276,20 +276,29 @@ export default function OpsRail({
 function OpsSeasonList({ lines, todayMonth, year, queueLength, ledgerLength, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* OV-3 F3 (2026-07-19) - matches SeasonRail.SeasonList exactly.
-       Three attempts (rAF + 300ms + 900ms) with the overflow guard
-       + done latch. Ripped: no ResizeObserver. Real content sources
-       in deps so React re-runs on every data-arrival growth
-       (queueLength for the pinned queue, ledgerLength for the
-       homestand ledger above the season list, lines.length for the
-       season list itself). See F3 commit body for the three-strike
-       history. */
+    /* OV-3 F3 + F3-redux (2026-07-19) - direct-math auto-scroll.
+       F3-redux changes vs F3:
+       1. behavior: "auto" always (was smooth). Smooth-scroll on a
+          sticky ancestor + overflow-hidden parent + JS-driven
+          scrollTo is a documented Chromium/WebKit quirk zone; user's
+          fourth-strike report (STL-FL scrollTop 0 despite
+          overflow=525 vs clientHeight=174) matches the class of
+          symptom. Deterministic auto behavior removes the
+          animation-cancellation surface.
+       2. Direct scrollTop assignment instead of scrollTo() -
+          scrollTo(behavior:"auto") should be equivalent but the
+          direct property write bypasses any scroll-behavior CSS
+          inheritance that could silently downgrade to smooth on
+          the container's computed style.
+       3. Instrumentation `data-f3-target` on scrollNode so the
+          gate cell can inspect the target after the fact without
+          re-running the effect.
+       Deps unchanged from F3. Three timed attempts + done latch
+       + overflow guard preserved. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
-    const rm = typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     let done = false;
     const tryScroll = () => {
       if (done) return;
@@ -298,10 +307,9 @@ function OpsSeasonList({ lines, todayMonth, year, queueLength, ledgerLength, onD
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
-      scrollNode.scrollTo({
-        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
-        behavior: rm ? "auto" : "smooth",
-      });
+      const target = top - scrollNode.clientHeight / 2 + el.clientHeight / 2;
+      scrollNode.scrollTop = target;
+      scrollNode.setAttribute("data-f3-target", String(Math.round(target)));
     };
     const rafId = requestAnimationFrame(tryScroll);
     const t1 = setTimeout(tryScroll, 300);

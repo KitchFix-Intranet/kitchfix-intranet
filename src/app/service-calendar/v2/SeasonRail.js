@@ -279,12 +279,14 @@ function SeasonList({
        content-fits case (CIN-AZ per-meal), so no work happens
        there.
        Full history in the OV-3 F3 commit body. */
+    /* F3-redux: match OpsSeasonList - direct scrollTop assignment
+       (behavior:"auto" via property write, no scrollTo animation)
+       + instrumentation attribute. See OpsSeasonList comment for
+       the reasoning. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
-    const rm = typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     let done = false;
     const tryScroll = () => {
       if (done) return;
@@ -293,10 +295,9 @@ function SeasonList({
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
-      scrollNode.scrollTo({
-        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
-        behavior: rm ? "auto" : "smooth",
-      });
+      const target = top - scrollNode.clientHeight / 2 + el.clientHeight / 2;
+      scrollNode.scrollTop = target;
+      scrollNode.setAttribute("data-f3-target", String(Math.round(target)));
     };
     const rafId = requestAnimationFrame(tryScroll);
     const t1 = setTimeout(tryScroll, 300);
