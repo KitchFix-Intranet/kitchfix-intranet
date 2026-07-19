@@ -135,6 +135,19 @@
      the :has() selector's ':has(.scv2)' scope. */
   --sc2-shell-max: 1520px;
   --sc2-entry-max: 1240px;
+
+  /* ---------- V3 canvas-token-scope (hotfix, 2026-07-19) ----------
+     L0 canvas - the page ground BELOW the widget scope; must live
+     at :root because its consumer (.oh-app) is an ancestor of
+     .scv2. The ONE sc2 token above the widget scope, by definition
+     of L0.
+
+     Prior placement inside .scv2 { } left it undefined at .oh-app,
+     so `.oh-app:has(.scv2) { background: var(--sc2-canvas) }`
+     resolved to an invalid declaration and the ground stayed
+     transparent. Hoisting here fixes without changing any consumer
+     rule; the :has(.scv2) gate keeps non-scv2 ops pages untouched. */
+  --sc2-canvas: #edeff2;
 }
 
 /* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */
@@ -247,8 +260,13 @@
      RETIRED on overview per T-table; kept declared here for
      non-overview surfaces (drill/entry) until each section's own
      V3 sweep runs. Zero overview usage of the retired names is
-     enforced by the ripple-ledger check. */
-  --sc2-canvas:         #edeff2;   /* NEW - L0 (spec T-table: replaces surface-app role on SC pages) */
+     enforced by the ripple-ledger check.
+
+     Note: --sc2-canvas (L0) is hoisted to :root above - see the
+     canvas-token-scope block. Its consumer (.oh-app) is an
+     ANCESTOR of .scv2; custom-property inheritance is downward
+     only. --sc2-surface and every other sc2- token still lives
+     here inside .scv2. */
   --sc2-surface:        #f7f8fa;   /* NEW - L1 (the one widget plane) */
   --sc2-surface-card:   #ffffff;   /* L2 (unchanged) */
   --sc2-surface-page:   #e8e3d8;   /* legacy; scheduled for retirement in downstream V3 sweeps */
