@@ -197,6 +197,15 @@ export default function SeasonShell({
                   onClick={onMonthClick}
                   syncingDates={syncingDates}
                   springDateSet={springDateSet}
+                  /* V3 §6.7 - current period range (the one containing
+                     today) so MonthCard can mark in-period day tiles
+                     with the --in-period class. Undefined when no
+                     periods or today is out of range. */
+                  currentPeriodRange={
+                    (periodRanges || []).find(
+                      (r) => todayDate && todayDate >= r.start && todayDate <= r.end
+                    )
+                  }
                 />
               </div>
             );

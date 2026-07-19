@@ -144,6 +144,12 @@ export default function DaySquare({
   // the philosophy amendment governing the #398 icon-strip rule.
   isGameDayOverlay = false,
 
+  // V3 §6.7 - day is inside the current period range. Emits the
+  // `sc-daysq--in-period` class which drives the period-wash inset
+  // (orientation, not alarm - must not compete with today-ring or
+  // urgency chips per spec).
+  isInPeriod = false,
+
   // sc-19 (2026-07-12): the date is inside a `spring-training`
   // canonical phase block per phaseCalendar.js (PDC accounts only).
   // Drives TWO visual marks:
@@ -202,6 +208,16 @@ export default function DaySquare({
     isFocused && "sc-daysq--focused",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
+    /* V3 §6.7 - period-wash marker; drives inset shadow. */
+    isInPeriod && "sc-daysq--in-period",
+    /* V3 §7.5 - `--home` alias for the year-zoom dot pair. Emitted
+       from the same signal as `--game-day` (isGameDayOverlay =
+       day.hasScheduleGame from the sc-17/sc-17b overlay path). A
+       future homestand-account emit will set this from dayType
+       === "GAME" via the year-summary payload; documented in the
+       drift log. Away already has its own class via status="away"
+       (STATUS_META maps to `sc-daysq--away`). */
+    isGameDayOverlay && "sc-daysq--home",
     isSpringPhase && "sc-daysq--spring",
   ].filter(Boolean).join(" ");
 

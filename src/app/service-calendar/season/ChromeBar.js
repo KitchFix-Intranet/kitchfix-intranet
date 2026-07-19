@@ -237,12 +237,18 @@ function FeeStat({ gameDaysEntered, totalGameDays }) {
 // Named export: ServiceCalendar.js relocates this into the hero's
 // bottom-right corner via the sc-hero-asof modifier so the chrome bar
 // can sit on one row at desktop widths.
-export function AsOf({ asOf, onRefresh, className }) {
+export function AsOf({ asOf, onRefresh, className, fetchState = "fresh" }) {
+  /* V3 §9.6 - as-of pill states: fresh (default) / stale / failed.
+     `fetchState` is the parent-supplied signal; caller decides when
+     to flip it (e.g., "stale" past a refresh interval, "failed" on
+     retry-exhausted fetch). CSS in overview.css keys on
+     `data-fetch-state` and swaps the pill background/dot tone. */
   const label = formatAsOf(asOf);
   return (
     <span
       className={`sc-chrome-bar-asof ${className || ""}`.trim()}
       title={asOf.toLocaleString()}
+      data-fetch-state={fetchState}
     >
       <span aria-hidden="true" className="sc-chrome-bar-asof-dot" />
       <span>{label}</span>

@@ -164,7 +164,7 @@
   text-transform: uppercase;
 }
 .scv2 .sc-workspace-band-count {
-  color: var(--sc2-ink-soft);
+  color: var(--sc2-ink);
   font-weight: var(--sc2-wt-medium);
   flex: 1 1 auto;
   text-align: center;

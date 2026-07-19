@@ -54,6 +54,7 @@ export default function MonthCard({
   onClick,                   // (monthIndex) => void
   syncingDates,              // F3: Set<YYYY-MM-DD> for the current account; overlays SYNCING badge on matching tiles
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
+  currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -129,6 +130,12 @@ export default function MonthCard({
       {expanded ? (
         <header className="sc-season-month-card-header">
           <span className="sc-season-month-card-name">{monthName}</span>
+          {/* V3 §6.5 - month-level urgency chip: worst wins.
+              Aggregated from the month's day states in monthSummary. */}
+          <MonthUrgencyChip
+            monthSummary={monthSummary}
+            hasHomestandSchedule={hasHomestandSchedule}
+          />
           {!isDesktop && (
             <button
               type="button"
@@ -181,7 +188,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet, currentPeriodRange,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -309,7 +316,68 @@ function indexDays(monthSummary) {
   return m;
 }
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet }) {
+/*
+  V3 §6.5 - MonthUrgencyChip. Aggregates the month's day states
+  worst-wins: red "N overdue" outranks amber "N need entry".
+
+  M2 fix (live-probe): the pre-fix code counted `d.status ===
+  "overdue"` only. Live probe on July convicted this: 2 overdue
+  days rendered amber "3 need entry" because the payload paths
+  can carry `d.status === "needs-entry"` for aged-past days
+  depending on the clientToday anchor / classifyDayStatus context
+  (`lockCutoff = today - LOCK_DAYS 7`). Fix: use the SAME
+  actionable-day predicate the rail queue uses (`status` in
+  {"needs-entry","overdue"}) AND apply a client-side aging check
+  (LOCK_DAYS = 7 threshold) to distinguish red vs amber. Same
+  aging math as overviewDerive.js daysAgo (local-midnight anchor).
+
+  Suppressed on fee/homestand accounts - urgency is a per-meal
+  operator signal; fee accounts have their own contract-status
+  band elsewhere.
+*/
+const URGENCY_LOCK_DAYS = 7;
+function daysSinceISO(iso) {
+  if (!iso) return 0;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const [y, m, d] = iso.split("-").map(Number);
+  const then = new Date(y, m - 1, d);
+  const ms = now.getTime() - then.getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+function MonthUrgencyChip({ monthSummary, hasHomestandSchedule }) {
+  if (hasHomestandSchedule) return null;
+  if (!monthSummary?.days) return null;
+  let overdue = 0;
+  let needs = 0;
+  for (const d of monthSummary.days) {
+    const s = d?.status;
+    if (s !== "overdue" && s !== "needs-entry") continue;
+    // Aging check anchors on today's local midnight (M2 fix): if the
+    // day is >= LOCK_DAYS past OR the payload already marks it
+    // "overdue", it counts as overdue. Otherwise "needs-entry".
+    const aging = daysSinceISO(d.date);
+    if (s === "overdue" || aging >= URGENCY_LOCK_DAYS) overdue++;
+    else needs++;
+  }
+  if (overdue > 0) {
+    return (
+      <span className="sc-season-month-card-chip sc-season-month-card-chip--overdue">
+        {overdue} overdue
+      </span>
+    );
+  }
+  if (needs > 0) {
+    return (
+      <span className="sc-season-month-card-chip sc-season-month-card-chip--needs">
+        {needs} need entry
+      </span>
+    );
+  }
+  return null;
+}
+
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
@@ -347,6 +415,10 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       // the ServiceCalendar level; non-PDC accounts get an empty Set
       // -> false, no wedge.
       isSpringPhase={!!springDateSet?.has(cell.dateStr)}
+      // V3 §6.7 - the current-period wash on in-period day tiles
+      // (period-scope orientation, not alarm). Range comes from
+      // SeasonShell (periodRanges + today).
+      isInPeriod={!!(currentPeriodRange && cell.dateStr >= currentPeriodRange.start && cell.dateStr <= currentPeriodRange.end)}
     />
   );
 }

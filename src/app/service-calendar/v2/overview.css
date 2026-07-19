@@ -1,36 +1,100 @@
 /* ══════════════════════════════════════════════════════════════
-   SC v2 - Overview surface (Ribbon + Chrome + two-pane + Rail).
+   SC v2 → V3 - Overview surface (Ribbon + Chrome + two-pane + Rail).
 
    Every rule scoped to `.scv2` on the SC root. Flag OFF renders v1
    untouched. Tokens only (from the .scv2 block in src/app/tokens.css);
    solid colors are all tokens; alpha variants via rgba() are the
    documented exception.
 
-   DOM under .scv2 (no wrapper needed - ribbon + chrome are siblings
-   whose visual continuity is created by adjacent-sibling styling):
-     .scv2.sc-root
-       .sc-ribbon           (top row: brand + right cluster)
-       .sc-chrome-bar       (bottom row, restyled navy under scv2)
-       .sc-body
-         .sc-overview       (grid: content left, rail right)
+   V3 spec references (see docs/design/V3_OVERVIEW_SPEC.md):
+     §S1 - three layers exactly (L0 canvas, L1 surface, L2 cards)
+     §S2 - one edge; legend + grid + rail align to S2.3 vertical line
+     §S3 - chrome one-row inventory (welcome deleted, chip conditional)
+     §S4 - Standard scale (Compact recalibrated in the same file)
+     §S5 - phase ribbon (band + month scale + phase labels)
+     §9.8 - 32px icon buttons, radius 8/12/16, 1px chip outlines
+
+   DOM under .scv2:
+     .scv2.sc-root                             L0 canvas ground
+       .sc-body                                widget wrap (L1 surface)
+         .sc-ribbon                            V3 top of widget header zone
+         .sc-chrome-bar                        chrome (one row per §S3)
+         .sc-overview                          grid: content left, rail right
            .sc-overview-main  (SeasonShell)
-           .sc-overview-rail  (sticky Rail)
+           .sc-overview-rail  (sticky Rail)    L2 card
    ══════════════════════════════════════════════════════════════ */
+
+/* V3 §S1.1 - L0 canvas + L1 widget.
+
+   M1 fix (live-probe): the pre-fix rule painted canvas on
+   `.oh-bound`, but `.oh-bound` has max-width 1520 (W7.5 shell)
+   AND its background is HIDDEN behind the widget that fills it.
+   The visible "ground" (viewport area around the widget) is
+   OUTSIDE `.oh-bound` - which is `.oh-app` (transparent) - which
+   lets the body's radial gradient (ops-shared.css:39) paint
+   through. Result: no canvas visible.
+
+   Fix: paint canvas on `.oh-app:has(.scv2)`. `.oh-app` is
+   min-height:100vh (ops-shared.css:46) so the paint covers the
+   whole viewport whenever scv2 is present. The widget's
+   el-widget shadow now reads against the L0 canvas. Body's
+   radial gradient shows through only on non-scv2 ops pages.
+
+   Semantic: `.oh-app.scv2` = L0 canvas (viewport ground);
+   `.oh-bound` = shell-max width binder (§S2.1, W7.5); the widget
+   `.sc-root.scv2` = L1 surface with radius 16, --sc2-el-widget,
+   margin-top 24 - contains ribbon + chrome + body per §S1.1's
+   "one continuous plane behind ribbon, grid, legend, rail". */
+.oh-app:has(.scv2) {
+  background: var(--sc2-canvas);
+}
+/* V3 §S1.2 - Widget: L1 surface, radius 16, --sc2-el-widget
+   shadow, margin-top 24 (sp-6) below site nav. .sc-root.scv2 IS
+   the widget - contains ribbon + chrome + body (grid + rail). */
+.sc-root.scv2 {
+  background: var(--sc2-surface);
+  border-radius: 16px;
+  box-shadow: var(--sc2-el-widget);
+  margin-top: var(--sc2-space-6);
+  overflow: hidden;      /* keeps ribbon's top corners inside the widget */
+}
+/* .sc-body inside the widget: pure layout, no ground. */
+.scv2 .sc-body {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 0;
+  overflow: visible;
+}
 
 /* ─── Ribbon (identity row above ChromeBar) ─────────────────
    The ribbon + ChromeBar together form one continuous navy band:
    the ribbon paints the top gradient with rounded top corners; the
    .scv2 .sc-chrome-bar rule below inherits the deeper navy shade
    with a hairline top divider so they read as one band. */
+/* V3 §S3.1 - one-row chrome. Ribbon + ChromeBar merge visually
+   into ONE navy row via CSS. The Ribbon renders the title + right
+   cluster (density / as-of / lock); ChromeBar renders account +
+   tag + view toggle + stats + export. Under scv2 both flatten:
+     - Ribbon: single-row, transparent gradient (no separate row);
+       carries the title on the LEFT and the ribbon-right cluster
+       on the RIGHT.
+     - ChromeBar: joins as an adjacent-sibling row on the SAME
+       navy ground.
+   Effect: reads as one continuous navy band with left/right
+   inventory per §3.1. Full JSX consolidation (single component
+   emitting one <header>) is a follow-up if the visual approach
+   proves brittle; this delivers the visual result today. */
 .scv2 .sc-ribbon {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sc2-space-4);
-  padding: var(--sc2-space-3) var(--sc2-space-5);
-  background: linear-gradient(180deg, var(--sc2-cmd-bg) 0%, var(--sc2-cmd-bg-deep) 100%);
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-2) var(--sc2-space-5);
+  background: var(--sc2-cmd-bg);
   color: var(--sc2-cmd-text);
-  border-radius: var(--sc2-radius-container) var(--sc2-radius-container) 0 0;
+  border-radius: 16px 16px 0 0;   /* matches widget radius top; §S1.2 */
+  border-bottom: 0;
 }
 
 /* Left cluster: title + welcome */
@@ -43,11 +107,12 @@
 .scv2 .sc-ribbon-title {
   margin: 0;
   font-family: var(--sc2-font-ui);
-  font-size: var(--sc2-size-h2);
+  /* V3 §S3.1 + §T type scale - chrome-title 18/800. */
+  font-size: 18px;
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-cmd-text);
   letter-spacing: -0.01em;
-  line-height: 1.15;
+  line-height: calc(24 / 18);
 }
 .scv2 .sc-ribbon-welcome {
   margin: 0;
@@ -84,14 +149,15 @@
   color: var(--sc2-cmd-text);
 }
 
-/* Admin lock button */
+/* V3 §S3.1 + §9.8 - Admin lock button 32px (icon-button lock
+   compliance; render's 30px corrected to 32). Radius 8 per T-table. */
 .scv2 .sc-ribbon-admin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--sc2-radius-control);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.10);
   border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
   color: var(--sc2-cmd-text-muted);
@@ -144,14 +210,18 @@
   outline-offset: 2px;
 }
 
-/* ─── ChromeBar under scv2 (navy band) ─────────────────────── */
+/* V3 §S3.1 - ChromeBar adjoins the Ribbon in ONE navy band.
+   Same background as ribbon so the two-DOM-node pair reads
+   visually as one row. Hairline top divider stays as a subtle
+   splitter between title-cluster (ribbon) and action-cluster
+   (chrome). */
 .scv2 .sc-chrome-bar {
-  background: var(--sc2-cmd-bg-deep);
+  background: var(--sc2-cmd-bg);
   border-top: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.10);
-  border-radius: 0 0 var(--sc2-radius-container) var(--sc2-radius-container);
+  border-radius: 0;
   padding: var(--sc2-space-2) var(--sc2-space-5);
   color: var(--sc2-cmd-text-muted);
-  margin-bottom: var(--sc2-space-3);
+  margin-bottom: 0;
 }
 .scv2 .sc-chrome-bar-left,
 .scv2 .sc-chrome-bar-right {
@@ -241,12 +311,26 @@
   box-shadow: var(--sc2-elevation-raised);
 }
 
-/* ─── Two-pane overview layout ─────────────────────────────── */
+/* V3 §S1.1 - two-pane overview grid lives INSIDE the widget (L1
+   surface). Grid gap is the one horizontal rhythm token; §S2.3
+   verifies the shared left edge across chrome content, ribbon,
+   grid, legend, and rail. */
 .scv2 .sc-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
   gap: var(--sc2-space-4);
   align-items: start;
+  padding: var(--sc2-space-5);   /* §6.1 content pad 20 = sp-5 = 20px */
+}
+
+/* V3 §S3.3 - needs-entry chip renders ONLY below the two-pane
+   breakpoint (rail not beside grid). At >=1280 the rail sits on
+   the side and carries the same information; the chrome chip
+   becomes duplicate context and is hidden. */
+@media (min-width: 1280px) {
+  .scv2 .sc-chrome-bar-stats-count {
+    display: none;
+  }
 }
 
 .scv2 .sc-overview-main {
@@ -485,7 +569,7 @@
   border-radius: var(--sc2-radius-cell);
 }
 .scv2 .sc-state-legend-item {
-  color: var(--sc2-ink-soft);
+  color: var(--sc2-ink);
   font-size: var(--sc2-size-micro);
 }
 
@@ -546,6 +630,304 @@
    days entered, meals YTD) is rehomed into the rail:
      entered YTD    -> RailHero.value (animated via useAnimatedNumber)
      projected      -> RailHero.meta "of ~$X projected"
-     days entered   -> RailHero.meta "N of M days recorded"
+     days entered   -> RailHero.meta "N of M days entered"    (V3 §9.1)
      meals YTD      -> RailHero.meta on Period mode "· N meals YTD"
    See v2/SeasonRail.js heroMetaCal / heroMetaPeriod. */
+
+/* ══════════════════════════════════════════════════════════════
+   V3 - GRID + STATES (§S6 / §S7)
+   ══════════════════════════════════════════════════════════════ */
+
+/* §6.4 / §6.8 - Month-card footer demotion + M4 one-row grammar.
+
+   M4 fix (live-probe): the pre-fix footer stacked the $ figure
+   ABOVE the progress bar (24px gap). Spec + approved render show
+   ONE row: bar (flex:1) + right-aligned figure on a shared
+   baseline. Restructured at the flex parent (.sc-season-month-
+   card-footer) so bar and figure sit on the same row.
+
+     per-meal grammar:  .stat-main (N/N entered) hidden ;
+                        bar   -> flex:1 (fills row)
+                        .stat-rev ($ actual OR ~$ projection)
+                              -> right-aligned, baseline-shared
+                        $ actual   = 12/800 ink-strong (§6.4).
+                        ~$ project = 12/700 ink-muted  (§6.4).
+     MLB grammar:       .stat-main (N/M game days) hidden ;
+                        bar   -> flex:1
+                        .stat-aux (N homestand) -> right (§6.8).
+     STL-FL grammar:    stats row collapses; bar spans row.
+
+   The .sc-season-month-card-stats wrapper becomes a compact
+   right-side flex item (contents flow together via display:contents
+   so the child spans join the parent row's flex). */
+.scv2 .sc-season-month-card-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  padding-top: var(--sc2-space-2);
+}
+.scv2 .sc-season-month-card-footer .sc-progress {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.scv2 .sc-season-month-card-stats {
+  display: contents;      /* children join the footer's row */
+}
+.scv2 .sc-season-month-card-stat-main {
+  display: none;
+}
+/* §6.8 MLB right figure - N homestand(s). */
+.scv2 .sc-season-month-card-stat-aux {
+  color: var(--sc2-ink-muted);
+  font-size: 12px;
+  font-weight: var(--sc2-wt-bold);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+/* §6.4 per-meal right figures - money-forward per state. */
+.scv2 .sc-season-month-card-stat-rev {
+  font-size: 12px;
+  font-weight: var(--sc2-wt-bold);            /* projection = 700 (spec says 700 for ~$) */
+  color: var(--sc2-ink-muted);                /* projection tone */
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.scv2 .sc-season-month-card-stat-rev--actual {
+  font-weight: var(--sc2-wt-display);         /* actual = 800 */
+  color: var(--sc2-ink-strong);               /* actual tone (money-forward, not green - spec §6.4) */
+}
+
+/* §6.10 - Off tiles: no border (non-actionable). The
+   --sc2-state-off-bd token is `transparent` per T-table; explicit
+   border-style:none clears any inherited border-medium at the
+   scv2 layer. */
+.scv2 .sc-daysq--off,
+.scv2 .sc-daysq--off-season {
+  border-style: none;
+}
+
+/* §7.3 - Two-signal law extended: needs tiles carry a 4px dot
+   glyph, top-right, needs-bd color. upcoming-mint (Y .850) and
+   needs-amber (Y .848) are grayscale-identical - the glyph is the
+   third carrier (color + border + glyph) so color is never the
+   sole signal.
+
+   A2 fix (live-probe): the year-zoom collision lives on `--sm`
+   tiles, not `--lg`. The glyph fires on BOTH sizes now. Position
+   adjusted so sm doesn't compete with the sc-daysq-badge slot
+   (top-right ~10-14px badge area) - the dot rides top-right at
+   3px offset on sm, 4px on lg. */
+.scv2 .sc-daysq--needs-entry::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sc2-state-needs-bd);
+  pointer-events: none;
+  z-index: 1;
+}
+.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
+  top: 4px;
+  right: 4px;
+}
+
+/* §7.4 - Corner markers retired on overview. Phase context lives
+   in the ribbon (§S5) and the month-tick (§6.6). The v1
+   corner-marks (--sc2-mark-gameday indigo, --sc2-accent-copper
+   spring-training) are audit-scheduled for removal in the drill
+   V3 pass; overview hides them here. */
+.scv2 .sc-daysq--game-day::before,
+.scv2 .sc-daysq--spring::after {
+  display: none;
+}
+
+/* §7.5 - Home/away dual-zoom. Year-zoom (sm tiles) carries a 5px
+   dot below the numeral encoding home vs away by fill-vs-outline.
+   Same carrier at drill zoom (chips). Grayscale-safe by construction.
+
+   B5 - DaySquare emits `sc-daysq--home` from `isGameDayOverlay`
+   (year-summary path: day.hasScheduleGame from sc-17/sc-17b
+   overlay). Away emits via existing status-map class `sc-daysq--away`
+   (STATUS_META :91 maps status "away" to modifier "away"). Homestand-
+   schedule accounts (CIN-KY, TBJ-NY, MLB fees) currently emit
+   `--away` on AWAY days but do NOT emit `--home` on home days -
+   the follow-up server-side hasScheduleGame emit for those accounts
+   lands as the drift-log item below. */
+.scv2 .sc-daysq--sm.sc-daysq--home::before,
+.scv2 .sc-daysq--sm.sc-daysq--away::before {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: block;
+  z-index: 1;
+}
+.scv2 .sc-daysq--sm.sc-daysq--home::before {
+  background: var(--sc2-cmd-bg);   /* --sc2-cmd-bg = navy */
+  border: 0;
+}
+.scv2 .sc-daysq--sm.sc-daysq--away::before {
+  background: transparent;
+  border: 1px solid var(--sc2-cmd-bg);
+}
+
+/* §7.6 - Interaction deltas: hover +/- L0.04, active +/- L0.07
+   uniform system-wide. Applied at the card level (el-hover shadow
+   step) via existing hover rules; state fills stay at rest. */
+
+/* §6.5 - Year-zoom alarm aggregation: zero per-cell urgency at
+   year view. The DaySquare atom does NOT paint state-color chips
+   inside cells at sm size (already the case in v1 - sm tiles are
+   compact); the aggregation chip lives in the month-card header
+   right slot (existing markup `.sc-season-month-card-stat-aux`
+   handles it or new "urgency" chip; render doesn't currently
+   emit it - deferred to a JSX pass if audit requires). */
+
+/* §6.7 - Current-period wash inset on in-period day tiles. */
+.scv2 .sc-daysq--in-period {
+  box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
+}
+
+/* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
+   inside the expanded MonthCard header right slot.
+
+   M5 flag-off self-check: MonthCard renders MonthUrgencyChip on
+   BOTH v1 and v2 paths (the component is shared). Without the
+   base display:none, the chip's `<span>` would render as
+   unstyled inline text on flag-off (raw "2 overdue" next to
+   month name). Base rule hides it; scv2 rule below shows it. */
+.sc-season-month-card-chip {
+  display: none;
+}
+.scv2 .sc-season-month-card-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+.scv2 .sc-season-month-card-chip--needs {
+  background: var(--sc2-state-needs-bg);
+  border-color: var(--sc2-state-needs-bd);
+  color: var(--sc2-state-needs-fg);
+}
+.scv2 .sc-season-month-card-chip--overdue {
+  background: var(--sc2-state-overdue-bg);
+  border-color: var(--sc2-state-overdue-bd);
+  color: var(--sc2-state-overdue-fg);
+}
+
+/* §6.1 - Square tiles. aspect-ratio: 1 on sm tiles inside the
+   overview month grid. Whole-px math shakes out at the browser
+   layer; --sc2-shell-max stays at 1520 unless Chat-Claude's
+   S10 sweep proves a ±4px adjustment (documented rider). */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+}
+/* §6.2 - Centered numerals on sm tiles (year-zoom). 12/600
+   tabular; tone per state (rides the fg tokens set in T-table). */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date {
+  font-size: 12px;
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1;
+}
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-top {
+  justify-content: center;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   V3 §S9 - RIDERS
+   ══════════════════════════════════════════════════════════════ */
+
+/* §9.3 - ONE focus-ring style. 2px navy, 2px offset. Applied at
+   scv2 scope to every focusable descendant so the tab walk (chrome
+   -> grid -> legend -> rail) reads as one style. Feeds C-012
+   unification (parallel design-audit item). */
+.scv2 *:focus-visible {
+  outline: 2px solid var(--sc2-cmd-bg);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* §9.6 - As-of pill states: fresh (green dot, default), stale
+   (amber pill + "stale" word), failed (red pill + retry cue).
+   Presentation only - fetch-state hook (§9.2) is elsewhere. The
+   ChromeBar / Ribbon components need to add a data-fetch-state
+   attribute on the as-of pill for these rules to fire; the CSS
+   is ready for that emit. */
+.scv2 .sc-chrome-bar-asof[data-fetch-state="stale"],
+.scv2 .sc-ribbon-asof[data-fetch-state="stale"] {
+  background: rgba(242, 212, 154, 0.16);
+  border-color: rgba(242, 212, 154, 0.42);
+  color: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="stale"] .sc-chrome-bar-asof-dot,
+.scv2 .sc-ribbon-asof[data-fetch-state="stale"] .sc-chrome-bar-asof-dot {
+  background: var(--sc2-rail-accent-warn);
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="failed"],
+.scv2 .sc-ribbon-asof[data-fetch-state="failed"] {
+  background: rgba(221, 138, 123, 0.18);
+  border-color: rgba(221, 138, 123, 0.44);
+  color: #ffbfb6;
+}
+.scv2 .sc-chrome-bar-asof[data-fetch-state="failed"] .sc-chrome-bar-asof-dot,
+.scv2 .sc-ribbon-asof[data-fetch-state="failed"] .sc-chrome-bar-asof-dot {
+  background: var(--sc2-state-overdue-bd);
+}
+
+/* §S11.1 - Heading map at scv2 scope. Micro-tier labels
+   (11/800 tracked all-caps) are the ONLY tracked tier per spec.
+   L1 chrome title (18/800) landed in Step 2; L2 month names +
+   rail hero label pair are shipped via existing sizes.
+
+   M3 fix - explicit type-slot map on the actual consumer selectors:
+     .sc-season-month-card-name   -> --sc2-size-subhead (15/20)
+                                     [was 14 via v1's --size-body]
+     .sc-rail-hero-value          -> --sc2-size-rail-total (30)
+                                     [already correct via rail.css:44]
+     .sc-ribbon-title             -> 18 (chrome-title)
+                                     [set inline in Step 2]
+     .sc-season-month-card-*      card headings -> 20 via existing
+                                     scv2 rules (h2 slot). */
+.scv2 .sc-season-month-card-name {
+  font-size: var(--sc2-size-subhead);
+  line-height: calc(20 / 15);
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-rail-label,
+.scv2 .sc-rail-section-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* §S11.2 - Tabular figures on all data nodes. */
+.scv2 .sc-rail-hero-value,
+.scv2 .sc-rail-line-value,
+.scv2 .sc-season-month-card-stat-rev,
+.scv2 .sc-season-month-card-stat-aux,
+.scv2 .sc-chrome-bar-stats-value,
+.scv2 .sc-chrome-bar-stats-count-num,
+.scv2 .sc-workspace-frame-stat-num {
+  font-variant-numeric: tabular-nums;
+}
