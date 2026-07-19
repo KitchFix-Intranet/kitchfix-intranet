@@ -45,6 +45,18 @@
    `.sc-root.scv2` = L1 surface with radius 16, --sc2-el-widget,
    margin-top 24 - contains ribbon + chrome + body per §S1.1's
    "one continuous plane behind ribbon, grid, legend, rail". */
+/* OV-3 Item 1a - canvas paint LIFTED to body:has() so no substrate
+   can show through at the nav boundary. Prior placement on
+   `.oh-app:has(.scv2)` left a thin `#fffbeb` strip (body's
+   radial-gradient at top) visible between the sticky nav (translucent
+   85% white) and the canvas at zoom-out - the body ground was still
+   the ops radial-gradient anywhere `.oh-app` didn't cover. Painting
+   canvas at body-level under a scv2 page means the ground is one
+   contiguous colour from html to widget edge; the translucent nav
+   blends onto the canvas cleanly at any zoom. */
+body:has(.scv2) {
+  background: var(--sc2-canvas);
+}
 .oh-app:has(.scv2) {
   background: var(--sc2-canvas);
 }
@@ -341,6 +353,37 @@
 
 .scv2 .sc-overview-main {
   min-width: 0;
+}
+
+/* OV-3 Item 1b - calendar-region beige cast repaired at the leak.
+   `.sc-season` (v1 rule at season.css:12-17) sets
+   `background: var(--surface-sunken)` which resolves via v1's
+   neutral scale to `--n-50: #FAF9F5` - a warm off-white with a
+   slight cream cast. Under `.scv2`, this beige leaked through the
+   season shell and cast the calendar region against the widget's
+   cool L1 surface (`--sc2-surface: #f7f8fa`).
+   Fix: override at the composition point so the widget's L1 shows
+   through. Transparent rather than re-setting a surface token so
+   the widget owns the ground; nothing hardcoded. Applies at all
+   viewports; `.sc-season` v1 base rule untouched. */
+.scv2 .sc-season {
+  background: transparent;
+}
+
+/* OV-3 Item 1e (§20, new law) - whole-pixel grid tiles.
+   Prior `grid-template-columns: repeat(7, 1fr)` distributes track
+   widths as fractional pixels when the container inline-size is
+   not divisible by 7. Sub-pixel widths land on non-integer offsets
+   and produce anti-aliasing seams at every column boundary.
+   Fix: use `round(down, (100% - 6 * 2px) / 7, 1px)` which floors
+   each track to a whole pixel (accounting for the 2px gaps between
+   columns from `season.css:512`). Remainder pixels (0-6) land in
+   the parent's inline-end padding, which is invisible on the calm
+   card background. Applied to the two overview-scoped grids
+   (MonthCard + PeriodCard week-grids); v1 SC's own grids untouched. */
+.scv2 .sc-season-month-card-grid,
+.scv2 .sc-season-period-card-grid {
+  grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
 }
 
 /* Rail sticks below the ribbon band as the user scrolls the page.

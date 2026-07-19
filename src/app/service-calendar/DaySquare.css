@@ -1112,10 +1112,21 @@
    Corner grammar preserved from v1 (top-right = game/event,
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
+/* OV-3 Item 1d - enlarge corner wedges from 15px legs (v1 base at
+   line 264-273 / 294-304) to 22px legs. Owner ruling: previous
+   render "too subtle" - grow meaningfully so game-day (STL - FL /
+   TBJ - FL AAA overlay dates included) + spring-training PDC dates
+   read at a glance in the year overview. Whole-px legs; visual
+   ratio ~50% of the 44px sm-tile min-height. v1 SC keeps 15px for
+   stability; the size uplift is scv2-scoped. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
+  width: 22px;
+  height: 22px;
   background: var(--sc2-mark-gameday);
 }
 .scv2 .sc-daysq--sm.sc-daysq--spring::after {
+  width: 22px;
+  height: 22px;
   background: var(--sc2-accent-copper);
 }
 .scv2 .sc-daysq-st-pill {
@@ -1134,22 +1145,36 @@
 .scv2 .sc-daysq--selected {
   box-shadow: 0 0 0 3px var(--sc2-selected-ring);
 }
+/* OV-3 Item 1c - today tile: 2px navy outline with a 2px breathing
+   gap outside the tile edge. Prior box-shadow `0 0 0 2px` painted
+   AT the edge and read weakly, especially on the state fills
+   (needs-bg amber, overdue-bg red). Outline+offset renders a 2px
+   navy ring OUTSIDE the tile with a 2px gap, so the mark reads on
+   every account kind (MLB / MiLB / PDC / CORP) and every state
+   fill. Modern engines follow border-radius on outlines. */
 .scv2 .sc-daysq--today {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 .scv2 .sc-daysq--today.sc-daysq--focused {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--selected {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), 0 0 0 5px var(--sc2-selected-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring);
 }
 .scv2 .sc-daysq--focused.sc-daysq--selected {
   box-shadow: 0 0 0 3px var(--sc2-selected-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
   box-shadow:
-    0 0 0 2px var(--sc2-today-ring),
-    0 0 0 5px var(--sc2-selected-ring),
+    0 0 0 3px var(--sc2-selected-ring),
     inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--interactive:focus-visible {
@@ -1157,7 +1182,9 @@
   box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--interactive:focus-visible {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 
 /* Today pill hidden per v1 (kept for structure) */

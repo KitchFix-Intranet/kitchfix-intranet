@@ -236,20 +236,37 @@ function SeasonList({
 }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* F-E5 (2026-07-19) - swap scrollIntoView({ block: "center" })
-       for direct math on the scroll container. Live probe showed
-       scrollIntoView bubbled up to `<html>` and scrolled the whole
-       page ~351 on load. The direct-math version scrolls ONLY
-       .sc-rail-scroll and leaves the document untouched. Verified
-       live at rail.scrollTop 96 with July centered, html untouched.
-       F-E4 deps preserved. */
+    /* OV-3 P3 diagnosis (2026-07-19) - the F-E5 direct-math scroll
+       (below) was firing correctly on per-meal CalendarRail too, but
+       reading as a no-op because `scrollNode.scrollHeight` was
+       <= `clientHeight`. CalendarRail's scroll region on per-meal
+       accounts (CIN, AZ) has ONLY the season list inside RailScroll -
+       no homestand ledger above the season list like OpsRail's fee
+       variant. Twelve month lines + one collapse toggle fit within
+       the rail scroller's natural clientHeight at typical viewport
+       heights, so `scrollTo({top: X})` clamps to 0 and July renders
+       at its natural row position (mid-bottom edge). OpsRail's fee
+       path added ~5-10 homestand ledger rows above the season list,
+       pushing content past clientHeight so its `scrollTop=224`
+       succeeded.
+       Fix: guard the scroll on `scrollHeight > clientHeight` (skip
+       when content fits - the "auto-scroll to today" is moot in that
+       case, natural row order already places today mid-list). Also
+       add a ResizeObserver so an incremental layout expansion (data
+       arrives after mount, container size changes) re-runs the scroll
+       once the overflow condition is met. Deps unchanged: reacts to
+       year/todayMonth/list-length as before. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
     const rm = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const rafId = requestAnimationFrame(() => {
+    let done = false;
+    const tryScroll = () => {
+      if (done) return;
+      if (scrollNode.scrollHeight <= scrollNode.clientHeight) return;
+      done = true;
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
@@ -257,8 +274,14 @@ function SeasonList({
         top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
         behavior: rm ? "auto" : "smooth",
       });
-    });
-    return () => cancelAnimationFrame(rafId);
+    };
+    const rafId = requestAnimationFrame(tryScroll);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
+    if (ro) ro.observe(scrollNode);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, todayMonth, visibleMonthLines.length]);
   return (

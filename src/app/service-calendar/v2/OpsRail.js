@@ -248,15 +248,21 @@ export default function OpsRail({
 function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* F-E5 - direct-math scroll on .sc-rail-scroll only (see
-       SeasonList block in SeasonRail.js for the diagnosis). */
+    /* OV-3 P3 (2026-07-19) - same guard + ResizeObserver backstop
+       as SeasonRail.SeasonList (see block comment there for full
+       diagnosis). Kept parallel so the two rail paths behave
+       identically. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
     const rm = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const rafId = requestAnimationFrame(() => {
+    let done = false;
+    const tryScroll = () => {
+      if (done) return;
+      if (scrollNode.scrollHeight <= scrollNode.clientHeight) return;
+      done = true;
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
@@ -264,8 +270,14 @@ function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
         top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
         behavior: rm ? "auto" : "smooth",
       });
-    });
-    return () => cancelAnimationFrame(rafId);
+    };
+    const rafId = requestAnimationFrame(tryScroll);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(tryScroll) : null;
+    if (ro) ro.observe(scrollNode);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, todayMonth, lines.length]);
   return (
