@@ -117,9 +117,14 @@ export default function SeasonShell({
   useEffect(() => {
     const grid = calendarGridRef.current;
     if (!grid) return;
+    /* F-B2: filter to VISIBLE elements. Slim cards contribute BOTH
+       their visible slim-expand AND their display:none drill; the
+       hidden drill can't accept focus, so including it in the
+       roving list desyncs tabIndex from focus. `offsetParent`
+       returns null for display:none elements (per HTML spec). */
     const cards = Array.from(grid.querySelectorAll(
       ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
-    ));
+    )).filter((c) => c.offsetParent !== null);
     if (!cards.length) return;
     const target = Math.min(rovingIndex, cards.length - 1);
     cards.forEach((c, i) => {
@@ -206,7 +211,9 @@ export default function SeasonShell({
           ref={calendarGridRef}
           onFocus={(e) => {
             /* V3 §9.3 F-C - track the currently-focused card so
-               the tabindex ref-effect can maintain ONE tabstop. */
+               the tabindex ref-effect can maintain ONE tabstop.
+               F-B2: filter to visible so slim's hidden drill can't
+               enter the index and desync tabindex from focus. */
             const card = e.target.closest(
               ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
             );
@@ -215,7 +222,7 @@ export default function SeasonShell({
               e.currentTarget.querySelectorAll(
                 ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
               )
-            );
+            ).filter((c) => c.offsetParent !== null);
             const idx = cards.indexOf(card);
             if (idx !== -1) setRovingIndex(idx);
           }}
@@ -236,7 +243,7 @@ export default function SeasonShell({
               e.currentTarget.querySelectorAll(
                 ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
               )
-            );
+            ).filter((c) => c.offsetParent !== null);
             if (!cards.length) return;
             const active = document.activeElement;
             const idx = cards.indexOf(active);

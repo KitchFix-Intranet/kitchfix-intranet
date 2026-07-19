@@ -331,7 +331,14 @@ function PeriodRail({
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
 
-      <RailScroll>
+      {/* V3 §S8.3 F-E2 - PeriodRail also pins NEEDS ENTRY above the
+          season scroll region. Same structure as CalendarRail so
+          both landing modes get the pinned queue + inner-scrolling
+          season list. Auto-scroll (SeasonList's current-month
+          rAF) is calendar-specific; period lines don't have a
+          per-month current-target concept, so PeriodRail's scroll
+          region uses the plain RailScroll without a ref. */}
+      <div className="sc-rail-pinned">
         <RailSection
           label="NEEDS ENTRY"
           meta={groupedQueue.length > 0 ? `${groupedQueue.length}` : null}
@@ -353,7 +360,9 @@ function PeriodRail({
             />
           )}
         </RailSection>
+      </div>
 
+      <RailScroll>
         <RailSection label="Season">
           {periodLines.map(line => (
             <PeriodRailLine
