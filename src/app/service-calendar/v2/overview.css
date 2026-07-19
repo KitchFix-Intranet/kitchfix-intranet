@@ -45,15 +45,27 @@
    `.sc-root.scv2` = L1 surface with radius 16, --sc2-el-widget,
    margin-top 24 - contains ribbon + chrome + body per §S1.1's
    "one continuous plane behind ribbon, grid, legend, rail". */
-/* OV-3 Item 1a - canvas paint LIFTED to body:has() so no substrate
-   can show through at the nav boundary. Prior placement on
-   `.oh-app:has(.scv2)` left a thin `#fffbeb` strip (body's
-   radial-gradient at top) visible between the sticky nav (translucent
-   85% white) and the canvas at zoom-out - the body ground was still
-   the ops radial-gradient anywhere `.oh-app` didn't cover. Painting
-   canvas at body-level under a scv2 page means the ground is one
-   contiguous colour from html to widget edge; the translucent nav
-   blends onto the canvas cleanly at any zoom. */
+/* OV-3 Item 1a + G3 (2026-07-19) - canvas paint LIFTED past body
+   to `html:has(.scv2)`. G3 diagnosis: the Wave-1 `body:has(.scv2)`
+   rule was served but body computed the ops-shared radial gradient
+   instead of canvas. Root cause: ops-shared.css:39
+   `body:has(.oh-app) { background: radial-gradient(...) }` and my
+   `body:has(.scv2)` tie at specificity 0,1,1 (element + :has-with-
+   class); at ties, later-in-source wins. Under Next 16 / Turbopack's
+   compiled bundle order, ops-shared.css emits AFTER v2/overview.css
+   in the /service-calendar route stylesheet (ops-shared is imported
+   from service-calendar/page.js which is a route file; overview.css
+   is imported deep in the client component chain), so ops-shared
+   paints its gradient over mine at zoom-out - the "warm-white strip"
+   between the nav and widget was that gradient bleeding through.
+   Fix: paint canvas at html:has(.scv2) so no body-level rule can
+   compete. html has no other background rule anywhere in the app;
+   the html-level canvas wins uncontested at every zoom. Belt-and-
+   braces: keep body:has(.scv2) too, so if the html rule ever
+   becomes contested the body rule is still the correct value. */
+html:has(.scv2) {
+  background: var(--sc2-canvas);
+}
 body:has(.scv2) {
   background: var(--sc2-canvas);
 }
