@@ -1043,11 +1043,19 @@
 .scv2 .sc-daysq--failed .sc-daysq-mid { display: none; }
 
 /* ── Exhibition + Away ─────────────────────────────────────────
-   Exhibition: cream base w/ copper ribbon (already positioned by v1).
+   Exhibition: OV-3 F6 (2026-07-19) - background unified with off
+   under scv2. Prior --sc2-surface-app (#f7f3ea legacy warm cream)
+   gave exhibition tiles a distinct warm cream/beige that read as
+   a SECOND grey next to off's #f1f0ec on spring-training PDC months
+   - owner spotted both greys together on TXR March. Non-service is
+   non-service; the ONE scv2 off pair is the canonical carrier.
+   The copper "EXH" corner ribbon still distinguishes exhibition
+   from a bare off tile by shape/color, so the fill unification
+   doesn't lose the exhibition signal.
    Away: teal-tint fill w/ hollow @OPP tag + plane glyph. */
 .scv2 .sc-daysq--exhibition {
-  background: var(--sc2-surface-app);
-  border-color: var(--sc2-line-2);
+  background: var(--sc2-state-off-bg);
+  border-color: var(--sc2-state-off-bd);
   color: var(--sc2-ink);
 }
 .scv2 .sc-daysq--exhibition .sc-daysq-date { color: var(--sc2-ink); }
