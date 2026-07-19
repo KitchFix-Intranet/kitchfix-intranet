@@ -24,20 +24,28 @@
            .sc-overview-rail  (sticky Rail)    L2 card
    ══════════════════════════════════════════════════════════════ */
 
-/* V3 §S1.1 - L0 canvas + L1 widget (REVISED per spec re-read).
+/* V3 §S1.1 - L0 canvas + L1 widget.
 
-   The spec §S1.1 says L1 is "ONE continuous plane behind ribbon,
-   grid, legend, rail" - so the widget WRAP includes ribbon +
-   chrome + body. Under the current DOM (Ribbon + ChromeBar +
-   .sc-body are siblings inside .sc-root.scv2), the widget is
-   .sc-root.scv2 itself. L0 canvas paints on the outer .oh-bound
-   via :has(.scv2) so the L1 widget floats above it visibly.
+   M1 fix (live-probe): the pre-fix rule painted canvas on
+   `.oh-bound`, but `.oh-bound` has max-width 1520 (W7.5 shell)
+   AND its background is HIDDEN behind the widget that fills it.
+   The visible "ground" (viewport area around the widget) is
+   OUTSIDE `.oh-bound` - which is `.oh-app` (transparent) - which
+   lets the body's radial gradient (ops-shared.css:39) paint
+   through. Result: no canvas visible.
 
-   §S2.1 - :has(.scv2) also aligns the outer .oh-bound to the
-   --sc2-shell-max (already done in shell.css from W7.5); the
-   canvas paint lands on the same node so the widget's shadow +
-   radius show correctly with a visible ground around it. */
-.oh-bound:has(.scv2) {
+   Fix: paint canvas on `.oh-app:has(.scv2)`. `.oh-app` is
+   min-height:100vh (ops-shared.css:46) so the paint covers the
+   whole viewport whenever scv2 is present. The widget's
+   el-widget shadow now reads against the L0 canvas. Body's
+   radial gradient shows through only on non-scv2 ops pages.
+
+   Semantic: `.oh-app.scv2` = L0 canvas (viewport ground);
+   `.oh-bound` = shell-max width binder (§S2.1, W7.5); the widget
+   `.sc-root.scv2` = L1 surface with radius 16, --sc2-el-widget,
+   margin-top 24 - contains ribbon + chrome + body per §S1.1's
+   "one continuous plane behind ribbon, grid, legend, rail". */
+.oh-app:has(.scv2) {
   background: var(--sc2-canvas);
 }
 /* V3 §S1.2 - Widget: L1 surface, radius 16, --sc2-el-widget
@@ -630,28 +638,41 @@
    V3 - GRID + STATES (§S6 / §S7)
    ══════════════════════════════════════════════════════════════ */
 
-/* §6.4 / §6.8 - Month-card footer demotion (both grammars).
+/* §6.4 / §6.8 - Month-card footer demotion + M4 one-row grammar.
 
-   A1 fix (live-probe): the pre-fix rule hid .stat-main via
-   display:none, but `.sc-season-month-card-stats` is flex with
-   justify-content:space-between - with one remaining child, that
-   pins it to the LEFT. Land the fix at the flex parent + the
-   remaining child so the single right-aligned figure actually
-   sits right on both grammars:
+   M4 fix (live-probe): the pre-fix footer stacked the $ figure
+   ABOVE the progress bar (24px gap). Spec + approved render show
+   ONE row: bar (flex:1) + right-aligned figure on a shared
+   baseline. Restructured at the flex parent (.sc-season-month-
+   card-footer) so bar and figure sit on the same row.
 
-     per-meal grammar:  .stat-main (N/N entered)  hidden ;
-                        .stat-rev  ($ actual OR ~$ projection) right.
+     per-meal grammar:  .stat-main (N/N entered) hidden ;
+                        bar   -> flex:1 (fills row)
+                        .stat-rev ($ actual OR ~$ projection)
+                              -> right-aligned, baseline-shared
                         $ actual   = 12/800 ink-strong (§6.4).
                         ~$ project = 12/700 ink-muted  (§6.4).
      MLB grammar:       .stat-main (N/M game days) hidden ;
-                        .stat-aux  (N homestand)    right (§6.8).
-     STL-FL grammar:    .stat-main (N/M entered)   hidden ;
-                        stats row collapses (bar encodes; zero $).
+                        bar   -> flex:1
+                        .stat-aux (N homestand) -> right (§6.8).
+     STL-FL grammar:    stats row collapses; bar spans row.
 
-   Flex justify moves to flex-end so any single remaining child
-   sits right regardless of class. */
+   The .sc-season-month-card-stats wrapper becomes a compact
+   right-side flex item (contents flow together via display:contents
+   so the child spans join the parent row's flex). */
+.scv2 .sc-season-month-card-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  padding-top: var(--sc2-space-2);
+}
+.scv2 .sc-season-month-card-footer .sc-progress {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .scv2 .sc-season-month-card-stats {
-  justify-content: flex-end;
+  display: contents;      /* children join the footer's row */
 }
 .scv2 .sc-season-month-card-stat-main {
   display: none;
@@ -661,17 +682,21 @@
   color: var(--sc2-ink-muted);
   font-size: 12px;
   font-weight: var(--sc2-wt-bold);
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 /* §6.4 per-meal right figures - money-forward per state. */
 .scv2 .sc-season-month-card-stat-rev {
   font-size: 12px;
-  font-weight: var(--sc2-wt-bold);           /* projection = 700 (spec says 700 for ~$) */
-  color: var(--sc2-ink-muted);               /* projection tone */
+  font-weight: var(--sc2-wt-bold);            /* projection = 700 (spec says 700 for ~$) */
+  color: var(--sc2-ink-muted);                /* projection tone */
   font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 .scv2 .sc-season-month-card-stat-rev--actual {
-  font-weight: var(--sc2-wt-display);        /* actual = 800 */
-  color: var(--sc2-ink-strong);              /* actual tone (money-forward, not green - spec §6.4) */
+  font-weight: var(--sc2-wt-display);         /* actual = 800 */
+  color: var(--sc2-ink-strong);               /* actual tone (money-forward, not green - spec §6.4) */
 }
 
 /* §6.10 - Off tiles: no border (non-actionable). The
@@ -773,8 +798,16 @@
 }
 
 /* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
-   inside the expanded MonthCard header right slot. 11/800 radius
-   full; state tokens (T-table Option B) drive fill/bd/text. */
+   inside the expanded MonthCard header right slot.
+
+   M5 flag-off self-check: MonthCard renders MonthUrgencyChip on
+   BOTH v1 and v2 paths (the component is shared). Without the
+   base display:none, the chip's `<span>` would render as
+   unstyled inline text on flag-off (raw "2 overdue" next to
+   month name). Base rule hides it; scv2 rule below shows it. */
+.sc-season-month-card-chip {
+  display: none;
+}
 .scv2 .sc-season-month-card-chip {
   margin-left: auto;
   display: inline-flex;
@@ -863,7 +896,22 @@
 /* §S11.1 - Heading map at scv2 scope. Micro-tier labels
    (11/800 tracked all-caps) are the ONLY tracked tier per spec.
    L1 chrome title (18/800) landed in Step 2; L2 month names +
-   rail hero label pair are shipped via existing sizes. */
+   rail hero label pair are shipped via existing sizes.
+
+   M3 fix - explicit type-slot map on the actual consumer selectors:
+     .sc-season-month-card-name   -> --sc2-size-subhead (15/20)
+                                     [was 14 via v1's --size-body]
+     .sc-rail-hero-value          -> --sc2-size-rail-total (30)
+                                     [already correct via rail.css:44]
+     .sc-ribbon-title             -> 18 (chrome-title)
+                                     [set inline in Step 2]
+     .sc-season-month-card-*      card headings -> 20 via existing
+                                     scv2 rules (h2 slot). */
+.scv2 .sc-season-month-card-name {
+  font-size: var(--sc2-size-subhead);
+  line-height: calc(20 / 15);
+  font-weight: var(--sc2-wt-bold);
+}
 .scv2 .sc-rail-label,
 .scv2 .sc-rail-section-label {
   font-size: 11px;
