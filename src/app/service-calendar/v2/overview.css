@@ -506,18 +506,44 @@ body:has(.scv2) {
   flex-direction: column;
 }
 
-/* Below the two-pane min: rail leaves the side and stacks below the
-   grid full width. W8 owns the real responsive frame; this is the
-   768-1279 interim pattern (768+ = stacked-below rail; ≤767 = bar+
-   sheet via MobileBooksBar - see v2/mobileBooksBar.css). */
-@media (max-width: 1279px) {
+/* OV-3 G7 (2026-07-19) - laptop bands.
+   1100-1279: two-pane HOLDS. Rail narrows to a 260px floor (from
+   the 336px desktop track); grid drops to 3 columns; sticky +
+   pinned are retained. Rail queue rows tighten their padding so
+   the "Overdue · N days old" status line still reads at narrow
+   width (line-wraps rather than horizontal overflow if a very
+   long aging label lands - Rail.js:158 composes it as ONE string,
+   not a separate node we can hide).
+   Owner ruling: two-row header CANCELLED - single row survives to
+   1024 with zero overflow. Only the rail bands remain here. */
+@media (max-width: 1279px) and (min-width: 1100px) {
+  .scv2 .sc-overview {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+  .scv2 .sc-season-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  /* Rail is present; sticky + pinned retained by the base rules.
+     Queue rows tighten to fit the narrower rail. */
+  .scv2 .sc-rail-queue-row {
+    padding: var(--sc2-space-2);
+    gap: var(--sc2-space-2);
+  }
+  .scv2 .sc-rail-queue-status {
+    font-size: var(--sc2-size-micro);
+  }
+}
+
+/* 768-1099: rail LEAVES; the shipped W8 MobileBooksBar takes over
+   (see mobileBooksBar.css breakpoint extended to 1099). The full-
+   width rail block below the grid is REMOVED in this band. Reuses
+   the shipped component - no new UI. */
+@media (max-width: 1099px) {
   .scv2 .sc-overview {
     grid-template-columns: minmax(0, 1fr);
   }
   .scv2 .sc-overview-rail {
-    position: static;
-    max-height: none;
-    overflow: visible;
+    display: none;
   }
 }
 
