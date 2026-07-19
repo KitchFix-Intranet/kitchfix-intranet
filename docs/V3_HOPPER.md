@@ -14,6 +14,15 @@ either audit's findings. Audit independence applies to findings; not to owner in
 
 ---
 
+## next-season
+
+- **MiLB homestand bar (CIN - KY / TBJ - NY): deferred.** sc-16 seeds their game rows
+  with `homestand_id = NULL` - no HS grouping exists. Options when revisited:
+  (A) DB seed HSn via extractor, or (B) client-derive from consecutive-game runs.
+  OV-3 ships MiLB on PhaseStrip. Owner ruling 2026-07-19.
+
+---
+
 ## V3 lenses (owner-stated, pre-audit)
 
 Shared with both auditors. These are brief-level directions from the owner that shape the audit
