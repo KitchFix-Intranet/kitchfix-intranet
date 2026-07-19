@@ -436,84 +436,140 @@
   }
 }
 
-/* ─── PhaseStrip restyle (slim under scv2, bolder current) ── */
-/* The PhaseStrip already renders a today-line + phase blocks +
-   labels. Under v2 we (a) tighten the strip vertically, (b) make
-   the today-line read like a proper tick (thicker, subtle glow
-   above the rail), and (c) bold the label of the current phase
-   block via aria-tracking that's already in the DOM. All strictly
-   presentational - the derivation logic (phaseDerivation) is
-   untouched. */
+/* V3 §S5 - PhaseStrip rebuild (CSS reshape of v1 DOM).
+   Total height ≤ 44px per §S5.1. Reads: band 8px (TRUE date
+   proportions from account's phase calendar - existing inline
+   linear-gradient) → month scale row (12 labels 10/700 ink-muted)
+   → phase label row (current = navy 800 + NOW dot); 2px today
+   tick breaks the band. Consumes --sc2-ph-* semantically (phase
+   family tints come from CANONICAL_PHASES data model in v1 -
+   documented in the drift log).
+
+   Legacy consumers hidden under scv2:
+   - "PHASE TIMELINE" micro-label header (§S5 - "self-evident once
+     months show")
+   - Mobile "current -> next" chip (overview is desktop scope)
+   - Subtitle "Phase calendar pending confirmation" (kept for v1)
+*/
 .scv2 .sc-season-strip {
+  position: relative;
   background: transparent;
   border: none;
-  padding: 0 0 var(--sc2-space-3) 0;
-  margin-bottom: var(--sc2-space-3);
+  padding: 0;
+  margin: 0 0 var(--sc2-space-4) 0;
 }
+/* §S5 - delete "PHASE TIMELINE" label */
 .scv2 .sc-season-strip-header {
-  padding-bottom: var(--sc2-space-2);
+  display: none;
 }
-.scv2 .sc-season-strip-title {
-  color: var(--sc2-ink-strong);
-  font-size: var(--sc2-size-caption);
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.scv2 .sc-season-strip-mobile-chip {
+  display: none;
 }
-.scv2 .sc-season-strip-subtitle {
-  color: var(--sc2-ink-muted);
-  font-size: var(--sc2-size-micro);
-}
+
+/* Rail: 8px band with the phase-family gradient painted inline.
+   Borders come off - the band edges bleed into the widget surface. */
 .scv2 .sc-season-strip-rail {
-  height: 12px;
-  border-radius: 8px;
-  border: var(--sc2-border-thin) solid var(--sc2-line);
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  overflow: visible;
+}
+
+/* Phase labels move BELOW the band. Blocks stay positioned; the
+   label rides absolute below its block. Current phase = navy 800
+   + a NOW dot. */
+.scv2 .sc-season-strip-blocks {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
   overflow: hidden;
 }
-/* Phase block label - v2 label baseline is medium weight (calm),
-   the CURRENT phase gets bold + brighter ink. PhaseStrip attaches
-   `data-current="true"` on the block containing today's date; the
-   marker is presentation-only, derivation logic is untouched. */
+.scv2 .sc-season-strip-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
 .scv2 .sc-season-strip-block-label {
+  position: absolute;
+  top: 26px;              /* below the band + month scale row */
+  left: 0;
+  right: 0;
+  padding: 0 4px;
   color: var(--sc2-ink-muted);
-  font-size: 10px;
-  font-weight: var(--sc2-wt-medium);
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.03em;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label {
-  color: var(--sc2-ink-strong);
-  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-cmd-bg);       /* navy identity */
+  font-weight: var(--sc2-wt-display);
 }
-/* Today tick - the v1 today-line becomes a more distinct vertical
-   tick under v2. Slightly wider, extends above/below the rail, uses
-   the navy identity. */
+.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sc2-cmd-bg);
+  vertical-align: middle;
+  margin-right: 4px;
+  transform: translateY(-1px);
+}
+
+/* Today tick - 2px navy breaking the band per §S5.1. */
 .scv2 .sc-season-strip-today-line {
-  width: 3px;
+  width: 2px;
   top: -3px;
   bottom: -3px;
   background: var(--sc2-cmd-bg);
-  border-radius: 2px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  border-radius: 1px;
   z-index: 3;
 }
+
+/* Month scale row - 12 labels, 10/700, ink-muted, evenly spaced
+   across the strip. Rides the existing .sc-season-strip-ticks
+   grid; retinted per T-table. */
 .scv2 .sc-season-strip-ticks {
-  font-size: var(--sc2-size-micro);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  margin-top: 6px;
+  padding: 0;
+}
+.scv2 .sc-season-strip-tick {
+  font-size: 10px;
+  font-weight: var(--sc2-wt-bold);
   color: var(--sc2-ink-muted);
-  padding-top: 4px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
-/* ─── W6: MLB chrome under .scv2 (token pass; taxonomy + copy untouched) ─ */
-
-/* SeasonStepper reskin - slim navy segments matching the .scv2
-   identity. Behavior + segment logic untouched; token-only overrides. */
+/* ─── V3 §5.4 - Homestand strip L2 grammar (SeasonStepper reskin)
+   L2 white card with --sc2-el-card, radius 12; blocks 16px tall,
+   radius 8. Block track colors per spec:
+     completed  #2b466b  (deeper navy)
+     current    #c8a24a  (amber, with HS{n} label)
+     future     #e6e9ed  (subtle line-2 tone)
+   Meta line (NEXT · HS{n} · opponents · dates · games · homestand
+   n of 13) rides the caption row above the bar. */
 .scv2 .sc-stepper {
-  background: transparent;
-  padding-bottom: var(--sc2-space-3);
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  padding: var(--sc2-space-3);
+  margin-bottom: var(--sc2-space-4);
 }
 .scv2 .sc-stepper-caption {
   color: var(--sc2-ink-muted);
-  font-size: var(--sc2-size-micro);
-  letter-spacing: 0.05em;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  letter-spacing: 0.03em;
+  margin-bottom: var(--sc2-space-2);
 }
 .scv2 .sc-stepper-caption-tag {
   color: var(--sc2-cmd-bg);
@@ -532,22 +588,23 @@
   color: var(--sc2-ink-muted);
 }
 .scv2 .sc-stepper-bar-segment {
-  border-radius: var(--sc2-radius-cell);
+  border-radius: 8px;
+  height: 16px;
 }
 .scv2 .sc-stepper-bar-segment--done .sc-stepper-bar-segment-button {
-  background: var(--sc2-cmd-bg);
+  background: #2b466b;                       /* completed */
 }
 .scv2 .sc-stepper-bar-segment--focus .sc-stepper-bar-segment-button {
-  background: var(--sc2-accent-amber);
-  color: var(--sc2-cmd-bg-deep);
+  background: #c8a24a;                       /* current, HS label */
+  color: #241d0c;
 }
 .scv2 .sc-stepper-bar-segment--next .sc-stepper-bar-segment-button {
-  background: var(--sc2-line-2);
+  background: #e6e9ed;                       /* future */
 }
 .scv2 .sc-stepper-bar-segment-label {
   color: inherit;
   font-weight: var(--sc2-wt-display);
-  font-size: var(--sc2-size-micro);
+  font-size: 10px;
   letter-spacing: 0.06em;
 }
 
