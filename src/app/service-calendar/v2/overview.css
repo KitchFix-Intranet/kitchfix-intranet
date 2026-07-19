@@ -1227,14 +1227,24 @@ body:has(.scv2) {
   gap: 4px;
 }
 
-/* OV-3 Wave 3b - needs-numeral (HEAVY NUMERAL, replaces the removed
-   dot glyph). Needs-entry date numeral bumps to the heaviest weight
-   available (--sc2-wt-display 800) and one step darker than the
-   normal --sc2-state-needs-fg. The two-signal law survives via
-   (color amber-fill) + (weight + darker step of ink). Applies at
-   both sm and lg. --sc2-state-needs-fg-strong is defined in the
-   tokens delta below. */
+/* OV-3 Wave 3b + G1 (2026-07-19) - needs-numeral HEAVY NUMERAL.
+   G1 diagnosis: the initial Wave 3b rule at
+   `.scv2 .sc-daysq--needs-entry .sc-daysq-date` (specificity 0,3,0)
+   tied with v1's `.sc-season-month-card-grid .sc-daysq--sm
+   .sc-daysq-date` (season.css:539 - `font-weight: var(--wt-bold)`,
+   specificity 0,3,0). Under Next's CSS-emission order (v2/overview.
+   css imported at ServiceCalendar.js:38 BEFORE season.css imported
+   via SeasonShell), season.css wins at equal specificity by later-
+   in-source. Color still landed (season doesn't set color); weight
+   lost. Fix: bump the needs-numeral selectors past 0,3,0 by
+   anchoring them inside the grid containers (0,4,0). Applies at
+   sm (both grids) + lg (drill inherits the base rule below). */
 .scv2 .sc-daysq--needs-entry .sc-daysq-date {
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-state-needs-fg-strong, #7a4b00);
+}
+.scv2 .sc-season-month-card-grid .sc-daysq--needs-entry .sc-daysq-date,
+.scv2 .sc-season-period-card-grid .sc-daysq--needs-entry .sc-daysq-date {
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-state-needs-fg-strong, #7a4b00);
 }
