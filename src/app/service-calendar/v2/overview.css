@@ -477,6 +477,19 @@ body:has(.scv2) {
 .scv2 .sc-season-period-card-grid {
   grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
 }
+/* F5 (2026-07-19) - DOW header shares the SAME grid template + gap
+   as the tile grid. Base rules (season.css:508 / 940) leave the
+   dow row on repeat(7, 1fr) with 2px gap, while the tile grids
+   under scv2 use the whole-px round() template with 4px gap. Two
+   different grids at the same nominal 7 columns produce column
+   centers that drift up to a pixel apart, so weekday labels sat
+   off-center from their tile columns. Applying the tile grid's
+   template + gap to the dow row aligns column centers. */
+.scv2 .sc-season-month-card-dow,
+.scv2 .sc-season-period-card-dow {
+  grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
+  gap: 4px;
+}
 
 /* OV-3 Wave 5a (§17) - inner-card region wrapping the calendar +
    period grids. Hairline border + radius 12 + the new half-step
