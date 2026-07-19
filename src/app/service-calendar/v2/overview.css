@@ -45,6 +45,30 @@
    `.sc-root.scv2` = L1 surface with radius 16, --sc2-el-widget,
    margin-top 24 - contains ribbon + chrome + body per §S1.1's
    "one continuous plane behind ribbon, grid, legend, rail". */
+/* OV-3 Item 1a + G3 (2026-07-19) - canvas paint LIFTED past body
+   to `html:has(.scv2)`. G3 diagnosis: the Wave-1 `body:has(.scv2)`
+   rule was served but body computed the ops-shared radial gradient
+   instead of canvas. Root cause: ops-shared.css:39
+   `body:has(.oh-app) { background: radial-gradient(...) }` and my
+   `body:has(.scv2)` tie at specificity 0,1,1 (element + :has-with-
+   class); at ties, later-in-source wins. Under Next 16 / Turbopack's
+   compiled bundle order, ops-shared.css emits AFTER v2/overview.css
+   in the /service-calendar route stylesheet (ops-shared is imported
+   from service-calendar/page.js which is a route file; overview.css
+   is imported deep in the client component chain), so ops-shared
+   paints its gradient over mine at zoom-out - the "warm-white strip"
+   between the nav and widget was that gradient bleeding through.
+   Fix: paint canvas at html:has(.scv2) so no body-level rule can
+   compete. html has no other background rule anywhere in the app;
+   the html-level canvas wins uncontested at every zoom. Belt-and-
+   braces: keep body:has(.scv2) too, so if the html rule ever
+   becomes contested the body rule is still the correct value. */
+html:has(.scv2) {
+  background: var(--sc2-canvas);
+}
+body:has(.scv2) {
+  background: var(--sc2-canvas);
+}
 .oh-app:has(.scv2) {
   background: var(--sc2-canvas);
 }
@@ -103,36 +127,117 @@
   border-bottom: 0;
 }
 
-/* Left cluster: title + welcome */
-.scv2 .sc-ribbon-brand {
+/* OV-3 Wave 2 - single-row header: left cluster carries identity,
+   account, kind chip, Calendar|Period toggle, and TODAY/PERIOD/WEEK
+   meta. Density toggle deleted (Comfortable removed). Right cluster
+   holds as-of pill, admin lock, export (far edge). */
+.scv2 .sc-ribbon-left {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sc2-space-3);
   min-width: 0;
+  flex: 1 1 auto;
 }
 .scv2 .sc-ribbon-title {
   margin: 0;
   font-family: var(--sc2-font-ui);
-  /* V3 §S3.1 + §T type scale - chrome-title 18/800. */
-  font-size: 18px;
+  /* OV-3 §S3 - chrome title 19/800 (per spec v4 delta: "~19-20px 800"). */
+  font-size: 19px;
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-cmd-text);
   letter-spacing: -0.01em;
-  line-height: calc(24 / 18);
+  line-height: calc(24 / 19);
+  white-space: nowrap;
 }
-.scv2 .sc-ribbon-welcome {
-  margin: 0;
-  font-size: var(--sc2-size-caption);
-  color: var(--sc2-cmd-text-muted);
-  font-weight: var(--sc2-wt-medium);
+.scv2 .sc-ribbon-account {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
-/* Right cluster: as-of pill, density toggle, admin lock */
+/* Thin vertical separator "|" between segments - white, low-opacity. */
+.scv2 .sc-ribbon-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.20);
+  flex: 0 0 auto;
+}
+
+/* Calendar|Period toggle - reuses the same pill treatment as the
+   chrome-bar toggle it replaces. Segmented control on the navy band. */
+.scv2 .sc-ribbon-toggle {
+  display: inline-flex;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
+  border-radius: var(--sc2-radius-control);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-toggle-btn {
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--sc2-cmd-text-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-ribbon-toggle-btn:hover {
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-toggle-btn--active {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-toggle-btn:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* TODAY {date} PERIOD {n} WEEK {n} meta cluster. */
+.scv2 .sc-ribbon-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  color: var(--sc2-cmd-text-muted);
+  font-size: var(--sc2-size-micro);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-meta-seg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.scv2 .sc-ribbon-meta-label {
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+}
+.scv2 .sc-ribbon-meta-value {
+  color: var(--sc2-cmd-text);
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-ribbon-meta-sep {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Right cluster: as-of pill, admin lock, export - far edge order. */
 .scv2 .sc-ribbon-right {
   display: inline-flex;
   align-items: center;
   gap: var(--sc2-space-2);
   flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-export {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* AsOf pill on the ribbon - reuses .sc-chrome-bar-asof base class
@@ -184,36 +289,35 @@
   border-color: transparent;
 }
 
-/* Density toggle - two-segment control */
-.scv2 .sc-ribbon-density {
-  display: inline-flex;
-  padding: 2px;
-  background: rgba(255, 255, 255, 0.10);
-  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.20);
-  border-radius: var(--sc2-radius-control);
+/* OV-3 Wave 2 - .sc-ribbon-density* rules REMOVED. Comfortable
+   density deleted; Standard is the only scale. See tokens.css delta. */
+
+/* OV-3 Wave 2 - responsive tripwires. Item 22 acceptance: the as-of
+   failed-state signal (data-fetch-state="failed" -> red dot) survives
+   every collapse; the dot itself is not shrunk to invisibility. */
+
+/* <=1360: TODAY / PERIOD / WEEK inner separators drop. Labels + values
+   stay legible; the group tightens visually. */
+@media (max-width: 1360px) {
+  .scv2 .sc-ribbon-meta-sep {
+    display: none;
+  }
+  .scv2 .sc-ribbon-meta {
+    gap: var(--sc2-space-3);
+  }
 }
-.scv2 .sc-ribbon-density-btn {
-  padding: 4px 10px;
-  border: none;
-  background: transparent;
-  color: var(--sc2-cmd-text-muted);
-  font-size: var(--sc2-size-micro);
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.04em;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
-}
-.scv2 .sc-ribbon-density-btn:hover {
-  color: var(--sc2-cmd-text);
-}
-.scv2 .sc-ribbon-density-btn--active {
-  background: var(--sc2-surface-app);
-  color: var(--sc2-cmd-bg-deep);
-}
-.scv2 .sc-ribbon-density-btn:focus-visible {
-  outline: 2px solid var(--sc2-rail-accent-warn);
-  outline-offset: 2px;
+
+/* <=1280: as-of pill compacts. Refresh button hides; the status dot
+   remains (fresh green / stale amber / failed red) so item 22
+   acceptance holds. The pill's text collapses tighter but the dot
+   is the load-bearing status signal in the collapsed shape. */
+@media (max-width: 1280px) {
+  .scv2 .sc-chrome-bar-asof.sc-ribbon-asof {
+    padding: 3px 8px;
+  }
+  .scv2 .sc-chrome-bar-asof.sc-ribbon-asof .sc-chrome-bar-asof-refresh {
+    display: none;
+  }
 }
 
 /* V3 §S3.1 - ChromeBar adjoins the Ribbon in ONE navy band.
@@ -343,6 +447,64 @@
   min-width: 0;
 }
 
+/* OV-3 Item 1b - calendar-region beige cast repaired at the leak.
+   `.sc-season` (v1 rule at season.css:12-17) sets
+   `background: var(--surface-sunken)` which resolves via v1's
+   neutral scale to `--n-50: #FAF9F5` - a warm off-white with a
+   slight cream cast. Under `.scv2`, this beige leaked through the
+   season shell and cast the calendar region against the widget's
+   cool L1 surface (`--sc2-surface: #f7f8fa`).
+   Fix: override at the composition point so the widget's L1 shows
+   through. Transparent rather than re-setting a surface token so
+   the widget owns the ground; nothing hardcoded. Applies at all
+   viewports; `.sc-season` v1 base rule untouched. */
+.scv2 .sc-season {
+  background: transparent;
+}
+
+/* OV-3 Item 1e (§20, new law) - whole-pixel grid tiles.
+   Prior `grid-template-columns: repeat(7, 1fr)` distributes track
+   widths as fractional pixels when the container inline-size is
+   not divisible by 7. Sub-pixel widths land on non-integer offsets
+   and produce anti-aliasing seams at every column boundary.
+   Fix: use `round(down, (100% - 6 * 2px) / 7, 1px)` which floors
+   each track to a whole pixel (accounting for the 2px gaps between
+   columns from `season.css:512`). Remainder pixels (0-6) land in
+   the parent's inline-end padding, which is invisible on the calm
+   card background. Applied to the two overview-scoped grids
+   (MonthCard + PeriodCard week-grids); v1 SC's own grids untouched. */
+.scv2 .sc-season-month-card-grid,
+.scv2 .sc-season-period-card-grid {
+  grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
+}
+/* F5 (2026-07-19) - DOW header shares the SAME grid template + gap
+   as the tile grid. Base rules (season.css:508 / 940) leave the
+   dow row on repeat(7, 1fr) with 2px gap, while the tile grids
+   under scv2 use the whole-px round() template with 4px gap. Two
+   different grids at the same nominal 7 columns produce column
+   centers that drift up to a pixel apart, so weekday labels sat
+   off-center from their tile columns. Applying the tile grid's
+   template + gap to the dow row aligns column centers. */
+.scv2 .sc-season-month-card-dow,
+.scv2 .sc-season-period-card-dow {
+  grid-template-columns: repeat(7, round(down, calc((100% - 12px) / 7), 1px));
+  gap: 4px;
+}
+
+/* OV-3 Wave 5a (§17) - inner-card region wrapping the calendar +
+   period grids. Hairline border + radius 12 + the new half-step
+   --sc2-el-inset shadow so the region reads as its own defined
+   surface without competing with the L2 month cards inside it.
+   Padding gives breathing room between the border and the grid. */
+.scv2 .sc-season-grid,
+.scv2 .sc-season-period-grid {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-inset);
+  padding: var(--sc2-space-4);
+}
+
 /* Rail sticks below the ribbon band as the user scrolls the page.
    The offset covers the intranet TopNav (~50px) + the ribbon band
    (~90-100px) - the site pattern is page-level scroll; the rail is
@@ -357,18 +519,44 @@
   flex-direction: column;
 }
 
-/* Below the two-pane min: rail leaves the side and stacks below the
-   grid full width. W8 owns the real responsive frame; this is the
-   768-1279 interim pattern (768+ = stacked-below rail; ≤767 = bar+
-   sheet via MobileBooksBar - see v2/mobileBooksBar.css). */
-@media (max-width: 1279px) {
+/* OV-3 G7 (2026-07-19) - laptop bands.
+   1100-1279: two-pane HOLDS. Rail narrows to a 260px floor (from
+   the 336px desktop track); grid drops to 3 columns; sticky +
+   pinned are retained. Rail queue rows tighten their padding so
+   the "Overdue · N days old" status line still reads at narrow
+   width (line-wraps rather than horizontal overflow if a very
+   long aging label lands - Rail.js:158 composes it as ONE string,
+   not a separate node we can hide).
+   Owner ruling: two-row header CANCELLED - single row survives to
+   1024 with zero overflow. Only the rail bands remain here. */
+@media (max-width: 1279px) and (min-width: 1100px) {
+  .scv2 .sc-overview {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+  .scv2 .sc-season-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  /* Rail is present; sticky + pinned retained by the base rules.
+     Queue rows tighten to fit the narrower rail. */
+  .scv2 .sc-rail-queue-row {
+    padding: var(--sc2-space-2);
+    gap: var(--sc2-space-2);
+  }
+  .scv2 .sc-rail-queue-status {
+    font-size: var(--sc2-size-micro);
+  }
+}
+
+/* 768-1099: rail LEAVES; the shipped W8 MobileBooksBar takes over
+   (see mobileBooksBar.css breakpoint extended to 1099). The full-
+   width rail block below the grid is REMOVED in this band. Reuses
+   the shipped component - no new UI. */
+@media (max-width: 1099px) {
   .scv2 .sc-overview {
     grid-template-columns: minmax(0, 1fr);
   }
   .scv2 .sc-overview-rail {
-    position: static;
-    max-height: none;
-    overflow: visible;
+    display: none;
   }
 }
 
@@ -379,24 +567,24 @@
    ══════════════════════════════════════════════════════════════ */
 
 @media (max-width: 767px) {
-  /* Ribbon: brand row on top, controls row (as-of + density + admin)
-     wrapping below. Reduces the h-space demand so 375 fits without
-     h-scroll while keeping every affordance visible. */
+  /* Ribbon: identity row on top, controls wrap below. OV-3 rebuild:
+     left-cluster becomes the wrap-first band; right-cluster wraps to
+     line 2. Density toggle gone; welcome deleted; brand class
+     replaced by sc-ribbon-left. */
   .scv2 .sc-ribbon {
     flex-wrap: wrap;
     gap: var(--sc2-space-2);
     padding: var(--sc2-space-3) var(--sc2-space-3);
     border-radius: 0;
   }
-  .scv2 .sc-ribbon-brand {
+  .scv2 .sc-ribbon-left {
     flex: 1 1 100%;
     min-width: 0;
+    flex-wrap: wrap;
+    gap: var(--sc2-space-2);
   }
   .scv2 .sc-ribbon-title {
     font-size: var(--sc2-size-h3);
-  }
-  .scv2 .sc-ribbon-welcome {
-    display: none;              /* keeps the top row calm; hidden here, not deleted */
   }
   .scv2 .sc-ribbon-right {
     flex: 1 1 100%;
@@ -518,36 +706,9 @@
 .scv2 .sc-season-strip-block:last-child {
   border-radius: 0 4px 4px 0;
 }
-.scv2 .sc-season-strip-block-label {
-  position: absolute;
-  top: 26px;              /* below the band + month scale row */
-  left: 0;
-  right: 0;
-  padding: 0 4px;
-  color: var(--sc2-ink-muted);
-  font-size: 11px;
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.03em;
-  text-transform: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label {
-  color: var(--sc2-cmd-bg);       /* navy identity */
-  font-weight: var(--sc2-wt-display);
-}
-.scv2 .sc-season-strip-block[data-current="true"] .sc-season-strip-block-label::before {
-  content: "";
-  display: inline-block;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--sc2-cmd-bg);
-  vertical-align: middle;
-  margin-right: 4px;
-  transform: translateY(-1px);
-}
+/* OV-3 Wave 3a - the in-band block labels are gone (JSX no longer
+   renders them). Phase titles moved to the new
+   .sc-season-strip-phase-labels row BELOW the rail. */
 
 /* Today tick - 2px navy breaking the band per §S5.1. */
 .scv2 .sc-season-strip-today-line {
@@ -559,13 +720,21 @@
   z-index: 3;
 }
 
-/* Month scale row - 12 labels, 10/700, ink-muted, evenly spaced
-   across the strip. Rides the existing .sc-season-strip-ticks
-   grid; retinted per T-table. */
+/* OV-3 Wave 3a - MONTHS ROW ABOVE the rail (spec v4 flip: months
+   above, phase titles below). */
+.scv2 .sc-season-strip-ticks--above {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  margin: 0 0 6px 0;
+  padding: 0;
+}
+/* Legacy `.sc-season-strip-ticks` (no --above modifier) is unused
+   under scv2 after Wave 3a - JSX only emits the --above variant now.
+   Kept the base rule below for any residual v1 render paths. */
 .scv2 .sc-season-strip-ticks {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  margin-top: 6px;
+  margin: 0 0 6px 0;
   padding: 0;
 }
 .scv2 .sc-season-strip-tick {
@@ -577,6 +746,31 @@
   text-transform: uppercase;
 }
 
+/* OV-3 Wave 3a - PHASE TITLES BELOW the rail. Absolutely positioned
+   spans mirror the block positions (left% + width%). Current phase
+   = navy + 800; NO dot (owner ruling). Non-current = ink-muted. */
+.scv2 .sc-season-strip-phase-labels {
+  position: relative;
+  height: 16px;
+  margin-top: 6px;
+}
+.scv2 .sc-season-strip-phase-label {
+  position: absolute;
+  top: 0;
+  padding: 0 4px;
+  color: var(--sc2-ink-muted);
+  font-size: 11px;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scv2 .sc-season-strip-phase-label[data-current="true"] {
+  color: var(--sc2-cmd-bg);
+  font-weight: var(--sc2-wt-display);
+}
+
 /* ─── V3 §5.4 - Homestand strip L2 grammar (SeasonStepper reskin)
    L2 white card with --sc2-el-card, radius 12; blocks 16px tall,
    radius 8. Block track colors per spec:
@@ -585,35 +779,84 @@
      future     #e6e9ed  (subtle line-2 tone)
    Meta line (NEXT · HS{n} · opponents · dates · games · homestand
    n of 13) rides the caption row above the bar. */
+/* OV-3 Wave 5b + G5 (2026-07-19) - homestand strip hierarchy +
+   breathing. G5 fix: Wave 5b set gap on .sc-stepper (the outer
+   section) but the caption + bar are siblings INSIDE
+   .sc-stepper-desktop (display:block at desktop), so the flex gap
+   never applied between them - caption sat flush with the bar.
+   Also the bar sat on the card's bottom border because the
+   sp-4 padding on the outer container was competing with the
+   bar's own 16px height and no bottom breathing.
+   Fix (three-part):
+   1. Move the flex layout down onto .sc-stepper-desktop so the gap
+      applies between Caption and SeasonBar (the two real siblings).
+   2. Bump the vertical padding on .sc-stepper to sp-5 top + sp-5
+      bottom so the caption sits >=10px from the top border and the
+      bar sits >=10px from the bottom border (measured).
+   3. Increase the caption -> bar gap to sp-4 so it visually
+      matches the bar -> bottom-border gap. */
 .scv2 .sc-stepper {
   background: var(--sc2-surface-card);
   border-radius: 12px;
   box-shadow: var(--sc2-el-card);
-  padding: var(--sc2-space-3);
+  padding: var(--sc2-space-5) var(--sc2-space-4);
   margin-bottom: var(--sc2-space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.scv2 .sc-stepper-desktop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-4);
 }
 .scv2 .sc-stepper-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
   color: var(--sc2-ink-muted);
   font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-medium);
   letter-spacing: 0.03em;
-  margin-bottom: var(--sc2-space-2);
+  margin-bottom: 0;
 }
+/* NEXT / NOW / LAST verb - small navy chip */
 .scv2 .sc-stepper-caption-tag {
-  color: var(--sc2-cmd-bg);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--sc2-cmd-bg);
+  color: var(--sc2-cmd-text);
   font-weight: var(--sc2-wt-display);
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  border-radius: 6px;
+  flex: 0 0 auto;
 }
-.scv2 .sc-stepper-caption-id,
+/* HS{n} - bold 13px */
+.scv2 .sc-stepper-caption-id {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-display);
+  font-size: 13px;
+}
 .scv2 .sc-stepper-caption-opponents {
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
 .scv2 .sc-stepper-caption-range,
-.scv2 .sc-stepper-caption-count,
+.scv2 .sc-stepper-caption-count {
+  color: var(--sc2-ink-muted);
+}
+/* "homestand n of 13" - right-aligned muted */
 .scv2 .sc-stepper-caption-ordinal {
   color: var(--sc2-ink-muted);
+  margin-left: auto;
+}
+/* Hide the last inline `·` that immediately precedes the pushed-
+   right ordinal so the auto-margin acts on a clean edge. */
+.scv2 .sc-stepper-caption-sep:last-of-type {
+  display: none;
 }
 .scv2 .sc-stepper-bar-segment {
   border-radius: 8px;
@@ -653,9 +896,130 @@
 .scv2 .sc-legend-popup-swatch {
   border-radius: var(--sc2-radius-cell);
 }
+/* OV-3 F8 (2026-07-19) - FIGURES section removed under scv2.
+   The Projected / Estimate / Entered explainer block explained
+   the OV-2 tile notation ("~$3K" / "est. $3K" / "$3K") which the
+   OV-3 rebuild retired in favor of state fills + numerals. The
+   block now reads as noise on the info popup. Hide the entire
+   section via :has() so nothing empty renders. The FigureRow
+   component is exclusive to this section (LegendInfoPopup.js:206-
+   215 - the only user of --figure modifier), so :has() targets
+   only this section cleanly. v1 unchanged (LegendInfoPopup is
+   shared component; scoping to .scv2 leaves flag-off intact). */
+.scv2 .sc-legend-popup-section:has(.sc-legend-popup-row--figure) {
+  display: none;
+}
 .scv2 .sc-state-legend-item {
   color: var(--sc2-ink);
   font-size: var(--sc2-size-micro);
+}
+
+/* OV-3 G11 (2026-07-19) - legend + swatch refresh.
+   (a) Container matches the inner-card region above it: same
+       background, hairline border, radius, inset shadow. Margin
+       zeroed so the legend's inline edges are flush with the
+       region's inline edges (both are children of sc-overview-main,
+       so horizontal extent is inherited; only the vertical inset
+       changes).
+   (b) State swatch text glyphs (unicode chars ✎/!/○ from
+       legendItems.js) hidden under scv2 - overview tiles no longer
+       render those glyphs after Wave 3c (A-scope glyph purge). SVG-
+       carrying swatches (milb-day/night, away, exhibition) keep
+       their glyphs unchanged.
+       Away swatch under scv2 flips to ghost-purple state tokens
+       (--sc2-state-away-bg / --sc2-state-away-fg) so the legend
+       sample reads what the tile now renders (Wave 3d).
+       Today swatch: outline 2px navy + outline-offset 2px so the
+       legend sample matches the tile's outline treatment (G-Item
+       1c).
+   (c) NOT SCOPED without ruling: adding wedge samples (game-day
+       navy top-right + spring copper bottom-left) requires new
+       entries in legendItems.js. The current HOMESTAND / FEE / MILB
+       / PER_MEAL arrays have no wedge slot. Flagged for follow-up.
+*/
+.scv2 .sc-state-legend {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-inset);
+  /* F4 (2026-07-19) - inline edges land on the region's inline
+     edges. The .sc-season shell (v1 base at season.css:12-17) adds
+     horizontal padding of var(--space-4) = 16px around
+     .sc-season-grid (the inner-card region). The legend is a
+     SIBLING of the shell (both children of .sc-overview-main), so
+     it has no shell padding on its side; without a margin the
+     legend extends 16px past the region on each side. Match the
+     shell's horizontal padding with a matching margin-inline so
+     the legend's inline edges align with the region's. */
+  margin: 0 var(--space-4);
+  padding: var(--sc2-space-4);
+}
+.scv2 .sc-body > .sc-state-legend {
+  border-radius: 12px;
+  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+}
+/* Hide text-glyph swatches (✎ / ! / ○). SVG-based swatches untouched
+   because their content is <svg>, not text. */
+.scv2 .sc-state-legend-swatch--entered,
+.scv2 .sc-state-legend-swatch--needs-entry,
+.scv2 .sc-state-legend-swatch--overdue,
+.scv2 .sc-state-legend-swatch--upcoming,
+.scv2 .sc-state-legend-swatch--off {
+  font-size: 0;
+}
+/* Today swatch outline treatment - mirrors DaySquare.css:1137-1141
+   (scv2 today outline + offset). Neutral tile fill so the ring is
+   the load-bearing signal. */
+.scv2 .sc-state-legend-swatch--today {
+  background: var(--sc2-surface-card);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  border: none;
+  box-shadow: none;
+  font-size: 0;
+}
+/* Away swatch under scv2 - ghost-purple state tokens, matches
+   Wave 3d tile state (`.scv2 .sc-daysq--away` at DaySquare.css
+   scoped block). */
+.scv2 .sc-state-legend-swatch--away {
+  background: var(--sc2-state-away-bg);
+  border-color: var(--sc2-state-away-fg);
+  color: var(--sc2-state-away-fg);
+}
+/* OV-3 F9 (2026-07-19) - game-day + spring marker swatches
+   render the SAME notch construction as tiles (DaySquare.css
+   .scv2 .sc-daysq--sm.sc-daysq--game-day::before /
+   .sc-daysq--spring::after). Base tile fill in the swatch stays
+   neutral so the notch is the load-bearing signal. */
+.scv2 .sc-state-legend-swatch--game-day-mark,
+.scv2 .sc-state-legend-swatch--spring-mark {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  position: relative;
+}
+.scv2 .sc-state-legend-swatch--game-day-mark::before {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  right: 1.5px;
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid var(--sc2-mark-gameday);
+  border-right: 2px solid var(--sc2-mark-gameday);
+  border-top-right-radius: 6px;
+  pointer-events: none;
+}
+.scv2 .sc-state-legend-swatch--spring-mark::after {
+  content: "";
+  position: absolute;
+  bottom: 1.5px;
+  left: 1.5px;
+  width: 9px;
+  height: 9px;
+  border-bottom: 2px solid var(--sc2-mark-spring);
+  border-left: 2px solid var(--sc2-mark-spring);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
 }
 
 /* Card polish under .scv2 (hover lift + banded header) - was §above,
@@ -685,27 +1049,60 @@
   }
 }
 
-/* PeriodCard banded header - navy left accent per render B. The
-   header already carries the phase tint (inline style from
-   PhaseStrip); we add a navy left-accent stripe under .scv2 so the
-   card reads as an anchored ledger entry rather than a floating
-   tile. Preserves the phase color as a slim strip (annotation, not
-   decoration). */
+/* OV-3 Wave 6 (item 13) - PeriodCard adopts month-card language:
+   white card + el-card, calm header (no phase-tint fill), 3px phase
+   tick inline before "P{n}", muted date-range caption. Heavy full-
+   color header suppressed by neutralizing the inline background.
+   The banded-header ::before accent is retired (Wave 6 rebuild). */
+.scv2 .sc-season-period-card {
+  background: var(--sc2-surface-card);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-card);
+  border-color: transparent;
+}
 .scv2 .sc-season-period-card-header {
   position: relative;
-  padding-left: calc(var(--space-3) + 3px);
+  background: transparent !important;   /* defeats inline phase-tint */
+  color: var(--sc2-ink-strong) !important;
+  padding: var(--sc2-space-3);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
 }
 .scv2 .sc-season-period-card-header::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--sc2-cmd-bg);
+  content: none;                        /* retire the banded accent */
 }
-.scv2 .sc-season-period-card--current .sc-season-period-card-header::before {
-  background: var(--sc2-accent-green-bright);
+.scv2 .sc-season-period-card-title {
+  align-items: center;
+  gap: var(--sc2-space-2);
+}
+/* 3px phase tick left of P{n} - hidden on v1 base, shown here. */
+.sc-season-period-card-phase-tick {
+  display: none;
+}
+.scv2 .sc-season-period-card-phase-tick {
+  display: inline-block;
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+/* Calm "P{n}" - month-name scale (15px, wt-display). */
+.scv2 .sc-season-period-card-num {
+  font-size: var(--sc2-size-subhead);   /* month-name / rail label-pair tier */
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-ink-strong);
+  letter-spacing: -0.01em;
+}
+/* Muted date-range caption. */
+.scv2 .sc-season-period-card-anchor {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  color: var(--sc2-ink-muted);
+  opacity: 1;
+}
+.scv2 .sc-season-period-card-subtitle {
+  color: var(--sc2-ink-muted);
+  opacity: 1;
 }
 
 /* FullSeasonCard retirement on v2 - handled at the render level in
@@ -793,76 +1190,67 @@
   border-style: none;
 }
 
-/* §7.3 - Two-signal law extended: needs tiles carry a 4px dot
-   glyph, top-right, needs-bd color. upcoming-mint (Y .850) and
-   needs-amber (Y .848) are grayscale-identical - the glyph is the
-   third carrier (color + border + glyph) so color is never the
-   sole signal.
+/* OV-3 Wave 3b - Two-signal law: needs-entry second signal is now
+   the HEAVY NUMERAL (weight + darker one step of needs-fg). The
+   ::after dot glyph is deleted. Color + weight/darkness carries
+   the pair; grayscale delta test survives via the numeral weight
+   step (heaviest available) plus the darker foreground.
+   The date numeral color + weight for needs tiles is set below
+   (search: OV-3 Wave 3b needs-numeral). */
 
-   A2 fix (live-probe): the year-zoom collision lives on `--sm`
-   tiles, not `--lg`. The glyph fires on BOTH sizes now. Position
-   adjusted so sm doesn't compete with the sc-daysq-badge slot
-   (top-right ~10-14px badge area) - the dot rides top-right at
-   3px offset on sm, 4px on lg. */
-.scv2 .sc-daysq--needs-entry::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--sc2-state-needs-bd);
-  pointer-events: none;
-  z-index: 1;
-}
-.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
-  top: 4px;
-  right: 4px;
-}
+/* OV-3 G10 (2026-07-19) - §7.4 "corner markers retired" rule
+   DELETED. That rule was written in OV-1 when phase context lived
+   only in the ribbon; the OV-3 spec explicitly RESTORES + enlarges
+   the wedges (Item 1d). My Wave-1 uplift at DaySquare.css:1122-1131
+   overrode width/height/background but not display - the OV-1
+   `display: none` at (specificity 0,2,1) beat nothing on the
+   display property, so wedges never painted despite the
+   uplift landing.
+   Diagnosis (owner's eyes overturned my Wave-1 computed-size gate):
+   the box was 22x22 with the clip-path still applied - the render
+   was suppressed at the display level, not the geometry level. The
+   wedges are clip-path polygons on a sized box (DaySquare.css:264-
+   305), not border-drawn triangles - so the Wave-1 width/height
+   uplift is structurally correct once the hide rule leaves. */
 
-/* §7.4 - Corner markers retired on overview. Phase context lives
-   in the ribbon (§S5) and the month-tick (§6.6). The v1
-   corner-marks (--sc2-mark-gameday indigo, --sc2-accent-copper
-   spring-training) are audit-scheduled for removal in the drill
-   V3 pass; overview hides them here. */
-.scv2 .sc-daysq--game-day::before,
-.scv2 .sc-daysq--spring::after {
-  display: none;
-}
+/* OV-3 Wave 3c/3d + F2(b) (2026-07-19) - year-zoom home/away DOT
+   PAIR REMOVED. Away days on MLB + MiLB render the new ghost-purple
+   TILE STATE (--sc2-state-away-bg/fg) instead of an extra glyph.
+   Home days render the base entered/needs/upcoming palette per §7.2 -
+   no dot, no additional carrier. The hasScheduleGame emit lands from
+   #474 and is retained for drill use.
 
-/* §7.5 - Home/away dual-zoom. Year-zoom (sm tiles) carries a 5px
-   dot below the numeral encoding home vs away by fill-vs-outline.
-   Same carrier at drill zoom (chips). Grayscale-safe by construction.
+   F2(b) DIAGNOSIS: the Wave-3c `content: none; display: none` hide
+   rule on `.scv2 .sc-daysq--sm.sc-daysq--home::before` was the
+   killer. DaySquare.js:220 emits `sc-daysq--home` from the SAME
+   signal that emits `sc-daysq--game-day` (both from
+   isGameDayOverlay). Every game-day tile (CIN-KY, TBJ-NY, MLB fee)
+   carries BOTH classes. The Wave-3c rule and my Wave-1d rule
+   (`.scv2 .sc-daysq--sm.sc-daysq--game-day::before`) TIE at (0,3,1);
+   Wave 3c set `content: none` and Wave 1d didn't - so the ::before
+   never generated, background token was moot. CIN-KY spring tiles
+   only carry --spring (no --home), so the Wave-3c rule never
+   matched them and their ::after painted.
+   Fix: DELETE the hide rule. The dot-painting rules it was written
+   to neutralize are gone (Wave 3c/3d dot-pair removal covered
+   them); leaving it kept ::before slot suppressed on every
+   game-day tile.
+   For F2(a) neutralization the display:none moves down under the
+   game-day::before rule so it applies where it actually needs to
+   (see F2(a) block below). */
 
-   B5 - DaySquare emits `sc-daysq--home` from `isGameDayOverlay`
-   (year-summary path: day.hasScheduleGame from sc-17/sc-17b
-   overlay). Away emits via existing status-map class `sc-daysq--away`
-   (STATUS_META :91 maps status "away" to modifier "away"). Homestand-
-   schedule accounts (CIN-KY, TBJ-NY, MLB fees) currently emit
-   `--away` on AWAY days but do NOT emit `--home` on home days -
-   the follow-up server-side hasScheduleGame emit for those accounts
-   lands as the drift-log item below. */
-.scv2 .sc-daysq--sm.sc-daysq--home::before,
-.scv2 .sc-daysq--sm.sc-daysq--away::before {
-  content: "";
-  position: absolute;
-  bottom: 3px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  display: block;
-  z-index: 1;
+/* OV-3 Wave 3d - away tile state. Ghost-purple fill + fg for
+   MLB + MiLB away days. Delta from off-grey preserved via the
+   distinct hue at similar lightness (grayscale delta verified in
+   sweep). Applies at both sm and lg zoom; SeasonRail tiles inherit
+   the palette by class. */
+.scv2 .sc-daysq--away {
+  background: var(--sc2-state-away-bg);
+  border-color: transparent;
+  color: var(--sc2-state-away-fg);
 }
-.scv2 .sc-daysq--sm.sc-daysq--home::before {
-  background: var(--sc2-cmd-bg);   /* --sc2-cmd-bg = navy */
-  border: 0;
-}
-.scv2 .sc-daysq--sm.sc-daysq--away::before {
-  background: transparent;
-  border: 1px solid var(--sc2-cmd-bg);
+.scv2 .sc-daysq--away .sc-daysq-date {
+  color: var(--sc2-state-away-fg);
 }
 
 /* §7.6 - Interaction deltas: hover +/- L0.04, active +/- L0.07
@@ -877,16 +1265,20 @@
    handles it or new "urgency" chip; render doesn't currently
    emit it - deferred to a JSX pass if audit requires). */
 
-/* §6.7 - Current-period wash inset on in-period day tiles. */
-.scv2 .sc-daysq--in-period {
-  box-shadow: inset 0 0 0 100vmax var(--sc2-period-wash);
-}
+/* OV-3 F7 (2026-07-19) - §6.7 in-period wash REMOVED.
+   The inset wash added a third green rendering to upcoming tiles
+   inside the current period range (upcoming pale mint + wash = a
+   variant that read as noise post-OV-3). Removing the CSS rule
+   is sufficient: DaySquare.js:212 still emits the
+   `sc-daysq--in-period` class from isInPeriod, but no style keys
+   on it under scv2 anymore. If the class ever needs to drive a
+   future signal, the emit is preserved; today it's inert.
+   Owner default ruling: veto by comment if the wash should
+   return. */
 
-/* V3 §6.6 - Month header phase tick + period tag.
-   M5 flag-off inertness: base rule hides both; scv2 rule below
-   shows them. Nothing else keys on these classes (grep-verified). */
-.sc-season-month-card-phase-tick,
-.sc-season-month-card-period-tag {
+/* V3 §6.6 - Month header phase tick (P{n} tag REMOVED, OV-3 Wave 3e).
+   M5 flag-off inertness: base rule hides; scv2 rule below shows. */
+.sc-season-month-card-phase-tick {
   display: none;
 }
 .scv2 .sc-season-month-card-phase-tick {
@@ -897,19 +1289,6 @@
   margin-right: var(--sc2-space-2);
   flex: 0 0 auto;
   vertical-align: middle;
-}
-.scv2 .sc-season-month-card-period-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  margin-left: var(--sc2-space-2);
-  background: rgba(26, 48, 80, 0.08);
-  color: var(--sc2-cmd-bg);
-  font-size: 11px;
-  font-weight: var(--sc2-wt-display);
-  letter-spacing: 0.03em;
-  border-radius: 8px;
-  font-variant-numeric: tabular-nums;
 }
 
 /* §6.5 - Month urgency chip (worst-wins, per-meal only). Renders
@@ -950,21 +1329,46 @@
    overview month grid. Whole-px math shakes out at the browser
    layer; --sc2-shell-max stays at 1520 unless Chat-Claude's
    S10 sweep proves a ±4px adjustment (documented rider). */
-.scv2 .sc-season-month-card-grid .sc-daysq--sm {
+.scv2 .sc-season-month-card-grid .sc-daysq--sm,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm {
   aspect-ratio: 1 / 1;
   min-width: 0;
 }
-/* §6.2 - Centered numerals on sm tiles (year-zoom). 12/600
-   tabular; tone per state (rides the fg tokens set in T-table). */
-.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date {
+/* OV-3 G12 (2026-07-19) - period tiles adopt calendar sm-tile
+   spec wholesale (§6.2). Wave 6 restyled the PeriodCard shell but
+   left the tiles inside falling through to v1 season.css:762-770
+   (--size-micro 11px + --wt-bold 700) which read larger + bolder
+   than the month-card tiles (which had this scv2 rule already).
+   Fix: extend the selector list to include the period grid; both
+   grids now share 12px + semibold + tabular + centered numerals.
+   Also add explicit vertical centering on the atom's top row so
+   numerals TRUE-CENTER within the aspect-ratio square (owner
+   flagged both calendar + period). */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-date {
   font-size: 12px;
   font-weight: var(--sc2-wt-semibold);
   font-variant-numeric: tabular-nums;
   text-align: center;
   line-height: 1;
 }
-.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-top {
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-top,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-top {
   justify-content: center;
+  align-items: center;
+}
+/* Vertical centering: make the tile itself a flex column centered
+   so the top row (which carries the numeral) sits in the middle. */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Match the month-grid 4px gap in the period grid too (Wave-1 B2
+   set month; period was never bumped). */
+.scv2 .sc-season-period-card-grid {
+  gap: 4px;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1060,17 +1464,26 @@
   gap: 4px;
 }
 
-/* B3 - Needs-dot punch. Bumped 4->5px + tone to needs-fg (darker,
-   more optical presence on low-DPI). Grayscale math still holds
-   (both fill and glyph are family-consistent). */
-.scv2 .sc-daysq--needs-entry::after {
-  width: 5px;
-  height: 5px;
-  background: var(--sc2-state-needs-fg);
+/* OV-3 Wave 3b + G1 (2026-07-19) - needs-numeral HEAVY NUMERAL.
+   G1 diagnosis: the initial Wave 3b rule at
+   `.scv2 .sc-daysq--needs-entry .sc-daysq-date` (specificity 0,3,0)
+   tied with v1's `.sc-season-month-card-grid .sc-daysq--sm
+   .sc-daysq-date` (season.css:539 - `font-weight: var(--wt-bold)`,
+   specificity 0,3,0). Under Next's CSS-emission order (v2/overview.
+   css imported at ServiceCalendar.js:38 BEFORE season.css imported
+   via SeasonShell), season.css wins at equal specificity by later-
+   in-source. Color still landed (season doesn't set color); weight
+   lost. Fix: bump the needs-numeral selectors past 0,3,0 by
+   anchoring them inside the grid containers (0,4,0). Applies at
+   sm (both grids) + lg (drill inherits the base rule below). */
+.scv2 .sc-daysq--needs-entry .sc-daysq-date {
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-state-needs-fg-strong, #7a4b00);
 }
-.scv2 .sc-daysq--lg.sc-daysq--needs-entry::after {
-  width: 5px;
-  height: 5px;
+.scv2 .sc-season-month-card-grid .sc-daysq--needs-entry .sc-daysq-date,
+.scv2 .sc-season-period-card-grid .sc-daysq--needs-entry .sc-daysq-date {
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-state-needs-fg-strong, #7a4b00);
 }
 
 /* B4 - Month-card drill affordance. cursor:pointer + subtle title
@@ -1086,55 +1499,11 @@
   box-shadow: var(--sc2-el-hover);
 }
 
-/* §6.9 - Progressive detail slim rows. Months beyond current+1
-   collapse to a compact one-row view: header only (name + phase
-   tick + P-tag).
-
-   F-A fix (Chat-Claude sweep): when slim, the header IS a real
-   `<button class="sc-season-month-card-slim-expand">` (§9.3 F-B
-   folds it into the roving list). Clicking expands via
-   userExpanded; the normal drill overlay returns.
-
-   Session-local: userExpanded resets on remount but survives
-   view changes within the session. RM-gated height transition
-   on the article for the expand animation. */
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-dow,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-grid,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-footer,
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-drill {
-  display: none;
-}
-.scv2 .sc-season-month-card[data-slim="true"] {
-  min-height: 0;
-}
-.scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-header {
-  padding-bottom: var(--sc2-space-2);
-}
-
-/* Slim-expand header button: same layout as the plain header,
-   button reset so it doesn't inherit browser button styles. */
-.scv2 .sc-season-month-card-slim-expand {
-  display: flex;
-  align-items: center;
-  gap: var(--sc2-space-2);
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: var(--sc2-space-3);
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.scv2 .sc-season-month-card-slim-expand:focus-visible {
-  outline: 2px solid var(--sc2-cmd-bg);
-  outline-offset: 2px;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .scv2 .sc-season-month-card {
-    transition: min-height var(--duration-base) var(--ease-standard);
-  }
-}
+/* OV-3 Wave 3f - §6.9 progressive detail (slim rows) REMOVED.
+   All 12 months render full; roving list simplifies back to
+   drill + collapsed-trigger. See MonthCard.js + SeasonShell.js
+   companion deletions. Sep-Dec fold on the rail is KEPT (owner
+   explicitly kept it). */
 
 /* §9.5 - Skeletons: month-card + rail. v1 already renders
    MonthSkeleton via `.sc-season-grid--loading`; scv2 re-skins to

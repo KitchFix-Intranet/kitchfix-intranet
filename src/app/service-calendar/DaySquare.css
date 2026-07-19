@@ -1043,11 +1043,19 @@
 .scv2 .sc-daysq--failed .sc-daysq-mid { display: none; }
 
 /* ── Exhibition + Away ─────────────────────────────────────────
-   Exhibition: cream base w/ copper ribbon (already positioned by v1).
+   Exhibition: OV-3 F6 (2026-07-19) - background unified with off
+   under scv2. Prior --sc2-surface-app (#f7f3ea legacy warm cream)
+   gave exhibition tiles a distinct warm cream/beige that read as
+   a SECOND grey next to off's #f1f0ec on spring-training PDC months
+   - owner spotted both greys together on TXR March. Non-service is
+   non-service; the ONE scv2 off pair is the canonical carrier.
+   The copper "EXH" corner ribbon still distinguishes exhibition
+   from a bare off tile by shape/color, so the fill unification
+   doesn't lose the exhibition signal.
    Away: teal-tint fill w/ hollow @OPP tag + plane glyph. */
 .scv2 .sc-daysq--exhibition {
-  background: var(--sc2-surface-app);
-  border-color: var(--sc2-line-2);
+  background: var(--sc2-state-off-bg);
+  border-color: var(--sc2-state-off-bd);
   color: var(--sc2-ink);
 }
 .scv2 .sc-daysq--exhibition .sc-daysq-date { color: var(--sc2-ink); }
@@ -1112,11 +1120,60 @@
    Corner grammar preserved from v1 (top-right = game/event,
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
+/* OV-3 F9 (2026-07-19) - Owner ruling: Option 6 outline notch.
+   The prior Wave-1d 22px filled wedges (from a clip-path polygon
+   on a sized box) were owner-rejected (devoured numerals; raw
+   copper clashed). Replaced with corner BRACKET marks - stroke
+   only, zero fill - so the numeral stays fully legible under
+   every state.
+   Construction:
+     Game (::before, TOP-RIGHT): 9x9 box, inset 1.5px from the
+       corner; borders on TOP + RIGHT edges only (2px solid navy);
+       transparent everywhere else; outer corner radius ~6px so
+       the mark hugs the tile's corner radius.
+     Spring (::after, BOTTOM-LEFT): mirror geometry - borders on
+       BOTTOM + LEFT (2px solid copper); outer corner radius ~6px.
+   Both marks coexist on a spring-training game day (opposite
+   corners; no collision).
+   Base rule (DaySquare.css:265-276) sets `content: "";
+   position: absolute; width/height 15; background; clip-path
+   polygon`. My scv2 rule overrides width/height/background AND
+   sets `background: transparent; border-{top,right,bottom,left}`
+   to convert the filled clip-path into an outline notch. The
+   clip-path from the base rule remains but is invisible under a
+   transparent background - notch reads purely from the borders.
+   G10 companion history + F2(b) game-pseudo diagnosis in the
+   commit body of ov-3 f2. Tokens: --sc2-mark-gameday (navy)
+   and --sc2-mark-spring (copper) are declared at tokens.css. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
-  background: var(--sc2-mark-gameday);
+  width: 9px;
+  height: 9px;
+  top: 1.5px;
+  right: 1.5px;
+  background: transparent;
+  border-top: 2px solid var(--sc2-mark-gameday);
+  border-right: 2px solid var(--sc2-mark-gameday);
+  border-bottom: none;
+  border-left: none;
+  border-top-right-radius: 6px;
+  clip-path: none;
+  pointer-events: none;
+  z-index: 1;
 }
 .scv2 .sc-daysq--sm.sc-daysq--spring::after {
-  background: var(--sc2-accent-copper);
+  width: 9px;
+  height: 9px;
+  bottom: 1.5px;
+  left: 1.5px;
+  background: transparent;
+  border-bottom: 2px solid var(--sc2-mark-spring);
+  border-left: 2px solid var(--sc2-mark-spring);
+  border-top: none;
+  border-right: none;
+  border-bottom-left-radius: 6px;
+  clip-path: none;
+  pointer-events: none;
+  z-index: 1;
 }
 .scv2 .sc-daysq-st-pill {
   background: var(--sc2-chip-mlb-bg);
@@ -1134,22 +1191,36 @@
 .scv2 .sc-daysq--selected {
   box-shadow: 0 0 0 3px var(--sc2-selected-ring);
 }
+/* OV-3 Item 1c - today tile: 2px navy outline with a 2px breathing
+   gap outside the tile edge. Prior box-shadow `0 0 0 2px` painted
+   AT the edge and read weakly, especially on the state fills
+   (needs-bg amber, overdue-bg red). Outline+offset renders a 2px
+   navy ring OUTSIDE the tile with a 2px gap, so the mark reads on
+   every account kind (MLB / MiLB / PDC / CORP) and every state
+   fill. Modern engines follow border-radius on outlines. */
 .scv2 .sc-daysq--today {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 .scv2 .sc-daysq--today.sc-daysq--focused {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--selected {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), 0 0 0 5px var(--sc2-selected-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--sc2-selected-ring);
 }
 .scv2 .sc-daysq--focused.sc-daysq--selected {
   box-shadow: 0 0 0 3px var(--sc2-selected-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--selected.sc-daysq--focused {
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
   box-shadow:
-    0 0 0 2px var(--sc2-today-ring),
-    0 0 0 5px var(--sc2-selected-ring),
+    0 0 0 3px var(--sc2-selected-ring),
     inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--interactive:focus-visible {
@@ -1157,7 +1228,9 @@
   box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--today.sc-daysq--interactive:focus-visible {
-  box-shadow: 0 0 0 2px var(--sc2-today-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 
 /* Today pill hidden per v1 (kept for structure) */

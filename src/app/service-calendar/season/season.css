@@ -109,6 +109,32 @@
   color: var(--accent-text);
 }
 
+/* OV-3 G9 (2026-07-19) - v1 parity for the new phase-labels row.
+   PhaseStrip.js (Wave 3a) rearranged JSX to render phase titles as
+   a separate .sc-season-strip-phase-labels row BELOW the rail;
+   labels are absolute-positioned with inline left% + width%. The
+   Wave-3a CSS was scoped to .scv2, so on v1 (flag-off) the labels
+   rendered as unstyled inline spans stacking under the rail. Base
+   rules restore v1 parity: relative row, small muted text, honor
+   the inline left/width so labels line up with their blocks. */
+.sc-season-strip-phase-labels {
+  position: relative;
+  height: 14px;
+  margin-top: 4px;
+}
+.sc-season-strip-phase-label {
+  position: absolute;
+  top: 0;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--wt-bold);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Today marker: a permanent vertical navy line. It does NOT carry an
    in-rail label - the label lives in the today-chip in the header
    instead. No more floating-tooltip-looking box (audit P2-4). */

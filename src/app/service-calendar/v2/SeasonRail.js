@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -81,8 +82,16 @@ export default function SeasonRail({
   // stat rehomed here (per bundle F4: every FullSeasonCard figure
   // must live in the rail before the card retires). totals.mealsYTD
   // is computed by the shared derive module - no new derivation path.
-  const heroMetaCal = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
-  const heroMetaPeriod = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
+  /* OV-3 Wave 4a + G2 (2026-07-19) - hero rebuild: projection joins
+     the value line (RailHero.projection); "N of M days entered"
+     moves BELOW the progress bar via RailHeroProgressCaption.
+     G2 shortening: "of ~$1.38M" (drop "projected" and the leading
+     dot separator) so the projection fits inline next to the label
+     at rail min-width. Meals YTD stays on the caption line only in
+     Period mode. */
+  const heroProjection = `of ~${fmtOverviewMoney(totals.projectedRevenue)}`;
+  const heroCaptionCal = `${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
+  const heroCaptionPeriod = `${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
 
   if (mode === "calendar") {
@@ -90,7 +99,8 @@ export default function SeasonRail({
       <CalendarRail
         year={year}
         totals={totals}
-        heroMeta={heroMetaCal}
+        heroProjection={heroProjection}
+        heroCaption={heroCaptionCal}
         yearData={yearData}
         periodRanges={periodRanges}
         today={today}
@@ -105,7 +115,8 @@ export default function SeasonRail({
     <PeriodRail
       year={year}
       totals={totals}
-      heroMeta={heroMetaPeriod}
+      heroProjection={heroProjection}
+      heroCaption={heroCaptionPeriod}
       yearData={yearData}
       periodRanges={periodRanges}
       today={today}
@@ -121,7 +132,7 @@ export default function SeasonRail({
 // Calendar mode - 12 month lines + flat needs queue.
 // ═══════════════════════════════════════════════════════════════
 function CalendarRail({
-  year, totals, heroMeta,
+  year, totals, heroProjection, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToMonth,
   showAllQueue, setShowAllQueue,
@@ -159,18 +170,32 @@ function CalendarRail({
         value={totals.actualRevenue}
         format={fmtOverviewMoney}
         label="ENTERED YTD"
-        meta={heroMeta}
+        projection={heroProjection}
         ariaSuffix={`${totals.actualRevenue > 0 ? "" : "no revenue entered yet, "}${totals.pctComplete}% complete`}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
+      <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
       {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
-          The queue stays visible while the season list inner-scrolls. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label="NEEDS ENTRY"
-          meta={queue.length > 0 ? `${queue.length}` : null}
-        >
+          The queue stays visible while the season list inner-scrolls.
+          OV-3 G13: meta becomes the severity pill - amber "{n} need"
+          when only needs-entry present; red "{n} overdue" when any
+          overdue exists. Worst-state wins; the count shown is that
+          state's count. */}
+      {(() => {
+        const overdueCount = queue.filter(r => r.status === "overdue").length;
+        const needsCount = queue.filter(r => r.status === "needs-entry").length;
+        const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+        const railMeta = overdueCount > 0
+          ? `${overdueCount} overdue`
+          : needsCount > 0 ? `${needsCount} need` : null;
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label="NEEDS ENTRY"
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
           {queue.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry right now.</p>
           )}
@@ -190,8 +215,10 @@ function CalendarRail({
               onClick={() => setShowAllQueue(true)}
             />
           )}
-        </RailSection>
-      </div>
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         <RailSection label="Season">
@@ -199,6 +226,11 @@ function CalendarRail({
             year={year}
             visibleMonthLines={visibleMonthLines}
             todayMonth={todayMonth}
+            /* F3 (2026-07-19) - forward the pinned-queue count so
+               the SeasonList's auto-scroll effect can re-fire when
+               the queue rows push the season list past clientHeight
+               after data arrival. */
+            queueLength={queue.length}
             onDrillToMonth={onDrillToMonth}
             tailEligible={tailEligible}
             tailAllLines={tailAllLines}
@@ -230,37 +262,53 @@ function CalendarRail({
   prefers-reduced-motion; else smooth.
 */
 function SeasonList({
-  year, visibleMonthLines, todayMonth, onDrillToMonth,
+  year, visibleMonthLines, todayMonth, queueLength, onDrillToMonth,
   tailEligible, tailAllLines, tailFirstShort, tailLastShort,
   tailSumProjected, showAllMonths, toggleTail,
 }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* F-E5 (2026-07-19) - swap scrollIntoView({ block: "center" })
-       for direct math on the scroll container. Live probe showed
-       scrollIntoView bubbled up to `<html>` and scrolled the whole
-       page ~351 on load. The direct-math version scrolls ONLY
-       .sc-rail-scroll and leaves the document untouched. Verified
-       live at rail.scrollTop 96 with July centered, html untouched.
-       F-E4 deps preserved. */
+    /* OV-3 F3 (2026-07-19) - auto-scroll goes deterministic. Three
+       strikes on RO cleverness (G8 observed the container - never
+       fired; G8-second-iteration observed firstElementChild - never
+       fired on STL-FL either). Ripped: use three scheduled attempts
+       (rAF + 300ms + 900ms) with the guard + done latch. Real
+       content sources go into deps so React re-runs the effect on
+       every data-arrival growth (queueLength for the CalendarRail
+       pinned queue). Overflow guard still short-circuits the
+       content-fits case (CIN-AZ per-meal), so no work happens
+       there.
+       Full history in the OV-3 F3 commit body. */
+    /* F3-redux: match OpsSeasonList - direct scrollTop assignment
+       (behavior:"auto" via property write, no scrollTo animation)
+       + instrumentation attribute. See OpsSeasonList comment for
+       the reasoning. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
-    const rm = typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const rafId = requestAnimationFrame(() => {
+    let done = false;
+    const tryScroll = () => {
+      if (done) return;
+      if (scrollNode.scrollHeight <= scrollNode.clientHeight) return;
+      done = true;
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
-      scrollNode.scrollTo({
-        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
-        behavior: rm ? "auto" : "smooth",
-      });
-    });
-    return () => cancelAnimationFrame(rafId);
+      const target = top - scrollNode.clientHeight / 2 + el.clientHeight / 2;
+      scrollNode.scrollTop = target;
+      scrollNode.setAttribute("data-f3-target", String(Math.round(target)));
+    };
+    const rafId = requestAnimationFrame(tryScroll);
+    const t1 = setTimeout(tryScroll, 300);
+    const t2 = setTimeout(tryScroll, 900);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth, visibleMonthLines.length]);
+  }, [year, todayMonth, visibleMonthLines.length, queueLength]);
   return (
     <>
       {visibleMonthLines.map((line) => (
@@ -293,12 +341,12 @@ function MonthRailLine({ line, onClick }) {
   const { label, short, state, entered, totalActionable, displayRev, hasActuals } = line;
   if (state === "off") {
     return (
-      <RailLine label={short} value="—" tone="off" onClick={onClick} />
+      <RailLine label={short} value="-" tone="off" onClick={onClick} />
     );
   }
   const money = displayRev > 0
     ? (hasActuals ? fmtLineMoney(displayRev) : `~${fmtLineMoney(displayRev)}`)
-    : (hasActuals ? "$0" : "—");
+    : (hasActuals ? "$0" : "-");
   if (state === "done") {
     return (
       <RailLine label={label} value={money} tone="done" onClick={onClick} />
@@ -320,7 +368,7 @@ function MonthRailLine({ line, onClick }) {
 // Period mode - 13 period lines + period-grouped queue.
 // ═══════════════════════════════════════════════════════════════
 function PeriodRail({
-  year, totals, heroMeta,
+  year, totals, heroProjection, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToPeriod,
   showAllQueue, setShowAllQueue,
@@ -337,40 +385,49 @@ function PeriodRail({
         value={totals.actualRevenue}
         format={fmtOverviewMoney}
         label="ENTERED YTD"
-        meta={heroMeta}
+        projection={heroProjection}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
+      <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
-      {/* V3 §S8.3 F-E2 - PeriodRail also pins NEEDS ENTRY above the
-          season scroll region. Same structure as CalendarRail so
-          both landing modes get the pinned queue + inner-scrolling
-          season list. Auto-scroll (SeasonList's current-month
-          rAF) is calendar-specific; period lines don't have a
-          per-month current-target concept, so PeriodRail's scroll
-          region uses the plain RailScroll without a ref. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label="NEEDS ENTRY"
-          meta={groupedQueue.length > 0 ? `${groupedQueue.length}` : null}
-        >
-          {groupedQueue.length === 0 && (
-            <p className="sc-rail-queue-empty">Every period is caught up.</p>
-          )}
-          {visibleGroups.map(g => (
-            <PeriodQueueRow
-              key={g.period}
-              group={g}
-              onClick={() => onDrillToPeriod?.(g.period)}
-            />
-          ))}
-          {overflow > 0 && (
-            <RailQueueMore
-              count={overflow}
-              onClick={() => setShowAllQueue(true)}
-            />
-          )}
-        </RailSection>
-      </div>
+      {/* V3 §S8.3 F-E2 + OV-3 G13 - PeriodRail pins NEEDS ENTRY with
+          the same severity-pill meta as CalendarRail. groupedQueue
+          rows carry per-period overdue + needs counts (see
+          PeriodQueueRow); the meta aggregates across all groups. */}
+      {(() => {
+        const overdueCount = groupedQueue.reduce((n, g) => n + (g.overdue || 0), 0);
+        const needsCount = groupedQueue.reduce((n, g) => n + (g.needs || 0), 0);
+        const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+        const railMeta = overdueCount > 0
+          ? `${overdueCount} overdue`
+          : needsCount > 0 ? `${needsCount} need` : null;
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label="NEEDS ENTRY"
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
+              {groupedQueue.length === 0 && (
+                <p className="sc-rail-queue-empty">Every period is caught up.</p>
+              )}
+              {visibleGroups.map(g => (
+                <PeriodQueueRow
+                  key={g.period}
+                  group={g}
+                  onClick={() => onDrillToPeriod?.(g.period)}
+                />
+              ))}
+              {overflow > 0 && (
+                <RailQueueMore
+                  count={overflow}
+                  onClick={() => setShowAllQueue(true)}
+                />
+              )}
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         <RailSection label="Season">
@@ -406,7 +463,7 @@ function PeriodRailLine({ line, onClick }) {
   const { period, state, entered, totalActionable, meals, overdue } = line;
   if (state === "off") {
     return (
-      <RailLine label={period} value="—" tone="off" onClick={onClick} />
+      <RailLine label={period} value="-" tone="off" onClick={onClick} />
     );
   }
   const mealsLabel = meals > 0 ? `${meals.toLocaleString("en-US")} meals` : "0 meals";

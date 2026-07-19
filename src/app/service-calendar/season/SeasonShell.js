@@ -117,13 +117,11 @@ export default function SeasonShell({
   useEffect(() => {
     const grid = calendarGridRef.current;
     if (!grid) return;
-    /* F-B2: filter to VISIBLE elements. Slim cards contribute BOTH
-       their visible slim-expand AND their display:none drill; the
-       hidden drill can't accept focus, so including it in the
-       roving list desyncs tabIndex from focus. `offsetParent`
-       returns null for display:none elements (per HTML spec). */
+    /* OV-3 Wave 3 - slim-expand removed; the roving list simplifies
+       back to drill + collapsed-trigger. Still filter to visible so
+       the mobile-collapsed and desktop-expanded shapes coexist. */
     const cards = Array.from(grid.querySelectorAll(
-      ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+      ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger"
     )).filter((c) => c.offsetParent !== null);
     if (!cards.length) return;
     const target = Math.min(rovingIndex, cards.length - 1);
@@ -210,17 +208,16 @@ export default function SeasonShell({
           aria-label={`${year} months`}
           ref={calendarGridRef}
           onFocus={(e) => {
-            /* V3 §9.3 F-C - track the currently-focused card so
-               the tabindex ref-effect can maintain ONE tabstop.
-               F-B2: filter to visible so slim's hidden drill can't
-               enter the index and desync tabindex from focus. */
+            /* V3 §9.3 F-C - track the currently-focused card so the
+               tabindex ref-effect can maintain ONE tabstop. OV-3
+               Wave 3: slim-expand removed from the roving list. */
             const card = e.target.closest(
-              ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+              ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger"
             );
             if (!card) return;
             const cards = Array.from(
               e.currentTarget.querySelectorAll(
-                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger"
               )
             ).filter((c) => c.offsetParent !== null);
             const idx = cards.indexOf(card);
@@ -235,13 +232,13 @@ export default function SeasonShell({
                unless we successfully move focus so v1 fallbacks
                (mobile chevron expand, form submit) survive.
 
-               F-B: the roving list includes slim-expand + collapsed-
-               trigger + drill (whichever the current card renders). */
+               OV-3 Wave 3: slim-expand removed; the roving list is
+               drill + collapsed-trigger only. */
             const key = e.key;
             if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(key)) return;
             const cards = Array.from(
               e.currentTarget.querySelectorAll(
-                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger"
               )
             ).filter((c) => c.offsetParent !== null);
             if (!cards.length) return;
@@ -293,15 +290,6 @@ export default function SeasonShell({
                   /* V3 §6.6 - phase timeline for the header 3px tick
                      (phase-family tint of the month's dominant phase). */
                   phaseTimeline={phaseTimeline}
-                  /* V3 §6.9 - progressive detail: months beyond
-                     current+1 default to slim (compact one-row) so
-                     the eye reads the current arc first. Click/Enter
-                     on the header expands (userExpanded takes over). */
-                  slimByDefault={
-                    todayDate
-                      ? (monthIndex > Number(todayDate.slice(5, 7)) - 1 + 1)
-                      : false
-                  }
                 />
               </div>
             );

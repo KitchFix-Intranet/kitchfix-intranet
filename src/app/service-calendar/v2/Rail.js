@@ -43,20 +43,34 @@ export function RailShell({ label, children }) {
 // aria-live="polite" announces on text change, so the SR reads the
 // settled value once ticking finishes (React only re-announces when
 // the text node's content actually differs from the previous read).
-export function RailHero({ value, format, label, meta, ariaSuffix }) {
+export function RailHero({ value, format, label, meta, projection, ariaSuffix }) {
   const isNumeric = typeof value === "number" && typeof format === "function";
   const animated = useAnimatedNumber(isNumeric ? value : 0);
   const displayed = isNumeric ? format(animated) : value;
   return (
     <div className="sc-rail-hero">
+      {/* OV-3 Wave 4a - hero line is INLINE:
+          "$X.XM  ENTERED YTD  · ~$Y projected"
+          Value + label + projection sit on one baseline. The old
+          two-line meta split moved: the projection joins the top
+          line (projection prop); the "N of M days entered" caption
+          moves BELOW the progress bar (RailHeroProgressCaption). */}
       <span className="sc-rail-hero-value" aria-live="polite">
         {displayed}
       </span>
       {label && <span className="sc-rail-hero-label">{label}</span>}
+      {projection && <span className="sc-rail-hero-projection">{projection}</span>}
       {meta && <span className="sc-rail-hero-meta">{meta}</span>}
       {ariaSuffix && <span className="sc-visually-hidden">{ariaSuffix}</span>}
     </div>
   );
+}
+
+// OV-3 Wave 4a - caption rendered BELOW the progress bar. Consumer
+// puts this between RailProgress and any following section.
+export function RailHeroProgressCaption({ children }) {
+  if (!children) return null;
+  return <div className="sc-rail-hero-progress-caption">{children}</div>;
 }
 
 // ─── Progress bar ──────────────────────────────────────────────
@@ -76,12 +90,24 @@ export function RailProgress({ pct, complete }) {
 }
 
 // ─── Section header ────────────────────────────────────────────
-export function RailSection({ label, meta, children }) {
+// OV-3 G13: metaTone optional prop drives the pill's tone class.
+//   metaTone="needs"    -> amber "{n} need" pill
+//   metaTone="overdue"  -> red   "{n} overdue" pill
+//   default (undefined) -> plain muted text (pre-G13 behavior)
+// Callers compute the pill copy + tone from their own worst-state
+// count (Rail is presentational; no derivation lives here).
+export function RailSection({ label, meta, metaTone, children }) {
   return (
     <div className="sc-rail-section">
       <div className="sc-rail-section-head">
         <span className="sc-rail-section-label">{label}</span>
-        {meta && <span className="sc-rail-section-meta">{meta}</span>}
+        {meta && (
+          <span
+            className={`sc-rail-section-meta${metaTone ? ` sc-rail-section-meta--${metaTone}` : ""}`}
+          >
+            {meta}
+          </span>
+        )}
       </div>
       {children}
     </div>

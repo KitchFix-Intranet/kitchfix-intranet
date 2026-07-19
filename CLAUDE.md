@@ -30,6 +30,7 @@ In this order, every session:
 6. [`docs/BUSINESS_NOTES.md`](docs/BUSINESS_NOTES.md) - living reference for niche business knowledge (domain rules, account-specific quirks, stakeholder preferences, calculation methodology, historical context). Consult before assuming business logic is wrong.
 7. [`docs/TEAM_KNOWLEDGE.md`](docs/TEAM_KNOWLEDGE.md) - team-facing knowledge corpus (how-to, policy, glossary, account-specific, tool reference). Seed corpus for the future Sous AI intranet search feature.
 8. [`docs/SPEC_INTRANET_AI_SEARCH.md`](docs/SPEC_INTRANET_AI_SEARCH.md) - passive brain dump for product thinking about the future Sous AI intranet search feature.
+9. [`docs/BUILD_ACCURACY_PROTOCOL.md`](docs/BUILD_ACCURACY_PROTOCOL.md) - read before any SC build session; binding for CC and Chat-Claude.
 
 The close-out + status docs are canonical for current state. ARCHITECTURE.md is canonical for the spatial mental model. BUSINESS_NOTES.md is canonical for domain rules. The repo itself is the ground truth - if a doc disagrees with the code, flag the doc drift, don't silently pick one.
 

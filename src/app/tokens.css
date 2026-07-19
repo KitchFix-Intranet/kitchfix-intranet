@@ -343,10 +343,21 @@
   --sc2-state-upcoming-bd: #b9e2cc;            /* T-table border */
   --sc2-state-upcoming-fg: #3e6b52;            /* T-table numeral (Lc 70.0) */
 
-  /* needs-entry - amber pastel + glyph carrier (§7.3) */
+  /* needs-entry - amber pastel; OV-3 Wave 3b two-signal law
+     (§7.3-v4) replaces the dot glyph with a HEAVY NUMERAL: color
+     + weight/darkness carries the pair. --sc2-state-needs-fg
+     kept for label sites; --sc2-state-needs-fg-strong is one
+     darker step for the tile numeral itself. */
   --sc2-state-needs-bg: #fcecc7;               /* T-table fill */
   --sc2-state-needs-bd: #e4b45e;               /* T-table border */
   --sc2-state-needs-fg: #7a5a17;               /* T-table numeral (Lc 70.9) */
+  --sc2-state-needs-fg-strong: #5c4310;        /* OV-3 needs numeral (one darker step) */
+
+  /* OV-3 §7.5 - away tile state (MLB + MiLB). Ghost-purple fill,
+     distinct from off-grey under grayscale simulation. Replaces
+     the removed year-zoom home/away dot pair. */
+  --sc2-state-away-bg: #e3dded;                /* OV-3 owner ruling */
+  --sc2-state-away-fg: #544e66;                /* OV-3 owner ruling */
 
   /* overdue - brick + "!" glyph */
   --sc2-state-overdue-bg: #f8d9d3;             /* T-table fill */
@@ -413,10 +424,15 @@
   /* ---------- Corner-mark family ----------
      Two-color grammar preserved from v1: top-right game wedge
      (indigo), bottom-left season wedge (copper - shares
-     --sc2-accent-copper above). Indigo has no dedicated ramp yet;
-     token holds the single value used by both the sm wedge and
-     the (future) lg game-day accents. */
-  --sc2-mark-gameday: #4338CA;   /* indigo-700 - promotable to a --sc2-indigo-* ramp */
+     --sc2-accent-copper above). OV-3 F9 (2026-07-19) - marker
+     construction redesigned as outline notches; token now points
+     at navy (--sc2-cmd-bg) so the game bracket is consistent with
+     the header identity. Prior indigo value #4338CA retired for
+     the notch redesign. --sc2-mark-spring is added as a distinct
+     copper-family token so the notch borders can consume tokens,
+     not hex; --sc2-accent-copper (other consumers) stays put. */
+  --sc2-mark-gameday: var(--sc2-cmd-bg);       /* navy #1a3050 per owner ruling */
+  --sc2-mark-spring:  #b0722c;                 /* copper per owner ruling */
 
   /* ---------- Structural lines ---------- */
   --sc2-line:   #eae4d6;
@@ -435,6 +451,11 @@
   --sc2-el-widget:  0 2px 8px rgba(18,34,56,0.08), 0 12px 32px rgba(18,34,56,0.06);
   --sc2-el-card:    0 1px 3px rgba(18,34,56,0.08), 0 2px 8px rgba(18,34,56,0.05);
   --sc2-el-hover:   0 2px 6px rgba(18,34,56,0.10), 0 6px 16px rgba(18,34,56,0.07);
+  /* OV-3 Wave 5a - half-step inset shadow, lighter than el-card.
+     Used by the calendar + period inner-card region (§17) so the
+     region reads as its own defined surface without competing with
+     the L2 month cards inside it. */
+  --sc2-el-inset:   0 1px 2px rgba(18,34,56,0.04), 0 1px 4px rgba(18,34,56,0.03);
   --sc2-elevation-card:    var(--sc2-el-card);       /* legacy alias */
   --sc2-elevation-raised:  0 3px 8px rgba(18,34,56,0.10), 0 24px 64px rgba(18,34,56,0.18);
   --sc2-elevation-inset-top: inset 0 1px 0 rgba(255,255,255,0.4);
@@ -527,23 +548,8 @@
      literals in the components (or via existing calc()s). */
 }
 
-.scv2[data-sc2-density="comfortable"] {
-  --sc2-size-micro:      12px;
-  --sc2-size-caption:    13px;
-  --sc2-size-body:       15px;
-  --sc2-size-subhead:    16px;
-  --sc2-size-h3:         20px;
-  --sc2-size-h2:         22px;
-  --sc2-size-h1:         26px;
-  --sc2-size-display:    33px;
-  --sc2-size-rail-total: 33px;
-  --sc2-control-h:       40px;
-  --sc2-control-h-icon:  36px;
-}
-
-/* Legacy no-op branch: safety net for any pre-V3 stored value.
-   useDensity.js normalize() intercepts at read; this rule ensures
-   the attribute never leaves the shell in a broken state. */
-.scv2[data-sc2-density="compact"] {
-  /* falls through to the .scv2 Standard defaults above */
-}
+/* OV-3 Wave 2 - Comfortable density REMOVED. Standard is the only
+   scale; the `.scv2[data-sc2-density="comfortable"]` remap block and
+   the legacy `compact` no-op branch are both deleted. The
+   `data-sc2-density` attribute is no longer emitted by ServiceCalendar
+   and `useDensity()` is deleted. */

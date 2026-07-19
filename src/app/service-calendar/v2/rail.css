@@ -43,19 +43,32 @@
   color: var(--sc2-rail-text-subtle);
 }
 
-/* ─── Hero ─────────────────────────────────────────────────── */
+/* ─── Hero (OV-3 Wave 4a + G2 2026-07-19) ─────────────────────
+   Inline baseline: value + label + projection sit on ONE row.
+   G2: nowrap + hero size 30 -> 27 (--sc2-size-rail-total scv2
+   floor) so the projection ALWAYS fits inline next to the label
+   at the rail's min-width. Copy also shortened to "of ~$X" (drop
+   "projected"; see SeasonRail.js heroProjection). Row wrap
+   disabled - if the row still can't fit, we'd rather show a
+   truncated projection than break to two lines.
+   The "N of M days entered" caption moved to
+   .sc-rail-hero-progress-caption BELOW the progress bar. */
 .scv2 .sc-rail-hero {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  min-width: 0;
 }
 .scv2 .sc-rail-hero-value {
-  font-size: var(--sc2-size-rail-total);
+  font-size: 27px;                       /* G2: 30 -> 27 to fit projection inline */
   font-weight: var(--sc2-wt-display);
   letter-spacing: -0.02em;
   color: var(--sc2-rail-text-strong);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .scv2 .sc-rail-hero-label {
   font-size: var(--sc2-size-micro);
@@ -63,12 +76,31 @@
   font-weight: var(--sc2-wt-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.scv2 .sc-rail-hero-projection {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  font-weight: var(--sc2-wt-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .scv2 .sc-rail-hero-meta {
   font-size: var(--sc2-size-micro);
   color: var(--sc2-rail-text-muted);
   margin-top: 2px;
   line-height: 1.5;
+  flex-basis: 100%;
+}
+.scv2 .sc-rail-hero-progress-caption {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+  margin-top: var(--sc2-space-2);
+  line-height: 1.4;
 }
 
 /* ─── Progress ─────────────────────────────────────────────── */
@@ -112,6 +144,33 @@
 .scv2 .sc-rail-section-meta {
   font-size: var(--sc2-size-micro);
   color: var(--sc2-rail-text-muted);
+}
+/* OV-3 G13 (2026-07-19) - severity pill tones for the NEEDS ENTRY
+   meta. Callers supply metaTone="needs" or "overdue"; the pill
+   surface + text color mirror the tile-state semantics (amber for
+   needs, red for overdue) so the rail header reads the same
+   language as the tiles below. Worst-state wins is a caller
+   concern - CSS only paints the pill. */
+.scv2 .sc-rail-section-meta--needs,
+.scv2 .sc-rail-section-meta--overdue {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--sc2-radius-pill);
+  font-weight: var(--sc2-wt-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.scv2 .sc-rail-section-meta--needs {
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong, #5c4310);
+  border: var(--sc2-border-thin) solid var(--sc2-state-needs-bd);
+}
+.scv2 .sc-rail-section-meta--overdue {
+  background: var(--sc2-state-overdue-bg);
+  color: var(--sc2-state-overdue-fg);
+  border: var(--sc2-border-thin) solid var(--sc2-state-overdue-bd);
 }
 
 /* ─── Scroll region + fade ────────────────────────────────── */

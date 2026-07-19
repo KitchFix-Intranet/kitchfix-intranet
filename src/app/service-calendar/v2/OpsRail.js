@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -77,33 +78,38 @@ export default function OpsRail({
 
   // ─── Hero ─────────────────────────────────────────────────
   const totals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
-  // MLB fee hero: game days entered / total; count numeric so RailHero
-  // can animate the tick via useAnimatedNumber (the RailHero API from
-  // W2-W4 F3). STL-FL hero: days entered / total. Meta lines carry
-  // meals + homestand-progress or projected + counts.
+  // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
+  // grammar. Prior construction stacked value + long-label + long-meta
+  // to three ragged lines. Now:
+  //   Line 1: big value + short label on one baseline (matches
+  //           SeasonRail.RailHero's inline shape from G2/Wave 4a).
+  //   Progress bar.
+  //   Caption line: secondary facts (of X · meals · homestands)
+  //           as a single tidy row via RailHeroProgressCaption.
+  // Match the per-meal hero's type scale + spacing so the two
+  // account families read identically.
   const heroValue = hasHomestandSchedule
     ? totals.gameDaysEntered
     : totals.daysEntered;
-  const heroDenominator = hasHomestandSchedule ? totals.totalGameDays : totals.totalActionableDays;
-  const heroLabelText = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
-  const meta = hasHomestandSchedule
-    ? `of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
-    : `of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
+  const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED";
+  const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
+  // Caption line - the secondary facts. MLB fee: entered/total +
+  // meals + homestands. STL-FL: entered/total + meals.
+  const heroCaption = hasHomestandSchedule
+    ? `${totals.gameDaysEntered} of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
+    : `${totals.daysEntered} of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals`;
 
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
-      <span className="sc-rail-hero-label">{heroLabelText}</span>
+      <span className="sc-rail-hero-label">{heroLongLabel}</span>
       <span className="sc-rail-hero-meta">Use the refresh button in the header to retry the fetch.</span>
     </div>
   ) : (
     <RailHero
       value={heroValue}
       format={(n) => String(Math.round(n))}
-      label={hasHomestandSchedule
-        ? `OF ${totals.totalGameDays} GAME DAYS ENTERED`
-        : `OF ${totals.totalActionableDays} DAYS ENTERED`}
-      meta={meta}
+      label={heroLabelText}
     />
   );
 
@@ -140,36 +146,59 @@ export default function OpsRail({
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
       {!incomplete && <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />}
+      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
-      {/* V3 §S8.3 F-E2 - OpsRail also pins the queue above the season
-          scroll region. Same structure as SeasonRail so fee accounts
-          (STL - FL, MLB fees) get the §S8.3 behavior too. */}
-      <div className="sc-rail-pinned">
-        <RailSection
-          label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
-          meta={queueRows.length > 0 ? `${queueRows.length}` : null}
-        >
-          {queueRows.length === 0 && (
-            <p className="sc-rail-queue-empty">
-              {hasHomestandSchedule ? "No unentered game days." : "Nothing needs entry right now."}
-            </p>
-          )}
-          {visibleQueue.map(row => (
-            <OpsQueueRow
-              key={row.date}
-              row={row}
-              hasHomestandSchedule={hasHomestandSchedule}
-              onClick={() => onTargetDay?.(row.date)}
-            />
-          ))}
-          {overflow > 0 && (
-            <RailQueueMore
-              count={overflow}
-              onClick={() => setShowAllQueue(true)}
-            />
-          )}
-        </RailSection>
-      </div>
+      {/* V3 §S8.3 F-E2 + OV-3 G13 - OpsRail pinned queue.
+          hasHomestandSchedule=true (MLB fee, MiLB AAA): "To enter"
+          queue is game-day rows carrying no per-day severity; meta
+          stays as the plain count.
+          hasHomestandSchedule=false (STL - FL fee non-homestand):
+          per-day needs / overdue apply - severity pill (amber
+          "{n} need" / red "{n} overdue"). Worst-state wins. */}
+      {(() => {
+        let railMeta = queueRows.length > 0 ? `${queueRows.length}` : null;
+        let railMetaTone;
+        if (!hasHomestandSchedule) {
+          const overdueCount = queueRows.filter(r => r.status === "overdue").length;
+          const needsCount = queueRows.filter(r => r.status === "needs-entry").length;
+          if (overdueCount > 0) {
+            railMeta = `${overdueCount} overdue`;
+            railMetaTone = "overdue";
+          } else if (needsCount > 0) {
+            railMeta = `${needsCount} need`;
+            railMetaTone = "needs";
+          }
+        }
+        return (
+          <div className="sc-rail-pinned">
+            <RailSection
+              label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
+              meta={railMeta}
+              metaTone={railMetaTone}
+            >
+              {queueRows.length === 0 && (
+                <p className="sc-rail-queue-empty">
+                  {hasHomestandSchedule ? "No unentered game days." : "Nothing needs entry right now."}
+                </p>
+              )}
+              {visibleQueue.map(row => (
+                <OpsQueueRow
+                  key={row.date}
+                  row={row}
+                  hasHomestandSchedule={hasHomestandSchedule}
+                  onClick={() => onTargetDay?.(row.date)}
+                />
+              ))}
+              {overflow > 0 && (
+                <RailQueueMore
+                  count={overflow}
+                  onClick={() => setShowAllQueue(true)}
+                />
+              )}
+            </RailSection>
+          </div>
+        );
+      })()}
 
       <RailScroll>
         {/* Homestand ledger - MLB fee variant only */}
@@ -211,6 +240,12 @@ export default function OpsRail({
               lines={seasonListMonths}
               todayMonth={new Date().getMonth()}
               year={new Date().getFullYear()}
+              /* F3 - forward pinned-queue + homestand-ledger counts
+                 so OpsSeasonList's auto-scroll re-runs when either
+                 lands after mount and pushes the season list past
+                 clientHeight. */
+              queueLength={queueRows.length}
+              ledgerLength={ledger.length}
               onDrillToMonth={onDrillToMonth}
             />
           </RailSection>
@@ -245,29 +280,54 @@ export default function OpsRail({
   fee accounts (STL - FL, MLB fees) also auto-scroll the current
   month row into view on mount. RM-gated via prefers-reduced-motion.
 */
-function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
+function OpsSeasonList({ lines, todayMonth, year, queueLength, ledgerLength, onDrillToMonth }) {
   const currentRef = useRef(null);
   useEffect(() => {
-    /* F-E5 - direct-math scroll on .sc-rail-scroll only (see
-       SeasonList block in SeasonRail.js for the diagnosis). */
+    /* OV-3 F3 + F3-redux (2026-07-19) - direct-math auto-scroll.
+       F3-redux changes vs F3:
+       1. behavior: "auto" always (was smooth). Smooth-scroll on a
+          sticky ancestor + overflow-hidden parent + JS-driven
+          scrollTo is a documented Chromium/WebKit quirk zone; user's
+          fourth-strike report (STL-FL scrollTop 0 despite
+          overflow=525 vs clientHeight=174) matches the class of
+          symptom. Deterministic auto behavior removes the
+          animation-cancellation surface.
+       2. Direct scrollTop assignment instead of scrollTo() -
+          scrollTo(behavior:"auto") should be equivalent but the
+          direct property write bypasses any scroll-behavior CSS
+          inheritance that could silently downgrade to smooth on
+          the container's computed style.
+       3. Instrumentation `data-f3-target` on scrollNode so the
+          gate cell can inspect the target after the fact without
+          re-running the effect.
+       Deps unchanged from F3. Three timed attempts + done latch
+       + overflow guard preserved. */
     const el = currentRef.current;
     if (!el) return;
     const scrollNode = el.closest(".sc-rail-scroll");
     if (!scrollNode) return;
-    const rm = typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const rafId = requestAnimationFrame(() => {
+    let done = false;
+    const tryScroll = () => {
+      if (done) return;
+      if (scrollNode.scrollHeight <= scrollNode.clientHeight) return;
+      done = true;
       const top = el.getBoundingClientRect().top
         - scrollNode.getBoundingClientRect().top
         + scrollNode.scrollTop;
-      scrollNode.scrollTo({
-        top: top - scrollNode.clientHeight / 2 + el.clientHeight / 2,
-        behavior: rm ? "auto" : "smooth",
-      });
-    });
-    return () => cancelAnimationFrame(rafId);
+      const target = top - scrollNode.clientHeight / 2 + el.clientHeight / 2;
+      scrollNode.scrollTop = target;
+      scrollNode.setAttribute("data-f3-target", String(Math.round(target)));
+    };
+    const rafId = requestAnimationFrame(tryScroll);
+    const t1 = setTimeout(tryScroll, 300);
+    const t2 = setTimeout(tryScroll, 900);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth, lines.length]);
+  }, [year, todayMonth, lines.length, queueLength, ledgerLength]);
   return (
     <>
       {lines.map((line) => (
@@ -444,7 +504,7 @@ function deriveOverviewMonthList(yearData, year, iso, hasHomestandSchedule) {
       const monthMeals = Number(month?.actualCovers) || 0;
       if (games === 0) {
         state = "off";
-        value = "—";
+        value = "-";
         sub = null;
       } else if (games === gamesEntered) {
         state = "done";
@@ -470,7 +530,7 @@ function deriveOverviewMonthList(yearData, year, iso, hasHomestandSchedule) {
       const monthMeals = Number(month?.actualCovers) || 0;
       if (totalDays === 0) {
         state = "off";
-        value = "—";
+        value = "-";
         sub = null;
       } else if (daysEntered === totalDays) {
         state = "done";

@@ -2,12 +2,25 @@
 
 // SeasonStepper - the homestand tracker (Design Batch 3, render 2).
 //
-// MLB-fee accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) render a
-// segmented season bar: 13 segments (one per homestand), status
-// encoded by fill (done = navy, next = grey, focus = amber). The
-// focus segment is the deriveFocus segment - live homestand when one
-// is in progress, else the next upcoming, else the last done. The
-// focus segment widens and carries the HS id label inside.
+// Renders for any account with hasHomestandSchedule=true:
+//   - MLB fee: CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V (4 accounts)
+//   - MiLB AAA (per OV-3 Wave 7 reuse, item 18): CIN-KY, TBJ-NY.
+//     `sc-16` (2026-07-11) added the has_homestand_schedule flag
+//     to these accounts; #474 (2026-07-19) rode the same homestand
+//     context to emit the home-day signal. deriveHomestandSegments
+//     is category-agnostic - it groups yearData days by homestandId
+//     (populated for every account that clears the flag gate in
+//     loadYearSummaryPostgres). No parallel derivation was needed
+//     for MiLB reuse (owner's carve-out guard held: existing MLB
+//     grouping reused cleanly). Guards satisfied at the reuse site:
+//     fee footer + DayDetail untouched, MLB rendering unchanged,
+//     read-side only, zero write-path.
+//
+// Segments: one per homestand, status encoded by fill (done = navy,
+// next = grey, focus = amber). The focus segment is the deriveFocus
+// segment - live homestand when one is in progress, else the next
+// upcoming, else the last done. The focus segment widens and carries
+// the HS id label inside.
 //
 // DESKTOP (>=1024px): caption + bar.
 // MOBILE  (<1024px): spotlight card + bar (>=44px tap target).

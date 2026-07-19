@@ -110,60 +110,46 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
         </div>
       )}
 
-      {/* Rail: a single continuous gradient across the year painted by
-          buildRailGradient (Bundle 2 change 2) when phases are recorded -
-          adjacent phase tints blend through a small transition zone, and
-          pre/post-season spans get the off-season wash so the rail is
-          never bare (the prior Jan-Mar void is filled). The block <div>s
-          stay - they position the phase labels - but their backgrounds
-          and the white right-border seam come off in CSS so the
-          underlying gradient shows through. The today line is the last
-          child so it paints on top of the gradient. Non-recorded
-          accounts ("Season axis") get a bare rail per the calm
-          treatment. */}
+      {/* OV-3 Wave 3a - MONTH TICKS ABOVE the rail (spec v4 flip:
+          months row above the band, phase titles below). */}
+      <div className="sc-season-strip-ticks sc-season-strip-ticks--above" aria-hidden="true">
+        {MONTH_SHORT.map((m) => (
+          <span key={m} className="sc-season-strip-tick">{m}</span>
+        ))}
+      </div>
+
+      {/* Rail: continuous gradient across the year. OV-3 Wave 3a
+          drops the in-band block LABELS - phase titles now render as
+          a separate row BELOW the rail (see .sc-season-strip-phase-
+          labels below). The block <div>s remain for their POSITIONS +
+          data-current signal so downstream selectors can still key
+          on the current phase; label text moved out. */}
       <div
         className="sc-season-strip-rail"
         style={railBackground ? { background: railBackground } : undefined}
       >
-        {/* V3 OV-2 F2: resolve the current PHASE key once (from the
-            sliver segment that actually contains today), then mark
-            every segment sharing that phase as current. Rationale:
-            derivePhaseTimeline splits a phase into multiple date
-            segments (e.g. Complex League Jun 15-Jul 15 + Jul 21-Aug 30
-            around a Draft break). The segment containing today may be
-            a 1-2% sliver, dropped by the `b.width >= 6` label gate at
-            line 149 - so lighting only that segment lit nothing.
-            Lighting the whole phase catches the WIDE, LABELED segment.
-            Zero derive change - `b.phase` + `b.start` + `b.end` are
-            existing block fields. */}
         {timeline.status === "recorded" && (() => {
           const currentPhaseKey = blockPositions.find(
             (b) => todayDate && todayDate >= b.start && todayDate <= b.end
           )?.phase ?? null;
           return (
-          <div className="sc-season-strip-blocks" aria-hidden="true">
-            {blockPositions.map((b, i) => {
-              const isCurrent = !!(currentPhaseKey && b.phase === currentPhaseKey);
-              return (
-                <div
-                  key={`${b.phase}-${i}`}
-                  className="sc-season-strip-block"
-                  data-current={isCurrent ? "true" : undefined}
-                  style={{
-                    left: `${b.left}%`,
-                    width: `${b.width}%`,
-                  }}
-                  title={`${b.label} · ${b.start} to ${b.end}`}
-                >
-                  {b.width >= 6 && (
-                    <span className="sc-season-strip-block-label">
-                      {b.width >= 9 ? b.label : b.short}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            <div className="sc-season-strip-blocks" aria-hidden="true">
+              {blockPositions.map((b, i) => {
+                const isCurrent = !!(currentPhaseKey && b.phase === currentPhaseKey);
+                return (
+                  <div
+                    key={`${b.phase}-${i}`}
+                    className="sc-season-strip-block"
+                    data-current={isCurrent ? "true" : undefined}
+                    style={{
+                      left: `${b.left}%`,
+                      width: `${b.width}%`,
+                    }}
+                    title={`${b.label} · ${b.start} to ${b.end}`}
+                  />
+                );
+              })}
+            </div>
           );
         })()}
 
@@ -176,13 +162,35 @@ export default function PhaseStrip({ accountKey, category, today, year, isLoadin
         )}
       </div>
 
-      {/* Month ticks underneath the rail. Always visible on desktop;
-          hidden on mobile (the chip above carries the signal). */}
-      <div className="sc-season-strip-ticks" aria-hidden="true">
-        {MONTH_SHORT.map((m) => (
-          <span key={m} className="sc-season-strip-tick">{m}</span>
-        ))}
-      </div>
+      {/* OV-3 Wave 3a - PHASE TITLES BELOW the rail. Current phase
+          = navy + 800 weight, NO dot. Positioned as an absolute-in-
+          row layout mirroring the block positions. */}
+      {timeline.status === "recorded" && (() => {
+        const currentPhaseKey = blockPositions.find(
+          (b) => todayDate && todayDate >= b.start && todayDate <= b.end
+        )?.phase ?? null;
+        return (
+          <div className="sc-season-strip-phase-labels" aria-hidden="true">
+            {blockPositions.map((b, i) => {
+              if (b.width < 6) return null;
+              const isCurrent = !!(currentPhaseKey && b.phase === currentPhaseKey);
+              return (
+                <span
+                  key={`${b.phase}-label-${i}`}
+                  className="sc-season-strip-phase-label"
+                  data-current={isCurrent ? "true" : undefined}
+                  style={{
+                    left: `${b.left}%`,
+                    width: `${b.width}%`,
+                  }}
+                >
+                  {b.width >= 9 ? b.label : b.short}
+                </span>
+              );
+            })}
+          </div>
+        );
+      })()}
     </section>
   );
 }

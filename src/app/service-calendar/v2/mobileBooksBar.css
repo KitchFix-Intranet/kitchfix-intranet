@@ -47,7 +47,11 @@
 .sc-mobile-books-backdrop { display: none; }
 .sc-mobile-books-action { display: none; }
 
-@media (max-width: 767px) {
+/* OV-3 G7 (2026-07-19) - band extended from <=767 to <=1099 so the
+   shipped W8 books-bar + sheet grammar carries the 768-1099 laptop
+   band too. The MobileBooksBar mount site (ServiceCalendar overview
+   paths) already emits the bar unconditionally; the CSS gates it. */
+@media (max-width: 1099px) {
   /* ─── Sheet host (the aside) ──────────────────────────────
      Fixed above the sticky bar. Translated off-screen when closed.
      When open, `--open` puts it at bottom:{bar-h} above the bar.

@@ -19,7 +19,6 @@ import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
 import { useScV2, useScEntryV2Effective } from "./v2/flags";
-import { useDensity } from "./v2/useDensity";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
@@ -282,7 +281,6 @@ function AccountDropdown({ accounts, value, onChange }) {
 
 export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
-  const [scV2Density, setScV2Density] = useDensity();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   // year is hardcoded to the active season; month initializes from the
@@ -1098,7 +1096,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // MiLB is hybrid: per-meal financially + schedule rhythm operationally.
   // (isFeeAccount hoisted upstream to feed the Phase 6 cutover hook -
   // one source for the fee-branch signal across the component.)
-  const hasHomestandSchedule = !!data?.homestandMap;
+  //
+  // G6 + F1 (2026-07-19): the gate READS FROM the account-level flag.
+  // G6 used `data.account.hasHomestandSchedule` but F1 caught that on
+  // year-overview scope the client seed can be sc-year-summary alone -
+  // whose payload is `{ success, accountKey, today, periodRanges,
+  // months }` with NO account object. sc-load populates `data.account`
+  // only after its own fetch resolves, so the stepper gate raced with
+  // the mount and often computed undefined even for MLB fee (CIN-OH
+  // works when sc-load has been visited; MiLB AAA reliably failed).
+  // Fix: derive from the SELECTED account's record in the accounts
+  // list ServiceCalendar already holds - `sc-accounts` (route.js:149)
+  // ships hasHomestandSchedule for every row. Zero API change; client-
+  // side only. Downstream self-guard unchanged: SeasonStepper's
+  // deriveHomestandSegments returns [] and the component returns null
+  // if yearData carries no homestandId - so the render still gates on
+  // actual data. Item 18 carve-out guards still satisfied.
+  const selectedAccountRecord = accounts.find(a => a.key === selectedAccount) || null;
+  const hasHomestandSchedule = !!selectedAccountRecord?.hasHomestandSchedule;
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
   // sc-load payload. Non-flagged accounts NEVER see a scheduleOverlay
@@ -2070,31 +2085,53 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     <div
       className={`sc-root${scV2 ? " scv2" : ""}`}
       data-density="compact"
-      data-sc2-density={scV2 ? scV2Density : undefined}
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
       {scV2 && (
         <Ribbon
-          firstName={firstName}
           asOf={asOf}
           onRefresh={handleRefresh}
-          /* V3 §9.2 + §9.6 - fetchState from effectiveYearLoadState
-             (yearLoadState + ?debug=failed hook, H1). "failed" maps
-             directly; other states resolve to "fresh". A future §9.6
-             stale check (past a refresh interval) can flip "loaded"
-             to "stale" - hook lives at the effective derivation, so
-             every consumer (grid, rail, as-of pill) reads one signal. */
+          /* V3 §9.2 + §9.6 - fetchState from effectiveYearLoadState. */
           fetchState={effectiveYearLoadState === "failed" ? "failed" : "fresh"}
           isAdmin={isAdmin}
           isAdminView={isAdminView}
           onAdminToggle={handleAdminToggle}
-          density={scV2Density}
-          onDensityChange={setScV2Density}
+          /* OV-3 Wave 2 - single-row header: chrome content flows into
+             the ribbon under scv2 overview. ChromeBar below suppresses
+             for scV2 && isYearView && !isAdminView (drill + admin
+             still use ChromeBar until V3 DRILL rebuilds them). */
+          accountDropdown={accountDropdown}
+          category={!isAdminView && isYearView ? category : null}
+          view={seasonView}
+          onViewChange={handleSeasonViewChange}
+          showToggle={!isAdminView && isYearView}
+          todayLabel={yearBannerStats?.todayLabel}
+          periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
+          weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
+          /* G4 (2026-07-19) - fee / homestand accounts render
+             GAME DAYS n/m in place of PERIOD | WEEK. Per-meal
+             accounts pass hasHomestandSchedule=false so RibbonMeta
+             renders the calendar variant unchanged. */
+          hasHomestandSchedule={hasHomestandSchedule}
+          gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
+          totalGameDays={yearBannerStats?.totalGameDays || 0}
+          exportControl={
+            !isAdminView && selectedAccount && isYearView
+              ? (
+                <ExportControl
+                  scope="year"
+                  year={year}
+                  accountKey={selectedAccount}
+                  showToast={showToast}
+                  hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
+                  hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+                />
+              ) : null
+          }
         />
       )}
-      {(() => { /* extracted so the DrillRail can re-render the same instance in its footer under v2 drill scope */ })()}
-      <ChromeBar
+      {!(scV2 && isYearView && !isAdminView) && <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
         view={seasonView}
@@ -2176,7 +2213,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         totalGameDays={yearBannerStats?.totalGameDays || 0}
         onJumpToNeeds={handleJumpToNeeds}
         onJumpToOverdue={handleJumpToOverdue}
-      />
+      />}
 
       {!isAdminView && (
         <StickyContext

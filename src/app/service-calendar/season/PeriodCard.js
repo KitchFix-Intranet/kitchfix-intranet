@@ -92,6 +92,15 @@ export default function PeriodCard({
     >
       <header className="sc-season-period-card-header" style={headerStyle}>
         <div className="sc-season-period-card-title">
+          {/* OV-3 Wave 6 - 3px phase tick left of P{n} (month-card
+              language). scv2 shows it as a 3px bar tinted by the
+              primaryPhase.tint; v1 base rule hides it so the inline
+              style is inert on the legacy header. */}
+          <span
+            className="sc-season-period-card-phase-tick"
+            style={primaryPhase ? { background: primaryPhase.tint } : undefined}
+            aria-hidden="true"
+          />
           <span className="sc-season-period-card-num">P{periodNum}</span>
           <span className="sc-season-period-card-anchor">· {anchor}</span>
         </div>
