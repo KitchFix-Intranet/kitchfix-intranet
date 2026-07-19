@@ -424,10 +424,15 @@
   /* ---------- Corner-mark family ----------
      Two-color grammar preserved from v1: top-right game wedge
      (indigo), bottom-left season wedge (copper - shares
-     --sc2-accent-copper above). Indigo has no dedicated ramp yet;
-     token holds the single value used by both the sm wedge and
-     the (future) lg game-day accents. */
-  --sc2-mark-gameday: #4338CA;   /* indigo-700 - promotable to a --sc2-indigo-* ramp */
+     --sc2-accent-copper above). OV-3 F9 (2026-07-19) - marker
+     construction redesigned as outline notches; token now points
+     at navy (--sc2-cmd-bg) so the game bracket is consistent with
+     the header identity. Prior indigo value #4338CA retired for
+     the notch redesign. --sc2-mark-spring is added as a distinct
+     copper-family token so the notch borders can consume tokens,
+     not hex; --sc2-accent-copper (other consumers) stays put. */
+  --sc2-mark-gameday: var(--sc2-cmd-bg);       /* navy #1a3050 per owner ruling */
+  --sc2-mark-spring:  #b0722c;                 /* copper per owner ruling */
 
   /* ---------- Structural lines ---------- */
   --sc2-line:   #eae4d6;

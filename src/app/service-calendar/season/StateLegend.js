@@ -116,6 +116,18 @@ function LegendSwatch({ mod, icon }) {
       </span>
     );
   }
+  // OV-3 F9: game-day / spring markers show the SAME notch
+  // construction as tiles - no glyph inside; the corner brackets are
+  // drawn by CSS via ::before/::after on the swatch itself (see
+  // stateLegend.css: F9 rules).
+  if (mod === "game-day-mark" || mod === "spring-mark") {
+    return (
+      <span
+        className={`sc-state-legend-swatch sc-state-legend-swatch--${mod}`}
+        aria-hidden="true"
+      />
+    );
+  }
   return (
     <span className={`sc-state-legend-swatch sc-state-legend-swatch--${mod}`} aria-hidden="true">
       {icon}

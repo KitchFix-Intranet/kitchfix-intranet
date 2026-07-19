@@ -986,6 +986,41 @@ body:has(.scv2) {
   border-color: var(--sc2-state-away-fg);
   color: var(--sc2-state-away-fg);
 }
+/* OV-3 F9 (2026-07-19) - game-day + spring marker swatches
+   render the SAME notch construction as tiles (DaySquare.css
+   .scv2 .sc-daysq--sm.sc-daysq--game-day::before /
+   .sc-daysq--spring::after). Base tile fill in the swatch stays
+   neutral so the notch is the load-bearing signal. */
+.scv2 .sc-state-legend-swatch--game-day-mark,
+.scv2 .sc-state-legend-swatch--spring-mark {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  position: relative;
+}
+.scv2 .sc-state-legend-swatch--game-day-mark::before {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  right: 1.5px;
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid var(--sc2-mark-gameday);
+  border-right: 2px solid var(--sc2-mark-gameday);
+  border-top-right-radius: 6px;
+  pointer-events: none;
+}
+.scv2 .sc-state-legend-swatch--spring-mark::after {
+  content: "";
+  position: absolute;
+  bottom: 1.5px;
+  left: 1.5px;
+  width: 9px;
+  height: 9px;
+  border-bottom: 2px solid var(--sc2-mark-spring);
+  border-left: 2px solid var(--sc2-mark-spring);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
+}
 
 /* Card polish under .scv2 (hover lift + banded header) - was §above,
    moved here to sit with the W6 chrome pass. */

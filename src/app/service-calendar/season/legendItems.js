@@ -16,6 +16,26 @@
 // Copy is verbatim-preserved from the pre-C1a renders - this
 // consolidates the SOURCE, not the wording.
 
+// OV-3 F9 (2026-07-19) - overlay marker legend entries. Notch
+// construction (see .scv2 .sc-daysq--sm.sc-daysq--game-day::before
+// + .sc-daysq--spring::after in DaySquare.css) - stroke-only corner
+// brackets that don't devour the tile numeral. Game mark navy;
+// spring mark copper.
+const GAME_DAY_MARK = {
+  mod: "game-day-mark",
+  icon: "",
+  label: "Game day",
+  labelLong: "Game day mark",
+  description: "Navy top-right corner bracket - the day is a scheduled home game (or an overlay game for STL - FL / TBJ - FL AAA).",
+};
+const SPRING_MARK = {
+  mod: "spring-mark",
+  icon: "",
+  label: "Spring Training",
+  labelLong: "Spring Training mark",
+  description: "Copper bottom-left corner bracket - the day falls inside the account's Spring Training phase (PDC accounts).",
+};
+
 const HOMESTAND = [
   {
     mod: "entered",
@@ -188,9 +208,18 @@ export const MILB_DAY_NIGHT = [
 
 // Returns the account-shape array. Same branch order the two
 // consumer components used pre-C1a.
+// OV-3 F9: game-day + spring markers append to the arrays where
+// the marks CAN render on tiles today:
+//   - Game mark: HOMESTAND (MLB fee + MiLB AAA via #474 emit) +
+//     FEE (STL - FL overlay via sc-17) + PER_MEAL (TBJ - FL AAA
+//     overlay via sc-17b).
+//   - Spring mark: FEE (STL - FL is PDC) + PER_MEAL (PDC per-meal
+//     accounts have springDateSet from phaseCalendar).
+// MILB (non-fee, non-homestand, non-AAA) sees neither marker in
+// practice, so its array stays untouched.
 export function getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }) {
-  if (hasHomestandSchedule) return HOMESTAND;
-  if (isFeeAccount)         return FEE;
+  if (hasHomestandSchedule) return [...HOMESTAND, GAME_DAY_MARK];
+  if (isFeeAccount)         return [...FEE, GAME_DAY_MARK, SPRING_MARK];
   if (isMilb)               return MILB;
-  return PER_MEAL;
+  return [...PER_MEAL, GAME_DAY_MARK, SPRING_MARK];
 }

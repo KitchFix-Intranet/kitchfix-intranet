@@ -1120,34 +1120,60 @@
    Corner grammar preserved from v1 (top-right = game/event,
    bottom-left = season). Recolored via .scv2 chip tokens so
    they inherit the theme's accent families cleanly. */
-/* OV-3 Item 1d + G10 + F2(a) (2026-07-19) - wedge history:
-   Wave 1d enlarged base 15px legs to 22px under scv2. G10 caught +
-   deleted an OV-1 §7.4 display:none that had been suppressing the
-   entire pseudo. F2 caught the second suppressor (Wave 3c home-
-   hide, overview.css - see the F2(b) block there for the full
-   diagnosis) and deleted it.
-   F2(a) OWNER NEUTRALIZATION (2026-07-19): the 22px filled wedges
-   are owner-rejected (devour numerals; raw copper clashes). Both
-   wedges hide via `display: none` here pending the F9 marker pick
-   (Option 6 outline notch under a separate commit - REPLACES this
-   block once the notch construction lands). Width/height/background
-   overrides are RETAINED so the F2(b) acceptance can verify content
-   generation via computed values on a hidden pseudo:
-      computed content: '""'  (from base rule at line 265-276)
-      computed background:  from --sc2-mark-gameday (Wave 1d override)
-   The base clip-path stays applied; nothing paints because display:
-   none skips box generation. */
+/* OV-3 F9 (2026-07-19) - Owner ruling: Option 6 outline notch.
+   The prior Wave-1d 22px filled wedges (from a clip-path polygon
+   on a sized box) were owner-rejected (devoured numerals; raw
+   copper clashed). Replaced with corner BRACKET marks - stroke
+   only, zero fill - so the numeral stays fully legible under
+   every state.
+   Construction:
+     Game (::before, TOP-RIGHT): 9x9 box, inset 1.5px from the
+       corner; borders on TOP + RIGHT edges only (2px solid navy);
+       transparent everywhere else; outer corner radius ~6px so
+       the mark hugs the tile's corner radius.
+     Spring (::after, BOTTOM-LEFT): mirror geometry - borders on
+       BOTTOM + LEFT (2px solid copper); outer corner radius ~6px.
+   Both marks coexist on a spring-training game day (opposite
+   corners; no collision).
+   Base rule (DaySquare.css:265-276) sets `content: "";
+   position: absolute; width/height 15; background; clip-path
+   polygon`. My scv2 rule overrides width/height/background AND
+   sets `background: transparent; border-{top,right,bottom,left}`
+   to convert the filled clip-path into an outline notch. The
+   clip-path from the base rule remains but is invisible under a
+   transparent background - notch reads purely from the borders.
+   G10 companion history + F2(b) game-pseudo diagnosis in the
+   commit body of ov-3 f2. Tokens: --sc2-mark-gameday (navy)
+   and --sc2-mark-spring (copper) are declared at tokens.css. */
 .scv2 .sc-daysq--sm.sc-daysq--game-day::before {
-  width: 22px;
-  height: 22px;
-  background: var(--sc2-mark-gameday);
-  display: none;   /* F2(a) - pending F9 marker pick */
+  width: 9px;
+  height: 9px;
+  top: 1.5px;
+  right: 1.5px;
+  background: transparent;
+  border-top: 2px solid var(--sc2-mark-gameday);
+  border-right: 2px solid var(--sc2-mark-gameday);
+  border-bottom: none;
+  border-left: none;
+  border-top-right-radius: 6px;
+  clip-path: none;
+  pointer-events: none;
+  z-index: 1;
 }
 .scv2 .sc-daysq--sm.sc-daysq--spring::after {
-  width: 22px;
-  height: 22px;
-  background: var(--sc2-accent-copper);
-  display: none;   /* F2(a) - pending F9 marker pick */
+  width: 9px;
+  height: 9px;
+  bottom: 1.5px;
+  left: 1.5px;
+  background: transparent;
+  border-bottom: 2px solid var(--sc2-mark-spring);
+  border-left: 2px solid var(--sc2-mark-spring);
+  border-top: none;
+  border-right: none;
+  border-bottom-left-radius: 6px;
+  clip-path: none;
+  pointer-events: none;
+  z-index: 1;
 }
 .scv2 .sc-daysq-st-pill {
   background: var(--sc2-chip-mlb-bg);
