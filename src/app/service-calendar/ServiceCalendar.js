@@ -1097,24 +1097,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // (isFeeAccount hoisted upstream to feed the Phase 6 cutover hook -
   // one source for the fee-branch signal across the component.)
   //
-  // G6 (2026-07-19): the gate READS FROM the account-level flag, not
-  // the current-month map presence. Prior derivation
-  // `!!data?.homestandMap` only fired true when the SC-load month
-  // had homestand context rows. On an off-week / between-homestand
-  // month, `data.homestandMap` was null even for MLB fee - and for
-  // MiLB AAA (CIN-KY / TBJ-NY, hasHomestandSchedule flag=true per
-  // sc-16) the map was frequently null too because year-summary
-  // populates homestandId onto yearData days, not sc-load's
-  // homestandMap. SeasonShell got hasHomestandSchedule=false and
-  // rendered PhaseStrip instead of SeasonStepper. Fix: read the DB
-  // flag directly via data.account.hasHomestandSchedule (set at
-  // route.js:453 from the accounts.has_homestand_schedule column).
-  // Downstream: SeasonStepper's own deriveHomestandSegments returns
-  // [] and the component returns null if yearData has no
-  // homestandId anywhere, so the render still self-guards. Loosening
-  // the gate lets MiLB accounts render the strip when their data
-  // supports it. Item 18 carve-out guards still satisfied.
-  const hasHomestandSchedule = !!data?.account?.hasHomestandSchedule;
+  // G6 + F1 (2026-07-19): the gate READS FROM the account-level flag.
+  // G6 used `data.account.hasHomestandSchedule` but F1 caught that on
+  // year-overview scope the client seed can be sc-year-summary alone -
+  // whose payload is `{ success, accountKey, today, periodRanges,
+  // months }` with NO account object. sc-load populates `data.account`
+  // only after its own fetch resolves, so the stepper gate raced with
+  // the mount and often computed undefined even for MLB fee (CIN-OH
+  // works when sc-load has been visited; MiLB AAA reliably failed).
+  // Fix: derive from the SELECTED account's record in the accounts
+  // list ServiceCalendar already holds - `sc-accounts` (route.js:149)
+  // ships hasHomestandSchedule for every row. Zero API change; client-
+  // side only. Downstream self-guard unchanged: SeasonStepper's
+  // deriveHomestandSegments returns [] and the component returns null
+  // if yearData carries no homestandId - so the render still gates on
+  // actual data. Item 18 carve-out guards still satisfied.
+  const selectedAccountRecord = accounts.find(a => a.key === selectedAccount) || null;
+  const hasHomestandSchedule = !!selectedAccountRecord?.hasHomestandSchedule;
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
   // sc-load payload. Non-flagged accounts NEVER see a scheduleOverlay
