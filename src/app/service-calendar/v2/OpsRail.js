@@ -259,8 +259,13 @@ function OpsSeasonList({ lines, todayMonth, year, onDrillToMonth }) {
       });
     });
     return () => cancelAnimationFrame(rafId);
+    /* F-E4: include the data-arrival signal (lines.length) in the
+       deps so the effect re-runs when data arrives. Pre-fix the
+       effect fired ONCE on mount before `lines` populated -
+       currentRef was null, early-returned, never re-ran.
+       scrollTop stayed 0 forever. Same pattern as SeasonList. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth]);
+  }, [year, todayMonth, lines.length]);
   return (
     <>
       {lines.map((line) => (

@@ -250,10 +250,16 @@ function SeasonList({
       });
     });
     return () => cancelAnimationFrame(rafId);
-    // Run only on mount + when the current month index would change
-    // (year switch); intentionally NOT on visibleMonthLines identity.
+    /* F-E4: include the data-arrival signal (visibleMonthLines.length)
+       in the deps. Pre-fix the effect fired ONCE on mount before the
+       lines array populated - currentRef.current was null, early-
+       returned, and never re-ran when data arrived. scrollTop stayed
+       0 forever. Adding length triggers a re-run when the lines
+       actually land; the null-ref early-return keeps redundant runs
+       harmless. Intentionally NOT depending on the full lines array
+       identity (would fire on every session interaction). */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, todayMonth]);
+  }, [year, todayMonth, visibleMonthLines.length]);
   return (
     <>
       {visibleMonthLines.map((line) => (
