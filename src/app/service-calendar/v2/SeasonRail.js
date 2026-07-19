@@ -9,7 +9,7 @@
 //
 // This component is inert to fetches - it only reads what's in memory.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
@@ -132,25 +132,26 @@ function CalendarRail({
   const visibleQueue = showAllQueue ? queue : queue.slice(0, QUEUE_TOP_N);
   const overflow = queue.length - visibleQueue.length;
 
-  /* V3 §S8.5 - Aug-Dec collapse row. Months whose state is
-     "upcoming" (or "off" past the current arc) fold into ONE row
-     "AUG - DEC · ~$X" - click expands in place. Session-local state
-     hoisted to CalendarRail (RailSection is presentational). */
+  /* V3 §S8.5 F-F - Aug-Dec collapse row. Session-local toggle:
+     collapsed (default) shows primary lines + a single "AUG - DEC
+     · ~$X" toggle row; expanded shows ALL monthLines + a
+     "Show less" toggle row at the end. Same button toggles either
+     direction. F-D2: hyphen not em-dash in labels. */
   const [showAllMonths, setShowAllMonths] = useState(false);
   const todayMonth = new Date().getMonth();     /* 0-11 */
-  const shouldCollapseTail = !showAllMonths && todayMonth < 11;
-  const primaryLines = shouldCollapseTail
-    ? monthLines.filter((_, i) => i <= todayMonth + 1)
-    : monthLines;
-  const tailLines = shouldCollapseTail
-    ? monthLines.filter((_, i) => i > todayMonth + 1)
-    : [];
-  const tailSumProjected = tailLines.reduce(
+  const tailEligible = todayMonth < 11;
+  const tailStartIdx = todayMonth + 2;          /* first slim-tail month */
+  const tailAllLines = tailEligible ? monthLines.slice(tailStartIdx) : [];
+  const tailSumProjected = tailAllLines.reduce(
     (acc, l) => acc + (Number(l.displayRev) || 0),
     0
   );
-  const tailFirstShort = tailLines[0]?.short || "";
-  const tailLastShort = tailLines[tailLines.length - 1]?.short || "";
+  const tailFirstShort = tailAllLines[0]?.short || "";
+  const tailLastShort = tailAllLines[tailAllLines.length - 1]?.short || "";
+  const visibleMonthLines = (tailEligible && !showAllMonths)
+    ? monthLines.slice(0, tailStartIdx)
+    : monthLines;
+  const toggleTail = () => setShowAllMonths((v) => !v);
 
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
@@ -163,7 +164,9 @@ function CalendarRail({
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
 
-      <RailScroll>
+      {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
+          The queue stays visible while the season list inner-scrolls. */}
+      <div className="sc-rail-pinned">
         <RailSection
           label="NEEDS ENTRY"
           meta={queue.length > 0 ? `${queue.length}` : null}
@@ -188,23 +191,23 @@ function CalendarRail({
             />
           )}
         </RailSection>
+      </div>
 
+      <RailScroll>
         <RailSection label="Season">
-          {primaryLines.map(line => (
-            <MonthRailLine
-              key={line.key}
-              line={line}
-              onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
-            />
-          ))}
-          {shouldCollapseTail && tailLines.length > 0 && (
-            <RailLine
-              label={`${tailFirstShort} — ${tailLastShort}`}
-              value={`~${fmtOverviewMoney(tailSumProjected)}`}
-              tone="upcoming"
-              onClick={() => setShowAllMonths(true)}
-            />
-          )}
+          <SeasonList
+            year={year}
+            visibleMonthLines={visibleMonthLines}
+            todayMonth={todayMonth}
+            onDrillToMonth={onDrillToMonth}
+            tailEligible={tailEligible}
+            tailAllLines={tailAllLines}
+            tailFirstShort={tailFirstShort}
+            tailLastShort={tailLastShort}
+            tailSumProjected={tailSumProjected}
+            showAllMonths={showAllMonths}
+            toggleTail={toggleTail}
+          />
         </RailSection>
       </RailScroll>
 
@@ -217,6 +220,62 @@ function CalendarRail({
         }}
       />
     </RailShell>
+  );
+}
+
+/*
+  V3 §S8.3 - SeasonList: auto-scroll the current month row into view
+  on mount. Uses a ref on the current month's line + a rAF scroll.
+  RM-gated via `scrollIntoView({ behavior: "auto" })` under
+  prefers-reduced-motion; else smooth.
+*/
+function SeasonList({
+  year, visibleMonthLines, todayMonth, onDrillToMonth,
+  tailEligible, tailAllLines, tailFirstShort, tailLastShort,
+  tailSumProjected, showAllMonths, toggleTail,
+}) {
+  const currentRef = useRef(null);
+  useEffect(() => {
+    const el = currentRef.current;
+    if (!el) return;
+    const rm = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    /* Delay one rAF so the layout settles before scrollIntoView
+       computes offsets. Block: "center" places the current month
+       mid-viewport of the scroll region. */
+    const rafId = requestAnimationFrame(() => {
+      el.scrollIntoView({
+        block: "center",
+        behavior: rm ? "auto" : "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
+    // Run only on mount + when the current month index would change
+    // (year switch); intentionally NOT on visibleMonthLines identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, todayMonth]);
+  return (
+    <>
+      {visibleMonthLines.map((line) => (
+        <div
+          key={line.key}
+          ref={line.monthIndex === todayMonth ? currentRef : null}
+        >
+          <MonthRailLine
+            line={line}
+            onClick={line.state === "off" ? undefined : () => onDrillToMonth?.(line.monthIndex)}
+          />
+        </div>
+      ))}
+      {tailEligible && tailAllLines.length > 0 && (
+        <RailLine
+          label={showAllMonths ? "Show less" : `${tailFirstShort} - ${tailLastShort}`}
+          value={showAllMonths ? "" : `~${fmtOverviewMoney(tailSumProjected)}`}
+          tone="upcoming"
+          onClick={toggleTail}
+        />
+      )}
+    </>
   );
 }
 

@@ -56,7 +56,13 @@
   border-radius: 16px;
   box-shadow: var(--sc2-el-widget);
   margin-top: var(--sc2-space-6);
-  overflow: hidden;      /* keeps ribbon's top corners inside the widget */
+  /* F-E fix (Chat-Claude sweep): `overflow: hidden` REMOVED. Any
+     overflow-hidden ancestor disables position:sticky for all
+     descendants; the rail's `top: 96px` sticky was failing
+     silently because of it. The ribbon's own border-radius
+     (§S3.1) clips its top corners; the ChromeBar shares the
+     same navy background so no bleed occurs. Verified: widget
+     top corners still clean without the overflow clip. */
 }
 /* .sc-body inside the widget: pure layout, no ground. */
 .scv2 .sc-body {
@@ -1082,14 +1088,16 @@
 
 /* §6.9 - Progressive detail slim rows. Months beyond current+1
    collapse to a compact one-row view: header only (name + phase
-   tick + P-tag). Grid, dow, footer are hidden. Click on the
-   collapsed-trigger button expands via userExpanded (MonthCard's
-   own state) which flips data-slim off.
+   tick + P-tag).
+
+   F-A fix (Chat-Claude sweep): when slim, the header IS a real
+   `<button class="sc-season-month-card-slim-expand">` (§9.3 F-B
+   folds it into the roving list). Clicking expands via
+   userExpanded; the normal drill overlay returns.
 
    Session-local: userExpanded resets on remount but survives
    view changes within the session. RM-gated height transition
-   on the article for the expand animation. Flag-off inertness:
-   base rule doesn't key on data-slim; only scv2 sees it. */
+   on the article for the expand animation. */
 .scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-dow,
 .scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-grid,
 .scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-footer,
@@ -1101,6 +1109,26 @@
 }
 .scv2 .sc-season-month-card[data-slim="true"] .sc-season-month-card-header {
   padding-bottom: var(--sc2-space-2);
+}
+
+/* Slim-expand header button: same layout as the plain header,
+   button reset so it doesn't inherit browser button styles. */
+.scv2 .sc-season-month-card-slim-expand {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: var(--sc2-space-3);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.scv2 .sc-season-month-card-slim-expand:focus-visible {
+  outline: 2px solid var(--sc2-cmd-bg);
+  outline-offset: 2px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .scv2 .sc-season-month-card {

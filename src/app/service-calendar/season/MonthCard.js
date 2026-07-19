@@ -124,19 +124,42 @@ export default function MonthCard({
   //             above it via z-index so tapping the chevron collapses
   //             instead of drilling). Mirrors the period-card click
   //             pattern; resolves audit CC-4.
+  /* V3 §6.9 F-A - Slim mode is an interactive collapsed state, not a
+     dead-end. When slim, the header itself is a real <button>
+     (`.sc-season-month-card-slim-expand`) that flips userExpanded on
+     click / Enter / Space, and participates in the SeasonShell roving
+     grid nav (§9.3 F-B - the roving list collects both
+     `-slim-expand` and `-collapsed-trigger` plus the drill overlay).
+     Once expanded, the normal header + drill overlay return. */
+  const isSlim = slimByDefault && !userExpanded;
   return (
     <article
       className={cardClass}
       aria-label={`${monthName} ${year}`}
       data-state={monthState}
-      /* V3 §6.9 - Slim mode: months beyond current+1 hide the tile
-         grid + footer + drill overlay via CSS (data-slim="true").
-         User can expand by clicking the collapsed-trigger header
-         (which flips userExpanded and, via slim's evaluation below,
-         removes the attribute). Session-local per userExpanded state. */
-      data-slim={slimByDefault && !userExpanded ? "true" : undefined}
+      data-slim={isSlim ? "true" : undefined}
     >
-      {expanded ? (
+      {expanded && isSlim ? (
+        <button
+          type="button"
+          className="sc-season-month-card-header sc-season-month-card-slim-expand"
+          onClick={handleExpand}
+          aria-label={`Expand ${monthName}`}
+          aria-expanded={false}
+        >
+          <MonthPhaseTick monthIndex={monthIndex} year={year} phaseTimeline={phaseTimeline} />
+          <span className="sc-season-month-card-name">{monthName}</span>
+          <MonthPeriodTag
+            monthIndex={monthIndex}
+            year={year}
+            currentPeriodRange={currentPeriodRange}
+          />
+          <MonthUrgencyChip
+            monthSummary={monthSummary}
+            hasHomestandSchedule={hasHomestandSchedule}
+          />
+        </button>
+      ) : expanded ? (
         <header className="sc-season-month-card-header">
           {/* V3 §6.6 - 3px phase tick left of month name; tint from
               the month's dominant phase (mid-month lookup, per spec

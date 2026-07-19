@@ -21,7 +21,7 @@
 // legacy lens/scope path remains intact alongside this new shell
 // (spec 11.4).
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./season.css";
 import PhaseStrip from "./PhaseStrip";
 import SeasonStepper from "./SeasonStepper";
@@ -105,6 +105,28 @@ export default function SeasonShell({
 
   const todayDate = yearToday?.date || null;
 
+  /* V3 §9.3 F-C - real roving tabindex management. Track the
+     currently-focused card index in state; on every render (data
+     shape may change slim-vs-expanded), a ref-based effect walks
+     the current card list and sets tabIndex=0 on the roving target
+     and tabIndex=-1 on the rest. Initial roving = 0 (first card).
+     Tab enters the grid once (lands on the roving card), next Tab
+     exits to legend/rail. */
+  const calendarGridRef = useRef(null);
+  const [rovingIndex, setRovingIndex] = useState(0);
+  useEffect(() => {
+    const grid = calendarGridRef.current;
+    if (!grid) return;
+    const cards = Array.from(grid.querySelectorAll(
+      ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+    ));
+    if (!cards.length) return;
+    const target = Math.min(rovingIndex, cards.length - 1);
+    cards.forEach((c, i) => {
+      c.tabIndex = i === target ? 0 : -1;
+    });
+  });
+
   // Bundle 1 (Section D1): the all-expanded-on-desktop layout needs
   // one matchMedia listener for the 12 cards instead of one per card.
   // SSR-safe: default true so the desktop layout (dominant case) is
@@ -181,6 +203,22 @@ export default function SeasonShell({
           className="sc-season-grid"
           role="grid"
           aria-label={`${year} months`}
+          ref={calendarGridRef}
+          onFocus={(e) => {
+            /* V3 §9.3 F-C - track the currently-focused card so
+               the tabindex ref-effect can maintain ONE tabstop. */
+            const card = e.target.closest(
+              ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+            );
+            if (!card) return;
+            const cards = Array.from(
+              e.currentTarget.querySelectorAll(
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+              )
+            );
+            const idx = cards.indexOf(card);
+            if (idx !== -1) setRovingIndex(idx);
+          }}
           onKeyDown={(e) => {
             /* V3 §9.3 - roving keyboard nav across the month grid.
                ONE tabstop (whichever button currently has focus);
@@ -188,11 +226,16 @@ export default function SeasonShell({
                (Up/Down); Home/End jump to first/last card. Enter
                is left to the native <button> click. No preventDefault
                unless we successfully move focus so v1 fallbacks
-               (mobile chevron expand, form submit) survive. */
+               (mobile chevron expand, form submit) survive.
+
+               F-B: the roving list includes slim-expand + collapsed-
+               trigger + drill (whichever the current card renders). */
             const key = e.key;
             if (!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(key)) return;
             const cards = Array.from(
-              e.currentTarget.querySelectorAll(".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger")
+              e.currentTarget.querySelectorAll(
+                ".sc-season-month-card-drill, .sc-season-month-card-collapsed-trigger, .sc-season-month-card-slim-expand"
+              )
             );
             if (!cards.length) return;
             const active = document.activeElement;
@@ -207,6 +250,7 @@ export default function SeasonShell({
             else if (key === "End") next = cards.length - 1;
             if (next !== idx) {
               e.preventDefault();
+              setRovingIndex(next);
               cards[next]?.focus();
             }
           }}

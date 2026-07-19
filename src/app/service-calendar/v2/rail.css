@@ -25,6 +25,15 @@
   height: 100%;
 }
 
+/* V3 §S8.3 - pinned NEEDS ENTRY section above the season scroll
+   region. Sits between the hero/progress rows and the scroll wrap;
+   the wrap owns its own overflow. */
+.scv2 .sc-rail-pinned {
+  flex: 0 0 auto;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  padding-bottom: var(--sc2-space-2);
+}
+
 /* Section label above the hero (e.g. SEASON · 2026 BOOKS) */
 .scv2 .sc-rail-label {
   font-size: var(--sc2-size-micro);
