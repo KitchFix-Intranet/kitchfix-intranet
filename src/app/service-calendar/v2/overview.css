@@ -888,6 +888,70 @@ body:has(.scv2) {
   font-size: var(--sc2-size-micro);
 }
 
+/* OV-3 G11 (2026-07-19) - legend + swatch refresh.
+   (a) Container matches the inner-card region above it: same
+       background, hairline border, radius, inset shadow. Margin
+       zeroed so the legend's inline edges are flush with the
+       region's inline edges (both are children of sc-overview-main,
+       so horizontal extent is inherited; only the vertical inset
+       changes).
+   (b) State swatch text glyphs (unicode chars ✎/!/○ from
+       legendItems.js) hidden under scv2 - overview tiles no longer
+       render those glyphs after Wave 3c (A-scope glyph purge). SVG-
+       carrying swatches (milb-day/night, away, exhibition) keep
+       their glyphs unchanged.
+       Away swatch under scv2 flips to ghost-purple state tokens
+       (--sc2-state-away-bg / --sc2-state-away-fg) so the legend
+       sample reads what the tile now renders (Wave 3d).
+       Today swatch: outline 2px navy + outline-offset 2px so the
+       legend sample matches the tile's outline treatment (G-Item
+       1c).
+   (c) NOT SCOPED without ruling: adding wedge samples (game-day
+       navy top-right + spring copper bottom-left) requires new
+       entries in legendItems.js. The current HOMESTAND / FEE / MILB
+       / PER_MEAL arrays have no wedge slot. Flagged for follow-up.
+*/
+.scv2 .sc-state-legend {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: 12px;
+  box-shadow: var(--sc2-el-inset);
+  margin: 0;
+  padding: var(--sc2-space-4);
+}
+.scv2 .sc-body > .sc-state-legend {
+  border-radius: 12px;
+  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+}
+/* Hide text-glyph swatches (✎ / ! / ○). SVG-based swatches untouched
+   because their content is <svg>, not text. */
+.scv2 .sc-state-legend-swatch--entered,
+.scv2 .sc-state-legend-swatch--needs-entry,
+.scv2 .sc-state-legend-swatch--overdue,
+.scv2 .sc-state-legend-swatch--upcoming,
+.scv2 .sc-state-legend-swatch--off {
+  font-size: 0;
+}
+/* Today swatch outline treatment - mirrors DaySquare.css:1137-1141
+   (scv2 today outline + offset). Neutral tile fill so the ring is
+   the load-bearing signal. */
+.scv2 .sc-state-legend-swatch--today {
+  background: var(--sc2-surface-card);
+  outline: 2px solid var(--sc2-today-ring);
+  outline-offset: 2px;
+  border: none;
+  box-shadow: none;
+  font-size: 0;
+}
+/* Away swatch under scv2 - ghost-purple state tokens, matches
+   Wave 3d tile state (`.scv2 .sc-daysq--away` at DaySquare.css
+   scoped block). */
+.scv2 .sc-state-legend-swatch--away {
+  background: var(--sc2-state-away-bg);
+  border-color: var(--sc2-state-away-fg);
+  color: var(--sc2-state-away-fg);
+}
+
 /* Card polish under .scv2 (hover lift + banded header) - was §above,
    moved here to sit with the W6 chrome pass. */
 
