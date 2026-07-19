@@ -43,11 +43,16 @@
   color: var(--sc2-rail-text-subtle);
 }
 
-/* ─── Hero ─────────────────────────────────────────────────── */
+/* ─── Hero (OV-3 Wave 4a rebuild) ─────────────────────────────
+   Inline baseline: value + label + projection sit on ONE row.
+   The "N of M days entered" caption moved to
+   .sc-rail-hero-progress-caption BELOW the progress bar. */
 .scv2 .sc-rail-hero {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  row-gap: 2px;
 }
 .scv2 .sc-rail-hero-value {
   font-size: var(--sc2-size-rail-total);
@@ -64,11 +69,24 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.scv2 .sc-rail-hero-projection {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  font-weight: var(--sc2-wt-medium);
+  font-variant-numeric: tabular-nums;
+}
 .scv2 .sc-rail-hero-meta {
   font-size: var(--sc2-size-micro);
   color: var(--sc2-rail-text-muted);
   margin-top: 2px;
   line-height: 1.5;
+  flex-basis: 100%;
+}
+.scv2 .sc-rail-hero-progress-caption {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+  margin-top: var(--sc2-space-2);
+  line-height: 1.4;
 }
 
 /* ─── Progress ─────────────────────────────────────────────── */

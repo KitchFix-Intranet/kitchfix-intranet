@@ -456,7 +456,7 @@ function deriveOverviewMonthList(yearData, year, iso, hasHomestandSchedule) {
       const monthMeals = Number(month?.actualCovers) || 0;
       if (games === 0) {
         state = "off";
-        value = "—";
+        value = "-";
         sub = null;
       } else if (games === gamesEntered) {
         state = "done";
@@ -482,7 +482,7 @@ function deriveOverviewMonthList(yearData, year, iso, hasHomestandSchedule) {
       const monthMeals = Number(month?.actualCovers) || 0;
       if (totalDays === 0) {
         state = "off";
-        value = "—";
+        value = "-";
         sub = null;
       } else if (daysEntered === totalDays) {
         state = "done";

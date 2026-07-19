@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -81,8 +82,13 @@ export default function SeasonRail({
   // stat rehomed here (per bundle F4: every FullSeasonCard figure
   // must live in the rail before the card retires). totals.mealsYTD
   // is computed by the shared derive module - no new derivation path.
-  const heroMetaCal = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
-  const heroMetaPeriod = `of ~${fmtOverviewMoney(totals.projectedRevenue)} projected · ${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
+  /* OV-3 Wave 4a - hero rebuild: projection joins the value line
+     (RailHero.projection); "N of M days entered" moves BELOW the
+     progress bar via RailHeroProgressCaption. Meals YTD stays on
+     the caption line only in Period mode. */
+  const heroProjection = `· ~${fmtOverviewMoney(totals.projectedRevenue)} projected`;
+  const heroCaptionCal = `${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
+  const heroCaptionPeriod = `${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
 
   if (mode === "calendar") {
@@ -90,7 +96,8 @@ export default function SeasonRail({
       <CalendarRail
         year={year}
         totals={totals}
-        heroMeta={heroMetaCal}
+        heroProjection={heroProjection}
+        heroCaption={heroCaptionCal}
         yearData={yearData}
         periodRanges={periodRanges}
         today={today}
@@ -105,7 +112,8 @@ export default function SeasonRail({
     <PeriodRail
       year={year}
       totals={totals}
-      heroMeta={heroMetaPeriod}
+      heroProjection={heroProjection}
+      heroCaption={heroCaptionPeriod}
       yearData={yearData}
       periodRanges={periodRanges}
       today={today}
@@ -121,7 +129,7 @@ export default function SeasonRail({
 // Calendar mode - 12 month lines + flat needs queue.
 // ═══════════════════════════════════════════════════════════════
 function CalendarRail({
-  year, totals, heroMeta,
+  year, totals, heroProjection, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToMonth,
   showAllQueue, setShowAllQueue,
@@ -159,10 +167,11 @@ function CalendarRail({
         value={totals.actualRevenue}
         format={fmtOverviewMoney}
         label="ENTERED YTD"
-        meta={heroMeta}
+        projection={heroProjection}
         ariaSuffix={`${totals.actualRevenue > 0 ? "" : "no revenue entered yet, "}${totals.pctComplete}% complete`}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
+      <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
       {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
           The queue stays visible while the season list inner-scrolls. */}
@@ -316,12 +325,12 @@ function MonthRailLine({ line, onClick }) {
   const { label, short, state, entered, totalActionable, displayRev, hasActuals } = line;
   if (state === "off") {
     return (
-      <RailLine label={short} value="—" tone="off" onClick={onClick} />
+      <RailLine label={short} value="-" tone="off" onClick={onClick} />
     );
   }
   const money = displayRev > 0
     ? (hasActuals ? fmtLineMoney(displayRev) : `~${fmtLineMoney(displayRev)}`)
-    : (hasActuals ? "$0" : "—");
+    : (hasActuals ? "$0" : "-");
   if (state === "done") {
     return (
       <RailLine label={label} value={money} tone="done" onClick={onClick} />
@@ -343,7 +352,7 @@ function MonthRailLine({ line, onClick }) {
 // Period mode - 13 period lines + period-grouped queue.
 // ═══════════════════════════════════════════════════════════════
 function PeriodRail({
-  year, totals, heroMeta,
+  year, totals, heroProjection, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToPeriod,
   showAllQueue, setShowAllQueue,
@@ -360,9 +369,10 @@ function PeriodRail({
         value={totals.actualRevenue}
         format={fmtOverviewMoney}
         label="ENTERED YTD"
-        meta={heroMeta}
+        projection={heroProjection}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
+      <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
 
       {/* V3 §S8.3 F-E2 - PeriodRail also pins NEEDS ENTRY above the
           season scroll region. Same structure as CalendarRail so
@@ -429,7 +439,7 @@ function PeriodRailLine({ line, onClick }) {
   const { period, state, entered, totalActionable, meals, overdue } = line;
   if (state === "off") {
     return (
-      <RailLine label={period} value="—" tone="off" onClick={onClick} />
+      <RailLine label={period} value="-" tone="off" onClick={onClick} />
     );
   }
   const mealsLabel = meals > 0 ? `${meals.toLocaleString("en-US")} meals` : "0 meals";

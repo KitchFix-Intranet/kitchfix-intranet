@@ -384,7 +384,7 @@ function MonthUrgencyChip({ monthSummary, hasHomestandSchedule }) {
   if (needs > 0) {
     return (
       <span className="sc-season-month-card-chip sc-season-month-card-chip--needs">
-        {needs} need entry
+        {needs} need
       </span>
     );
   }
