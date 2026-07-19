@@ -1239,21 +1239,46 @@ body:has(.scv2) {
    overview month grid. Whole-px math shakes out at the browser
    layer; --sc2-shell-max stays at 1520 unless Chat-Claude's
    S10 sweep proves a ±4px adjustment (documented rider). */
-.scv2 .sc-season-month-card-grid .sc-daysq--sm {
+.scv2 .sc-season-month-card-grid .sc-daysq--sm,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm {
   aspect-ratio: 1 / 1;
   min-width: 0;
 }
-/* §6.2 - Centered numerals on sm tiles (year-zoom). 12/600
-   tabular; tone per state (rides the fg tokens set in T-table). */
-.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date {
+/* OV-3 G12 (2026-07-19) - period tiles adopt calendar sm-tile
+   spec wholesale (§6.2). Wave 6 restyled the PeriodCard shell but
+   left the tiles inside falling through to v1 season.css:762-770
+   (--size-micro 11px + --wt-bold 700) which read larger + bolder
+   than the month-card tiles (which had this scv2 rule already).
+   Fix: extend the selector list to include the period grid; both
+   grids now share 12px + semibold + tabular + centered numerals.
+   Also add explicit vertical centering on the atom's top row so
+   numerals TRUE-CENTER within the aspect-ratio square (owner
+   flagged both calendar + period). */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-date,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-date {
   font-size: 12px;
   font-weight: var(--sc2-wt-semibold);
   font-variant-numeric: tabular-nums;
   text-align: center;
   line-height: 1;
 }
-.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-top {
+.scv2 .sc-season-month-card-grid .sc-daysq--sm .sc-daysq-top,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm .sc-daysq-top {
   justify-content: center;
+  align-items: center;
+}
+/* Vertical centering: make the tile itself a flex column centered
+   so the top row (which carries the numeral) sits in the middle. */
+.scv2 .sc-season-month-card-grid .sc-daysq--sm,
+.scv2 .sc-season-period-card-grid .sc-daysq--sm {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Match the month-grid 4px gap in the period grid too (Wave-1 B2
+   set month; period was never bumped). */
+.scv2 .sc-season-period-card-grid {
+  gap: 4px;
 }
 
 /* ══════════════════════════════════════════════════════════════
