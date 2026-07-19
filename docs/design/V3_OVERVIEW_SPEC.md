@@ -333,7 +333,112 @@ Chat-Claude re-measure of its S10 slice before Kevin's pass.
 Engine/derives · drill/entry/DayDetail internals (own sections; DayDetail = C-001/D1) ·
 mobile · nav IA beyond edge styling · data model.
 
+## v4 - Owner Round OV-3 (2026-07-19) - DELTA (canon)
+
+Round of 22 owner reversals against the v3 render (RENDER_OV3_v1.html + owner rulings).
+This delta REPLACES the referenced v3 sections; v3 language remains for context. Where
+the delta and v3 disagree, the delta wins.
+
+### Removals
+- **§6.9 Progressive detail (slim rows) - REMOVED.** No more `slimByDefault` prop, no
+  more `data-slim` CSS state, no more slim-expand button, no more slim-list roving
+  simplification. All 12 months render full. Roving keyboard reverts to the drill list.
+  Rail's Sep-Dec fold is KEPT (owner explicitly kept it).
+- **§6.6 P{n} MonthPeriodTag - REMOVED.** Component, CSS, and prop deleted. Period-index
+  identity moves onto the ribbon phase title (P{n} lives on the ribbon in §S5 language).
+- **§S5 NOW-dot - REMOVED.** No dot on the current-phase title. Current phase = navy +
+  800 (weight) only.
+- **§7.5 year-zoom home/away dot pair - REMOVED.** Zero glyphs on tiles across all
+  zooms. The dot pair is replaced by tile state (see §7.5-v4). The
+  `hasScheduleGame` emit that #474 landed is RETAINED for drill-surface use.
+- **Comfortable density - REMOVED.** Standard is the only scale. The `useDensity`
+  toggle, its Comfortable remap block, the ribbon control, and the density prop pass-
+  through all come out. Every existing Comfortable-only token consumer moves to
+  Standard tokens directly. No shim, no fallback path.
+
+### Reversals + edits
+- **§S5 ribbon layout - FLIPPED.** Months row sits ABOVE the phase band; phase titles
+  sit BELOW. Current phase = navy + 800 with no dot. §5.4 homestand strip position
+  unchanged.
+- **§S3 chrome - COLLAPSED to a single-row header.** Title | separator | account
+  selector | kind chip | Calendar|Period toggle | separator | TODAY {date} PERIOD {n}
+  WEEK {n} | right cluster (as-of pill, admin lock, export). Export sits RIGHT of the
+  admin lock, at the far edge. Responsive tripwires: `<=1360` the TODAY/PERIOD/WEEK
+  group tightens (drop internal separators); `<=1280` the as-of pill collapses to its
+  status dot + time. Item 22 acceptance: as-of failed state remains VISIBLE in every
+  collapse.
+- **§7.3 needs-entry second signal - CHANGED from dot to HEAVY NUMERAL.** The
+  `::after` needs-dot glyph is deleted. The needs numeral bumps to the heaviest
+  available weight and one darker step of `--sc2-needs-fg`. APCA re-verified on the
+  amber fill. Two-signal law survives (color + weight/darkness), not (color + glyph).
+- **§7.5 dual-zoom home/away - RESTYLED to tile state.** MLB + MiLB away days render
+  as a ghost-purple tile. New tokens: `--sc2-state-away-bg: #e3dded` / `--sc2-state-
+  away-fg: #544e66`. Delta from off-grey verified under grayscale simulation. Home
+  days render as the base entered/needs/upcoming palette per §7.2 (no additional
+  glyph, no home dot).
+- **§8/rail null glyph - CHANGED em-dash "—" to hyphen "-"** at the three catalogued
+  sites (`SeasonRail.js:286` / `:291` / `:390`) and the analogous OpsRail sites.
+  December's null renders "-". House-rule hyphen policy over typographic convention.
+- **§7 pill (rail meta / rows) - SEVERITY + SHORT COPY.** "{n} need" (amber) when
+  only needs-entry present; "{n} overdue" (red) when any overdue exists. Worst-state
+  wins; count shown = that state's count.
+- **Hero line - REPLACED.** Inline: "$1.08M ENTERED YTD · ~$1.37M projected" (big
+  figure + small label + muted projection on one baseline). "155 of 253 days entered"
+  moves BELOW the progress line.
+
+### Additions
+- **§17 Inner-card region** (NEW). Calendar + Period surfaces both wrap in a defined
+  inner card: hairline border (`--sc2-line`), radius 12, `--sc2-el-inset` half-step
+  shadow (NEW token, lighter than `--sc2-el-card`; see tokens delta). Item-13 Period
+  view sits inside the same region.
+- **§6.4/6.5 wedges - ENLARGED.** Game-day (navy top-right) and spring-training
+  (copper bottom-left) corner wedges grow well beyond the OV-2 size. Whole-pixel legs.
+  Overlay dates (STL - FL / TBJ - FL AAA) unchanged - still get the game wedge.
+- **§20 whole-pixel grid tiles** (NEW law). Tile inline-size and block-size land on
+  whole pixels; sub-pixel widths are excluded.
+- **§13 Period view - RESTYLED to month-card language.** PeriodCard: white card,
+  `--sc2-el-card`, 3px phase tick, `P{n}` title at month-name scale, muted date-range
+  caption, stats row (days entered / $ entered|projected), footer figure + progress
+  bar. The v3 heavy full-color period headers are OUT.
+- **§18 MiLB homestand strip** (NEW, ONE derive carve-out for OV-3). CIN-KY / TBJ-NY
+  reuse the EXISTING MLB homestand grouping (consecutive GAME runs + opponents ->
+  stands) and render the same polished strip (§12 hierarchy). Read-side only. Guards:
+  fee footer + DayDetail untouched; MLB path unchanged; zero write-path. If MLB
+  grouping cannot be reused cleanly, STOP.
+- **§12 homestand strip hierarchy** (POLISHED). Meta row: NEXT as small navy chip |
+  HS{n} bold 13px | dot-separated opponent · date · games | "homestand n of 13" right-
+  aligned muted. Bar vertically centered with even padding (bottom-hug removed). Card
+  height fits content.
+- **Tokens delta.** ADD: `--sc2-state-away-bg: #e3dded`, `--sc2-state-away-fg:
+  #544e66`, `--sc2-el-inset` (half-step shadow, lighter than `--sc2-el-card`).
+  REMOVE: Comfortable-scale remap block + any Comfortable-only variable pairs.
+
+### Bug + grounds law
+- **Canvas ground reaches the top-nav boundary at every zoom** (Item 1). The white
+  strip between the top nav and canvas at zoom-out is a root-level issue - diagnose at
+  body/`.oh-app` boundary, not at widget level.
+- **Calendar region computes the proper surface grey** (Item 2). The beige cast is a
+  `--sc2-surface-page` family leak; fix at the leaking rule.
+- **Today tile navy border** (Item 3). 2px navy outline, offset for breathing room,
+  ALL account kinds. Acceptance-visible marker.
+- **CalendarRail auto-scroll no-fire** (Item 5). OpsRail path verified working; per-
+  meal path doesn't fire. DIAGNOSE before fixing; state the cause in the commit
+  message.
+
+### Wave map
+- Wave 1: 1a canvas / 1b beige leak / 1c today border / 1d wedges / 1e whole-px /
+  1f rail auto-scroll diagnose+fix
+- Wave 2: 6/7 single-row header + Comfortable removal (+ item 22 acceptance)
+- Wave 3: 3a ribbon flip / 3b needs numeral / 3c glyph purge / 3d ghost-purple away
+  tile / 3e P{n} tag delete / 3f slim rows delete
+- Wave 4: 4a hero inline / 4b pill severity / 4c hyphen rail nulls
+- Wave 5: 5a inner card + `--sc2-el-inset` / 5b homestand meta polish
+- Wave 6: 13 PeriodCard restyle (in the 5a container)
+- Wave 7: 18 MiLB homestand grouping reuse (ONE derive carve-out)
+
 ## CHANGELOG
+- v4 2026-07-19 DELTA (OV-3 owner round): 22-item reversal set - see §v4 block above.
+  v3 language retained for context; delta wins where they disagree.
 - v3 2026-07-18 LOCKED: owner approved render v2 + Option B. Every render-validated
   candidate hardened. Option B compensations codified (7.2 amended targets, 7.3 needs-dot
   two-signal law from the grayscale collision Y .850/.848). New: 7.5 home/away dual-zoom
