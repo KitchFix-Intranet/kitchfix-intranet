@@ -248,6 +248,9 @@ export default function PeriodWorkspace({
         scV2={scV2}
         weekMetrics={m.weeks}
         focusTargetDate={focusTargetDate}
+        /* PR-D drill Phase 1: month scope keys band lookup by the row's
+           Monday date (calendar-week), not by day.meta.week (fiscal). */
+        scope={scope}
       />
 
       {/* W5: WeekSubtotals cards do not render under scV2 - their
@@ -701,7 +704,7 @@ function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, on
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period" }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -862,33 +865,52 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
         onKeyDown={handleGridKeyDown}
       >
         {rows.map((week, weekIdx) => {
-          // W5: derive the fiscal-week label from the first real day in
-          // the row; the workspace grid IS week-aligned (Mon-Sun rows),
-          // so one row = one fiscal week. Bands render under
-          // scV2 && !hasHomestandSchedule (SC-073 - MLB homestand
-          // accounts never see week cards or bands, ever). weekMetrics
-          // comes from aggregateWorkspaceMetrics's `weeks` slot -
-          // SAME source the retired WeekSubtotals cards read + the
-          // drill rail composes below.
+          // PR-D drill Phase 1: band lookup branches on scope.
+          //   period: fiscal-week key from day.meta.week (unchanged).
+          //   month : calendar-week key = Monday ISO of the row (from
+          //           the cell's `date` attached at buildWorkspaceWeekGrid).
+          //           The Monday is always cells[0] because the grid is
+          //           Mon-Sun aligned. Calendar buckets carry .label
+          //           ("Week 1"..N), .startDate/.endDate, and .periods
+          //           for the P7 / P7-8 prefix (DP1-11).
           const firstDayCell = week.find(c => c.day);
-          const weekLabel = firstDayCell?.day?.meta?.week || null;
-          const wm = weekLabel && weekMetrics ? weekMetrics[weekLabel] : null;
+          const rowKey = scope === "month"
+            ? (week[0]?.date || null)
+            : (firstDayCell?.day?.meta?.week || null);
+          const wm = rowKey && weekMetrics ? weekMetrics[rowKey] : null;
+          const bandLabel = wm?.label || rowKey;
           // Two-guard model (bundle scope §3):
           //  - !hasHomestandSchedule (SC-073 - MLB homestand accounts
           //    never see week cards or bands)
           //  - !isFeeAccount (fee accounts' drill is otherwise untouched;
           //    STL-FL's actRev is structurally $0 so the band would read
           //    "$0.00" every week - not helpful, and out of policy)
-          const showBand = scV2 && !hasHomestandSchedule && !isFeeAccount && weekLabel && wm;
+          const showBand = scV2 && !hasHomestandSchedule && !isFeeAccount && rowKey && wm;
+          // DP1-11: period prefix. Single period -> "P7" (with the P
+          // canon stripped-and-added so "7" and "P7" both format the
+          // same); two or more -> "P7-8" and amber via data-straddle.
+          // Fiscal buckets by definition contain one period; calendar
+          // buckets can straddle a month with a period boundary.
+          const prefixPeriods = (wm?.periods || []).map(p => String(p).replace(/^P/i, ""));
+          const bandPrefix = prefixPeriods.length === 1
+            ? `P${prefixPeriods[0]}`
+            : prefixPeriods.length > 1
+              ? `P${prefixPeriods[0]}-${prefixPeriods[prefixPeriods.length - 1]}`
+              : null;
+          const isStraddle = prefixPeriods.length > 1;
           return (
             <React.Fragment key={weekIdx}>
               {showBand && (
                 <div
                   className="sc-workspace-band"
-                  data-week={weekLabel}
+                  data-week={rowKey}
+                  data-straddle={isStraddle ? "true" : undefined}
                   aria-hidden="true"
                 >
-                  <span className="sc-workspace-band-label">{weekLabel}</span>
+                  {bandPrefix && (
+                    <span className="sc-workspace-band-prefix">{bandPrefix}</span>
+                  )}
+                  <span className="sc-workspace-band-label">{bandLabel}</span>
                   <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
                   <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
                 </div>
@@ -1287,7 +1309,11 @@ function buildWorkspaceWeekGrid(periodRange, periodDays, loadState = "loaded") {
       // detects `cell.ghost` before falling through to the out-of-
       // period empty span.
       const ghostDate = inPeriod && !realDay && !stubDay ? dateStr : null;
-      cells.push({ day: realDay || stubDay || null, ghost: !!ghostDate, ghostDate });
+      // PR-D drill Phase 1: attach `date` to every cell (in-period and
+      // out-of-period) so the calendar-week band lookup can key on the
+      // row's Monday without walking back through gridStart arithmetic.
+      // Existing consumers (renderCell etc.) ignore the extra field.
+      cells.push({ date: dateStr, day: realDay || stubDay || null, ghost: !!ghostDate, ghostDate });
       cursor.setDate(cursor.getDate() + 1);
     }
     week++;

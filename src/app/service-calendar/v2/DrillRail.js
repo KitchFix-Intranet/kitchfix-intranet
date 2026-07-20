@@ -74,14 +74,24 @@ export default function DrillRail({
   const heroTotalDays = m?.total || 0;
   const heroPct = heroTotalDays > 0 ? Math.round((heroDaysEntered / heroTotalDays) * 100) : 0;
 
-  // Week lines (only when SC-073 guard permits)
+  // Week lines (only when SC-073 guard permits).
+  // PR-D drill Phase 1: buckets carry .label + .startDate/.endDate for
+  // both grouping modes. Use the human label; use the date bounds for
+  // "today in this week" so month scope's calendar-week keys (ISO
+  // Monday date strings) don't leak into the visible label OR into
+  // the isCurrent detection.
   const showWeekLines = !hasHomestandSchedule && m?.weeks;
   const weekLines = showWeekLines
     ? Object.entries(m.weeks)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([label, wm]) => {
-          const isCurrent = today && wm.total > 0 && weekContainsToday(periodDays, label, today);
-          return { label, wm, isCurrent };
+        .map(([key, wm]) => {
+          const label = wm.label || key;
+          const inRange = today
+            && wm.startDate && wm.endDate
+            && today >= wm.startDate && today <= wm.endDate;
+          const isCurrent = today && wm.total > 0
+            && (inRange || weekContainsToday(periodDays, key, today));
+          return { key, label, wm, isCurrent };
         })
     : [];
 
@@ -266,7 +276,7 @@ export default function DrillRail({
               ? <span className="sc-rail-section-meta--warn">totals incomplete</span>
               : null}
           >
-            {weekLines.map(({ label, wm, isCurrent }) => {
+            {weekLines.map(({ key, label, wm, isCurrent }) => {
               const money = incomplete ? "--" : fmt$(wm.actRev);
               const tone = incomplete
                 ? "attention"
@@ -274,12 +284,16 @@ export default function DrillRail({
               const sub = wm.total > 0 ? `${wm.complete}/${wm.total}` : null;
               return (
                 <RailLine
-                  key={label}
+                  key={key}
                   label={label}
                   value={money}
                   sublabel={sub}
                   tone={tone}
-                  onClick={() => scrollToBand(label)}
+                  /* PR-D drill Phase 1: scroll target keys on the bucket
+                     KEY (data-week attr), which is fiscal for period +
+                     Monday-ISO for month - matches DayGrid's data-week
+                     without needing a label round-trip. */
+                  onClick={() => scrollToBand(key)}
                 />
               );
             })}
