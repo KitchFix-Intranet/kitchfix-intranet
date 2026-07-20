@@ -112,6 +112,22 @@ const SC_TABLES = {
 // "managers can edit any past day" applies here too. The flag is
 // computed and returned with each day so the UI can apply consistent
 // styling without recomputing.
+//
+// DP2-09 (owner-confirmed 2026-07-20): LOCK_DAYS is the INTENTIONAL
+// grace period that separates the "needs-entry" (amber) and "overdue"
+// (red) states in the UI classifier. Recent-past unentered days sit
+// in amber grace for LOCK_DAYS-1 days after their service date;
+// crossing the boundary flips them to red overdue. The threshold is
+// a product decision (not a bug): floor teams get a week to enter
+// actuals with soft urgency before escalation. Downstream:
+// classify() at serviceCalendar.js:215-216 branches on isLocked;
+// DayDetail.js:747 + DayEntryV2.js:457 recompute the same isPast +
+// isLocked signal for the modal; RailFooter footer state machines
+// (DrillRail.js:132-172, OpsRail.js buildDrillFooter, OpsRail
+// deriveOpsFooterActionStlFl) all read `.status` fields already
+// classified with this cutoff. DO NOT change LOCK_DAYS without an
+// owner ruling - the value shows up in every operator surface
+// (chip colors, rail severity, "N days old" copy, escalation UX).
 const LOCK_DAYS = 7;
 
 // Service Calendar months are always full calendar months in account

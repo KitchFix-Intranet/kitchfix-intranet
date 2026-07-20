@@ -99,6 +99,19 @@ export default function OpsRail({
     ? `${totals.gameDaysEntered} of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
     : `${totals.daysEntered} of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals`;
 
+  // DP2-06 (2026-07-20): the drill hero adopts the per-meal ENTERED
+  // grammar - value + label + projection on one baseline. Prior hero
+  // rendered a bare number ("0 GAME DAYS"), which read as "0 of 0" and
+  // did not surface the total. Per-meal DrillRail already inlines the
+  // "of $X" projection at DrillRail.js:163 + 176; OpsRail now matches
+  // it for drill (mode-scoped so overview OpsRail hero, which already
+  // has its own approved layout, stays untouched).
+  const heroProjection = mode === "drill"
+    ? (hasHomestandSchedule
+        ? `of ${totals.totalGameDays || 0}`
+        : `of ${totals.totalActionableDays || 0}`)
+    : null;
+
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
@@ -110,6 +123,7 @@ export default function OpsRail({
       value={heroValue}
       format={(n) => String(Math.round(n))}
       label={heroLabelText}
+      projection={heroProjection}
     />
   );
 
@@ -473,7 +487,35 @@ function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) 
       label: `Enter oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`,
     };
   }
-  return { kind: "oldest-needs", target: queue[0], label: "Enter oldest" };
+  // DP2-04 (2026-07-20): STL-FL drill oldest-needs branch now carries
+  // the same aging suffix DrillRail uses at DrillRail.js:157-160
+  // (after P0 DP2-03). Prior label was a bare "Enter oldest" - the
+  // DrillRail path shipped with the days-old grammar, so this brings
+  // the two rail paths to identical language. Aging for needs-entry
+  // rows is not pre-computed at opsRailDerive.js:260 (that field is
+  // overdue-only), so we compute inline. MLB drill footer branches
+  // above are untouched - game-day next-game / oldest-unentered
+  // semantics are the owner-approved MLB path.
+  const oldestNeeds = queue[0];
+  const aging = ageInDays(oldestNeeds.date, iso);
+  return {
+    kind: "oldest-needs",
+    target: oldestNeeds,
+    label: `Enter oldest · ${aging} ${aging === 1 ? "day" : "days"} old`,
+  };
+}
+
+// Local aging helper - opsRailDerive.js keeps its own daysAgo as a
+// module-private; duplicated here to avoid changing that module's
+// export surface for a single call site. Same math (whole-day diff
+// via manual ISO parts to sidestep TZ midnight edge cases).
+function ageInDays(iso, todayIso) {
+  if (!iso || !todayIso) return 0;
+  const [ay, am, ad] = iso.split("-").map(Number);
+  const [by, bm, bd] = todayIso.split("-").map(Number);
+  const then = new Date(ay, am - 1, ad).getTime();
+  const now = new Date(by, bm - 1, bd).getTime();
+  return Math.max(0, Math.floor((now - then) / 86400000));
 }
 
 // Overview season list - one line per month showing the primary

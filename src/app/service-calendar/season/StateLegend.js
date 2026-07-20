@@ -24,6 +24,16 @@ export default function StateLegend({
   isFeeAccount = false,
   isMilb = false,
   showDayNight = false,
+  // DP2-05 (2026-07-20): compact FIGURES trailer in the drill legend
+  // bar. Off by default (v1 + overview call sites don't set it);
+  // scv2 drill mounts opt in. Matches the tile figure grammar the
+  // popup already teaches (LegendInfoPopup.js:125-138): per-meal /
+  // MiLB carry the $ triad ($3K entered · est. $3K awaiting · ~$3K
+  // projected); fee/homestand carry just ~180 meals projected
+  // (fee tiles encode meals, not $). DP1-20's popup-side scoping
+  // deferral is separate; this addition targets the always-visible
+  // bar per the DP1-20 owner ask.
+  showFigures = false,
 }) {
   // The one-line key keeps the IN-USE states for the current account
   // (rubric non-negotiable #1: always visible). The fuller cell-state
@@ -60,6 +70,32 @@ export default function StateLegend({
             </li>
           ))}
         </ul>
+        {showFigures && (
+          <span className="sc-state-legend-figures" aria-label="Tile figures key">
+            <span className="sc-state-legend-figures-title">Figures</span>
+            {(hasHomestandSchedule || isFeeAccount) ? (
+              <span className="sc-state-legend-figures-item">
+                <span className="sc-state-legend-figures-chip">~180 meals</span>
+                <span className="sc-state-legend-figures-word">projected</span>
+              </span>
+            ) : (
+              <>
+                <span className="sc-state-legend-figures-item">
+                  <span className="sc-state-legend-figures-chip">$3K</span>
+                  <span className="sc-state-legend-figures-word">entered</span>
+                </span>
+                <span className="sc-state-legend-figures-item">
+                  <span className="sc-state-legend-figures-chip">est. $3K</span>
+                  <span className="sc-state-legend-figures-word">awaiting</span>
+                </span>
+                <span className="sc-state-legend-figures-item">
+                  <span className="sc-state-legend-figures-chip">~$3K</span>
+                  <span className="sc-state-legend-figures-word">projected</span>
+                </span>
+              </>
+            )}
+          </span>
+        )}
         <button
           ref={infoBtnRef}
           type="button"

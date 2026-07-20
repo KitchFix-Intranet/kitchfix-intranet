@@ -2728,6 +2728,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
+                    /* DP2-05 (2026-07-20): scv2 drill legend bar
+                       carries the FIGURES trailer. v1 fallback mount
+                       below (:2917) leaves the prop off - v1 legend
+                       stays untouched. */
+                    showFigures={true}
                   />
                 )}
               </div>
@@ -2887,6 +2892,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
+                    /* DP2-05 (2026-07-20): scv2 drill legend bar
+                       carries the FIGURES trailer. v1 fallback mount
+                       below (:2917) leaves the prop off - v1 legend
+                       stays untouched. */
+                    showFigures={true}
                   />
                 )}
               </div>
