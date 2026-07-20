@@ -193,7 +193,15 @@ async function settle(page: Page) {
 }
 
 async function waitForSc(page: Page) {
-  await expect(page.locator('.sc-chrome-bar').first()).toBeVisible({ timeout: 10_000 });
+  // Drill P1 PR-A DP1-02 (merged 2026-07-20) suppressed ChromeBar on
+  // scv2 non-admin scopes and moved its controls into the Ribbon. This
+  // suite runs with scv2 on (useScV2 defaultOn=true, no ?v2=0 anywhere),
+  // so `.sc-chrome-bar` no longer renders and the old selector timed
+  // out. Ribbon is the stable load-gate element - it renders on every
+  // scv2 non-admin scope (year/period/month) and every entry URL these
+  // tests exercise (E1 cold /, E2/E3/E4 cold with ?period / ?month /
+  // no-account). See src/app/service-calendar/v2/Ribbon.js.
+  await expect(page.locator('.sc-ribbon').first()).toBeVisible({ timeout: 10_000 });
 }
 
 function urlOf(page: Page): string {
