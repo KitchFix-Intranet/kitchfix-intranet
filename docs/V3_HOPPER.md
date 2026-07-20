@@ -21,6 +21,33 @@ either audit's findings. Audit independence applies to findings; not to owner in
   (A) DB seed HSn via extractor, or (B) client-derive from consecutive-game runs.
   OV-3 ships MiLB on PhaseStrip. Owner ruling 2026-07-19.
 
+- **Drill Phase 2 - DayDetail / DayEntryV2 modal visual pass.** Deliberately deferred
+  out of Drill Phase 1 scope (2026-07-20). DayDetail is the highest-traffic operator
+  surface (every actuals entry passes through it) and has its own render pipeline
+  (`v2/entry/DayEntryV2.js` + `entry/dayEntryV2.css`, plus the F1 History Activity
+  ledger, submission toast, and dirty-close guard). Phase 1 shipped drill chrome +
+  tile + rail + legend + tokens but left the modal untouched so P1 could ship without
+  entangling actuals-entry regression risk. Phase 2 owns: navy scoreboard header
+  alignment with V3 ribbon vocabulary, tightened clubhouse-card rows on the new
+  card/tile radii, review + success overlay recheck against the state spine
+  (Entered / Needs entry / Overdue / Upcoming), dirty-close guard behavior, and any
+  DP1-24-style padding audit inside the modal itself.
+
+- **DP1-20 FIGURES key drill-only scoping.** #481 hotfix reversed F8's popup-hide so
+  FIGURES returns to `LegendInfoPopup` under scv2 for BOTH scopes (overview + drill),
+  which was an overshoot vs the DP1-20 spec of drill-only. Proper scoping requires
+  plumbing scope through `StateLegend -> LegendInfoPopup -> data-attr`; deferred as
+  its own tiny surgical change rather than folded into a hotfix. Strip-level FIGURES
+  row also not added.
+
+- **Demolition-PR cleanup: F3-redux + drill-P1 instrumentation.** The `data-f3-target`
+  attribute added during the STL - FL scrollTop gate cell is still present on
+  `.sc-rail-scroll` at `SeasonRail.js` + `OpsRail.js` (harmless; no runtime cost).
+  Drill P1's HF-5 dedup left the rail `exportControl` prop contract intact
+  (`DrillRail.js:359` / `OpsRail.js:263` conditional retained for any future overview
+  rail-footer export mount). Both slated for removal in the W9 demolition PR alongside
+  the `sc-v2-complete` tag.
+
 ---
 
 ## V3 lenses (owner-stated, pre-audit)
