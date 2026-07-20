@@ -2168,11 +2168,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
           totalGameDays={yearBannerStats?.totalGameDays || 0}
           exportControl={
-            !isAdminView && selectedAccount && isYearView
+            // HF-5 (2026-07-20): export renders in ribbon-right on
+            // ALL non-admin scopes (was year-view only). Scope prop
+            // follows the current view. Rail still mounts an export
+            // in drill via DrillRail.js:359 / OpsRail.js:263 (PR-C
+            // scope) - flagged in PR body for owner ruling on the
+            // duplicate.
+            !isAdminView && selectedAccount
               ? (
                 <ExportControl
-                  scope="year"
+                  scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
                   year={year}
+                  periodKey={isPeriodView ? periodKey : null}
+                  monthKey={isMonthView ? monthKey : null}
                   accountKey={selectedAccount}
                   showToast={showToast}
                   hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}

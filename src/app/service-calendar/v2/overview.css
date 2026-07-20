@@ -277,21 +277,59 @@ body:has(.scv2) {
 /* DP1-04 - stepper period/month label renders WHITE on the navy
    ribbon (was ink-muted for the light ChromeBar). */
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-period,
-.scv2 .sc-ribbon-drillnav .sc-chrome-drill-range,
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-back,
-.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn,
-.scv2 .sc-ribbon-drillnav .sc-chrome-drill-phase {
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn {
   color: var(--sc2-cmd-text);
 }
-.scv2 .sc-ribbon-drillnav .sc-chrome-drill-dot {
-  color: var(--sc2-cmd-text-muted);
+/* HF-1 (2026-07-20) - the ChromeBar defaults paint Season-back +
+   stepper buttons with a white BACKGROUND (var(--surface-card))
+   and a light-grey border (var(--border-default)). On the navy
+   ribbon that reads as white-on-white boxes with an invisible
+   glyph. Override to the on-navy ribbon-button treatment
+   (transparent fill, subtle-white 1px border, matching the
+   .sc-ribbon-admin / .sc-chrome-bar-asof.sc-ribbon-asof
+   vocabulary at :311 / :331). */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.20);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-sep {
+  background: rgba(255, 255, 255, 0.18);
 }
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-back:hover,
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:not(:disabled):hover {
   background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.30);
 }
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:disabled {
   color: rgba(255, 255, 255, 0.30);
+}
+
+/* HF-3 (2026-07-20) - "Period 7" label reads too large next to
+   the ribbon title. Reduce to the ribbon-meta scale so it sits
+   in the readout tier, not the h1 tier. Matches
+   .sc-ribbon-meta-value at :219-223. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-period {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+  letter-spacing: 0;
+}
+
+/* HF-2 (2026-07-20) - remove the "· Complex" phase pill + its
+   leading "·" dot from the ribbon drill-nav. Phase context lives
+   elsewhere. Scoped to .scv2 .sc-ribbon-drillnav so v1 ChromeBar
+   drill still renders phase (v1 base rules untouched). Covers
+   both the majority-phase pill and the Spring Training rider
+   (both use .sc-chrome-drill-phase). */
+/* HF-4 (2026-07-20) - drop the "Jun 15 - Jul 12" date range from
+   the ribbon drill-nav; stepper + PERIOD number already convey
+   the scope. Same scv2-scoped hide as HF-2. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-phase,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-dot,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-range,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-skel {
+  display: none;
 }
 
 /* Right cluster: as-of pill, admin lock, export - far edge order. */
