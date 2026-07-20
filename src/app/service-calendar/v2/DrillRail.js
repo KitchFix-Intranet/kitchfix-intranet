@@ -124,7 +124,16 @@ export default function DrillRail({
   // Primary footer action - pinned per bundle scope:
   //   1. today in scope + needs-entry -> Enter today
   //   2. else oldest overdue in scope -> Enter oldest · N days old
-  //   3. else quiet all-caught-up
+  //   3. Drill P2 PR-1 DP2-03 (2026-07-20): else oldest needs-entry ->
+  //      Enter oldest · N days old. Prior fall-through was "caught-up"
+  //      which contradicted the amber "N need" pill above (CIN-AZ had
+  //      3 needs + 0 overdue rendering as caught-up checkmark with no
+  //      way to enter). queueRows already contains BOTH needs-entry
+  //      AND overdue (filter at :113) and is date-ascending; at this
+  //      branch oldestOverdue is null so queueRows[0] is the oldest
+  //      unentered day of any status. OpsRail already handles this at
+  //      OpsRail.js:476.
+  //   4. else quiet all-caught-up (genuinely zero unentered).
   const todayInScope = periodRange
     && today >= periodRange.start
     && today <= periodRange.end;
@@ -139,6 +148,15 @@ export default function DrillRail({
     footerKind = "oldest-overdue";
     footerLabel = `Enter oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`;
     footerAction = () => onEnterOldest?.(oldestOverdue.date);
+  } else if (queueRows.length > 0) {
+    // DP2-03: no overdue but needs-entry present. queueRows[0] is the
+    // oldest by date. Compute aging inline - the row's `.aging` field
+    // at :117 is 0 for needs-entry rows (only overdue rows compute it).
+    const oldestNeeds = queueRows[0];
+    const aging = daysAgo(oldestNeeds.date, today);
+    footerKind = "oldest-needs";
+    footerLabel = `Enter oldest · ${aging} ${aging === 1 ? "day" : "days"} old`;
+    footerAction = () => onEnterOldest?.(oldestNeeds.date);
   } else {
     footerKind = "caught-up";
     footerLabel = "";

@@ -657,7 +657,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // [{ period, start, end }, ...] aggregation added in the dataStore
     // extension). One endpoint, two consumers - the year heatmap and
     // the period nav both feed from sc-year-summary.
-    const needsYearData = isYearView;
+    // Drill P2 PR-1 DP2-02 (2026-07-20): also fire on isMonthView so
+    // yearData + yearToday populate on the month drill. Without this,
+    // a cold URL landing directly on ?month=YYYY-MM leaves yearData
+    // null - which nulls yearBannerStats + yearToday - which renders
+    // the ribbon's Today-group readout as "TODAY -  PERIOD -" empty
+    // dashes on month, even though period view (which trips
+    // needsPeriodRanges) populates it fine. Same lightweight
+    // sc-year-summary endpoint; already fires on year + period; now
+    // month too. Account-switch reset at :620 still clears everything;
+    // fetch re-fires under the new account.
+    const needsYearData = isYearView || isMonthView;
     const needsPeriodRanges = lens === "period";
     if (!selectedAccount || (!needsYearData && !needsPeriodRanges)) return;
     // reloadKey is in the dep array so a save in the month view also
