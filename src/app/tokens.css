@@ -255,6 +255,14 @@
      restyle migrates to --sc2-radius-modal=14. */
   --sc2-radius-card:      12px;
   --sc2-radius-modal:     14px;
+  /* Drill P1 PR-B DEN-2 (2026-07-20) - tile-tier radius 8px.
+     Sits between --sc2-radius-cell (6px) and --sc2-radius-card
+     (12px). Owner ruling: drill lg tiles read too sharp at 6px
+     inside a 12px card; 8px softens them without eroding the
+     card/tile distinction. Named + reusable rather than
+     hardcoded, so a future tile audit can shift the tier here
+     instead of a repo-wide grep. */
+  --sc2-radius-tile:      8px;
 
   /* ---------- Font + weight roles ---------- */
   --sc2-font-ui: var(--font-ui);

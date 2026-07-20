@@ -1251,18 +1251,30 @@
 }
 
 /* ── Drill-in polish (lg-only) ─────────────────────────────── */
-/* Drill P1 PR-B DP1-25 - lg tile density tightened ~30% under scv2.
+/* Drill P1 PR-B DP1-25 + DEN-1 + DEN-2 (2026-07-20) - lg tile
+   density under scv2, drill grid only.
    Base v1 sc-daysq--lg is min-height: 96px (DaySquare.css:54). At
    96px each row is tall and the drill card feels loose next to the
    overview's tight sm-tile grid. 68px reduces vertical space ~30%
    while keeping the 44px min tap-target floor + room for the date +
    badges + mid line. Padding tightens to sp-1 sp-2 correspondingly.
-   Radius migrates to --sc2-radius-cell (6px) for tighter tile edges
-   that match the overview sm tile - DP1-23's tile tier. */
-.scv2 .sc-daysq--lg {
+   Radius sits at the tile tier (--sc2-radius-tile = 8px) - softer
+   than 6px inside the 12px card, still distinct.
+   DEN-1 specificity fix: the plain `.scv2 .sc-daysq--lg` selector
+   (0,2,0) is EQUAL specificity to `.sc-workspace-grid .sc-daysq--lg`
+   at periodWorkspace.css:570 (also 0,2,0, min-height: 96px). Since
+   periodWorkspace.css loads later in the tree, its 96px override
+   silently won the cascade - the density rule never took effect.
+   Adding the .sc-workspace-grid ancestor here (0,3,0) beats both
+   the base sc-daysq--lg (0,1,0) AND the grid override (0,2,0). No
+   !important. The drill grid is the only place lg tiles get the
+   scv2 density anyway (per the "Workspace scope only" comment at
+   DaySquare.css:68), so scoping to .sc-workspace-grid matches
+   actual usage. */
+.scv2 .sc-workspace-grid .sc-daysq--lg {
   min-height: 68px;
   padding: var(--sc2-space-1) var(--sc2-space-2);
-  border-radius: var(--sc2-radius-cell);
+  border-radius: var(--sc2-radius-tile);
   box-shadow: var(--sc2-elevation-inset-top), var(--sc2-elevation-card);
 }
 .scv2 .sc-daysq--lg .sc-daysq-badge {
