@@ -181,6 +181,17 @@ export default function PeriodWorkspace({
 
   return (
     <div className="sc-workspace sc-fade-in">
+      {/* Drill P1 PR-A (2026-07-20) DP1-07 - the 2nd strip (TodayRail
+          + PastRail fallback) is DELETED. Everything it carried:
+          - Financial figures duplicate the FinancialFrame above.
+          - "Enter actuals" + "Bulk Update" buttons relocated to the
+            rail as three CTAs (rail owns entry affordances now).
+            See DrillRail PR-A additions.
+          Handlers (onDayClick, onBulkModeToggle) still flow through
+          ServiceCalendar → DrillRail unchanged.
+          FinancialFrame now renders without a todaySlot; its layout
+          reflows to the compact frame the render approved.
+      */}
       <FinancialFrame
         m={m}
         kind={kind}
@@ -190,32 +201,7 @@ export default function PeriodWorkspace({
         today={today}
         onJumpFirstOverdue={onJumpFirstOverdue}
         onJumpFirstNeeds={onJumpFirstNeeds}
-        todaySlot={isCurrentPeriod && todayDay ? (
-          <TodayRail
-            day={todayDay}
-            kind={kind}
-            homestandMap={homestandMap}
-            onEnterActuals={() => onDayClick?.(todayDay.date)}
-            onBulkUpdate={onBulkModeToggle ? () => onBulkModeToggle(true) : undefined}
-          />
-        ) : (
-          // SC-040: past-scope drill with unentered days keeps a bulk
-          // entry point. For MLB (schedule view per SC-037b) needsEntry
-          // + overdue are both zero via the pipeline unification, so
-          // the rail auto-hides there - correct per the ruling.
-          !isCurrentPeriod
-            && periodRange?.end
-            && today
-            && today > periodRange.end
-            && (m.needsEntry + m.overdue) > 0
-        ) ? (
-          <PastRail
-            unentered={m.needsEntry + m.overdue}
-            periodRange={periodRange}
-            scope={scope}
-            onBulkUpdate={onBulkModeToggle ? () => onBulkModeToggle(true) : undefined}
-          />
-        ) : null}
+        todaySlot={null}
       />
 
       <BulkAffordance

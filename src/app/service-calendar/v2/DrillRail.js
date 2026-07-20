@@ -62,6 +62,13 @@ export default function DrillRail({
   onTargetDay,       // (date) => void - queue rows + week-line + notes-line target
   onEnterToday,      // () => void - primary CTA when today needs entry
   onEnterOldest,     // (date) => void - primary CTA fallback
+  /* Drill P1 PR-A (2026-07-20) DP1-08 - entry CTAs relocated from the
+     deleted TodayRail / PastRail. Bulk entry becomes a secondary tier
+     button below the primary footer; Enter-today secondary surfaces
+     when the primary is Enter-oldest AND today is in scope + needs
+     entry. Handlers reused from the ones ServiceCalendar already
+     lifts (matching TodayRail's pre-deletion wiring). */
+  onBulkModeToggle,  // (next: bool) => void — flips ServiceCalendar's bulkMode
 }) {
   const [showAllQueue, setShowAllQueue] = useState(false);
 
@@ -287,14 +294,49 @@ export default function DrillRail({
         )}
       </RailScroll>
 
-      {/* Footer: primary CTA (or caught-up) + quiet secondary Export.
-          Refines the one-primary-button law: exactly one primary acts;
-          Export is the sole quiet utility. */}
+      {/* Footer: primary CTA (or caught-up). Drill P1 PR-A DP1-08
+          adds a secondary-tier row below (Enter today + Bulk entry)
+          for the three-CTA two-tier layout the deleted TodayRail
+          used to host. */}
       <RailFooter
         kind={footerKind}
         label={footerLabel}
         onClick={footerAction}
       />
+      {(() => {
+        // DP1-08 secondary tier. Enter-today shows ONLY when today is
+        // in scope + needs entry AND the primary is NOT already
+        // Enter today (i.e. primary is Enter-oldest, so today is a
+        // second explicit target). Bulk entry always shows when
+        // onBulkModeToggle is wired (past-period + current both).
+        const showEnterToday = todayInScope
+          && todayRow
+          && footerKind !== "today";
+        const showBulk = !!onBulkModeToggle;
+        if (!showEnterToday && !showBulk) return null;
+        return (
+          <div className="sc-drill-rail-actions" role="group" aria-label="Entry actions">
+            {showEnterToday && (
+              <button
+                type="button"
+                className="sc-drill-rail-action sc-drill-rail-action--secondary"
+                onClick={() => onEnterToday?.(today)}
+              >
+                Enter today
+              </button>
+            )}
+            {showBulk && (
+              <button
+                type="button"
+                className="sc-drill-rail-action sc-drill-rail-action--secondary"
+                onClick={() => onBulkModeToggle?.(true)}
+              >
+                Bulk entry
+              </button>
+            )}
+          </div>
+        );
+      })()}
       {exportControl && (
         <div className="sc-drill-rail-export">
           {exportControl}

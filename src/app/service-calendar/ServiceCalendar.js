@@ -2088,7 +2088,55 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
-      {scV2 && (
+      {scV2 && (() => {
+        /* Drill P1 PR-A DP1-02: drill-scope controls that ChromeBar
+           used to host now flow into the Ribbon. Compute the two
+           slots once here and pass to both Ribbon (scv2) and
+           ChromeBar (v1) so the drill-nav JSX has one source. */
+        const drillNavSlot = !isAdminView
+          ? (isPeriodView ? (
+              <PeriodHeaderNav
+                account={data?.account}
+                year={year}
+                periodKey={periodKey}
+                periodRange={drillPeriodRange}
+                canPrev={canPrevPeriod}
+                canNext={canNextPeriod}
+                isLoading={!periodRanges}
+                onClimbToSeason={handleClimbToSeason}
+                onPrevPeriod={handlePrevPeriod}
+                onNextPeriod={handleNextPeriod}
+              />
+            ) : isMonthView ? (
+              <MonthHeaderNav
+                monthKey={monthKey}
+                monthRange={monthRange}
+                canPrev={canPrevMonth}
+                canNext={canNextMonth}
+                isLoading={!monthRange}
+                onClimbToSeason={handleClimbToSeason}
+                onPrevMonth={handlePrevMonth}
+                onNextMonth={handleNextMonth}
+                phaseTimeline={phaseTimeline}
+              />
+            ) : null)
+          : null;
+        const drillNavEndSlot = !isAdminView
+          ? (isPeriodView ? (
+              <PeriodTodayChip
+                today={today}
+                isCurrentPeriod={isCurrentPeriod}
+                onTodayJump={handleTodayJump}
+              />
+            ) : isMonthView ? (
+              <PeriodTodayChip
+                today={today}
+                isCurrentPeriod={isCurrentMonth}
+                onTodayJump={handleMonthTodayJump}
+              />
+            ) : null)
+          : null;
+        return (
         <Ribbon
           asOf={asOf}
           onRefresh={handleRefresh}
@@ -2097,22 +2145,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           isAdmin={isAdmin}
           isAdminView={isAdminView}
           onAdminToggle={handleAdminToggle}
-          /* OV-3 Wave 2 - single-row header: chrome content flows into
-             the ribbon under scv2 overview. ChromeBar below suppresses
-             for scV2 && isYearView && !isAdminView (drill + admin
-             still use ChromeBar until V3 DRILL rebuilds them). */
+          /* OV-3 Wave 2 + Drill P1 PR-A (2026-07-20): chrome content
+             flows into the ribbon under scv2 for BOTH overview AND
+             drill. ChromeBar below suppresses for `scV2 && !isAdminView`
+             (admin still uses ChromeBar). Drill nav slots (Season
+             back / stepper / phase pill / Today jump) come in via
+             the drillNav + drillNavEnd props. */
           accountDropdown={accountDropdown}
-          category={!isAdminView && isYearView ? category : null}
+          /* DP1-06: type pill renders in ALL non-admin scopes (was
+             overview-only). Consistent structure across the 4 account
+             shapes. */
+          category={!isAdminView ? category : null}
           view={seasonView}
           onViewChange={handleSeasonViewChange}
           showToggle={!isAdminView && isYearView}
+          drillNav={drillNavSlot}
+          drillNavEnd={drillNavEndSlot}
           todayLabel={yearBannerStats?.todayLabel}
           periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
           weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
-          /* G4 (2026-07-19) - fee / homestand accounts render
-             GAME DAYS n/m in place of PERIOD | WEEK. Per-meal
-             accounts pass hasHomestandSchedule=false so RibbonMeta
-             renders the calendar variant unchanged. */
           hasHomestandSchedule={hasHomestandSchedule}
           gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
           totalGameDays={yearBannerStats?.totalGameDays || 0}
@@ -2130,8 +2181,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               ) : null
           }
         />
-      )}
-      {!(scV2 && isYearView && !isAdminView) && <ChromeBar
+        );
+      })()}
+      {/* Drill P1 PR-A DP1-02: ChromeBar suppresses for ALL scv2
+          non-admin scopes (overview + drill). Admin still uses
+          ChromeBar (its own admin-scope render path). v1 also uses
+          it as before. */}
+      {!(scV2 && !isAdminView) && <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
         view={seasonView}
@@ -2502,6 +2558,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
+              /* Drill P1 PR-A DP1-08 - bulk entry secondary CTA in rail. */
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
             />
           );
           // W8 - drill mobile books-bar.
@@ -2663,6 +2721,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
+              /* Drill P1 PR-A DP1-08 - bulk entry secondary CTA in rail. */
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
             />
           );
           // W8 - month-drill mobile books-bar. Mirrors the period-drill

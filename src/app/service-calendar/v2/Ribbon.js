@@ -1,22 +1,22 @@
 "use client";
 
-// SC v2 -> V3 Ribbon - OV-3 rebuild: ONE navy row combining identity,
-// account selection, view toggle, TODAY/PERIOD/WEEK meta, and the
-// right cluster (as-of pill, admin lock, export).
-//
-// Comfortable density removed in OV-3 - Standard is the only scale.
-// The two-segment density control is gone; useDensity is deleted.
+// SC v2 -> V3 Ribbon - Drill P1 rebuild: single navy row combining
+// identity, account, view/scope controls, meta readout, and the right
+// cluster (as-of, admin, export). Drill scope now folds Season-back /
+// period stepper / phase pill / Today-jump into the Ribbon too, so
+// ChromeBar suppresses on scv2 drill (DP1-02). PR-D month-scope
+// grouping is independent from this file.
 //
 // PRESENTATIONAL: takes resolved props in, emits onClick out.
 //
 // Layout (left -> right):
-//   "Service Calendar" | account | kind chip | Calendar|Period | TODAY .. PERIOD .. WEEK ..
-//   ..spacer..  as-of pill | admin lock | export
+//   "Service Calendar" | account | kind chip | scope-toggle-or-drillNav
+//   | Today-group (readout · | ⊙ Today) | ..spacer.. as-of | admin | export
 //
 // Responsive:
-//   <=1360: TODAY/PERIOD/WEEK inner separators drop (labels stay).
-//   <=1280: as-of pill collapses to dot + time (item 22 acceptance -
-//   failed state remains visible via the red-tinted status dot).
+//   <=1360: readout inner separators drop (labels stay).
+//   <=1280: as-of pill compacts (refresh button hides; status dot stays
+//   so failed state remains visible).
 
 import { AsOf } from "../season/ChromeBar";
 
@@ -27,7 +27,6 @@ export default function Ribbon({
   isAdmin,
   isAdminView,
   onAdminToggle,
-  /* NEW OV-3 chrome props (moved off ChromeBar into the single row) */
   accountDropdown,
   category,
   view,
@@ -36,16 +35,20 @@ export default function Ribbon({
   todayLabel,
   periodNum,
   weekNum,
-  /* G4 (2026-07-19): fee / homestand accounts render "TODAY | GAME
-     DAYS {n}/{m}" instead of TODAY | PERIOD | WEEK. When
-     hasHomestandSchedule=true, RibbonMeta swaps to the game-days
-     variant. Per-meal accounts pass hasHomestandSchedule=false
-     (default) and see the calendar meta unchanged. */
+  /* G4 (2026-07-19): fee/homestand accounts render "TODAY | GAME DAYS
+     {n}/{m}" instead of TODAY | PERIOD | WEEK. */
   hasHomestandSchedule = false,
   gameDaysEntered,
   totalGameDays,
+  /* Drill P1 PR-A (2026-07-20) DP1-02: drill scope controls that ChromeBar
+     used to host now render here so ChromeBar can suppress on scv2 drill.
+     drillNav = PeriodHeaderNav / MonthHeaderNav JSX (Season back + stepper
+     + phase pill); drillNavEnd = PeriodTodayChip JSX (Today jump). */
+  drillNav,
+  drillNavEnd,
   exportControl,
 }) {
+  const isDrill = !!drillNav;
   return (
     <div className="sc-ribbon" role="banner">
       <div className="sc-ribbon-left">
@@ -79,15 +82,33 @@ export default function Ribbon({
             </button>
           </div>
         )}
+        {/* Drill P1 DP1-02 - drill-scope nav slot. Renders BETWEEN the
+            toggle slot (which showToggle-gates itself away on drill) and
+            the Today-group. Its own component ships the Season back +
+            stepper + phase pill markup that ChromeBar used to host. */}
+        {drillNav && (
+          <div className="sc-ribbon-drillnav">{drillNav}</div>
+        )}
         <RibbonSep />
-        <RibbonMeta
-          todayLabel={todayLabel}
-          periodNum={periodNum}
-          weekNum={weekNum}
-          hasHomestandSchedule={hasHomestandSchedule}
-          gameDaysEntered={gameDaysEntered}
-          totalGameDays={totalGameDays}
-        />
+        {/* DP1-05 Today-group - one bordered container. Left: passive
+            readout (spans, not buttons, non-focusable). Right: Today-jump
+            (real button, hover) - the drillNavEnd slot. Divider between. */}
+        <div className={`sc-ribbon-today-group${isDrill ? " sc-ribbon-today-group--drill" : ""}`}>
+          <RibbonMeta
+            todayLabel={todayLabel}
+            periodNum={periodNum}
+            weekNum={weekNum}
+            hasHomestandSchedule={hasHomestandSchedule}
+            gameDaysEntered={gameDaysEntered}
+            totalGameDays={totalGameDays}
+          />
+          {drillNavEnd && (
+            <>
+              <span className="sc-ribbon-today-group-divider" aria-hidden="true" />
+              <div className="sc-ribbon-today-jump">{drillNavEnd}</div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="sc-ribbon-right">
@@ -133,7 +154,7 @@ function RibbonSep() {
 
 // TODAY {date} PERIOD {n} WEEK {n} meta cluster (per-meal), OR
 // TODAY {date} | GAME DAYS {n}/{m} (fee / homestand) per G4.
-// Internal separators collapse at <=1360; labels + values readable.
+// All spans, no buttons - non-focusable readout per DP1-05.
 function RibbonMeta({
   todayLabel,
   periodNum,
@@ -143,7 +164,7 @@ function RibbonMeta({
   totalGameDays,
 }) {
   return (
-    <div className="sc-ribbon-meta">
+    <div className="sc-ribbon-meta" aria-label="Current context readout">
       <span className="sc-ribbon-meta-seg">
         <span className="sc-ribbon-meta-label">TODAY</span>
         <span className="sc-ribbon-meta-value">{todayLabel || "-"}</span>

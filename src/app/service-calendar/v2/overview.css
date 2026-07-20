@@ -228,6 +228,72 @@ body:has(.scv2) {
   background: rgba(255, 255, 255, 0.14);
 }
 
+/* Drill P1 PR-A (2026-07-20) DP1-05 - Today-group container.
+   Overview scope: readout is the only child; no border, transparent
+   background, no divider — stays as a plain inline meta cluster.
+   Drill scope: adds a bordered pill so the passive readout + the
+   Today-jump button read as ONE affordance. `.sc-ribbon-today-group
+   --drill` modifier keys the drill treatment. */
+.scv2 .sc-ribbon-today-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-today-group--drill {
+  padding: 3px 4px 3px 10px;
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--sc2-radius-control);
+  background: rgba(255, 255, 255, 0.04);
+}
+.scv2 .sc-ribbon-today-group-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 var(--sc2-space-1);
+}
+.scv2 .sc-ribbon-today-jump {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Drill P1 PR-A DP1-02 - drill-nav slot (Season back + stepper +
+   phase pill). Occupies the same slot the ChromeBar used to host.
+   Reuses .sc-chrome-drill* class chain from the PeriodHeaderNav /
+   MonthHeaderNav components. Under Ribbon (navy bg) the muted
+   defaults from the ChromeBar CSS need to reverse to white/on-navy;
+   handled below. */
+.scv2 .sc-ribbon-drillnav {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill {
+  color: var(--sc2-cmd-text);
+  gap: var(--sc2-space-2);
+}
+/* DP1-04 - stepper period/month label renders WHITE on the navy
+   ribbon (was ink-muted for the light ChromeBar). */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-period,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-range,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-phase {
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-dot {
+  color: var(--sc2-cmd-text-muted);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back:hover,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:disabled {
+  color: rgba(255, 255, 255, 0.30);
+}
+
 /* Right cluster: as-of pill, admin lock, export - far edge order. */
 .scv2 .sc-ribbon-right {
   display: inline-flex;
