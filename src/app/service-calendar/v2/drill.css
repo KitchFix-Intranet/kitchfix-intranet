@@ -163,6 +163,22 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* PR-D drill Phase 1 (2026-07-20) - period prefix (DP1-11).
+   Single period reads as a calm ink-strong "P7" pill leading the
+   band; a straddle (two periods in the same calendar week) flips
+   the pill's tone via [data-straddle="true"] on the band ancestor.
+   Amber comes from the shared needs-fg token so the strip legend
+   language stays consistent with the tile fills. */
+.scv2 .sc-workspace-band-prefix {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-display);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  padding-right: var(--sc2-space-1);
+}
+.scv2 .sc-workspace-band[data-straddle="true"] .sc-workspace-band-prefix {
+  color: var(--sc2-state-needs-fg);
+}
 .scv2 .sc-workspace-band-count {
   color: var(--sc2-ink);
   font-weight: var(--sc2-wt-medium);

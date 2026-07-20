@@ -114,7 +114,36 @@ function buildScUrl({ account, period, month, view, day } = {}) {
 // (calendar month) so the range-based PeriodWorkspace reads either
 // identically. Revenue comes from day.totals.* (the #257-corrected
 // sc_daily_revenue source - never recomputed client-side).
-function aggregateWorkspaceMetrics(days) {
+//
+// PR-D drill Phase 1 (2026-07-20): the grouping backend gains an
+// explicit branch on the second arg. Period scope stays byte-identical
+// (default "fiscalWeek"); month scope opts into "calendarWeek" where
+// each bucket keys on the ISO Monday of the day's calendar week. Fiscal
+// buckets can straddle a Mon-Sun visual row when a period boundary sits
+// mid-week - the old bug was labeling the row by the FIRST day's fiscal
+// week and totaling only that fiscal slice. Under "calendarWeek" the
+// bucket totals the actual 7 days that Mon-Sun row shows; the rail
+// Weeks list iterates the same output so bands and rail lines stay in
+// sync (correctness gate DP1-13). Consumers below the aggregate read
+// `wm.label` (human) + `wm.startDate` / `wm.endDate` (calendar bounds)
+// + `wm.periods` (the fiscal periods the days belong to) rather than
+// keying on the bucket key directly, so calendar Monday keys don't leak
+// into the UI as raw date strings.
+function weekMondayISO(dateStr) {
+  // dateStr is YYYY-MM-DD. Convert to a UTC date noon to sidestep
+  // DST edges (same shape buildWorkspaceWeekGrid uses at :1258-1263).
+  const d = new Date(dateStr + "T12:00:00");
+  const dow = d.getDay();                // 0 = Sunday
+  const daysBeforeMonday = dow === 0 ? 6 : dow - 1;
+  d.setDate(d.getDate() - daysBeforeMonday);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function addDaysISO(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function aggregateWorkspaceMetrics(days, { groupBy = "fiscalWeek" } = {}) {
   const out = {
     projMeals: 0, actMeals: 0,
     projRev: 0, actRev: 0,
@@ -193,16 +222,46 @@ function aggregateWorkspaceMetrics(days) {
       if (pv != null) out.projMeals += pv;
       if (day.hasActuals && day.actual?.[ci] != null) out.actMeals += day.actual[ci];
     }
-    const wk = day.meta?.week || "W?";
+    // PR-D drill Phase 1: bucket key branches on groupBy.
+    //   "fiscalWeek" (period scope default): existing day.meta.week key.
+    //   "calendarWeek" (month scope): ISO Monday of day's calendar week.
+    // Fiscal bucket carries its own label as the key. Calendar bucket
+    // stores startDate/endDate (Mon..Sun) so downstream can identify
+    // "today's week" without keying on meta.week (which would still be
+    // fiscal). Both bucket shapes track periods[] so band render can
+    // prefix P7 / P8 / straddle-P7-8 without a second derivation.
+    const wk = groupBy === "calendarWeek"
+      ? weekMondayISO(day.date)
+      : (day.meta?.week || "W?");
     if (!out.weeks[wk]) {
       out.weeks[wk] = {
         actRev: 0, projRev: 0, actMeals: 0,
         complete: 0, total: 0, needsEntry: 0, overdue: 0,
         serviceDays: 0, serviceDaysEntered: 0,
         gameDays: 0, gameDaysEntered: 0,
+        // Human label - post-processed for calendarWeek (Week 1..N in
+        // insertion order); fiscalWeek keeps its key as its label.
+        label: groupBy === "calendarWeek" ? null : wk,
+        // Calendar bounds for both branches. calendarWeek fills from
+        // the key; fiscalWeek fills as the min/max day.date it sees.
+        startDate: groupBy === "calendarWeek" ? wk : null,
+        endDate:   groupBy === "calendarWeek" ? addDaysISO(wk, 6) : null,
+        // Unique fiscal periods the days belong to (order of first
+        // insertion). Drives DP1-11 P7 / P7-8 prefix rendering.
+        periods: [],
       };
     }
     const w = out.weeks[wk];
+    // Track periods (both branches - useful for calendar buckets to
+    // detect straddle; fiscalWeek buckets carry a single period by
+    // definition but keeping the array uniform simplifies consumers).
+    const dayPeriod = day.meta?.period || null;
+    if (dayPeriod && !w.periods.includes(dayPeriod)) w.periods.push(dayPeriod);
+    // Fiscal bucket: track startDate/endDate as min/max seen.
+    if (groupBy !== "calendarWeek") {
+      if (w.startDate === null || day.date < w.startDate) w.startDate = day.date;
+      if (w.endDate   === null || day.date > w.endDate)   w.endDate   = day.date;
+    }
     // Kevin's ruling 2026-07-11: weeks track actionable-only counts
     // too so the week-card counter agrees with the period counter
     // for the same range. w.total = actionable days in this week.
@@ -238,6 +297,17 @@ function aggregateWorkspaceMetrics(days) {
   // (Kevin's ruling 2026-07-11). Prior version set out.total =
   // days.length here, which inflated the denominator with away /
   // no-service / exhibition / off-season / prep days.
+  //
+  // PR-D drill Phase 1: calendarWeek buckets get "Week N" labels in
+  // insertion order (which is calendar-time order because callers
+  // pass days sorted asc by date). fiscalWeek buckets already carry
+  // their key as the label.
+  if (groupBy === "calendarWeek") {
+    let n = 1;
+    for (const k of Object.keys(out.weeks)) {
+      out.weeks[k].label = `Week ${n++}`;
+    }
+  }
   return out;
 }
 
@@ -970,7 +1040,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
   const monthMetrics = useMemo(() => {
     if (!monthDays) return null;
-    return aggregateWorkspaceMetrics(monthDays);
+    // PR-D drill Phase 1 (2026-07-20): month scope groups by calendar
+    // week (Mon-Sun). Period scope stays on the fiscalWeek default -
+    // so periodMetrics is byte-identical to prior behavior.
+    return aggregateWorkspaceMetrics(monthDays, { groupBy: "calendarWeek" });
   }, [monthDays]);
 
   const monthHomestandMap = useMemo(() => {
