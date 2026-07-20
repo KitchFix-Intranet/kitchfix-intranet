@@ -2713,7 +2713,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               };
           return (
             <div className="sc-drill">
-              <div className="sc-drill-main">{workspace}</div>
+              <div className="sc-drill-main">
+                {workspace}
+                {/* Drill P1 PR-B DP1-19: legend renders inside
+                    .sc-drill-main so its inline edges match the
+                    calendar card and stop at the rail column edge
+                    (was a sibling of .sc-drill - stretched full
+                    width including rail). scv2 only; v1 path (the
+                    !scV2 branch above the drill scope) still uses
+                    the sibling render at :2774. */}
+                {scV2 && (
+                  <StateLegend
+                    hasHomestandSchedule={hasHomestandSchedule}
+                    isFeeAccount={isFeeAccount}
+                    isMilb={isMilb}
+                    showDayNight={true}
+                  />
+                )}
+              </div>
               <MobileBooksBar
                 className="sc-drill-rail"
                 ariaLabel="Period books"
@@ -2855,7 +2872,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               };
           return (
             <div className="sc-drill">
-              <div className="sc-drill-main">{workspace}</div>
+              <div className="sc-drill-main">
+                {workspace}
+                {/* Drill P1 PR-B DP1-19: legend renders inside
+                    .sc-drill-main so its inline edges match the
+                    calendar card and stop at the rail column edge
+                    (was a sibling of .sc-drill - stretched full
+                    width including rail). scv2 only; v1 path (the
+                    !scV2 branch above the drill scope) still uses
+                    the sibling render at :2774. */}
+                {scV2 && (
+                  <StateLegend
+                    hasHomestandSchedule={hasHomestandSchedule}
+                    isFeeAccount={isFeeAccount}
+                    isMilb={isMilb}
+                    showDayNight={true}
+                  />
+                )}
+              </div>
               <MobileBooksBar
                 className="sc-drill-rail"
                 ariaLabel="Month books"
@@ -2875,7 +2909,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             bottom band with a hairline top divider and bottom card
             radii. When rendered inside .sc-workspace it stays the default
             pill; this placement lets the existing CSS take over. */}
-        {(isPeriodView || isMonthView) && (
+        {/* Drill P1 PR-B DP1-19: scv2 drill renders StateLegend
+            INSIDE .sc-drill-main (see the two drill blocks above).
+            v1 (flag off) keeps the sibling render here so v1
+            layout is byte-identical. */}
+        {(isPeriodView || isMonthView) && !scV2 && (
           <StateLegend
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}

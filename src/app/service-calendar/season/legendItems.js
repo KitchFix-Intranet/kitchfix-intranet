@@ -13,8 +13,57 @@
 // trailer. LegendInfoPopup renders labels + descriptions, plus its
 // own Section framing around the array.
 //
-// Copy is verbatim-preserved from the pre-C1a renders - this
-// consolidates the SOURCE, not the wording.
+// ─── SC drill Phase 1 · DP1-18 (2026-07-20) - ONE STATE SPINE ───
+//
+// Owner ruling: unify the shared STATE VOCABULARY across the four
+// arrays so switching accounts changes WHICH entries appear, not
+// the wording of shared ones. Layered model:
+//
+// SHARED STATE SPINE (identical label + swatch on every array
+// that has the state):
+//   entered      -> "Entered"       - actionable day with actuals
+//   needs-entry  -> "Needs entry"   - past day without actuals
+//   overdue      -> "Overdue"       - past entry deadline
+//   upcoming     -> "Upcoming"      - future service day
+//   today        -> "Today"         - navy outline ring (added
+//                                     universally by StateLegend.js)
+//
+// ACCOUNT-SPECIFIC ADDITIONS (real semantic differences - kept
+// distinct per the guardrail):
+//   off (HOMESTAND only) -> "Non Game day" - a between-games day
+//     on an MLB/AAA schedule. GUARDRAIL FIRED: reconciling per-
+//     meal's grey off-tile with MLB's "Non Game day" would
+//     mislabel one or the other - per-meal off means "no service
+//     contract this day"; MLB Non-Game-day means "scheduled non-
+//     game between games". Different semantics. HOMESTAND keeps
+//     "Non Game day"; per-meal / MiLB / FEE strip continues to
+//     drop off from the legend (self-evident flat grey per
+//     StateLegend.js:43-45).
+//   exhibition (HOMESTAND) -> "EXH" - TXR spring exhibitions.
+//   away (HOMESTAND)       -> "Away" - team on the road.
+//
+// ORTHOGONAL MARKER LAYER (glyph/notch swatches, not state fills):
+//   game-day-mark   -> "Game day"      (F9 outline notch, navy)
+//   spring-mark     -> "Spring Training" (F9 outline notch, copper)
+//   milb-day        -> "Day"           (sun glyph on lg tile)
+//   milb-night      -> "Night"         (moon glyph on lg tile)
+// Markers are appended to the strip by StateLegend.js and
+// getLegendItems() per account shape - they layer on top of the
+// spine, they don't compete with state names.
+//
+// PRIOR STATE (before DP1-18): HOMESTAND used "Scheduled" for the
+// upcoming mod class (same mod as per-meal "Upcoming"). Same state
+// under the hood; different word. Renamed to "Upcoming" - matches
+// the spine. The longer "Scheduled game day" survives as labelLong
+// so LegendInfoPopup can still surface the MLB-flavored specificity
+// in its detail section.
+//
+// v1 REGRESSION DECLARATION (owner-accepted for the demolition-
+// bound v1): renaming HOMESTAND upcoming's label lands in v1 too.
+// v1 MLB fee accounts will read "Upcoming" instead of "Scheduled"
+// on their legend strip + popup. Owner spec permits this
+// (v1 is demolition-bound); declared here rather than silently
+// changed.
 
 // OV-3 F9 (2026-07-19) - overlay marker legend entries. Notch
 // construction (see .scv2 .sc-daysq--sm.sc-daysq--game-day::before
@@ -45,9 +94,13 @@ const HOMESTAND = [
       "Actuals recorded. Includes game days (any recorded meal count, zero counts as a cancelled game) and non-game days where meals were served.",
   },
   {
+    // DP1-18: label unified to the spine word "Upcoming" (was
+    // "Scheduled" - same mod class as per-meal upcoming, just
+    // MLB-flavored wording). labelLong preserves "Scheduled game
+    // day" so LegendInfoPopup can still surface the MLB detail.
     mod: "upcoming",
     icon: "○",
-    label: "Scheduled",
+    label: "Upcoming",
     labelLong: "Scheduled game day",
     description: "An upcoming game on the homestand schedule.",
   },

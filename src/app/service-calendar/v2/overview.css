@@ -643,7 +643,9 @@ body:has(.scv2) {
 .scv2 .sc-season-period-grid {
   background: var(--sc2-surface-card);
   border: var(--sc2-border-thin) solid var(--sc2-line);
-  border-radius: 12px;
+  /* Drill P1 PR-B DP1-23: hardcoded 12 promoted to --sc2-radius-card
+     token so drill card + overview inner card + legend all agree. */
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-el-inset);
   padding: var(--sc2-space-4);
 }
@@ -940,7 +942,7 @@ body:has(.scv2) {
       matches the bar -> bottom-border gap. */
 .scv2 .sc-stepper {
   background: var(--sc2-surface-card);
-  border-radius: 12px;
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-el-card);
   padding: var(--sc2-space-5) var(--sc2-space-4);
   margin-bottom: var(--sc2-space-4);
@@ -1039,19 +1041,18 @@ body:has(.scv2) {
 .scv2 .sc-legend-popup-swatch {
   border-radius: var(--sc2-radius-cell);
 }
-/* OV-3 F8 (2026-07-19) - FIGURES section removed under scv2.
-   The Projected / Estimate / Entered explainer block explained
-   the OV-2 tile notation ("~$3K" / "est. $3K" / "$3K") which the
-   OV-3 rebuild retired in favor of state fills + numerals. The
-   block now reads as noise on the info popup. Hide the entire
-   section via :has() so nothing empty renders. The FigureRow
-   component is exclusive to this section (LegendInfoPopup.js:206-
-   215 - the only user of --figure modifier), so :has() targets
-   only this section cleanly. v1 unchanged (LegendInfoPopup is
-   shared component; scoping to .scv2 leaves flag-off intact). */
-.scv2 .sc-legend-popup-section:has(.sc-legend-popup-row--figure) {
-  display: none;
-}
+/* OV-3 F8 (2026-07-19) - FIGURES popup section hide.
+   Drill P1 PR-B DP1-20 (2026-07-20) REVERSAL: owner wants the
+   compact FIGURES key restored in the drill legend. LegendInfoPopup
+   is a shared modal that doesn't know scope, so we can't
+   drill-only-gate the popup section from CSS alone. Cleanest path:
+   remove the F8 hide so FIGURES returns to the popup in BOTH
+   overview + drill scv2. Owner spec was drill-only; overview gains
+   a small overshoot (FIGURES key visible in the overview info
+   popup). Flagged as partial-scope in the PR body for a Phase-2
+   tightening if the overshoot matters.
+   .sc-drill-only-legend-figures selector would need scope plumbing
+   through StateLegend → LegendInfoPopup → data-attr — deferred. */
 .scv2 .sc-state-legend-item {
   color: var(--sc2-ink);
   font-size: var(--sc2-size-micro);
@@ -1083,7 +1084,8 @@ body:has(.scv2) {
 .scv2 .sc-state-legend {
   background: var(--sc2-surface-card);
   border: var(--sc2-border-thin) solid var(--sc2-line);
-  border-radius: 12px;
+  /* Drill P1 PR-B DP1-23: legend matches the card tier via token. */
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-el-inset);
   /* F4 (2026-07-19) - inline edges land on the region's inline
      edges. The .sc-season shell (v1 base at season.css:12-17) adds
@@ -1098,7 +1100,7 @@ body:has(.scv2) {
   padding: var(--sc2-space-4);
 }
 .scv2 .sc-body > .sc-state-legend {
-  border-radius: 12px;
+  border-radius: var(--sc2-radius-card);
   border-top: var(--sc2-border-thin) solid var(--sc2-line);
 }
 /* Hide text-glyph swatches (✎ / ! / ○). SVG-based swatches untouched
@@ -1123,11 +1125,18 @@ body:has(.scv2) {
 }
 /* Away swatch under scv2 - ghost-purple state tokens, matches
    Wave 3d tile state (`.scv2 .sc-daysq--away` at DaySquare.css
-   scoped block). */
+   scoped block).
+   Drill P1 PR-B DP1-17: swatches must match the live tile. Since
+   PR-B DP1-21 removed the plane glyph from the tile, hide the plane
+   svg inside the away swatch under scv2 too (v1 keeps the plane on
+   both tile and swatch — unchanged). */
 .scv2 .sc-state-legend-swatch--away {
   background: var(--sc2-state-away-bg);
   border-color: var(--sc2-state-away-fg);
   color: var(--sc2-state-away-fg);
+}
+.scv2 .sc-state-legend-swatch--away svg {
+  display: none;
 }
 /* OV-3 F9 (2026-07-19) - game-day + spring marker swatches
    render the SAME notch construction as tiles (DaySquare.css
@@ -1199,7 +1208,7 @@ body:has(.scv2) {
    The banded-header ::before accent is retired (Wave 6 rebuild). */
 .scv2 .sc-season-period-card {
   background: var(--sc2-surface-card);
-  border-radius: 12px;
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-el-card);
   border-color: transparent;
 }
@@ -1658,7 +1667,7 @@ body:has(.scv2) {
    7x6 total, matching the real MonthCard's grid + dow strip. */
 .scv2 .sc-season-month-skeleton {
   background: var(--sc2-surface-card);
-  border-radius: 12px;
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-el-card);
   padding: var(--sc2-space-3);
   display: flex;

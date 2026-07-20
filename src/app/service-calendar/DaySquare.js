@@ -31,7 +31,7 @@
 //   fee-no-dollar  N served (NO $, STL-FL discipline)
 
 import "./DaySquare.css";
-import { SunGlyph, MoonGlyph, MessageSquare, PlaneGlyph } from "./Icons";
+import { SunGlyph, MoonGlyph, MessageSquare } from "./Icons";
 import { fmt$K, fmtMeals } from "./season/format";
 
 // Number formatting convention (Design Batch 1, audit P2-1).
@@ -316,19 +316,16 @@ export default function DaySquare({
       {isExhibition && (
         <span className="sc-daysq-exh-ribbon" aria-hidden="true">EXH</span>
       )}
-      {/* sc-13: plane glyph carries the AWAY state as a shape signal
-          alongside the teal fill (colorblind-safe on lg tiles).
-          Restyle 2026-07-10: gated to size !== "sm" per Kevin's ruling.
-          The dense year-grid overview crowds at that size, so small
-          tiles carry the state by teal fill alone (matches the
-          `renderAway` !sm gate on the "no service" line). Full-size
-          tiles keep the plane. Same top-right absolute-positioned
-          slot as the EXH ribbon (mutually exclusive - no collision). */}
-      {isAway && size !== "sm" && (
-        <span className="sc-daysq-away-glyph" aria-hidden="true">
-          <PlaneGlyph size={13} />
-        </span>
-      )}
+      {/* Drill P1 PR-B (2026-07-20) DP1-21 - airplane RETIRED at the
+          tile level. Away renders purple-only via the .scv2
+          --sc2-state-away-bg (Wave 3d ghost-purple #e3dded) - the
+          plane was redundant with the fill and (per owner ruling)
+          reads as visual noise inside the drill card. Moon/sun
+          (DayNightPill) untouched - lives on its own --lg-scoped
+          rule. Legend swatch loses its plane glyph via CSS in
+          overview.css (see PR-B legend rule). PlaneGlyph removed
+          from imports; StateLegend re-imports it directly if
+          needed. */}
       {isSyncing && (
         <span className="sc-daysq-syncing" aria-label="Save syncing">
           <span className="sc-daysq-syncing-spinner" aria-hidden="true" />
