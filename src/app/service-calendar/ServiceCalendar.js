@@ -2523,18 +2523,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               day: date,
             }), { scroll: false });
           };
-          const exportControlEl = selectedAccount ? (
-            <ExportControl
-              scope="period"
-              year={year}
-              periodKey={periodKey}
-              monthKey={null}
-              accountKey={selectedAccount}
-              showToast={showToast}
-              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-            />
-          ) : null;
+          // HF-5 dedup (2026-07-20): the rail's exportControl slot
+          // (DrillRail.js:359 / OpsRail.js:263) is deliberately not
+          // fed on scv2 drill - HF-5 mounts export in the ribbon
+          // instead (ServiceCalendar.js:2170-2189, single source).
+          // The rail's `{exportControl && ...}` conditional keeps
+          // the prop contract intact for any future overview mount
+          // that wants a rail-footer export; drill just passes null.
           const rail = isFeeAccount ? (
             <OpsRail
               mode="drill"
@@ -2547,7 +2542,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodRange={drillPeriodRange}
               loading={loading && !periodDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
             />
           ) : (
@@ -2562,7 +2557,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               today={today}
               loading={loading && !periodDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
@@ -2686,18 +2681,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             const [y, m] = monthKey.split("-").map(Number);
             return m >= 1 && m <= 12 ? `${MON[m-1]} ${y}` : monthKey;
           })() : "";
-          const exportControlEl = selectedAccount ? (
-            <ExportControl
-              scope="month"
-              year={year}
-              periodKey={null}
-              monthKey={monthKey}
-              accountKey={selectedAccount}
-              showToast={showToast}
-              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-            />
-          ) : null;
+          // HF-5 dedup (2026-07-20): month-scope rail export removed;
+          // ribbon owns export (see period-scope note above).
           const rail = isFeeAccount ? (
             <OpsRail
               mode="drill"
@@ -2710,7 +2695,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodRange={monthRange}
               loading={loading && !monthDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
             />
           ) : (
@@ -2725,7 +2710,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               today={today}
               loading={loading && !monthDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}

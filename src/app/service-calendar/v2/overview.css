@@ -154,6 +154,45 @@ body:has(.scv2) {
   align-items: center;
   min-width: 0;
 }
+/* HF-6 (2026-07-20) - inner AccountDropdown trigger sizing +
+   on-navy retint. The base .sc-dropdown-trigger rules at
+   ops-sc.css:116 give the trigger font-size var(--size-body) 14px
+   + padding var(--space-2) var(--space-3) 8/12, producing a
+   ~35-39px tall element that reads as a second title on the
+   ribbon. They also paint background: var(--surface-card) (white)
+   which lands white-on-navy in the ribbon because the existing
+   scv2 retint at :505 is .sc-chrome-bar-scoped and no longer
+   fires on scv2 non-admin (ChromeBar suppresses per DP1-02).
+   Reduce to the ribbon control tier (caption / 12px) with 4/10
+   padding to land ~28-30px, matching the drill-nav Season +
+   stepper buttons. Adopt the on-navy vocabulary
+   (transparent-white bg + white text + subtle-white border)
+   consistent with .sc-ribbon-admin / AsOf. Menu keeps a light
+   card so the item list stays legible against page bg. Scoped
+   to .sc-ribbon-account, so the admin ChromeBar dropdown (which
+   still hits the :505 retint via .sc-chrome-bar ancestor) is
+   untouched. */
+.scv2 .sc-ribbon-account .sc-dropdown-trigger {
+  padding: 4px 10px;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-arrow {
+  color: var(--sc2-cmd-text-muted);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-menu {
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  box-shadow: var(--sc2-elevation-raised);
+}
 
 /* Thin vertical separator "|" between segments - white, low-opacity. */
 .scv2 .sc-ribbon-sep {
