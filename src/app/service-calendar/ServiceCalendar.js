@@ -2286,6 +2286,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
           weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
           hasHomestandSchedule={hasHomestandSchedule}
+          isFeeAccount={isFeeAccount}
           gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
           totalGameDays={yearBannerStats?.totalGameDays || 0}
           exportControl={
