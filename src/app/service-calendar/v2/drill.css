@@ -196,11 +196,13 @@
    (hero is exact-2dp so the value line runs longer;
    week-lines fit tighter than season-lines). Small overrides
    only - no new geometry. */
-.scv2 .sc-drill-rail .sc-rail-hero-value {
-  /* Exact-2dp values are wider than compact overview values;
-     shrink to fit while staying prominent. */
-  font-size: var(--sc2-size-h3);
-}
+/* Drill P1 PR-C (2026-07-20) DP1-16 - hero-value size override
+   REMOVED. Overview hero uses 27px via rail.css (G2). Match
+   overview exactly so the two account families read the same
+   grammar. Owner spec DP1-14: "type scale + spacing exactly" -
+   overrides here diverge from that. If a very wide fmt$ value
+   overflows at rail min-width, the nowrap + ellipsis logic on the
+   inline projection handles it (rail.css hero rules). */
 .scv2 .sc-drill-rail .sc-rail-hero-meta {
   line-height: 1.5;
 }
@@ -266,6 +268,39 @@
   color: var(--sc2-rail-text);
 }
 .scv2 .sc-drill-rail .sc-rail-footer-quiet:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* Drill P1 PR-A (2026-07-20) DP1-08 - secondary-tier action row that
+   sits between the primary footer CTA and the export slot. Two
+   buttons max: "Enter today" (when primary is Enter-oldest) + "Bulk
+   entry" (always). Quiet treatment; same border/hover grammar as
+   the export button so the rail's utility layer reads as one
+   family. */
+.scv2 .sc-drill-rail-actions {
+  display: flex;
+  gap: var(--sc2-space-2);
+  margin-top: var(--sc2-space-2);
+}
+.scv2 .sc-drill-rail-action {
+  flex: 1 1 0;
+  background: transparent;
+  color: var(--sc2-rail-cta-quiet-text);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-cta-quiet-border);
+  border-radius: var(--sc2-radius-control);
+  padding: 8px var(--sc2-space-3);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.scv2 .sc-drill-rail-action:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc2-rail-text);
+}
+.scv2 .sc-drill-rail-action:focus-visible {
   outline: 2px solid var(--sc2-rail-accent-warn);
   outline-offset: 2px;
 }

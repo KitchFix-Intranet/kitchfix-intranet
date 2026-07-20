@@ -154,6 +154,45 @@ body:has(.scv2) {
   align-items: center;
   min-width: 0;
 }
+/* HF-6 (2026-07-20) - inner AccountDropdown trigger sizing +
+   on-navy retint. The base .sc-dropdown-trigger rules at
+   ops-sc.css:116 give the trigger font-size var(--size-body) 14px
+   + padding var(--space-2) var(--space-3) 8/12, producing a
+   ~35-39px tall element that reads as a second title on the
+   ribbon. They also paint background: var(--surface-card) (white)
+   which lands white-on-navy in the ribbon because the existing
+   scv2 retint at :505 is .sc-chrome-bar-scoped and no longer
+   fires on scv2 non-admin (ChromeBar suppresses per DP1-02).
+   Reduce to the ribbon control tier (caption / 12px) with 4/10
+   padding to land ~28-30px, matching the drill-nav Season +
+   stepper buttons. Adopt the on-navy vocabulary
+   (transparent-white bg + white text + subtle-white border)
+   consistent with .sc-ribbon-admin / AsOf. Menu keeps a light
+   card so the item list stays legible against page bg. Scoped
+   to .sc-ribbon-account, so the admin ChromeBar dropdown (which
+   still hits the :505 retint via .sc-chrome-bar ancestor) is
+   untouched. */
+.scv2 .sc-ribbon-account .sc-dropdown-trigger {
+  padding: 4px 10px;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: var(--sc2-cmd-text);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-arrow {
+  color: var(--sc2-cmd-text-muted);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-menu {
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  box-shadow: var(--sc2-elevation-raised);
+}
 
 /* Thin vertical separator "|" between segments - white, low-opacity. */
 .scv2 .sc-ribbon-sep {
@@ -226,6 +265,110 @@ body:has(.scv2) {
   width: 1px;
   height: 12px;
   background: rgba(255, 255, 255, 0.14);
+}
+
+/* Drill P1 PR-A (2026-07-20) DP1-05 - Today-group container.
+   HF-7 (2026-07-20): the bordered pill treatment applies to BOTH
+   overview and drill now. Original --drill modifier renamed to
+   --boxed since the visual is no longer drill-specific. Overview
+   readout + Today-jump sit in the same bordered container as the
+   drill version so the two scopes read identically. */
+.scv2 .sc-ribbon-today-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  flex: 0 0 auto;
+}
+.scv2 .sc-ribbon-today-group--boxed {
+  padding: 3px 4px 3px 10px;
+  border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--sc2-radius-control);
+  background: rgba(255, 255, 255, 0.04);
+}
+.scv2 .sc-ribbon-today-group-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 var(--sc2-space-1);
+}
+.scv2 .sc-ribbon-today-jump {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Drill P1 PR-A DP1-02 - drill-nav slot (Season back + stepper +
+   phase pill). Occupies the same slot the ChromeBar used to host.
+   Reuses .sc-chrome-drill* class chain from the PeriodHeaderNav /
+   MonthHeaderNav components. Under Ribbon (navy bg) the muted
+   defaults from the ChromeBar CSS need to reverse to white/on-navy;
+   handled below. */
+.scv2 .sc-ribbon-drillnav {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill {
+  color: var(--sc2-cmd-text);
+  gap: var(--sc2-space-2);
+}
+/* DP1-04 - stepper period/month label renders WHITE on the navy
+   ribbon (was ink-muted for the light ChromeBar). */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-period,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn {
+  color: var(--sc2-cmd-text);
+}
+/* HF-1 (2026-07-20) - the ChromeBar defaults paint Season-back +
+   stepper buttons with a white BACKGROUND (var(--surface-card))
+   and a light-grey border (var(--border-default)). On the navy
+   ribbon that reads as white-on-white boxes with an invisible
+   glyph. Override to the on-navy ribbon-button treatment
+   (transparent fill, subtle-white 1px border, matching the
+   .sc-ribbon-admin / .sc-chrome-bar-asof.sc-ribbon-asof
+   vocabulary at :311 / :331). */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.20);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-sep {
+  background: rgba(255, 255, 255, 0.18);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back:hover,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-step-btn:disabled {
+  color: rgba(255, 255, 255, 0.30);
+}
+
+/* HF-3 (2026-07-20) - "Period 7" label reads too large next to
+   the ribbon title. Reduce to the ribbon-meta scale so it sits
+   in the readout tier, not the h1 tier. Matches
+   .sc-ribbon-meta-value at :219-223. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-period {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+  letter-spacing: 0;
+}
+
+/* HF-2 (2026-07-20) - remove the "· Complex" phase pill + its
+   leading "·" dot from the ribbon drill-nav. Phase context lives
+   elsewhere. Scoped to .scv2 .sc-ribbon-drillnav so v1 ChromeBar
+   drill still renders phase (v1 base rules untouched). Covers
+   both the majority-phase pill and the Spring Training rider
+   (both use .sc-chrome-drill-phase). */
+/* HF-4 (2026-07-20) - drop the "Jun 15 - Jul 12" date range from
+   the ribbon drill-nav; stepper + PERIOD number already convey
+   the scope. Same scv2-scoped hide as HF-2. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-phase,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-dot,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-range,
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-skel {
+  display: none;
 }
 
 /* Right cluster: as-of pill, admin lock, export - far edge order. */

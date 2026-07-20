@@ -9,7 +9,7 @@ import PeriodWorkspace from "./season/PeriodWorkspace";
 import StateLegend from "./season/StateLegend";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
 import ExportControl from "./season/ExportControl";
-import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
+import PeriodHeaderNav, { PeriodTodayChip, OverviewTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
@@ -24,6 +24,9 @@ import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
 import MobileBooksBar from "./v2/MobileBooksBar";
+// HF-7 (2026-07-20) - overview ribbon Today-jump routes through
+// scrollIntoViewRM so the RM branch is respected.
+import { scrollIntoViewRM } from "./v2/motion";
 // W8 - the bar figures are read from the SAME derives the rails
 // consume internally. Not a new derivation path: SeasonRail also calls
 // deriveHeroTotals(yearData) + deriveQueue(...) at its top; the bar
@@ -2046,6 +2049,28 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     if (!mk) return;
     router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
   }, [today, router, selectedAccount]);
+  // HF-7 (2026-07-20) - overview Today-jump. Finds the current-month
+  // card ([data-state="current"] on MonthCard's article - see
+  // MonthCard.js:134), scrolls it into view, and one-shot-pulses it
+  // via .sc-season-month-card--today-pulse (~1200ms; see
+  // season.css:376-399 for the keyframes). Silent no-op if no
+  // current-month card exists in the DOM (off-season / wrong year -
+  // the OverviewTodayChip also hides itself in that case via its
+  // `hasCurrentMonth` prop, so the button shouldn't have been
+  // clickable in the first place).
+  const handleOverviewTodayJump = useCallback(() => {
+    const el = document.querySelector('.sc-season-month-card[data-state="current"]');
+    if (!el) return;
+    scrollIntoViewRM(el, { block: "center" });
+    el.classList.remove("sc-season-month-card--today-pulse");
+    // Force reflow so the animation restarts if the user clicks Today
+    // twice in a row without leaving the current month.
+    void el.offsetWidth;
+    el.classList.add("sc-season-month-card--today-pulse");
+    setTimeout(() => {
+      el.classList.remove("sc-season-month-card--today-pulse");
+    }, 1250);
+  }, []);
 
   const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
   const canPrevMonth = drillMonthIdx > 1;
@@ -2161,7 +2186,68 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
-      {scV2 && (
+      {scV2 && (() => {
+        /* Drill P1 PR-A DP1-02: drill-scope controls that ChromeBar
+           used to host now flow into the Ribbon. Compute the two
+           slots once here and pass to both Ribbon (scv2) and
+           ChromeBar (v1) so the drill-nav JSX has one source. */
+        const drillNavSlot = !isAdminView
+          ? (isPeriodView ? (
+              <PeriodHeaderNav
+                account={data?.account}
+                year={year}
+                periodKey={periodKey}
+                periodRange={drillPeriodRange}
+                canPrev={canPrevPeriod}
+                canNext={canNextPeriod}
+                isLoading={!periodRanges}
+                onClimbToSeason={handleClimbToSeason}
+                onPrevPeriod={handlePrevPeriod}
+                onNextPeriod={handleNextPeriod}
+              />
+            ) : isMonthView ? (
+              <MonthHeaderNav
+                monthKey={monthKey}
+                monthRange={monthRange}
+                canPrev={canPrevMonth}
+                canNext={canNextMonth}
+                isLoading={!monthRange}
+                onClimbToSeason={handleClimbToSeason}
+                onPrevMonth={handlePrevMonth}
+                onNextMonth={handleNextMonth}
+                phaseTimeline={phaseTimeline}
+              />
+            ) : null)
+          : null;
+        // HF-7 (2026-07-20) - drillNavEndSlot now covers YEAR view too:
+        // OverviewTodayChip scrolls the current-month card into view +
+        // pulses it. The chip hides itself when hasCurrentMonth is
+        // false (viewing a non-current year - never rendered as a dead
+        // control per owner ruling). isCurrentYear compares the fixed
+        // season year (2026) to the client wall clock so an operator
+        // reading the intranet in 2027 sees no Today button.
+        const isCurrentYear = year === new Date().getFullYear();
+        const drillNavEndSlot = !isAdminView
+          ? (isPeriodView ? (
+              <PeriodTodayChip
+                today={today}
+                isCurrentPeriod={isCurrentPeriod}
+                onTodayJump={handleTodayJump}
+              />
+            ) : isMonthView ? (
+              <PeriodTodayChip
+                today={today}
+                isCurrentPeriod={isCurrentMonth}
+                onTodayJump={handleMonthTodayJump}
+              />
+            ) : isYearView ? (
+              <OverviewTodayChip
+                hasCurrentMonth={isCurrentYear}
+                onTodayJump={handleOverviewTodayJump}
+              />
+            ) : null)
+          : null;
+        return (
         <Ribbon
           asOf={asOf}
           onRefresh={handleRefresh}
@@ -2170,31 +2256,42 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           isAdmin={isAdmin}
           isAdminView={isAdminView}
           onAdminToggle={handleAdminToggle}
-          /* OV-3 Wave 2 - single-row header: chrome content flows into
-             the ribbon under scv2 overview. ChromeBar below suppresses
-             for scV2 && isYearView && !isAdminView (drill + admin
-             still use ChromeBar until V3 DRILL rebuilds them). */
+          /* OV-3 Wave 2 + Drill P1 PR-A (2026-07-20): chrome content
+             flows into the ribbon under scv2 for BOTH overview AND
+             drill. ChromeBar below suppresses for `scV2 && !isAdminView`
+             (admin still uses ChromeBar). Drill nav slots (Season
+             back / stepper / phase pill / Today jump) come in via
+             the drillNav + drillNavEnd props. */
           accountDropdown={accountDropdown}
-          category={!isAdminView && isYearView ? category : null}
+          /* DP1-06: type pill renders in ALL non-admin scopes (was
+             overview-only). Consistent structure across the 4 account
+             shapes. */
+          category={!isAdminView ? category : null}
           view={seasonView}
           onViewChange={handleSeasonViewChange}
           showToggle={!isAdminView && isYearView}
+          drillNav={drillNavSlot}
+          drillNavEnd={drillNavEndSlot}
           todayLabel={yearBannerStats?.todayLabel}
           periodNum={yearToday?.period ? (String(yearToday.period).match(/\d+/)?.[0] ?? null) : null}
           weekNum={yearToday?.week ? (String(yearToday.week).match(/\d+/)?.[0] ?? null) : null}
-          /* G4 (2026-07-19) - fee / homestand accounts render
-             GAME DAYS n/m in place of PERIOD | WEEK. Per-meal
-             accounts pass hasHomestandSchedule=false so RibbonMeta
-             renders the calendar variant unchanged. */
           hasHomestandSchedule={hasHomestandSchedule}
           gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
           totalGameDays={yearBannerStats?.totalGameDays || 0}
           exportControl={
-            !isAdminView && selectedAccount && isYearView
+            // HF-5 (2026-07-20): export renders in ribbon-right on
+            // ALL non-admin scopes (was year-view only). Scope prop
+            // follows the current view. Rail still mounts an export
+            // in drill via DrillRail.js:359 / OpsRail.js:263 (PR-C
+            // scope) - flagged in PR body for owner ruling on the
+            // duplicate.
+            !isAdminView && selectedAccount
               ? (
                 <ExportControl
-                  scope="year"
+                  scope={isPeriodView ? "period" : isMonthView ? "month" : "year"}
                   year={year}
+                  periodKey={isPeriodView ? periodKey : null}
+                  monthKey={isMonthView ? monthKey : null}
                   accountKey={selectedAccount}
                   showToast={showToast}
                   hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
@@ -2203,8 +2300,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               ) : null
           }
         />
-      )}
-      {!(scV2 && isYearView && !isAdminView) && <ChromeBar
+        );
+      })()}
+      {/* Drill P1 PR-A DP1-02: ChromeBar suppresses for ALL scv2
+          non-admin scopes (overview + drill). Admin still uses
+          ChromeBar (its own admin-scope render path). v1 also uses
+          it as before. */}
+      {!(scV2 && !isAdminView) && <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
         view={seasonView}
@@ -2532,18 +2634,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               day: date,
             }), { scroll: false });
           };
-          const exportControlEl = selectedAccount ? (
-            <ExportControl
-              scope="period"
-              year={year}
-              periodKey={periodKey}
-              monthKey={null}
-              accountKey={selectedAccount}
-              showToast={showToast}
-              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-            />
-          ) : null;
+          // HF-5 dedup (2026-07-20): the rail's exportControl slot
+          // (DrillRail.js:359 / OpsRail.js:263) is deliberately not
+          // fed on scv2 drill - HF-5 mounts export in the ribbon
+          // instead (ServiceCalendar.js:2170-2189, single source).
+          // The rail's `{exportControl && ...}` conditional keeps
+          // the prop contract intact for any future overview mount
+          // that wants a rail-footer export; drill just passes null.
           const rail = isFeeAccount ? (
             <OpsRail
               mode="drill"
@@ -2556,7 +2653,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodRange={drillPeriodRange}
               loading={loading && !periodDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
             />
           ) : (
@@ -2571,10 +2668,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               today={today}
               loading={loading && !periodDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
+              /* Drill P1 PR-A DP1-08 - bulk entry secondary CTA in rail. */
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
             />
           );
           // W8 - drill mobile books-bar.
@@ -2693,18 +2792,8 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             const [y, m] = monthKey.split("-").map(Number);
             return m >= 1 && m <= 12 ? `${MON[m-1]} ${y}` : monthKey;
           })() : "";
-          const exportControlEl = selectedAccount ? (
-            <ExportControl
-              scope="month"
-              year={year}
-              periodKey={null}
-              monthKey={monthKey}
-              accountKey={selectedAccount}
-              showToast={showToast}
-              hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
-              hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
-            />
-          ) : null;
+          // HF-5 dedup (2026-07-20): month-scope rail export removed;
+          // ribbon owns export (see period-scope note above).
           const rail = isFeeAccount ? (
             <OpsRail
               mode="drill"
@@ -2717,7 +2806,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               periodRange={monthRange}
               loading={loading && !monthDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
             />
           ) : (
@@ -2732,10 +2821,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               today={today}
               loading={loading && !monthDays}
               incomplete={!!partialError}
-              exportControl={exportControlEl}
+              exportControl={null}
               onTargetDay={targetDay}
               onEnterToday={targetDay}
               onEnterOldest={targetDay}
+              /* Drill P1 PR-A DP1-08 - bulk entry secondary CTA in rail. */
+              onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
             />
           );
           // W8 - month-drill mobile books-bar. Mirrors the period-drill

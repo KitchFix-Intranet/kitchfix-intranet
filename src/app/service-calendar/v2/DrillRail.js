@@ -29,6 +29,7 @@ import { useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -62,6 +63,13 @@ export default function DrillRail({
   onTargetDay,       // (date) => void - queue rows + week-line + notes-line target
   onEnterToday,      // () => void - primary CTA when today needs entry
   onEnterOldest,     // (date) => void - primary CTA fallback
+  /* Drill P1 PR-A (2026-07-20) DP1-08 - entry CTAs relocated from the
+     deleted TodayRail / PastRail. Bulk entry becomes a secondary tier
+     button below the primary footer; Enter-today secondary surfaces
+     when the primary is Enter-oldest AND today is in scope + needs
+     entry. Handlers reused from the ones ServiceCalendar already
+     lifts (matching TodayRail's pre-deletion wiring). */
+  onBulkModeToggle,  // (next: bool) => void — flips ServiceCalendar's bulkMode
 }) {
   const [showAllQueue, setShowAllQueue] = useState(false);
 
@@ -146,12 +154,14 @@ export default function DrillRail({
     );
   }
 
-  // Incomplete-fetch treatment for the hero money region. Rail
-  // structure is preserved; the money value refuses to render a
-  // possibly-wrong sum, and points the operator at the ribbon
-  // AsOf refresh reachable above. Progress bar + queue + week
-  // lines can still show what data DID come in - they're annotations,
-  // not billing figures.
+  // Drill P1 PR-C (2026-07-20) DP1-14 - hero matches SeasonRail's
+  // per-meal grammar (Wave 4a / G2 / F10):
+  //   Line 1: value + label + projection inline on one baseline.
+  //   Progress bar.
+  //   Caption below the bar: "N of M days entered" via
+  //   RailHeroProgressCaption (same slot the overview uses).
+  const heroProjection = `of ${fmt$(heroProjRev)}`;
+  const heroCaption = `${heroDaysEntered} of ${heroTotalDays} days entered`;
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
@@ -163,7 +173,7 @@ export default function DrillRail({
       value={heroActRev}
       format={fmt$}
       label="ENTERED"
-      meta={`of ${fmt$(heroProjRev)} projected · ${heroDaysEntered} of ${heroTotalDays} days entered`}
+      projection={heroProjection}
     />
   );
 
@@ -171,14 +181,28 @@ export default function DrillRail({
     <RailShell label={`${scope.toUpperCase()} · ${scopeLabel || ""}`}>
       {heroBlock}
       {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
+      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       <RailScroll>
         {/* Needs-attention queue - identical semantics to overview
             queue but limited to the drill range. Rows target the
-            day (?day= param via caller's onTargetDay). */}
+            day (?day= param via caller's onTargetDay).
+            Drill P1 PR-C DP1-15: meta becomes the severity pill
+            (reuse G13's RailSection metaTone). Worst-state wins:
+            any overdue -> red "{n} overdue"; else needs -> amber
+            "{n} need". Empty -> plain count / null. */}
+        {(() => {
+          const overdueCount = queueRows.filter(r => r.status === "overdue").length;
+          const needsCount = queueRows.filter(r => r.status === "needs-entry").length;
+          const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+          const railMeta = overdueCount > 0
+            ? `${overdueCount} overdue`
+            : needsCount > 0 ? `${needsCount} need` : null;
+          return (
         <RailSection
           label="NEEDS ENTRY"
-          meta={queueRows.length > 0 ? `${queueRows.length}` : null}
+          meta={railMeta}
+          metaTone={railMetaTone}
         >
           {queueRows.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry in this scope.</p>
@@ -199,6 +223,8 @@ export default function DrillRail({
             />
           )}
         </RailSection>
+          );
+        })()}
 
         {/* W6: HOMESTANDS section for per-meal accounts w/
             hasHomestandSchedule=true (CIN-KY is the proof case).
@@ -301,14 +327,49 @@ export default function DrillRail({
         )}
       </RailScroll>
 
-      {/* Footer: primary CTA (or caught-up) + quiet secondary Export.
-          Refines the one-primary-button law: exactly one primary acts;
-          Export is the sole quiet utility. */}
+      {/* Footer: primary CTA (or caught-up). Drill P1 PR-A DP1-08
+          adds a secondary-tier row below (Enter today + Bulk entry)
+          for the three-CTA two-tier layout the deleted TodayRail
+          used to host. */}
       <RailFooter
         kind={footerKind}
         label={footerLabel}
         onClick={footerAction}
       />
+      {(() => {
+        // DP1-08 secondary tier. Enter-today shows ONLY when today is
+        // in scope + needs entry AND the primary is NOT already
+        // Enter today (i.e. primary is Enter-oldest, so today is a
+        // second explicit target). Bulk entry always shows when
+        // onBulkModeToggle is wired (past-period + current both).
+        const showEnterToday = todayInScope
+          && todayRow
+          && footerKind !== "today";
+        const showBulk = !!onBulkModeToggle;
+        if (!showEnterToday && !showBulk) return null;
+        return (
+          <div className="sc-drill-rail-actions" role="group" aria-label="Entry actions">
+            {showEnterToday && (
+              <button
+                type="button"
+                className="sc-drill-rail-action sc-drill-rail-action--secondary"
+                onClick={() => onEnterToday?.(today)}
+              >
+                Enter today
+              </button>
+            )}
+            {showBulk && (
+              <button
+                type="button"
+                className="sc-drill-rail-action sc-drill-rail-action--secondary"
+                onClick={() => onBulkModeToggle?.(true)}
+              >
+                Bulk entry
+              </button>
+            )}
+          </div>
+        );
+      })()}
       {exportControl && (
         <div className="sc-drill-rail-export">
           {exportControl}
