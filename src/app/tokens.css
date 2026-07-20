@@ -243,6 +243,18 @@
   --sc2-radius-pill:      9999px;
   --sc2-border-thin:      1px;
   --sc2-border-medium:    1.5px;
+  /* Drill P1 PR-B (2026-07-20) DP1-23 - explicit card + modal
+     tiers. Owner-confirmed: card=12, modal=14, tile keeps
+     --sc2-radius-cell=6. `--sc2-radius-container` STAYS 11 as the
+     fallback for anything that hasn't migrated - safest for
+     regression avoidance during Phase 1. New consumers: drill
+     workspace card, overview Wave-5a inner-card region, legend
+     under scv2 (previously hardcoded 12 or reading
+     --sc2-radius-container=11). Modal (dayEntryV2) still reads
+     --sc2-radius-container = 11 today; the future Phase-2 modal
+     restyle migrates to --sc2-radius-modal=14. */
+  --sc2-radius-card:      12px;
+  --sc2-radius-modal:     14px;
 
   /* ---------- Font + weight roles ---------- */
   --sc2-font-ui: var(--font-ui);

@@ -1251,8 +1251,18 @@
 }
 
 /* ── Drill-in polish (lg-only) ─────────────────────────────── */
+/* Drill P1 PR-B DP1-25 - lg tile density tightened ~30% under scv2.
+   Base v1 sc-daysq--lg is min-height: 96px (DaySquare.css:54). At
+   96px each row is tall and the drill card feels loose next to the
+   overview's tight sm-tile grid. 68px reduces vertical space ~30%
+   while keeping the 44px min tap-target floor + room for the date +
+   badges + mid line. Padding tightens to sp-1 sp-2 correspondingly.
+   Radius migrates to --sc2-radius-cell (6px) for tighter tile edges
+   that match the overview sm tile - DP1-23's tile tier. */
 .scv2 .sc-daysq--lg {
-  border-radius: var(--sc2-radius-container);
+  min-height: 68px;
+  padding: var(--sc2-space-1) var(--sc2-space-2);
+  border-radius: var(--sc2-radius-cell);
   box-shadow: var(--sc2-elevation-inset-top), var(--sc2-elevation-card);
 }
 .scv2 .sc-daysq--lg .sc-daysq-badge {

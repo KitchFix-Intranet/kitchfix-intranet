@@ -105,11 +105,14 @@
 .scv2 .sc-workspace-frame {
   background: var(--sc2-surface-card);
   border: var(--sc2-border-thin) solid var(--sc2-line);
-  border-radius: var(--sc2-radius-container);
+  /* Drill P1 PR-B DP1-23: card tier = 12 via new --sc2-radius-card
+     token (was --sc2-radius-container = 11). Matches overview
+     inner-card region + drill legend. */
+  border-radius: var(--sc2-radius-card);
   box-shadow: var(--sc2-elevation-card);
 }
 .scv2 .sc-workspace-frame-band {
-  border-radius: var(--sc2-radius-container) var(--sc2-radius-container) 0 0;
+  border-radius: var(--sc2-radius-card) var(--sc2-radius-card) 0 0;
 }
 .scv2 .sc-workspace-frame-stat-num {
   color: var(--sc2-ink-strong);
