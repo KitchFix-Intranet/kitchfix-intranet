@@ -29,6 +29,7 @@ import { useState } from "react";
 import {
   RailShell,
   RailHero,
+  RailHeroProgressCaption,
   RailProgress,
   RailSection,
   RailScroll,
@@ -143,12 +144,14 @@ export default function DrillRail({
     );
   }
 
-  // Incomplete-fetch treatment for the hero money region. Rail
-  // structure is preserved; the money value refuses to render a
-  // possibly-wrong sum, and points the operator at the ribbon
-  // AsOf refresh reachable above. Progress bar + queue + week
-  // lines can still show what data DID come in - they're annotations,
-  // not billing figures.
+  // Drill P1 PR-C (2026-07-20) DP1-14 - hero matches SeasonRail's
+  // per-meal grammar (Wave 4a / G2 / F10):
+  //   Line 1: value + label + projection inline on one baseline.
+  //   Progress bar.
+  //   Caption below the bar: "N of M days entered" via
+  //   RailHeroProgressCaption (same slot the overview uses).
+  const heroProjection = `of ${fmt$(heroProjRev)}`;
+  const heroCaption = `${heroDaysEntered} of ${heroTotalDays} days entered`;
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
@@ -160,7 +163,7 @@ export default function DrillRail({
       value={heroActRev}
       format={fmt$}
       label="ENTERED"
-      meta={`of ${fmt$(heroProjRev)} projected · ${heroDaysEntered} of ${heroTotalDays} days entered`}
+      projection={heroProjection}
     />
   );
 
@@ -168,14 +171,28 @@ export default function DrillRail({
     <RailShell label={`${scope.toUpperCase()} · ${scopeLabel || ""}`}>
       {heroBlock}
       {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
+      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       <RailScroll>
         {/* Needs-attention queue - identical semantics to overview
             queue but limited to the drill range. Rows target the
-            day (?day= param via caller's onTargetDay). */}
+            day (?day= param via caller's onTargetDay).
+            Drill P1 PR-C DP1-15: meta becomes the severity pill
+            (reuse G13's RailSection metaTone). Worst-state wins:
+            any overdue -> red "{n} overdue"; else needs -> amber
+            "{n} need". Empty -> plain count / null. */}
+        {(() => {
+          const overdueCount = queueRows.filter(r => r.status === "overdue").length;
+          const needsCount = queueRows.filter(r => r.status === "needs-entry").length;
+          const railMetaTone = overdueCount > 0 ? "overdue" : needsCount > 0 ? "needs" : undefined;
+          const railMeta = overdueCount > 0
+            ? `${overdueCount} overdue`
+            : needsCount > 0 ? `${needsCount} need` : null;
+          return (
         <RailSection
           label="NEEDS ENTRY"
-          meta={queueRows.length > 0 ? `${queueRows.length}` : null}
+          meta={railMeta}
+          metaTone={railMetaTone}
         >
           {queueRows.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry in this scope.</p>
@@ -196,6 +213,8 @@ export default function DrillRail({
             />
           )}
         </RailSection>
+          );
+        })()}
 
         {/* W6: HOMESTANDS section for per-meal accounts w/
             hasHomestandSchedule=true (CIN-KY is the proof case).
