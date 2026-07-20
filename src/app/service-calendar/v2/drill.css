@@ -180,11 +180,13 @@
    (hero is exact-2dp so the value line runs longer;
    week-lines fit tighter than season-lines). Small overrides
    only - no new geometry. */
-.scv2 .sc-drill-rail .sc-rail-hero-value {
-  /* Exact-2dp values are wider than compact overview values;
-     shrink to fit while staying prominent. */
-  font-size: var(--sc2-size-h3);
-}
+/* Drill P1 PR-C (2026-07-20) DP1-16 - hero-value size override
+   REMOVED. Overview hero uses 27px via rail.css (G2). Match
+   overview exactly so the two account families read the same
+   grammar. Owner spec DP1-14: "type scale + spacing exactly" -
+   overrides here diverge from that. If a very wide fmt$ value
+   overflows at rail min-width, the nowrap + ellipsis logic on the
+   inline projection handles it (rail.css hero rules). */
 .scv2 .sc-drill-rail .sc-rail-hero-meta {
   line-height: 1.5;
 }
