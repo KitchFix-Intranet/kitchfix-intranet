@@ -268,18 +268,18 @@ body:has(.scv2) {
 }
 
 /* Drill P1 PR-A (2026-07-20) DP1-05 - Today-group container.
-   Overview scope: readout is the only child; no border, transparent
-   background, no divider — stays as a plain inline meta cluster.
-   Drill scope: adds a bordered pill so the passive readout + the
-   Today-jump button read as ONE affordance. `.sc-ribbon-today-group
-   --drill` modifier keys the drill treatment. */
+   HF-7 (2026-07-20): the bordered pill treatment applies to BOTH
+   overview and drill now. Original --drill modifier renamed to
+   --boxed since the visual is no longer drill-specific. Overview
+   readout + Today-jump sit in the same bordered container as the
+   drill version so the two scopes read identically. */
 .scv2 .sc-ribbon-today-group {
   display: inline-flex;
   align-items: center;
   gap: var(--sc2-space-2);
   flex: 0 0 auto;
 }
-.scv2 .sc-ribbon-today-group--drill {
+.scv2 .sc-ribbon-today-group--boxed {
   padding: 3px 4px 3px 10px;
   border: var(--sc2-border-thin) solid rgba(255, 255, 255, 0.16);
   border-radius: var(--sc2-radius-control);

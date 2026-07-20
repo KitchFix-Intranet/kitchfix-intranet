@@ -48,7 +48,6 @@ export default function Ribbon({
   drillNavEnd,
   exportControl,
 }) {
-  const isDrill = !!drillNav;
   return (
     <div className="sc-ribbon" role="banner">
       <div className="sc-ribbon-left">
@@ -90,10 +89,13 @@ export default function Ribbon({
           <div className="sc-ribbon-drillnav">{drillNav}</div>
         )}
         <RibbonSep />
-        {/* DP1-05 Today-group - one bordered container. Left: passive
-            readout (spans, not buttons, non-focusable). Right: Today-jump
-            (real button, hover) - the drillNavEnd slot. Divider between. */}
-        <div className={`sc-ribbon-today-group${isDrill ? " sc-ribbon-today-group--drill" : ""}`}>
+        {/* DP1-05 + HF-7 Today-group - one bordered container. Left:
+            passive readout (spans, not buttons, non-focusable). Right:
+            Today-jump (real button, hover) - the drillNavEnd slot.
+            Divider between. HF-7 (2026-07-20): the --boxed treatment
+            applies to BOTH overview and drill (was --drill only), so
+            the two scopes read identically. */}
+        <div className="sc-ribbon-today-group sc-ribbon-today-group--boxed">
           <RibbonMeta
             todayLabel={todayLabel}
             periodNum={periodNum}

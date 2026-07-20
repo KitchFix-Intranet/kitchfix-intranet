@@ -192,6 +192,28 @@ export function PeriodTodayChip({ today, isCurrentPeriod, onTodayJump }) {
   );
 }
 
+// HF-7 (2026-07-20) - overview ribbon Today-jump. Scrolls the current-
+// month card into view + pulses it briefly. Rendered inside the
+// overview ribbon's Today-group (same visual as PeriodTodayChip's
+// button variant, same .sc-chrome-drill-today class). If the current-
+// month card cannot be located (e.g. viewing a non-current year, or
+// off-season with no [data-state="current"] card), the component
+// returns null - hidden rather than present-but-dead per owner ruling.
+export function OverviewTodayChip({ hasCurrentMonth, onTodayJump }) {
+  if (!hasCurrentMonth) return null;
+  return (
+    <button
+      type="button"
+      className="sc-chrome-drill-today"
+      onClick={onTodayJump}
+      aria-label="Jump to the current month"
+    >
+      <TargetIcon />
+      Today
+    </button>
+  );
+}
+
 // Local target glyph - Icons.js has no target concept yet; stroke 1.75
 // matches the Icons.js vocabulary.
 function TargetIcon() {

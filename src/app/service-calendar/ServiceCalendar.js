@@ -9,7 +9,7 @@ import PeriodWorkspace from "./season/PeriodWorkspace";
 import StateLegend from "./season/StateLegend";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
 import ExportControl from "./season/ExportControl";
-import PeriodHeaderNav, { PeriodTodayChip } from "./season/PeriodHeaderNav";
+import PeriodHeaderNav, { PeriodTodayChip, OverviewTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
@@ -24,6 +24,9 @@ import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
 import MobileBooksBar from "./v2/MobileBooksBar";
+// HF-7 (2026-07-20) - overview ribbon Today-jump routes through
+// scrollIntoViewRM so the RM branch is respected.
+import { scrollIntoViewRM } from "./v2/motion";
 // W8 - the bar figures are read from the SAME derives the rails
 // consume internally. Not a new derivation path: SeasonRail also calls
 // deriveHeroTotals(yearData) + deriveQueue(...) at its top; the bar
@@ -1973,6 +1976,28 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     if (!mk) return;
     router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
   }, [today, router, selectedAccount]);
+  // HF-7 (2026-07-20) - overview Today-jump. Finds the current-month
+  // card ([data-state="current"] on MonthCard's article - see
+  // MonthCard.js:134), scrolls it into view, and one-shot-pulses it
+  // via .sc-season-month-card--today-pulse (~1200ms; see
+  // season.css:376-399 for the keyframes). Silent no-op if no
+  // current-month card exists in the DOM (off-season / wrong year -
+  // the OverviewTodayChip also hides itself in that case via its
+  // `hasCurrentMonth` prop, so the button shouldn't have been
+  // clickable in the first place).
+  const handleOverviewTodayJump = useCallback(() => {
+    const el = document.querySelector('.sc-season-month-card[data-state="current"]');
+    if (!el) return;
+    scrollIntoViewRM(el, { block: "center" });
+    el.classList.remove("sc-season-month-card--today-pulse");
+    // Force reflow so the animation restarts if the user clicks Today
+    // twice in a row without leaving the current month.
+    void el.offsetWidth;
+    el.classList.add("sc-season-month-card--today-pulse");
+    setTimeout(() => {
+      el.classList.remove("sc-season-month-card--today-pulse");
+    }, 1250);
+  }, []);
 
   const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
   const canPrevMonth = drillMonthIdx > 1;
@@ -2121,6 +2146,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               />
             ) : null)
           : null;
+        // HF-7 (2026-07-20) - drillNavEndSlot now covers YEAR view too:
+        // OverviewTodayChip scrolls the current-month card into view +
+        // pulses it. The chip hides itself when hasCurrentMonth is
+        // false (viewing a non-current year - never rendered as a dead
+        // control per owner ruling). isCurrentYear compares the fixed
+        // season year (2026) to the client wall clock so an operator
+        // reading the intranet in 2027 sees no Today button.
+        const isCurrentYear = year === new Date().getFullYear();
         const drillNavEndSlot = !isAdminView
           ? (isPeriodView ? (
               <PeriodTodayChip
@@ -2133,6 +2166,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 today={today}
                 isCurrentPeriod={isCurrentMonth}
                 onTodayJump={handleMonthTodayJump}
+              />
+            ) : isYearView ? (
+              <OverviewTodayChip
+                hasCurrentMonth={isCurrentYear}
+                onTodayJump={handleOverviewTodayJump}
               />
             ) : null)
           : null;
