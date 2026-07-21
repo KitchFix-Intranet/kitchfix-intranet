@@ -31,6 +31,7 @@ import {
 } from "./Rail";
 import {
   deriveOpsHeroTotals,
+  deriveOpsHeroTotalsScoped,
   deriveOpsHomestandLedger,
   deriveOpsHomestandLedgerScoped,
   deriveOpsQueueMlb,
@@ -77,7 +78,28 @@ export default function OpsRail({
   }
 
   // ─── Hero ─────────────────────────────────────────────────
-  const totals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
+  // DP2-06 real fix (2026-07-21): drill hero reads from the DRILLED
+  // scope's days (periodDays == monthDays on month, periodDays on
+  // period), not the season-wide yearData. Prior code called
+  // deriveOpsHeroTotals(yearData, ...) unconditionally - so on
+  // CIN-OH July drill the hero rendered season totals (15/81)
+  // instead of month totals (9/14), contradicting the calendar
+  // tiles the operator was looking at. Overview mode
+  // (mode !== "drill") KEEPS the yearData path since the overview
+  // hero is season-to-date by design.
+  // deriveOpsHeroTotalsScoped also updates the caption facts
+  // (meals, homestandsComplete/total) to the same scope so all
+  // three numbers describe one window; no confusing hybrid.
+  const totals = (mode === "drill" && Array.isArray(periodDays))
+    ? deriveOpsHeroTotalsScoped(
+        periodDays,
+        hasHomestandSchedule,
+        yearData,
+        iso,
+        periodRange?.start,
+        periodRange?.end,
+      )
+    : deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
   // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
   // grammar. Prior construction stacked value + long-label + long-meta
   // to three ragged lines. Now:

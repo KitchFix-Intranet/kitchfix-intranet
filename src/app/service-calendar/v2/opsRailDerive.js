@@ -109,6 +109,84 @@ export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// DP2-06 (2026-07-21) - drill-scope hero totals.
+//
+// deriveOpsHeroTotals above aggregates over the FULL yearData (12
+// months) and is correct for the OVERVIEW hero (season-to-date).
+// The DRILL hero must reflect the drilled window (period or month)
+// or the number contradicts the calendar tiles the operator is
+// looking at (e.g. July shows 9 entered game days on the grid but
+// the season-scoped hero reads 15/81).
+//
+// Same day-shape logic as the homestandSummaryByMonth builder at
+// serviceCalendar.js:1327-1335: skip EXHIBITION + AWAY;
+// "entered" widens to include "no-service" per SC-078 completeness.
+// Meals aggregate from the per-day actualMeals field
+// (serviceCalendar.js:1249) so the caption's "N meals" reads the
+// scope's meals - not season YTD - matching the hero above it.
+// Homestands scoped via deriveOpsHomestandLedgerScoped so the
+// "M of N homestands" caption fact also reflects the window
+// (all three caption facts share one scope; no confusing hybrid).
+export function deriveOpsHeroTotalsScoped(periodDays, hasHomestandSchedule, yearData, todayDate, rangeStart, rangeEnd) {
+  const totals = {
+    gameDaysEntered: 0,
+    totalGameDays: 0,
+    daysEntered: 0,
+    totalActionableDays: 0,
+    // Kept the name for shape compatibility with deriveOpsHeroTotals;
+    // on drill this is the SCOPED meals (month or period), not YTD.
+    mealsYTD: 0,
+    homestandsComplete: 0,
+    totalHomestands: 0,
+    homestandsInProgress: 0,
+    pctComplete: 0,
+  };
+  if (!Array.isArray(periodDays)) return totals;
+  const iso = todayDate || todayISO();
+
+  for (const d of periodDays) {
+    if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
+    totals.mealsYTD += Number(d.actualMeals) || 0;
+    if (d.dayType === "GAME") {
+      totals.totalGameDays += 1;
+      if (d.status === "entered" || d.status === "no-service") {
+        totals.gameDaysEntered += 1;
+      }
+    }
+  }
+
+  if (!hasHomestandSchedule) {
+    totals.daysEntered = countEnteredActionable(periodDays);
+    totals.totalActionableDays = countActionableDays(periodDays);
+  }
+
+  if (hasHomestandSchedule && rangeStart && rangeEnd) {
+    const scopedLedger = deriveOpsHomestandLedgerScoped(yearData, iso, rangeStart, rangeEnd);
+    totals.totalHomestands = scopedLedger.length;
+    for (const hs of scopedLedger) {
+      const gc = Number(hs.gameCount) || 0;
+      const ge = Number(hs.gameEntered) || 0;
+      if (gc > 0 && gc === ge) {
+        totals.homestandsComplete += 1;
+      } else if (ge > 0) {
+        totals.homestandsInProgress += 1;
+      }
+    }
+  }
+
+  if (hasHomestandSchedule) {
+    totals.pctComplete = totals.totalGameDays > 0
+      ? Math.round((totals.gameDaysEntered / totals.totalGameDays) * 100)
+      : 0;
+  } else {
+    totals.pctComplete = totals.totalActionableDays > 0
+      ? Math.round((totals.daysEntered / totals.totalActionableDays) * 100)
+      : 0;
+  }
+  return totals;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Homestand ledger rows (MLB fee accounts only).
 //
 // Returns the full segment list from deriveHomestandSegments in
