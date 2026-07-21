@@ -36,8 +36,18 @@ export default function Ribbon({
   periodNum,
   weekNum,
   /* G4 (2026-07-19): fee/homestand accounts render "TODAY | GAME DAYS
-     {n}/{m}" instead of TODAY | PERIOD | WEEK. */
+     {n}/{m}" instead of TODAY | PERIOD | WEEK.
+     DP2-02b (2026-07-20): the GAME DAYS treatment is for TRUE MLB fee
+     homestand (hasHomestandSchedule + isFeeAccount). MiLB (CIN-KY /
+     TBJ-NY) also carries hasHomestandSchedule but is per-meal
+     (isFeeAccount=false), and its yearBannerStats.totalGameDays reads
+     0 - so the prior `hasHomestandSchedule` sole gate took the GAME
+     DAYS branch and then rendered nothing (the inner totalGameDays>0
+     check failed), leaving only "TODAY Jul 20" on the ribbon. Gate
+     tightened to `hasHomestandSchedule && isFeeAccount` so MiLB
+     falls through to PERIOD/WEEK like per-meal. */
   hasHomestandSchedule = false,
+  isFeeAccount = false,
   gameDaysEntered,
   totalGameDays,
   /* Drill P1 PR-A (2026-07-20) DP1-02: drill scope controls that ChromeBar
@@ -101,6 +111,7 @@ export default function Ribbon({
             periodNum={periodNum}
             weekNum={weekNum}
             hasHomestandSchedule={hasHomestandSchedule}
+            isFeeAccount={isFeeAccount}
             gameDaysEntered={gameDaysEntered}
             totalGameDays={totalGameDays}
           />
@@ -162,16 +173,21 @@ function RibbonMeta({
   periodNum,
   weekNum,
   hasHomestandSchedule,
+  isFeeAccount,
   gameDaysEntered,
   totalGameDays,
 }) {
+  // DP2-02b (2026-07-20): GAME DAYS variant reserved for TRUE MLB fee
+  // homestand (fee + homestand). MiLB is per-meal + homestand-shape
+  // but its ribbon readout should read PERIOD/WEEK like per-meal.
+  const showGameDays = hasHomestandSchedule && isFeeAccount;
   return (
     <div className="sc-ribbon-meta" aria-label="Current context readout">
       <span className="sc-ribbon-meta-seg">
         <span className="sc-ribbon-meta-label">TODAY</span>
         <span className="sc-ribbon-meta-value">{todayLabel || "-"}</span>
       </span>
-      {hasHomestandSchedule ? (
+      {showGameDays ? (
         (totalGameDays || 0) > 0 && (
           <>
             <span className="sc-ribbon-meta-sep" aria-hidden="true" />

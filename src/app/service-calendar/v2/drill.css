@@ -15,11 +15,20 @@
    ══════════════════════════════════════════════════════════════ */
 
 /* ─── Two-pane drill layout (same skeleton as .sc-overview) ── */
+/* DP2-01b (2026-07-20): interior padding mirrors overview.css:576
+   `.scv2 .sc-overview { padding: var(--sc2-space-5); }` so the two
+   surfaces share identical header→content, side, and content→widget-
+   bottom gaps. Prior to DP2-01 the FinancialFrame's own vertical
+   padding was incidentally buffering the header edge; removing that
+   strip in DP2-01 exposed the missing padding here. Minimum-diff
+   fix: single-line addition, same token overview uses. Update both
+   together if the interior gutter ever shifts. */
 .scv2 .sc-drill {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
   gap: var(--sc2-space-4);
   align-items: start;
+  padding: var(--sc2-space-5);
 }
 .scv2 .sc-drill-main {
   min-width: 0;

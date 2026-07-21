@@ -181,28 +181,18 @@ export default function PeriodWorkspace({
 
   return (
     <div className="sc-workspace sc-fade-in">
-      {/* Drill P1 PR-A (2026-07-20) DP1-07 - the 2nd strip (TodayRail
-          + PastRail fallback) is DELETED. Everything it carried:
-          - Financial figures duplicate the FinancialFrame above.
-          - "Enter actuals" + "Bulk Update" buttons relocated to the
-            rail as three CTAs (rail owns entry affordances now).
-            See DrillRail PR-A additions.
-          Handlers (onDayClick, onBulkModeToggle) still flow through
-          ServiceCalendar → DrillRail unchanged.
-          FinancialFrame now renders without a todaySlot; its layout
-          reflows to the compact frame the render approved.
-      */}
-      <FinancialFrame
-        m={m}
-        kind={kind}
-        hasHomestandSchedule={hasHomestandSchedule}
-        isFeeAccount={isFeeAccount}
-        periodRange={periodRange}
-        today={today}
-        onJumpFirstOverdue={onJumpFirstOverdue}
-        onJumpFirstNeeds={onJumpFirstNeeds}
-        todaySlot={null}
-      />
+      {/* Drill P1 PR-A DP1-07 removed the 2nd strip (TodayRail +
+          PastRail). Drill P2 PR-1 DP2-01 (2026-07-20) removes the
+          whole <FinancialFrame> as well - the strip's remaining body
+          ($X of ~$Y / ENTERED / PROJECTED / N/M DAYS / progress /
+          needs pill) all lives in the right rail now (DrillRail hero
+          + progress + queue rows, OpsRail hero for fee/MLB). No
+          information loss - just duplication removed.
+          Function definition retained below (dead code) to avoid
+          churn on shared helpers; onJumpFirstOverdue / onJumpFirstNeeds
+          props still flow through ServiceCalendar for the same reason
+          (rail queue rows target days directly, so the jumps aren't
+          needed on the scv2 drill). W9 demolition PR cleans up. */}
 
       <BulkAffordance
         bulkMode={bulkMode}
