@@ -234,24 +234,41 @@
   line-height: 1.2;
 }
 
-/* #5 (2026-07-21): uniform tile height at ~66px floor. Rows in the
-   drill grid were auto-sized (min-content per row) so "no service"
-   tiles rendered shorter than meal+figure tiles - ragged rows. Set
-   the row itself to min-height: 66px so short-content rows still
-   land at the floor; DEN-1 tile min-height dropped 68 -> 66 to
-   match (see DaySquare.css:1275). Tiles fill their cell via the
-   base rule .sc-workspace-grid-cell > * { height: 100% } at
-   periodWorkspace.css:559-562, so short-content days stretch to
-   fill the row.
-   MLB / MiLB drill caveat: game-day tiles carry more content
-   (opponent + day/night pill + meal count) that pushes past 66px
-   organically. The row grows to fit, and cells in that row stretch
-   together within the row (uniform within-row). Across rows in the
-   MLB grid, heights may differ if one week has fuller games than
-   another - accepted behavior. PDC per-meal (owner's primary) fits
-   entirely in 66. */
+/* #5 v2 (2026-07-21): FIXED-height rows at 66px for true cross-row
+   uniformity. Prior attempt (min-height: 66px) failed the gate:
+   tiles measured at 80/68/66 = three distinct heights.
+   Two structural drivers were forcing the mismatch:
+   1. `.sc-workspace-grid-cell-empty { min-height: 80px }` at
+      periodWorkspace.css:565 - the out-of-period placeholder for
+      leading/trailing partial-week cells has a hard 80px floor.
+      Grid children with min-heights push the row past its own
+      min-height, so any row with an empty cell (weeks 1 + 5
+      typically) went to 80.
+   2. `.sc-workspace-grid` (flex column) doesn't share sizing
+      across rows - each row is independent - so row-level
+      min-height only floors that row, doesn't equalize.
+   Fix (Option A per owner):
+   - Fixed `height: 66px` on the row + `flex: 0 0 auto` so the
+     flex column can't stretch/shrink it.
+   - Neutralize the empty-cell min-height under scv2 so it can't
+     push past 66.
+   Cells fill the row via the base
+   `.sc-workspace-grid-cell { display: flex; align-items: stretch }`
+   (periodWorkspace.css:553-557); the tile inside is grid-cell's
+   child which gets `height: 100%` from `.sc-workspace-grid-cell > *`
+   at :559-562 - confirmed applying (grid cell is the parent, tile
+   is the direct child).
+   Richest PDC content (date + note pencil + est. figure line) is
+   proven to fit in 66px per the gate measurement of tiles that
+   currently land at 66. MLB / MiLB drill still has the caveat
+   that game-day content can exceed 66; this fixed value CLIPS
+   there. Rescope later if MLB drill needs it. */
 .scv2 .sc-workspace-grid-row {
-  min-height: 66px;
+  height: 66px;
+  flex: 0 0 auto;
+}
+.scv2 .sc-workspace-grid-cell-empty {
+  min-height: 0;
 }
 
 /* ─── Drill rail overrides ────────────────────────────────
