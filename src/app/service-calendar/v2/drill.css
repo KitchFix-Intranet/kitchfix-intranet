@@ -110,6 +110,13 @@
    restyle color/typography/spacing hairlines here. */
 .scv2 .sc-workspace {
   padding-top: 0;
+  /* Bundle-A #4 (2026-07-21): the v1 base rule at
+     periodWorkspace.css:9 paints .sc-workspace with
+     --surface-sunken (#FAF9F5, warm off-white / tan cast). Under
+     scv2 drill it leaked as a "stray tan bg" behind the grid.
+     Mirror the overview's same fix at overview.css:610 for
+     .sc-season - let the widget's L1 surface show through. */
+  background: transparent;
 }
 .scv2 .sc-workspace-frame {
   background: var(--sc2-surface-card);
@@ -201,7 +208,6 @@
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
-
 /* ─── Drill rail overrides ────────────────────────────────
    The drill rail reuses every .sc-rail-* primitive from
    rail.css but has slightly different content proportions

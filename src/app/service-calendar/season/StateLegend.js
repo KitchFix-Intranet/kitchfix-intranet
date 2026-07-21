@@ -34,14 +34,23 @@ export default function StateLegend({
   // deferral is separate; this addition targets the always-visible
   // bar per the DP1-20 owner ask.
   showFigures = false,
+  // Bundle-A #10 (2026-07-21): filter the game-day + spring-training
+  // markers out of the swatch list on drill. getLegendItems appends
+  // GAME_DAY_MARK / SPRING_MARK per account shape - meaningful on
+  // overview sm-tile paint but noise on the drill bar. Off by
+  // default so overview mounts (if any) keep the marks; drill mounts
+  // opt in.
+  dropMarkers = false,
 }) {
   // The one-line key keeps the IN-USE states for the current account
   // (rubric non-negotiable #1: always visible). The fuller cell-state
   // taxonomy lives in the popup behind the info button. Source:
   // ./legendItems.js (shared with LegendInfoPopup).
-  const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }).map(it => ({
-    mod: it.mod, icon: it.icon, label: it.label,
-  }));
+  const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
+    .filter(it => !dropMarkers || (it.mod !== "game-day-mark" && it.mod !== "spring-mark"))
+    .map(it => ({
+      mod: it.mod, icon: it.icon, label: it.label,
+    }));
   // sc-15 (2026-07-11): widen the day/night legend gate to MLB fee
   // accounts too. MLB home cells now carry the same sun/moon glyph
   // as MiLB (backfilled from MLB Stats API dayNight into
@@ -84,10 +93,9 @@ export default function StateLegend({
                   <span className="sc-state-legend-figures-chip">$3K</span>
                   <span className="sc-state-legend-figures-word">entered</span>
                 </span>
-                <span className="sc-state-legend-figures-item">
-                  <span className="sc-state-legend-figures-chip">est. $3K</span>
-                  <span className="sc-state-legend-figures-word">awaiting</span>
-                </span>
+                {/* Bundle-A #12 (2026-07-21): middle "est. $3K
+                    awaiting" item REMOVED per owner. Kept entered
+                    + projected as the concise pair. */}
                 <span className="sc-state-legend-figures-item">
                   <span className="sc-state-legend-figures-chip">~$3K</span>
                   <span className="sc-state-legend-figures-word">projected</span>
