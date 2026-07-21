@@ -166,15 +166,23 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sc2-space-3);
-  padding: 6px var(--sc2-space-2);
-  margin-top: var(--sc2-space-2);
-  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+  /* #3 Part 1 (2026-07-21): band now visually groups with the row
+     BELOW it. Prior treatment (border-top + margin-top: sp-2) drew a
+     divider ABOVE the band and left the band-to-row gap coming
+     entirely from the grid's own row-gap (~6px), which read as the
+     band floating "between" two weeks. Now: clear separation ABOVE
+     via space-4 margin (separates from previous week's row); band's
+     own bottom hugs its row below by tightening padding and
+     negative-margin-canceling the parent flex gap. Result: band +
+     its row read as one unit. */
+  padding: 6px var(--sc2-space-2) 2px;
+  margin-top: var(--sc2-space-4);
+  margin-bottom: -6px;
   font-size: var(--sc2-size-micro);
   font-variant-numeric: tabular-nums;
 }
 .scv2 .sc-workspace-band:first-child {
   margin-top: 0;
-  border-top: none;
 }
 .scv2 .sc-workspace-band-label {
   color: var(--sc2-ink-muted);
@@ -208,6 +216,46 @@
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
+/* #3 Part 2 REDO v2 (2026-07-21): ONE continuous pill around the
+   current week's title group ("P8 WEEK 4"). Prior REDO v1 painted
+   the two spans (.sc-workspace-band-prefix + .sc-workspace-band-
+   label) with left-half / right-half rounded backgrounds meant to
+   look continuous - but the gap between the two elements left a
+   visible seam ("two pills stitched" instead of "one pill").
+   Fix: the JSX now wraps prefix + label in a single
+   .sc-workspace-band-title container. That wrapper carries the
+   entire pill; the inner spans render plain (no per-span bg or
+   radius). Background is one continuous shape across both.
+   .sc-workspace-band-title always exists on the band (see
+   PeriodWorkspace.js); its pill treatment only fires when the
+   band carries data-current="true", so non-current weeks read as
+   before. */
+.scv2 .sc-workspace-band-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-title {
+  background: var(--sc2-cmd-bg, var(--navy-700));
+  color: var(--sc2-cmd-text, #fff);
+  padding: 1px var(--sc2-space-2);
+  border-radius: var(--sc2-radius-pill);
+  font-weight: var(--sc2-wt-bold);
+}
+/* Inside the current pill, the individual spans inherit the
+   wrapper's white text; explicit reset in case any earlier rule
+   (e.g. [data-straddle] amber, base ink-strong / ink-muted) tries
+   to repaint them. No per-span background here - the wrapper owns
+   it. */
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-title .sc-workspace-band-prefix,
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-title .sc-workspace-band-label {
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+
 /* ─── Drill rail overrides ────────────────────────────────
    The drill rail reuses every .sc-rail-* primitive from
    rail.css but has slightly different content proportions

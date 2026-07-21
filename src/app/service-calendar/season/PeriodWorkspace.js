@@ -874,6 +874,14 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               ? `P${prefixPeriods[0]}-${prefixPeriods[prefixPeriods.length - 1]}`
               : null;
           const isStraddle = prefixPeriods.length > 1;
+          // #3 Part 2 REDO (2026-07-21): NO separate pill element.
+          // Owner reversed: pill the EXISTING label ("P8 WEEK 4")
+          // via a data-current attribute + CSS, not a duplicate
+          // text pill. isCurrentWeek retained so CSS can target
+          // the current band; weekNum + composed pill string
+          // deleted (were only used by the retired separate pill).
+          const isCurrentWeek = !!(today && wm?.startDate && wm?.endDate
+            && today >= wm.startDate && today <= wm.endDate);
           return (
             <React.Fragment key={weekIdx}>
               {showBand && (
@@ -881,12 +889,20 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   className="sc-workspace-band"
                   data-week={rowKey}
                   data-straddle={isStraddle ? "true" : undefined}
+                  data-current={isCurrentWeek ? "true" : undefined}
                   aria-hidden="true"
                 >
-                  {bandPrefix && (
-                    <span className="sc-workspace-band-prefix">{bandPrefix}</span>
-                  )}
-                  <span className="sc-workspace-band-label">{bandLabel}</span>
+                  {/* #3 Part 2 REDO v2 (2026-07-21): wrap prefix +
+                      label in one container so the current-week
+                      pill background paints as ONE continuous shape.
+                      Prior treatment styled each span individually,
+                      leaving a seam between "P8" and "WEEK 4". */}
+                  <span className="sc-workspace-band-title">
+                    {bandPrefix && (
+                      <span className="sc-workspace-band-prefix">{bandPrefix}</span>
+                    )}
+                    <span className="sc-workspace-band-label">{bandLabel}</span>
+                  </span>
                   <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
                   <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
                 </div>
