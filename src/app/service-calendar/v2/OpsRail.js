@@ -31,7 +31,6 @@ import {
 } from "./Rail";
 import {
   deriveOpsHeroTotals,
-  deriveOpsHeroTotalsScoped,
   deriveOpsHomestandLedger,
   deriveOpsHomestandLedgerScoped,
   deriveOpsQueueMlb,
@@ -57,6 +56,14 @@ export default function OpsRail({
   // Drill-only
   periodDays = null,           // days[] in the drill scope (period or month)
   periodRange = null,          // { start, end }
+  // DP2-06 v3 (2026-07-21): the drilled window's aggregated metrics.
+  // Same `m` object PeriodWorkspace reads for its top-strip figures
+  // (PeriodWorkspace.js:180 + :322-333). complete = entered days for
+  // this scope, total = actionable days, actMeals = meals for this
+  // scope. On MLB fee this is 9/14 for CIN-OH July (matches the
+  // strip and the tiles). The drill hero + caption now source their
+  // numbers here instead of a parallel aggregation.
+  periodMetrics = null,
   loading = false,
   incomplete = false,          // partial-fetch treatment (F1 pattern from W5)
   // Handlers
@@ -78,61 +85,60 @@ export default function OpsRail({
   }
 
   // ─── Hero ─────────────────────────────────────────────────
-  // DP2-06 real fix (2026-07-21): drill hero reads from the DRILLED
-  // scope's days (periodDays == monthDays on month, periodDays on
-  // period), not the season-wide yearData. Prior code called
-  // deriveOpsHeroTotals(yearData, ...) unconditionally - so on
-  // CIN-OH July drill the hero rendered season totals (15/81)
-  // instead of month totals (9/14), contradicting the calendar
-  // tiles the operator was looking at. Overview mode
-  // (mode !== "drill") KEEPS the yearData path since the overview
-  // hero is season-to-date by design.
-  // deriveOpsHeroTotalsScoped also updates the caption facts
-  // (meals, homestandsComplete/total) to the same scope so all
-  // three numbers describe one window; no confusing hybrid.
-  const totals = (mode === "drill" && Array.isArray(periodDays))
-    ? deriveOpsHeroTotalsScoped(
-        periodDays,
-        hasHomestandSchedule,
-        yearData,
-        iso,
-        periodRange?.start,
-        periodRange?.end,
-      )
-    : deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
   // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
-  // grammar. Prior construction stacked value + long-label + long-meta
-  // to three ragged lines. Now:
-  //   Line 1: big value + short label on one baseline (matches
-  //           SeasonRail.RailHero's inline shape from G2/Wave 4a).
-  //   Progress bar.
-  //   Caption line: secondary facts (of X · meals · homestands)
-  //           as a single tidy row via RailHeroProgressCaption.
-  // Match the per-meal hero's type scale + spacing so the two
-  // account families read identically.
-  const heroValue = hasHomestandSchedule
-    ? totals.gameDaysEntered
-    : totals.daysEntered;
+  // grammar (value + label + projection on one baseline; caption
+  // below the progress bar). Match the per-meal hero's type scale +
+  // spacing so the two account families read identically.
+  //
+  // DP2-06 v3 (2026-07-21): drill hero + caption read from
+  // periodMetrics (the workspace strip's source of truth). Prior
+  // attempts:
+  //  - v1: deriveOpsHeroTotals(yearData) - season-wide, showed 15/81
+  //    on July drill.
+  //  - v2: deriveOpsHeroTotalsScoped(periodDays) - broken aggregation,
+  //    returned 0/0 for MLB. Retired.
+  //  - v3 (here): periodMetrics.complete / .total / .actMeals - the
+  //    SAME numbers the top strip renders (PeriodWorkspace.js:322-333)
+  //    and the tiles reflect. Aggregator at ServiceCalendar.js:149
+  //    (aggregateWorkspaceMetrics) handles both account shapes:
+  //    complete = entered days (game days on MLB via SC-078 status
+  //    widening); total = actionable days (game days on MLB, since
+  //    prep/off/away drop out).
+  // Overview mode (mode !== "drill") keeps deriveOpsHeroTotals since
+  // the overview hero is season-to-date by design.
+  const isDrill = mode === "drill";
+  const scopedComplete = periodMetrics?.complete || 0;
+  const scopedTotal = periodMetrics?.total || 0;
+  const scopedMeals = periodMetrics?.actMeals || 0;
+  const seasonTotals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
+  const heroValue = isDrill
+    ? scopedComplete
+    : (hasHomestandSchedule ? seasonTotals.gameDaysEntered : seasonTotals.daysEntered);
+  const heroTotal = isDrill
+    ? scopedTotal
+    : (hasHomestandSchedule ? seasonTotals.totalGameDays : seasonTotals.totalActionableDays);
   const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED";
   const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
-  // Caption line - the secondary facts. MLB fee: entered/total +
-  // meals + homestands. STL-FL: entered/total + meals.
-  const heroCaption = hasHomestandSchedule
-    ? `${totals.gameDaysEntered} of ${totals.totalGameDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals · ${totals.homestandsComplete} of ${totals.totalHomestands} homestands`
-    : `${totals.daysEntered} of ${totals.totalActionableDays} · ${totals.mealsYTD.toLocaleString("en-US")} meals`;
-
-  // DP2-06 (2026-07-20): the drill hero adopts the per-meal ENTERED
-  // grammar - value + label + projection on one baseline. Prior hero
-  // rendered a bare number ("0 GAME DAYS"), which read as "0 of 0" and
-  // did not surface the total. Per-meal DrillRail already inlines the
-  // "of $X" projection at DrillRail.js:163 + 176; OpsRail now matches
-  // it for drill (mode-scoped so overview OpsRail hero, which already
-  // has its own approved layout, stays untouched).
-  const heroProjection = mode === "drill"
-    ? (hasHomestandSchedule
-        ? `of ${totals.totalGameDays || 0}`
-        : `of ${totals.totalActionableDays || 0}`)
-    : null;
+  // Caption:
+  //  - Drill: entered/total + scoped meals. Homestand-count fact
+  //    dropped on drill (aggregateWorkspaceMetrics doesn't carry
+  //    homestand rollups; owner-accepted 2026-07-21 - strip doesn't
+  //    show it either, so this matches the strip's minimalism).
+  //  - Overview: entered/total + season meals + (MLB) season
+  //    homestand count - unchanged from OV-3 F10.
+  const heroCaption = isDrill
+    ? `${scopedComplete} of ${scopedTotal} · ${scopedMeals.toLocaleString("en-US")} meals`
+    : (hasHomestandSchedule
+        ? `${seasonTotals.gameDaysEntered} of ${seasonTotals.totalGameDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals · ${seasonTotals.homestandsComplete} of ${seasonTotals.totalHomestands} homestands`
+        : `${seasonTotals.daysEntered} of ${seasonTotals.totalActionableDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals`);
+  // Projection on drill: "of {total}" - value + label + projection on
+  // one baseline, matching DrillRail.js:163 + 176's per-meal shape.
+  const heroProjection = isDrill ? `of ${heroTotal || 0}` : null;
+  // Progress bar percent: drill uses scoped complete/total; overview
+  // uses season pctComplete (unchanged).
+  const heroPct = isDrill
+    ? (scopedTotal > 0 ? Math.round((scopedComplete / scopedTotal) * 100) : 0)
+    : seasonTotals.pctComplete;
 
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
@@ -181,7 +187,7 @@ export default function OpsRail({
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
-      {!incomplete && <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />}
+      {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       {/* V3 §S8.3 F-E2 + OV-3 G13 - OpsRail pinned queue.
@@ -244,7 +250,7 @@ export default function OpsRail({
             meta={
               mode === "drill"
                 ? `${ledger.length} in scope`
-                : `${totals.homestandsComplete} of ${totals.totalHomestands} complete`
+                : `${seasonTotals.homestandsComplete} of ${seasonTotals.totalHomestands} complete`
             }
           >
             {ledger.map(hs => (

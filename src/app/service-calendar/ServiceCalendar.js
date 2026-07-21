@@ -33,7 +33,7 @@ import { scrollIntoViewRM } from "./v2/motion";
 // call at the mount site passes the same yearData in, guaranteeing
 // identical outputs by construction. See MobileBooksBar.js law 2.
 import { deriveHeroTotals, deriveQueue, fmtOverviewMoney } from "./v2/overviewDerive";
-import { deriveOpsHeroTotals, deriveOpsHeroTotalsScoped } from "./v2/opsRailDerive";
+import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
 // fmt$ already imported at line 15 for the bulk-review rows; reused
 // at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
@@ -2650,6 +2650,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               yearData={yearData}
               today={today}
               periodDays={periodDays}
+              /* DP2-06 v3 (2026-07-21): source of truth for the drill
+                 hero + caption. Same `m` the strip reads. */
+              periodMetrics={periodMetrics}
               periodRange={drillPeriodRange}
               loading={loading && !periodDays}
               incomplete={!!partialError}
@@ -2701,16 +2704,13 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 // "SEASON BOOKS" suffix, which would contradict the
                 // now-scoped rail hero. Label drops the suffix so it
                 // describes the scope its numbers describe.
-                const t = deriveOpsHeroTotalsScoped(
-                  periodDays,
-                  hasHomestandSchedule,
-                  yearData,
-                  today,
-                  drillPeriodRange?.start,
-                  drillPeriodRange?.end,
-                );
-                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
-                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                // DP2-06 v3 (2026-07-21): bar mirrors the rail hero,
+                // which now reads periodMetrics directly (same source
+                // as the strip). complete/total on MLB = game days
+                // (SC-078 status widening); on STL-FL = actionable
+                // days. Same field applies to both account shapes.
+                const num = periodMetrics?.complete || 0;
+                const den = periodMetrics?.total || 0;
                 return {
                   label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}`,
                   value: `${num} of ${den}`,
@@ -2838,6 +2838,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               yearData={yearData}
               today={today}
               periodDays={monthDays}
+              /* DP2-06 v3 (2026-07-21): monthMetrics feeds the drill
+                 hero + caption. Same object the month strip reads. */
+              periodMetrics={monthMetrics}
               periodRange={monthRange}
               loading={loading && !monthDays}
               incomplete={!!partialError}
@@ -2877,16 +2880,10 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 // yearData + "SEASON BOOKS" suffix which contradicted
                 // the scoped rail. Suffix dropped so the label matches
                 // its numbers' scope.
-                const t = deriveOpsHeroTotalsScoped(
-                  monthDays,
-                  hasHomestandSchedule,
-                  yearData,
-                  today,
-                  monthRange?.start,
-                  monthRange?.end,
-                );
-                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
-                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                // DP2-06 v3 (2026-07-21): bar reads monthMetrics
+                // directly (same as the rail hero + top strip).
+                const num = monthMetrics?.complete || 0;
+                const den = monthMetrics?.total || 0;
                 return {
                   label: monthLabel.toUpperCase() || "MONTH",
                   value: `${num} of ${den}`,
