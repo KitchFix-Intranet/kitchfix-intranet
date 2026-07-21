@@ -570,7 +570,13 @@ body:has(.scv2) {
    grid, legend, and rail. */
 .scv2 .sc-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 336px;
+  /* SC-90b (2026-07-21): overview rail narrowed 336 -> 300 so the
+     12-month card grid gets ~36px more room. Owner ruling after the
+     SC-90 scale gate. Drill rail (drill.css:28) is a SEPARATE
+     selector on .sc-drill and stays at 336px. The 260px band at
+     :679 (laptop 1100-1279) is inside its media query and unaffected;
+     still triggers below 1280 as before. */
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: var(--sc2-space-4);
   align-items: start;
   padding: var(--sc2-space-5);   /* §6.1 content pad 20 = sp-5 = 20px */
