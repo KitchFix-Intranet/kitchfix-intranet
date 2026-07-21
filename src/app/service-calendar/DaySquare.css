@@ -1272,13 +1272,7 @@
    DaySquare.css:68), so scoping to .sc-workspace-grid matches
    actual usage. */
 .scv2 .sc-workspace-grid .sc-daysq--lg {
-  /* #5 (2026-07-21): tile min-height dropped 68 -> 66 to align with
-     the comfortable-floor decision on .scv2 .sc-workspace-grid-row
-     (drill.css). Row and tile floor now agree; short-content tiles
-     ("no service") fill the row via the base
-     .sc-workspace-grid-cell > * { height: 100% } rule at
-     periodWorkspace.css:559-562. */
-  min-height: 66px;
+  min-height: 68px;
   padding: var(--sc2-space-1) var(--sc2-space-2);
   border-radius: var(--sc2-radius-tile);
   box-shadow: var(--sc2-elevation-inset-top), var(--sc2-elevation-card);
