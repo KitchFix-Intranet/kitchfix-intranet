@@ -66,7 +66,17 @@
 html:has(.scv2) {
   background: var(--sc2-canvas);
 }
-body:has(.scv2) {
+/* Bundle-A #1 REDO (2026-07-21): boost specificity so this beats
+   ops-shared.css:39-41 `body:has(.oh-app) { background:
+   radial-gradient(#fffbeb, #f8fafc) }` in the cascade. The gradient
+   was the "grey strip" the owner saw between the site nav and the
+   widget's rounded top - warm-white bleeding through the widget's
+   margin-top. Both `body:has(.oh-app)` and `body:has(.scv2)` are
+   specificity 0,2,0; ops-shared loads AFTER overview.css in the
+   route stylesheet order so the gradient won. Bumping the inner
+   :has() selector to `.sc-root.scv2` yields specificity 0,3,0 -
+   wins uncontested. */
+body:has(.sc-root.scv2) {
   background: var(--sc2-canvas);
 }
 .oh-app:has(.scv2) {
@@ -79,13 +89,14 @@ body:has(.scv2) {
   background: var(--sc2-surface);
   border-radius: 16px;
   box-shadow: var(--sc2-el-widget);
-  /* Bundle-A #1 (2026-07-21): margin-top zeroed so the widget butts
-     up to the site nav and the canvas bg no longer paints a grey
-     strip above the navy ribbon. Ribbon paints from the widget's
-     top edge down with a 16/16/0/0 radius, so butting up leaves
-     clean rounded top corners against the nav. Was
-     var(--sc2-space-6) ~21.6px. */
-  margin-top: 0;
+  /* Bundle-A #1 REDO (2026-07-21): restored original margin-top
+     var(--sc2-space-6) (~21.6px scaled). Zeroing was owner-corrected -
+     the breathing room between the site nav and the widget stays;
+     the fix is at the body:has(.sc-root.scv2) selector above, which
+     now wins over ops-shared's warm gradient so the gap paints
+     --sc2-canvas (light cool grey #edeff2) instead of the warm-white
+     radial. */
+  margin-top: var(--sc2-space-6);
   /* F-E fix (Chat-Claude sweep): `overflow: hidden` REMOVED. Any
      overflow-hidden ancestor disables position:sticky for all
      descendants; the rail's `top: 96px` sticky was failing

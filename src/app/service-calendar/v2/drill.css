@@ -208,15 +208,6 @@
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
-/* Bundle-A #11 (2026-07-21): green check marker on a fully-entered
-   week's count. Rendered only when wm.complete === wm.total > 0. */
-.scv2 .sc-workspace-band-check {
-  display: inline-flex;
-  align-items: center;
-  margin-left: var(--sc2-space-1);
-  color: var(--sc2-rail-accent-success, var(--text-success));
-}
-
 /* ─── Drill rail overrides ────────────────────────────────
    The drill rail reuses every .sc-rail-* primitive from
    rail.css but has slightly different content proportions
