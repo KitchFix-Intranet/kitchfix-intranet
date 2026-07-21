@@ -159,15 +159,23 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sc2-space-3);
-  padding: 6px var(--sc2-space-2);
-  margin-top: var(--sc2-space-2);
-  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+  /* #3 Part 1 (2026-07-21): band now visually groups with the row
+     BELOW it. Prior treatment (border-top + margin-top: sp-2) drew a
+     divider ABOVE the band and left the band-to-row gap coming
+     entirely from the grid's own row-gap (~6px), which read as the
+     band floating "between" two weeks. Now: clear separation ABOVE
+     via space-4 margin (separates from previous week's row); band's
+     own bottom hugs its row below by tightening padding and
+     negative-margin-canceling the parent flex gap. Result: band +
+     its row read as one unit. */
+  padding: 6px var(--sc2-space-2) 2px;
+  margin-top: var(--sc2-space-4);
+  margin-bottom: -6px;
   font-size: var(--sc2-size-micro);
   font-variant-numeric: tabular-nums;
 }
 .scv2 .sc-workspace-band:first-child {
   margin-top: 0;
-  border-top: none;
 }
 .scv2 .sc-workspace-band-label {
   color: var(--sc2-ink-muted);
@@ -200,6 +208,43 @@
 .scv2 .sc-workspace-band-sum {
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
+}
+/* #3 Part 2 (2026-07-21): current-week pill. Small navy badge with
+   white text, reads "P{n} · WK {n}". Rendered only in the band
+   whose date range contains today (see PeriodWorkspace.js
+   isCurrentWeek). No band fill / outline - Option C, pill only. */
+.scv2 .sc-workspace-band-current-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--sc2-space-2);
+  background: var(--sc2-cmd-bg, var(--navy-700));
+  color: var(--sc2-cmd-text, #fff);
+  border-radius: var(--sc2-radius-pill);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* #5 (2026-07-21): uniform tile height at ~66px floor. Rows in the
+   drill grid were auto-sized (min-content per row) so "no service"
+   tiles rendered shorter than meal+figure tiles - ragged rows. Set
+   the row itself to min-height: 66px so short-content rows still
+   land at the floor; DEN-1 tile min-height dropped 68 -> 66 to
+   match (see DaySquare.css:1275). Tiles fill their cell via the
+   base rule .sc-workspace-grid-cell > * { height: 100% } at
+   periodWorkspace.css:559-562, so short-content days stretch to
+   fill the row.
+   MLB / MiLB drill caveat: game-day tiles carry more content
+   (opponent + day/night pill + meal count) that pushes past 66px
+   organically. The row grows to fit, and cells in that row stretch
+   together within the row (uniform within-row). Across rows in the
+   MLB grid, heights may differ if one week has fuller games than
+   another - accepted behavior. PDC per-meal (owner's primary) fits
+   entirely in 66. */
+.scv2 .sc-workspace-grid-row {
+  min-height: 66px;
 }
 
 /* ─── Drill rail overrides ────────────────────────────────
