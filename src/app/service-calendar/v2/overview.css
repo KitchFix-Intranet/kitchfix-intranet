@@ -66,18 +66,23 @@
 html:has(.scv2) {
   background: var(--sc2-canvas);
 }
-/* Bundle-A #1 REDO (2026-07-21): boost specificity so this beats
-   ops-shared.css:39-41 `body:has(.oh-app) { background:
-   radial-gradient(#fffbeb, #f8fafc) }` in the cascade. The gradient
-   was the "grey strip" the owner saw between the site nav and the
-   widget's rounded top - warm-white bleeding through the widget's
-   margin-top. Both `body:has(.oh-app)` and `body:has(.scv2)` are
-   specificity 0,2,0; ops-shared loads AFTER overview.css in the
-   route stylesheet order so the gradient won. Bumping the inner
-   :has() selector to `.sc-root.scv2` yields specificity 0,3,0 -
-   wins uncontested. */
+/* Bundle-A #1 REDO v2 (2026-07-21): the gradient is a background-
+   IMAGE (radial-gradient), not a background-color. Prior REDO
+   used `background: var(--sc2-canvas)` (shorthand). Per CSS spec
+   the shorthand SHOULD reset background-image to none, but the
+   live DOM showed background-image still paints the ops-shared
+   radial-gradient - a known edge case where `background: var(...)`
+   containing an unresolved custom property doesn't reliably
+   propagate the reset to background-image. Explicit longhands
+   guarantee both sub-properties land where we need them:
+   background-color = --sc2-canvas (#edeff2 cool grey), and
+   background-image = none (kills ops-shared.css:39-41's warm
+   radial). Specificity: body:has(.sc-root.scv2) = (0,2,1) beats
+   ops-shared's body:has(.oh-app) = (0,1,1), so this rule wins the
+   cascade uncontested for both sub-properties. */
 body:has(.sc-root.scv2) {
-  background: var(--sc2-canvas);
+  background-color: var(--sc2-canvas);
+  background-image: none;
 }
 .oh-app:has(.scv2) {
   background: var(--sc2-canvas);
