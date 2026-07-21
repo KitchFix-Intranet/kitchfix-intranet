@@ -203,8 +203,13 @@
    ============================================================ */
 .scv2 {
   /* ---------- Fluid scale multiplier ---------- */
-  /* Comfortable = 1.0. Compact branch remaps below. */
-  --sc2-scale: 1;
+  /* SC-90 (2026-07-21): owner approved a global 10% reduction after
+     testing browser-zoom 90% at the 1280 min-width. Flip from 1 to
+     0.9 flows through the fluid clamps here AND (see :553 block)
+     the REAL Standard T-table below - both blocks now multiply
+     against --sc2-scale so a single value change scales the whole
+     scv2 surface (overview, drill, DayDetail, rail, header). */
+  --sc2-scale: 0.9;
 
   /* ---------- Fluid type ---------- */
   /* Each token: clamp(1024-floor, linear-interpolation, 1440-ceiling),
@@ -551,21 +556,30 @@
    pre-V3 defaults (the "less-dense" preference). Multiplier
    distorts line-heights off-grid, so per-token overrides here. */
 .scv2 {
-  /* Standard type scale */
-  --sc2-size-micro:      11px;
-  --sc2-size-caption:    12px;
-  --sc2-size-body:       14px;
-  --sc2-size-subhead:    15px;   /* month-name / rail label-pair */
-  --sc2-size-h3:         18px;   /* chrome title tier */
-  --sc2-size-h2:         20px;   /* card headings */
-  --sc2-size-h1:         24px;
-  --sc2-size-display:    30px;
-  --sc2-size-rail-total: 30px;
+  /* Standard type scale.
+     SC-90 (2026-07-21): each token is calc(basePx * var(--sc2-scale))
+     so the top-of-file `--sc2-scale` flip reaches these overrides
+     too. Prior version hardcoded plain px, which silently pinned
+     type to 1.0 regardless of the scale variable - the "one lever
+     scales the whole surface" contract at :190 was half-broken.
+     Base values are the T-table Standard values from the F5
+     correction; scale × basePx keeps them byte-identical at
+     scale=1.0 and shrinks uniformly at 0.9. Line-heights consumed
+     as literals in components stay on the 4px grid at whatever
+     the components declared (slight ratio drift at 0.9; owner
+     eyeball). */
+  --sc2-size-micro:      calc(11px * var(--sc2-scale));
+  --sc2-size-caption:    calc(12px * var(--sc2-scale));
+  --sc2-size-body:       calc(14px * var(--sc2-scale));
+  --sc2-size-subhead:    calc(15px * var(--sc2-scale));   /* month-name / rail label-pair */
+  --sc2-size-h3:         calc(18px * var(--sc2-scale));   /* chrome title tier */
+  --sc2-size-h2:         calc(20px * var(--sc2-scale));   /* card headings */
+  --sc2-size-h1:         calc(24px * var(--sc2-scale));
+  --sc2-size-display:    calc(30px * var(--sc2-scale));
+  --sc2-size-rail-total: calc(30px * var(--sc2-scale));
   /* Standard control heights (consumed in overview.css / rail.css) */
-  --sc2-control-h:       36px;
-  --sc2-control-h-icon:  32px;
-  /* Line-height ramps kept on 4px grid; consumed as `line-height`
-     literals in the components (or via existing calc()s). */
+  --sc2-control-h:       calc(36px * var(--sc2-scale));
+  --sc2-control-h-icon:  calc(32px * var(--sc2-scale));
 }
 
 /* OV-3 Wave 2 - Comfortable density REMOVED. Standard is the only
