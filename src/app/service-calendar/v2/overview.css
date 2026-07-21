@@ -66,8 +66,23 @@
 html:has(.scv2) {
   background: var(--sc2-canvas);
 }
-body:has(.scv2) {
-  background: var(--sc2-canvas);
+/* Bundle-A #1 REDO v2 (2026-07-21): the gradient is a background-
+   IMAGE (radial-gradient), not a background-color. Prior REDO
+   used `background: var(--sc2-canvas)` (shorthand). Per CSS spec
+   the shorthand SHOULD reset background-image to none, but the
+   live DOM showed background-image still paints the ops-shared
+   radial-gradient - a known edge case where `background: var(...)`
+   containing an unresolved custom property doesn't reliably
+   propagate the reset to background-image. Explicit longhands
+   guarantee both sub-properties land where we need them:
+   background-color = --sc2-canvas (#edeff2 cool grey), and
+   background-image = none (kills ops-shared.css:39-41's warm
+   radial). Specificity: body:has(.sc-root.scv2) = (0,2,1) beats
+   ops-shared's body:has(.oh-app) = (0,1,1), so this rule wins the
+   cascade uncontested for both sub-properties. */
+body:has(.sc-root.scv2) {
+  background-color: var(--sc2-canvas);
+  background-image: none;
 }
 .oh-app:has(.scv2) {
   background: var(--sc2-canvas);
@@ -79,6 +94,13 @@ body:has(.scv2) {
   background: var(--sc2-surface);
   border-radius: 16px;
   box-shadow: var(--sc2-el-widget);
+  /* Bundle-A #1 REDO (2026-07-21): restored original margin-top
+     var(--sc2-space-6) (~21.6px scaled). Zeroing was owner-corrected -
+     the breathing room between the site nav and the widget stays;
+     the fix is at the body:has(.sc-root.scv2) selector above, which
+     now wins over ops-shared's warm gradient so the gap paints
+     --sc2-canvas (light cool grey #edeff2) instead of the warm-white
+     radial. */
   margin-top: var(--sc2-space-6);
   /* F-E fix (Chat-Claude sweep): `overflow: hidden` REMOVED. Any
      overflow-hidden ancestor disables position:sticky for all
@@ -192,6 +214,21 @@ body:has(.scv2) {
   color: var(--sc2-ink);
   border: var(--sc2-border-thin) solid var(--sc2-line);
   box-shadow: var(--sc2-elevation-raised);
+}
+/* Bundle-A #18 (2026-07-21): the open-menu options were still on
+   the v1 base .sc-dropdown-item font-size (var(--size-body), 14px
+   fixed), while the closed trigger runs on var(--sc2-size-caption)
+   (~10.8px scaled) via HF-6. Options were visibly larger than the
+   selected value. Scope the options to the same scv2 caption
+   token so both track the SC-90 scale lever together. .sc-dropdown-
+   item elsewhere (admin dropdowns, other tools) is untouched -
+   this rule targets ONLY the account dropdown inside the ribbon. */
+.scv2 .sc-ribbon-account .sc-dropdown-item {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-item--active {
+  font-weight: var(--sc2-wt-semibold);
 }
 
 /* Thin vertical separator "|" between segments - white, low-opacity. */
@@ -348,11 +385,25 @@ body:has(.scv2) {
 /* HF-3 (2026-07-20) - "Period 7" label reads too large next to
    the ribbon title. Reduce to the ribbon-meta scale so it sits
    in the readout tier, not the h1 tier. Matches
-   .sc-ribbon-meta-value at :219-223. */
+   .sc-ribbon-meta-value at :219-223.
+   Bundle-A #2 (2026-07-21): bump micro -> caption so the period
+   label matches the Season button (falls through to v1
+   var(--size-caption) = 12px). Both now read ~12px scaled - one
+   ribbon-control tier. Also scope the Season button to the scv2
+   caption token below so both stay scv2-scale-aware together. */
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-period {
-  font-size: var(--sc2-size-micro);
+  font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-semibold);
   letter-spacing: 0;
+}
+/* Bundle-A #2: Season button pinned to the SAME scv2 caption token
+   so both track the scv2 scale lever. Falling through to v1
+   var(--size-caption) at chromeBar.css:305 would leave Season on
+   a fixed 12px v1 token, unaffected by SC-90's 0.9 multiplier -
+   Season would look larger than July on any future scale tune. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
 }
 
 /* HF-2 (2026-07-20) - remove the "· Complex" phase pill + its
