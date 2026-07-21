@@ -2755,8 +2755,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     /* DP2-05 (2026-07-20): scv2 drill legend bar
                        carries the FIGURES trailer. v1 fallback mount
                        below (:2917) leaves the prop off - v1 legend
-                       stays untouched. */
+                       stays untouched.
+                       Bundle-A #10 (2026-07-21): drop the game-day
+                       + spring-training markers on drill (StateLegend
+                       filters when dropMarkers=true). */
                     showFigures={true}
+                    dropMarkers={true}
                   />
                 )}
               </div>
@@ -2928,8 +2932,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     /* DP2-05 (2026-07-20): scv2 drill legend bar
                        carries the FIGURES trailer. v1 fallback mount
                        below (:2917) leaves the prop off - v1 legend
-                       stays untouched. */
+                       stays untouched.
+                       Bundle-A #10 (2026-07-21): drop the game-day
+                       + spring-training markers on drill (StateLegend
+                       filters when dropMarkers=true). */
                     showFigures={true}
+                    dropMarkers={true}
                   />
                 )}
               </div>

@@ -110,6 +110,13 @@
    restyle color/typography/spacing hairlines here. */
 .scv2 .sc-workspace {
   padding-top: 0;
+  /* Bundle-A #4 (2026-07-21): the v1 base rule at
+     periodWorkspace.css:9 paints .sc-workspace with
+     --surface-sunken (#FAF9F5, warm off-white / tan cast). Under
+     scv2 drill it leaked as a "stray tan bg" behind the grid.
+     Mirror the overview's same fix at overview.css:610 for
+     .sc-season - let the widget's L1 surface show through. */
+  background: transparent;
 }
 .scv2 .sc-workspace-frame {
   background: var(--sc2-surface-card);
@@ -200,6 +207,14 @@
 .scv2 .sc-workspace-band-sum {
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
+}
+/* Bundle-A #11 (2026-07-21): green check marker on a fully-entered
+   week's count. Rendered only when wm.complete === wm.total > 0. */
+.scv2 .sc-workspace-band-check {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--sc2-space-1);
+  color: var(--sc2-rail-accent-success, var(--text-success));
 }
 
 /* ─── Drill rail overrides ────────────────────────────────

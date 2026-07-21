@@ -887,7 +887,19 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     <span className="sc-workspace-band-prefix">{bandPrefix}</span>
                   )}
                   <span className="sc-workspace-band-label">{bandLabel}</span>
-                  <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
+                  <span className="sc-workspace-band-count">
+                    {wm.complete} of {wm.total} entered
+                    {/* Bundle-A #11 (2026-07-21): green check when
+                        the week is 100% entered. wm.complete /
+                        wm.total already computed by
+                        aggregateWorkspaceMetrics
+                        (ServiceCalendar.js:149); pure display add. */}
+                    {wm.total > 0 && wm.complete === wm.total && (
+                      <span className="sc-workspace-band-check" aria-label="week complete">
+                        <CheckCircle size="sm" />
+                      </span>
+                    )}
+                  </span>
                   <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
                 </div>
               )}

@@ -79,7 +79,13 @@ body:has(.scv2) {
   background: var(--sc2-surface);
   border-radius: 16px;
   box-shadow: var(--sc2-el-widget);
-  margin-top: var(--sc2-space-6);
+  /* Bundle-A #1 (2026-07-21): margin-top zeroed so the widget butts
+     up to the site nav and the canvas bg no longer paints a grey
+     strip above the navy ribbon. Ribbon paints from the widget's
+     top edge down with a 16/16/0/0 radius, so butting up leaves
+     clean rounded top corners against the nav. Was
+     var(--sc2-space-6) ~21.6px. */
+  margin-top: 0;
   /* F-E fix (Chat-Claude sweep): `overflow: hidden` REMOVED. Any
      overflow-hidden ancestor disables position:sticky for all
      descendants; the rail's `top: 96px` sticky was failing
@@ -192,6 +198,21 @@ body:has(.scv2) {
   color: var(--sc2-ink);
   border: var(--sc2-border-thin) solid var(--sc2-line);
   box-shadow: var(--sc2-elevation-raised);
+}
+/* Bundle-A #18 (2026-07-21): the open-menu options were still on
+   the v1 base .sc-dropdown-item font-size (var(--size-body), 14px
+   fixed), while the closed trigger runs on var(--sc2-size-caption)
+   (~10.8px scaled) via HF-6. Options were visibly larger than the
+   selected value. Scope the options to the same scv2 caption
+   token so both track the SC-90 scale lever together. .sc-dropdown-
+   item elsewhere (admin dropdowns, other tools) is untouched -
+   this rule targets ONLY the account dropdown inside the ribbon. */
+.scv2 .sc-ribbon-account .sc-dropdown-item {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-ribbon-account .sc-dropdown-item--active {
+  font-weight: var(--sc2-wt-semibold);
 }
 
 /* Thin vertical separator "|" between segments - white, low-opacity. */
@@ -348,11 +369,25 @@ body:has(.scv2) {
 /* HF-3 (2026-07-20) - "Period 7" label reads too large next to
    the ribbon title. Reduce to the ribbon-meta scale so it sits
    in the readout tier, not the h1 tier. Matches
-   .sc-ribbon-meta-value at :219-223. */
+   .sc-ribbon-meta-value at :219-223.
+   Bundle-A #2 (2026-07-21): bump micro -> caption so the period
+   label matches the Season button (falls through to v1
+   var(--size-caption) = 12px). Both now read ~12px scaled - one
+   ribbon-control tier. Also scope the Season button to the scv2
+   caption token below so both stay scv2-scale-aware together. */
 .scv2 .sc-ribbon-drillnav .sc-chrome-drill-period {
-  font-size: var(--sc2-size-micro);
+  font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-semibold);
   letter-spacing: 0;
+}
+/* Bundle-A #2: Season button pinned to the SAME scv2 caption token
+   so both track the scv2 scale lever. Falling through to v1
+   var(--size-caption) at chromeBar.css:305 would leave Season on
+   a fixed 12px v1 token, unaffected by SC-90's 0.9 multiplier -
+   Season would look larger than July on any future scale tune. */
+.scv2 .sc-ribbon-drillnav .sc-chrome-drill-back {
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
 }
 
 /* HF-2 (2026-07-20) - remove the "· Complex" phase pill + its

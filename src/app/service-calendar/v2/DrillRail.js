@@ -289,18 +289,13 @@ export default function DrillRail({
           );
         })()}
 
-        {/* Notes line - single row, count + first-day target. Omitted
-            when there are zero notes. */}
-        {notesCount > 0 && (
-          <RailSection label="Notes">
-            <RailLine
-              label={`${notesCount} ${notesCount === 1 ? "day" : "days"} with notes`}
-              value=""
-              tone="current"
-              onClick={firstNoteDay ? () => onTargetDay?.(firstNoteDay) : undefined}
-            />
-          </RailSection>
-        )}
+        {/* Bundle-A #7/#8 (2026-07-21): the Notes rail section
+            (single row: "N days with notes" targeting the first
+            note-day) has been REMOVED per owner. Notes count
+            derivation (notesDays / notesCount / firstNoteDay at
+            :107-109) retained above because it's cheap and
+            harmless if a future consumer wants it back; only the
+            RailSection render is stripped. */}
 
         {/* Week lines - identical source as the in-grid bands (m.weeks).
             SC-073: rendered ONLY when !hasHomestandSchedule.

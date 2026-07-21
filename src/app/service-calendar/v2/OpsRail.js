@@ -263,17 +263,11 @@ export default function OpsRail({
           </RailSection>
         )}
 
-        {/* Notes (drill only) */}
-        {mode === "drill" && notes.count > 0 && (
-          <RailSection label="Notes">
-            <RailLine
-              label={`${notes.count} ${notes.count === 1 ? "day" : "days"} with notes`}
-              value=""
-              tone="current"
-              onClick={notes.firstDate ? () => onTargetDay?.(notes.firstDate) : undefined}
-            />
-          </RailSection>
-        )}
+        {/* Bundle-A #7/#8 (2026-07-21): Notes rail section REMOVED
+            per owner (was drill-only render at "N days with notes"
+            targeting notes.firstDate). notes count derived at
+            :173 is retained since it's used only here today; kept
+            harmlessly in case any future consumer wants it. */}
 
         {/* Season list - overview only (per-month game-day or days-entered summary) */}
         {mode === "overview" && seasonListMonths.length > 0 && (
