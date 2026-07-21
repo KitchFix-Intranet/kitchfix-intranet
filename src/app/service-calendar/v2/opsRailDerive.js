@@ -109,6 +109,17 @@ export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// DP2-06 v2 retired 2026-07-21: deriveOpsHeroTotalsScoped attempted
+// a parallel per-day aggregation for the drill hero, but returned
+// zeros for MLB (the game-day predicate mis-matched the workspace
+// aggregator's semantics). Rather than debug two aggregators, the
+// drill hero now reads the SAME `periodMetrics` object the top
+// strip + tiles derive from - computed once by
+// aggregateWorkspaceMetrics in ServiceCalendar.js. See OpsRail.js:80
+// for the wire-up. Overview hero keeps deriveOpsHeroTotals(yearData).
+// ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
 // Homestand ledger rows (MLB fee accounts only).
 //
 // Returns the full segment list from deriveHomestandSegments in

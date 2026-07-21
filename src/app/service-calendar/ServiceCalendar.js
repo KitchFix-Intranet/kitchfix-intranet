@@ -2661,6 +2661,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               yearData={yearData}
               today={today}
               periodDays={periodDays}
+              /* DP2-06 v3 (2026-07-21): source of truth for the drill
+                 hero + caption. Same `m` the strip reads. */
+              periodMetrics={periodMetrics}
               periodRange={drillPeriodRange}
               loading={loading && !periodDays}
               incomplete={!!partialError}
@@ -2706,11 +2709,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           // truth-agreement (F1 verdict, PR #469).
           const drillBar = isFeeAccount
             ? (() => {
-                const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
-                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
-                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                // DP2-06 real fix (2026-07-21): period-drill bar mirrors
+                // the rail hero (truth-agreement law) - both now read
+                // the DRILLED window. Prior code used yearData +
+                // "SEASON BOOKS" suffix, which would contradict the
+                // now-scoped rail hero. Label drops the suffix so it
+                // describes the scope its numbers describe.
+                // DP2-06 v3 (2026-07-21): bar mirrors the rail hero,
+                // which now reads periodMetrics directly (same source
+                // as the strip). complete/total on MLB = game days
+                // (SC-078 status widening); on STL-FL = actionable
+                // days. Same field applies to both account shapes.
+                const num = periodMetrics?.complete || 0;
+                const den = periodMetrics?.total || 0;
                 return {
-                  label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""} · SEASON BOOKS`,
+                  label: `PERIOD ${periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : ""}`,
                   value: `${num} of ${den}`,
                   status: null,
                 };
@@ -2739,6 +2752,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
+                    /* DP2-05 (2026-07-20): scv2 drill legend bar
+                       carries the FIGURES trailer. v1 fallback mount
+                       below (:2917) leaves the prop off - v1 legend
+                       stays untouched. */
+                    showFigures={true}
                   />
                 )}
               </div>
@@ -2831,6 +2849,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               yearData={yearData}
               today={today}
               periodDays={monthDays}
+              /* DP2-06 v3 (2026-07-21): monthMetrics feeds the drill
+                 hero + caption. Same object the month strip reads. */
+              periodMetrics={monthMetrics}
               periodRange={monthRange}
               loading={loading && !monthDays}
               incomplete={!!partialError}
@@ -2865,11 +2886,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           // sheet stay in truth-agreement.
           const monthBar = isFeeAccount
             ? (() => {
-                const t = deriveOpsHeroTotals(yearData, hasHomestandSchedule, today);
-                const num = hasHomestandSchedule ? t.gameDaysEntered : t.daysEntered;
-                const den = hasHomestandSchedule ? t.totalGameDays : t.totalActionableDays;
+                // DP2-06 real fix (2026-07-21): month-drill bar mirrors
+                // the rail hero - both DRILLED window. Prior code used
+                // yearData + "SEASON BOOKS" suffix which contradicted
+                // the scoped rail. Suffix dropped so the label matches
+                // its numbers' scope.
+                // DP2-06 v3 (2026-07-21): bar reads monthMetrics
+                // directly (same as the rail hero + top strip).
+                const num = monthMetrics?.complete || 0;
+                const den = monthMetrics?.total || 0;
                 return {
-                  label: `${monthLabel.toUpperCase() || "MONTH"} · SEASON BOOKS`,
+                  label: monthLabel.toUpperCase() || "MONTH",
                   value: `${num} of ${den}`,
                   status: null,
                 };
@@ -2898,6 +2925,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
+                    /* DP2-05 (2026-07-20): scv2 drill legend bar
+                       carries the FIGURES trailer. v1 fallback mount
+                       below (:2917) leaves the prop off - v1 legend
+                       stays untouched. */
+                    showFigures={true}
                   />
                 )}
               </div>

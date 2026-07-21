@@ -67,6 +67,48 @@
   font-weight: var(--wt-medium);
 }
 
+/* DP2-05 (2026-07-20) - compact FIGURES trailer on the drill legend
+   bar (right-aligned via margin-left: auto so it sits opposite the
+   swatch list; the info button follows in DOM order but keeps its
+   own right edge because the flex container has flex-wrap:wrap).
+   Reads: Figures $3K entered · est. $3K awaiting · ~$3K projected
+   (per-meal / MiLB) or Figures ~180 meals projected (fee/homestand).
+   Only rendered when the StateLegend consumer opts in via
+   showFigures - scv2 drill only today. */
+.sc-state-legend-figures {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  padding-left: var(--space-3);
+  border-left: var(--border-thin) solid var(--border-default);
+  font-size: var(--size-micro);
+  color: var(--text-muted);
+}
+.sc-state-legend-figures-title {
+  font-weight: var(--wt-bold);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sc-state-legend-figures-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.sc-state-legend-figures-item + .sc-state-legend-figures-item {
+  padding-left: var(--space-2);
+  border-left: var(--border-thin) solid var(--border-subtle);
+}
+.sc-state-legend-figures-chip {
+  font-weight: var(--wt-bold);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-state-legend-figures-word {
+  color: var(--text-muted);
+}
+
 /* Swatches mirror the atom's status fills + glyphs. Smaller, fixed
    size so the row stays one-line-ish on desktop. */
 .sc-state-legend-swatch {
