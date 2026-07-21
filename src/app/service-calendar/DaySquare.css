@@ -1271,8 +1271,24 @@
    scv2 density anyway (per the "Workspace scope only" comment at
    DaySquare.css:68), so scoping to .sc-workspace-grid matches
    actual usage. */
+/* SC tile-system (2026-07-21): height goes from min-height:68px to a
+   fixed height:96px. Rationale from the Q1-Q5 tile investigation:
+   MiLB / rare-overlay PDC game-day tiles need ~94px to render every
+   line (date + opponent chip + day/night pill + hero count + rev)
+   without clipping; a uniform 96px fits the tallest case with a
+   small cushion and forces every row to render at the same height
+   across account types (per-meal, MLB, MiLB, fee). Fixed height (not
+   min-height) is required so full-week and partial-week rows land at
+   the same 96px - min-height:96px let cells stretch when other cells
+   in the row grew, but empty-cell weeks still measured shorter.
+   Paired with .scv2 .sc-workspace-grid-cell-empty override in
+   drill.css so orphan empty cells match the 96px tile.
+   The Turbopack bundle also loads periodWorkspace.css after this
+   file; that file's .sc-workspace-grid .sc-daysq--lg (0,2,0,
+   min-height:96px) NO LONGER conflicts because height (this rule,
+   0,3,0) beats min-height on the same property axis. */
 .scv2 .sc-workspace-grid .sc-daysq--lg {
-  min-height: 68px;
+  height: 96px;
   padding: var(--sc2-space-1) var(--sc2-space-2);
   border-radius: var(--sc2-radius-tile);
   box-shadow: var(--sc2-elevation-inset-top), var(--sc2-elevation-card);

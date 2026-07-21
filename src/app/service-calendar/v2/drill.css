@@ -402,3 +402,100 @@
   border: var(--sc2-border-thin) solid var(--sc2-line);
   box-shadow: var(--sc2-elevation-raised);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SC TILE-SYSTEM (2026-07-21) - uniform-height day tile + four
+   internal-drift normalizations.
+
+   Backstory: Bundle B PR #488 shipped a per-tile fixed 66px height
+   that broke MLB / MiLB / fee game-day tiles (opponent chip + pill
+   + hero + rev needed ~85-94px; 66 clipped mid-word). Q1-Q5
+   investigation showed the tallest single-tile stack is ~94px
+   (MiLB game day / rare PDC schedule-overlay day); 96px fits with
+   ~2px cushion. Fee-column tiles land at ~85px so uniform-96 wastes
+   little.
+
+   PART 1: uniform height 96px lives on the DEN-1 rule in
+   DaySquare.css:1274 (height:96px, not min-height). Corresponding
+   empty-cell match below neutralises the 80px min-height at
+   periodWorkspace.css:565 so partial-week rows measure at 96 too.
+
+   PART 2: four drift points normalised - mid-container gap +
+   direction, meal/served count typography, opponent chip
+   treatment, and (via the shared column layout) fee's structural
+   parity with the other kinds. Every rule scopes under
+   .scv2 .sc-workspace-grid .sc-daysq--lg so the overview
+   (.sc-season / .sc-daysq--sm) is untouched and v1 is untouched.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Part 1 - empty spacer cells share the 96px so orphan-week
+   rows land at the same height as full-week rows. The base rule
+   at periodWorkspace.css:565 sets min-height:80px unconditionally;
+   this scv2-scoped override lifts it to 96 (higher-specificity via
+   the .scv2 ancestor). */
+.scv2 .sc-workspace-grid-cell-empty {
+  min-height: 96px;
+}
+
+/* Part 2 item 1 - mid-container column layout + gap. The four
+   existing mid variants had drifted: --stack gap:2, --milb gap:2,
+   --mlb gap:4 (--space-1), and the fee-no-dollar path uses the
+   BASE .sc-daysq-mid which is inline-flex row-wrap gap:1 (a
+   left-over from the sm year-view). Under scv2 drill lg we force
+   every mid into the same column stack with the same 2px inter-line
+   gap. Fee-no-dollar picks up column layout from the same rule so
+   we don't need a new modifier class in JS.
+
+   Note: this rule beats the base .sc-daysq-mid (0,1,0) and each
+   --{variant} rule (0,2,0) via the .scv2 + .sc-workspace-grid
+   + .sc-daysq--lg + .sc-daysq-mid chain (0,4,0). */
+.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Part 2 item 2 - unified meal / served count typography. Prior
+   drift: per-meal / MiLB meals hero at 14.5px bold (DaySquare.css
+   :754), MLB headcount at var(--size-body)=14px bold (:364), fee
+   served text inherits the base --lg meal size (14.5px) at :753.
+   Bring all three into the same "hero" size + weight + colour so a
+   glance across account types reads the same visual weight for the
+   count. Uses the exact 14.5px value that per-meal already used
+   (owner has been shipping against it since P7) - keeps a tone
+   match on the tiles that were already correct. */
+.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid-meals,
+.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid-headcount {
+  font-size: 14.5px;
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-strong);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Part 2 item 3 - unified opponent chip treatment. MLB already
+   ships the navy-tinted pill at DaySquare.css:349 (bg rgba,
+   padding 2px 7px, radius-pill, size-micro, uppercase, letter-
+   spacing 0.04em). Per-meal / MiLB / fee opponent labels ship as
+   BARE text via the base rule at DaySquare.css:153 - no pill. Under
+   scv2 drill lg every account type gets the same navy pill so the
+   drill grid reads one grammar for "who's on today."
+
+   Guard: this MUST NOT fire on the --exh (green wash) and --away
+   (hollow) variants, which own their own colour semantics. Using
+   :not() keeps the guard explicit and readable. */
+.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid-opponent:not(.sc-daysq-mid-opponent--exh):not(.sc-daysq-mid-opponent--away) {
+  display: inline-block;
+  background: rgba(21, 57, 104, 0.09);
+  color: var(--text-link);
+  font-weight: var(--sc2-wt-display);
+  font-size: var(--sc2-size-micro);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
