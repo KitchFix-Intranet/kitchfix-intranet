@@ -874,18 +874,14 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               ? `P${prefixPeriods[0]}-${prefixPeriods[prefixPeriods.length - 1]}`
               : null;
           const isStraddle = prefixPeriods.length > 1;
-          // #3 Part 2 (2026-07-21): current-week pill. wm.startDate /
-          // .endDate are available on the same shape DrillRail.js:97-99
-          // reads. Compose "P{n} · WK {n}" only when today falls in
-          // the range AND we have both a period prefix and a weeknum
-          // to show; hidden on other weeks; no band fill / outline.
+          // #3 Part 2 REDO (2026-07-21): NO separate pill element.
+          // Owner reversed: pill the EXISTING label ("P8 WEEK 4")
+          // via a data-current attribute + CSS, not a duplicate
+          // text pill. isCurrentWeek retained so CSS can target
+          // the current band; weekNum + composed pill string
+          // deleted (were only used by the retired separate pill).
           const isCurrentWeek = !!(today && wm?.startDate && wm?.endDate
             && today >= wm.startDate && today <= wm.endDate);
-          const weekNumMatch = bandLabel ? String(bandLabel).match(/\d+/) : null;
-          const weekNum = weekNumMatch ? weekNumMatch[0] : null;
-          const currentPill = isCurrentWeek && bandPrefix && weekNum
-            ? `${bandPrefix} · WK ${weekNum}`
-            : null;
           return (
             <React.Fragment key={weekIdx}>
               {showBand && (
@@ -900,9 +896,6 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     <span className="sc-workspace-band-prefix">{bandPrefix}</span>
                   )}
                   <span className="sc-workspace-band-label">{bandLabel}</span>
-                  {currentPill && (
-                    <span className="sc-workspace-band-current-pill">{currentPill}</span>
-                  )}
                   <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
                   <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
                 </div>

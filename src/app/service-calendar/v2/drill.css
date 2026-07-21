@@ -216,22 +216,36 @@
   color: var(--sc2-ink-strong);
   font-weight: var(--sc2-wt-bold);
 }
-/* #3 Part 2 (2026-07-21): current-week pill. Small navy badge with
-   white text, reads "P{n} · WK {n}". Rendered only in the band
-   whose date range contains today (see PeriodWorkspace.js
-   isCurrentWeek). No band fill / outline - Option C, pill only. */
-.scv2 .sc-workspace-band-current-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px var(--sc2-space-2);
+/* #3 Part 2 REDO (2026-07-21): pill the EXISTING label group
+   ("P8 WEEK 4") on the current band, not a separate text element.
+   Owner reversed the earlier design (separate .sc-workspace-band-
+   current-pill span with "P8 · WK 4" text) - it duplicated what
+   the band already said. Now: bandPrefix + bandLabel are the
+   only carriers; on data-current="true" they get a shared pill
+   background via a two-halves treatment (prefix = left half,
+   label = right half → reads as one continuous pill hugging the
+   two spans). If prefixPeriods is empty (no bandPrefix rendered),
+   the label picks up the full-pill radius via :first-child. */
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-prefix,
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-label {
   background: var(--sc2-cmd-bg, var(--navy-700));
   color: var(--sc2-cmd-text, #fff);
-  border-radius: var(--sc2-radius-pill);
-  font-size: var(--sc2-size-micro);
+  padding: 1px 6px;
   font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1.2;
+}
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-prefix {
+  border-radius: var(--sc2-radius-pill) 0 0 var(--sc2-radius-pill);
+  padding-right: 4px;
+}
+.scv2 .sc-workspace-band[data-current="true"] .sc-workspace-band-label {
+  border-radius: 0 var(--sc2-radius-pill) var(--sc2-radius-pill) 0;
+  padding-left: 4px;
+}
+/* No-prefix case: label is the band's first child (prefix span
+   omitted by JSX conditional). Full pill radius on both ends. */
+.scv2 .sc-workspace-band[data-current="true"] > .sc-workspace-band-label:first-child {
+  border-radius: var(--sc2-radius-pill);
+  padding-left: 6px;
 }
 
 /* #5 v2 (2026-07-21): FIXED-height rows at 66px for true cross-row
