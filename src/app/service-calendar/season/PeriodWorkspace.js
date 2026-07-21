@@ -892,10 +892,17 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   data-current={isCurrentWeek ? "true" : undefined}
                   aria-hidden="true"
                 >
-                  {bandPrefix && (
-                    <span className="sc-workspace-band-prefix">{bandPrefix}</span>
-                  )}
-                  <span className="sc-workspace-band-label">{bandLabel}</span>
+                  {/* #3 Part 2 REDO v2 (2026-07-21): wrap prefix +
+                      label in one container so the current-week
+                      pill background paints as ONE continuous shape.
+                      Prior treatment styled each span individually,
+                      leaving a seam between "P8" and "WEEK 4". */}
+                  <span className="sc-workspace-band-title">
+                    {bandPrefix && (
+                      <span className="sc-workspace-band-prefix">{bandPrefix}</span>
+                    )}
+                    <span className="sc-workspace-band-label">{bandLabel}</span>
+                  </span>
                   <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
                   <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
                 </div>
