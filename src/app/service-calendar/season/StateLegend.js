@@ -34,12 +34,20 @@ export default function StateLegend({
   // deferral is separate; this addition targets the always-visible
   // bar per the DP1-20 owner ask.
   showFigures = false,
-  // Bundle-A #10 (2026-07-21): filter the game-day + spring-training
-  // markers out of the swatch list on drill. getLegendItems appends
-  // GAME_DAY_MARK / SPRING_MARK per account shape - meaningful on
-  // overview sm-tile paint but noise on the drill bar. Off by
-  // default so overview mounts (if any) keep the marks; drill mounts
-  // opt in.
+  // Bundle-A #10 (2026-07-21) + Bundle-B follow-up (2026-07-22):
+  // drill-bar concision flag. Started life as a marker-filter (drop
+  // game-day + spring notches on drill; keep them on overview where
+  // they identify sm tiles). Widened here to also drop:
+  //   - exhibition (the "EXH" rare-HOMESTAND state key - noise on the
+  //     shared state spine; still explained in the popup)
+  //   - MiLB day / night (the sun / moon pair - orthogonal game-time
+  //     cue on lg drill tiles; still explained in the popup)
+  // Rationale for one prop instead of two: no call site wants to
+  // toggle these categories independently; drill mounts want ALL
+  // dropped, overview mounts want NONE dropped. Name kept for
+  // minimum-diff (would rename to `barConcise` if we grow a third
+  // category with different toggling needs). Off by default; drill
+  // mounts opt in.
   dropMarkers = false,
 }) {
   // The one-line key keeps the IN-USE states for the current account
@@ -47,7 +55,11 @@ export default function StateLegend({
   // taxonomy lives in the popup behind the info button. Source:
   // ./legendItems.js (shared with LegendInfoPopup).
   const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
-    .filter(it => !dropMarkers || (it.mod !== "game-day-mark" && it.mod !== "spring-mark"))
+    .filter(it => !dropMarkers || (
+      it.mod !== "game-day-mark" &&
+      it.mod !== "spring-mark" &&
+      it.mod !== "exhibition"
+    ))
     .map(it => ({
       mod: it.mod, icon: it.icon, label: it.label,
     }));
@@ -56,7 +68,9 @@ export default function StateLegend({
   // as MiLB (backfilled from MLB Stats API dayNight into
   // sc_homestand_schedule.day_night), so both account shapes need
   // the day/night pair in the compact strip.
-  if (hasHomestandSchedule || (isMilb && !isFeeAccount)) {
+  // Bundle-B follow-up (2026-07-22): dropMarkers now also gates the
+  // day/night pair so drill bars read the shared state spine only.
+  if (!dropMarkers && (hasHomestandSchedule || (isMilb && !isFeeAccount))) {
     items.push(...MILB_DAY_NIGHT.map(it => ({ mod: it.mod, icon: "", label: it.label })));
   }
   // Universal trailer. Off-season dropped from the line - it's now flat

@@ -2758,7 +2758,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                        stays untouched.
                        Bundle-A #10 (2026-07-21): drop the game-day
                        + spring-training markers on drill (StateLegend
-                       filters when dropMarkers=true). */
+                       filters when dropMarkers=true).
+                       Bundle-B follow-up (2026-07-22): dropMarkers
+                       widened to also drop EXH + Day/Night from the
+                       drill bar so every account type reads the same
+                       concise state spine. Popup keeps them. */
                     showFigures={true}
                     dropMarkers={true}
                   />
@@ -2935,7 +2939,11 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                        stays untouched.
                        Bundle-A #10 (2026-07-21): drop the game-day
                        + spring-training markers on drill (StateLegend
-                       filters when dropMarkers=true). */
+                       filters when dropMarkers=true).
+                       Bundle-B follow-up (2026-07-22): dropMarkers
+                       widened to also drop EXH + Day/Night from the
+                       drill bar so every account type reads the same
+                       concise state spine. Popup keeps them. */
                     showFigures={true}
                     dropMarkers={true}
                   />
