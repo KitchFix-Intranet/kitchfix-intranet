@@ -40,16 +40,18 @@ relationships:
 - **Team / entity**: Louisville Bats - Cincinnati Reds AAA affiliate, Louisville Slugger Field (Louisville, KY)
 - **Level / tier**: AAA (MiLB)
 - **Search aliases**: "Louisville", "Louisville Bats", "Bats", "Slugger Field", "Reds AAA", "Louisville Kentucky"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `CIN-KY` |
-  | PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
-  | PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
-  | QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) - the Home/Away split is a real KitchFix taxonomy. *invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16* |
-  | P&L file | Louisville Bats rows |
-  | ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
-  | Contract folder | `/Contracts/CIN KY/` |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `CIN-KY` |
+| PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
+| PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
+| QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) - the Home/Away split is a real KitchFix taxonomy. *invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16* |
+| P&L file | Louisville Bats rows |
+| ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
+| Contract folder | `/Contracts/CIN KY/` |
+
 - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side; also covers CIN-AZ) *src: Kevin, 2026-07-15, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - all three years' contracts banked verbatim, rate history complete, structure is the simplest of the 11 (pure per-meal, no SF, no passthrough). The only gaps are non-blocking: no invoice in the sample (so no worked example / tax-rate confirmation), and net-payment days unstated in the executed contract.
 

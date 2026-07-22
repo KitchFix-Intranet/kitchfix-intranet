@@ -42,17 +42,19 @@ relationships:
 - **Team / entity**: Tampa Bay Rays - MLB (spring training @ Charlotte Sports Park; regular season billed to Tropicana Field HQ) + MiLB (Charlotte County PDC). Plus **BGC** (Boys & Girls Club - a second client on the commissary).
 - **Level / tier**: PDC (`billing_model=actuals_drive_invoice`)
 - **Search aliases**: "Rays", "Tampa Bay Rays", "TBR", "Charlotte Sports Park", "Tropicana", "TBR-FL", "Rays PDC", "BGC" (second client)
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `TBR-FL` |
-  | PG `accounts` | team_key `TBR - FL` · name "Tampa Bay Rays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
-  | PG `sc_service_prices` | MLB (no discount): Breakfast $35.63, Lunch/Dinner $39.48. MiLB (post-25%-SF): Breakfast $17.83, Lunch $21.68, Dinner $20.96. Add-ons: Road Sandwiches $15, Extra Protein. **NO `sc_fee_schedule` row** - MiLB SF is out-of-band (see the Billing Record section). |
-  | QuickBooks (invoice `Item`) | `TBR MLB - Breakfast`, `TBR MLB - Lunch/Dinner`, `TBR MiLB - Breakfast`, `TBR MiLB - Lunch/Dinner`, `TBR MiLB - Road Sandwiches`, `Labor Fee`, `Extra Protein (TBR) - Chicken/Pork`. Meal lines T-flagged. *K300168545 MLB, K300168871 MiLB* |
-  | Finance schedule (§W) | 2026 MiLB **SF = $457,768** = $200,000 (installment 1, static) + $257,768 (installment 2, variable). NOT in `sc_fee_schedule` - out-of-band. |
-  | P&L file | Rays - MLB + MiLB meal revenue → 2400.1; MiLB SF → 2300 ($457,768); **BGC → 2200 ($79,950)**. |
-  | ABR OneSheeter tab | "TAMPA BAY RAYS" |
-  | Contract folder | `/Contracts/TBR FL/` - 4 executed 2024 docs (MLB Agreement + MLB SOW + MiLB Agreement + MiLB SOW). **BGC contract: EXTRACTED → the Contract Digest (REF-129) (2025-26 school year; term ends May 21, 2026).** |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `TBR-FL` |
+| PG `accounts` | team_key `TBR - FL` · name "Tampa Bay Rays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
+| PG `sc_service_prices` | MLB (no discount): Breakfast $35.63, Lunch/Dinner $39.48. MiLB (post-25%-SF): Breakfast $17.83, Lunch $21.68, Dinner $20.96. Add-ons: Road Sandwiches $15, Extra Protein. **NO `sc_fee_schedule` row** - MiLB SF is out-of-band (see the Billing Record section). |
+| QuickBooks (invoice `Item`) | `TBR MLB - Breakfast`, `TBR MLB - Lunch/Dinner`, `TBR MiLB - Breakfast`, `TBR MiLB - Lunch/Dinner`, `TBR MiLB - Road Sandwiches`, `Labor Fee`, `Extra Protein (TBR) - Chicken/Pork`. Meal lines T-flagged. *K300168545 MLB, K300168871 MiLB* |
+| Finance schedule (§W) | 2026 MiLB **SF = $457,768** = $200,000 (installment 1, static) + $257,768 (installment 2, variable). NOT in `sc_fee_schedule` - out-of-band. |
+| P&L file | Rays - MLB + MiLB meal revenue → 2400.1; MiLB SF → 2300 ($457,768); **BGC → 2200 ($79,950)**. |
+| ABR OneSheeter tab | "TAMPA BAY RAYS" |
+| Contract folder | `/Contracts/TBR FL/` - 4 executed 2024 docs (MLB Agreement + MLB SOW + MiLB Agreement + MiLB SOW). **BGC contract: EXTRACTED → the Contract Digest (REF-129) (2025-26 school year; term ends May 21, 2026).** |
+
 - **Client stakeholders**: **MLB → Erik Hart** (with the MLB club; at Charlotte Sports Park during spring training, then Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). MLB and MiLB bill to SEPARATE cost centers (see the Operations Record section). BGC = separate client billed directly. *Kevin 2026-07-16; K300168545, K300168871*
 > NOTE: Capture completeness - **FULLY-CAPTURED** (models + rates + fees confirmed). Contracts verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoices not sampled (golden seeds - Phase E); the **BGC contract-digest is complete** (the Contract Digest (REF-129); $6.50 confirmed, tax-exempt, school-year term ending May 21, 2026) - no BGC 2026-27 renewal on file yet (fall-2026 gap).
 

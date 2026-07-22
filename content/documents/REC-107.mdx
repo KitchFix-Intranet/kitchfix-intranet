@@ -41,17 +41,19 @@ relationships:
 - **Team / entity**: Buffalo Bisons - Toronto Blue Jays AAA affiliate, Sahlen Field (Buffalo, NY)
 - **Level / tier**: AAA (MiLB)
 - **Search aliases**: "Buffalo", "Buffalo Bisons", "Bisons", "Sahlen Field", "Blue Jays AAA", "Buffalo New York"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `TBJ-NY` |
-  | PG `accounts` | team_key `TBJ - NY` · name "Buffalo Bisons" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
-  | PG `sc_service_prices` | "Breakfast", "Lunch", "Post-Game", "Umpire" (all $27.34); "Snack", "Shake" (deactivated, $0) |
-  | QuickBooks (invoice `Item`) | Activity = **"Buffalo Meal Service"** (meal type in Description; all meal types bill at $27.34). *invoice K300168849* |
-  | Invoice Bill-To / billing entity | **Rogers Blue Jays Baseball Partnership** / Toronto Blue Jays Player Development Complex / 3031 Garrison Road, Dunedin FL 34698 - i.e. Buffalo bills through the **parent Toronto PDC address** (SAME as TBJ-FL), NOT a Buffalo entity. Invoice recipient ("Sent to"): **Charlie Wilson**. *invoice K300168849* |
-  | P&L file | Buffalo Bisons rows |
-  | ABR OneSheeter tab | NOT included (the OneSheeter's "TORONTO BLUE JAYS" tab covers the relationship but Buffalo is treated as adjacent; ABR notes "How is Buffalo going?" as an open question) |
-  | Contract folder | `/Contracts/TBJ NY/` (contained only a 2019 historical draft SOW - see the Contract section/the History section) |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `TBJ-NY` |
+| PG `accounts` | team_key `TBJ - NY` · name "Buffalo Bisons" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
+| PG `sc_service_prices` | "Breakfast", "Lunch", "Post-Game", "Umpire" (all $27.34); "Snack", "Shake" (deactivated, $0) |
+| QuickBooks (invoice `Item`) | Activity = **"Buffalo Meal Service"** (meal type in Description; all meal types bill at $27.34). *invoice K300168849* |
+| Invoice Bill-To / billing entity | **Rogers Blue Jays Baseball Partnership** / Toronto Blue Jays Player Development Complex / 3031 Garrison Road, Dunedin FL 34698 - i.e. Buffalo bills through the **parent Toronto PDC address** (SAME as TBJ-FL), NOT a Buffalo entity. Invoice recipient ("Sent to"): **Charlie Wilson**. *invoice K300168849* |
+| P&L file | Buffalo Bisons rows |
+| ABR OneSheeter tab | NOT included (the OneSheeter's "TORONTO BLUE JAYS" tab covers the relationship but Buffalo is treated as adjacent; ABR notes "How is Buffalo going?" as an open question) |
+| Contract folder | `/Contracts/TBJ NY/` (contained only a 2019 historical draft SOW - see the Contract section/the History section) |
+
 - **Client stakeholders**: **Katarina Dimino** - client contact for both TBJ accounts (TBJ-NY + TBJ-FL) *src: Kevin, 2026-07-16, high*. (Invoice K300168849 was "Sent to" Charlie Wilson at the Toronto PDC - the AP/billing recipient, distinct from the account contact. Michelle, the prior relationship contact, left the org.)
 > NOTE: Capture completeness - **PARTIAL** (upgraded from THIN by invoice K300168849). No standalone Buffalo contract, but the invoice confirms Buffalo bills through the Toronto parent PDC (Rogers Blue Jays / Dunedin) - a sub-scope of the Toronto master (Dec 2018 MSA), not an orphaned account. Operative rate $27.34 is invoice-confirmed (+ Kevin + Joe + PG); tax/terms/cadence/worked-example all confirmed. Remaining gap is the Buffalo SOW document under the Toronto MSA - a chase, not a billing-accuracy hole.
 

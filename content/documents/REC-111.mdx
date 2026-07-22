@@ -42,20 +42,22 @@ relationships:
 - **Team / entity**: Texas Rangers - **visiting clubhouse** catering, Globe Life Field (Arlington, TX). Clients = the visiting MLB teams, not the Rangers.
 - **Level / tier**: MLB (visiting-clubhouse service)
 - **Search aliases**: "Rangers visiting", "visiting clubhouse", "TXR visiting", "visiting team catering", "Arlington visiting", "away clubhouse", "TXR-V"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `TXR-TX-V` |
-  | PG `accounts` | team_key `TXR - TX - V` · name "Texas Rangers Visiting" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-  | PG `sc_fee_schedule` | **$0**, `covered_by_account_key = TXR - TX - H` - the visiting-clubhouse *contract carve-in* (G&G/snacks/coffee) is paid through TXR-H's $604,032. The **catering revenue** is a separate stream NOT in `sc_fee_schedule` (see the Billing Record section). |
-  | PG `sc_service_prices` | per-meal rows all $0 (planning only) |
-  | QuickBooks (invoice `Item`) | **"Meal Service - PFS (Away)"** - the `(Away)` mirror of CIN-KY's `PFS (Home)`. `PFS` = Performance Food Service. *invoice K300168675* |
-  | Finance schedule | NOT present (no service fee - TXR-V has no SF row; it's catering revenue, not a fee) *§W* |
-  | P&L file | Texas Rangers - visiting-catering revenue → **P&L 2400.1** (opt-in sales revenue, ~$312K ledger reference) |
-  | ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
-  | Contract folder | `/Contracts/TXR H&V/` (shared 2026 MLB agreement with TXR-TX-H) |
-  | Season / Revenue Tracker | The per-series catering activity log (currently a **standalone tool** - `TXR VISITING CATERING.xlsx`, "2026 Season" tab). Kevin roadmap: migrate INTO the SC (future). *§Z* |
-  | Menu (pricing authority) | `THE VITAL PARTNER.pdf` (2026 Visiting Team Catering Menu) + `New Catering Items.pdf` addendum - **the price source of record for TXR-V** (no signed Price Review). *§Z* |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `TXR-TX-V` |
+| PG `accounts` | team_key `TXR - TX - V` · name "Texas Rangers Visiting" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+| PG `sc_fee_schedule` | **$0**, `covered_by_account_key = TXR - TX - H` - the visiting-clubhouse *contract carve-in* (G&G/snacks/coffee) is paid through TXR-H's $604,032. The **catering revenue** is a separate stream NOT in `sc_fee_schedule` (see the Billing Record section). |
+| PG `sc_service_prices` | per-meal rows all $0 (planning only) |
+| QuickBooks (invoice `Item`) | **"Meal Service - PFS (Away)"** - the `(Away)` mirror of CIN-KY's `PFS (Home)`. `PFS` = Performance Food Service. *invoice K300168675* |
+| Finance schedule | NOT present (no service fee - TXR-V has no SF row; it's catering revenue, not a fee) *§W* |
+| P&L file | Texas Rangers - visiting-catering revenue → **P&L 2400.1** (opt-in sales revenue, ~$312K ledger reference) |
+| ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
+| Contract folder | `/Contracts/TXR H&V/` (shared 2026 MLB agreement with TXR-TX-H) |
+| Season / Revenue Tracker | The per-series catering activity log (currently a **standalone tool** - `TXR VISITING CATERING.xlsx`, "2026 Season" tab). Kevin roadmap: migrate INTO the SC (future). *§Z* |
+| Menu (pricing authority) | `THE VITAL PARTNER.pdf` (2026 Visiting Team Catering Menu) + `New Catering Items.pdf` addendum - **the price source of record for TXR-V** (no signed Price Review). *§Z* |
+
 - **Client stakeholders**: EACH VISITING TEAM has its own AP contact (see the Operations Record section for the roster). KitchFix-side: **Bethany Ham** (Visiting Clubhouse Catering Coordinator, client POC); **Jordan Rogers** (Visiting Clubhouse Exec Chef); **Britt Chernikovich** (Director of Culinary, Ops cc + recipe authority); **Kevin Fietek** (Ops cc); **Sebastian** (AP/billing); **Mason** (Rangers Clubhouse Manager, BEO recipient). *§Z*
 > NOTE: Capture completeness - **FULLY-CAPTURED (model + pricing authority)** - contract carve-in banked, catering model + menu + SOP + billing workflow captured, invoice-confirmed (Yankees K300168675 maps to menu). One spot-check pending: the Cubs invoice (to confirm the per-team pattern holds identically across teams).
 

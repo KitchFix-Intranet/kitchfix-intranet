@@ -40,19 +40,21 @@ relationships:
 - **Team / entity**: St. Louis Cardinals MLB - Busch Stadium (St. Louis, MO)
 - **Level / tier**: MLB
 - **Search aliases**: "Cardinals MLB", "St. Louis", "Busch", "Busch Stadium", "Cards home", "Cardinals Missouri"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `STL-MO` |
-  | PG `accounts` | team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-  | PG `sc_fee_schedule` | $473,000 base row (2026-01-01, annual, monthly-6) - NOTE: base; 2026 escalated actual bills at $489,497 (see the Billing Record section) |
-  | PG `sc_service_prices` | per-meal rows all $0 (flat-fee; planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
-  | QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** *K300168851, K300168853*; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" - STL-MO-specific QB convention) *K300168469* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-  | Finance schedule | "STL - MO" - accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food *§W* |
-  | P&L file | St. Louis Cardinals - Busch / MLB rows |
-  | ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR - flat-fee accounts run a different review track) |
-  | Contract folder | `/Contracts/STL MO/` |
-  | Invoice recipients | St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact *§X, Kevin* |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `STL-MO` |
+| PG `accounts` | team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+| PG `sc_fee_schedule` | $473,000 base row (2026-01-01, annual, monthly-6) - NOTE: base; 2026 escalated actual bills at $489,497 (see the Billing Record section) |
+| PG `sc_service_prices` | per-meal rows all $0 (flat-fee; planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
+| QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** *K300168851, K300168853*; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" - STL-MO-specific QB convention) *K300168469* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
+| Finance schedule | "STL - MO" - accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food *§W* |
+| P&L file | St. Louis Cardinals - Busch / MLB rows |
+| ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR - flat-fee accounts run a different review track) |
+| Contract folder | `/Contracts/STL MO/` |
+| Invoice recipients | St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact *§X, Kevin* |
+
 - **Client stakeholders**: **Carl Kochan** - client (ckochan@cardinals.com); **Linda Brauer** - Finance/AP (lbrauer@cardinals.com) *src: Kevin, 2026-07-16, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($489,497), the $489K/$698K/$473K figure question RESOLVED, reimbursable structure invoice-confirmed, postseason mechanic banked. SF non-taxable (Cardinals' legal position). Non-blocking: PG migration to escalated figure.
 

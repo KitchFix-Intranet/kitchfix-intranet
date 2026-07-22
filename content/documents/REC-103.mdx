@@ -40,19 +40,21 @@ relationships:
 - **Team / entity**: Cincinnati Reds MLB - Great American Ball Park (Cincinnati, OH)
 - **Level / tier**: MLB
 - **Search aliases**: "Reds MLB", "Cincinnati", "GABP", "Great American Ball Park", "Reds Ohio", "Reds home", "REDS OH", "REDS CIN", "REDS CINN"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `CIN-OH` |
-  | PG `accounts` | team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-  | PG `sc_fee_schedule` | $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section |
-  | PG `sc_service_prices` | per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
-  | QuickBooks (invoice `Item`) | SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-  | Finance schedule | "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W* |
-  | P&L file | Cincinnati Reds - GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY) |
-  | ABR OneSheeter tab | "CINCINNATI REDS" (SHARED tab - blends/distinguishes OH from AZ) |
-  | Contract folder | `/Contracts/CINN/` |
-  | Invoice recipients | Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) *§X* |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `CIN-OH` |
+| PG `accounts` | team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
+| PG `sc_fee_schedule` | $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section |
+| PG `sc_service_prices` | per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
+| QuickBooks (invoice `Item`) | SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
+| Finance schedule | "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W* |
+| P&L file | Cincinnati Reds - GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY) |
+| ABR OneSheeter tab | "CINCINNATI REDS" (SHARED tab - blends/distinguishes OH from AZ) |
+| Contract folder | `/Contracts/CINN/` |
+| Invoice recipients | Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) *§X* |
+
 - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side, covers CIN-AZ + CIN-OH + CIN-KY); **Sarah Vedder** - AP/billing recipient (post-Ashley) *§X, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($376,686 accrued / $371,442.48 billed), SF + both reimbursable tracks invoice-confirmed, tax treatment confirmed (SF taxable 7.80%, reimbursables tax-zero), postseason mechanic banked. Non-blocking opens: the "seven installments" contract typo (cosmetic), postseason per-game invoice unsampled (Phase E).
 

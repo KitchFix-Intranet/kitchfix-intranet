@@ -40,17 +40,19 @@ relationships:
 - **Team / entity**: Texas Rangers - Surprise, AZ spring-training complex (Surprise Stadium)
 - **Level / tier**: PDC (spring training + non-MLB food service)
 - **Search aliases**: "Rangers Surprise", "TXR Surprise", "Surprise AZ", "Rangers spring training", "TXR-AZ", "Surprise Stadium"
-- **Crosswalk to other systems**:
-  | System | How this account appears |
-  |---|---|
-  | Intranet (PRIMARY) | `TXR-AZ` |
-  | PG `accounts` | team_key `TXR - AZ` · name "Texas Rangers" · level `PDC` · city Surprise · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
-  | PG `sc_service_prices` | per-meal rates (post-deposit): MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. **NO `sc_fee_schedule` row** - the deposit is not a PG fee cell (see the Billing Record section). |
-  | QuickBooks (invoice `Item`) | `TXR-AZ MLB - Breakfast/Lunch/Dinner`, `TXR-AZ MiLB - Breakfast/Lunch/Dinner`, `TXR-AZ - Pre-Game Hot Snack`, `TXR-AZ - Regular Snack`. All T-flagged (taxable). *K300168585 MLB, K300168870 MiLB* |
-  | Finance schedule (§W) | 2026 **Annual Deposit $301,623** (3× $100,541, Jan/Feb/Mar). This is the DEPOSIT, not a service-fee installment. |
-  | P&L file | Texas Rangers Surprise - meal revenue → 2400.1; deposit/SF-component → 2300 (~$301,621). |
-  | ABR OneSheeter tab | "TEXAS RANGERS" (Surprise section) |
-  | Contract folder | `/Contracts/TXR AZ/` - `Texas Rangers 2025-2027 Surprise Food Service Agreement.pdf` (operative) + 2022 (superseded) |
+**Crosswalk to other systems**
+
+| System | How this account appears |
+|---|---|
+| Intranet (PRIMARY) | `TXR-AZ` |
+| PG `accounts` | team_key `TXR - AZ` · name "Texas Rangers" · level `PDC` · city Surprise · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
+| PG `sc_service_prices` | per-meal rates (post-deposit): MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. **NO `sc_fee_schedule` row** - the deposit is not a PG fee cell (see the Billing Record section). |
+| QuickBooks (invoice `Item`) | `TXR-AZ MLB - Breakfast/Lunch/Dinner`, `TXR-AZ MiLB - Breakfast/Lunch/Dinner`, `TXR-AZ - Pre-Game Hot Snack`, `TXR-AZ - Regular Snack`. All T-flagged (taxable). *K300168585 MLB, K300168870 MiLB* |
+| Finance schedule (§W) | 2026 **Annual Deposit $301,623** (3× $100,541, Jan/Feb/Mar). This is the DEPOSIT, not a service-fee installment. |
+| P&L file | Texas Rangers Surprise - meal revenue → 2400.1; deposit/SF-component → 2300 (~$301,621). |
+| ABR OneSheeter tab | "TEXAS RANGERS" (Surprise section) |
+| Contract folder | `/Contracts/TXR AZ/` - `Texas Rangers 2025-2027 Surprise Food Service Agreement.pdf` (operative) + 2022 (superseded) |
+
 - **Client stakeholders**: **MLB → Brandon Boyd** (same Brandon Boyd who is TXR-TX-H's clubhouse manager - the MLB Rangers relationship runs through him at both the home clubhouse and Surprise); **MiLB → Stanton "Stosh" Hoover** (AP recipient, MiLB invoices). MLB and MiLB bill to SEPARATE client cost centers (see the Operations Record section). *Kevin 2026-07-16; K300168870*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract verbatim + 2 invoices (MLB + MiLB) confirming rates to the penny + AZ tax + all snack rates. The cleanest end-to-end trace of the corpus (contract → 2.5% escalation → signed sheet → PG → invoice all cohere). Non-blocking gaps: 2026 SOW is a paperwork-memorialization gap only (rates derive from the master + 2.5%; invoices confirm); the 2026 deposit invoice was not sampled (golden-test seed for the deposit line - Phase E).
 
