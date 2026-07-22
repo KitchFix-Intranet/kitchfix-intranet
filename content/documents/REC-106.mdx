@@ -33,9 +33,9 @@ relationships:
   - { to: REF-127, type: references, from_section: "section 1 Contract - verbatim source-of-record" }
 ---
 
-> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-127).
+> Canonical record. Current-state above the fold; history preserved below (the History section). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-127).
 >
-> ⚠️ **FLAT SF + PER-MEAL, IN PARALLEL, ACROSS TWO GROUPS/LOCATIONS.** TBJ-FL carries a flat annual Service Fee ($515,712 in 2026) AND per-meal billing, split across MLB, FCL (at the PDC), and FSL (Dunedin Single-A, produced at the PDC + delivered to TD Ballpark). Buffalo (TBJ-NY) is an affiliated sub-scope on the same Toronto master.
+> **FLAT SF + PER-MEAL, IN PARALLEL, ACROSS TWO GROUPS/LOCATIONS.** TBJ-FL carries a flat annual Service Fee ($515,712 in 2026) AND per-meal billing, split across MLB, FCL (at the PDC), and FSL (Dunedin Single-A, produced at the PDC + delivered to TD Ballpark). Buffalo (TBJ-NY) is an affiliated sub-scope on the same Toronto master.
 
 ## 0. Identity & Aliases
 - **Primary key (intranet)**: `TBJ-FL`
@@ -47,20 +47,20 @@ relationships:
   |---|---|
   | Intranet (PRIMARY) | `TBJ-FL` |
   | PG `accounts` | team_key `TBJ - FL` · name "Toronto Blue Jays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_schedule_overlay `true` |
-  | PG `sc_service_prices` | MLB Meal $23.12; FCL (MiLB at PDC) $11.55; FSL (Single-A at TD Ballpark) $16.51. Plus a broad service catalog (see §2b). **NO `sc_fee_schedule` row** - SF is out-of-band (see §2). |
-  | QuickBooks (invoice `Item`) | `TBJ MLB - Breakfast/Lunch/Dinner`, `TBJ MiLB - Breakfast/Lunch/Dinner` (FCL). SF Item expected `Service Fees (PFS)`. `[K300168548 MLB, K300168872 MiLB]` |
+  | PG `sc_service_prices` | MLB Meal $23.12; FCL (MiLB at PDC) $11.55; FSL (Single-A at TD Ballpark) $16.51. Plus a broad service catalog (see §2b). **NO `sc_fee_schedule` row** - SF is out-of-band (see the Billing Record section). |
+  | QuickBooks (invoice `Item`) | `TBJ MLB - Breakfast/Lunch/Dinner`, `TBJ MiLB - Breakfast/Lunch/Dinner` (FCL). SF Item expected `Service Fees (PFS)`. *K300168548 MLB, K300168872 MiLB* |
   | Finance schedule (§W) | 2026 **SF = $515,712** (3× $171,904, Jan/Feb/Mar) - the BILLABLE amount, negotiated. NOT in `sc_fee_schedule` - out-of-band. |
   | P&L file | Blue Jays - MLB + MiLB meal revenue → 2400.1; SF → 2300 ($515,712, full-year P1-P13 spread). |
   | ABR OneSheeter tab | "TORONTO BLUE JAYS" |
   | Contract folder | `/Contracts/TBJ FL/` - `Complete_with_DocuSign_Final_Dunedin_Caterin - Final.pdf` (shared Services Agreement + Schedule "A" SOW #1; same doc governs the Toronto relationship) |
-  | Affiliated | **TBJ-NY (Buffalo)** bills through this Toronto PDC master (Dec 2018 Rogers/Toronto MSA) - an affiliated sub-scope (see §3). |
-- **Client stakeholders**: **MLB → Katarina Dimino** (client contact for BOTH TBJ accounts - replaced the departed Michelle Rodgers). **MiLB → Charlie Wilson** (AP/billing recipient, Toronto PDC). MLB and MiLB bill to SEPARATE cost centers (see §3). `[Kevin 2026-07-16; K300168548, K300168872]`
-- **Capture completeness**: **FULLY-CAPTURED** (model + rates + fee confirmed). Contract verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoice not sampled (golden seed - Phase E).
+  | Affiliated | **TBJ-NY (Buffalo)** bills through this Toronto PDC master (Dec 2018 Rogers/Toronto MSA) - an affiliated sub-scope (see the Operations Record section). |
+- **Client stakeholders**: **MLB → Katarina Dimino** (client contact for BOTH TBJ accounts - replaced the departed Michelle Rodgers). **MiLB → Charlie Wilson** (AP/billing recipient, Toronto PDC). MLB and MiLB bill to SEPARATE cost centers (see the Operations Record section). *Kevin 2026-07-16; K300168548, K300168872*
+> NOTE: Capture completeness - **FULLY-CAPTURED** (model + rates + fee confirmed). Contract verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoice not sampled (golden seed - Phase E).
 
 ## 1. Contract
-- **Operative doc**: `Complete_with_DocuSign_Final_Dunedin_Caterin - Final.pdf` - Master effective Apr 5, 2023 / SOW #1 effective Feb 1, 2023, Initial Term through Jan 31, 2026, auto-renews up to 3 one-year terms (45-day non-renewal notice). Operative for 2026 via auto-renewal. Signatories: Ross Atkins (EVP/GM) + Matthew Shuber (SVP Legal) for Rogers Blue Jays; Josh Katt (CEO) for CJK. `[digest §A, §B.1]`
+- **Operative doc**: `Complete_with_DocuSign_Final_Dunedin_Caterin - Final.pdf` - Master effective Apr 5, 2023 / SOW #1 effective Feb 1, 2023, Initial Term through Jan 31, 2026, auto-renews up to 3 one-year terms (45-day non-renewal notice). Operative for 2026 via auto-renewal. Signatories: Ross Atkins (EVP/GM) + Matthew Shuber (SVP Legal) for Rogers Blue Jays; Josh Katt (CEO) for CJK. *digest §A, §B.1*
 - **Verbatim source-of-record**: the Contract Digest (REF-127).
-- **Governing law split**: Master → Ontario (Toronto courts); SOW → Florida (Pinellas County). The client is Canadian (Rogers Blue Jays) - Canadian withholding-tax framework applies (§7: NR301 forms, RogersTaxDepartment@rci.rogers.com). `[digest §B.5, §B.9]`
+- **Governing law split**: Master → Ontario (Toronto courts); SOW → Florida (Pinellas County). The client is Canadian (Rogers Blue Jays) - Canadian withholding-tax framework applies (the Provenance & Attribution section: NR301 forms, RogersTaxDepartment@rci.rogers.com). *digest §B.5, §B.9*
 
 <NonCanonical>
 
@@ -68,66 +68,67 @@ relationships:
 
 > Specimen figures - live values resolve from the Price Book (generated from PG). Reference context, not the canonical price source.
 
-> ⚠️ **FLAT SF + PER-MEAL RUN IN PARALLEL** (unlike TBR-FL where the SF buys down per-meal rates). TBJ-FL's flat SF does NOT discount the per-meal rates - the two are separate money streams.
+> **FLAT SF + PER-MEAL RUN IN PARALLEL** (unlike TBR-FL where the SF buys down per-meal rates). TBJ-FL's flat SF does NOT discount the per-meal rates - the two are separate money streams.
 
-### 2a. Money shape
-- **Flat annual Service Fee**: **$515,712 for 2026** - this is the BILLABLE amount per the finance "PFS Service Fees 2026" sheet, **negotiated last year.** The contract's $452,812 base is OUTDATED/superseded (finance is the authority for the operative figure). NOT a "+13.89% escalation to reconcile" - a settled negotiated number. `[§W; Kevin 2026-07-16]`
-- **SF cadence**: 3× $171,904, Jan/Feb/Mar. The period-by-period billed totals are in the "PFS Service Fees 2026" sheet. `[§W; Kevin 2026-07-16]`
-- **The SF does NOT buy down per-meal rates** - flat SF + per-meal in parallel (contract has a separate SF §12(a) + separate per-meal §12(b)). `[digest §B.3]`
-- **The SF is NOT in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog; SF is out-of-band (finance §W). `[fee-model probe, §Z]`
+### Money shape
+- **Flat annual Service Fee**: **$515,712 for 2026** - this is the BILLABLE amount per the finance "PFS Service Fees 2026" sheet, **negotiated last year.** The contract's $452,812 base is OUTDATED/superseded (finance is the authority for the operative figure). NOT a "+13.89% escalation to reconcile" - a settled negotiated number. *§W; Kevin 2026-07-16*
+- **SF cadence**: 3× $171,904, Jan/Feb/Mar. The period-by-period billed totals are in the "PFS Service Fees 2026" sheet. *§W; Kevin 2026-07-16*
+- **The SF does NOT buy down per-meal rates** - flat SF + per-meal in parallel (contract has a separate SF §12(a) + separate per-meal §12(b)). *digest §B.3*
+- **The SF is NOT in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog; SF is out-of-band (finance §W). *fee-model probe, §Z*
 - **Per-meal**: MLB + two distinct MiLB groups (FCL + FSL), billed per-meal + FL tax.
-- **Escalation** (contract §12(c), for the historical base): provider-initiated, **100% of CPI Food Away From Home** (broad index), Q4 basis, max 1 increase/yr, Club written approval, can decrease. ⚠️ Distinct from TBR-FL's 75%/SEFV01. (But the 2026 operative SF is the negotiated $515,712, not a formula output.) `[digest §B.4]`
+- **Escalation** (contract §12(c), for the historical base): provider-initiated, **100% of CPI Food Away From Home** (broad index), Q4 basis, max 1 increase/yr, Club written approval, can decrease. Distinct from TBR-FL's 75%/SEFV01. (But the 2026 operative SF is the negotiated $515,712, not a formula output.) *digest §B.4*
 
-### 2b. Rate table (effective-dated; the retrievable price list)
+### Rate table (effective-dated; the retrievable price list)
 | Service | Group | 2026 rate | Location | Taxable | Source |
 |---|---|---|---|---|---|
-| Breakfast / Lunch / Dinner | MLB | **$23.12** | PDC (Dunedin) | Yes (7%) | K300168548 ✓ |
-| Breakfast / Lunch / Dinner | **FCL** (minor-leaguers) | **$11.55** | **at the PDC** | Yes (7%) | K300168872 ✓ |
+| Breakfast / Lunch / Dinner | MLB | **$23.12** | PDC (Dunedin) | Yes (7%) | K300168548 |
+| Breakfast / Lunch / Dinner | **FCL** (minor-leaguers) | **$11.55** | **at the PDC** | Yes (7%) | K300168872 |
 | Breakfast / Pre-Game / Post-Game | **FSL** (Dunedin Blue Jays, Single-A) | **$16.51** | **produced at PDC → delivered to TD Ballpark** | Yes (7%) | signed sheet / §T |
 | Media Meals | ancillary | **$16.00** | - | Yes | signed (projected correct; $15 stale) |
 | Snack | MiLB | (per catalog) | - | Yes | PG |
 | Umpire / Post Game Meal | MiLB | (per catalog) | - | Yes | PG |
-- ⚠️ **FCL and FSL are TWO SEPARATE GROUPS at TWO LOCATIONS - NOT a blend.** FCL = the minor-leaguers who eat at the PDC ($11.55). FSL = the Dunedin Blue Jays (Single-A) who eat at **TD Ballpark** ($16.51) - their food is produced at the PDC and **delivered ~15 min to TD Ballpark**, where it's reheated/plated in the clubhouse. So TBJ-FL is PARTLY a commissary/delivery operation for the FSL stream. The historical "$11.55 blend" was a phantom (one sampled invoice showed only the FCL line). `[§T; Kevin 2026-07-16]`
-- **Broad service catalog** (PG): beyond the meal lines, TBJ-FL is a complex PDC with Umpire, Post-Game, Snack, Pre-Game, Media Meals, Scout Meals, Team Canada, Stadium Staff Meals, MLB G&G-Pantry, MiLB G&G-Pantry, MLB-Catering, Florida Ops-PDC, and "Fun $$$$ Allocated" (is_flat_fee, **is_non_revenue** - internal, never billed). `[§Z fee-model probe]`
-- **MFN clause** (§12(d), "Favored Pricing"): obligates KitchFix to pass any more-favorable pricing given to another customer (for equivalent/lower-volume purchases) back to TBJ-FL. Operational risk to note, not a billing rule. `[digest §B.9]`
+- **FCL and FSL are TWO SEPARATE GROUPS at TWO LOCATIONS - NOT a blend.** FCL = the minor-leaguers who eat at the PDC ($11.55). FSL = the Dunedin Blue Jays (Single-A) who eat at **TD Ballpark** ($16.51) - their food is produced at the PDC and **delivered ~15 min to TD Ballpark**, where it's reheated/plated in the clubhouse. So TBJ-FL is PARTLY a commissary/delivery operation for the FSL stream. The historical "$11.55 blend" was a phantom (one sampled invoice showed only the FCL line). *§T; Kevin 2026-07-16*
+- **Broad service catalog** (PG): beyond the meal lines, TBJ-FL is a complex PDC with Umpire, Post-Game, Snack, Pre-Game, Media Meals, Scout Meals, Team Canada, Stadium Staff Meals, MLB G&G-Pantry, MiLB G&G-Pantry, MLB-Catering, Florida Ops-PDC, and "Fun $$$$ Allocated" (is_flat_fee, **is_non_revenue** - internal, never billed). *§Z fee-model probe*
+- **MFN clause** (§12(d), "Favored Pricing"): obligates KitchFix to pass any more-favorable pricing given to another customer (for equivalent/lower-volume purchases) back to TBJ-FL. Operational risk to note, not a billing rule. *digest §B.9*
 
-### 2c. Passthrough / non-revenue lines
-- **Pantry Items and Supplies** (§5): specified condiments/generic drinks/dry goods/cleaning supplies the Club designates - KitchFix orders + seeks reimbursement **without markup**, invoiced weekly. Passthrough (at cost), never revenue. (MiLB Pantry seen on invoice K300168698 in the mixed set.) `[digest §B.7]`
-- **"Fun $$$$ Allocated"** = internal, is_non_revenue - never on a client invoice or export. `[§Z]`
+### Passthrough / non-revenue lines
+- **Pantry Items and Supplies** (the Open Items section): specified condiments/generic drinks/dry goods/cleaning supplies the Club designates - KitchFix orders + seeks reimbursement **without markup**, invoiced weekly. Passthrough (at cost), never revenue. (MiLB Pantry seen on invoice K300168698 in the mixed set.) *digest §B.7*
+- **"Fun $$$$ Allocated"** = internal, is_non_revenue - never on a client invoice or export. *§Z*
 
-### 2d. Ancillary revenue (OUT of SC meal-model scope)
+### Ancillary revenue (OUT of SC meal-model scope)
 - Media Meals, Scout Meals, Team Canada, Stadium Staff Meals, MLB-Catering are catalog services (in the SC); not out-of-scope the way CIN-AZ's events are. No separate out-of-scope stream identified.
 
-### 2e. Worked billing example (golden-test seed - to the penny)
-- **MLB (invoice K300168548, wk 2/23-3/1/2026)**: 7 daily lines `TBJ MLB` @ $23.12 (qty ~301/day). Subtotal $48,713.84 + tax $3,409.97 (7.0% exact) = **$52,123.81 PAID**. `[K300168548]`
-- **MiLB/FCL (invoice K300168872, wk 6/29-7/5/2026)**: 7 daily lines `TBJ MiLB` @ $11.55 (FCL rate). Subtotal $20,997.90 + tax $1,469.85 (7.0% exact) = **$22,467.75**. `[K300168872]`
+### Worked billing example (golden-test seed - to the penny)
+- **MLB (invoice K300168548, wk 2/23-3/1/2026)**: 7 daily lines `TBJ MLB` @ $23.12 (qty ~301/day). Subtotal $48,713.84 + tax $3,409.97 (7.0% exact) = **$52,123.81 PAID**. *K300168548*
+- **MiLB/FCL (invoice K300168872, wk 6/29-7/5/2026)**: 7 daily lines `TBJ MiLB` @ $11.55 (FCL rate). Subtotal $20,997.90 + tax $1,469.85 (7.0% exact) = **$22,467.75**. *K300168872*
 - **SF golden seed**: PENDING - an SF installment invoice ($171,904) was not sampled. Amount finance-confirmed (§W). Would confirm the SF line's FL tax treatment. Phase-E item.
 
-### 2f. Tax
-- **FL 7.0%** on all meal lines - invoice-confirmed exact (K300168548 + K300168872 both 7.0000%). Per R9, SC emits pre-tax; tax at invoice. `[K300168548, K300168872]`
-- SF tax treatment: to confirm at the SF invoice (Phase E). Canadian withholding framework applies at the Rogers entity level (§7).
+### Tax
+- **FL 7.0%** on all meal lines - invoice-confirmed exact (K300168548 + K300168872 both 7.0000%). Per R9, SC emits pre-tax; tax at invoice. *K300168548, K300168872*
+- SF tax treatment: to confirm at the SF invoice (Phase E). Canadian withholding framework applies at the Rogers entity level (the Provenance & Attribution section).
 
 </NonCanonical>
 
 ## 3. Operations Record
-- **Service model**: on-site at the Dunedin PDC (MLB + FCL) + delivery to TD Ballpark for FSL (Single-A). The FSL stream is produced at the PDC and delivered ~15 min to TD Ballpark, reheated/plated in the clubhouse. `[Kevin 2026-07-16]`
-- **Billing routing - MLB vs MiLB = SEPARATE cost centers** (one operation, two invoice streams by design - NOT a data inconsistency): **MLB → Katarina Dimino** (client contact, both TBJ accounts). **MiLB → Charlie Wilson** (AP recipient, Toronto PDC). Emit MLB and MiLB separately, routed to the correct payer. `[Kevin 2026-07-16]`
-- **Buffalo (TBJ-NY) is an affiliated sub-scope**: TBJ-NY bills through this same Toronto PDC master (Dec 2018 Rogers/Toronto MSA) - same Bill-To address (3031 Garrison Road, Dunedin) as TBJ-FL. Buffalo is a sub-scope of the Toronto relationship, not a standalone account. TBJ-NY's file points up to Toronto; this file notes Buffalo as affiliated. Katarina Dimino is the contact for both. `[§V]`
-- **Count/order protocol**: Preliminary Food & Beverage Order (14 days advance) + Final F&B Order (3 days advance). Weekly invoicing, supporting docs required, NO client sign-off gate. `[digest §B.8, §B.9]`
-- **No exclusivity** granted (§16 - the Club may retain other providers). `[digest §B.9]`
+- **Service model**: on-site at the Dunedin PDC (MLB + FCL) + delivery to TD Ballpark for FSL (Single-A). The FSL stream is produced at the PDC and delivered ~15 min to TD Ballpark, reheated/plated in the clubhouse. *Kevin 2026-07-16*
+- **Billing routing - MLB vs MiLB = SEPARATE cost centers** (one operation, two invoice streams by design - NOT a data inconsistency): **MLB → Katarina Dimino** (client contact, both TBJ accounts). **MiLB → Charlie Wilson** (AP recipient, Toronto PDC). Emit MLB and MiLB separately, routed to the correct payer. *Kevin 2026-07-16*
+- **Buffalo (TBJ-NY) is an affiliated sub-scope**: TBJ-NY bills through this same Toronto PDC master (Dec 2018 Rogers/Toronto MSA) - same Bill-To address (3031 Garrison Road, Dunedin) as TBJ-FL. Buffalo is a sub-scope of the Toronto relationship, not a standalone account. TBJ-NY's file points up to Toronto; this file notes Buffalo as affiliated. Katarina Dimino is the contact for both. *§V*
+- **Count/order protocol**: Preliminary Food & Beverage Order (14 days advance) + Final F&B Order (3 days advance). Weekly invoicing, supporting docs required, NO client sign-off gate. *digest §B.8, §B.9*
+- **No exclusivity** granted (§16 - the Club may retain other providers). *digest §B.9*
 - **Contacts point-in-time**: Michelle Rodgers (departed) → Katarina Dimino (current, both TBJ accounts); Charlie Wilson = AP. Review + refresh at year-start.
 
 ## 4. Rulings & Decisions
-| ID | Ruling (current state) | Status | as-of | LEDGER ref |
-|---|---|---|---|---|
-| SF amount | $515,712 for 2026 = the BILLABLE negotiated figure (finance §W). Contract $452,812 = outdated/superseded. NOT an escalation to reconcile. | CLOSED | 2026-07-16 | §W, Kevin |
-| SF cadence | 3× $171,904 Jan/Feb/Mar; period totals in the PFS Service Fees 2026 sheet. | CLOSED | 2026-07-16 | §W |
-| SF vs per-meal | Flat SF + per-meal in PARALLEL - the SF does NOT buy down per-meal rates. Out-of-band (not PG). | CLOSED | 2026-07-16 | digest |
-| FCL vs FSL | Two distinct groups/locations: FCL $11.55 (at PDC), FSL $16.51 (Single-A, produced at PDC → delivered to TD Ballpark). NOT a blend. | CLOSED | 2026-07-16 | §T, Kevin |
-| Media Meals | $16 (not stale $15). | CLOSED | 2026-07-16 | §U |
-| Buffalo cross-ref | TBJ-NY (Buffalo) = affiliated sub-scope on the Toronto master. Katarina Dimino contacts both. | CLOSED | 2026-07-16 | §V |
-| Escalation | 100% CPI Food-Away (broad), Q4, provider-initiated + Club approval. Differs from TBR-FL (75%/SEFV01). (2026 SF is negotiated, not formula.) | CLOSED | 2026-07-16 | digest |
+*All rates as-of 2026-07-16.*
 
+| ID | Ruling (current state) | Status | LEDGER ref |
+|---|---|---|---|
+| SF amount | $515,712 for 2026 = the BILLABLE negotiated figure (finance §W). Contract $452,812 = outdated/superseded. NOT an escalation to reconcile. | CLOSED | §W, Kevin |
+| SF cadence | 3× $171,904 Jan/Feb/Mar; period totals in the PFS Service Fees 2026 sheet. | CLOSED | §W |
+| SF vs per-meal | Flat SF + per-meal in PARALLEL - the SF does NOT buy down per-meal rates. Out-of-band (not PG). | CLOSED | digest |
+| FCL vs FSL | Two distinct groups/locations: FCL $11.55 (at PDC), FSL $16.51 (Single-A, produced at PDC → delivered to TD Ballpark). NOT a blend. | CLOSED | §T, Kevin |
+| Media Meals | $16 (not stale $15). | CLOSED | §U |
+| Buffalo cross-ref | TBJ-NY (Buffalo) = affiliated sub-scope on the Toronto master. Katarina Dimino contacts both. | CLOSED | §V |
+| Escalation | 100% CPI Food-Away (broad), Q4, provider-initiated + Club approval. Differs from TBR-FL (75%/SEFV01). (2026 SF is negotiated, not formula.) | CLOSED | digest |
 ## 5. Open Items
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
@@ -141,11 +142,11 @@ relationships:
 <NonCanonical>
 
 > Superseded facts, preserved. Specimen figures; live values via Price Book.
-- **Contract SF base $452,812** - the 2023 contract figure; SUPERSEDED by the negotiated 2026 billable $515,712 (finance §W). The contract is outdated on the fee. `[§W; Kevin 2026-07-16]`
-- **Contract 2023 base per-meal rates**: MLB $20.29, FSL $14.50, FCL $10.14, Snack $1.50, Shake $5.00. 2026 operative: MLB $23.12, FSL $16.51, FCL $11.55. `[digest §B.2]`
-- **"$11.55 blend" / "two tiers of one population" (DISSOLVED)**: FCL and FSL are two separate groups at two locations, not a blend. The illusion came from one sampled invoice showing only the FCL line + the contract's tier language. `[§T]`
-- **Prior contact: Michelle Rodgers** - departed; appears on pre-handover invoices (e.g. K300168548 Mar 2026, K300168698 May 2026). Katarina Dimino is the current contact for both TBJ accounts. `[§X, §V]`
-- **Media Meals $15** - stale actuals value; corrected to $16. `[§U]`
+- **Contract SF base $452,812** - the 2023 contract figure; SUPERSEDED by the negotiated 2026 billable $515,712 (finance §W). The contract is outdated on the fee. *§W; Kevin 2026-07-16*
+- **Contract 2023 base per-meal rates**: MLB $20.29, FSL $14.50, FCL $10.14, Snack $1.50, Shake $5.00. 2026 operative: MLB $23.12, FSL $16.51, FCL $11.55. *digest §B.2*
+- **"$11.55 blend" / "two tiers of one population" (DISSOLVED)**: FCL and FSL are two separate groups at two locations, not a blend. The illusion came from one sampled invoice showing only the FCL line + the contract's tier language. *§T*
+- **Prior contact: Michelle Rodgers** - departed; appears on pre-handover invoices (e.g. K300168548 Mar 2026, K300168698 May 2026). Katarina Dimino is the current contact for both TBJ accounts. *§X, §V*
+- **Media Meals $15** - stale actuals value; corrected to $16. *§U*
 
 </NonCanonical>
 

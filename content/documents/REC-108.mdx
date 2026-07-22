@@ -33,9 +33,9 @@ relationships:
   - { to: REF-129, type: references, from_section: "section 1 Contract - verbatim source-of-record" }
 ---
 
-> Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-129).
+> Canonical record. Current-state above the fold; history preserved below (the History section). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-129).
 >
-> ⚠️ **TWO SERVICE LEVELS + A SECOND CLIENT.** TBR-FL spans MLB (per-meal, NO SF) and MiLB (per-meal, 25% buy-down via a recurring SF), billed to SEPARATE client cost centers. It is the only account that runs a **commissary model serving a PDC**, which is why it carries **BGC (Boys & Girls Club) as an in-scope second client** on the same operation.
+> **TWO SERVICE LEVELS + A SECOND CLIENT.** TBR-FL spans MLB (per-meal, NO SF) and MiLB (per-meal, 25% buy-down via a recurring SF), billed to SEPARATE client cost centers. It is the only account that runs a **commissary model serving a PDC**, which is why it carries **BGC (Boys & Girls Club) as an in-scope second client** on the same operation.
 
 ## 0. Identity & Aliases
 - **Primary key (intranet)**: `TBR-FL`
@@ -47,20 +47,20 @@ relationships:
   |---|---|
   | Intranet (PRIMARY) | `TBR-FL` |
   | PG `accounts` | team_key `TBR - FL` · name "Tampa Bay Rays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false` |
-  | PG `sc_service_prices` | MLB (no discount): Breakfast $35.63, Lunch/Dinner $39.48. MiLB (post-25%-SF): Breakfast $17.83, Lunch $21.68, Dinner $20.96. Add-ons: Road Sandwiches $15, Extra Protein. **NO `sc_fee_schedule` row** - MiLB SF is out-of-band (see §2). |
-  | QuickBooks (invoice `Item`) | `TBR MLB - Breakfast`, `TBR MLB - Lunch/Dinner`, `TBR MiLB - Breakfast`, `TBR MiLB - Lunch/Dinner`, `TBR MiLB - Road Sandwiches`, `Labor Fee`, `Extra Protein (TBR) - Chicken/Pork`. Meal lines T-flagged. `[K300168545 MLB, K300168871 MiLB]` |
+  | PG `sc_service_prices` | MLB (no discount): Breakfast $35.63, Lunch/Dinner $39.48. MiLB (post-25%-SF): Breakfast $17.83, Lunch $21.68, Dinner $20.96. Add-ons: Road Sandwiches $15, Extra Protein. **NO `sc_fee_schedule` row** - MiLB SF is out-of-band (see the Billing Record section). |
+  | QuickBooks (invoice `Item`) | `TBR MLB - Breakfast`, `TBR MLB - Lunch/Dinner`, `TBR MiLB - Breakfast`, `TBR MiLB - Lunch/Dinner`, `TBR MiLB - Road Sandwiches`, `Labor Fee`, `Extra Protein (TBR) - Chicken/Pork`. Meal lines T-flagged. *K300168545 MLB, K300168871 MiLB* |
   | Finance schedule (§W) | 2026 MiLB **SF = $457,768** = $200,000 (installment 1, static) + $257,768 (installment 2, variable). NOT in `sc_fee_schedule` - out-of-band. |
   | P&L file | Rays - MLB + MiLB meal revenue → 2400.1; MiLB SF → 2300 ($457,768); **BGC → 2200 ($79,950)**. |
   | ABR OneSheeter tab | "TAMPA BAY RAYS" |
   | Contract folder | `/Contracts/TBR FL/` - 4 executed 2024 docs (MLB Agreement + MLB SOW + MiLB Agreement + MiLB SOW). **BGC contract: EXTRACTED → the Contract Digest (REF-129) (2025-26 school year; term ends May 21, 2026).** |
-- **Client stakeholders**: **MLB → Erik Hart** (with the MLB club; at Charlotte Sports Park during spring training, then Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). MLB and MiLB bill to SEPARATE cost centers (see §3). BGC = separate client billed directly. `[Kevin 2026-07-16; K300168545, K300168871]`
-- **Capture completeness**: **FULLY-CAPTURED** (models + rates + fees confirmed). Contracts verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoices not sampled (golden seeds - Phase E); the **BGC contract-digest is complete** (the Contract Digest (REF-129); $6.50 confirmed, tax-exempt, school-year term ending May 21, 2026) - no BGC 2026-27 renewal on file yet (fall-2026 gap).
+- **Client stakeholders**: **MLB → Erik Hart** (with the MLB club; at Charlotte Sports Park during spring training, then Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). MLB and MiLB bill to SEPARATE cost centers (see the Operations Record section). BGC = separate client billed directly. *Kevin 2026-07-16; K300168545, K300168871*
+> NOTE: Capture completeness - **FULLY-CAPTURED** (models + rates + fees confirmed). Contracts verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoices not sampled (golden seeds - Phase E); the **BGC contract-digest is complete** (the Contract Digest (REF-129); $6.50 confirmed, tax-exempt, school-year term ending May 21, 2026) - no BGC 2026-27 renewal on file yet (fall-2026 gap).
 
 ## 1. Contract
-- **Operative docs (4)**: MLB Master + MLB SOW + MiLB Master + MiLB SOW, all Nov 16, 2023, effective Jan 1, 2024. Retention: **MLB → Oct 1, 2026; MiLB → Dec 31, 2026** (extension options through 2028). Signatories: John P. Higgins (Rays) + Josh Katt (CJK). `[digest §A, §B.1]`
+- **Operative docs (4)**: MLB Master + MLB SOW + MiLB Master + MiLB SOW, all Nov 16, 2023, effective Jan 1, 2024. Retention: **MLB → Oct 1, 2026; MiLB → Dec 31, 2026** (extension options through 2028). Signatories: John P. Higgins (Rays) + Josh Katt (CJK). *digest §A, §B.1*
 - **Verbatim source-of-record**: the Contract Digest (REF-129).
-- **BGC contract**: the Contract Digest (REF-129) - `Boys and Girls Club Contract 25_26`, a single 5-page catering contract with **Boys & Girls Clubs of Charlotte County** (Port Charlotte, FL), contractually independent of the Rays. Term **Aug 19, 2025 → May 21, 2026** (10-month school year, Tue-Thu, 1:30pm delivery), flat **$6.50/Estimated Meal**, tax-exempt, no auto-renewal. `[CONTRACT_DIGEST_BGC, 2026-07-16]`
-- **Paperwork gap**: 2025 + 2026 MiLB SOWs not in the folder. The SF recurs (static $200K + variable) but each year is SOW-gated; the 2026 amount is finance-confirmed (§W) rather than in a filed SOW. Low-priority chase, owner Kevin. `[digest §D]`
+- **BGC contract**: the Contract Digest (REF-129) - `Boys and Girls Club Contract 25_26`, a single 5-page catering contract with **Boys & Girls Clubs of Charlotte County** (Port Charlotte, FL), contractually independent of the Rays. Term **Aug 19, 2025 → May 21, 2026** (10-month school year, Tue-Thu, 1:30pm delivery), flat **$6.50/Estimated Meal**, tax-exempt, no auto-renewal. *CONTRACT_DIGEST_BGC, 2026-07-16*
+- **Paperwork gap**: 2025 + 2026 MiLB SOWs not in the folder. The SF recurs (static $200K + variable) but each year is SOW-gated; the 2026 amount is finance-confirmed (§W) rather than in a filed SOW. Low-priority chase, owner Kevin. *digest §D*
 
 <NonCanonical>
 
@@ -68,82 +68,83 @@ relationships:
 
 > Specimen figures - live values resolve from the Price Book (generated from PG). Reference context, not the canonical price source.
 
-> ⚠️ **TWO LEVELS, DIFFERENT MONEY SHAPES**:
+> **TWO LEVELS, DIFFERENT MONEY SHAPES**:
 > - **MLB** = pure per-meal, **NO service fee**. Projected = actual.
 > - **MiLB** = per-meal with a **25% buy-down**, funded by a **recurring annual SF** ($457,768 in 2026). The SF reduces MiLB per-meal rates by 25%.
 
-### 2a. Money shape
-- **MLB**: per-meal, no SF. Billed at the per-meal rate + FL tax. `[digest §B.3 - MLB SOW has NO Service Fee]`
-- **MiLB**: per-meal with the SF-funded 25% discount. Contract: "The Rates will be reduced by 25% for all billings for the Minor League Baseball Teams within the Term." `[digest §B.3]`
-- **MiLB SF = ANNUALLY RECURRING, structured $200K static + variable second installment.** 2026 = **$457,768** = **$200,000** (installment 1, static - always $200K) + **$257,768** (installment 2, variable). Cadence: installment 1 on the signing date + installment 2 by Feb 1, every year. The contract text quotes the ORIGINAL year's amounts ($200K + $120,569.84) but the STRUCTURE (static $200K + variable) is fixed; the variable amount is set per year. `[digest §B.3, §W; Kevin 2026-07-16]`
-- **The SF is NOT in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog; the SF is out-of-band (finance §W). `[fee-model probe, §Z]`
-- **Escalation**: **75% of CPI** (CPI-U Food Away from Home - Full Service Meals & Snacks, **sub-index SEFV01**, **November** reset). Applies to per-meal rates only, NOT the SF. ⚠️ Distinct from TBJ-FL's 100% CPI - a real per-account divergence. `[digest §B.4]`
-- **Billed totals by period** (both levels + SF) are in the finance "PFS Service Fees 2026" sheet. `[§W; Kevin 2026-07-16]`
+### Money shape
+- **MLB**: per-meal, no SF. Billed at the per-meal rate + FL tax. *digest §B.3 - MLB SOW has NO Service Fee*
+- **MiLB**: per-meal with the SF-funded 25% discount. Contract: "The Rates will be reduced by 25% for all billings for the Minor League Baseball Teams within the Term." *digest §B.3*
+- **MiLB SF = ANNUALLY RECURRING, structured $200K static + variable second installment.** 2026 = **$457,768** = **$200,000** (installment 1, static - always $200K) + **$257,768** (installment 2, variable). Cadence: installment 1 on the signing date + installment 2 by Feb 1, every year. The contract text quotes the ORIGINAL year's amounts ($200K + $120,569.84) but the STRUCTURE (static $200K + variable) is fixed; the variable amount is set per year. *digest §B.3, §W; Kevin 2026-07-16*
+- **The SF is NOT in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog; the SF is out-of-band (finance §W). *fee-model probe, §Z*
+- **Escalation**: **75% of CPI** (CPI-U Food Away from Home - Full Service Meals & Snacks, **sub-index SEFV01**, **November** reset). Applies to per-meal rates only, NOT the SF. Distinct from TBJ-FL's 100% CPI - a real per-account divergence. *digest §B.4*
+- **Billed totals by period** (both levels + SF) are in the finance "PFS Service Fees 2026" sheet. *§W; Kevin 2026-07-16*
 
-### 2b. Rate table (effective-dated; the retrievable price list)
+### Rate table (effective-dated; the retrievable price list)
 | Service | Level | 2026 rate | Notes | Taxable | Source |
 |---|---|---|---|---|---|
-| Breakfast | MLB | **$35.63** | no discount | Yes (7%) | K300168545 ✓ |
-| Lunch/Dinner | MLB | **$39.48** | no discount | Yes (7%) | K300168545 ✓ |
-| Breakfast | MiLB | **$17.83** | post-25%-SF (also "Breakfast - MiLB ST" = same $17.83) | Yes (7%) | K300168871 ✓ / signed $17.8275 |
-| Lunch | MiLB | **$21.68** | post-25%-SF | Yes (7%) | K300168871 ✓ / signed $21.675 |
+| Breakfast | MLB | **$35.63** | no discount | Yes (7%) | K300168545 |
+| Lunch/Dinner | MLB | **$39.48** | no discount | Yes (7%) | K300168545 |
+| Breakfast | MiLB | **$17.83** | post-25%-SF (also "Breakfast - MiLB ST" = same $17.83) | Yes (7%) | K300168871 / signed $17.8275 |
+| Lunch | MiLB | **$21.68** | post-25%-SF | Yes (7%) | K300168871 / signed $21.675 |
 | Dinner | MiLB | **$20.96** | post-25%-SF | Yes (7%) | signed $20.96183 (Kevin confirmed) |
-| Road Sandwiches | MiLB | **$15.00**/each | flat; each replaces a projected lunch | Yes* | K300168871 ✓ |
-| Labor Fee | - | **$280.00** flat | ancillary labor line | Yes* | K300168871 ✓ |
-| Extra Protein (TBR) - Chicken/Pork | MiLB | **$111.84** flat | à-la-carte add-on | Yes* | K300168871 ✓ |
+| Road Sandwiches | MiLB | **$15.00**/each | flat; each replaces a projected lunch | Yes* | K300168871 |
+| Labor Fee | - | **$280.00** flat | ancillary labor line | Yes* | K300168871 |
+| Extra Protein (TBR) - Chicken/Pork | MiLB | **$111.84** flat | à-la-carte add-on | Yes* | K300168871 |
 | Extra Protein - Beef/Seafood | MiLB | (is_flat_fee add-on) | à-la-carte | Yes | PG / QBR ~$156 |
-| **BGC meal** | BGC | **$6.50**/Estimated Meal | flat (any meal type); after-school svc - see §2d | **TAX-EXEMPT** | CONTRACT_DIGEST_BGC ✓ |
-- ⚠️ **MiLB three rates are DISTINCT** (Breakfast $17.83 / Lunch $21.68 / Dinner $20.96) - the historical "$20.96 vs $21.68" confusion was a digest artifact (MONEY_MODEL flattened Lunch+Dinner). The signed sheet + PG store all three; invoices bill the correct per-service rate. `[§O, PRICE_AUDIT; Kevin 2026-07-16]`
-- *Add-on taxability*: the MiLB summer invoice (K300168871) showed a blended ~6.93% (vs 7% on buffet lines), suggesting the add-on lines (Road Sandwiches / Labor Fee / Extra Protein) carry different tax flags than base buffet. → **MIXED taxability across TBR-FL lines; the bill export must handle per-line tax, not a single account rate.** Flag for Sebastian. `[K300168871]`
+| **BGC meal** | BGC | **$6.50**/Estimated Meal | flat (any meal type); after-school svc - see §2d | **TAX-EXEMPT** | CONTRACT_DIGEST_BGC |
+- **MiLB three rates are DISTINCT** (Breakfast $17.83 / Lunch $21.68 / Dinner $20.96) - the historical "$20.96 vs $21.68" confusion was a digest artifact (MONEY_MODEL flattened Lunch+Dinner). The signed sheet + PG store all three; invoices bill the correct per-service rate. *§O, PRICE_AUDIT; Kevin 2026-07-16*
+- *Add-on taxability*: the MiLB summer invoice (K300168871) showed a blended ~6.93% (vs 7% on buffet lines), suggesting the add-on lines (Road Sandwiches / Labor Fee / Extra Protein) carry different tax flags than base buffet. → **MIXED taxability across TBR-FL lines; the bill export must handle per-line tax, not a single account rate.** Flag for Sebastian. *K300168871*
 
-### 2c. Passthrough / non-revenue lines
-- **NONE.** No passthrough budget in either SOW - the Provider bears all ingredient/personnel/equipment costs (both SOWs §4(a)). `[digest §B.7]`
+### Passthrough / non-revenue lines
+- **NONE.** No passthrough budget in either SOW - the Provider bears all ingredient/personnel/equipment costs (both SOWs §4(a)). *digest §B.7*
 
-### 2d. Ancillary revenue - BGC is IN-SCOPE (the second-client stream)
-> ⚠️ **BGC is NOT out-of-scope ancillary - it is IN-SCOPE projected TBR-FL revenue.** (Contrast CIN-AZ's Owners Week / Fantasy Camp, which ARE out of scope.)
-- **Why**: TBR-FL runs a **commissary model** - KitchFix rents a commissary and delivers to the PDC (does NOT cook in the client's facility). The Exec Chef has a separate relationship with the Boys & Girls Club, and to add revenue to the commissary operation, KitchFix **produces food for BGC and bills them like a second client under TBR-FL.** `[§T]`
-- **BGC counts ARE tracked in the SC; BGC sales ARE projected as TBR-FL revenue.** P&L 2200 (~$79,950, the 2025-26 SCHOOL-YEAR total) includes BGC because it belongs there. The bill export must account for BGC as tracked/projected SC revenue - with the school-year caveat below (spring-only for calendar 2026 absent a fall renewal). `[§T]`
-- **BGC rate = $6.50 per Estimated Meal** - FLAT, one rate for any meal type (the contract does NOT split by breakfast/lunch/dinner). Contract-confirmed verbatim (§V, §VI). `[CONTRACT_DIGEST_BGC]`
-- **⚠️ Meal type = after-school supper, NOT lunch** (corrects the earlier "$6.50/lunch" label): **1:30pm delivery** (post-lunch), the contract's sample menu is a **dinner menu**, and service follows the USDA **CCFP** meal pattern - all consistent with an after-school supper delivery. The rate is the same regardless, so this is a labeling correction, not a price change. `[CONTRACT_DIGEST_BGC §D]`
-- **BGC is TAX-EXEMPT** - the Club provided tax-exempt documentation; no sales tax on BGC lines (§V, §X.b). `[CONTRACT_DIGEST_BGC]`
-- **⚠️ School-year term (Aug 19, 2025 → May 21, 2026), straddles two calendar years, NO auto-renewal.** For calendar 2026, only **Jan 1–May 21** is under contract; **fall 2026 (Aug onward) requires a NEW BGC contract not yet on file.** → BGC's 2026 revenue projection is a PARTIAL-year (spring-only) line unless/until a 2026-27 renewal is signed. `[CONTRACT_DIGEST_BGC §B.8, §D]`
-- **Billing = prepaid 4-week periods**: Club sends a Period Estimate 7+ days ahead → KitchFix invoices $6.50 × estimate at period start → **Club pays BEFORE the period begins** → unserved meals credit forward. Check-only payment; 5%/month late fee; 125/day is a planning estimate, not a billed floor. `[CONTRACT_DIGEST_BGC §VI-VIII]`
-- **Contractually independent of the Rays** - BGC is a standalone client (Boys & Girls Clubs of Charlotte County); the commissary overlap is operational, not contractual. `[CONTRACT_DIGEST_BGC §D]`
-- **Structural fact**: TBR-FL = the only account that runs a commissary serving a PDC. (CIN-KY is also a commissary operation, but serves a MiLB team, not a PDC - so commissary-serving-a-PDC is what's unique to TBR-FL, not "commissary" in general.) This is WHY TBR-FL can carry a second-client revenue stream the on-site accounts can't. `[Kevin 2026-07-16]`
+### Ancillary revenue - BGC is IN-SCOPE (the second-client stream)
+> **BGC is NOT out-of-scope ancillary - it is IN-SCOPE projected TBR-FL revenue.** (Contrast CIN-AZ's Owners Week / Fantasy Camp, which ARE out of scope.)
+- **Why**: TBR-FL runs a **commissary model** - KitchFix rents a commissary and delivers to the PDC (does NOT cook in the client's facility). The Exec Chef has a separate relationship with the Boys & Girls Club, and to add revenue to the commissary operation, KitchFix **produces food for BGC and bills them like a second client under TBR-FL.** *§T*
+- **BGC counts ARE tracked in the SC; BGC sales ARE projected as TBR-FL revenue.** P&L 2200 (~$79,950, the 2025-26 SCHOOL-YEAR total) includes BGC because it belongs there. The bill export must account for BGC as tracked/projected SC revenue - with the school-year caveat below (spring-only for calendar 2026 absent a fall renewal). *§T*
+- **BGC rate = $6.50 per Estimated Meal** - FLAT, one rate for any meal type (the contract does NOT split by breakfast/lunch/dinner). Contract-confirmed verbatim (§V, §VI). *CONTRACT_DIGEST_BGC*
+- **Meal type = after-school supper, NOT lunch** (corrects the earlier "$6.50/lunch" label): **1:30pm delivery** (post-lunch), the contract's sample menu is a **dinner menu**, and service follows the USDA **CCFP** meal pattern - all consistent with an after-school supper delivery. The rate is the same regardless, so this is a labeling correction, not a price change. *CONTRACT_DIGEST_BGC §D*
+- **BGC is TAX-EXEMPT** - the Club provided tax-exempt documentation; no sales tax on BGC lines (§V, §X.b). *CONTRACT_DIGEST_BGC*
+- **School-year term (Aug 19, 2025 → May 21, 2026), straddles two calendar years, NO auto-renewal.** For calendar 2026, only **Jan 1–May 21** is under contract; **fall 2026 (Aug onward) requires a NEW BGC contract not yet on file.** → BGC's 2026 revenue projection is a PARTIAL-year (spring-only) line unless/until a 2026-27 renewal is signed. *CONTRACT_DIGEST_BGC §B.8, §D*
+- **Billing = prepaid 4-week periods**: Club sends a Period Estimate 7+ days ahead → KitchFix invoices $6.50 × estimate at period start → **Club pays BEFORE the period begins** → unserved meals credit forward. Check-only payment; 5%/month late fee; 125/day is a planning estimate, not a billed floor. *CONTRACT_DIGEST_BGC §VI-VIII*
+- **Contractually independent of the Rays** - BGC is a standalone client (Boys & Girls Clubs of Charlotte County); the commissary overlap is operational, not contractual. *CONTRACT_DIGEST_BGC §D*
+- **Structural fact**: TBR-FL = the only account that runs a commissary serving a PDC. (CIN-KY is also a commissary operation, but serves a MiLB team, not a PDC - so commissary-serving-a-PDC is what's unique to TBR-FL, not "commissary" in general.) This is WHY TBR-FL can carry a second-client revenue stream the on-site accounts can't. *Kevin 2026-07-16*
 
-### 2e. Worked billing example (golden-test seed - to the penny)
-- **MLB (invoice K300168545, wk 2/23-3/1/2026)**: 14 lines (7 days × Breakfast $35.63 + Lunch/Dinner $39.48). Subtotal $75,110.00 + tax $5,257.70 (7.0% exact) = **$80,367.70 PAID**. `[K300168545]`
-- **MiLB (invoice K300168871, wk 6/29-7/5/2026)**: Breakfast $17.83 + Lunch/Dinner $21.68 + Road Sandwiches $15 (28+28 units) + Labor Fee $280 + Extra Protein C/P $111.84. Subtotal $29,388.96 + tax $2,037.63 (~6.93% blended) = **$31,426.59**. `[K300168871]`
+### Worked billing example (golden-test seed - to the penny)
+- **MLB (invoice K300168545, wk 2/23-3/1/2026)**: 14 lines (7 days × Breakfast $35.63 + Lunch/Dinner $39.48). Subtotal $75,110.00 + tax $5,257.70 (7.0% exact) = **$80,367.70 PAID**. *K300168545*
+- **MiLB (invoice K300168871, wk 6/29-7/5/2026)**: Breakfast $17.83 + Lunch/Dinner $21.68 + Road Sandwiches $15 (28+28 units) + Labor Fee $280 + Extra Protein C/P $111.84. Subtotal $29,388.96 + tax $2,037.63 (~6.93% blended) = **$31,426.59**. *K300168871*
 - **SF golden seed**: PENDING - SF installment invoices (K300168375 $200K + K300168376 $257,768) not sampled. Amounts finance-confirmed (§W). Phase-E item.
 - **BGC golden seed**: PENDING - no BGC invoice sampled. Rate $6.50 contract-confirmed; tax-exempt, prepaid-period billing.
 
-### 2f. Tax
-- **FL 7.0%** on MLB + base MiLB buffet lines - invoice-confirmed exact (K300168545 = 7.0000%). Per R9, SC emits pre-tax; tax at invoice. `[K300168545]`
-- ⚠️ **MIXED taxability** on MiLB add-on lines (K300168871 blended ~6.93%) - Road Sandwiches / Labor Fee / Extra Protein may carry different tax flags. The export handles per-line tax. Flag for Sebastian.
-- **BGC lines = TAX-EXEMPT** - the Club provided tax-exempt documentation; no sales tax on the BGC stream. `[CONTRACT_DIGEST_BGC §V, §X.b]`
+### Tax
+- **FL 7.0%** on MLB + base MiLB buffet lines - invoice-confirmed exact (K300168545 = 7.0000%). Per R9, SC emits pre-tax; tax at invoice. *K300168545*
+- **MIXED taxability** on MiLB add-on lines (K300168871 blended ~6.93%) - Road Sandwiches / Labor Fee / Extra Protein may carry different tax flags. The export handles per-line tax. Flag for Sebastian.
+- **BGC lines = TAX-EXEMPT** - the Club provided tax-exempt documentation; no sales tax on the BGC stream. *CONTRACT_DIGEST_BGC §V, §X.b*
 
 </NonCanonical>
 
 ## 3. Operations Record
-- **Commissary/delivery model**: KitchFix rents a commissary and delivers to the Charlotte County PDC (no on-site cooking in the client's facility). During MLB spring training, MLB players eat at the PDC alongside the minor-leaguers (same roof), but MLB and MiLB bill to different cost centers. `[§T]`
-- **Billing routing - MLB vs MiLB = SEPARATE cost centers** (one operation, two invoice streams by design - NOT a data inconsistency): **MLB → Erik Hart** (travels with the MLB club: Charlotte Sports Park in spring → Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). Emit MLB and MiLB as separate invoices, routed to the correct payer. BGC = a third invoice stream (separate client). `[Kevin 2026-07-16]`
-- **MLB MTO commitment**: during MLB spring training (7-week window, early Feb → end of March), KitchFix manages on-site MTO services at its own expense (MLB SOW §12). `[digest §B.7]`
-- **Commissary exclusivity**: the commissary kitchen is used exclusively for the Rays (no third-party foodservice) - Exhibit 2, both SOWs. `[digest §B.9]`
-- **Right of First Negotiation**: if the Rays leave Charlotte Sports Park, KitchFix gets a 30-day exclusive window to negotiate service at the new site (both Master Agreements §5). `[digest §B.9]`
-- **Count verification**: weekly invoicing, supporting docs required, NO client sign-off gate. Dispute → 10-day window then CPA arbitration. `[digest §B.8, §B.9]`
+- **Commissary/delivery model**: KitchFix rents a commissary and delivers to the Charlotte County PDC (no on-site cooking in the client's facility). During MLB spring training, MLB players eat at the PDC alongside the minor-leaguers (same roof), but MLB and MiLB bill to different cost centers. *§T*
+- **Billing routing - MLB vs MiLB = SEPARATE cost centers** (one operation, two invoice streams by design - NOT a data inconsistency): **MLB → Erik Hart** (travels with the MLB club: Charlotte Sports Park in spring → Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). Emit MLB and MiLB as separate invoices, routed to the correct payer. BGC = a third invoice stream (separate client). *Kevin 2026-07-16*
+- **MLB MTO commitment**: during MLB spring training (7-week window, early Feb → end of March), KitchFix manages on-site MTO services at its own expense (MLB SOW §12). *digest §B.7*
+- **Commissary exclusivity**: the commissary kitchen is used exclusively for the Rays (no third-party foodservice) - Exhibit 2, both SOWs. *digest §B.9*
+- **Right of First Negotiation**: if the Rays leave Charlotte Sports Park, KitchFix gets a 30-day exclusive window to negotiate service at the new site (both Master Agreements §5). *digest §B.9*
+- **Count verification**: weekly invoicing, supporting docs required, NO client sign-off gate. Dispute → 10-day window then CPA arbitration. *digest §B.8, §B.9*
 - **Contacts point-in-time**: AP recipients rotate (Erik Hart / Sunny Jones by level; ABR named Alex Roth primary + Tatiana/Sonny secondary). Review + refresh at year-start.
 
 ## 4. Rulings & Decisions
-| ID | Ruling (current state) | Status | as-of | LEDGER ref |
-|---|---|---|---|---|
-| MLB shape | Per-meal, NO SF. Breakfast $35.63, Lunch/Dinner $39.48. | CLOSED | 2026-07-16 | digest, invoices |
-| MiLB shape | Per-meal with 25% buy-down (SF-funded). Breakfast $17.83, Lunch $21.68, Dinner $20.96 (three distinct rates). | CLOSED | 2026-07-16 | §O, Kevin |
-| MiLB SF | Recurring: $200K static + variable 2nd installment. 2026 = $457,768 ($200K + $257,768). Out-of-band (not PG). Going-forward variable-derivation = Joe #3 (non-blocking). | CLOSED (2026) | 2026-07-16 | §W |
-| BGC | IN-SCOPE second client. $6.50/meal flat (any type), tax-exempt, school-year term (ends May 21, 2026). Contract-digest complete. | CLOSED (in-scope) | 2026-07-16 | §T, DIGEST_BGC |
-| Commissary | TBR-FL = only commissary serving a PDC (CIN-KY also commissary but serves MiLB). Enables the BGC second-client stream. | CLOSED | 2026-07-16 | Kevin |
-| Add-ons | Road Sandwiches $15, Labor Fee $280, Extra Protein C/P $111.84. Mixed per-line taxability. | CLOSED | 2026-07-16 | K300168871 |
-| Escalation | 75% CPI (SEFV01, Nov). Per-meal only, not SF. Differs from TBJ-FL (100%). | CLOSED | 2026-07-16 | digest |
+*All rates as-of 2026-07-16.*
 
+| ID | Ruling (current state) | Status | LEDGER ref |
+|---|---|---|---|
+| MLB shape | Per-meal, NO SF. Breakfast $35.63, Lunch/Dinner $39.48. | CLOSED | digest, invoices |
+| MiLB shape | Per-meal with 25% buy-down (SF-funded). Breakfast $17.83, Lunch $21.68, Dinner $20.96 (three distinct rates). | CLOSED | §O, Kevin |
+| MiLB SF | Recurring: $200K static + variable 2nd installment. 2026 = $457,768 ($200K + $257,768). Out-of-band (not PG). Going-forward variable-derivation = Joe #3 (non-blocking). | CLOSED (2026) | §W |
+| BGC | IN-SCOPE second client. $6.50/meal flat (any type), tax-exempt, school-year term (ends May 21, 2026). Contract-digest complete. | CLOSED (in-scope) | §T, DIGEST_BGC |
+| Commissary | TBR-FL = only commissary serving a PDC (CIN-KY also commissary but serves MiLB). Enables the BGC second-client stream. | CLOSED | Kevin |
+| Add-ons | Road Sandwiches $15, Labor Fee $280, Extra Protein C/P $111.84. Mixed per-line taxability. | CLOSED | K300168871 |
+| Escalation | 75% CPI (SEFV01, Nov). Per-meal only, not SF. Differs from TBJ-FL (100%). | CLOSED | digest |
 ## 5. Open Items
 | Item | Status | Owner | Blocking cert? | Note |
 |---|---|---|---|---|
@@ -160,12 +161,12 @@ relationships:
 <NonCanonical>
 
 > Superseded facts, preserved. Specimen figures; live values via Price Book.
-- **2024 base rates**: MLB Breakfast $32.98 / Lunch-Dinner $36.54; MiLB Base Breakfast $21.11 / Lunch-Dinner $25.86; MiLB Post-SF Breakfast $15.84 / Lunch-Dinner $19.40. 2026 rates are 75%-CPI-escalated from these. `[digest §B.2]`
-- **2024 SF = $382,448** ($200K signing + $182,448 by Feb 1, 2024). 2021 = $200K + $120,569.84 = $320,569.84. Pattern: static $200K + variable. `[digest §B.3]`
-- **"one-time 2024" reading (REVERSED)**: an earlier ledger reading called the SF one-time; corrected - it's annually recurring ($200K + variable), SOW-gated. `[§M, §T]`
-- **"$20.96 vs $21.68 conflict" (DISSOLVED)**: was a MONEY_MODEL digest flattening Lunch ($21.675) + Dinner ($20.96) into one row; never a real conflict. `[§O, PRICE_AUDIT]`
-- **BGC "out of scope" (REVERSED)**: an earlier recommendation excluded BGC; corrected - BGC is in-scope TBR-FL revenue. `[§T]`
-- **BGC "$6.50/lunch" label (CORRECTED)**: the earlier ledger label called it a lunch rate; the contract shows after-school supper service (1:30pm delivery, dinner sample menu, CCFP pattern). The $6.50 is flat for any meal type - a labeling correction, no price change. `[CONTRACT_DIGEST_BGC]`
+- **2024 base rates**: MLB Breakfast $32.98 / Lunch-Dinner $36.54; MiLB Base Breakfast $21.11 / Lunch-Dinner $25.86; MiLB Post-SF Breakfast $15.84 / Lunch-Dinner $19.40. 2026 rates are 75%-CPI-escalated from these. *digest §B.2*
+- **2024 SF = $382,448** ($200K signing + $182,448 by Feb 1, 2024). 2021 = $200K + $120,569.84 = $320,569.84. Pattern: static $200K + variable. *digest §B.3*
+- **"one-time 2024" reading (REVERSED)**: an earlier ledger reading called the SF one-time; corrected - it's annually recurring ($200K + variable), SOW-gated. *§M, §T*
+- **"$20.96 vs $21.68 conflict" (DISSOLVED)**: was a MONEY_MODEL digest flattening Lunch ($21.675) + Dinner ($20.96) into one row; never a real conflict. *§O, PRICE_AUDIT*
+- **BGC "out of scope" (REVERSED)**: an earlier recommendation excluded BGC; corrected - BGC is in-scope TBR-FL revenue. *§T*
+- **BGC "$6.50/lunch" label (CORRECTED)**: the earlier ledger label called it a lunch rate; the contract shows after-school supper service (1:30pm delivery, dinner sample menu, CCFP pattern). The $6.50 is flat for any meal type - a labeling correction, no price change. *CONTRACT_DIGEST_BGC*
 
 </NonCanonical>
 
