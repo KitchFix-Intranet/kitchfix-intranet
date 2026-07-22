@@ -1433,44 +1433,6 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // PR-B Fix 2 v2 (2026-07-22): imperative month refetch that bypasses
-  // the drill loader effects' cache-miss guards.
-  //
-  // Why: v1 kept monthCache[mk] populated (great - no loading skeleton)
-  // but the period-drill loader (:704-705 `if (missing.length === 0)
-  // return`) and month-drill loader (:750-751 `if (monthCache[monthKey])
-  // return`) both short-circuit when the month is cached. So on drill
-  // views the "background truth-restore" refetch never fired - notes /
-  // history / status stayed stale until a manual reload. Root cause is
-  // that the OLD `delete monthCache[mk]` served two purposes: force
-  // skeleton (bad) AND trigger the loader (needed). This helper
-  // separates them.
-  //
-  // Contract: fires sc-load unconditionally for `mk` and merges the
-  // fresh payload into monthCache. Aborts on unmount via the shared
-  // controller set. Silent on failure - the optimistic patch already
-  // set the correct display state, so a lost refetch is a Ledger-
-  // freshness miss (~ next reload catches up), not a data-integrity
-  // event. Called from every save-success path.
-  const refetchMonth = useCallback((mk) => {
-    if (!selectedAccount || !mk) return;
-    const controller = new AbortController();
-    inFlightControllersRef.current.add(controller);
-    fetch(
-      `/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`,
-      { signal: controller.signal },
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        if (!isMountedRef.current || controller.signal.aborted) return;
-        if (d?.success) {
-          setMonthCache((prev) => ({ ...prev, [mk]: d }));
-        }
-      })
-      .catch(() => { /* silent - optimistic patch is the display truth */ })
-      .finally(() => { inFlightControllersRef.current.delete(controller); });
-  }, [selectedAccount, today]);
-
   const buildRecordedToast = useCallback((opts) => {
     const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0, noService = false } = opts;
     // Step-0 (SC-066): mirror aggregateWorkspaceMetrics's widened
@@ -1528,18 +1490,22 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       if (!isMountedRef.current) return result;
       if (result.success) {
         const newlyEntered = day.hasActuals ? 0 : 1;
-        // PR-B Fix 2 v2 (2026-07-22): server totals are the ONLY source
-        // for the money line. If either field is absent or non-finite,
-        // pass null so SubmissionToast's Number.isFinite gate hides the
-        // amount rather than printing a fabricated "$0" (v1's
-        // `Number(...) || 0` violated the "never display a value the
-        // response didn't contain" rule).
-        const rawSavedRevenue = Number(result.savedRevenue);
-        const rawSavedMeals   = Number(result.savedMeals);
-        const hasFiniteTotals = Number.isFinite(rawSavedRevenue) && Number.isFinite(rawSavedMeals);
+        // P2 item 2: partial-success case. Save landed but the ride
+        // note append failed post-save. Show the honest partial toast
+        // instead of the recorded success - never a clean success when
+        // the note the operator asked us to attach didn't post.
         if (result.noteFailed) {
           showToast("Saved - note couldn't post, use Add note", "error");
         } else {
+          // PR-B kept toast fix (2026-07-22): guard amount/meals on
+          // Number.isFinite. If server response omits either total
+          // (queued replay or future server variant), pass null so
+          // SubmissionToast's Number.isFinite gate at :33 hides the
+          // money line instead of printing a fabricated "$0". Prior
+          // `Number(x) || 0` would coerce absent to 0 -> "$0".
+          const rawSavedRevenue = Number(result.savedRevenue);
+          const rawSavedMeals   = Number(result.savedMeals);
+          const hasFiniteTotals = Number.isFinite(rawSavedRevenue) && Number.isFinite(rawSavedMeals);
           showToast(buildRecordedToast({
             amount: hasFiniteTotals ? rawSavedRevenue : null,
             meals:  hasFiniteTotals ? rawSavedMeals   : null,
@@ -1549,93 +1515,56 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             noService: !!opts.noService,
           }));
         }
-        // PR-B Fix 2 v2 (2026-07-22): OPTIMISTIC PATCH + IMPERATIVE REFETCH.
-        //
-        // v1 kept monthCache[mk] populated (great - no loading skeleton)
-        // but that also silenced the drill loader effects' refetch
-        // (their guards short-circuit when the month is cached). Result:
-        // Ledger notes / history / effective-dated prices never
-        // refreshed until a manual page reload. v2 keeps the optimistic
-        // patch AND calls refetchMonth() imperatively so the truth-
-        // restore fires regardless of loader guards.
-        //
-        // What's patched, and from what source:
-        //   - day.actual[colIndex] <- operator's typed values (echo,
-        //     not derived; comes from `entries`, not the response).
-        //   - day.hasActuals = true (factual: the row now exists in
-        //     sc_daily_actuals).
-        //   - day.status <- "entered" for regular save, "no-service"
-        //     for mark-no-service. Server classify() would emit these
-        //     for a day with fresh actuals; not client-fabricated math.
-        //   - day.totals.actualRevenue / actualMeals <- server values
-        //     from result.savedRevenue / result.savedMeals, ONLY IF
-        //     both are finite. If either is absent, the totals are
-        //     LEFT UNTOUCHED and the imperative refetch supplies them.
-        //     No fabricated zeros.
-        //   - day.hasNoteEntries = true if rideNote landed (so the
-        //     ledger row count reflects the just-added note).
+        // Surgical monthCache invalidation: drop only the month we wrote
+        // to so the drill-in refetches just that month, not the whole
+        // cache (see the note above the dayMap memo).
+        // PR-B (2026-07-22): the delete + reloadKey shape is main's
+        // proven behavior - slow (skeleton flash + refetch) but correct
+        // across every surface. Fix 2 (optimistic patch) was attempted
+        // here twice and reverted after failing the gate both times.
+        // See PR #493 body for Phase 1 hand-off notes (period +
+        // month-drill loader guards; the rail-vs-tile split-refresh
+        // anomaly; the setFocusDay-null-on-reloadKey close-the-modal
+        // interaction). The correct fix belongs to Phase 1 where the
+        // cache/render architecture is in scope.
         const mk = day.date.slice(0, 7);
+        // #418 (2026-07-12): if a rideNote was appended successfully,
+        // patch yearData[m].days[i].hasNoteEntries=true BEFORE the
+        // monthCache invalidation so the sm-tile bubble reflects the
+        // note immediately (yearData survives monthCache refetch and
+        // is refreshed by the reloadKey bump below). The note TEXT
+        // itself arrives in DayDetail via the paired refetch of the
+        // invalidated month - typically 100-300ms, and DayDetail's
+        // own local `noteEntries` state (seeded from day.noteEntries
+        // via handleAddNote's ride-through pattern) already shows the
+        // draft in the open composer. Choice: sc-submit-day does NOT
+        // return the appended entry (Kevin's guardrail: no server
+        // note-path changes), so we can't do the direct entry patch
+        // used in handleAddNote. Chose "trigger the minimal targeted
+        // refetch of that day" (via the existing month invalidation)
+        // over client-fabrication of the entry to preserve server-
+        // derived author/timestamp truth.
         const rideNoteAppended = !!(opts.rideNote && (opts.rideNote || "").trim().length > 0 && !result.noteFailed);
-        const patchedStatus = opts.noService ? "no-service" : "entered";
-        const patchDay = (d) => {
-          if (d.date !== day.date) return d;
-          const newActual = { ...(d.actual || {}) };
-          for (const e of entries) newActual[e.colIndex] = e.value;
-          const nextTotals = hasFiniteTotals
-            ? { ...(d.totals || {}), actualRevenue: rawSavedRevenue, actualMeals: rawSavedMeals }
-            : d.totals;
-          return {
-            ...d,
-            actual: newActual,
-            hasActuals: true,
-            status: patchedStatus,
-            ...(nextTotals ? { totals: nextTotals } : {}),
-            ...(rideNoteAppended ? { hasNoteEntries: true } : {}),
-          };
-        };
-        setData(prev => {
-          if (!prev?.days) return prev;
-          return { ...prev, days: prev.days.map(patchDay) };
-        });
-        setMonthCache(prev => {
-          const m = prev[mk];
-          if (!m?.days) return prev;
-          return { ...prev, [mk]: { ...m, days: m.days.map(patchDay) } };
-        });
-        // yearData sparse compact shape - sm-tile bubble flag patched
-        // for the year overview note-indicator + hasActuals for the
-        // year status classifier. Refetch on reloadKey below re-syncs
-        // if server disagrees.
-        setYearData(prev => {
-          if (!prev) return prev;
-          let touched = false;
-          const next = prev.map(m => {
-            if (!m.days) return m;
-            const patched = m.days.map(d => {
-              if (d.date !== day.date) return d;
-              touched = true;
-              return {
-                ...d,
-                hasActuals: true,
-                status: patchedStatus,
-                ...(rideNoteAppended ? { hasNoteEntries: true } : {}),
-              };
+        if (rideNoteAppended) {
+          setYearData(prev => {
+            if (!prev) return prev;
+            let touched = false;
+            const next = prev.map(m => {
+              if (!m.days) return m;
+              const patched = m.days.map(d => {
+                if (d.date !== day.date) return d;
+                touched = true;
+                return { ...d, hasNoteEntries: true };
+              });
+              return touched ? { ...m, days: patched } : m;
             });
-            return touched ? { ...m, days: patched } : m;
+            return touched ? next : prev;
           });
-          return touched ? next : prev;
+        }
+        setMonthCache(prev => {
+          if (!(mk in prev)) return prev;
+          const next = { ...prev }; delete next[mk]; return next;
         });
-        // Imperative background truth-restore: bypasses the drill
-        // loader guards so notes / history / status / prices refresh
-        // even though monthCache[mk] is still present. Silent on
-        // failure (optimistic patch is the display truth).
-        refetchMonth(mk);
-        // reloadKey bump preserved for cross-surface refresh (sc-load
-        // for the calendar view's `mk` at :641; sc-year-summary at
-        // :677). Drill loader guards short-circuit as designed - the
-        // refetchMonth call above is what actually keeps the drill
-        // fresh. NOTE: this also fires setFocusDay(null) at :640,
-        // which closes the modal - existing behavior, unchanged.
         setReloadKey(k => k + 1);
         return result;
       }
@@ -1669,7 +1598,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       inFlightControllersRef.current.delete(controller);
       if (isMountedRef.current) setSaving(false);
     }
-  }, [data, showToast, buildRecordedToast, refreshSyncing, kickReplay, refetchMonth]);
+  }, [data, showToast, buildRecordedToast, refreshSyncing, kickReplay]);
 
   // SC-079: POST one authored note entry to sc-add-note. DayDetail
   // owns the draft + local ledger; this just moves it over the wire.
@@ -1835,25 +1764,30 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setSaving(false);
     if (queuedCount > 0) refreshSyncing();
     if (successCount > 0) {
-      // PR-B Fix 2 v2 (2026-07-22): amount/meals null (not 0) so
-      // SubmissionToast's Number.isFinite gate hides the money line -
-      // sc-bulk-submit returns no per-day totals and printing "$0"
-      // for a successful bulk save would be a lie. The days-count
+      // PR-B kept toast fix (2026-07-22): amount/meals null (not 0)
+      // so SubmissionToast's Number.isFinite gate hides the money
+      // line - sc-bulk-submit returns no per-day totals and printing
+      // "$0" for a successful bulk save would be a lie. Days-count
       // progress meta still renders.
       showToast(buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount }));
     }
-    // PR-B Fix 2 v2 (2026-07-22): imperative refetch per affected
-    // month instead of the monthCache delete + reloadKey combo. The
-    // delete forced periodDays memo to null (loading skeleton path);
-    // dropping it + refetchMonth keeps the view rendering during the
-    // fetch and lands the real numbers when it returns. reloadKey
-    // bump preserved for sc-year-summary + calendar sc-load refresh.
+    // Surgical monthCache invalidation: drop the affected months so
+    // the drill-in refetches them. main's proven pattern - slow
+    // (skeleton flash + refetch) but correct. Fix 2 (optimistic patch)
+    // deferred to Phase 1.
     const affected = new Set();
     for (const day of days) affected.add(day.date.slice(0, 7));
-    for (const mk of affected) refetchMonth(mk);
+    if (affected.size > 0) {
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affected) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+    }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast, refreshSyncing, refetchMonth]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast, refreshSyncing]);
 
   // Bulk confirm as projected for all selected.
   // PR-B Fix 1 (2026-07-22): mirror handleBulkSave's sc-bulk-submit
@@ -1924,13 +1858,21 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       // money line rather than fabricating "$0".
       showToast(buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount }));
     }
-    // Imperative refetch per affected month (see handleBulkSave).
+    // Surgical monthCache invalidation: same main-shape pattern as
+    // handleBulkSave.
     const affected = new Set();
     for (const day of days) affected.add(day.date.slice(0, 7));
-    for (const mk of affected) refetchMonth(mk);
+    if (affected.size > 0) {
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affected) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+    }
     setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
     setReloadKey(k => k + 1);
-  }, [data, dayMap, activeDrillDays, bulkSelected, showToast, buildRecordedToast, refreshSyncing, refetchMonth]);
+  }, [data, dayMap, activeDrillDays, bulkSelected, showToast, buildRecordedToast, refreshSyncing]);
 
   const toggleBulkSelect = useCallback((dk) => {
     setBulkSelected(prev => { const next = new Set(prev); if (next.has(dk)) next.delete(dk); else next.add(dk); return next; });
