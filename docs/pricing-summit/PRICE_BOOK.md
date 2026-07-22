@@ -1,3 +1,9 @@
+> **SUPERSEDED - DO NOT USE FOR LIVE PRICES.**
+> This file is a frozen pre-migration snapshot. The live, generated Price Book is now
+> **REF-141** in the OPD corpus (`content/documents/REF-141.mdx`), regenerated from PG
+> on any price change. Prices below are stale as of 2026-07-22 and will drift further.
+> Retained as historical provenance until cutover.
+
 # KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT
 
 **Generated:** 2026-07-17 12:02:13Z by `scripts/generate-price-book.mjs`  
