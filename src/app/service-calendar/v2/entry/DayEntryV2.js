@@ -1250,11 +1250,39 @@ function ActivityBand({ entries, draft, onDraftChange, onPost, isPosting, inputR
       </div>
       {entries.length > 0 && (
         <ul className="sc-v2-entry-activity-list">
+          {/* PR-A Fix 1 (2026-07-22): rows come from mergeActivity()
+              (DayDetail.js:50-106) with shape:
+                note      -> { type: "note",  timestamp, author, key, note }
+                edit      -> { type: "edit",  timestamp, author, key,
+                               serviceName, oldValue, newValue }
+                edit sys  -> { type: "edit",  timestamp, author, key,
+                               systemPhrasing: true }
+              The prior render read e.id / e.kind / e.createdAt|ts|postedAt
+              / e.body|text|summary - none of which mergeActivity emits -
+              and had no edit-row branch, so notes rendered as author-only
+              and edits rendered blank. Field access + branching now
+              matches the v1 canonical renderer at DayDetail.js:1420-1449. */}
           {entries.slice(0, 8).map((e, i) => (
-            <li key={e.id || `${e.kind}-${i}`} className={`sc-v2-entry-activity-item sc-v2-entry-activity-item--${e.kind || "note"}`}>
-              <span className="sc-v2-entry-activity-stamp">{formatEntryStamp(e.createdAt || e.ts || e.postedAt)}</span>
+            <li
+              key={e.key || `${e.type || "note"}-${i}`}
+              className={`sc-v2-entry-activity-item sc-v2-entry-activity-item--${e.type || "note"}`}
+            >
+              <span className="sc-v2-entry-activity-stamp">{formatEntryStamp(e.timestamp)}</span>
               {e.author && <span className="sc-v2-entry-activity-author">{e.author}</span>}
-              <span className="sc-v2-entry-activity-body">{e.body || e.text || e.summary || ""}</span>
+              <span className="sc-v2-entry-activity-body">
+                {e.type === "note" ? (
+                  e.note
+                ) : e.systemPhrasing ? (
+                  "Marked no service (all services 0)"
+                ) : (
+                  <>
+                    <strong>{e.serviceName}</strong>{" "}
+                    {e.oldValue}
+                    {" → "}
+                    <strong>{e.newValue}</strong>
+                  </>
+                )}
+              </span>
             </li>
           ))}
         </ul>
