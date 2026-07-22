@@ -42,18 +42,16 @@ relationships:
 - **Search aliases**: "Cardinals MLB", "St. Louis", "Busch", "Busch Stadium", "Cards home", "Cardinals Missouri"
 **Crosswalk to other systems**
 
-| System | How this account appears |
-|---|---|
-| Intranet (PRIMARY) | `STL-MO` |
-| PG `accounts` | team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-| PG `sc_fee_schedule` | $473,000 base row (2026-01-01, annual, monthly-6) - NOTE: base; 2026 escalated actual bills at $489,497 (see the Billing Record section) |
-| PG `sc_service_prices` | per-meal rows all $0 (flat-fee; planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
-| QuickBooks (invoice `Item`) | reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** *K300168851, K300168853*; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" - STL-MO-specific QB convention) *K300168469* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-| Finance schedule | "STL - MO" - accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food *§W* |
-| P&L file | St. Louis Cardinals - Busch / MLB rows |
-| ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR - flat-fee accounts run a different review track) |
-| Contract folder | `/Contracts/STL MO/` |
-| Invoice recipients | St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact *§X, Kevin* |
+- **Intranet (PRIMARY)** - `STL-MO`
+- **PG `accounts`** - team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+- **PG `sc_fee_schedule`** - $473,000 base row (2026-01-01, annual, monthly-6) - NOTE: base; 2026 escalated actual bills at $489,497 (see the Billing Record section)
+- **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee; planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+- **QuickBooks (invoice `Item`)** - reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** *K300168851, K300168853*; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" - STL-MO-specific QB convention) *K300168469* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+- **Finance schedule** - "STL - MO" - accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food *§W*
+- **P&L file** - St. Louis Cardinals - Busch / MLB rows
+- **ABR OneSheeter tab** - NOT included (STL excluded from 2025 ABR - flat-fee accounts run a different review track)
+- **Contract folder** - `/Contracts/STL MO/`
+- **Invoice recipients** - St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact *§X, Kevin*
 
 - **Client stakeholders**: **Carl Kochan** - client (ckochan@cardinals.com); **Linda Brauer** - Finance/AP (lbrauer@cardinals.com) *src: Kevin, 2026-07-16, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($489,497), the $489K/$698K/$473K figure question RESOLVED, reimbursable structure invoice-confirmed, postseason mechanic banked. SF non-taxable (Cardinals' legal position). Non-blocking: PG migration to escalated figure.
@@ -121,22 +119,35 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 
 # Rulings & Decisions
 
-| ID | Ruling (current state) | Status | as-of | LEDGER ref |
-|---|---|---|---|---|
-| Figure resolution | $698K gross / $473K base (PG) / **$489,497 escalated 2026 actual (bills)**. Old "$489,431" = the escalated figure, not a contradiction. CLOSED. | CLOSED | 2026-07-16 | §W |
-| R11 | Flat-fee postseason = 1/81-of-fee mechanic ($5,222.22/game). Satisfied. | CLOSED | 2026-07 | R11 |
-| Reimbursable tax | Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts. | CLOSED | 2026-07-16 | §X |
-| PG carries escalated | PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling. | CLOSED (decision) → migration pending | 2026-07-16 | §W |
-| SF tax | STL-MO SF is **NON-TAXABLE** (Cardinals' legal position; they bear the risk) - **invoice-confirmed** K300168469 (tax $0.00). | CLOSED | 2026-07-16 | §Y + SF-invoice |
-| SF description naming | STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. Bill export must not assume uniform Description strings. | NOTED | 2026-07-16 | SF-invoice |
+| ID | Status | as-of | LEDGER ref |
+|---|---|---|---|
+| Figure resolution | CLOSED | 2026-07-16 | §W |
+| R11 | CLOSED | 2026-07 | R11 |
+| Reimbursable tax | CLOSED | 2026-07-16 | §X |
+| PG carries escalated | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+| SF tax | CLOSED | 2026-07-16 | §Y + SF-invoice |
+| SF description naming | NOTED | 2026-07-16 | SF-invoice |
+
+**Detail**
+
+- **Figure resolution** - $698K gross / $473K base (PG) / **$489,497 escalated 2026 actual (bills)**. Old "$489,431" = the escalated figure, not a contradiction. CLOSED.
+- **R11** - Flat-fee postseason = 1/81-of-fee mechanic ($5,222.22/game). Satisfied.
+- **Reimbursable tax** - Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts.
+- **PG carries escalated** - PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling.
+- **SF tax** - STL-MO SF is **NON-TAXABLE** (Cardinals' legal position; they bear the risk) - **invoice-confirmed** K300168469 (tax $0.00).
+- **SF description naming** - STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. Bill export must not assume uniform Description strings.
 
 # Open Items
 
-| Item | Status | Owner | Blocking cert? | Note |
-|---|---|---|---|---|
+| Item | Status | Owner | Blocking cert? |
+|---|---|---|---|
+| PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No |
+| $225K passthrough true-up | UNKNOWN | - | No |
 
-| PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: STL-MO `sc_fee_schedule` flipped from $473,000 base → $489,497 escalated (changed_by `kf-fee-escalation-2026-07`). Companion CIN-OH migration ran same day ($362,500 → $376,686). |
-| $225K passthrough true-up | UNKNOWN | - | No | Savings revert to Cardinals, overage billable; SF-level true-up not specified. |
+**Detail**
+
+- **PG fee-schedule migration to escalated** - Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: STL-MO `sc_fee_schedule` flipped from $473,000 base → $489,497 escalated (changed_by `kf-fee-escalation-2026-07`). Companion CIN-OH migration ran same day ($362,500 → $376,686).
+- **$225K passthrough true-up** - Savings revert to Cardinals, overage billable; SF-level true-up not specified.
 
 # History
 

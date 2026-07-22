@@ -42,18 +42,16 @@ relationships:
 - **Search aliases**: "Cardinals FL", "Jupiter", "Roger Dean", "Palm Beach Cardinals", "PBC", "Cards spring training", "STL Florida"
 **Crosswalk to other systems**
 
-| System | How this account appears |
-|---|---|
-| Intranet (PRIMARY) | `STL-FL` |
-| PG `accounts` | team_key `STL - FL` · name "St Louis Cardinals" · level `PDC` · billing_model `flat_fee` · has_schedule_overlay `true` |
-| PG `sc_fee_schedule` | $1,400,000 (2026-01-01, annual, quarterly cadence) |
-| PG `sc_service_prices` | per-meal rows all $0 (zeroed 2026-06-16; flat-fee planning only) - incl. "Fun Money allocation" ($0, is_non_revenue) |
-| QuickBooks (invoice `Item`) | SF: **"Service Fees (PFS)"** *K300168340-343* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-| Finance schedule | "STL - FL" - accrued P1-P12, billed 4× $350,000 *§W* |
-| P&L file | St. Louis Cardinals - Jupiter / FL rows |
-| ABR OneSheeter tab | NOT included (STL excluded from 2025 ABR) |
-| Contract folder | `/Contracts/STL FL/` (Amendment; base agreement lives in `/Contracts/STL MO/`) |
-| Invoice recipients | St. Louis Cardinals / Jupiter FL / **Linda Brauer** *K300168343* |
+- **Intranet (PRIMARY)** - `STL-FL`
+- **PG `accounts`** - team_key `STL - FL` · name "St Louis Cardinals" · level `PDC` · billing_model `flat_fee` · has_schedule_overlay `true`
+- **PG `sc_fee_schedule`** - $1,400,000 (2026-01-01, annual, quarterly cadence)
+- **PG `sc_service_prices`** - per-meal rows all $0 (zeroed 2026-06-16; flat-fee planning only) - incl. "Fun Money allocation" ($0, is_non_revenue)
+- **QuickBooks (invoice `Item`)** - SF: **"Service Fees (PFS)"** *K300168340-343* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+- **Finance schedule** - "STL - FL" - accrued P1-P12, billed 4× $350,000 *§W*
+- **P&L file** - St. Louis Cardinals - Jupiter / FL rows
+- **ABR OneSheeter tab** - NOT included (STL excluded from 2025 ABR)
+- **Contract folder** - `/Contracts/STL FL/` (Amendment; base agreement lives in `/Contracts/STL MO/`)
+- **Invoice recipients** - St. Louis Cardinals / Jupiter FL / **Linda Brauer** *K300168343*
 
 - **Client stakeholders**: **Carl Kochan** - top stakeholder (Jen & Linda's boss), ckochan@cardinals.com; **Jen Goldstein** - site contact, RD/Dietitian; **Linda Brauer** - Finance/AP, lbrauer@cardinals.com *src: Kevin, 2026-07-16, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED (SF layer)** - Amendment banked, $1.4M fee finance-confirmed, SF non-taxable confirmed, quarterly cadence confirmed, the $24,500 credit mechanic explained, 2027 work-stoppage lock-in captured. Upkeep-ownership RESOLVED (Cardinals-reimbursed passthrough) and the full food/snack/beverage stream confirmed as reimbursable passthrough (Kevin). One honest gap: the passthrough reimbursable invoices weren't sampled (structure mirrors STL-MO's; see §2c).
@@ -120,22 +118,38 @@ The Amendment §2.c pre-scripts 2027 payments around a possible MLB work stoppag
 # Rulings & Decisions
 *All rates as-of 2026-07-16.*
 
-| ID | Ruling (current state) | Status | LEDGER ref |
-|---|---|---|---|
-| A-6 | STL-FL SF is **NON-TAXABLE** (bills TAX 0.00). Confirmed by invoice + Kevin ruling + Josh/Lessard Slack. Cardinals' asserted legal position; Cardinals bear the liability risk. | CLOSED | §U, §Y |
-| $24,500 credit | The "prior payment" on K300168343 = a 2025 tax-matter credit, applied as a "payment" line against the SF installment. Credits offset future installments (not separate refunds). | CLOSED | §W, §X |
-| Fee figure | 2026 Florida Services Fee = $1,400,000 (finance + invoice confirmed); $900K passthrough + $30K upkeep separate. | CLOSED | §W |
-| Upkeep ownership | The $30K upkeep envelope is a **Cardinals-reimbursed passthrough** (KitchFix spends, Cardinals reimburse) - NOT KitchFix-borne. | CLOSED | Kevin |
-| Full passthrough | ALL food/snacks/beverages at STL-FL are reimbursable passthrough (the $900K stream). | CLOSED | Kevin |
-| Reimbursable tax | Reimbursables bill tax-zero (tax paid to vendors already; avoids double-tax). General rule. | CLOSED | §X |
+| ID | Status | LEDGER ref |
+|---|---|---|
+| A-6 | CLOSED | §U, §Y |
+| $24,500 credit | CLOSED | §W, §X |
+| Fee figure | CLOSED | §W |
+| Upkeep ownership | CLOSED | Kevin |
+| Full passthrough | CLOSED | Kevin |
+| Reimbursable tax | CLOSED | §X |
+
+**Detail**
+
+- **A-6** - STL-FL SF is **NON-TAXABLE** (bills TAX 0.00). Confirmed by invoice + Kevin ruling + Josh/Lessard Slack. Cardinals' asserted legal position; Cardinals bear the liability risk.
+- **$24,500 credit** - The "prior payment" on K300168343 = a 2025 tax-matter credit, applied as a "payment" line against the SF installment. Credits offset future installments (not separate refunds).
+- **Fee figure** - 2026 Florida Services Fee = $1,400,000 (finance + invoice confirmed); $900K passthrough + $30K upkeep separate.
+- **Upkeep ownership** - The $30K upkeep envelope is a **Cardinals-reimbursed passthrough** (KitchFix spends, Cardinals reimburse) - NOT KitchFix-borne.
+- **Full passthrough** - ALL food/snacks/beverages at STL-FL are reimbursable passthrough (the $900K stream).
+- **Reimbursable tax** - Reimbursables bill tax-zero (tax paid to vendors already; avoids double-tax). General rule.
 # Open Items
 
-| Item | Status | Owner | Blocking cert? | Note |
-|---|---|---|---|---|
-| $900K passthrough invoice | PENDING (accounting) | accounting | No | STL-FL reimbursable invoice not sampled. Structure inferred from STL-MO (single-line lump, tax-zero, at-cost). Confirm when obtained - the STL-FL $900K is the largest passthrough of the 11. |
-| Finance-doc credit note placement | OPEN (minor) | Sebastian | No | The $24,500 credit note in the finance workbook (§W) sits on installment 3, but the credit actually applied on installment 4 (per invoice K300168343). Off-by-one in the finance doc; not a billing error. Flag for correction. |
-| Fun Money allocation | OPEN (planned) | Kevin | No | $25,000 "Fun Money" (not contractually defined) - `is_non_revenue`, planned to move to the Fun Money Tracker. |
-| STL-FL MiLB Snack price missing | OPEN (minor) | Kevin | No | Snack projection price blank in the SC - reconcile (flat-fee, so $0 anyway, but the service row is incomplete). |
+| Item | Status | Owner | Blocking cert? |
+|---|---|---|---|
+| $900K passthrough invoice | PENDING (accounting) | accounting | No |
+| Finance-doc credit note placement | OPEN (minor) | Sebastian | No |
+| Fun Money allocation | OPEN (planned) | Kevin | No |
+| STL-FL MiLB Snack price missing | OPEN (minor) | Kevin | No |
+
+**Detail**
+
+- **$900K passthrough invoice** - STL-FL reimbursable invoice not sampled. Structure inferred from STL-MO (single-line lump, tax-zero, at-cost). Confirm when obtained - the STL-FL $900K is the largest passthrough of the 11.
+- **Finance-doc credit note placement** - The $24,500 credit note in the finance workbook (§W) sits on installment 3, but the credit actually applied on installment 4 (per invoice K300168343). Off-by-one in the finance doc; not a billing error. Flag for correction.
+- **Fun Money allocation** - $25,000 "Fun Money" (not contractually defined) - `is_non_revenue`, planned to move to the Fun Money Tracker.
+- **STL-FL MiLB Snack price missing** - Snack projection price blank in the SC - reconcile (flat-fee, so $0 anyway, but the service row is incomplete).
 
 # History
 

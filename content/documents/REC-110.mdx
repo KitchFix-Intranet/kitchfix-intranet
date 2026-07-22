@@ -42,17 +42,15 @@ relationships:
 - **Search aliases**: "Rangers home", "Globe Life", "Arlington", "TXR home", "Rangers MLB home", "Rangers Texas"
 **Crosswalk to other systems**
 
-| System | How this account appears |
-|---|---|
-| Intranet (PRIMARY) | `TXR-TX-H` |
-| PG `accounts` | team_key `TXR - TX - H` · name "Texas Rangers Home" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-| PG `sc_fee_schedule` | $604,032 (2026-01-01, annual, monthly-6) |
-| PG `sc_service_prices` | per-meal rows all $0 (flat-fee planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
-| QuickBooks (invoice `Item`) | SF: Activity **"Service Fees (PFS)"**, Description "2026 Service Fee - N of 6" *K300168474* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-| Finance schedule | **"TXR - HOME"** (their label) - accrued P4-P10, billed 6× $100,672 *§W* |
-| P&L file | Texas Rangers - Globe Life / home rows |
-| ABR OneSheeter tab | "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction) |
-| Contract folder | `/Contracts/TXR H&V/` (shared with TXR-TX-V) |
+- **Intranet (PRIMARY)** - `TXR-TX-H`
+- **PG `accounts`** - team_key `TXR - TX - H` · name "Texas Rangers Home" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+- **PG `sc_fee_schedule`** - $604,032 (2026-01-01, annual, monthly-6)
+- **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+- **QuickBooks (invoice `Item`)** - SF: Activity **"Service Fees (PFS)"**, Description "2026 Service Fee - N of 6" *K300168474* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+- **Finance schedule** - **"TXR - HOME"** (their label) - accrued P4-P10, billed 6× $100,672 *§W*
+- **P&L file** - Texas Rangers - Globe Life / home rows
+- **ABR OneSheeter tab** - "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction)
+- **Contract folder** - `/Contracts/TXR H&V/` (shared with TXR-TX-V)
 
 - **Client stakeholders**: **Brandon Boyd** - Clubhouse Manager, main client (bboyd@texasrangers.com); **Katie McInnes** - RD/Dietitian (kmcinnis@texasrangers.com); Ross Fenstermaker - GM, contract signatory *src: Kevin, 2026-07-16, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, $604,032 fee finance+contract-confirmed (exact), monthly cadence + 8.25% tax gross-up confirmed, postseason pro-rata mechanic banked. Non-blocking opens: the missing-§2(d) contract defect (cosmetic), SF invoice not sampled (Phase E), single-year contract (2027 TBD).
@@ -105,20 +103,33 @@ relationships:
 
 # Rulings & Decisions
 
-| ID | Ruling (current state) | Status | as-of | LEDGER ref |
-|---|---|---|---|---|
-| R11 | Flat-fee postseason = pro-rata-of-fee mechanic (~$7,457.19/game). Satisfied. | CLOSED | 2026-07 | R11 |
-| SF-tax (per-account) | TXR-TX-H SF is **TAXABLE (8.25% Arlington)** - contract states the with-tax figure ($108,977.44). Per-account attribute. | CLOSED | 2026-07-16 | §X |
-| Fee figure | 2026 SF = $604,032 (finance + contract exact). No escalator; +10% YoY was negotiated. | CLOSED | 2026-07-16 | §W |
+| ID | Status | as-of | LEDGER ref |
+|---|---|---|---|
+| R11 | CLOSED | 2026-07 | R11 |
+| SF-tax (per-account) | CLOSED | 2026-07-16 | §X |
+| Fee figure | CLOSED | 2026-07-16 | §W |
+
+**Detail**
+
+- **R11** - Flat-fee postseason = pro-rata-of-fee mechanic (~$7,457.19/game). Satisfied.
+- **SF-tax (per-account)** - TXR-TX-H SF is **TAXABLE (8.25% Arlington)** - contract states the with-tax figure ($108,977.44). Per-account attribute.
+- **Fee figure** - 2026 SF = $604,032 (finance + contract exact). No escalator; +10% YoY was negotiated.
 
 # Open Items
 
-| Item | Status | Owner | Blocking cert? | Note |
-|---|---|---|---|---|
-| Missing §2(d) contract reference | OPEN (defect) | Kevin | No | §1.c references "the budget set forth below in Section 2(d)" for kitchen setup, but the Billing Record section has NO subsection (d). Dangling reference / missing clause. Kitchen-setup budget amount undocumented. Chase / note the drafting defect. |
-| Postseason per-game denominator | OPEN (derivation) | - | No | Contract says "pro rata" without a $/game figure; ~$7,457.19 is derived ($604,032/81). Workout-day rate silent. |
-| 2027 contract | OPEN (future) | Kevin | No | Single-year 2026; 2027 renegotiated separately (annual model). |
-| Background-check cost | OPEN (minor) | - | No | New 2026 obligation at KitchFix cost; not in a passthrough line. Watch for cost impact. |
+| Item | Status | Owner | Blocking cert? |
+|---|---|---|---|
+| Missing §2(d) contract reference | OPEN (defect) | Kevin | No |
+| Postseason per-game denominator | OPEN (derivation) | - | No |
+| 2027 contract | OPEN (future) | Kevin | No |
+| Background-check cost | OPEN (minor) | - | No |
+
+**Detail**
+
+- **Missing §2(d) contract reference** - §1.c references "the budget set forth below in Section 2(d)" for kitchen setup, but the Billing Record section has NO subsection (d). Dangling reference / missing clause. Kitchen-setup budget amount undocumented. Chase / note the drafting defect.
+- **Postseason per-game denominator** - Contract says "pro rata" without a $/game figure; ~$7,457.19 is derived ($604,032/81). Workout-day rate silent.
+- **2027 contract** - Single-year 2026; 2027 renegotiated separately (annual model).
+- **Background-check cost** - New 2026 obligation at KitchFix cost; not in a passthrough line. Watch for cost impact.
 
 # History
 

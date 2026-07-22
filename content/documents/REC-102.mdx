@@ -42,15 +42,13 @@ relationships:
 - **Search aliases**: "Louisville", "Louisville Bats", "Bats", "Slugger Field", "Reds AAA", "Louisville Kentucky"
 **Crosswalk to other systems**
 
-| System | How this account appears |
-|---|---|
-| Intranet (PRIMARY) | `CIN-KY` |
-| PG `accounts` | team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false` |
-| PG `sc_service_prices` | "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire" |
-| QuickBooks (invoice `Item`) | Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) - the Home/Away split is a real KitchFix taxonomy. *invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16* |
-| P&L file | Louisville Bats rows |
-| ABR OneSheeter tab | shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account |
-| Contract folder | `/Contracts/CIN KY/` |
+- **Intranet (PRIMARY)** - `CIN-KY`
+- **PG `accounts`** - team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false`
+- **PG `sc_service_prices`** - "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire"
+- **QuickBooks (invoice `Item`)** - Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) - the Home/Away split is a real KitchFix taxonomy. *invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16*
+- **P&L file** - Louisville Bats rows
+- **ABR OneSheeter tab** - shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account
+- **Contract folder** - `/Contracts/CIN KY/`
 
 - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side; also covers CIN-AZ) *src: Kevin, 2026-07-15, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - all three years' contracts banked verbatim, rate history complete, structure is the simplest of the 11 (pure per-meal, no SF, no passthrough). The only gaps are non-blocking: no invoice in the sample (so no worked example / tax-rate confirmation), and net-payment days unstated in the executed contract.
@@ -119,21 +117,36 @@ relationships:
 # Rulings & Decisions
 *All rates as-of 2026-07-14.*
 
-| ID | Ruling (current state) | Status | LEDGER ref |
-|---|---|---|---|
-| C-18 | The $28,000 upfront lump-sum ($2,000 credit × 14 homestands) present in 2024 + 2025 was **REMOVED in the executed 2026 contract** → pure weekly per-meal. Anything downstream still assuming the lump-sum/credit is STALE. | CLOSED (removal confirmed verbatim) | §P (C-18) |
-| Type-labeling | Contract uses "Type 1 / Type 2"; PG + MONEY_MODEL use named services (Breakfast Buffet / Post-Game / Umpire etc.). Not a conflict - Type-1 rate ($25.95) maps to all Type-1 services; Type-2 ($8.64) is Snack. Naming alignment only. | CLOSED (informational) | §12 (evidence) |
+| ID | Status | LEDGER ref |
+|---|---|---|
+| C-18 | CLOSED (removal confirmed verbatim) | §P (C-18) |
+| Type-labeling | CLOSED (informational) | §12 (evidence) |
+
+**Detail**
+
+- **C-18** - The $28,000 upfront lump-sum ($2,000 credit × 14 homestands) present in 2024 + 2025 was **REMOVED in the executed 2026 contract** → pure weekly per-meal. Anything downstream still assuming the lump-sum/credit is STALE.
+- **Type-labeling** - Contract uses "Type 1 / Type 2"; PG + MONEY_MODEL use named services (Breakfast Buffet / Post-Game / Umpire etc.). Not a conflict - Type-1 rate ($25.95) maps to all Type-1 services; Type-2 ($8.64) is Snack. Naming alignment only.
 # Open Items
 
-| Item | Status | Owner | Blocking cert? | Note |
-|---|---|---|---|---|
-| Post-game service in SC projections | OPEN | Kevin / ops | No | Post-game is on-request-only (72hr advance, rare) - NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served. |
-| KY sales-tax rate | CONFIRMED (6.00%) | - | No | Invoice K300168861 confirms 6.00% exact (no local Louisville tax). Was pending; now closed. |
-| Net-payment terms | CONFIRMED (Net 30) | - | No | Invoice K300168861: Net 30, weekly Sunday-dated invoicing, 6-day service period (Tue-Sun). Was UNKNOWN; now closed. |
-| "PFS" meaning + "(Home)"/"(Away)" variant | RESOLVED | Kevin | No | **`PFS` = Performance Food Service** (Kevin, 2026-07-16). The **"(Away)" variant is CONFIRMED** (TXR-V visiting-team catering, invoice K300168675). CIN-KY itself is Home-only per-meal; the Away stream is the separate visiting-team catering lane (TXR-V), not CIN-KY road-food. Glossary closed. |
-| Year-end reconciliation vs $186,462 estimate | UNKNOWN | - | No | Contract silent on whether the annual estimate is trued up. CIN-KY bills on actuals, so likely no reconciliation, but unconfirmed. |
-| Homestand count (13 vs 14) | OPEN (verify) | - | No | 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13. |
-| Invoice sample for golden test | RECEIVED | - | closes CIN-KY slice of Sebastian #3 | Invoice K300168861 (PAID) obtained + worked example built (§2e). CIN-KY golden-test coverage complete. |
+| Item | Status | Owner | Blocking cert? |
+|---|---|---|---|
+| Post-game service in SC projections | OPEN | Kevin / ops | No |
+| KY sales-tax rate | CONFIRMED (6.00%) | - | No |
+| Net-payment terms | CONFIRMED (Net 30) | - | No |
+| "PFS" meaning + "(Home)"/"(Away)" variant | RESOLVED | Kevin | No |
+| Year-end reconciliation vs $186,462 estimate | UNKNOWN | - | No |
+| Homestand count (13 vs 14) | OPEN (verify) | - | No |
+| Invoice sample for golden test | RECEIVED | - | closes CIN-KY slice of Sebastian #3 |
+
+**Detail**
+
+- **Post-game service in SC projections** - Post-game is on-request-only (72hr advance, rare) - NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served.
+- **KY sales-tax rate** - Invoice K300168861 confirms 6.00% exact (no local Louisville tax). Was pending; now closed.
+- **Net-payment terms** - Invoice K300168861: Net 30, weekly Sunday-dated invoicing, 6-day service period (Tue-Sun). Was UNKNOWN; now closed.
+- **"PFS" meaning + "(Home)"/"(Away)" variant** - **`PFS` = Performance Food Service** (Kevin, 2026-07-16). The **"(Away)" variant is CONFIRMED** (TXR-V visiting-team catering, invoice K300168675). CIN-KY itself is Home-only per-meal; the Away stream is the separate visiting-team catering lane (TXR-V), not CIN-KY road-food. Glossary closed.
+- **Year-end reconciliation vs $186,462 estimate** - Contract silent on whether the annual estimate is trued up. CIN-KY bills on actuals, so likely no reconciliation, but unconfirmed.
+- **Homestand count (13 vs 14)** - 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13.
+- **Invoice sample for golden test** - Invoice K300168861 (PAID) obtained + worked example built (§2e). CIN-KY golden-test coverage complete.
 
 # History
 
