@@ -173,6 +173,13 @@ export default function SeasonShell({
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
+        /* Coverage split (2026-07-22): day/night pill is lg-only
+           (buildCompactContent strips dayNight from the sm content
+           bag; DayNightPill's atom render gate is size==="lg"). So
+           on the season overview the bar keys point at a signal
+           that can't paint here = orphan keys. Drop them. Markers
+           + EXH stay - both paint on sm tiles. */
+        dropDayNight={true}
       />
       </>
     );
@@ -323,6 +330,13 @@ export default function SeasonShell({
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
+        /* Coverage split (2026-07-22): day/night pill is lg-only
+           (buildCompactContent strips dayNight from the sm content
+           bag; DayNightPill's atom render gate is size==="lg"). So
+           on the season overview the bar keys point at a signal
+           that can't paint here = orphan keys. Drop them. Markers
+           + EXH stay - both paint on sm tiles. */
+        dropDayNight={true}
       />
       </>
   );

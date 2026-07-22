@@ -92,6 +92,28 @@ const HOMESTAND = [
     label: "Entered",
     description: "Actuals recorded (zero counts as a cancelled game).",
   },
+  // Bar-coverage fix (2026-07-22): HOMESTAND accounts (MLB fee + MiLB
+  // AAA via sc-16) render past-unentered game days as needs-entry and
+  // overdue tiles (server engine classify() emits these statuses for
+  // past days without actuals; resolveDayStatus maps them straight
+  // through). Prior legend array skipped these two, so the bar +
+  // popup had no key for tiles the operator was staring at (owner
+  // gate finding: TBJ-NY salmon "!" overdue tiles with no overdue
+  // key). Inserted here so the SHARED STATE SPINE order per the
+  // file-top comment (entered -> needs-entry -> overdue -> upcoming
+  // -> ...) holds across every account shape.
+  {
+    mod: "needs-entry",
+    icon: "✎",
+    label: "Needs entry",
+    description: "Past day with no actuals yet.",
+  },
+  {
+    mod: "overdue",
+    icon: "!",
+    label: "Overdue",
+    description: "Past entry deadline.",
+  },
   {
     // DP1-18: label unified to the spine word "Upcoming" (was
     // "Scheduled" - same mod class as per-meal upcoming, just
