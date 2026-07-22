@@ -149,13 +149,26 @@
   min-width: 0;
 }
 
-/* One group block */
+/* One group block.
+   PR-A Fix 2 (2026-07-22): flex-shrink: 0 to prevent silent content
+   clipping. .sc-v2-entry-list is a flex-column with overflow-y: auto.
+   A flex item's automatic min-height (min-height: auto) normally
+   prevents shrinking below its content - BUT overflow: hidden here
+   suppresses that automatic minimum. Without flex-shrink: 0, when
+   total group height exceeds the list viewport every group shrinks
+   proportionally instead of the list scrolling, and overflow: hidden
+   silently clips the rows that no longer fit (measured live at
+   106px box holding 513px of content; ~1 of 6 services reachable).
+   flex-shrink: 0 restores natural group height, the list's existing
+   overflow-y: auto then takes over. overflow: hidden stays for the
+   border-radius clip + sticky header clip contract. */
 .sc-v2-entry-group {
   border: var(--sc2-border-thin) solid var(--sc2-line);
   border-radius: var(--sc2-radius-container);
   background: var(--sc2-surface-card);
   padding: 0;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .sc-v2-entry-group-header {
   display: flex;
