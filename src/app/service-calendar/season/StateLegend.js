@@ -103,29 +103,37 @@ export default function StateLegend({
             </li>
           ))}
         </ul>
-        {showFigures && (
+        {/* FIGURES trailer - drill-only opt-in via showFigures. Effective
+           meaning after the 2026-07-22 owner ruling: "show the per-meal
+           two-notation figures key" ($3K entered · ~$3K projected). The
+           prior single-item branch (~180 meals projected) for HOMESTAND
+           / FEE was dropped - one item explaining one notation doesn't
+           earn its space next to the state spine (whereas the per-meal
+           pair encodes a real actual-vs-projected distinction).
+           Effect on the four rendering shapes:
+             - PDC per-meal (PER_MEAL)              -> two-notation key.
+             - MiLB regular (MILB non-AAA)          -> two-notation key
+               (per-meal financially; hits the same branch).
+             - MLB fee (HOMESTAND) + MiLB AAA       -> no FIGURES block.
+             - STL-FL (FEE)                         -> no FIGURES block.
+           No separator artifact when the block is absent: the "|"
+           divider comes from .sc-state-legend-figures {border-left}
+           (stateLegend.css:84); removing the entire outer <span>
+           removes the border with it. */}
+        {showFigures && !hasHomestandSchedule && !isFeeAccount && (
           <span className="sc-state-legend-figures" aria-label="Tile figures key">
             <span className="sc-state-legend-figures-title">Figures</span>
-            {(hasHomestandSchedule || isFeeAccount) ? (
-              <span className="sc-state-legend-figures-item">
-                <span className="sc-state-legend-figures-chip">~180 meals</span>
-                <span className="sc-state-legend-figures-word">projected</span>
-              </span>
-            ) : (
-              <>
-                <span className="sc-state-legend-figures-item">
-                  <span className="sc-state-legend-figures-chip">$3K</span>
-                  <span className="sc-state-legend-figures-word">entered</span>
-                </span>
-                {/* Bundle-A #12 (2026-07-21): middle "est. $3K
-                    awaiting" item REMOVED per owner. Kept entered
-                    + projected as the concise pair. */}
-                <span className="sc-state-legend-figures-item">
-                  <span className="sc-state-legend-figures-chip">~$3K</span>
-                  <span className="sc-state-legend-figures-word">projected</span>
-                </span>
-              </>
-            )}
+            <span className="sc-state-legend-figures-item">
+              <span className="sc-state-legend-figures-chip">$3K</span>
+              <span className="sc-state-legend-figures-word">entered</span>
+            </span>
+            {/* Bundle-A #12 (2026-07-21): middle "est. $3K awaiting"
+                item REMOVED per owner. Kept entered + projected as
+                the concise pair. */}
+            <span className="sc-state-legend-figures-item">
+              <span className="sc-state-legend-figures-chip">~$3K</span>
+              <span className="sc-state-legend-figures-word">projected</span>
+            </span>
           </span>
         )}
         <button
