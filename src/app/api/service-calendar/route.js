@@ -608,6 +608,58 @@ export async function GET(request) {
 }
 
 
+// PR-B Fix 3 (2026-07-22): server-side integer guard for actual_count.
+//
+// Prior coercion `Number(e.value) || 0` at :637 silently mapped any
+// non-numeric input to 0 - a plausible-looking zero the operator would
+// not spot on the next month refetch. NaN -> 0, "abc" -> 0, false -> 0,
+// undefined -> 0. Client digit-strip was the only defense; nothing
+// guarded the wire.
+//
+// This helper distinguishes intent from malformed input:
+//   - null / undefined / "" (empty) -> deliberate zero (accept)
+//   - a numeric value that is a non-negative integer -> accept
+//   - anything else -> throw ValidationError with the offending
+//     serviceId so the caller can respond 400 with a specific message
+//
+// Defense-in-depth: sc_daily_actuals CHECK (actual_count >= 0) at
+// docs/migrations/sc-1-service-calendar-schema.sql:206 still catches
+// anything that slips past. Non-integer / non-numeric never should.
+class ActualCountValidationError extends Error {
+  constructor(message, serviceId) {
+    super(message);
+    this.name = "ActualCountValidationError";
+    this.serviceId = serviceId;
+  }
+}
+function coerceActualCount(rawValue, serviceId) {
+  // Deliberate zero from a cleared field. Client's getVal already
+  // returns 0 for "" / undefined, but accept the empty forms here so
+  // a queued replay or a legitimate direct API caller doesn't have
+  // to guess at the coercion.
+  if (rawValue === null || rawValue === undefined || rawValue === "") return 0;
+  const n = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(n) || Number.isNaN(n)) {
+    throw new ActualCountValidationError(
+      `Invalid value for service ${serviceId}: got ${JSON.stringify(rawValue)}, expected a non-negative integer`,
+      serviceId,
+    );
+  }
+  if (!Number.isInteger(n)) {
+    throw new ActualCountValidationError(
+      `Invalid value for service ${serviceId}: got ${JSON.stringify(rawValue)}, expected a non-negative integer (non-integer values would be silently truncated by PG)`,
+      serviceId,
+    );
+  }
+  if (n < 0) {
+    throw new ActualCountValidationError(
+      `Invalid value for service ${serviceId}: got ${n}, must be non-negative`,
+      serviceId,
+    );
+  }
+  return n;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // POST HANDLER
 // ═══════════════════════════════════════════════════════════════════
@@ -634,10 +686,24 @@ export async function POST(request) {
       // P0-1 NOTE: future UI PR should filter to touched-only entries
       // before this call; the orchestrator already preserves untouched
       // services that are absent from the array.
-      const touched = entries.map((e) => ({
-        serviceId:   e.colIndex,
-        actualCount: Number(e.value) || 0,
-      }));
+      // PR-B Fix 3 (2026-07-22): coerceActualCount replaces `Number(x) || 0`
+      // so malformed values 400 out with a field-specific message
+      // instead of silently zeroing an actuals row.
+      let touched;
+      try {
+        touched = entries.map((e) => ({
+          serviceId:   e.colIndex,
+          actualCount: coerceActualCount(e.value, e.colIndex),
+        }));
+      } catch (err) {
+        if (err instanceof ActualCountValidationError) {
+          return NextResponse.json(
+            { success: false, error: err.message, serviceId: err.serviceId },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
       const result = await saveActuals(accountKey, date, touched, email);
 
       // SC-079: notes moved off the save path (#361's dayNotes upsert
@@ -719,11 +785,26 @@ export async function POST(request) {
       // meant for. Per-day ride notes for bulk are out of scope for
       // this iteration - operators post standalone notes via the
       // DayDetail composer per day.
-      const touched = entries.map((e) => ({
-        serviceId:   e.colIndex,
-        serviceDate: e.date,
-        actualCount: Number(e.value) || 0,
-      }));
+      // PR-B Fix 3 (2026-07-22): coerceActualCount replaces `Number(x) || 0`
+      // on the bulk path too. A 400 aborts the ENTIRE batch (per Fix 1's
+      // all-or-nothing contract) - one malformed entry blocks the whole
+      // upsert rather than silently zeroing that row.
+      let touched;
+      try {
+        touched = entries.map((e) => ({
+          serviceId:   e.colIndex,
+          serviceDate: e.date,
+          actualCount: coerceActualCount(e.value, e.colIndex),
+        }));
+      } catch (err) {
+        if (err instanceof ActualCountValidationError) {
+          return NextResponse.json(
+            { success: false, error: err.message, serviceId: err.serviceId },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
       const result = await saveBulkActuals(accountKey, touched, email);
       return NextResponse.json(result);
     }

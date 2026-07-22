@@ -1497,9 +1497,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         if (result.noteFailed) {
           showToast("Saved - note couldn't post, use Add note", "error");
         } else {
+          // PR-B kept toast fix (2026-07-22): guard amount/meals on
+          // Number.isFinite. If server response omits either total
+          // (queued replay or future server variant), pass null so
+          // SubmissionToast's Number.isFinite gate at :33 hides the
+          // money line instead of printing a fabricated "$0". Prior
+          // `Number(x) || 0` would coerce absent to 0 -> "$0".
+          const rawSavedRevenue = Number(result.savedRevenue);
+          const rawSavedMeals   = Number(result.savedMeals);
+          const hasFiniteTotals = Number.isFinite(rawSavedRevenue) && Number.isFinite(rawSavedMeals);
           showToast(buildRecordedToast({
-            amount: Number(result.savedRevenue) || 0,
-            meals:  Number(result.savedMeals)   || 0,
+            amount: hasFiniteTotals ? rawSavedRevenue : null,
+            meals:  hasFiniteTotals ? rawSavedMeals   : null,
             newlyEntered,
             // SC-066: mark-no-service flag flows through so the toast
             // reads "No service recorded" instead of "0 meals / $0".
@@ -1509,6 +1518,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         // Surgical monthCache invalidation: drop only the month we wrote
         // to so the drill-in refetches just that month, not the whole
         // cache (see the note above the dayMap memo).
+        // PR-B (2026-07-22): the delete + reloadKey shape is main's
+        // proven behavior - slow (skeleton flash + refetch) but correct
+        // across every surface. Fix 2 (optimistic patch) was attempted
+        // here twice and reverted after failing the gate both times.
+        // See PR #493 body for Phase 1 hand-off notes (period +
+        // month-drill loader guards; the rail-vs-tile split-refresh
+        // anomaly; the setFocusDay-null-on-reloadKey close-the-modal
+        // interaction). The correct fix belongs to Phase 1 where the
+        // cache/render architecture is in scope.
         const mk = day.date.slice(0, 7);
         // #418 (2026-07-12): if a rideNote was appended successfully,
         // patch yearData[m].days[i].hasNoteEntries=true BEFORE the
@@ -1685,80 +1703,80 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       return;
     }
     setSaving(true);
-    let successCount = 0;
-    let newlyEntered = 0;
-    let totalMeals = 0;
-    let totalAmount = 0;
-    // F3: track queued-per-network-fail so the trailing bulk toast can
-    // stay silent when the operator's work IS captured (locally). Mixed
-    // batches (some server-confirmed, some queued) still fire the
-    // "Saved N days" success toast on the confirmed subset only - honest.
-    let queuedCount = 0;
-    // SC-051: server returns per-day savedRevenue + savedMeals read from
-    // sc_daily_revenue (effective-dated). Bulk toast = sum of the
-    // per-day response values. The old computeMealsAmount recompute was
-    // hoisted out of the loop and used current-catalog prices - drift
-    // from the tile source.
+    // PR-B Fix 1 (2026-07-22): swap the client for-loop of per-day
+    // sc-submit-day POSTs for a single sc-bulk-submit call. Was 30
+    // sequential round-trips at ~1s each on a 30-day bulk; now one.
+    // sc-bulk-submit is server-atomic (single .upsert() with N rows
+    // per serviceCalendar.js:1727-1753) - all-or-nothing per owner
+    // decision #4. No per-day retry / partial-commit fallback.
+    // Payload shape: entries carry per-day date (not top-level).
+    // rideNote/auditNote are not accepted here (see route.js:716-721);
+    // the two client loops didn't send them anyway.
+    const days = [];
+    const perDayEntries = [];
     for (const dk of bulkSelected) {
-      // Look up the day in the DISPLAYED drill days first; fall back to
-      // dayMap only (dayMap is built from `data.days` which only ever
-      // holds today's calendar month - it doesn't cover a period spanning
-      // a non-today month or a month drill-in on any month other than
-      // today's, and the bulk save silently skipped every selected day
-      // there before this fix). Mirrors the focusDayData lookup below.
       const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
-      // C1b (F4): one controller per per-day fetch; the loop shares
-      // the tracked Set with handleSave so page unmount aborts any
-      // in-flight day. Silent on AbortError (mount-ref suppresses the
-      // trailing showToast anyway).
-      const controller = new AbortController();
-      inFlightControllersRef.current.add(controller);
-      try {
-        // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
-        const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }),
-          signal: controller.signal });
-        const result = await res.json();
-        if (result.success) {
-          successCount++;
-          if (!day.hasActuals) newlyEntered++;
-          totalMeals  += Number(result.savedMeals)   || 0;
-          totalAmount += Number(result.savedRevenue) || 0;
-        }
-      } catch (err) {
-        if (err?.name === "AbortError") break;
-        // F3: per-day network failure enqueues that day and CONTINUES
-        // the loop. Server-side rejections stay silent per-day (existing
-        // catch behavior) so the trailing toast can honestly report the
-        // server-confirmed count. Queued days surface via the tile badge.
-        if (scIsNetworkError(err)) {
-          scEnqueue({ accountKey: data.account.key, date: day.date, entries });
-          queuedCount++;
-        }
-        /* else: continue */
-      } finally { inFlightControllersRef.current.delete(controller); }
+      days.push(day);
+      for (const e of entries) {
+        perDayEntries.push({ colIndex: e.colIndex, date: day.date, value: e.value });
+      }
     }
+    if (days.length === 0 || perDayEntries.length === 0) {
+      setSaving(false);
+      return;
+    }
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
+    let successCount = 0;
+    let newlyEntered = 0;
+    let queuedCount = 0;
+    try {
+      const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries }),
+        signal: controller.signal });
+      const result = await res.json();
+      if (result.success) {
+        successCount = days.length;
+        for (const day of days) if (!day.hasActuals) newlyEntered++;
+      } else {
+        showToast(result.error || "Bulk save failed", "error");
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        if (scIsNetworkError(err)) {
+          // saveQueue can't represent a batch under its (accountKey,
+          // date) key shape (saveQueue.js:3-8). Fall back to N per-day
+          // enqueues so offline resilience is preserved - the batch
+          // never touched the server, so there's no partial commit to
+          // worry about. Replay is per-day via sc-submit-day, matching
+          // the queue's existing semantic.
+          for (const day of days) {
+            scEnqueue({ accountKey: data.account.key, date: day.date, entries });
+            queuedCount++;
+          }
+        } else {
+          showToast("Bulk save failed", "error");
+        }
+      }
+    } finally { inFlightControllersRef.current.delete(controller); }
     if (!isMountedRef.current) return;
     setSaving(false);
     if (queuedCount > 0) refreshSyncing();
     if (successCount > 0) {
-      showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
-    } else if (queuedCount === 0) {
-      // Pure failure (no successes, nothing queued). Only fires when the
-      // server actually rejected every day - a "0 of M" error toast is
-      // honest here. If queuedCount > 0, we skip the error toast: the
-      // work IS captured (locally), and the grid's SYNCING badges will
-      // report the truth without a page-level indicator.
-      showToast(`Saved actuals for 0 of ${bulkSelected.size} days`, "error");
+      // PR-B kept toast fix (2026-07-22): amount/meals null (not 0)
+      // so SubmissionToast's Number.isFinite gate hides the money
+      // line - sc-bulk-submit returns no per-day totals and printing
+      // "$0" for a successful bulk save would be a lie. Days-count
+      // progress meta still renders.
+      showToast(buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount }));
     }
-    // Surgical monthCache invalidation: drop only the months whose days
-    // were in the bulk write. In practice a period spans 1-2 months and
-    // a month drill-in spans 1, so this drops 1-2 keys instead of the
-    // whole cache - the refetch is scoped, and the burst that used to
-    // race the header nav after a save shrinks accordingly.
+    // Surgical monthCache invalidation: drop the affected months so
+    // the drill-in refetches them. main's proven pattern - slow
+    // (skeleton flash + refetch) but correct. Fix 2 (optimistic patch)
+    // deferred to Phase 1.
     const affected = new Set();
-    for (const dk of bulkSelected) affected.add(dk.slice(0, 7));
+    for (const day of days) affected.add(day.date.slice(0, 7));
     if (affected.size > 0) {
       setMonthCache(prev => {
         let changed = false;
@@ -1771,64 +1789,79 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setReloadKey(k => k + 1);
   }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast, refreshSyncing]);
 
-  // Bulk confirm as projected for all selected
+  // Bulk confirm as projected for all selected.
+  // PR-B Fix 1 (2026-07-22): mirror handleBulkSave's sc-bulk-submit
+  // swap - one batch call, atomic all-or-nothing, saveQueue falls back
+  // to per-day enqueue on network failure. Difference from bulkSave:
+  // each day carries its OWN projected values, so perDayEntries is
+  // built per-day inside the flatten loop.
   const handleBulkConfirm = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
     setSaving(true);
-    let successCount = 0;
-    let newlyEntered = 0;
-    let totalMeals = 0;
-    let totalAmount = 0;
-    // F3: mirrors handleBulkSave's queued-count discriminator.
-    let queuedCount = 0;
-    // SC-051: same server-echo pattern as handleBulkSave. Per-day
-    // savedRevenue/savedMeals sum into the bulk toast.
+    const days = [];
+    const perDayEntries = [];
     for (const dk of bulkSelected) {
-      // Same activeDrillDays-first lookup as handleBulkSave above - see
-      // the note there. dayMap-only was the reason "Confirmed 0 days as
-      // projected" fired on any period/month view whose displayed days
-      // fall outside today's calendar month.
       const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
-      const entries = [];
-      for (const g of data.serviceGroups) { for (const s of g.services) { entries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 }); } }
-      // C1b (F4): same per-day AbortController pattern as handleBulkSave.
-      const controller = new AbortController();
-      inFlightControllersRef.current.add(controller);
-      try {
-        // spreadsheetId + sheetRow dropped (Sheets-era leftovers, PG route ignores).
-        const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sc-submit-day", accountKey: data.account.key, date: day.date, entries }),
-          signal: controller.signal });
-        const result = await res.json();
-        if (result.success) {
-          successCount++;
-          if (!day.hasActuals) newlyEntered++;
-          totalMeals  += Number(result.savedMeals)   || 0;
-          totalAmount += Number(result.savedRevenue) || 0;
+      days.push(day);
+      for (const g of data.serviceGroups) {
+        for (const s of g.services) {
+          perDayEntries.push({ colIndex: s.colIndex, date: day.date, value: day.projected[s.colIndex] ?? 0 });
         }
-      } catch (err) {
-        if (err?.name === "AbortError") break;
-        if (scIsNetworkError(err)) {
-          scEnqueue({ accountKey: data.account.key, date: day.date, entries });
-          queuedCount++;
-        }
-        /* else: continue */
-      } finally { inFlightControllersRef.current.delete(controller); }
+      }
     }
+    if (days.length === 0 || perDayEntries.length === 0) {
+      setSaving(false);
+      return;
+    }
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
+    let successCount = 0;
+    let newlyEntered = 0;
+    let queuedCount = 0;
+    try {
+      const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries }),
+        signal: controller.signal });
+      const result = await res.json();
+      if (result.success) {
+        successCount = days.length;
+        for (const day of days) if (!day.hasActuals) newlyEntered++;
+      } else {
+        showToast(result.error || "Confirm as projected failed", "error");
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        if (scIsNetworkError(err)) {
+          // Same per-day enqueue fallback as handleBulkSave. Each day's
+          // slice of projected values enqueues under (accountKey, date).
+          for (const day of days) {
+            const dayEntries = [];
+            for (const g of data.serviceGroups) {
+              for (const s of g.services) {
+                dayEntries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
+              }
+            }
+            scEnqueue({ accountKey: data.account.key, date: day.date, entries: dayEntries });
+            queuedCount++;
+          }
+        } else {
+          showToast("Confirm as projected failed", "error");
+        }
+      }
+    } finally { inFlightControllersRef.current.delete(controller); }
     if (!isMountedRef.current) return;
     setSaving(false);
     if (queuedCount > 0) refreshSyncing();
     if (successCount > 0) {
-      showToast(buildRecordedToast({ amount: totalAmount, meals: totalMeals, newlyEntered, isBulk: true, bulkDays: successCount }));
-    } else if (queuedCount === 0) {
-      // Same rationale as handleBulkSave: skip the "0 of M" error toast
-      // when at least one day queued locally.
-      showToast("Confirmed 0 days as projected", "error");
+      // Same rationale as handleBulkSave: null amount/meals skips the
+      // money line rather than fabricating "$0".
+      showToast(buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount }));
     }
-    // Surgical monthCache invalidation: same pattern as handleBulkSave.
+    // Surgical monthCache invalidation: same main-shape pattern as
+    // handleBulkSave.
     const affected = new Set();
-    for (const dk of bulkSelected) affected.add(dk.slice(0, 7));
+    for (const day of days) affected.add(day.date.slice(0, 7));
     if (affected.size > 0) {
       setMonthCache(prev => {
         let changed = false;
