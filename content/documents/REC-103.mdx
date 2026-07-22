@@ -42,18 +42,16 @@ relationships:
 - **Search aliases**: "Reds MLB", "Cincinnati", "GABP", "Great American Ball Park", "Reds Ohio", "Reds home", "REDS OH", "REDS CIN", "REDS CINN"
 **Crosswalk to other systems**
 
-| System | How this account appears |
-|---|---|
-| Intranet (PRIMARY) | `CIN-OH` |
-| PG `accounts` | team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true` |
-| PG `sc_fee_schedule` | $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section |
-| PG `sc_service_prices` | per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire" |
-| QuickBooks (invoice `Item`) | SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*|
-| Finance schedule | "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W* |
-| P&L file | Cincinnati Reds - GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY) |
-| ABR OneSheeter tab | "CINCINNATI REDS" (SHARED tab - blends/distinguishes OH from AZ) |
-| Contract folder | `/Contracts/CINN/` |
-| Invoice recipients | Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) *§X* |
+- **Intranet (PRIMARY)** - `CIN-OH`
+- **PG `accounts`** - team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+- **PG `sc_fee_schedule`** - $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section
+- **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+- **QuickBooks (invoice `Item`)** - SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+- **Finance schedule** - "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W*
+- **P&L file** - Cincinnati Reds - GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY)
+- **ABR OneSheeter tab** - "CINCINNATI REDS" (SHARED tab - blends/distinguishes OH from AZ)
+- **Contract folder** - `/Contracts/CINN/`
+- **Invoice recipients** - Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) *§X*
 
 - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side, covers CIN-AZ + CIN-OH + CIN-KY); **Sarah Vedder** - AP/billing recipient (post-Ashley) *§X, high*
 > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($376,686 accrued / $371,442.48 billed), SF + both reimbursable tracks invoice-confirmed, tax treatment confirmed (SF taxable 7.80%, reimbursables tax-zero), postseason mechanic banked. Non-blocking opens: the "seven installments" contract typo (cosmetic), postseason per-game invoice unsampled (Phase E).
@@ -118,22 +116,37 @@ Two reimbursement tracks, invoiced **per-homestand/weekly, Net 30** (contract §
 
 # Rulings & Decisions
 
-| ID | Ruling (current state) | Status | as-of | LEDGER ref |
-|---|---|---|---|---|
-| R11 | Flat-fee postseason = "same rate + additional days" via the 1/81-of-annual-fee mechanic. CIN-OH's $4,413.58/game satisfies it. | CLOSED | 2026-07 | R11 |
-| SF-tax (per-account) | CIN-OH SF is **TAXABLE (7.80%)** - invoice-confirmed. SF-taxability is per-account (contrast STL-FL exempt); bill export carries it as an account attribute. | CLOSED | 2026-07-16 | §X |
-| Fee figure | 2026 SF = $376,686 accrued / $371,442.48 billed (finance-confirmed), escalated from $362,500 base. | CLOSED | 2026-07-16 | §W |
-| PG carries escalated | PG `sc_fee_schedule` should carry the **escalated** $376,686, not the $362,500 base. Kevin ruling. | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+| ID | Status | as-of | LEDGER ref |
+|---|---|---|---|
+| R11 | CLOSED | 2026-07 | R11 |
+| SF-tax (per-account) | CLOSED | 2026-07-16 | §X |
+| Fee figure | CLOSED | 2026-07-16 | §W |
+| PG carries escalated | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+
+**Detail**
+
+- **R11** - Flat-fee postseason = "same rate + additional days" via the 1/81-of-annual-fee mechanic. CIN-OH's $4,413.58/game satisfies it.
+- **SF-tax (per-account)** - CIN-OH SF is **TAXABLE (7.80%)** - invoice-confirmed. SF-taxability is per-account (contrast STL-FL exempt); bill export carries it as an account attribute.
+- **Fee figure** - 2026 SF = $376,686 accrued / $371,442.48 billed (finance-confirmed), escalated from $362,500 base.
+- **PG carries escalated** - PG `sc_fee_schedule` should carry the **escalated** $376,686, not the $362,500 base. Kevin ruling.
 
 # Open Items
 
-| Item | Status | Owner | Blocking cert? | Note |
-|---|---|---|---|---|
-| "Seven installments" contract typo | OPEN (cosmetic) | - | No | Contract §2.a says "seven (7) installments" but the table shows 6 monthly $56,250 (2025) + 1× $20,000 (Jan 1 2027). Math works ($357,500). The $20K is a 2025-season revenue tail landing in 2027 cash - a recognition-timing note. |
-| PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No | Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: CIN-OH `sc_fee_schedule` flipped from $362,500 base → $376,686 escalated (changed_by `kf-fee-escalation-2026-07`). Companion STL-MO migration ran same day ($473K → $489,497). Any future escalating-fee account follows this pattern. |
-| Postseason per-game invoice | N/A unless Reds qualify | accounting | No | This invoice type only gets created IF the Reds make the postseason (Kevin). No postseason invoice exists to sample unless/until they qualify. The $4,413.58 mechanic is contract-defined; a real invoice is contingent on a playoff berth, so it's NOT a standing Phase-E gap. |
-| 2027 extension | OPEN (future) | Kevin | No | Reds notice by Oct 1, 2026, else meet-and-confer by Nov 1. The ABR planning doc floats a 2027+ MSA restructure. |
-| Reimbursable due-date convention | OPEN (minor) | Sebastian | No | Reimbursables invoiced ~40-44 day effective terms despite "Net 30". Confirm the finance convention. |
+| Item | Status | Owner | Blocking cert? |
+|---|---|---|---|
+| "Seven installments" contract typo | OPEN (cosmetic) | - | No |
+| PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No |
+| Postseason per-game invoice | N/A unless Reds qualify | accounting | No |
+| 2027 extension | OPEN (future) | Kevin | No |
+| Reimbursable due-date convention | OPEN (minor) | Sebastian | No |
+
+**Detail**
+
+- **"Seven installments" contract typo** - Contract §2.a says "seven (7) installments" but the table shows 6 monthly $56,250 (2025) + 1× $20,000 (Jan 1 2027). Math works ($357,500). The $20K is a 2025-season revenue tail landing in 2027 cash - a recognition-timing note.
+- **PG fee-schedule migration to escalated** - Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: CIN-OH `sc_fee_schedule` flipped from $362,500 base → $376,686 escalated (changed_by `kf-fee-escalation-2026-07`). Companion STL-MO migration ran same day ($473K → $489,497). Any future escalating-fee account follows this pattern.
+- **Postseason per-game invoice** - This invoice type only gets created IF the Reds make the postseason (Kevin). No postseason invoice exists to sample unless/until they qualify. The $4,413.58 mechanic is contract-defined; a real invoice is contingent on a playoff berth, so it's NOT a standing Phase-E gap.
+- **2027 extension** - Reds notice by Oct 1, 2026, else meet-and-confer by Nov 1. The ABR planning doc floats a 2027+ MSA restructure.
+- **Reimbursable due-date convention** - Reimbursables invoiced ~40-44 day effective terms despite "Net 30". Confirm the finance convention.
 
 # History
 
