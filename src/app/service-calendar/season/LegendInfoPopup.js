@@ -103,74 +103,61 @@ export default function LegendInfoPopup({
         </div>
 
         <div className="sc-legend-popup-body">
-          <Section title={accountSectionTitle(hasHomestandSchedule, isFeeAccount, isMilb)}>
-            {getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }).map(it => (
-              <Row
-                key={it.mod}
-                mod={it.mod}
-                label={it.labelLong || it.label}
-                icon={it.icon}
-              >
-                {it.description}
-              </Row>
-            ))}
+          {/* Bundle B (2026-07-21): single flat list under one title.
+              #14 collapsed the four prior Sections (per-account state
+              list, Figures, Calendar context, Data states) into ONE
+              consolidated list titled "Service Calendar Icons".
+              #15 removed the Figures section outright (redundant - the
+              always-visible legend bar already carries the figures key).
+              #16 folded Today + Has-notes into the main list and
+              deleted the "Calendar context" wrapper.
+              #17-popup dropped the Game day + Spring Training legend
+              entries from the popup - tile rendering of those markers
+              is UNCHANGED (this is popup copy only). The filter on
+              getLegendItems below drops the "game-day-mark" +
+              "spring-mark" entries that HOMESTAND / FEE / PER_MEAL
+              arrays append; StateLegend.js (the always-visible bar)
+              consumes the same source and still receives them.
+              Data states (failed / loading) survive as a subtle
+              trailing group because they're a system-pipeline signal,
+              not a calendar icon - keeping them titled maintains the
+              distinction. */}
+          <Section title="Service Calendar Icons">
+            {getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
+              .filter(it => it.mod !== "game-day-mark" && it.mod !== "spring-mark")
+              .map(it => (
+                <Row
+                  key={it.mod}
+                  mod={it.mod}
+                  label={it.labelLong || it.label}
+                  icon={it.icon}
+                >
+                  {it.description}
+                </Row>
+              ))}
             {/* sc-15 (2026-07-11): widen the day/night popup gate to MLB
                 fee accounts too - MLB home cells now render the same
                 sun/moon glyph as MiLB. */}
             {(hasHomestandSchedule || (isMilb && !isFeeAccount)) && MILB_DAY_NIGHT.map(it => (
-              <MilbRow key={it.mod} type={it.type} label={it.labelLong} />
+              <MilbRow
+                key={it.mod}
+                type={it.type}
+                label={it.labelLong}
+                description={it.description}
+              />
             ))}
-          </Section>
-
-          <Section title="Figures">
-            {/* SC-041: key the est./~/bare encoding operators see on
-                the drill-in tiles. Per-meal + MiLB carry $; fee variants
-                get the ~ line only (they encode projected meals, not $). */}
-            {hasHomestandSchedule || isFeeAccount ? (
-              <FigureRow chip="~180 meals" label="Projected" desc="Upcoming day - counts are the plan, no actuals yet." />
-            ) : (
-              <>
-                <FigureRow chip="~$3K" label="Projected" desc="Upcoming day - the figure is the plan, no actuals yet." />
-                <FigureRow chip="est. $3K" label="Estimate" desc="Past day awaiting entry - the figure is the estimate the tile carries until you save actuals." />
-                <FigureRow chip="$3K" label="Entered" desc="Actuals recorded. Bare figure means the number is the operator-recorded truth." />
-              </>
-            )}
-          </Section>
-
-          <Section title="Calendar context">
             <Row mod="today" label="Today">
-              Today's date carries a navy outer ring.
+              Navy outer ring on today's date.
             </Row>
-            {/* P2 (item 3, R3): note-indicator row - the chat-bubble
-                glyph the DaySquare renders on days with authored notes
-                in the ledger. Rendered here (Calendar context) rather
-                than in an account-shape status list because the signal
-                is orthogonal to status. */}
             <NoteRow />
-            {/* sc-18 (2026-07-12): game-day wedge - the small indigo
-                corner triangle DaySquare renders on sm overview tiles
-                when the account is has_schedule_overlay=true AND the
-                date has a GAME row. Rendered here alongside the today
-                ring and the note bubble because it's an orthogonal
-                overlay signal (not a status). Only applies to overlay
-                accounts (STL - FL, TBJ - FL today); fee/AAA homestand
-                accounts already color their game days by state and
-                don't get the wedge. */}
-            <GameDayRow />
-            {/* sc-19 (2026-07-12): Spring Training row - the dark-copper
-                corner wedge on sm overview tiles PLUS the "ST" pill on
-                lg drill-in tiles PLUS the chrome bar rider. PDC-only.
-                All three coordinated to the same phaseCalendar.js
-                spring block for the account. */}
-            <SpringTrainingRow />
           </Section>
 
           <Section title="Data states">
             <Row mod="failed" label="Could not load" icon="⚠">
-              The data fetch errored. The cell never falls back to a silent zero - this dashed treatment surfaces the failure.
+              Data fetch errored; the tile never falls back to a silent zero.
             </Row>
             <Row mod="loading" label="Loading">
-              Data fetch in flight; no number rendered until it lands.
+              Data fetch in flight, no number rendered until it lands.
             </Row>
           </Section>
         </div>
@@ -179,41 +166,12 @@ export default function LegendInfoPopup({
   );
 }
 
-function accountSectionTitle(hasHomestand, isFeeAccount, isMilb) {
-  if (hasHomestand) return "Homestand-fee account";
-  if (isFeeAccount) return "Operational-only account";
-  if (isMilb) return "MiLB hybrid account";
-  return "Per-meal account";
-}
-
 function Section({ title, children }) {
   return (
     <section className="sc-legend-popup-section">
       <h3 className="sc-legend-popup-section-title">{title}</h3>
       <dl className="sc-legend-popup-rows">{children}</dl>
     </section>
-  );
-}
-
-// SC-041: text-only row for the Figures section. The "swatch" is the
-// figure notation itself; no color to inherit, no glyph. Same DOM
-// shape as Row so it slots into the popup's dl/row grid.
-// Design review 2026-07-11 (Kevin): the shared .sc-legend-popup-row
-// grid-template gave every row a 28px first column, but the figure
-// swatch demands 68px+ - text was clipped and the FIGURES rows read
-// as empty. Adding --figure modifier widens the first column just
-// for this row shape; every other legend row is unaffected.
-function FigureRow({ chip, label, desc }) {
-  return (
-    <div className="sc-legend-popup-row sc-legend-popup-row--figure">
-      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--figure" aria-hidden="true">
-        {chip}
-      </span>
-      <div className="sc-legend-popup-row-text">
-        <dt className="sc-legend-popup-row-label">{label}</dt>
-        <dd className="sc-legend-popup-row-desc">{desc}</dd>
-      </div>
-    </div>
   );
 }
 
@@ -253,45 +211,7 @@ function NoteRow() {
   );
 }
 
-// sc-18 (2026-07-12): legend row for the game-day wedge. The swatch
-// renders a neutral tile with the SAME indigo triangle sm tiles get,
-// so the popup preview matches the on-tile mark 1:1. Legend swatches
-// render outside the sm gate per the #409 legend-figures fix, so this
-// wedge actually shows up here even though `.sc-daysq-game-day::before`
-// on live tiles gates on --sm.
-function GameDayRow() {
-  return (
-    <div className="sc-legend-popup-row">
-      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--gameday" aria-hidden="true" />
-      <div className="sc-legend-popup-row-text">
-        <dt className="sc-legend-popup-row-label">Game day</dt>
-        <dd className="sc-legend-popup-row-desc">
-          A home game this day - drill in for opponent and first pitch. Overlay accounts only.
-        </dd>
-      </div>
-    </div>
-  );
-}
-
-// sc-19 (2026-07-12): legend row for Spring Training styling. The
-// swatch renders the same dark-copper bottom-left corner wedge sm
-// tiles get, on a neutral shell - the on-tile mark 1:1. Legend
-// swatches render outside the sm gate per #409's figure-row fix.
-function SpringTrainingRow() {
-  return (
-    <div className="sc-legend-popup-row">
-      <span className="sc-legend-popup-swatch sc-legend-popup-swatch--spring" aria-hidden="true" />
-      <div className="sc-legend-popup-row-text">
-        <dt className="sc-legend-popup-row-label">Spring Training</dt>
-        <dd className="sc-legend-popup-row-desc">
-          Spring Training dates - copper corner on the overview, ST tag on day tiles. PDC accounts only.
-        </dd>
-      </div>
-    </div>
-  );
-}
-
-function MilbRow({ type, label }) {
+function MilbRow({ type, label, description }) {
   return (
     <div className="sc-legend-popup-row">
       <span className={`sc-legend-popup-swatch sc-state-legend-swatch--milb-${type}`} aria-hidden="true">
@@ -299,9 +219,7 @@ function MilbRow({ type, label }) {
       </span>
       <div className="sc-legend-popup-row-text">
         <dt className="sc-legend-popup-row-label">{label}</dt>
-        <dd className="sc-legend-popup-row-desc">
-          {type === "day" ? "Day game - amber sun on the homestand day." : "Night game - navy moon on the homestand day."}
-        </dd>
+        <dd className="sc-legend-popup-row-desc">{description}</dd>
       </div>
     </div>
   );

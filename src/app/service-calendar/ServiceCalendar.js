@@ -2757,10 +2757,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                        below (:2917) leaves the prop off - v1 legend
                        stays untouched.
                        Bundle-A #10 (2026-07-21): drop the game-day
-                       + spring-training markers on drill (StateLegend
-                       filters when dropMarkers=true). */
+                       + spring-training markers on drill (they paint
+                       on sm overview tiles, not lg drill tiles).
+                       Bundle-B follow-up (2026-07-22): drill also
+                       drops EXH + Day/Night so every account type
+                       reads the same concise state spine.
+                       Coverage split (2026-07-22): three
+                       independent flags because overview wants a
+                       different subset (day/night only). Popup keeps
+                       every category explained. */
                     showFigures={true}
                     dropMarkers={true}
+                    dropExhibition={true}
+                    dropDayNight={true}
                   />
                 )}
               </div>
@@ -2934,10 +2943,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                        below (:2917) leaves the prop off - v1 legend
                        stays untouched.
                        Bundle-A #10 (2026-07-21): drop the game-day
-                       + spring-training markers on drill (StateLegend
-                       filters when dropMarkers=true). */
+                       + spring-training markers on drill (they paint
+                       on sm overview tiles, not lg drill tiles).
+                       Bundle-B follow-up (2026-07-22): drill also
+                       drops EXH + Day/Night so every account type
+                       reads the same concise state spine.
+                       Coverage split (2026-07-22): three
+                       independent flags because overview wants a
+                       different subset (day/night only). Popup keeps
+                       every category explained. */
                     showFigures={true}
                     dropMarkers={true}
+                    dropExhibition={true}
+                    dropDayNight={true}
                   />
                 )}
               </div>

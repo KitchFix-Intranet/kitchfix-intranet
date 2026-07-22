@@ -34,20 +34,41 @@ export default function StateLegend({
   // deferral is separate; this addition targets the always-visible
   // bar per the DP1-20 owner ask.
   showFigures = false,
-  // Bundle-A #10 (2026-07-21): filter the game-day + spring-training
-  // markers out of the swatch list on drill. getLegendItems appends
-  // GAME_DAY_MARK / SPRING_MARK per account shape - meaningful on
-  // overview sm-tile paint but noise on the drill bar. Off by
-  // default so overview mounts (if any) keep the marks; drill mounts
-  // opt in.
-  dropMarkers = false,
+  // Bar-coverage split (2026-07-22): three independent drop flags,
+  // one per category. Prior single dropMarkers prop bundled three
+  // categories into one flag, which broke down when the overview
+  // coverage audit found it wants a DIFFERENT subset than drill
+  // (overview drops day/night only; drill drops all three). Each
+  // mount now declares what it drops. Off by default; mounts opt in.
+  //
+  // Category matrix (from the audit):
+  //   game-day-mark + spring-mark - ORTHOGONAL MARKER LAYER
+  //     Paint on sm overview tiles as corner notches. Noise on the
+  //     drill bar (drill lg tiles don't paint them). Drop on drill.
+  //   exhibition - rare HOMESTAND state key
+  //     Paints on both sm (copper corner ribbon) and lg (state fill
+  //     + ribbon). Overview shows the ribbon so its key is a real
+  //     signal; drill chose to drop it as noise on the state spine.
+  //   MiLB day / night - lg-only DayNightPill
+  //     Renders only on lg drill tiles (buildCompactContent strips
+  //     dayNight from the sm content bag; DayNightPill is lg-scoped).
+  //     Bar key on overview points at nothing = orphan key. Drop on
+  //     overview. Drill drops it anyway per owner's approved concise
+  //     shape - the popup keeps every category explained.
+  dropMarkers = false,        // game-day-mark + spring-mark
+  dropExhibition = false,     // "exhibition" state key
+  dropDayNight = false,       // day/night sun/moon pair
 }) {
   // The one-line key keeps the IN-USE states for the current account
   // (rubric non-negotiable #1: always visible). The fuller cell-state
   // taxonomy lives in the popup behind the info button. Source:
   // ./legendItems.js (shared with LegendInfoPopup).
   const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
-    .filter(it => !dropMarkers || (it.mod !== "game-day-mark" && it.mod !== "spring-mark"))
+    .filter(it => {
+      if (dropMarkers && (it.mod === "game-day-mark" || it.mod === "spring-mark")) return false;
+      if (dropExhibition && it.mod === "exhibition") return false;
+      return true;
+    })
     .map(it => ({
       mod: it.mod, icon: it.icon, label: it.label,
     }));
@@ -56,7 +77,10 @@ export default function StateLegend({
   // as MiLB (backfilled from MLB Stats API dayNight into
   // sc_homestand_schedule.day_night), so both account shapes need
   // the day/night pair in the compact strip.
-  if (hasHomestandSchedule || (isMilb && !isFeeAccount)) {
+  // Bar-coverage split (2026-07-22): now gated on dropDayNight (was
+  // dropMarkers before the split). Overview mounts opt in - day/night
+  // never paints on sm tiles.
+  if (!dropDayNight && (hasHomestandSchedule || (isMilb && !isFeeAccount))) {
     items.push(...MILB_DAY_NIGHT.map(it => ({ mod: it.mod, icon: "", label: it.label })));
   }
   // Universal trailer. Off-season dropped from the line - it's now flat
@@ -79,29 +103,37 @@ export default function StateLegend({
             </li>
           ))}
         </ul>
-        {showFigures && (
+        {/* FIGURES trailer - drill-only opt-in via showFigures. Effective
+           meaning after the 2026-07-22 owner ruling: "show the per-meal
+           two-notation figures key" ($3K entered · ~$3K projected). The
+           prior single-item branch (~180 meals projected) for HOMESTAND
+           / FEE was dropped - one item explaining one notation doesn't
+           earn its space next to the state spine (whereas the per-meal
+           pair encodes a real actual-vs-projected distinction).
+           Effect on the four rendering shapes:
+             - PDC per-meal (PER_MEAL)              -> two-notation key.
+             - MiLB regular (MILB non-AAA)          -> two-notation key
+               (per-meal financially; hits the same branch).
+             - MLB fee (HOMESTAND) + MiLB AAA       -> no FIGURES block.
+             - STL-FL (FEE)                         -> no FIGURES block.
+           No separator artifact when the block is absent: the "|"
+           divider comes from .sc-state-legend-figures {border-left}
+           (stateLegend.css:84); removing the entire outer <span>
+           removes the border with it. */}
+        {showFigures && !hasHomestandSchedule && !isFeeAccount && (
           <span className="sc-state-legend-figures" aria-label="Tile figures key">
             <span className="sc-state-legend-figures-title">Figures</span>
-            {(hasHomestandSchedule || isFeeAccount) ? (
-              <span className="sc-state-legend-figures-item">
-                <span className="sc-state-legend-figures-chip">~180 meals</span>
-                <span className="sc-state-legend-figures-word">projected</span>
-              </span>
-            ) : (
-              <>
-                <span className="sc-state-legend-figures-item">
-                  <span className="sc-state-legend-figures-chip">$3K</span>
-                  <span className="sc-state-legend-figures-word">entered</span>
-                </span>
-                {/* Bundle-A #12 (2026-07-21): middle "est. $3K
-                    awaiting" item REMOVED per owner. Kept entered
-                    + projected as the concise pair. */}
-                <span className="sc-state-legend-figures-item">
-                  <span className="sc-state-legend-figures-chip">~$3K</span>
-                  <span className="sc-state-legend-figures-word">projected</span>
-                </span>
-              </>
-            )}
+            <span className="sc-state-legend-figures-item">
+              <span className="sc-state-legend-figures-chip">$3K</span>
+              <span className="sc-state-legend-figures-word">entered</span>
+            </span>
+            {/* Bundle-A #12 (2026-07-21): middle "est. $3K awaiting"
+                item REMOVED per owner. Kept entered + projected as
+                the concise pair. */}
+            <span className="sc-state-legend-figures-item">
+              <span className="sc-state-legend-figures-chip">~$3K</span>
+              <span className="sc-state-legend-figures-word">projected</span>
+            </span>
           </span>
         )}
         <button

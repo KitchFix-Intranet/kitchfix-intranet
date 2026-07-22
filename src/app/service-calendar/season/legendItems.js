@@ -90,8 +90,29 @@ const HOMESTAND = [
     mod: "entered",
     icon: "",
     label: "Entered",
-    description:
-      "Actuals recorded. Includes game days (any recorded meal count, zero counts as a cancelled game) and non-game days where meals were served.",
+    description: "Actuals recorded (zero counts as a cancelled game).",
+  },
+  // Bar-coverage fix (2026-07-22): HOMESTAND accounts (MLB fee + MiLB
+  // AAA via sc-16) render past-unentered game days as needs-entry and
+  // overdue tiles (server engine classify() emits these statuses for
+  // past days without actuals; resolveDayStatus maps them straight
+  // through). Prior legend array skipped these two, so the bar +
+  // popup had no key for tiles the operator was staring at (owner
+  // gate finding: TBJ-NY salmon "!" overdue tiles with no overdue
+  // key). Inserted here so the SHARED STATE SPINE order per the
+  // file-top comment (entered -> needs-entry -> overdue -> upcoming
+  // -> ...) holds across every account shape.
+  {
+    mod: "needs-entry",
+    icon: "✎",
+    label: "Needs entry",
+    description: "Past day with no actuals yet.",
+  },
+  {
+    mod: "overdue",
+    icon: "!",
+    label: "Overdue",
+    description: "Past entry deadline.",
   },
   {
     // DP1-18: label unified to the spine word "Upcoming" (was
@@ -102,41 +123,27 @@ const HOMESTAND = [
     icon: "○",
     label: "Upcoming",
     labelLong: "Scheduled game day",
-    description: "An upcoming game on the homestand schedule.",
+    description: "Upcoming game on the homestand schedule.",
   },
   {
     mod: "off",
     icon: "",
     label: "Non Game day",
-    // sc-13 (2026-07-10): PREP/OPEN/CLOSE rows retired - the schedule
-    // now tracks games only. This state rarely surfaces on the MLB
-    // homestand view; kept for the CLEAN-day case + any manually-
-    // authored non-game row (the day_type CHECK still allows them).
-    description: "Day between games with no scheduled service.",
+    description: "Between-games day, no scheduled service.",
   },
-  // sc-12 (2026-07-10): TXR spring-training exhibitions (vs KC).
-  // Display-only tile - billed as separate catering outside the
-  // contract, so it does NOT count toward the game-days-entered
-  // progress bar and cannot be clicked to enter actuals.
   {
     mod: "exhibition",
     icon: "",
     label: "EXH",
     labelLong: "Exhibition",
-    description:
-      "Spring-training exhibition. Billed as separate catering outside the contract. Display-only - excluded from the game-days-entered counter and not clickable.",
+    description: "Spring-training exhibition, billed outside the contract. Display-only.",
   },
-  // sc-13 (2026-07-10): away games - team is on the road, no service.
-  // Display-only tile - carries date + opponent for planning context,
-  // but excluded from the game-days-entered counter and not clickable.
-  // The plane glyph top-right is the primary shape signal.
   {
     mod: "away",
     icon: "",
     label: "Away",
     labelLong: "Away game",
-    description:
-      "Team is on the road; no service happens at the home clubhouse. Display-only - excluded from the game-days-entered counter and not clickable. Plane glyph top-right is the state signal.",
+    description: "Team on the road, no home service. Display-only, plane glyph top-right.",
   },
 ];
 
@@ -145,34 +152,7 @@ const FEE = [
     mod: "entered",
     icon: "",
     label: "Entered",
-    description: "Service confirmed - actuals recorded.",
-  },
-  {
-    mod: "needs-entry",
-    icon: "✎",
-    label: "Needs entry",
-    description: "Past day with no actuals yet - action required.",
-  },
-  {
-    mod: "overdue",
-    icon: "!",
-    label: "Overdue",
-    description: "Past entry deadline - escalated action.",
-  },
-  {
-    mod: "upcoming",
-    icon: "○",
-    label: "Upcoming",
-    description: "Future service day; nothing required yet.",
-  },
-];
-
-const MILB = [
-  {
-    mod: "entered",
-    icon: "",
-    label: "Entered",
-    description: "Service confirmed - actuals recorded.",
+    description: "Service confirmed, actuals recorded.",
   },
   {
     mod: "needs-entry",
@@ -184,7 +164,34 @@ const MILB = [
     mod: "overdue",
     icon: "!",
     label: "Overdue",
-    description: "Past entry deadline - escalated.",
+    description: "Past entry deadline.",
+  },
+  {
+    mod: "upcoming",
+    icon: "○",
+    label: "Upcoming",
+    description: "Future service day.",
+  },
+];
+
+const MILB = [
+  {
+    mod: "entered",
+    icon: "",
+    label: "Entered",
+    description: "Service confirmed, actuals recorded.",
+  },
+  {
+    mod: "needs-entry",
+    icon: "✎",
+    label: "Needs entry",
+    description: "Past day with no actuals yet.",
+  },
+  {
+    mod: "overdue",
+    icon: "!",
+    label: "Overdue",
+    description: "Past entry deadline.",
   },
   {
     mod: "upcoming",
@@ -208,19 +215,19 @@ const PER_MEAL = [
     mod: "needs-entry",
     icon: "✎",
     label: "Needs entry",
-    description: "Past day with no actuals yet - action required.",
+    description: "Past day with no actuals yet.",
   },
   {
     mod: "overdue",
     icon: "!",
     label: "Overdue",
-    description: "Past entry deadline - escalated.",
+    description: "Past entry deadline.",
   },
   {
     mod: "upcoming",
     icon: "○",
     label: "Upcoming",
-    description: "Future service day; nothing required yet.",
+    description: "Future service day.",
   },
 ];
 
@@ -235,8 +242,7 @@ export const NOTE_INDICATOR = {
   mod: "notebubble",
   label: "Has notes",
   labelLong: "Has notes",
-  description:
-    "The day carries at least one authored note in its Activity ledger. The bubble reads at half opacity so it defers to the state signal.",
+  description: "Day carries an authored note.",
 };
 
 // MiLB day/night entries. Sun/moon icons come from Icons.js via the
@@ -248,14 +254,14 @@ export const MILB_DAY_NIGHT = [
     type: "day",
     label: "Day",
     labelLong: "Day game",
-    description: "Day game - amber sun on the homestand day.",
+    description: "Amber sun on the homestand day.",
   },
   {
     mod: "milb-night",
     type: "night",
     label: "Night",
     labelLong: "Night game",
-    description: "Night game - navy moon on the homestand day.",
+    description: "Navy moon on the homestand day.",
   },
 ];
 
