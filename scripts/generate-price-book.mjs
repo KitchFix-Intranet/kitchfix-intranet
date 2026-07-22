@@ -1,7 +1,8 @@
 // KITCHFIX PRICE BOOK generator (read-only, PG-projection).
 //
 // Reads the PG snapshot produced by scripts/audit-sc-prices.mjs and emits
-// a Markdown Price Book to ~/Downloads/PRICE_BOOK.md.
+// REF-141 (the corpus Price Book): an MDX file with a full corpus
+// frontmatter block + the generated body.
 //
 // Data policy:
 //   - Prices, flags, effective_date, active-state come from PG only.
@@ -11,19 +12,26 @@
 //   - Contract terms + rulings + rationale live in the account files;
 //     this book projects the PG live catalog under those terms.
 //
+// The default output is a corpus doc: content/documents/REF-141.mdx.
+// The generator emits the full corpus frontmatter block on every run,
+// followed by the generated body. Because the file lives under
+// content/documents/**, a regenerate is a re-projection: the auto-
+// projection Action fires on any push that touches that path, so a
+// price-side refresh reaches PG + SousAI without a manual project step.
+//
 // Regenerate on ANY price change (Studio apply, admin edit, effective-date
 // backdate). This document is generated - never hand-edit it.
 //
 // Usage:
 //   set -a && source .env.local && set +a
 //   node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json
-//   node scripts/generate-price-book.mjs                 # writes <repo>/docs/pricing-summit/PRICE_BOOK.md
-//   node scripts/generate-price-book.mjs --downloads     # writes ~/Downloads/PRICE_BOOK.md for review
+//   node scripts/generate-price-book.mjs                 # writes <repo>/content/documents/REF-141.mdx
+//   node scripts/generate-price-book.mjs --downloads     # writes ~/Downloads/REF-141.mdx for review
 //
 // Optional flags:
 //   --in FILE    read a specific PG dump (default /tmp/pg_prices.json)
 //   --out FILE   write to a specific path (overrides both defaults)
-//   --downloads  quick shortcut for review builds; goes to ~/Downloads/PRICE_BOOK.md
+//   --downloads  quick shortcut for review builds; goes to ~/Downloads/REF-141.mdx
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -38,13 +46,16 @@ const argVal = (name, dflt) => {
 };
 const flag = (name) => args.includes(name);
 
-// Resolve <repo>/docs/pricing-summit/PRICE_BOOK.md as the default output.
+// Resolve <repo>/content/documents/REF-141.mdx as the default output.
 // This script lives at <repo>/scripts/generate-price-book.mjs, so ../ = repo.
+// REF-141 IS the Price Book in the corpus - a `derived: true` MDX file that
+// the projection Action re-embeds on every write. See the module header for
+// the full data-flow rationale.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
-const DEFAULT_OUT = path.join(REPO_ROOT, "docs", "pricing-summit", "PRICE_BOOK.md");
-const DOWNLOADS_OUT = path.join(homedir(), "Downloads", "PRICE_BOOK.md");
+const DEFAULT_OUT = path.join(REPO_ROOT, "content", "documents", "REF-141.mdx");
+const DOWNLOADS_OUT = path.join(homedir(), "Downloads", "REF-141.mdx");
 
 const IN = argVal("--in", "/tmp/pg_prices.json");
 const OUT = argVal("--out", flag("--downloads") ? DOWNLOADS_OUT : DEFAULT_OUT);
@@ -214,6 +225,47 @@ const nowISO = now.toISOString();
 const nowHuman = now.toISOString().slice(0, 19).replace("T", " ") + "Z";
 
 const md = [];
+
+// ---- Corpus frontmatter (REF-141) ----
+// Emitted on every run so a regenerate reproduces a complete, valid corpus
+// document, not just the body. Fields tracked here mirror the
+// content/schema/frontmatter.schema.json contract; `derived: true` is the
+// load-bearing flag - the gate rejects hand-edits of derived docs.
+md.push("---");
+md.push("id: REF-141");
+md.push('title: "Price Book - Live Account Pricing (generated)"');
+md.push("doc_class: REF");
+md.push('shelf: "Service Delivery & Client Accounts"');
+md.push('subshelf: "Financial Reference"');
+md.push("status: In Build");
+md.push('version: "1.0"');
+md.push('card_line: "Live per-account price catalog - the ONLY canonical price-values document. Generated from PG on any price change; every other doc treats prices as specimens."');
+md.push('summary: "The generated, live-price source for KitchFix Service Calendar billing. Organized by account (11 accounts, all services active + inactive); every price row is the latest-effective sc_service_prices projected-price at PG snapshot time. Per-account header lines (money shape, 2026 fee, escalation, notes) are static config maintained inside the generator, each cited to accounts/ACCOUNT_<KEY>.md section 2. Contract clauses, rulings, and rationale live in the account records (REC-101..111) and digests (REF-121..132). The Price Book is derived:true - never hand-edited; regenerate from PG on any price change (Studio apply, admin edit, effective-date backdate). This is the ONE document in the corpus where dollar figures are CANONICAL - everywhere else they are specimens wrapped in NonCanonical."');
+md.push("keywords:");
+md.push("  - price book");
+md.push("  - live prices");
+md.push("  - per-account rates");
+md.push("  - generated");
+md.push("  - PG");
+md.push("  - post-SF invoice rate");
+md.push("  - REF-141");
+md.push('owner: "Senior Director of Operations"');
+md.push('approver: "Senior Director of Operations"');
+md.push("audience: corporate");
+md.push('classification: "KitchFix Internal - Commercial Confidential"');
+md.push("access_level: restricted");
+md.push("lang: en");
+md.push("in_corpus: true");
+md.push("applies_to: company-wide");
+md.push("derived: true");
+md.push("review_interval_months: 3");
+md.push("sort_order: 141");
+md.push("relationships:");
+md.push('  - { to: PB-009, type: references, from_section: "financial hub" }');
+md.push('  - { to: REF-140, type: references, from_section: "money-model mechanics" }');
+md.push("---");
+md.push("");
+
 md.push("# KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT");
 md.push("");
 md.push(`**Generated:** ${nowHuman} by \`scripts/generate-price-book.mjs\`  `);
