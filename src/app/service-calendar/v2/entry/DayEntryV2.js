@@ -143,9 +143,46 @@ function DayEntryV2({
   const successPrimaryBtnRef = useRef(null);
   const prevViewRef = useRef({ justSaved: false });
 
-  // Day-nav re-seed - matches DayDetail.js:265-308 verbatim. Same source,
-  // same predicates, same reset set.
+  // Day-nav re-seed. Previously matched DayDetail.js:265-308 verbatim
+  // and re-fired whenever any of [day.date, serviceGroups, day.actual,
+  // day.noteEntries, day.historyEntries] changed reference. That was
+  // fine for day-nav (day.date genuinely changes) but broke on a
+  // same-day background refresh: monthCache invalidation replaces the
+  // payload with a NEW object (new day.actual reference), the effect
+  // re-fired, and setEditValues(vals) OVERWROTE the operator's typed
+  // input with server values - data loss. Save button greyed out too
+  // because initialValues + touched got re-seeded.
+  //
+  // Fix (B8a Fix 2 amend, 2026-07-23): distinguish "different day
+  // opened" (seed from server) from "same day's payload refreshed"
+  // (don't clobber operator input).
+  //   - Track the last-seeded day.date via a ref.
+  //   - If day.date is unchanged AND the form is dirty (any touched
+  //     service, any note draft), skip the value + UI reseed. The
+  //     server-owned ledger streams (noteEntries / historyEntries)
+  //     STILL sync so a save elsewhere shows up in the Ledger under
+  //     the operator's open form.
+  //   - If day.date is unchanged AND the form is pristine, reseed
+  //     freely - that's what a refresh under a pristine form should do.
+  //   - If day.date changed, reseed regardless (dirty state on the
+  //     PREVIOUS day is destroyed by day-nav; the discard-confirm
+  //     imperative handle upstream catches user-initiated nav; forced
+  //     nav is deliberate).
+  const seededDateRef = useRef(null);
   useEffect(() => {
+    const dateChanged = seededDateRef.current !== day.date;
+    const isPristine = touched.size === 0
+      && !(notes || "").trim()
+      && !(standaloneDraft || "").trim();
+    if (!dateChanged && !isPristine) {
+      // Same-day background refresh under a dirty form. Sync the
+      // server-owned ledger streams (safe - they don't conflict with
+      // typed input) and leave everything else alone.
+      setNoteEntries(day.noteEntries || []);
+      setHistoryEntries(day.historyEntries || []);
+      return;
+    }
+    seededDateRef.current = day.date;
     const vals = {};
     const t = new Set();
     for (const g of serviceGroups) {
@@ -171,6 +208,7 @@ function DayEntryV2({
     setShowNoServiceConfirm(false);
     setStandaloneDraft("");
     setMobileBillOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // isDirty - matches DayDetail.js:316-335. Value comparison + note drafts.

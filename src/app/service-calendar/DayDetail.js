@@ -267,7 +267,42 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   const successPrimaryBtnRef = useRef(null);
   const prevViewRef = useRef({ showReview: null, justSaved: false });
 
+  // B8a Fix 4 (2026-07-23): parallel to the DayEntryV2 seed guard.
+  // Previously this effect re-fired whenever [day.date, serviceGroups,
+  // day.actual, day.noteEntries, day.historyEntries] changed reference.
+  // That was fine for day-nav (day.date genuinely changes) but broke
+  // under B8a Fix 1's monthCache invalidation: a background refresh
+  // replaces the payload with a new object (new day.actual reference)
+  // and the effect re-fired, OVERWRITING editValues with server values
+  // and wiping operator input mid-edit. Same data-loss shape v2 got.
+  //
+  // v1 has slightly different state than v2 (expandedExtras +
+  // showReview instead of mobileBillOpen) but the pristine check is
+  // IDENTICAL: v1's isDirty memo at :335-340 keys on editValues vs
+  // initialValues, notes, and standaloneDraft - so those three are
+  // the correct dirty signal for the guard here too.
+  //
+  // Three cases:
+  //   day.date changed -> reseed everything (day-nav; existing behavior)
+  //   same day, pristine -> reseed freely (refresh under a clean form
+  //                         should take fresh server values)
+  //   same day, dirty -> skip value/UI reseed, but still sync the
+  //                      server-owned noteEntries + historyEntries so
+  //                      the Ledger stays fresh under the dirty form
+  const seededDateRef = useRef(null);
   useEffect(() => {
+    const dateChanged = seededDateRef.current !== day.date;
+    const isPristine = touched.size === 0
+      && !(notes || "").trim()
+      && !(standaloneDraft || "").trim();
+    if (!dateChanged && !isPristine) {
+      // Same-day background refresh under a dirty form. Sync ledger
+      // streams; leave everything else alone.
+      setNoteEntries(day.noteEntries || []);
+      setHistoryEntries(day.historyEntries || []);
+      return;
+    }
+    seededDateRef.current = day.date;
     const vals = {};
     const t = new Set();
     for (const g of serviceGroups) {
@@ -310,6 +345,7 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
     // P2.1 (2026-07-11): the always-on Activity composer draft is
     // per-day, same as `notes`. Day-nav clears both.
     setStandaloneDraft("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
   // SC-063 + C1b: dirty = any editValues entry differs from its

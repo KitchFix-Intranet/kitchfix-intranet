@@ -634,10 +634,33 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   }, [selectedAccount]);
 
   const mk = `${year}-${String(month+1).padStart(2,"0")}`;
+  // B8a Fix 2 (2026-07-23): view-context UI reset extracted here from
+  // the sc-load fetch effect below. Prior to this split, closing the
+  // day-entry modal and clearing bulk state were bundled into the
+  // fetch effect's body - which fires on every reloadKey bump. That
+  // meant a refresh or save closed the modal mid-edit (data-loss-shaped
+  // on refresh once B8a Fix 1 wires it, and incompatible with the
+  // Handoff animation §8B that keeps the modal open through save).
+  //
+  // Now: these resets fire ONLY when the operator changes the VIEW,
+  // which is either an account switch, a calendar-month change (mk),
+  // or a drill nav (monthKey / periodKey). reloadKey is deliberately
+  // NOT in the deps - a data refresh must not touch UI state.
+  //
+  // Drill nav closure: opening a modal on July 5 then stepping to
+  // August is a deliberate navigation; closing the July modal is the
+  // expected behavior. Refresh and save are BACKGROUND data events
+  // the operator did not ask for - modal must survive those.
+  useEffect(() => {
+    setFocusDay(null);
+    setBulkMode(false);
+    setBulkSelected(new Set());
+    setBulkPanelOpen(false);
+  }, [selectedAccount, mk, monthKey, periodKey]);
   useEffect(() => {
     if (!selectedAccount) return;
     const controller = new AbortController();
-    setLoading(true); setFocusDay(null); setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    setLoading(true);
     fetch(`/api/service-calendar?action=sc-load&account=${selectedAccount}&month=${mk}&clientToday=${encodeURIComponent(today)}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (d.success) setData(d); else { showToast(d.error || "Failed", "error"); setData(null); } })
@@ -2037,9 +2060,44 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     setSeasonView(next === "period" ? "period" : "calendar");
   }, []);
 
+  // B8a Fix 1 (2026-07-23): the refresh button was reloadKey-only and
+  // never invalidated monthCache - so on a drill view the loader guard
+  // (`if (monthCache[monthKey]) return`) passed, the drill loader
+  // early-returned, sc-load fired only for the calendar view (writing
+  // `data`, not `monthCache`), and the drill tile stayed stale. Now:
+  // invalidate the in-view month(s) first (same delete-guard shape as
+  // handleSave + handleBulkSave), then bump reloadKey. The loaders'
+  // guards fail, they fetch, monthCache refills, tile updates.
+  //
+  // Which months per view:
+  //   month drill   -> [monthKey]
+  //   period drill  -> monthsBetween(range.start, range.end)  (matches
+  //                    the periodDays memo at :949 - mirrors, not
+  //                    re-derives)
+  //   season overview -> no monthCache invalidation; overview reads
+  //                    `data` (unguarded calendar sc-load) and
+  //                    `yearData` (unguarded year-summary), both
+  //                    refresh on the reloadKey bump.
+  //
+  // Never `setMonthCache({})` - preserves #338's narrowing.
   const handleRefresh = useCallback(() => {
+    let affected = null;
+    if (isMonthView && monthKey) {
+      affected = [monthKey];
+    } else if (isPeriodView && periodKey && periodRanges) {
+      const range = periodRanges.find(r => r.period === periodKey);
+      if (range) affected = monthsBetween(range.start, range.end);
+    }
+    if (affected && affected.length > 0) {
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affected) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+    }
     setReloadKey(k => k + 1);
-  }, []);
+  }, [isMonthView, monthKey, isPeriodView, periodKey, periodRanges]);
 
   const handleAdminToggle = useCallback(() => {
     if (isAdminView) {

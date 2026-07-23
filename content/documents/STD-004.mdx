@@ -4,7 +4,7 @@ title: Documentation Repository Standard
 doc_class: STD
 shelf: "Brand & Documentation Standards"
 status: In Build
-version: "1.2"
+version: "1.3"
 card_line: "How the OPD corpus is organized and governed - classes, shelves, access tiers, canonical sourcing, lifecycle, and IDs. The system-of-docs standard."
 summary: "The Documentation Repository Standard. Governs the OPD document library as a system: the corpus model (content/documents as the corpus vs docs/ as developer/provenance space), the document-class decision rubric (when to use PB/SOP/TPL/REF/STD/POL/CHK/AGR/FORM/POST), the six shelves and organization, the one-fact-one-home rule (Facts vs prose vs generated docs, and non-canonical handling), the access-tier rubric (unrestricted/restricted/slt), the provenance boundary (operator knowledge vs repo-side evidence), lifecycle and status (retire-not-delete, supersession, effective-dating), ID-space governance, and relationship rules. STD-001 governs format inside a doc; STD-004 governs the system of docs."
 keywords:
@@ -166,9 +166,21 @@ Every corpus document carries an `access_level`:
 ## The rubric
 
 - Default to **unrestricted** - over-restricting operational truth defeats the purpose of the library for the people running the operation.
-- Use **restricted** when content is management-level context that should not be all-hands.
-- Use **slt** for anything carrying rates, fees, money terms, or compensation.
+- Use **restricted** for the per-entity operational record: the internal working state of an account, vendor, or facility - stakeholder detail, open items, internal rulings, and the operational judgment that sits behind a relationship.
+- Use **slt** only for genuinely leadership-only material such as compensation bands.
 - When a document is ambiguous, fail closed to the more restrictive tier.
+
+**Reference material is not restricted by default.** Contract terms, the money model, and the generated price catalog are facts the business runs on, not secrets: at KitchFix, pricing and contract data are intentionally shared internally (the same norm that keeps invoices and vendor data open). The distinction that drives the tier is not "does this contain dollar figures" - it is **operational record versus reference fact**. A per-account record carrying live open items and internal commentary is `restricted`; the contract digest, the money model, and the Price Book that document what is true are `unrestricted`.
+
+Worked example - the Service Calendar pricing set:
+
+| Document set | Tier | Why |
+|---|---|---|
+| Account Records (REC-101..111) | restricted | Per-account operational record: stakeholders, open items, internal rulings |
+| Contract Digests (REF-121..132) | unrestricted | Verbatim contract terms - reference fact |
+| Money Model (REF-140) | unrestricted | How billing works - framework knowledge |
+| Price Book (REF-141) | unrestricted | The generated live price catalog - reference fact |
+| Templates and standards (TPL-020, STD-004) | unrestricted | Governance and authoring scaffolding |
 
 > CRITICAL: Access tier is set at authoring time, before a document is projected or ingested. A sensitive document must never enter the corpus at the wrong tier and be corrected later - by then it may already have been rendered or embedded.
 
@@ -176,7 +188,9 @@ Enforcement status: the reader enforces `access_level` today - both the document
 
 > ANCHOR: Because the reader already enforces access and no retrieval surface exists yet, restricted and slt documents - including pricing, contract, and compensation content - are safe to land now. The retrieval-side enforcement lands with the retrieval build, not before this content.
 
-> NOTE: OPD access is presently all-or-nothing within a tier - the reader enforces the tier, not per-account or per-document identity. Where a document set is sensitive but every OPD user (all salaried managers) legitimately needs it, the correct tier is `restricted` for the whole set, not slt. Per-account or per-user scoping within a tier is a future capability; until it exists, choose the tier on "which population needs this," not on finer-grained visibility.
+> NOTE: OPD access is presently all-or-nothing within a tier - the reader enforces the tier, not per-account or per-document identity. Choose the tier on "which population needs this," not on finer-grained visibility. Per-account or per-user scoping within a tier is a future capability.
+
+> CRITICAL: `access_level` is overlay-preserved at projection - the MDX value seeds the row on first insert and is not re-applied on update, so a tier changed in the cockpit persists in the database but does NOT flow back to the MDX. Keep the two in step: when a tier is changed in the cockpit, update the document's frontmatter to match. If they diverge and the document is ever re-inserted, it returns at the stale MDX tier.
 
 # The Provenance Boundary
 
