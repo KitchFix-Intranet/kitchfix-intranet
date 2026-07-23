@@ -135,19 +135,19 @@ Food/packaging/supplies budget **$225,000** (contract §2.a.iii), billed as **si
 - **Reimbursable tax** - Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts.
 - **PG carries escalated** - PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling.
 - **SF tax** - STL-MO SF is **NON-TAXABLE** (Cardinals' legal position; they bear the risk) - **invoice-confirmed** K300168469 (tax $0.00).
-- **SF description naming** - STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. Bill export must not assume uniform Description strings.
+- **SF description naming** - STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. "Management Fee" and "Service Fee" are functionally the same at STL-MO (Kevin). Bill export must handle both Description strings.
 
 # Open Items
 
 | Item | Status | Owner | Blocking cert? |
 |---|---|---|---|
 | PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No |
-| $225K passthrough true-up | UNKNOWN | - | No |
+| $225K passthrough true-up | MANAGED (tracked vs goal) | Kevin | No |
 
 **Detail**
 
 - **PG fee-schedule migration to escalated** - Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: STL-MO `sc_fee_schedule` flipped from $473,000 base → $489,497 escalated (changed_by `kf-fee-escalation-2026-07`). Companion CIN-OH migration ran same day ($362,500 → $376,686).
-- **$225K passthrough true-up** - Savings revert to Cardinals, overage billable; SF-level true-up not specified.
+- **$225K passthrough true-up** - $225K is the goal/budget with wiggle room. KitchFix tracks invoices and keeps the Cardinals aware of spending against the budget. Savings revert to Cardinals; overage billable (§2.a.iii). No SF-level true-up mechanic - managed operationally against the target. *Kevin, 2026-07-23*
 
 # History
 

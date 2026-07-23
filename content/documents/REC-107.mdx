@@ -69,13 +69,13 @@ relationships:
 > Specimen figures - live values resolve from the Price Book (generated from PG). Reference context, not the canonical price source.
 
 ## Money shape
-- **Shape**: **Pure per-meal, NO service fee (assumption).** `actual_count × $27.34` = invoice. No SF, no passthrough - but this shape is *assumed* (mirrors CIN-KY, the sibling AAA account), NOT contract-confirmed, because there's no operative contract. *MONEY_MODEL: No-SF assumption*
-- **Service Fee**: NONE (assumed; no contract to confirm).
-- **Escalation regime**: **UNKNOWN** - no operative contract on file. The $27.34 rate is now **invoice-confirmed** (K300168849) + Kevin-confirmed + Joe-attested, but how it was originally set and whether/how it escalates remain undocumented (likely governed by the Dec 2018 MSA's escalation terms, unread).
+- **Shape**: **Pure per-meal, NO service fee.** `actual_count × $27.34` = invoice. No SF, no passthrough - Kevin-confirmed and invoice-corroborated (K300168849 shows no SF line). Mirrors CIN-KY, the sibling AAA account. *MONEY_MODEL: No-SF*
+- **Service Fee**: NONE - confirmed by invoice K300168849 (no SF line) and Kevin.
+- **Escalation regime**: Governed by the Dec 2018 Rogers/Toronto MSA (not in the Buffalo folder; likely lives in the Toronto master). The $27.34 rate is **invoice-confirmed** (K300168849) + Kevin-confirmed + Joe-attested; the escalation mechanic is at the MSA level and not surfaced separately for Buffalo.
 - **Tax treatment**: **New York sales tax = 8.75%** (confirmed from invoice K300168849: $1,112.40 / $12,713.10 = 8.75% exact; = Erie County combined, 4% NY State + 4.75% Erie). SC emits pre-tax (R9). *invoice K300168849*
 
 ## Rate table (effective-dated; the retrievable price list)
-> No SF, so sticker = billed rate. The rate is **assumption-only** - Joe-attested via the signed sheet + PG-matched, but with no operative contract behind it. All as-of 2026.
+> No SF, so sticker = billed rate. The rate is Joe-attested via the signed sheet, PG-matched, and corroborated by invoice K300168849. All as-of 2026.
 
 *All rates as-of 2026.*
 
@@ -88,7 +88,7 @@ relationships:
 | Snack | - (deactivated) | - | signed sheet | PG $0, inactive *C-10 ruled: deactivate* |
 | Shake | - (deactivated) | - | signed sheet | PG $0, inactive *C-10 ruled: deactivate* |
 **Rate-table notes:**
-- **The $27.34 rate is now INVOICE-CONFIRMED** (K300168849, every line at $27.34 regardless of meal type) - in addition to Kevin-confirmed + Joe-attested + PG-matched. This closes the "least-supported price" concern: the *number* is now backed by an actual client invoice, the strongest evidence short of a countersigned contract. What remains missing is only the *contract document* scoping Buffalo (likely an SOW under the Dec 2018 Toronto MSA). The 2019 draft rate was $18.75 (superseded).
+- **The $27.34 rate is now INVOICE-CONFIRMED** (K300168849, every line at $27.34 regardless of meal type) - in addition to Kevin-confirmed + Joe-attested + PG-matched. This closes the "least-supported price" concern: the *number* is now backed by an actual client invoice, the strongest evidence short of a countersigned contract. What remains missing is only the *contract document* scoping Buffalo (an SOW under the Dec 2018 Toronto MSA). The 2019 draft rate was $18.75 (superseded).
 - **All meal types bill at the same $27.34** - Breakfast, Lunch, and Post-Game are one flat rate (invoice carries meal type in the description, not as separate-priced SKUs).
 - **Snack + Shake are correctly DEACTIVATED** ($0/inactive) per the C-10 ruling - confirmed by the invoice showing NO snack/shake lines. *LEDGER §O, C-10; §U confirms; invoice K300168849*
 
@@ -136,9 +136,9 @@ relationships:
 
 **Detail**
 
-- ****Buffalo SOW under the Dec 2018 Toronto MSA**** - NOT "no contract exists" - the invoice traces Buffalo billing to the Rogers/Toronto PDC umbrella, so the operative paper is almost certainly an SOW under the Dec 11 2018 MSA (same master as TBJ-FL). Chase: (1) the MSA, (2) the Buffalo SOW under it. Risk reduced now that the rate is invoice-confirmed + the billing relationship is traced.
+- ****Buffalo SOW under the Dec 2018 Toronto MSA**** - billing is through the PDC umbrella; the invoice traces Buffalo billing to the Rogers/Toronto PDC (same master as TBJ-FL), so the operative paper is an SOW under the Dec 11 2018 MSA. Chase: (1) the MSA, (2) the Buffalo SOW under it. Risk reduced now that the rate is invoice-confirmed + the billing relationship is traced.
 - **Client contact** - Katarina Dimino is the client contact for both TBJ accounts. Charlie Wilson is the AP/billing recipient on invoices. Closed.
-- ****Why $27.34** (rate justification)** - Rate now invoice-confirmed + Kevin-confirmed + Joe-attested. The *number* is solid; only the contract *document* scoping it is missing (likely the Dec 2018 MSA escalation terms).
+- ****Why $27.34** (rate justification)** - Rate now invoice-confirmed + Kevin-confirmed + Joe-attested. The *number* is solid; only the contract *document* scoping it is missing (the Dec 2018 MSA escalation terms).
 - **NY tax rate + net terms** - Invoice K300168849: NY tax 8.75% (Erie County), Net 30, weekly Sunday cadence. Was pending; now closed.
 - **Invoice sample for golden test** - Invoice K300168849 obtained + worked example built (§2e). Independent $27.34 confirmation.
 
@@ -155,8 +155,8 @@ relationships:
 
 # Provenance & Attribution
 - **Contract facts**: the ONLY document is the 2019 historical draft, verbatim in the Contract Digest (REF-128). No operative contract exists to cite.
-- **Per-service price ($27.34)**: signed Price Review v3 (Joe **Lessard**-attested) + PG match - assumption-only, no contract/invoice backing.
-- **Money shape**: the Money Model (REF-140) (No-SF assumption).
+- **Per-service price ($27.34)**: signed Price Review v3 (Joe **Lessard**-attested) + PG match + invoice-confirmed (K300168849).
+- **Money shape**: the Money Model (REF-140) (No-SF).
 - **Rulings**: LEDGER (repo-side provenance) §O (C-10), §K/§P (Q6 gap).
 - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
 
