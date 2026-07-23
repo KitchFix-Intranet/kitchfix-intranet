@@ -840,12 +840,36 @@ function DayEntryV2({
             notes={notes}
             onNotesChange={setNotes}
             noteRef={rideNoteRef}
-            onConfirm={executeConfirm}
-            confirmDisabled={!hasTouchedAny || saving}
-            confirmLabel={saving ? "Saving..." : "Confirm & save"}
-            confirmBtnRef={primaryBtnRef}
           />
         </aside>
+      </div>
+
+      {/* B3 (2026-07-24): pinned actions row per §8C. Desktop-only
+          via CSS media query; mobile keeps its MobileBooksBar stickyAction
+          below. Confirm & save was previously the last child of BillRail
+          which lives inside a scrollable rail column - at 555px viewport
+          the button rendered at y=754 (below the fold). Pinning it here,
+          as a sibling of the pane rather than a child, keeps it visible
+          at every supported height. Day total shown alongside for
+          §8C's "day total + Confirm & save" contract. */}
+      <div className="sc-v2-entry-actions">
+        <div className="sc-v2-entry-actions-total">
+          <span className="sc-v2-entry-actions-total-label">
+            {hasTouchedAny ? "Day total" : "Projected"}
+          </span>
+          <span className="sc-v2-entry-actions-total-value">
+            {hasTouchedAny ? "" : "~"}{fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}
+          </span>
+        </div>
+        <button
+          type="button"
+          ref={primaryBtnRef}
+          className="sc-v2-entry-rail-cta"
+          onClick={executeConfirm}
+          disabled={!hasTouchedAny || saving}
+        >
+          {saving ? "Saving..." : "Confirm & save"}
+        </button>
       </div>
 
       {/*
@@ -1033,8 +1057,10 @@ function BillRail({
   serviceGroups, day, editValues, touched,
   groupSummary, projectedGroupSummary,
   notes, onNotesChange, noteRef,
-  onConfirm, confirmDisabled, confirmLabel, confirmBtnRef,
 }) {
+  // B3 (2026-07-24): the Confirm & save block was extracted from here
+  // to a pinned actions row in the parent (DayEntryV2). Rail now
+  // renders label + hero + progress + invoice + ride-along note.
   // Hero value: entered total (from touched services) when the operator
   // has touched something, otherwise the projected total. Matches
   // DayDetail's SC-072 "entered-only from first entry onward" rule.
@@ -1169,18 +1195,6 @@ function BillRail({
         />
       </div>
 
-      {/* Confirm - ONE primary action */}
-      <div className="sc-v2-entry-rail-footer">
-        <button
-          type="button"
-          ref={confirmBtnRef}
-          className="sc-v2-entry-rail-cta"
-          onClick={onConfirm}
-          disabled={confirmDisabled}
-        >
-          {confirmLabel}
-        </button>
-      </div>
     </div>
   );
 }

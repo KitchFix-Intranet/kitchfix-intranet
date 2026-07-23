@@ -2531,6 +2531,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 period,
                 day: date,
               }), { scroll: false });
+              // B2 (2026-07-24): rail queue rows previously navigated
+              // without opening the entry modal - buildScUrl's ?day=
+              // is documented focus-only (see :98-113), and no code
+              // turned it into setFocusDay. Explicit setFocusDay opens
+              // the modal the operator expected. router.push above still
+              // updates the URL (preserves tile-focus scroll + shareable
+              // link semantics).
+              setFocusDay(date);
             }
           };
           const overviewDrillMonth = (mi) => {
@@ -2553,6 +2561,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 period: containingPeriod.period,
                 day: date,
               }), { scroll: false });
+              // B2 (2026-07-24): open the entry modal after navigating.
+              // See overviewTargetDay above.
+              setFocusDay(date);
             }
           };
           const rail = isFeeAccount ? (
@@ -2693,6 +2704,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               period: periodKey,
               day: date,
             }), { scroll: false });
+            // B2 (2026-07-24): open the entry modal after navigating.
+            // See overviewTargetDay in the overview branch above.
+            setFocusDay(date);
           };
           // HF-5 dedup (2026-07-20): the rail's exportControl slot
           // (DrillRail.js:359 / OpsRail.js:263) is deliberately not
@@ -2893,6 +2907,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               month: monthKey,
               day: date,
             }), { scroll: false });
+            // B2 (2026-07-24): open the entry modal after navigating.
+            // See overviewTargetDay in the overview branch above.
+            setFocusDay(date);
           };
           // Human month label ("Jul 2026") for the rail section header
           const monthLabel = monthKey ? (() => {
