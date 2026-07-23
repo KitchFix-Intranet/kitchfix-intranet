@@ -641,18 +641,22 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // meant a refresh or save closed the modal mid-edit (data-loss-shaped
   // on refresh once B8a Fix 1 wires it, and incompatible with the
   // Handoff animation §8B that keeps the modal open through save).
-  // Now: these resets fire only when the operator changes the VIEW
-  // (account switch or calendar-month change). reloadKey is
-  // deliberately NOT in the deps - a data refresh must not touch UI
-  // state. NOTE: drill URL nav (monthKey / periodKey change) does
-  // not currently fire this reset either; leaving the modal open
-  // across drill nav matches the current-pass spec.
+  //
+  // Now: these resets fire ONLY when the operator changes the VIEW,
+  // which is either an account switch, a calendar-month change (mk),
+  // or a drill nav (monthKey / periodKey). reloadKey is deliberately
+  // NOT in the deps - a data refresh must not touch UI state.
+  //
+  // Drill nav closure: opening a modal on July 5 then stepping to
+  // August is a deliberate navigation; closing the July modal is the
+  // expected behavior. Refresh and save are BACKGROUND data events
+  // the operator did not ask for - modal must survive those.
   useEffect(() => {
     setFocusDay(null);
     setBulkMode(false);
     setBulkSelected(new Set());
     setBulkPanelOpen(false);
-  }, [selectedAccount, mk]);
+  }, [selectedAccount, mk, monthKey, periodKey]);
   useEffect(() => {
     if (!selectedAccount) return;
     const controller = new AbortController();
