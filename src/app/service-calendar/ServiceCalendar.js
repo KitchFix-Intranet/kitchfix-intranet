@@ -1248,12 +1248,28 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // point. Only page unmount triggers the abort loop below.
   const isMountedRef = useRef(true);
   const inFlightControllersRef = useRef(new Set());
-  useEffect(() => () => {
-    isMountedRef.current = false;
-    for (const c of inFlightControllersRef.current) {
-      try { c.abort(); } catch { /* ignore */ }
-    }
-    inFlightControllersRef.current.clear();
+  // B8b fix (2026-07-23): the mount body was missing - previously this
+  // was a cleanup-only effect. `useRef(true)` initialized `.current`
+  // once; StrictMode's dev double-mount (mount -> cleanup -> mount)
+  // ran the cleanup body between them, setting `.current = false`,
+  // and nothing re-armed it on the second mount. Result: for the
+  // entire life of the page in dev, isMountedRef.current stayed
+  // false. Every `isMountedRef.current` guard in this file (13 call
+  // sites) silently short-circuited, including handleSave's toast +
+  // monthCache delete + reloadKey bump at :1490 - which is why the
+  // drill never refreshed after a save. Adding the mount body
+  // re-arms the flag on every mount. Prod builds are unaffected
+  // (StrictMode double-invoke is dev-only per React docs), but the
+  // guard shape was wrong either way. See docs/GOTCHAS.md.
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      for (const c of inFlightControllersRef.current) {
+        try { c.abort(); } catch { /* ignore */ }
+      }
+      inFlightControllersRef.current.clear();
+    };
   }, []);
 
   // F3: retry driver. One useEffect owns the timer map, the online +
