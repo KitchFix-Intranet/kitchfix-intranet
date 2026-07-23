@@ -258,6 +258,50 @@ useEffect(() => {
 
 **Fix:** put the cache in the deps and drop the eslint-disable. The guard self-terminates (empty cache → fetch → populate → guard hits → stop), so no loop. SC account-switch blank, #332.
 
+### A cleanup-only mount-guard `useRef` is silently broken under StrictMode
+
+Pattern:
+
+```javascript
+// WRONG - cleanup-only, no mount body
+const isMountedRef = useRef(true);
+useEffect(() => () => {
+  isMountedRef.current = false;
+  ...
+}, []);
+```
+
+`useRef(true)` initializes `.current` once on first render. Under React StrictMode's dev double-mount (mount → cleanup → mount), the cleanup body runs between the two mounts, setting `.current = false`. **Nothing re-arms it on the second mount** because the effect has no mount body. `isMountedRef.current` stays `false` for the entire life of the page in dev, and every `if (isMountedRef.current)` guard downstream silently short-circuits.
+
+Symptom on SC: a save's `handleSave` short-circuited at its mount guard, skipping the toast, the `monthCache` invalidation, and the `reloadKey` bump - so the drill never refreshed after a save. Every other guard in the same file (13 total) had the same silent-drop behavior, including `setSaving(false)` in `finally` (the "stuck at Saving..." from an earlier PR).
+
+**Fix:** always give the effect a mount body that re-arms the flag:
+
+```javascript
+// RIGHT
+useEffect(() => {
+  isMountedRef.current = true;    // re-arm on (re)mount
+  return () => {
+    isMountedRef.current = false;
+    ...cleanup...
+  };
+}, []);
+```
+
+Prod builds are unaffected: StrictMode's double-invoke is dev-only per React docs. But the guard shape is wrong either way - a real unmount/remount in prod (session flip, error boundary reset) hits the same behavior.
+
+**Class:** grep for `useRef(true)` and for `useEffect(() => () => ..., [])` when reviewing a mount-guard pattern. Two catches, same rule. SC B8b, #501.
+
+### `DayEntryV2`'s "Recorded" success screen is not the toast - and it lies
+
+The SC modal renders its own local success screen at `sc-v2-entry-success-*` classes (`DayEntryV2.js:652-673`) when `justSaved === true`. Layout: `<h3>Recorded</h3>` + `fmt$(summary.revenue)` hero + `{summary.meals.toLocaleString()} meals · {formatDate(day.date)}`. Visually it reads like the `<SubmissionToast>` recorded variant. It is not.
+
+`summary.revenue` and `summary.meals` are computed CLIENT-SIDE in the modal from the operator's just-typed values (`getVal(colIndex) * priceAtDate`, `DayEntryV2.js:382-392`). **The success screen renders on `result.success === true` regardless of what happens next in `handleSave`** - even if `handleSave` short-circuits at its mount guard and never fires its toast, invalidates the cache, or bumps `reloadKey`. The values line up with the server because the operator typed them correctly, not because the client verified against server state.
+
+This is the "confirmation UI is not evidence" corollary from *Debugging method* landing live: an operator sees a plausible success confirmation on the modal, closes it, and the tile / week card / rail hero all remain stale. The confirmation was rendered by a component that has no dependency on the state the save was supposed to update.
+
+**Fix:** when a save appears to have succeeded but downstream state doesn't refresh, verify the surface the write is supposed to touch (tile, week card, rail hero), not the success confirmation inside the modal. Same pattern in `DayDetail.js:1078` (v1 modal's `<h3>Recorded</h3>` head). Both are client-computed and both will lie if the state layer silently fails. SC B8b, #501.
+
 ---
 
 ## Next.js App Router
