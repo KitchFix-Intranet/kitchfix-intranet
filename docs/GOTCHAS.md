@@ -7,6 +7,32 @@
 
 ---
 
+## Debugging method
+
+### After the second failed fix, stop reasoning and instrument
+
+The failure mode: a bug gets a plausible diagnosis, a fix ships, the bug survives. A second theory, a second fix, still alive. Each attempt is an argument about what the code *should* do, and each one is checked by reading more code - which is the same tool that produced the wrong answer the first time.
+
+**Fix:** treat the second failed attempt as a hard trigger to instrument. Put `console.log` probes on a throwaway branch and reproduce once. Probe, at minimum:
+
+- entry and exit of the suspect function
+- **every early return in it, including guard clauses** - this is usually where the answer is
+- inside the `catch` (log the error object), and inside the `finally`
+- the top of the effect or handler you expect to fire downstream, plus the line immediately before the work it does
+
+Then find a path that **works** and probe it identically. **Diff the two traces.** The line where they stop matching is the bug. This is faster and more reliable than reading either path in isolation.
+
+Two things this catches that code-reading does not:
+
+- **Code that never ran.** A missing log is as informative as a wrong value. B8's entire trace was one line from the `finally` block - no success branch, no `catch` - which pointed straight at a guard clause that reading the function had not made suspicious.
+- **Confirmation UI is not evidence.** A save showed a green "Recorded $3,030.34" while nothing downstream updated. Success messaging is often rendered by a different component, or a different code path, than the one that owns the state. Verify the surface that is *supposed to reflect* the write, not the one that announces it.
+
+Corollary for anything asynchronous: if a network call is expected and none appears, wrap `window.fetch` before reproducing. It records calls that were dispatched and later aborted, which distinguishes "never called" from "called and cancelled" - two completely different bugs.
+
+Incident: SC stale-view-after-save (B8). Three fixes at the cache layer, all wrong; the cache was never broken, the code that triggers it was being skipped. Two console traces resolved it in seconds.
+
+---
+
 ## Data & Sheets
 
 ### Currency values from Sheets are strings, not numbers
