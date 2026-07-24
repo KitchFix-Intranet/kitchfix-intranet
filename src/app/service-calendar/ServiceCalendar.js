@@ -1465,13 +1465,24 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
 
     const onBeforeUnload = (e) => {
       const anyQueued = scGetAll().length > 0;
-      if (!anyQueued) return;
+      // A4 fix (2026-07-24): also prompt when a save is genuinely
+      // in flight (fetch on the wire). Prior behavior: closing the
+      // tab mid-save let the server write complete silently while
+      // the client never knew - operator could re-enter the same
+      // day with different values, LWW clobbering the first write.
+      // Extending the existing beforeunload guard is the cheapest
+      // and most honest fix; full durable-state reconciliation
+      // (localStorage + mount-time replay for in-flight saves) is
+      // scoped separately in the PR body.
+      const anyInFlight = inFlightControllersRef.current.size > 0;
+      if (!anyQueued && !anyInFlight) return;
       // Browser shows its native "leave / stay" prompt; the specific
       // message string is ignored on modern browsers but the returnValue
       // is what triggers the dialog.
       e.preventDefault();
-      e.returnValue = "A save is still syncing.";
-      return "A save is still syncing.";
+      const msg = anyInFlight ? "A save is still in flight." : "A save is still syncing.";
+      e.returnValue = msg;
+      return msg;
     };
 
     window.addEventListener("online", onOnline);
@@ -1564,12 +1575,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       if (!isMountedRef.current) return result;
       if (result.success) {
         const newlyEntered = day.hasActuals ? 0 : 1;
-        // P2 item 2: partial-success case. Save landed but the ride
-        // note append failed post-save. Show the honest partial toast
-        // instead of the recorded success - never a clean success when
-        // the note the operator asked us to attach didn't post.
+        // P2 item 2 + A3 amend (2026-07-24): partial-success cases.
+        // Save landed but a note append failed post-save. Both flags
+        // surface honestly:
+        //   noteFailed       - rideNote (operator-authored) failed
+        //   auditNoteFailed  - no-service audit note failed
+        // Different literal messages; same partial-success shape.
         if (result.noteFailed) {
           showToast("Saved - note couldn't post, use Add note", "error");
+        } else if (result.auditNoteFailed) {
+          showToast("Saved - no-service note couldn't post", "error");
         } else {
           // PR-B kept toast fix (2026-07-22): guard amount/meals on
           // Number.isFinite. If server response omits either total
@@ -1642,7 +1657,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         setReloadKey(k => k + 1);
         return result;
       }
-      showToast(result.error || "Save failed", "error");
+      // A3 failure-UI amend (2026-07-24): caller can suppress the
+      // floating toast when it renders the failure inline in its own
+      // panel (per §8B "failure is the absence of the handoff"). v2
+      // DayEntryV2 passes silentFailure:true; v1 DayDetail leaves it
+      // absent to preserve existing failure behavior.
+      if (!opts.silentFailure) {
+        showToast(result.error || "Save failed", "error");
+      }
       return result;
     } catch (err) {
       // C1b (F4): user navigated away mid-save; mount-ref already
@@ -1814,7 +1836,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         successCount = days.length;
         for (const day of days) if (!day.hasActuals) newlyEntered++;
       } else {
-        showToast(result.error || "Bulk save failed", "error");
+        // A3 failure-UI (2026-07-24): server returns serviceDate for
+        // validation failures on the bulk path (route.js sc-bulk-submit
+        // catch). Name the offending day inline so the operator knows
+        // WHICH day to fix - per §8B all-or-nothing message. Nothing
+        // committed (bulk is server-atomic).
+        const bulkErr = result.error || "Bulk save failed";
+        const dayHint = result.serviceDate ? `on ${result.serviceDate} - ` : "";
+        showToast(`Bulk rejected: ${dayHint}${bulkErr}. Nothing committed.`, "error");
       }
     } catch (err) {
       if (err?.name !== "AbortError") {
@@ -1902,7 +1931,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         successCount = days.length;
         for (const day of days) if (!day.hasActuals) newlyEntered++;
       } else {
-        showToast(result.error || "Confirm as projected failed", "error");
+        // A3 failure-UI (2026-07-24): mirror handleBulkSave's enhanced
+        // error message. Confirm-as-projected uses the same bulk
+        // endpoint, so serviceDate can flow through the same way.
+        const bulkErr = result.error || "Confirm as projected failed";
+        const dayHint = result.serviceDate ? `on ${result.serviceDate} - ` : "";
+        showToast(`Bulk rejected: ${dayHint}${bulkErr}. Nothing committed.`, "error");
       }
     } catch (err) {
       if (err?.name !== "AbortError") {
