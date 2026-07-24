@@ -711,9 +711,25 @@ export async function POST(request) {
       // trail, so it posts its literal via the same ledger table as
       // sc-add-note. Author derives from the session - the client
       // cannot spoof it. Regular saves omit auditNote entirely.
+      //
+      // A3 fix (2026-07-24): wrap in try/catch. Prior behavior let a
+      // note-write failure propagate to the outer catch, which
+      // returned 500 while the ACTUALS were already committed to disk.
+      // Operator saw "Save failed" and retried; LWW rewrote the same
+      // value. Now: actuals are the billing truth - a note-write
+      // failure is non-fatal, surfaced via auditNoteFailed so the
+      // client can display an honest partial-success message ("saved,
+      // no-service note couldn't post"). Same shape as rideNote below.
+      let auditNoteFailed = false;
       if (typeof auditNote === "string" && auditNote.trim().length > 0) {
-        const author = session.user?.name || session.user?.email || "";
-        await addDayNoteEntry(accountKey, date, auditNote, author);
+        try {
+          const author = session.user?.name || session.user?.email || "";
+          await addDayNoteEntry(accountKey, date, auditNote, author);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("[sc-submit-day] auditNote append after successful save:", err);
+          auditNoteFailed = true;
+        }
       }
 
       // P2 (item 2, 2026-07-10): ride-along authored note. Ordered
@@ -742,13 +758,25 @@ export async function POST(request) {
       // as the tile + week card + drill rail), not a client recompute
       // from the current catalog. Toast rounds to whole dollars via
       // fmt$; toast component receives the raw sum.
-      const totals = await readSavedDayTotals(accountKey, date);
+      //
+      // A3 fix (2026-07-24): wrap in try/catch for the same reason as
+      // auditNote above. Actuals are committed; a view-read failure
+      // means we can't echo totals but the write is fine. Client's
+      // Number.isFinite guard (SubmissionToast.js:33) already handles
+      // absent totals gracefully.
+      let totals = null;
+      try {
+        totals = await readSavedDayTotals(accountKey, date);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[sc-submit-day] readSavedDayTotals after successful save:", err);
+      }
 
       return NextResponse.json({
         ...result,
-        savedRevenue: totals.revenue,
-        savedMeals:   totals.meals,
+        ...(totals ? { savedRevenue: totals.revenue, savedMeals: totals.meals } : {}),
         ...(noteFailed ? { noteFailed: true } : {}),
+        ...(auditNoteFailed ? { auditNoteFailed: true } : {}),
       });
     }
 
@@ -789,17 +817,32 @@ export async function POST(request) {
       // on the bulk path too. A 400 aborts the ENTIRE batch (per Fix 1's
       // all-or-nothing contract) - one malformed entry blocks the whole
       // upsert rather than silently zeroing that row.
+      // A3 failure-UI amend (2026-07-24): track the current entry so
+      // the 400 response can name which DAY the bad value came from
+      // (not just which service). Enables the client's "day X, field Y"
+      // bulk-rejection message per §8B without a second lookup.
       let touched;
+      let failingEntry = null;
       try {
-        touched = entries.map((e) => ({
-          serviceId:   e.colIndex,
-          serviceDate: e.date,
-          actualCount: coerceActualCount(e.value, e.colIndex),
-        }));
+        touched = [];
+        for (const e of entries) {
+          failingEntry = e;
+          touched.push({
+            serviceId:   e.colIndex,
+            serviceDate: e.date,
+            actualCount: coerceActualCount(e.value, e.colIndex),
+          });
+        }
+        failingEntry = null;
       } catch (err) {
         if (err instanceof ActualCountValidationError) {
           return NextResponse.json(
-            { success: false, error: err.message, serviceId: err.serviceId },
+            {
+              success: false,
+              error: err.message,
+              serviceId: err.serviceId,
+              serviceDate: failingEntry?.date || null,
+            },
             { status: 400 },
           );
         }

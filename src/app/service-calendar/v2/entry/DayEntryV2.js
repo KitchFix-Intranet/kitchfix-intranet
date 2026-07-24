@@ -92,6 +92,16 @@ function DayEntryV2({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
   const [standaloneDraft, setStandaloneDraft] = useState("");
+  // A3 failure UI (2026-07-24): inline failure state. Set by
+  // executeConfirm when onSave returns !success (server rejected the
+  // write; nothing committed). Rendered as a red-rail banner at the
+  // top of the modal body. Cleared on next handleChange (operator is
+  // retrying) and on any successful save. Shape:
+  //   { message: string, serviceId?: string }
+  // The serviceId is present for validation errors (from the server's
+  // ActualCountValidationError path); UI can highlight the offending
+  // input if we choose. Absent for other rejection classes.
+  const [saveError, setSaveError] = useState(null);
   // W7 PR 2/3 motion: colIndexes currently mid-flash. Populated by
   // handleChange (ghost -> solid transition) and by fillGroupWithProjections
   // (Match-projections cascade). Each colIndex is a Map key -> stagger
@@ -208,6 +218,10 @@ function DayEntryV2({
     setShowNoServiceConfirm(false);
     setStandaloneDraft("");
     setMobileBillOpen(false);
+    // A3 failure UI (2026-07-24): clear inline save error on day-nav.
+    // Failure state belongs to the day + values that failed - opening
+    // a different day shouldn't inherit it.
+    setSaveError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
@@ -257,6 +271,10 @@ function DayEntryV2({
   }, [showNoServiceConfirm]);
 
   const handleChange = useCallback((colIndex, value) => {
+    // A3 failure UI (2026-07-24): clear any prior save error - the
+    // operator is retrying by typing. Panel is no longer in a failed
+    // state until their next Confirm & save resolves.
+    setSaveError(null);
     const clean = value.replace(/[^0-9]/g, "");
     setEditValues(prev => {
       const was = prev[colIndex] ?? "";
@@ -476,17 +494,28 @@ function DayEntryV2({
     if (entries.length === 0) return;
     const trimmedDraft = (notes || "").trim();
     const rideNote = trimmedDraft.length > 0 ? trimmedDraft : undefined;
-    const result = await onSave(day, entries, { rideNote });
+    // A3 failure UI (2026-07-24): pass silentFailure so handleSave
+    // does NOT fire its floating "Save failed" toast. The failure
+    // renders inline in this panel instead (per §8B "failure is the
+    // absence of the handoff"). Panel stays open, counts intact.
+    const result = await onSave(day, entries, { rideNote, silentFailure: true });
     if (result?.success) {
+      setSaveError(null);   // any prior failure state is stale now
       if (result.queued) {
         setNotes("");
         onClose?.();
-      } else if (result.noteFailed) {
+      } else if (result.noteFailed || result.auditNoteFailed) {
         onClose?.();
       } else {
         setJustSaved(true);
         setNotes("");
       }
+    } else {
+      // Nothing committed. Panel stays open, counts intact.
+      setSaveError({
+        message: result?.error || "Save failed",
+        serviceId: result?.serviceId || null,
+      });
     }
   }, [serviceGroups, touched, getVal, day, onSave, onClose, notes]);
 
@@ -785,6 +814,19 @@ function DayEntryV2({
       {coaching && (
         <div className={`sc-v2-entry-coaching sc-v2-entry-coaching--${coaching.tone}`}>
           {coaching.text}
+        </div>
+      )}
+
+      {/* A3 failure UI (2026-07-24): inline save-failure banner. Red
+          left-rail per §8B. Renders above the pane so it's the first
+          thing above the input area. Counts/typed values remain intact
+          in the body below. Cleared on retry (handleChange) or day-nav.
+          Panel does not close - operator can fix the reason and retry
+          in place. */}
+      {saveError && (
+        <div className="sc-v2-entry-alert sc-v2-entry-alert--error" role="alert" aria-live="assertive">
+          <div className="sc-v2-entry-alert-head">Save failed - nothing recorded</div>
+          <div className="sc-v2-entry-alert-body">{saveError.message}</div>
         </div>
       )}
 
