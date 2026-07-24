@@ -4,7 +4,7 @@ title: "Price Book - Live Account Pricing (generated)"
 doc_class: REF
 shelf: "Service Delivery & Client Accounts"
 subshelf: "Financial Reference"
-status: In Build
+status: Live
 version: "1.0"
 card_line: "Live per-account price catalog - the ONLY canonical price-values document. Generated from PG on any price change; every other doc treats prices as specimens."
 summary: "The generated, live-price source for KitchFix Service Calendar billing. Organized by account (11 accounts, all services active + inactive); every price row is the latest-effective sc_service_prices projected-price at PG snapshot time. Per-account header lines (money shape, 2026 fee, escalation, notes) are static config maintained inside the generator, each cited to accounts/ACCOUNT_<KEY>.md section 2. Contract clauses, rulings, and rationale live in the account records (REC-101..111) and digests (REF-121..132). The Price Book is derived:true - never hand-edited; regenerate from PG on any price change (Studio apply, admin edit, effective-date backdate). This is the ONE document in the corpus where dollar figures are CANONICAL - everywhere else they are specimens wrapped in NonCanonical."
