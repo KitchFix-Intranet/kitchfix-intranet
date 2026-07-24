@@ -144,15 +144,10 @@ function checkRelationships(fm, allDocIds, findings) {
   }
 }
 
-// Lines that record source text rather than authoring their own do not count
-// as placeholders even if they contain one of the flagged tokens. Two cases:
-// - a blockquote line (first non-whitespace char is `>`): verbatim contract or
-//   quoted source text, which can legitimately contain "TBD" and cannot be
-//   rewritten. REF-123 quotes the Louisville agreement's literal
-//   "Exact end date TBD" and cannot be rephrased without breaking fidelity.
-// - a table row (line begins with `|`): tracker or contract-record cells,
-//   which likewise carry source-of-record data rather than authored prose.
-// Ordinary body prose containing a genuinely unfilled TBD is still caught.
+// A line records source text rather than authoring its own when its first
+// non-whitespace character is `>` (blockquote) or the line begins with `|`
+// (table row). Those shapes legitimately carry contract or tracker text a
+// document cannot rewrite.
 function isSourceOfRecordLine(line) {
   const trimmed = line.trimStart();
   if (trimmed.startsWith(">")) return true;
@@ -160,13 +155,39 @@ function isSourceOfRecordLine(line) {
   return false;
 }
 
+// A placeholder-token match is also legitimate when it sits inside a
+// double-quoted span on the same line - the token is being quoted, not
+// authored. Same principle as the blockquote and table-row skips, expressed
+// with quotation marks instead of a line-shape marker.
+// Test: count straight double quotes strictly before the match position; an
+// odd count means the match is inside an open `"..."` span. REF-123's L95
+// parenthesises a Louisville agreement snippet containing "Exact end date
+// TBD"; REC-111's L109 quotes the visiting-team roster's own "TBD" cell.
+function isMatchInsideQuotedSpan(line, matchIndex) {
+  let count = 0;
+  for (let i = 0; i < matchIndex; i++) {
+    if (line.charCodeAt(i) === 0x22) count++; // straight double quote
+  }
+  return count % 2 === 1;
+}
+
 function checkNumberHygiene(body, fm, findings) {
   if (fm.status !== "Live") return; // applies only to Live docs
   const lines = body.split("\n");
+  const globalRe = new RegExp(PLACEHOLDER_RE.source, "gi");
   for (let i = 0; i < lines.length; i++) {
     if (isSourceOfRecordLine(lines[i])) continue;
-    if (PLACEHOLDER_RE.test(lines[i])) {
-      findings.push({ severity: "ERROR", check: "number_hygiene", msg: `Live doc has placeholder text on line ${i + 1}: '${lines[i].trim().slice(0, 80)}'` });
+    // Flag the line only if at least one match sits outside a quoted span.
+    // If every match is inside `"..."`, the line is recording source text.
+    const line = lines[i];
+    globalRe.lastIndex = 0;
+    let m;
+    let flagged = false;
+    while ((m = globalRe.exec(line)) !== null) {
+      if (!isMatchInsideQuotedSpan(line, m.index)) { flagged = true; break; }
+    }
+    if (flagged) {
+      findings.push({ severity: "ERROR", check: "number_hygiene", msg: `Live doc has placeholder text on line ${i + 1}: '${line.trim().slice(0, 80)}'` });
     }
   }
 }
