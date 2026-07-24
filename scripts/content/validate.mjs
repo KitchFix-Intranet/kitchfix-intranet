@@ -144,10 +144,27 @@ function checkRelationships(fm, allDocIds, findings) {
   }
 }
 
+// Lines that record source text rather than authoring their own do not count
+// as placeholders even if they contain one of the flagged tokens. Two cases:
+// - a blockquote line (first non-whitespace char is `>`): verbatim contract or
+//   quoted source text, which can legitimately contain "TBD" and cannot be
+//   rewritten. REF-123 quotes the Louisville agreement's literal
+//   "Exact end date TBD" and cannot be rephrased without breaking fidelity.
+// - a table row (line begins with `|`): tracker or contract-record cells,
+//   which likewise carry source-of-record data rather than authored prose.
+// Ordinary body prose containing a genuinely unfilled TBD is still caught.
+function isSourceOfRecordLine(line) {
+  const trimmed = line.trimStart();
+  if (trimmed.startsWith(">")) return true;
+  if (line.startsWith("|")) return true;
+  return false;
+}
+
 function checkNumberHygiene(body, fm, findings) {
   if (fm.status !== "Live") return; // applies only to Live docs
   const lines = body.split("\n");
   for (let i = 0; i < lines.length; i++) {
+    if (isSourceOfRecordLine(lines[i])) continue;
     if (PLACEHOLDER_RE.test(lines[i])) {
       findings.push({ severity: "ERROR", check: "number_hygiene", msg: `Live doc has placeholder text on line ${i + 1}: '${lines[i].trim().slice(0, 80)}'` });
     }
