@@ -855,13 +855,44 @@ function DayEntryV2({
           keepEditingBtnRef={keepEditingBtnRef}
         />
       )}
-      {showNoServiceConfirm && (
-        <NoServiceConfirm
-          onCancel={() => setShowNoServiceConfirm(false)}
-          onConfirm={executeMarkNoService}
-          cancelBtnRef={nsCancelBtnRef}
-        />
-      )}
+      {showNoServiceConfirm && (() => {
+        // Owner Ruling 3 (2026-07-24): entered days need a destructive
+        // copy variant with a concrete counts summary - the misclick
+        // guardrail. Meals + service count only, NO currency (currency
+        // is server-derived; a wrong dollar figure in a destructive
+        // dialog is worse than none).
+        // Local `status` at :621 is a 4-value simplification that
+        // conflates "any actuals" with "entered"; day.status is the
+        // server-classified truth. Both would work here (this branch
+        // only cares about hasActuals + non-zero counts), but day.
+        // status keeps the concept aligned with the gate above.
+        const isEntered = day.status === "entered";
+        let enteredMeals = 0;
+        let enteredServices = 0;
+        if (isEntered) {
+          for (const g of serviceGroups) {
+            for (const s of g.services) {
+              if (!isInServiceOnDay(s, day.date)) continue;
+              const v = Number(day.actual?.[s.colIndex]);
+              if (Number.isFinite(v) && v > 0) {
+                enteredMeals += v;
+                enteredServices += 1;
+              }
+            }
+          }
+        }
+        return (
+          <NoServiceConfirm
+            onCancel={() => setShowNoServiceConfirm(false)}
+            onConfirm={executeMarkNoService}
+            cancelBtnRef={nsCancelBtnRef}
+            dateLabel={formatDate(day.date)}
+            hasEnteredCounts={isEntered && enteredServices > 0}
+            enteredMeals={enteredMeals}
+            enteredServices={enteredServices}
+          />
+        );
+      })()}
 
       {/* ─── Header ─── */}
       <div className="sc-v2-entry-head">
@@ -979,8 +1010,17 @@ function DayEntryV2({
             </details>
           )}
 
-          {/* Mark-no-service link */}
-          {status !== "entered" && (
+          {/* Mark-no-service link
+              2026-07-24 (owner Ruling 2): entered days ARE eligible for
+              cancellation - a game cancelled after counts, or a wrong-
+              day entry. Only no-service (already terminal) is gated.
+              v2 doesn't see prep/off-season (MLB fee stays on v1).
+              Gate reads SERVER status (day.status): the local `status`
+              var at :621 is a 4-value simplification (entered/overdue/
+              needs-entry/upcoming) and never emits "no-service", so
+              gating on local would leak the button onto server-no-
+              service days (all-zero actuals present). */}
+          {day.status !== "no-service" && (
             <div className="sc-v2-entry-nsvc">
               <button
                 type="button"
@@ -1544,12 +1584,25 @@ function DiscardConfirm({ onKeepEditing, onDiscard, keepEditingBtnRef }) {
   );
 }
 
-function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef }) {
+// One dialog, two copy variants (owner Ruling 3, 2026-07-24):
+//   hasEnteredCounts=false -> un-entered day, existing copy verbatim
+//   hasEnteredCounts=true  -> entered day, destructive-warning copy
+//                             with concrete meals/services summary
+// No currency in either variant - server-derived; a wrong dollar
+// figure in a destructive dialog is worse than no dollar figure.
+function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnteredCounts, enteredMeals, enteredServices }) {
+  const title = dateLabel ? `Mark ${dateLabel} as no service?` : "Mark as no service?";
   return (
     <div className="sc-v2-entry-modal" role="alertdialog" aria-modal="true">
       <div className="sc-v2-entry-modal-inner">
-        <h4 className="sc-v2-entry-modal-title">Mark as no service?</h4>
-        <p className="sc-v2-entry-modal-body">Every in-service service records zero. An audit note is appended.</p>
+        <h4 className="sc-v2-entry-modal-title">{title}</h4>
+        {hasEnteredCounts ? (
+          <p className="sc-v2-entry-modal-body">
+            This day has <strong>{enteredMeals.toLocaleString()} meal{enteredMeals === 1 ? "" : "s"}</strong> recorded across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
+          </p>
+        ) : (
+          <p className="sc-v2-entry-modal-body">Every in-service service records zero. An audit note is appended.</p>
+        )}
         <div className="sc-v2-entry-modal-actions">
           <button ref={cancelBtnRef} className="sc-btn sc-btn--outline" onClick={onCancel}>Cancel</button>
           <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Mark no service</button>

@@ -1355,28 +1355,46 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
         })}
 
         {/* SC-066 (render B2): Mark-no-service row for the client-
-            cancelled-service case. Non-homestand accounts only (MLB
-            homestand is schedule-driven, no operator-marked cancels).
-            Renders only when there are projections AND the day isn't
-            already handled (entered/no-service/off-season/prep). Sits
-            above DAY NOTES so the confirm decision reads next to the
-            note the operator might have already started. */}
+            cancelled-service case.
+            2026-07-24 (owner Ruling 2): "entered" is no longer terminal
+            for this button. Two workflows demand it: a game cancelled
+            after counts are entered, and wrong-day entries. Manual
+            zeroing loses the audit signal (six separate edits vs one
+            "cancelled" batch); this button preserves it.
+            Schedule-truth principle governs which OTHER statuses see
+            the button: off-season / prep mean nothing was scheduled,
+            so there is nothing to cancel; no-service is already in the
+            terminal state. Once counts are recorded, the counts are
+            the truth - even a fee non-game day with entered counts
+            gets the button (entered wins over the schedule).
+            Sits above DAY NOTES so the confirm decision reads next to
+            the note the operator might have already started. */}
         {(() => {
-          // SC-077: SC-066 flow now available on MLB homestand accounts
-          // too (rainout use case). Gate splits per billing model:
-          //   - per-meal / MiLB / STL-FL: need day.projected to have
-          //     something (no meals = no service to cancel).
-          //   - MLB homestand: need the day to be a scheduled game
-          //     (non-game days already read as prep on the schedule).
-          // dayHandled short-circuits both paths - if the classifier
-          // already labeled the day complete, no button.
           const isMlbHomestand = isFeeAccount && !!homestandContext?.dayType;
-          const dayHandled = status === "entered" || status === "no-service" || status === "off-season" || status === "prep";
+          // Gate reads SERVER status (day.status). The local `status`
+          // var at :805 is a 4-value simplification (entered/overdue/
+          // needs-entry/upcoming) and never emits "no-service", "off-
+          // season", or "prep" - the pre-2026-07-24 gate checked those
+          // three but the branches were dead in local scope. Using
+          // day.status makes the intent effective.
+          //
+          // Never offer on statuses where cancellation is meaningless:
+          //   no-service - already there
+          //   off-season - not on the schedule
+          //   prep       - fee non-game day with nothing recorded
+          const dayHandled = day.status === "no-service" || day.status === "off-season" || day.status === "prep";
           if (dayHandled) return null;
-          const hasScheduledService = isMlbHomestand
-            ? homestandContext?.dayType === "GAME"
-            : dayProjection.meals > 0;
-          if (!hasScheduledService) return null;
+          // For NON-entered statuses (needs-entry / overdue / future),
+          // keep the pre-existing hasScheduledService gate: no point
+          // offering "cancel" when nothing was scheduled to serve.
+          // Entered days bypass this gate - the counts are the truth,
+          // whatever the schedule said.
+          if (day.status !== "entered") {
+            const hasScheduledService = isMlbHomestand
+              ? homestandContext?.dayType === "GAME"
+              : dayProjection.meals > 0;
+            if (!hasScheduledService) return null;
+          }
           return (
             <div className="sc-day-noservice-row">
               <span className="sc-day-noservice-copy">Client cancelled service for this day?</span>
@@ -1590,7 +1608,31 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // primary "Mark no service" runs the write. Esc dismisses without
   // firing the write; stopPropagation so useDialogA11y's outer keydown
   // doesn't cascade the parent close guard.
+  //
+  // Owner Ruling 3 (2026-07-24): entered days need a destructive-copy
+  // variant with a concrete meals/services summary. Meals + service
+  // count only, NO currency (server-derived; a wrong dollar figure
+  // in a destructive dialog is worse than no dollar figure).
+  // Un-entered copy unchanged.
   function renderNoServiceConfirm() {
+    // day.status (server-classified) not local `status` (:805 is a
+    // 4-value simplification). Same reason as the gate above.
+    const isEntered = day.status === "entered";
+    let enteredMeals = 0;
+    let enteredServices = 0;
+    if (isEntered) {
+      for (const g of serviceGroups) {
+        for (const s of g.services) {
+          if (!isInServiceOnDay(s, day.date)) continue;
+          const v = Number(day.actual?.[s.colIndex]);
+          if (Number.isFinite(v) && v > 0) {
+            enteredMeals += v;
+            enteredServices += 1;
+          }
+        }
+      }
+    }
+    const hasEnteredCounts = isEntered && enteredServices > 0;
     return (
       <div
         className="sc-day-discard"
@@ -1610,9 +1652,15 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
           <h3 id="sc-day-noservice-title" className="sc-day-discard-title">
             Mark {formatDate(day.date)} as no service?
           </h3>
-          <p id="sc-day-noservice-body" className="sc-day-discard-body">
-            All services record 0 for this day and it counts as complete. A note is added for the record.
-          </p>
+          {hasEnteredCounts ? (
+            <p id="sc-day-noservice-body" className="sc-day-discard-body">
+              This day has <strong>{enteredMeals.toLocaleString()} meal{enteredMeals === 1 ? "" : "s"}</strong> recorded across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
+            </p>
+          ) : (
+            <p id="sc-day-noservice-body" className="sc-day-discard-body">
+              All services record 0 for this day and it counts as complete. A note is added for the record.
+            </p>
+          )}
           <div className="sc-day-discard-actions">
             <button
               ref={nsCancelBtnRef}
