@@ -984,27 +984,48 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // - cancelled-after-entry, wrong-day - work in bulk too.
               // Manual zeroing loses the audit signal; a bulk overwrite
               // preserves it (BulkReview flags the row + the batch,
-              // Ledger records every value as old->new). NO-SERVICE
-              // days are also selectable (same reasoning as no-service
-              // undo: re-entry over zeros is legitimate; the audit
-              // trail on undo is honest).
+              // Ledger records every value as old->new).
               //
               // Gate now reads SERVER status (d.status) not the resolved
               // display status: `resolveDayStatus` maps both `no-service`
               // AND `prep` to "off", which would conflate two different
-              // rulings. no-service = allow (re-entry); prep = block
-              // (nothing scheduled, same schedule-truth argument as the
-              // no-service dialog gate).
+              // rulings.
               //
-              // Blocked statuses:
-              //   off-season - not on schedule
-              //   prep       - fee non-game day with nothing recorded
-              //   exhibition - display-only tile
-              //   away       - display-only tile
+              // "no-service" splits on hasActuals - the classifier emits
+              // it for TWO distinct realities (serviceCalendar.js):
+              //   :303  hasAct && !anyNonZeroAct     -> recorded
+              //         cancellation (operator marked no-service; all-
+              //         zero actuals exist). Selectable - re-entry is
+              //         legitimate, audit trail via Ledger.
+              //   :310  !hasAct && hasProj &&        -> planned off-day
+              //         !anyNonZeroProj                (PR #167; nothing
+              //         ever scheduled). BLOCKED - schedule truth:
+              //         nothing scheduled, nothing to bulk-enter. A bulk
+              //         write here would inject zero-value rows into
+              //         sc_daily_actuals and flip the day's classifica-
+              //         tion from planned-off (:310) to recorded
+              //         no-service (:303), silently promoting a non-
+              //         scheduled day to a cancellation in the Ledger
+              //         and exports.
+              //
+              // Full 9-status partition (owner Ruling 5, 2026-07-24):
+              //   ALLOW:
+              //     entered, needs-entry, overdue, future,
+              //     no-service + hasActuals (kind 1)
+              //   BLOCK:
+              //     no-service + !hasActuals (kind 2),
+              //     off-season, prep,
+              //     exhibition, away (via isDisplayOnly)
+              //
+              // Do NOT drop the hasActuals term on no-service without
+              // reading serviceCalendar.js:303-310. Removing it re-
+              // admits planned off-days.
               const isExhibition = status === "exhibition";
               const isAway = status === "away";
               const isDisplayOnly = isExhibition || isAway;
-              const dayNotScheduled = d.status === "off-season" || d.status === "prep";
+              const dayNotScheduled = d.status === "off-season"
+                || d.status === "prep"
+                || (d.status === "no-service" && !d.hasActuals);
               const isBulkSelectable = bulkMode && !dayNotScheduled && !isDisplayOnly;
               const isRoving = flatIdx === focusIdx;
               return (

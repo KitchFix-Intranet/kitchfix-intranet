@@ -108,10 +108,10 @@ export default function BulkEntry({
           <div className="sc-v2-entry-head">
             <div className="sc-v2-entry-head-brand">
               <h2 className="sc-v2-entry-title" id="sc-bulk-entry-title">
-                Bulk entry - {daysCount} days
+                Bulk entry - {daysCount} day{daysCount === 1 ? "" : "s"}
               </h2>
               <span className="sc-v2-entry-account">
-                Enter values once, apply to all {daysCount} selected days.
+                Enter values once, apply to all {daysCount} selected day{daysCount === 1 ? "" : "s"}.
               </span>
             </div>
             <button className="sc-day-close" onClick={onCancel} aria-label="Close">
