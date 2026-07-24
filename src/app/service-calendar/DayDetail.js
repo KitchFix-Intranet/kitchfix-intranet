@@ -42,11 +42,15 @@ export function formatEntryStamp(iso) {
 //   (server order: newest first)
 //
 // Return shape:
-//   [{ type: "note"|"edit", timestamp, author, key, ...body }]
+//   [{ type: "note"|"edit"|"first-entered", timestamp, author, key, ...body }]
 //   where body varies:
-//     note      -> { note }
-//     edit      -> { serviceName, oldValue, newValue }
-//     edit sys  -> { systemPhrasing: true }  (all-zero batch)
+//     note           -> { note }
+//     edit           -> { serviceName, oldValue, newValue }
+//     edit sys       -> { systemPhrasing: true }  (all-zero batch)
+//     first-entered  -> {}  (synthetic row from readHistoryEntriesForRange;
+//                       fills the audit-trigger INSERT gap. Guarded
+//                       BEFORE bucketing so its null newValue cannot
+//                       corrupt the every(newValue === 0) collapse.)
 export function mergeActivity(noteEntries, historyEntries) {
   const rows = [];
   for (const n of (noteEntries || [])) {
@@ -62,8 +66,25 @@ export function mergeActivity(noteEntries, historyEntries) {
   // fires per-service inside one upsert, so within-batch rows share
   // changedAt to millisecond precision; the second-truncation gives a
   // little slop for ~1s network jitter.
+  //
+  // Phase 1 Ledger (2026-07-24): the synthetic first-entered row (marker
+  // `kind === "first-entered"` from readHistoryEntriesForRange) is
+  // filtered OUT of the bucketing loop and pushed directly. Rationale:
+  // (a) its null oldValue/newValue would render "undefined -> undefined"
+  // if it fell through to the edit branch, and (b) Number(null) === 0
+  // would cause it to be absorbed by the all-zero collapse if it
+  // landed in a real mark-no-service bucket.
   const buckets = new Map();
   for (const h of (historyEntries || [])) {
+    if (h.kind === "first-entered") {
+      rows.push({
+        type: "first-entered",
+        timestamp: h.changedAt,
+        author: h.author,
+        key: `first:${h.changedAt}`,
+      });
+      continue;
+    }
     const t = new Date(h.changedAt);
     if (!Number.isNaN(t.getTime())) t.setMilliseconds(0);
     const key = Number.isNaN(t.getTime()) ? String(h.changedAt) : t.toISOString();
@@ -1458,11 +1479,13 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
                 {mergeActivity(noteEntries, historyEntries).map((row, i) => (
                   <li key={row.key || `${row.timestamp}-${i}`} className={`sc-day-activity-item sc-day-activity-item--${row.type}`}>
                     <span className={`sc-day-activity-chip sc-day-activity-chip--${row.type}`}>
-                      {row.type === "note" ? "NOTE" : "EDIT"}
+                      {row.type === "note" ? "NOTE" : row.type === "first-entered" ? "ENTRY" : "EDIT"}
                     </span>
                     <div className="sc-day-activity-body">
                       {row.type === "note" ? (
                         <span className="sc-day-activity-note">{row.note}</span>
+                      ) : row.type === "first-entered" ? (
+                        <span className="sc-day-activity-system">Entered counts</span>
                       ) : row.systemPhrasing ? (
                         <span className="sc-day-activity-system">Marked no service (all services 0)</span>
                       ) : (

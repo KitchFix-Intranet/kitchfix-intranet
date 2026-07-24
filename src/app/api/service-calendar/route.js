@@ -270,7 +270,12 @@ function transformDays(orchDays) {
       // F1 (M2): actuals-edit history per day, newest first. Same
       // pass-through pattern as noteEntries. Author null on legacy /
       // seed rows; UI renders as em-dash.
+      // Phase 1 Ledger (2026-07-24 revised): server may append a
+      // synthetic {kind: "first-entered"} row - preserved on the
+      // pass-through so BOTH v1 mergeActivity and v2 groupActivity
+      // can guard on it.
       historyEntries: (d.historyEntries || []).map((h) => ({
+        kind:        h.kind || null,
         serviceId:   h.serviceId,
         serviceName: h.serviceName,
         oldValue:    h.oldValue,
@@ -278,13 +283,6 @@ function transformDays(orchDays) {
         author:      h.author,
         changedAt:   h.changedAt,
       })),
-      // Phase 1 Ledger (2026-07-24): "first entered" synthesis from
-      // sc_daily_actuals.created_by/created_at. Populated whenever
-      // the day has ANY actuals rows. Consumed by v2's groupActivity
-      // helper to render the "who first entered this day?" row that
-      // the audit trigger can't emit (trigger fires only on UPDATE
-      // per sc-1-service-calendar-schema.sql:263-268).
-      firstEntered: d.firstEntered || null,
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,

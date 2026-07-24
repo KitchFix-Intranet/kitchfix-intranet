@@ -63,10 +63,13 @@ import {
 //
 // v2 spec (§8, owner-approved): hybrid summary line per EVENT (bucket),
 // expandable to per-service detail. Same bucketing input as mergeActivity;
-// preserves the bucket structure instead of flattening. Also synthesizes
-// a first-entered row from day.firstEntered (server-side synthesis in
-// readHistoryEntriesForRange - the audit trigger deliberately skips INSERT
-// so a day entered once and never edited has no history rows).
+// preserves the bucket structure instead of flattening.
+//
+// First-entered synthesis lives in the DATA LAYER (owner Q1 ruling): the
+// server appends a {kind: "first-entered"} row to historyEntries so v1
+// AND v2 both receive it through the same channel. This helper filters
+// it out of the bucketing loop and emits it as its own row - same guard
+// mergeActivity applies, protecting the mark-no-service collapse.
 //
 // Owner constraint: mergeActivity's output shape MUST NOT change (v1
 // consumes it too). This helper is v2-only, alongside mergeActivity.
@@ -78,11 +81,11 @@ import {
 //   edit-noservice  -> { type: "edit-noservice", timestamp, author, key }
 //                       (all-zero batch, aka "Marked no service")
 //   first-entered   -> { type: "first-entered",  timestamp, author, key }
-//                       (from firstEntered synthesis; who FIRST inserted
-//                       any actuals for this day - the audit trigger's
-//                       INSERT gap)
+//                       (from server-appended kind marker; who FIRST
+//                       inserted any actuals for this day - the audit
+//                       trigger's INSERT gap)
 // Sorted newest first.
-function groupActivity(noteEntries, historyEntries, firstEntered) {
+function groupActivity(noteEntries, historyEntries) {
   const rows = [];
   for (const n of (noteEntries || [])) {
     rows.push({
@@ -96,8 +99,21 @@ function groupActivity(noteEntries, historyEntries, firstEntered) {
   // Bucketing: same second-truncation as mergeActivity. History rows
   // within one upsert share changedAt to millisecond precision; the
   // truncation is jitter slop.
+  //
+  // The synthetic first-entered row (kind === "first-entered") is
+  // filtered OUT of the bucketing loop. See mergeActivity's guard for
+  // the full rationale (null values, allZero collapse corruption).
   const buckets = new Map();
   for (const h of (historyEntries || [])) {
+    if (h.kind === "first-entered") {
+      rows.push({
+        type: "first-entered",
+        timestamp: h.changedAt,
+        author: h.author,
+        key: `first:${h.changedAt}`,
+      });
+      continue;
+    }
     const t = new Date(h.changedAt);
     if (!Number.isNaN(t.getTime())) t.setMilliseconds(0);
     const bucketKey = Number.isNaN(t.getTime()) ? String(h.changedAt) : t.toISOString();
@@ -127,14 +143,6 @@ function groupActivity(noteEntries, historyEntries, firstEntered) {
         })),
       });
     }
-  }
-  if (firstEntered && firstEntered.createdAt) {
-    rows.push({
-      type: "first-entered",
-      timestamp: firstEntered.createdAt,
-      author: firstEntered.createdBy,
-      key: `first:${firstEntered.createdAt}`,
-    });
   }
   rows.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
   return rows;
@@ -797,11 +805,12 @@ function DayEntryV2({
   const hasTouchedAny = touched.size > 0;
   // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
   // (v2-specific). Preserves bucket structure (hybrid summary + expand
-  // detail per §8) and adds the first-entered synthesis row from
-  // day.firstEntered. v1 DayDetail still uses mergeActivity.
+  // detail per §8). The first-entered synthesis row is now DATA-LAYER
+  // (kind marker in historyEntries) so both v1 and v2 receive it; no
+  // separate arg needed here.
   const combinedActivity = useMemo(
-    () => groupActivity(noteEntries, historyEntries, day.firstEntered),
-    [noteEntries, historyEntries, day.firstEntered]
+    () => groupActivity(noteEntries, historyEntries),
+    [noteEntries, historyEntries]
   );
 
   // Header nav - DayDetail day nav for prev/next.

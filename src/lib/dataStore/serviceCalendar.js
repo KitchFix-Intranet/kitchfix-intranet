@@ -911,13 +911,11 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         // F1 (M2): actuals-edit history, newest first. Empty array when
         // the day has no historical UPDATEs (fresh saves do NOT populate
         // this by trigger design - see readHistoryEntriesForRange).
-        // Phase 1 Ledger (2026-07-24): readHistoryEntriesForRange return
-        // shape changed from Map<date, [historyRow]> to Map<date,
-        // {history, firstEntered}>. Unpack both here. firstEntered is
-        // {createdAt, createdBy} | null - populated whenever the day
-        // has ANY sc_daily_actuals rows.
-        historyEntries: (historyEntriesByDate.get(day.date)?.history) || [],
-        firstEntered:   (historyEntriesByDate.get(day.date)?.firstEntered) || null,
+        // Phase 1 Ledger (2026-07-24 revised): the reader appends a
+        // synthetic {kind: "first-entered"} row into this array for any
+        // day that has actuals rows. Consumers filter on kind. Flat
+        // shape restored - no separate firstEntered field.
+        historyEntries: historyEntriesByDate.get(day.date) || [],
       };
     });
 
@@ -1589,20 +1587,25 @@ export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
 // See sc-1-service-calendar-schema.sql:263-268.
 export async function readHistoryEntriesForRange(accountKey, first, last) {
   const supa = getServiceClient();
-  // Phase 1 Ledger (2026-07-24): parallel query for the "first entered"
-  // synthesis. The audit trigger deliberately skips INSERT (per :1579-
-  // 1583 above), so a day entered once and never edited has NO history
-  // rows even though it's the operator's most-asked question about the
-  // Ledger ("who entered this day?"). Server-side synthesis from
-  // sc_daily_actuals.created_by/created_at fills that gap. NOT NULL
-  // columns (sc-1-service-calendar-schema.sql:207-208), no legacy
-  // null concern. Owner ruling: no schema change - all synthesized.
+  // Phase 1 Ledger (2026-07-24, revised per owner Q1 ruling): parallel
+  // query for "first entered" synthesis. The audit trigger deliberately
+  // skips INSERT (per :1579-1583 above), so a day entered once and never
+  // edited has NO history rows even though it's the operator's most-
+  // asked Ledger question ("who entered this day?"). Server synthesis
+  // from sc_daily_actuals.created_by/created_at fills that gap.
   //
-  // Return-shape change: was Map<date, [historyRow]>; now
-  // Map<date, {history: [historyRow], firstEntered: {createdAt,
-  // createdBy} | null}>. v1 mergeActivity ignores the new field
-  // (only reads noteEntries + historyEntries); v2 groupActivity
-  // consumes it. v1 UI unchanged.
+  // NOT NULL columns (sc-1-service-calendar-schema.sql:207-208), no
+  // legacy null concern. Owner ruling: no schema change - synthesized.
+  //
+  // Transport shape: the synthesized row is APPENDED into historyEntries
+  // with a discriminator {kind: "first-entered"} so BOTH consumers
+  // (v1 mergeActivity, v2 groupActivity) receive it through the same
+  // channel. Return shape stays flat: Map<date, [historyRow]>.
+  //
+  // Discriminator (not just null values) so the mark-no-service collapse
+  // {every(newValue === 0), length > 1} in mergeActivity/groupActivity
+  // cannot silently absorb a synthetic row that happens to have
+  // null newValue (Number(null) === 0).
   const [historyRows, servicesRes, actualsCreationRows] = await Promise.all([
     fetchAllPaginated(
       supa,
@@ -1652,8 +1655,8 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
   }
   const byDate = new Map();
   for (const r of historyRows || []) {
-    if (!byDate.has(r.service_date)) byDate.set(r.service_date, { history: [], firstEntered: null });
-    byDate.get(r.service_date).history.push({
+    if (!byDate.has(r.service_date)) byDate.set(r.service_date, []);
+    byDate.get(r.service_date).push({
       serviceId:   r.service_id,
       serviceName: svcNameById.get(r.service_id) || "(archived service)",
       oldValue:    Number(r.old_count),
@@ -1662,12 +1665,21 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
       changedAt:   r.changed_at,
     });
   }
-  // Merge firstEntered into every date that has it (whether or not it
-  // has history rows). A first-entered-never-edited day has only the
-  // firstEntered field populated.
+  // Append the synthetic first-entered row per date. changedAt = the
+  // earliest actuals.created_at for that date, so newest-first sort in
+  // mergeActivity/groupActivity naturally places it last. Consumers
+  // recognize it by `kind` and route around the bucketing loop.
   for (const [date, first] of firstEnteredByDate.entries()) {
-    if (!byDate.has(date)) byDate.set(date, { history: [], firstEntered: first });
-    else byDate.get(date).firstEntered = first;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push({
+      kind:        "first-entered",
+      serviceId:   null,
+      serviceName: null,
+      oldValue:    null,
+      newValue:    null,
+      author:      first.createdBy,
+      changedAt:   first.createdAt,
+    });
   }
   return byDate;
 }
