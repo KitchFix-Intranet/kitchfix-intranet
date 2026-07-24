@@ -652,7 +652,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // expected behavior. Refresh and save are BACKGROUND data events
   // the operator did not ask for - modal must survive those.
   useEffect(() => {
-    setFocusDay(null);
+    // B2/B8a interaction guard (2026-07-24): read + CLEAR the ref
+    // at the top of every fire. See pendingRailFocusRef declaration
+    // (~:1274) for the full contract. Clear must run unconditionally
+    // - that's what makes the "cleared exactly once" invariant hold
+    // regardless of whether we skip focusDay reset or not.
+    const suppressFocusReset = pendingRailFocusRef.current !== null;
+    pendingRailFocusRef.current = null;
+    if (!suppressFocusReset) {
+      setFocusDay(null);
+    }
     setBulkMode(false);
     setBulkSelected(new Set());
     setBulkPanelOpen(false);
@@ -1271,6 +1280,32 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   // point. Only page unmount triggers the abort loop below.
   const isMountedRef = useRef(true);
   const inFlightControllersRef = useRef(new Set());
+  // B2/B8a interaction fix (2026-07-24): rail queue clicks from the
+  // OVERVIEW cross into a period drill by changing `periodKey`, which
+  // then triggers the view-context reset effect from #503 (deps
+  // `[selectedAccount, mk, monthKey, periodKey]`), which calls
+  // setFocusDay(null), which closes the modal B2 just opened. Only
+  // the two OVERVIEW handlers (overviewTargetDay, feeTargetDay)
+  // straddle this boundary; drill-scope targetDay handlers stay
+  // within the same periodKey/monthKey and don't fire the reset.
+  //
+  // Option (a): those two handlers set this ref before/alongside
+  // setFocusDay. The reset effect below reads the ref, and if set,
+  // preserves focusDay and clears the ref in the same pass.
+  //
+  // Cleared exactly once: the reset effect ALWAYS clears the ref at
+  // its top on every fire. This means the ref cannot outlive one
+  // reset-effect cycle. Since the two handlers cause deterministic
+  // periodKey transitions (null -> N), the effect fires reliably.
+  // If a future refactor breaks that guarantee, worst case is the
+  // NEXT nav skips its focusDay reset once - not catastrophic, no
+  // silent data loss.
+  //
+  // Bulk state (setBulkMode/setBulkSelected/setBulkPanelOpen) is
+  // NOT suppressed by this ref: the operator is opening a single
+  // day's modal; clearing bulk selection on a view change is still
+  // correct.
+  const pendingRailFocusRef = useRef(null);
   // B8b fix (2026-07-23): the mount body was missing - previously this
   // was a cleanup-only effect. `useRef(true)` initialized `.current`
   // once; StrictMode's dev double-mount (mount -> cleanup -> mount)
@@ -2584,11 +2619,27 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           // the HS section (Step 2).
           const overviewTargetDay = (date, period /*, source */) => {
             if (period) {
+              // B2/B8a interaction (2026-07-24): this handler crosses
+              // the overview -> drill boundary (periodKey null -> N),
+              // which fires the view-context reset effect and would
+              // close the modal we're about to open. Set the pending-
+              // rail-focus signal BEFORE the URL change so the reset
+              // effect sees it. See pendingRailFocusRef declaration
+              // (~:1274) for the full contract.
+              pendingRailFocusRef.current = date;
               router.push(buildScUrl({
                 account: selectedAccount || undefined,
                 period,
                 day: date,
               }), { scroll: false });
+              // B2 (2026-07-24): rail queue rows previously navigated
+              // without opening the entry modal - buildScUrl's ?day=
+              // is documented focus-only (see :98-113), and no code
+              // turned it into setFocusDay. Explicit setFocusDay opens
+              // the modal the operator expected. router.push above still
+              // updates the URL (preserves tile-focus scroll + shareable
+              // link semantics).
+              setFocusDay(date);
             }
           };
           const overviewDrillMonth = (mi) => {
@@ -2606,11 +2657,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           const feeTargetDay = (date) => {
             const containingPeriod = periodRanges?.find(r => date >= r.start && date <= r.end);
             if (containingPeriod) {
+              // B2/B8a interaction (2026-07-24): same overview-to-drill
+              // boundary as overviewTargetDay above. Signal the reset
+              // effect via pendingRailFocusRef so it preserves focusDay.
+              pendingRailFocusRef.current = date;
               router.push(buildScUrl({
                 account: selectedAccount || undefined,
                 period: containingPeriod.period,
                 day: date,
               }), { scroll: false });
+              // B2 (2026-07-24): open the entry modal after navigating.
+              // See overviewTargetDay above.
+              setFocusDay(date);
             }
           };
           const rail = isFeeAccount ? (
@@ -2751,6 +2809,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               period: periodKey,
               day: date,
             }), { scroll: false });
+            // B2 (2026-07-24): open the entry modal after navigating.
+            // See overviewTargetDay in the overview branch above.
+            setFocusDay(date);
           };
           // HF-5 dedup (2026-07-20): the rail's exportControl slot
           // (DrillRail.js:359 / OpsRail.js:263) is deliberately not
@@ -2951,6 +3012,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               month: monthKey,
               day: date,
             }), { scroll: false });
+            // B2 (2026-07-24): open the entry modal after navigating.
+            // See overviewTargetDay in the overview branch above.
+            setFocusDay(date);
           };
           // Human month label ("Jul 2026") for the rail section header
           const monthLabel = monthKey ? (() => {

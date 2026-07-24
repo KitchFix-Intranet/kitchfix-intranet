@@ -500,11 +500,57 @@
 }
 
 /* Footer + primary CTA */
-.sc-v2-entry-rail-footer {
-  padding-top: var(--sc2-space-3);
-  border-top: var(--sc2-border-thin) solid var(--sc2-rail-border);
-  margin-top: auto;
+/* B3 (2026-07-24): pinned actions row per §8C. Sibling of
+   .sc-v2-entry-pane, not a child of the rail. flex-shrink: 0 so it
+   never gets squeezed by pane content growth; the pane above absorbs
+   the difference. Desktop-only via the media query at the bottom of
+   this block - mobile keeps its MobileBooksBar stickyAction below the
+   modal. Uses --sc2-space-* / --sc2-radius-container / --sc2-size-*
+   tokens throughout (§13A discipline). Reuses .sc-v2-entry-rail-cta
+   for button styling - no button CSS added. */
+.sc-v2-entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc2-space-4);
+  padding: var(--sc2-space-3) var(--sc2-space-5);
+  flex-shrink: 0;
+  background: var(--sc2-surface-card);
+  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: 0 0 var(--sc2-radius-container) var(--sc2-radius-container);
 }
+.sc-v2-entry-actions-total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  min-width: 0;
+}
+.sc-v2-entry-actions-total-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-ink-muted);
+}
+.sc-v2-entry-actions-total-value {
+  font-size: var(--sc2-size-h3);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-ink-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.sc-v2-entry-actions .sc-v2-entry-rail-cta {
+  width: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 1099px) {
+  /* Mobile: MobileBooksBar's stickyAction owns Confirm; the desktop
+     actions row is redundant at this breakpoint and would compete for
+     the footer slot with the mobile bar. */
+  .sc-v2-entry-actions { display: none; }
+}
+
 .sc-v2-entry-rail-cta {
   width: 100%;
   background: var(--sc2-rail-cta-bg);
