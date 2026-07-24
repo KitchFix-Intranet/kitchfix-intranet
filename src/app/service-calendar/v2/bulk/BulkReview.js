@@ -101,14 +101,33 @@ export default function BulkReview({
           </div>
 
           <div className="sc-day-body">
-            {overwriteCount > 0 && (
-              <p className="sc-bulk-review-warning" role="note">
-                <span className="sc-bulk-review-warning-icon" aria-hidden="true">⚠</span>
-                {" "}
-                <strong>{overwriteCount} of these day{overwriteCount === 1 ? "" : "s"} already ha{overwriteCount === 1 ? "s" : "ve"} counts.</strong>
-                {" Confirming will replace them."}
-              </p>
-            )}
+            {overwriteCount > 0 && (() => {
+              // Split the batch line: some overwrites are entered days
+              // with real counts; others are no-service cancellations
+              // (all zeros). Report both counts distinctly so the
+              // operator sees exactly what will be replaced.
+              let enteredCount = 0, noServiceCount = 0;
+              for (const ow of overwrites.values()) {
+                if (ow.isNoService) noServiceCount++;
+                else enteredCount++;
+              }
+              const parts = [];
+              if (enteredCount > 0) {
+                parts.push(`${enteredCount} already ha${enteredCount === 1 ? "s" : "ve"} counts`);
+              }
+              if (noServiceCount > 0) {
+                parts.push(`${noServiceCount} ${noServiceCount === 1 ? "is" : "are"} marked no service`);
+              }
+              const dayPhrase = `${overwriteCount} of these day${overwriteCount === 1 ? "" : "s"}`;
+              return (
+                <p className="sc-bulk-review-warning" role="note">
+                  <span className="sc-bulk-review-warning-icon" aria-hidden="true">⚠</span>
+                  {" "}
+                  <strong>{dayPhrase} - {parts.join(", ")}.</strong>
+                  {" Confirming will replace them."}
+                </p>
+              );
+            })()}
 
             <ul className="sc-bulk-review-list">
               {days.map(d => {
@@ -137,9 +156,12 @@ export default function BulkReview({
                       </span>
                       {ow && (
                         <span className="sc-bulk-review-overwrite">
-                          {"⚠ replacing "}
-                          <strong>{ow.prevMeals.toLocaleString()} meal{ow.prevMeals === 1 ? "" : "s"}</strong>
-                          {ow.prevServices > 0 ? ` across ${ow.prevServices} service${ow.prevServices === 1 ? "" : "s"}` : ""}
+                          {"⚠ "}
+                          {ow.isNoService ? (
+                            <>replacing <strong>&quot;no service&quot;</strong> status</>
+                          ) : (
+                            <>replacing <strong>{ow.prevMeals.toLocaleString()} meal{ow.prevMeals === 1 ? "" : "s"}</strong>{ow.prevServices > 0 ? ` across ${ow.prevServices} service${ow.prevServices === 1 ? "" : "s"}` : ""}</>
+                          )}
                         </span>
                       )}
                     </div>

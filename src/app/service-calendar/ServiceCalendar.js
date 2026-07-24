@@ -3337,8 +3337,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) { prevMeals += n; prevServices += 1; }
           }
-          if (prevMeals > 0 || prevServices > 0) {
-            overwrites.set(d.date, { prevMeals, prevServices });
+          // hasActuals + all zeros = server-classified no-service day
+          // (all-zero actuals present). Owner ruling 2026-07-24: bulk
+          // re-entry over a no-service day is legitimate; the warning
+          // needs its own copy variant ("replacing 'no service' status")
+          // because prevMeals is 0 - the counts-based message would
+          // read "replacing 0 meals" which is wrong.
+          const isNoService = d.status === "no-service";
+          if (prevMeals > 0 || prevServices > 0 || isNoService) {
+            overwrites.set(d.date, { prevMeals, prevServices, isNoService });
           }
         }
         // Per-service expand: emit one row per in-service service with
@@ -3425,8 +3432,15 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) { prevMeals += n; prevServices += 1; }
           }
-          if (prevMeals > 0 || prevServices > 0) {
-            overwrites.set(d.date, { prevMeals, prevServices });
+          // hasActuals + all zeros = server-classified no-service day
+          // (all-zero actuals present). Owner ruling 2026-07-24: bulk
+          // re-entry over a no-service day is legitimate; the warning
+          // needs its own copy variant ("replacing 'no service' status")
+          // because prevMeals is 0 - the counts-based message would
+          // read "replacing 0 meals" which is wrong.
+          const isNoService = d.status === "no-service";
+          if (prevMeals > 0 || prevServices > 0 || isNoService) {
+            overwrites.set(d.date, { prevMeals, prevServices, isNoService });
           }
         }
         return (

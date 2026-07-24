@@ -978,24 +978,34 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
               const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb, accountKey, scheduleOverlay);
-              // Bulk-selectable gate: needs-entry / overdue / future
-              // days are always selectable. SC-069 widens the gate to
-              // also allow ENTERED FUTURE days so a fully-caught-up
-              // current period isn't a dead end - operators can
-              // revise forward projections in bulk. Past entered days
-              // stay LOCKED (bulk cannot stomp confirmed history).
-              // Off days ("off-season", any residual "off") never selectable.
-              const isEnteredFuture = d.hasActuals && d.date > today;
-              // sc-12: exhibition tiles are display-only. Bulk-select
-              // must skip them; onClick is also gated in the atom, but
-              // dropping the handler here removes the button role at
-              // the source and keeps keyboard/roving-tabindex semantics
-              // clean (no gridcell that pretends to be actionable).
-              // sc-13: away tiles share the display-only contract.
+              // Bulk-selectable gate. Phase 2A / Ruling 4 (2026-07-24):
+              // ENTERED PAST days are now selectable so the two
+              // operator workflows the no-service ruling identified
+              // - cancelled-after-entry, wrong-day - work in bulk too.
+              // Manual zeroing loses the audit signal; a bulk overwrite
+              // preserves it (BulkReview flags the row + the batch,
+              // Ledger records every value as old->new). NO-SERVICE
+              // days are also selectable (same reasoning as no-service
+              // undo: re-entry over zeros is legitimate; the audit
+              // trail on undo is honest).
+              //
+              // Gate now reads SERVER status (d.status) not the resolved
+              // display status: `resolveDayStatus` maps both `no-service`
+              // AND `prep` to "off", which would conflate two different
+              // rulings. no-service = allow (re-entry); prep = block
+              // (nothing scheduled, same schedule-truth argument as the
+              // no-service dialog gate).
+              //
+              // Blocked statuses:
+              //   off-season - not on schedule
+              //   prep       - fee non-game day with nothing recorded
+              //   exhibition - display-only tile
+              //   away       - display-only tile
               const isExhibition = status === "exhibition";
               const isAway = status === "away";
               const isDisplayOnly = isExhibition || isAway;
-              const isBulkSelectable = bulkMode && status !== "off" && !isDisplayOnly && (!d.hasActuals || isEnteredFuture);
+              const dayNotScheduled = d.status === "off-season" || d.status === "prep";
+              const isBulkSelectable = bulkMode && !dayNotScheduled && !isDisplayOnly;
               const isRoving = flatIdx === focusIdx;
               return (
                 <span
@@ -1011,6 +1021,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     content={content}
                     isToday={isToday}
                     isSelected={isSelected}
+                    hasActuals={d.hasActuals}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
                     onClick={isDisplayOnly ? undefined : () => {

@@ -1304,6 +1304,19 @@
 .scv2 .sc-daysq--lg.sc-daysq--selected.sc-daysq--focused {
   box-shadow: 0 0 0 3px var(--sc2-selected-ring), inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
+/* Phase 2A (2026-07-24): selected + has-actuals - the operator is
+   about to overwrite a day that already carries counts (entered) or
+   is a no-service cancellation. Amber ring (state-needs-fg-strong,
+   same family as the BulkReview overwrite warning) signals the
+   destructive intent in the grid, BEFORE the operator reaches the
+   review. Consistent grammar - the review's per-row marker uses the
+   same token. */
+.scv2 .sc-daysq--lg.sc-daysq--selected.sc-daysq--has-actuals {
+  box-shadow: 0 0 0 3px var(--sc2-state-needs-fg-strong), var(--sc2-elevation-inset-top);
+}
+.scv2 .sc-daysq--lg.sc-daysq--selected.sc-daysq--has-actuals.sc-daysq--focused {
+  box-shadow: 0 0 0 3px var(--sc2-state-needs-fg-strong), inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
 
 /* Selection check badge - swapped to scv2 green family */
 .scv2 .sc-daysq-check {
@@ -1325,6 +1338,17 @@
   box-shadow:
     0 0 0 2.5px var(--sc2-cmd-bg),
     0 0 0 5.5px var(--sc2-selected-ring),
+    inset 0 0 0 1.5px var(--sc2-focus-ring);
+}
+/* Today + selected + has-actuals: same amber override rule as the
+   non-today variant, layered over the navy today outline. */
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--selected.sc-daysq--has-actuals {
+  box-shadow: 0 0 0 2.5px var(--sc2-cmd-bg), 0 0 0 5.5px var(--sc2-state-needs-fg-strong);
+}
+.scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--selected.sc-daysq--has-actuals.sc-daysq--focused {
+  box-shadow:
+    0 0 0 2.5px var(--sc2-cmd-bg),
+    0 0 0 5.5px var(--sc2-state-needs-fg-strong),
     inset 0 0 0 1.5px var(--sc2-focus-ring);
 }
 .scv2 .sc-daysq--lg.sc-daysq--today.sc-daysq--interactive:focus-visible {

@@ -102,6 +102,14 @@ export default function DaySquare({
   isToday = false,
   isSelected = false,
   isFocused = false,
+  // Phase 2A (2026-07-24): the day already carries actuals (any
+  // status that gates on hasActuals - entered OR no-service). Used
+  // by scv2 to swap the selected ring to an amber "will overwrite"
+  // color when the operator bulk-selects a day with existing counts,
+  // so the operator sees the destructive intent BEFORE reaching
+  // BulkReview. Emits the `sc-daysq--has-actuals` class; the ring
+  // override lives in DaySquare.css.
+  hasActuals = false,
 
   // polymorphic content
   kind = "per-meal",       // "per-meal" | "mlb-fee" | "milb" | "fee-no-dollar"
@@ -206,6 +214,7 @@ export default function DaySquare({
     isToday && "sc-daysq--today",
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
+    hasActuals && "sc-daysq--has-actuals",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
     /* V3 §6.7 - period-wash marker; drives inset shadow. */
