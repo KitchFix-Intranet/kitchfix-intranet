@@ -270,7 +270,12 @@ function transformDays(orchDays) {
       // F1 (M2): actuals-edit history per day, newest first. Same
       // pass-through pattern as noteEntries. Author null on legacy /
       // seed rows; UI renders as em-dash.
+      // Phase 1 Ledger (2026-07-24 revised): server may append a
+      // synthetic {kind: "first-entered"} row - preserved on the
+      // pass-through so BOTH v1 mergeActivity and v2 groupActivity
+      // can guard on it.
       historyEntries: (d.historyEntries || []).map((h) => ({
+        kind:        h.kind || null,
         serviceId:   h.serviceId,
         serviceName: h.serviceName,
         oldValue:    h.oldValue,

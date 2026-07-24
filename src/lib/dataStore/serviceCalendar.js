@@ -911,6 +911,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         // F1 (M2): actuals-edit history, newest first. Empty array when
         // the day has no historical UPDATEs (fresh saves do NOT populate
         // this by trigger design - see readHistoryEntriesForRange).
+        // Phase 1 Ledger (2026-07-24 revised): the reader appends a
+        // synthetic {kind: "first-entered"} row into this array for any
+        // day that has actuals rows. Consumers filter on kind. Flat
+        // shape restored - no separate firstEntered field.
         historyEntries: historyEntriesByDate.get(day.date) || [],
       };
     });
@@ -1583,7 +1587,26 @@ export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
 // See sc-1-service-calendar-schema.sql:263-268.
 export async function readHistoryEntriesForRange(accountKey, first, last) {
   const supa = getServiceClient();
-  const [historyRows, servicesRes] = await Promise.all([
+  // Phase 1 Ledger (2026-07-24, revised per owner Q1 ruling): parallel
+  // query for "first entered" synthesis. The audit trigger deliberately
+  // skips INSERT (per :1579-1583 above), so a day entered once and never
+  // edited has NO history rows even though it's the operator's most-
+  // asked Ledger question ("who entered this day?"). Server synthesis
+  // from sc_daily_actuals.created_by/created_at fills that gap.
+  //
+  // NOT NULL columns (sc-1-service-calendar-schema.sql:207-208), no
+  // legacy null concern. Owner ruling: no schema change - synthesized.
+  //
+  // Transport shape: the synthesized row is APPENDED into historyEntries
+  // with a discriminator {kind: "first-entered"} so BOTH consumers
+  // (v1 mergeActivity, v2 groupActivity) receive it through the same
+  // channel. Return shape stays flat: Map<date, [historyRow]>.
+  //
+  // Discriminator (not just null values) so the mark-no-service collapse
+  // {every(newValue === 0), length > 1} in mergeActivity/groupActivity
+  // cannot silently absorb a synthetic row that happens to have
+  // null newValue (Number(null) === 0).
+  const [historyRows, servicesRes, actualsCreationRows] = await Promise.all([
     fetchAllPaginated(
       supa,
       (q) => q
@@ -1601,10 +1624,35 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
       .from("sc_services")
       .select("id, service_name")
       .eq("account_key", accountKey),
+    // First-entered source: (created_by, created_at) per row in the
+    // range. Client aggregates to MIN(created_at) per date. Doing the
+    // aggregate client-side rather than a PostgREST rpc keeps this a
+    // single .select() call - same shape as the other reads here.
+    fetchAllPaginated(
+      supa,
+      (q) => q
+        .from("sc_daily_actuals")
+        .select("service_date, created_by, created_at")
+        .eq("account_key", accountKey)
+        .gte("service_date", first)
+        .lte("service_date", last),
+      "readHistoryEntriesForRange.actualsCreation"
+    ),
   ]);
   throwOnError(servicesRes.error, "readHistoryEntriesForRange.services");
   const svcNameById = new Map();
   for (const s of servicesRes.data || []) svcNameById.set(s.id, s.service_name);
+  // First-entered aggregate: earliest created_at per date, with its author.
+  const firstEnteredByDate = new Map();
+  for (const r of actualsCreationRows || []) {
+    const existing = firstEnteredByDate.get(r.service_date);
+    if (!existing || r.created_at < existing.createdAt) {
+      firstEnteredByDate.set(r.service_date, {
+        createdAt: r.created_at,
+        createdBy: r.created_by,
+      });
+    }
+  }
   const byDate = new Map();
   for (const r of historyRows || []) {
     if (!byDate.has(r.service_date)) byDate.set(r.service_date, []);
@@ -1615,6 +1663,22 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
       newValue:    Number(r.new_count),
       author:      r.changed_by || null,
       changedAt:   r.changed_at,
+    });
+  }
+  // Append the synthetic first-entered row per date. changedAt = the
+  // earliest actuals.created_at for that date, so newest-first sort in
+  // mergeActivity/groupActivity naturally places it last. Consumers
+  // recognize it by `kind` and route around the bucketing loop.
+  for (const [date, first] of firstEnteredByDate.entries()) {
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push({
+      kind:        "first-entered",
+      serviceId:   null,
+      serviceName: null,
+      oldValue:    null,
+      newValue:    null,
+      author:      first.createdBy,
+      changedAt:   first.createdAt,
     });
   }
   return byDate;
