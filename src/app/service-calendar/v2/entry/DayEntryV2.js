@@ -49,6 +49,7 @@ import {
   deriveUnit,
   renderRate,
   LEDGER_HEAD,
+  LEDGER_HEAD_NO_AMOUNT,
   isInServiceOnDay,
 } from "../../DayDetail";
 
@@ -1141,11 +1142,23 @@ function DayEntryV2({
 // Renders per DayDetail.js:837-914 renderServiceRow (per-meal branch)
 // with the same input/chip/rate/amount composition.
 // ═════════════════════════════════════════════════════════════════
-function GroupBlock({
+// Exported for reuse by v2 bulk (owner Ruling 2, 2026-07-24: reuse
+// in place, do not extract a new primitive yet). Bulk custom-entry
+// panel imports this to render its per-group cards without authoring
+// a parallel .bulk-* variant - the same classes drive both surfaces,
+// which is what the computed-style diff on gate protects.
+//
+// hideAmount prop: bulk custom-entry omits the per-day Amount column
+// (amounts vary by day). ServiceRow drops its amount cell; group
+// footer drops its amount span; caller must apply the CSS variant
+// class .sc-day-ledger--no-amount on the wrapper (defined in
+// dayEntryV2.css). Match / projections / entry stays 4-col.
+export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
   groupSummary, projectedGroupSummary,
   expanded,
+  hideAmount = false,
 }) {
   const gsEntered = groupSummary(group);
   const gsProjected = projectedGroupSummary(group);
@@ -1172,8 +1185,8 @@ function GroupBlock({
           )}
         </div>
       </header>
-      <div className="sc-day-ledger">
-        {LEDGER_HEAD}
+      <div className={`sc-day-ledger${hideAmount ? " sc-day-ledger--no-amount" : ""}`}>
+        {hideAmount ? LEDGER_HEAD_NO_AMOUNT : LEDGER_HEAD}
         {group.services.map(s => (
           <ServiceRow
             key={s.colIndex}
@@ -1183,6 +1196,7 @@ function GroupBlock({
             touched={touched}
             flashDelay={flashMap?.get(s.colIndex)}
             onChange={onChange}
+            hideAmount={hideAmount}
           />
         ))}
       </div>
@@ -1190,9 +1204,11 @@ function GroupBlock({
         <span className="sc-v2-entry-group-subtotal-label">
           {gsEntered.meals.toLocaleString()} meals
         </span>
-        <span className="sc-v2-entry-group-subtotal-amount">
-          {fmt$(gsEntered.revenue)}
-        </span>
+        {!hideAmount && (
+          <span className="sc-v2-entry-group-subtotal-amount">
+            {fmt$(gsEntered.revenue)}
+          </span>
+        )}
       </footer>
     </section>
   );
@@ -1200,7 +1216,11 @@ function GroupBlock({
 
 // One service row - reuses the v1 CSS class names so the atom style
 // inherits automatically. See DayDetail.js:837-914 for the shape.
-function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange }) {
+// Exported alongside GroupBlock (2026-07-24, owner Ruling 2) for
+// bulk custom-entry reuse.
+// hideAmount omits the trailing amount cell; caller's ledger wrapper
+// must carry .sc-day-ledger--no-amount so the subgrid is 3-col.
+export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false }) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
@@ -1256,15 +1276,17 @@ function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange }) {
       </div>
       <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
       {qtyCell}
-      <span className="sc-day-row-amount">
-        {svc.isNonRevenue
-          ? <span className="sc-day-amount-none" title="Not billed">—</span>
-          : entered
-            ? fmt$(Number(editVal) * rate)
-            : inService
-              ? <span className="sc-day-amount-ghost">~{fmt$(projVal * rate)}</span>
-              : <span className="sc-day-amount-pending">–</span>}
-      </span>
+      {!hideAmount && (
+        <span className="sc-day-row-amount">
+          {svc.isNonRevenue
+            ? <span className="sc-day-amount-none" title="Not billed">—</span>
+            : entered
+              ? fmt$(Number(editVal) * rate)
+              : inService
+                ? <span className="sc-day-amount-ghost">~{fmt$(projVal * rate)}</span>
+                : <span className="sc-day-amount-pending">–</span>}
+        </span>
+      )}
     </div>
   );
 }

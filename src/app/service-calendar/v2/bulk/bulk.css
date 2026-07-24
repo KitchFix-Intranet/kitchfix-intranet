@@ -1,0 +1,129 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Bulk convergence (Phase 2A, 2026-07-24)
+   Additions ONLY. Base .sc-bulk-review-list / -item / -date / -vals /
+   -meals / -rev live in dayDetail.css:1006-1049 - reuse them, don't
+   fork. Everything here is either a NEW class or a modifier.
+   §13A token discipline: --sc2-space-* / --sc2-radius-* / --sc2-size-*
+   / --sc2-wt-* / --sc2-ink-* / --sc2-line* / --sc2-state-* only.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Batch-level overwrite warning above the list. Amber-family tokens
+   (state-needs-fg-strong) - same palette the mark-no-service flow
+   uses so the destructive-warning grammar reads consistently. No
+   currency ever renders here (counts only, per standing rule + owner
+   ruling on destructive-context numbers). */
+.sc-bulk-review-warning {
+  margin: 0 0 var(--sc2-space-3);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-state-needs-fg);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+  line-height: 1.4;
+}
+.sc-bulk-review-warning-icon {
+  color: var(--sc2-state-needs-fg-strong);
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* Expandable review row. The base .sc-bulk-review-item is a flex
+   space-between - we swap to a grid on the row wrapper so caret /
+   date / vals / overwrite-marker line up regardless of which cells
+   render. Keeps the list block-level for the expanded detail. */
+.sc-bulk-review-item--expandable {
+  display: block;
+  padding: 0;
+}
+.sc-bulk-review-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  font-size: var(--sc2-size-body);
+}
+.sc-bulk-review-row--toggle {
+  cursor: pointer;
+}
+.sc-bulk-review-row--toggle:hover {
+  background: var(--sc2-surface-sunken);
+}
+.sc-bulk-review-row--toggle:focus-visible {
+  outline: 2px solid var(--sc2-accent-green);
+  outline-offset: -2px;
+}
+.sc-bulk-review-caret {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  min-width: var(--sc2-space-3);
+}
+/* Overwrite marker on an entered day. Spans the full row width below
+   the primary line so it never squeezes the date/meals cluster. */
+.sc-bulk-review-overwrite {
+  grid-column: 2 / -1;
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-state-needs-fg-strong);
+  font-weight: var(--sc2-wt-medium);
+}
+
+/* Per-service expand detail (indented list beneath the row). Mirrors
+   the Ledger's .sc-v2-entry-ledger-detail grammar so the two expand
+   surfaces read the same. */
+.sc-bulk-review-detail {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--sc2-space-4) var(--sc2-space-3) calc(var(--sc2-space-4) + var(--sc2-space-3));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-soft);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line-2);
+}
+.sc-bulk-review-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sc2-space-3);
+  align-items: baseline;
+}
+.sc-bulk-review-detail-name {
+  color: var(--sc2-ink);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-bulk-review-detail-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink);
+}
+
+/* Footer contract line - "Saves as one batch. All N or none." above
+   the action bar so the operator reads it BEFORE the primary button. */
+.sc-bulk-review-footer-note {
+  margin: var(--sc2-space-3) 0 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+/* ─── Bulk custom-entry panel additions ──────────────────────────
+   Uses .sc-v2-entry-group / .sc-day-ledger primitives (imported from
+   the single-day modal via GroupBlock/ServiceRow exports). Only the
+   panel shell + selection-count header are new.
+   Selection guidance (P2-5) - empty state + running total. */
+
+/* Bulk empty-selection state inside the panel opener. */
+.sc-workspace-bulk-active-hint {
+  margin: 0 var(--sc2-space-3) 0 0;
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-caption);
+  font-style: italic;
+}
+.sc-workspace-bulk-active-total {
+  margin: 0 var(--sc2-space-3) 0 0;
+  color: var(--sc2-ink);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  font-variant-numeric: tabular-nums;
+}

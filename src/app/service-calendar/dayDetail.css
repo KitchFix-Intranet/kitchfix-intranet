@@ -1177,6 +1177,13 @@
   column-gap: var(--space-3);
   max-width: min(720px, 100%);
 }
+/* 3-col variant for bulk custom-entry (redline #11, owner Ruling 2
+   2026-07-24). Amounts vary by day so the per-day Amount column is
+   omitted; head + row emit N-1 cells and the subgrid follows via
+   grid-template-columns override on the wrapper. */
+.sc-day-ledger--no-amount {
+  grid-template-columns: minmax(0, 1fr) 152px 88px;
+}
 .sc-day-ledger > .sc-day-ledger-head,
 .sc-day-ledger > .sc-day-row--ledger {
   display: grid;
@@ -1269,4 +1276,11 @@
   .sc-day-ledger > .sc-day-row--ledger .sc-day-row-archived-chip { grid-area: qty; }
   .sc-day-ledger > .sc-day-row--ledger .sc-day-row-rate          { grid-area: rate; align-items: flex-start; }
   .sc-day-ledger > .sc-day-row--ledger .sc-day-row-amount        { grid-area: amount; }
+  /* No-amount variant collapses the mobile stack to rate under name,
+     qty to the right - no dead area. */
+  .sc-day-ledger--no-amount > .sc-day-row--ledger {
+    grid-template-areas:
+      "name qty"
+      "rate qty";
+  }
 }

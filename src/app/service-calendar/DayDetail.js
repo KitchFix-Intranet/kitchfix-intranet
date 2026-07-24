@@ -208,6 +208,17 @@ export const LEDGER_HEAD = (
   </div>
 );
 
+// 3-col variant for bulk custom-entry (no per-day Amount column -
+// amounts vary by day). Pairs with .sc-day-ledger--no-amount on the
+// wrapper (dayEntryV2.css). Owner Ruling 2 / redline #11.
+export const LEDGER_HEAD_NO_AMOUNT = (
+  <div className="sc-day-ledger-head" aria-hidden="true">
+    <span className="sc-lh-name">Service</span>
+    <span className="sc-lh-rate">Rate</span>
+    <span className="sc-lh-qty">Qty</span>
+  </div>
+);
+
 // In-service predicate: a (service, day) pair is in service iff the service
 // has no archive date OR the day is on or before its archive date. Mirrors
 // the sc_daily_revenue view's catalog JOIN (sc-6b) exactly. Used to gate
