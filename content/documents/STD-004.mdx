@@ -3,8 +3,8 @@ id: STD-004
 title: Documentation Repository Standard
 doc_class: STD
 shelf: "Brand & Documentation Standards"
-status: Live
-version: "1.3"
+status: In Build
+version: "1.4"
 card_line: "How the OPD corpus is organized and governed - classes, shelves, access tiers, canonical sourcing, lifecycle, and IDs. The system-of-docs standard."
 summary: "The Documentation Repository Standard. Governs the OPD document library as a system: the corpus model (content/documents as the corpus vs docs/ as developer/provenance space), the document-class decision rubric (when to use PB/SOP/TPL/REF/STD/POL/CHK/AGR/FORM/POST), the six shelves and organization, the one-fact-one-home rule (Facts vs prose vs generated docs, and non-canonical handling), the access-tier rubric (unrestricted/restricted/slt), the provenance boundary (operator knowledge vs repo-side evidence), lifecycle and status (retire-not-delete, supersession, effective-dating), ID-space governance, and relationship rules. STD-001 governs format inside a doc; STD-004 governs the system of docs."
 keywords:
@@ -190,7 +190,7 @@ Enforcement status: the reader enforces `access_level` today - both the document
 
 > NOTE: OPD access is presently all-or-nothing within a tier - the reader enforces the tier, not per-account or per-document identity. Choose the tier on "which population needs this," not on finer-grained visibility. Per-account or per-user scoping within a tier is a future capability.
 
-> CRITICAL: `access_level` is overlay-preserved at projection - the MDX value seeds the row on first insert and is not re-applied on update, so a tier changed in the cockpit persists in the database but does NOT flow back to the MDX. Keep the two in step: when a tier is changed in the cockpit, update the document's frontmatter to match. If they diverge and the document is ever re-inserted, it returns at the stale MDX tier.
+> CRITICAL: `status` and `access_level` are both overlay-preserved at projection - the MDX value seeds the row on first insert and is not re-applied on update. A status flipped or a tier changed in the cockpit persists in the database but does NOT flow back to the MDX. Keep the two in step: when either is changed in the cockpit, update the document's frontmatter to match. If they diverge and the document is ever re-inserted, it returns at the stale MDX value. A 2026-07-24 audit found 74 such divergences, 70 of them status.
 
 # The Provenance Boundary
 
@@ -217,6 +217,12 @@ A document that leaves active use is Retired, never deleted. It is preserved as 
 ## Supersession and effective-dating
 
 When a document replaces another, the replacement declares `supersedes` pointing at the old ID, and the old document is Retired. When a value inside a document changes, the prior value moves to a history section marked superseded with its date; the new value carries its effective date. Current truth is always on top; history is preserved, never overwritten.
+
+## What a document needs before it can go Live
+
+A document cannot be set to Live unless it carries both a `version` and a `card_line`. This is enforced in the database by the `chk_live_complete` constraint, not by the frontmatter schema, so a document can pass validation and still be refused at the moment of the flip. The cockpit surfaces this as a rejected save rather than a named error, so these two fields are the first thing to check when a flip is refused. Documents flagged `is_historical` are exempt from the rule.
+
+Class-specific requirements sit on top of that. POL and AGR documents carry legal or HR exposure and require an approval record on the page; see STD-001 Section 11 for the per-class approval chain and Section 12 for what the approval block contains.
 
 ## Review cadence
 
