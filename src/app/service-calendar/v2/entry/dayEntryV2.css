@@ -304,8 +304,15 @@
   text-decoration-color: currentColor;
 }
 
-/* ─── Activity band + composer ─────────────────────────── */
-.sc-v2-entry-activity {
+/* ─── Ledger (Phase 1 rename from Activity) ────────────────
+   Same shell grammar as the pre-rename block: card with composer
+   on top, chronological entries beneath. Ledger adds a title,
+   composer hint (notes post immediately), event-summary rows that
+   expand to per-service detail (edit-event only), and pips by
+   type. Tokens only (§13A). No new px literals for type / spacing
+   / radius. Uses the existing composer + input primitive shapes
+   from the Activity block; only the identifiers changed. */
+.sc-v2-entry-ledger {
   border: var(--sc2-border-thin) solid var(--sc2-line);
   border-radius: var(--sc2-radius-container);
   padding: var(--sc2-space-3);
@@ -314,26 +321,39 @@
   flex-direction: column;
   gap: var(--sc2-space-2);
 }
-.sc-v2-entry-activity-composer {
+.sc-v2-entry-ledger-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.sc-v2-entry-ledger-title {
+  margin: 0;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sc2-ink-muted);
+}
+.sc-v2-entry-ledger-composer {
   display: flex;
   gap: var(--sc2-space-2);
 }
-.sc-v2-entry-activity-input {
+.sc-v2-entry-ledger-input {
   flex: 1 1 auto;
-  padding: 6px var(--sc2-space-3);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
   border: var(--sc2-border-thin) solid var(--sc2-line);
   border-radius: var(--sc2-radius-control);
   font-size: var(--sc2-size-caption);
   color: var(--sc2-ink);
   background: var(--sc2-surface-page);
 }
-.sc-v2-entry-activity-input:focus-visible {
+.sc-v2-entry-ledger-input:focus-visible {
   outline: 2px solid var(--sc2-accent-green);
   outline-offset: -2px;
   border-color: var(--sc2-accent-green);
 }
-.sc-v2-entry-activity-post {
-  padding: 6px var(--sc2-space-4);
+.sc-v2-entry-ledger-post {
+  padding: var(--sc2-space-2) var(--sc2-space-4);
   background: var(--sc2-accent-green);
   color: var(--sc2-ink-inverse);
   border: none;
@@ -343,31 +363,101 @@
   cursor: pointer;
   letter-spacing: 0.03em;
 }
-.sc-v2-entry-activity-post:disabled {
+.sc-v2-entry-ledger-post:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.sc-v2-entry-activity-list {
+.sc-v2-entry-ledger-hint {
+  margin: 0;
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  font-style: italic;
+}
+.sc-v2-entry-ledger-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sc2-space-2);
 }
-.sc-v2-entry-activity-item {
-  display: grid;
-  grid-template-columns: 90px auto 1fr;
-  gap: var(--sc2-space-2);
-  font-size: var(--sc2-size-micro);
-  color: var(--sc2-ink-soft);
-  padding-bottom: var(--sc2-space-2);
+.sc-v2-entry-ledger-item {
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line-2);
 }
-.sc-v2-entry-activity-item:last-child { border-bottom: none; }
-.sc-v2-entry-activity-stamp { color: var(--sc2-ink-muted); }
-.sc-v2-entry-activity-author { color: var(--sc2-accent-green-deep); font-weight: var(--sc2-wt-semibold); }
-.sc-v2-entry-activity-body { color: var(--sc2-ink); }
+.sc-v2-entry-ledger-item:last-child { border-bottom: none; }
+.sc-v2-entry-ledger-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-2) 0;
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink);
+}
+.sc-v2-entry-ledger-row--toggle {
+  cursor: pointer;
+  border-radius: var(--sc2-radius-control);
+}
+.sc-v2-entry-ledger-row--toggle:hover {
+  background: var(--sc2-surface-sunken);
+}
+.sc-v2-entry-ledger-row--toggle:focus-visible {
+  outline: 2px solid var(--sc2-accent-green);
+  outline-offset: -2px;
+}
+/* Type pip - small dot color-coded to event class. Notes green,
+   edits neutral ink, no-service amber, first-entered accent. */
+.sc-v2-entry-ledger-pip {
+  display: inline-block;
+  width: var(--sc2-space-2);
+  height: var(--sc2-space-2);
+  border-radius: 50%;
+  background: var(--sc2-ink-muted);
+  align-self: center;
+}
+.sc-v2-entry-ledger-pip--note          { background: var(--sc2-accent-green); }
+.sc-v2-entry-ledger-pip--edit-event    { background: var(--sc2-ink-muted); }
+.sc-v2-entry-ledger-pip--edit-noservice { background: var(--sc2-state-needs-fg); }
+.sc-v2-entry-ledger-pip--first-entered { background: var(--sc2-accent-copper, var(--sc2-ink-muted)); }
+.sc-v2-entry-ledger-summary {
+  color: var(--sc2-ink);
+  min-width: 0;
+  word-break: break-word;
+}
+.sc-v2-entry-ledger-stamp {
+  color: var(--sc2-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sc-v2-entry-ledger-detail {
+  list-style: none;
+  margin: 0;
+  padding: var(--sc2-space-2) 0 var(--sc2-space-3) calc(var(--sc2-space-4) + var(--sc2-space-2));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-soft);
+}
+.sc-v2-entry-ledger-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sc2-space-3);
+  align-items: baseline;
+}
+.sc-v2-entry-ledger-detail-name {
+  color: var(--sc2-ink);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-v2-entry-ledger-detail-arrow {
+  font-variant-numeric: tabular-nums;
+  color: var(--sc2-ink);
+}
+.sc-v2-entry-ledger-detail-old {
+  color: var(--sc2-ink-muted);
+}
+.sc-v2-entry-ledger-detail-new {
+  font-weight: var(--sc2-wt-bold);
+}
 
 /* ─── Right: bill rail ─────────────────────────────────────── */
 .sc-v2-entry-rail {

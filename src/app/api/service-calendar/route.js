@@ -278,6 +278,13 @@ function transformDays(orchDays) {
         author:      h.author,
         changedAt:   h.changedAt,
       })),
+      // Phase 1 Ledger (2026-07-24): "first entered" synthesis from
+      // sc_daily_actuals.created_by/created_at. Populated whenever
+      // the day has ANY actuals rows. Consumed by v2's groupActivity
+      // helper to render the "who first entered this day?" row that
+      // the audit trigger can't emit (trigger fires only on UPDATE
+      // per sc-1-service-calendar-schema.sql:263-268).
+      firstEntered: d.firstEntered || null,
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
       isLocked:   d.isLocked,

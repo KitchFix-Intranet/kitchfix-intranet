@@ -51,6 +51,94 @@ import {
   LEDGER_HEAD,
   isInServiceOnDay,
 } from "../../DayDetail";
+
+// ═══════════════════════════════════════════════════════════════════
+// groupActivity - v2's grouped Activity feed for the Ledger (Phase 1).
+// ═══════════════════════════════════════════════════════════════════
+//
+// v1's mergeActivity (DayDetail.js:50-106) buckets history rows internally
+// by second-truncated changedAt, then FLATTENS regular multi-service edits
+// back to N per-service rows. That worked for v1's density but produces
+// noisy Ledger walls on a busy day where one save touches 5-8 services.
+//
+// v2 spec (§8, owner-approved): hybrid summary line per EVENT (bucket),
+// expandable to per-service detail. Same bucketing input as mergeActivity;
+// preserves the bucket structure instead of flattening. Also synthesizes
+// a first-entered row from day.firstEntered (server-side synthesis in
+// readHistoryEntriesForRange - the audit trigger deliberately skips INSERT
+// so a day entered once and never edited has no history rows).
+//
+// Owner constraint: mergeActivity's output shape MUST NOT change (v1
+// consumes it too). This helper is v2-only, alongside mergeActivity.
+//
+// Row shapes emitted (all carry timestamp for sorting):
+//   note            -> { type: "note",           timestamp, author, key, note }
+//   edit-event      -> { type: "edit-event",     timestamp, author, key,
+//                        entries: [{serviceId, serviceName, oldValue, newValue}] }
+//   edit-noservice  -> { type: "edit-noservice", timestamp, author, key }
+//                       (all-zero batch, aka "Marked no service")
+//   first-entered   -> { type: "first-entered",  timestamp, author, key }
+//                       (from firstEntered synthesis; who FIRST inserted
+//                       any actuals for this day - the audit trigger's
+//                       INSERT gap)
+// Sorted newest first.
+function groupActivity(noteEntries, historyEntries, firstEntered) {
+  const rows = [];
+  for (const n of (noteEntries || [])) {
+    rows.push({
+      type: "note",
+      timestamp: n.createdAt,
+      author: n.author,
+      key: `n:${n.createdAt}`,
+      note: n.note,
+    });
+  }
+  // Bucketing: same second-truncation as mergeActivity. History rows
+  // within one upsert share changedAt to millisecond precision; the
+  // truncation is jitter slop.
+  const buckets = new Map();
+  for (const h of (historyEntries || [])) {
+    const t = new Date(h.changedAt);
+    if (!Number.isNaN(t.getTime())) t.setMilliseconds(0);
+    const bucketKey = Number.isNaN(t.getTime()) ? String(h.changedAt) : t.toISOString();
+    if (!buckets.has(bucketKey)) buckets.set(bucketKey, { author: h.author, changedAt: h.changedAt, entries: [] });
+    buckets.get(bucketKey).entries.push(h);
+  }
+  for (const [bucketKey, bucket] of buckets.entries()) {
+    const allZero = bucket.entries.length > 1 && bucket.entries.every(e => Number(e.newValue) === 0);
+    if (allZero) {
+      rows.push({
+        type: "edit-noservice",
+        timestamp: bucket.changedAt,
+        author: bucket.author,
+        key: `edit-sys:${bucketKey}`,
+      });
+    } else {
+      rows.push({
+        type: "edit-event",
+        timestamp: bucket.changedAt,
+        author: bucket.author,
+        key: `edit:${bucketKey}`,
+        entries: bucket.entries.map(e => ({
+          serviceId: e.serviceId,
+          serviceName: e.serviceName,
+          oldValue: e.oldValue,
+          newValue: e.newValue,
+        })),
+      });
+    }
+  }
+  if (firstEntered && firstEntered.createdAt) {
+    rows.push({
+      type: "first-entered",
+      timestamp: firstEntered.createdAt,
+      author: firstEntered.createdBy,
+      key: `first:${firstEntered.createdAt}`,
+    });
+  }
+  rows.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+  return rows;
+}
 import useAnimatedNumber from "../../useAnimatedNumber";
 import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
 import MobileBooksBar from "../MobileBooksBar";
@@ -707,9 +795,13 @@ function DayEntryV2({
   }, [serviceGroups, day.projected, day.actual, day.hasActuals]);
 
   const hasTouchedAny = touched.size > 0;
+  // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
+  // (v2-specific). Preserves bucket structure (hybrid summary + expand
+  // detail per §8) and adds the first-entered synthesis row from
+  // day.firstEntered. v1 DayDetail still uses mergeActivity.
   const combinedActivity = useMemo(
-    () => mergeActivity(noteEntries, historyEntries),
-    [noteEntries, historyEntries]
+    () => groupActivity(noteEntries, historyEntries, day.firstEntered),
+    [noteEntries, historyEntries, day.firstEntered]
   );
 
   // Header nav - DayDetail day nav for prev/next.
@@ -891,8 +983,13 @@ function DayEntryV2({
             </div>
           )}
 
-          {/* Standalone Activity composer + ledger */}
-          <ActivityBand
+          {/* Ledger - composer on top, chronological events beneath.
+              Phase 1 (2026-07-24): renamed from ActivityBand. Events are
+              now grouped per §8 hybrid: one summary line per save event,
+              expandable to per-service detail. First-entered synthesis
+              row appears for any day with actuals (no schema change -
+              synthesized server-side from sc_daily_actuals.created_*). */}
+          <LedgerBand
             entries={combinedActivity}
             draft={standaloneDraft}
             onDraftChange={setStandaloneDraft}
@@ -917,9 +1014,6 @@ function DayEntryV2({
             touched={touched}
             groupSummary={groupSummary}
             projectedGroupSummary={projectedGroupSummary}
-            notes={notes}
-            onNotesChange={setNotes}
-            noteRef={rideNoteRef}
           />
         </aside>
       </div>
@@ -1136,7 +1230,6 @@ function BillRail({
   hasTouchedAny, enteredCount, totalToEnter,
   serviceGroups, day, editValues, touched,
   groupSummary, projectedGroupSummary,
-  notes, onNotesChange, noteRef,
 }) {
   // B3 (2026-07-24): the Confirm & save block was extracted from here
   // to a pinned actions row in the parent (DayEntryV2). Rail now
@@ -1259,21 +1352,12 @@ function BillRail({
         })}
       </div>
 
-      {/* Ride-along note */}
-      <div className="sc-v2-entry-rail-note">
-        <label htmlFor="sc-v2-entry-ride-note" className="sc-v2-entry-rail-note-label">
-          Note riding this save
-        </label>
-        <textarea
-          id="sc-v2-entry-ride-note"
-          ref={noteRef}
-          className="sc-v2-entry-rail-note-input"
-          placeholder="Optional note - saves with the confirm"
-          value={notes}
-          onChange={e => onNotesChange(e.target.value)}
-          rows={2}
-        />
-      </div>
+      {/* Phase 1 Ledger (2026-07-24): ride-along note removed per
+          owner redline #8 - one note location, not two. The Ledger's
+          composer (posts immediately via sc-add-note) is the single
+          note surface now. rideNote prop path preserved server-side
+          for queued replays that stored one before this PR; new saves
+          from this UI never populate it. */}
 
     </div>
   );
@@ -1312,16 +1396,38 @@ function BillLine({ svc, day, editValues, touched }) {
 }
 
 // ═════════════════════════════════════════════════════════════════
-// ActivityBand - standalone note composer + merged ledger.
+// LedgerBand - the day's Ledger (§8, Phase 1).
+// Composer on top (notes post immediately via sc-add-note - the hint
+// under the button says so). Chronological event stream beneath,
+// newest first. Row types (produced by groupActivity above):
+//   note            - always-visible body text
+//   edit-event      - summary "Kevin updated N services"; click to
+//                     expand a per-service `old -> new` detail block
+//   edit-noservice  - "Marked no service" system row
+//   first-entered   - "Kevin entered counts" - synthesized from the
+//                     day's earliest sc_daily_actuals.created_at
+// Only edit-event is expandable (the others are single-line facts).
+// Expansion state is LOCAL to this component - not persisted, not
+// lifted; opening a modal opens all events collapsed.
 // ═════════════════════════════════════════════════════════════════
-function ActivityBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef }) {
+function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef }) {
+  const [expanded, setExpanded] = useState(() => new Set());
+  const toggle = (key) => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
   return (
-    <section className="sc-v2-entry-activity" aria-label="Activity">
-      <div className="sc-v2-entry-activity-composer">
+    <section className="sc-v2-entry-ledger" aria-label="Ledger">
+      <div className="sc-v2-entry-ledger-head">
+        <h3 className="sc-v2-entry-ledger-title">Ledger</h3>
+      </div>
+      <div className="sc-v2-entry-ledger-composer">
         <input
           ref={inputRef}
           type="text"
-          className="sc-v2-entry-activity-input"
+          className="sc-v2-entry-ledger-input"
           placeholder="Add a note..."
           value={draft}
           onChange={e => onDraftChange(e.target.value)}
@@ -1335,50 +1441,76 @@ function ActivityBand({ entries, draft, onDraftChange, onPost, isPosting, inputR
         />
         <button
           type="button"
-          className="sc-v2-entry-activity-post"
+          className="sc-v2-entry-ledger-post"
           onClick={onPost}
           disabled={isPosting || !(draft || "").trim()}
         >
           {isPosting ? "..." : "Add note"}
         </button>
       </div>
+      <p className="sc-v2-entry-ledger-hint">Notes post immediately - no need to save.</p>
       {entries.length > 0 && (
-        <ul className="sc-v2-entry-activity-list">
-          {/* PR-A Fix 1 (2026-07-22): rows come from mergeActivity()
-              (DayDetail.js:50-106) with shape:
-                note      -> { type: "note",  timestamp, author, key, note }
-                edit      -> { type: "edit",  timestamp, author, key,
-                               serviceName, oldValue, newValue }
-                edit sys  -> { type: "edit",  timestamp, author, key,
-                               systemPhrasing: true }
-              The prior render read e.id / e.kind / e.createdAt|ts|postedAt
-              / e.body|text|summary - none of which mergeActivity emits -
-              and had no edit-row branch, so notes rendered as author-only
-              and edits rendered blank. Field access + branching now
-              matches the v1 canonical renderer at DayDetail.js:1420-1449. */}
-          {entries.slice(0, 8).map((e, i) => (
-            <li
-              key={e.key || `${e.type || "note"}-${i}`}
-              className={`sc-v2-entry-activity-item sc-v2-entry-activity-item--${e.type || "note"}`}
-            >
-              <span className="sc-v2-entry-activity-stamp">{formatEntryStamp(e.timestamp)}</span>
-              {e.author && <span className="sc-v2-entry-activity-author">{e.author}</span>}
-              <span className="sc-v2-entry-activity-body">
-                {e.type === "note" ? (
-                  e.note
-                ) : e.systemPhrasing ? (
-                  "Marked no service (all services 0)"
-                ) : (
-                  <>
-                    <strong>{e.serviceName}</strong>{" "}
-                    {e.oldValue}
-                    {" → "}
-                    <strong>{e.newValue}</strong>
-                  </>
+        <ul className="sc-v2-entry-ledger-list">
+          {entries.map((e) => {
+            const isExpandable = e.type === "edit-event";
+            const isOpen = isExpandable && expanded.has(e.key);
+            const nEntries = e.entries?.length || 0;
+            return (
+              <li
+                key={e.key}
+                className={`sc-v2-entry-ledger-item sc-v2-entry-ledger-item--${e.type}${isOpen ? " sc-v2-entry-ledger-item--open" : ""}`}
+              >
+                <div
+                  className={`sc-v2-entry-ledger-row${isExpandable ? " sc-v2-entry-ledger-row--toggle" : ""}`}
+                  onClick={isExpandable ? () => toggle(e.key) : undefined}
+                  role={isExpandable ? "button" : undefined}
+                  tabIndex={isExpandable ? 0 : undefined}
+                  onKeyDown={isExpandable ? (evt) => {
+                    if (evt.key === "Enter" || evt.key === " ") {
+                      evt.preventDefault();
+                      toggle(e.key);
+                    }
+                  } : undefined}
+                  aria-expanded={isExpandable ? isOpen : undefined}
+                >
+                  <span className={`sc-v2-entry-ledger-pip sc-v2-entry-ledger-pip--${e.type}`} aria-hidden="true" />
+                  <span className="sc-v2-entry-ledger-summary">
+                    {e.type === "note" && e.note}
+                    {e.type === "edit-event" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{" "}updated {nEntries} service{nEntries === 1 ? "" : "s"}
+                      </>
+                    )}
+                    {e.type === "edit-noservice" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{" "}marked no service
+                      </>
+                    )}
+                    {e.type === "first-entered" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{" "}entered counts
+                      </>
+                    )}
+                  </span>
+                  <span className="sc-v2-entry-ledger-stamp">{formatEntryStamp(e.timestamp)}</span>
+                </div>
+                {isOpen && (
+                  <ul className="sc-v2-entry-ledger-detail">
+                    {e.entries.map(en => (
+                      <li key={en.serviceId} className="sc-v2-entry-ledger-detail-row">
+                        <span className="sc-v2-entry-ledger-detail-name">{en.serviceName}</span>
+                        <span className="sc-v2-entry-ledger-detail-arrow">
+                          <span className="sc-v2-entry-ledger-detail-old">{en.oldValue}</span>
+                          {" → "}
+                          <span className="sc-v2-entry-ledger-detail-new">{en.newValue}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
