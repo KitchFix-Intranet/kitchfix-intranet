@@ -1184,6 +1184,13 @@
 .sc-day-ledger--no-amount {
   grid-template-columns: minmax(0, 1fr) 152px 88px;
 }
+/* 2-col fee variant for fee-no-dollar accounts (STL-FL). NO Rate cell
+   and NO Amount cell - STL-FL prices are $0 by design; a rate column
+   would leak "$0.00 / meal" on every row (Phase 2B gate-2 blocker).
+   Head + row emit two cells and the subgrid follows. */
+.sc-day-ledger--fee {
+  grid-template-columns: minmax(0, 1fr) 88px;
+}
 .sc-day-ledger > .sc-day-ledger-head,
 .sc-day-ledger > .sc-day-row--ledger {
   display: grid;
@@ -1282,5 +1289,12 @@
     grid-template-areas:
       "name qty"
       "rate qty";
+  }
+  /* Fee variant is a pure 2-cell stack: name left, qty right, no rate
+     or amount cells to place - no dead areas. */
+  .sc-day-ledger--fee > .sc-day-row--ledger {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name qty";
+    row-gap: 0;
   }
 }

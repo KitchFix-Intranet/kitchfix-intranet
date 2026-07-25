@@ -160,6 +160,20 @@ export function useScEntryV2() {
 // Key format: canonical account key with spaces around the hyphen -
 // `selectedAccount` holds exactly this string, so the Set.has()
 // check at the mount is a same-shape compare.
+// Phase 2B (2026-07-25): the set now carries a SECOND meaning -
+// per-meal cutover keys (six original) PLUS fee-account opt-in
+// (STL - FL). STL-FL is flat_fee but has no homestand data (the
+// classifier at serviceCalendar.js:249-251 confirms this), so it
+// renders on DayEntryV2's fee-no-dollar variant (BillRailFee +
+// vocab.js "served"/"confirm"). MLB fee accounts stay OUT of the
+// set - they render v1 until Phase 4 (MLB SC v2.1).
+//
+// MLB keys deliberately EXCLUDED from this set (Phase 4 target):
+//   "CIN - OH"      MLB Reds - fee + homestand
+//   "STL - MO"      MLB Cardinals - fee + homestand
+//   "TXR - TX - H"  MLB Rangers home - fee + homestand
+//   "TXR - TX - V"  MLB Rangers visitors - fee + homestand
+// Adding any of these before Phase 4 breaks the MLB v1 fence.
 export const ENTRY_V2_ACCOUNTS = new Set([
   "CIN - AZ",
   "TXR - AZ",
@@ -167,6 +181,7 @@ export const ENTRY_V2_ACCOUNTS = new Set([
   "TBJ - FL",
   "CIN - KY",
   "TBJ - NY",
+  "STL - FL",   // fee-no-dollar; opts in via cutover-set override in useScEntryV2Effective
 ]);
 
 // ─── Effective entry-v2 gate for a specific account ───────────
@@ -189,8 +204,27 @@ export function useScEntryV2Effective(accountKey, isFeeAccount) {
   const { stored, envDef } = useFlagState("entry-v2", "entry2", "NEXT_PUBLIC_SC_ENTRY_V2");
 
   if (!scV2) return false;
-  if (isFeeAccount) return false;
-  if (stored === false) return false;   // kill switch
+
+  // Phase 2B (2026-07-25): fee-account gate is now account-level, not
+  // shape-level. Fee accounts default OFF, but the ENTRY_V2_ACCOUNTS
+  // cutover set can override - STL-FL opts in this way. MLB fee
+  // accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) are DELIBERATELY
+  // NOT in the set until Phase 4 (MLB SC v2.1).
+  //
+  // Do NOT "simplify" this back to `if (isFeeAccount) return false`.
+  // That was the shape-level shortcircuit; removing the cutover-set
+  // clause re-shadows the account-level opt-in and unfences the four
+  // MLB accounts by shape membership. See ENTRY_V2_ACCOUNTS above
+  // for the MLB key list and the Phase 4 marker.
+  //
+  // Ordering rationale: this fee gate MUST stay ahead of the stored-
+  // flag returns. Otherwise `?entry2=1` on an MLB account would force
+  // it into v2 (kill switch inversion). MLB binary is protected by
+  // the set-membership check being consulted BEFORE stored is honored
+  // for fee accounts.
+  if (isFeeAccount && !(accountKey && ENTRY_V2_ACCOUNTS.has(accountKey))) return false;
+
+  if (stored === false) return false;   // kill switch (per-meal only reaches here)
   if (stored === true) return true;     // durable on
   // stored === null (absent): env default OR account is in the cutover set
   return envDef || (accountKey ? ENTRY_V2_ACCOUNTS.has(accountKey) : false);

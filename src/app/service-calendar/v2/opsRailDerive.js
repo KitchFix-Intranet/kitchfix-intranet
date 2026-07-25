@@ -336,12 +336,15 @@ export function deriveOpsFooterActionStlFl(yearData, todayDate) {
   const iso = todayDate || todayISO();
   const rows = deriveOpsQueueStlFl(yearData, iso);
   if (!rows.length) return { kind: "caught-up", target: null };
+  // Phase 2B (2026-07-25): STL-FL-only function by name (Stl_Fl). Verb
+  // swap "Enter" -> "Confirm" per vocab ruling. MLB footer action
+  // lives in deriveOpsFooterActionMlb above and is untouched.
   const todayRow = rows.find(r => r.date === iso && r.status === "needs-entry");
   if (todayRow) {
     return {
       kind: "today",
       target: todayRow,
-      label: `Enter today · ${fmtShortDate(iso)}`,
+      label: `Confirm today · ${fmtShortDate(iso)}`,
     };
   }
   const oldestOverdue = rows.find(r => r.status === "overdue");
@@ -349,14 +352,14 @@ export function deriveOpsFooterActionStlFl(yearData, todayDate) {
     return {
       kind: "oldest-overdue",
       target: oldestOverdue,
-      label: `Enter oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`,
+      label: `Confirm oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`,
     };
   }
   const oldestNeeds = rows[0];
   return {
     kind: "oldest-needs",
     target: oldestNeeds,
-    label: `Enter oldest · ${fmtShortDate(oldestNeeds.date)}`,
+    label: `Confirm oldest · ${fmtShortDate(oldestNeeds.date)}`,
   };
 }
 

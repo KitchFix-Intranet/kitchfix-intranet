@@ -50,8 +50,14 @@ import {
   renderRate,
   LEDGER_HEAD,
   LEDGER_HEAD_NO_AMOUNT,
+  LEDGER_HEAD_FEE,
   isInServiceOnDay,
 } from "../../DayDetail";
+// Phase 2B (2026-07-25): fee-no-dollar variant. Sibling rail + vocab
+// helper. Both key on the same isFeeNoDollar predicate so the entry
+// tree stays consistent on STL-FL without perturbing per-meal or MLB.
+import BillRailFee from "./BillRailFee";
+import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
 
 // ═══════════════════════════════════════════════════════════════════
 // groupActivity - v2's grouped Activity feed for the Ledger (Phase 1).
@@ -169,10 +175,24 @@ function DayEntryV2({
   onNext,
   onNextException,
   onClose,
-  isFeeAccount,           // always false at mount (mount gate); prop kept for parity
+  // Phase 2B (2026-07-25): isFeeAccount is no longer always false.
+  // STL-FL now mounts DayEntryV2 via the ENTRY_V2_ACCOUNTS cutover
+  // override (flags.js:187+). MLB fee accounts (CIN-OH, STL-MO,
+  // TXR-TX-H, TXR-TX-V) stay OUT of the set until Phase 4 and never
+  // reach this component. `account` is the full account object
+  // (billingModel + hasHomestandSchedule) - the isFeeNoDollar
+  // predicate on it selects the fee-no-dollar shape (STL-FL only).
+  isFeeAccount,
+  account = null,
+  periodStats = null,     // { daysConfirmed, daysTotal, servedToDate } - fee Month block
   homestandContext,
   scopeLabel = "period",
 }, ref) {
+  // Fee-no-dollar shape flag - keyed on the account, not isFeeAccount.
+  // MLB (flat_fee + hasHomestandSchedule) reads false here; STL-FL
+  // (flat_fee + !hasHomestandSchedule) reads true. Vocabulary helpers
+  // and rail branching read this single derived boolean.
+  const feeNoDollar = isFeeNoDollar(account);
   // ═══════════════════════════════════════════════════════════════
   // State - byte-identical to v1 DayDetail (see DayDetail.js:208-263).
   // Values: "" = untouched (ghost), "0" = explicit zero, "123" = entered
@@ -575,6 +595,58 @@ function DayEntryV2({
     return { meals, revenue: rev };
   }, [serviceGroups, day.projected, day.priceAtDate, day.date]);
 
+  // Phase 2B (2026-07-25): fee-no-dollar `groupSummary` variant. The
+  // per-meal `groupSummary` above skips isFlatFee services (`if
+  // (!s.isFlatFee) meals += v;`) because they carry no per-meal count.
+  // On STL-FL every service is flatFee-billed, so `gsEntered.meals` is
+  // always 0 - useless for the group subtotal. This variant returns
+  // `meals` = sum of ALL typed values (irrespective of isFlatFee),
+  // matching the "served" concept on a fee account. Passed to
+  // GroupBlock only on the fee branch; per-meal keeps its per-meal
+  // groupSummary unchanged.
+  const feeGroupSummary = useCallback((group) => {
+    let served = 0;
+    for (const s of group.services) {
+      const v = getVal(s.colIndex);
+      served += v;
+    }
+    return { meals: served, revenue: 0 };
+  }, [getVal]);
+  const feeProjectedGroupSummary = useCallback((group) => {
+    let served = 0;
+    for (const s of group.services) {
+      if (!isInServiceOnDay(s, day.date)) continue;
+      served += day.projected[s.colIndex] ?? 0;
+    }
+    return { meals: served, revenue: 0 };
+  }, [day.projected, day.date]);
+
+  // Phase 2B gate-2 (2026-07-25): fee mirror of `enteredTotals` /
+  // `dayProjection`. Extracted per owner's L7 ruling - three sites
+  // (actions total, MobileBooksBar value, success screen) previously
+  // pasted the same archive-gated served-sum loop; a drift risk that
+  // was consistent by luck. All three now read this single memo. No
+  // behavior change; identical rendered numbers by construction.
+  //
+  // Fee served derivations ignore isFlatFee (unlike per-meal's
+  // enteredTotals/dayProjection which skip isFlatFee services because
+  // they carry no per-meal count). On a fee account the operator's
+  // typed value IS the served count for every line.
+  const feeServedTotals = useMemo(() => {
+    let entered = 0, scheduled = 0;
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        scheduled += day.projected[s.colIndex] ?? 0;
+        if (touched.has(s.colIndex)) {
+          const v = editValues[s.colIndex];
+          if (v !== "" && v !== undefined) entered += Number(v) || 0;
+        }
+      }
+    }
+    return { entered, scheduled };
+  }, [serviceGroups, day.projected, day.date, touched, editValues]);
+
   // Confirm handler = DayDetail.js:664-735 executeSave verbatim (minus
   // the setShowReview lines that no longer apply on the v2 path -
   // Review screen deleted).
@@ -780,9 +852,16 @@ function DayEntryV2({
     }
   }, [touched, saving, executeConfirm, focusInputScrolled]);
 
-  // Coaching per-meal branch - DayDetail.js:829-835 (fee branch omitted
-  // because DayEntryV2 never receives a fee-account day).
-  const coaching = {
+  // Coaching per-meal branch - DayDetail.js:829-835. Phase 2B: fee-no-
+  // dollar variant swaps "enter" -> "confirm" and "meal counts" ->
+  // "served counts" (vocab.js). MLB fee never reaches this component
+  // so the fee branch here targets STL-FL only.
+  const coaching = feeNoDollar ? {
+    "needs-entry": { tone: "needs",   text: "Confirm served counts. Projections shown for reference." },
+    "overdue":     { tone: "overdue", text: "Past due - confirm served counts as soon as possible." },
+    "upcoming":    { tone: "neutral", text: "Confirm served counts. Projections shown for reference." },
+    "entered":     { tone: "entered", text: "Counts confirmed. Edit and re-save if needed." },
+  }[status] : {
     "needs-entry": { tone: "needs",   text: "Enter actual meal counts. Projections shown for reference." },
     "overdue":     { tone: "overdue", text: "Past due - enter actual counts as soon as possible." },
     "upcoming":    { tone: "neutral", text: "Enter actual meal counts. Projections shown for reference." },
@@ -818,15 +897,23 @@ function DayEntryV2({
   const showDayNav = onPrev || onNext;
 
   // Success state - after clean save, celebration screen.
+  // Fee-no-dollar variant: no currency hero; served count is the hero,
+  // "Confirmed" replaces "Recorded" in the title (Ruling 3, vocabulary).
+  // Served count reads feeServedTotals.entered (post-save = touched values).
   if (justSaved) {
     return (
       <div className="sc-v2-entry sc-v2-entry--success" role="status" aria-live="polite">
         <div className="sc-v2-entry-success-inner">
           <div className="sc-v2-entry-success-check">✓</div>
-          <h3 className="sc-v2-entry-success-title">Recorded</h3>
-          <span className="sc-v2-entry-success-hero">{fmt$(summary.revenue)}</span>
+          <h3 className="sc-v2-entry-success-title">{feeNoDollar ? "Confirmed" : "Recorded"}</h3>
+          <span className="sc-v2-entry-success-hero">
+            {feeNoDollar ? `${feeServedTotals.entered.toLocaleString()} served` : fmt$(summary.revenue)}
+          </span>
           <p className="sc-v2-entry-success-sub">
-            {summary.meals.toLocaleString()} meals · {formatDate(day.date)}
+            {feeNoDollar
+              ? formatDate(day.date)
+              : <>{summary.meals.toLocaleString()} meals · {formatDate(day.date)}</>
+            }
           </p>
           <div className="sc-v2-entry-success-actions">
             {onNextException ? (
@@ -891,6 +978,8 @@ function DayEntryV2({
             hasEnteredCounts={isEntered && enteredServices > 0}
             enteredMeals={enteredMeals}
             enteredServices={enteredServices}
+            unit={unitLabel(account)}
+            feeNoDollar={feeNoDollar}
           />
         );
       })()}
@@ -984,8 +1073,10 @@ function DayEntryV2({
               accountSegment={accountSegment}
               onChange={handleChange}
               onFillProjections={fillGroupWithProjections}
-              groupSummary={groupSummary}
-              projectedGroupSummary={projectedGroupSummary}
+              groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
+              projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
+              variant={feeNoDollar ? "fee" : undefined}
+              unit={feeNoDollar ? "served" : "meals"}
               expanded={true}
             />
           ))}
@@ -1003,8 +1094,10 @@ function DayEntryV2({
                   accountSegment={accountSegment}
                   onChange={handleChange}
                   onFillProjections={fillGroupWithProjections}
-                  groupSummary={groupSummary}
-                  projectedGroupSummary={projectedGroupSummary}
+                  groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
+                  projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
+                  variant={feeNoDollar ? "fee" : undefined}
+                  unit={feeNoDollar ? "served" : "meals"}
                   expanded={false}
                 />
               ))}
@@ -1049,22 +1142,42 @@ function DayEntryV2({
           />
         </div>
 
-        {/* ─── Right: live-bill rail ─── */}
-        <aside id="sc-v2-entry-rail-mobile" className="sc-v2-entry-rail" aria-label="Forming invoice">
-          <BillRail
-            summary={summary}
-            enteredTotals={enteredTotals}
-            dayProjection={dayProjection}
-            hasTouchedAny={hasTouchedAny}
-            enteredCount={enteredCount}
-            totalToEnter={totalToEnter}
-            serviceGroups={activeGroups}
-            day={day}
-            editValues={editValues}
-            touched={touched}
-            groupSummary={groupSummary}
-            projectedGroupSummary={projectedGroupSummary}
-          />
+        {/* ─── Right: rail. BillRailFee sibling on fee-no-dollar
+             (STL-FL only today); BillRail on per-meal. Zero edits
+             inside BillRail per owner Ruling 2 - the sibling keeps
+             per-meal untouched by construction. ─── */}
+        <aside
+          id="sc-v2-entry-rail-mobile"
+          className="sc-v2-entry-rail"
+          aria-label={feeNoDollar ? "Confirmation summary" : "Forming invoice"}
+        >
+          {feeNoDollar ? (
+            <BillRailFee
+              serviceGroups={activeGroups}
+              day={day}
+              editValues={editValues}
+              touched={touched}
+              hasTouchedAny={hasTouchedAny}
+              enteredCount={enteredCount}
+              totalToEnter={totalToEnter}
+              periodStats={periodStats}
+            />
+          ) : (
+            <BillRail
+              summary={summary}
+              enteredTotals={enteredTotals}
+              dayProjection={dayProjection}
+              hasTouchedAny={hasTouchedAny}
+              enteredCount={enteredCount}
+              totalToEnter={totalToEnter}
+              serviceGroups={activeGroups}
+              day={day}
+              editValues={editValues}
+              touched={touched}
+              groupSummary={groupSummary}
+              projectedGroupSummary={projectedGroupSummary}
+            />
+          )}
         </aside>
       </div>
 
@@ -1078,12 +1191,31 @@ function DayEntryV2({
           §8C's "day total + Confirm & save" contract. */}
       <div className="sc-v2-entry-actions">
         <div className="sc-v2-entry-actions-total">
-          <span className="sc-v2-entry-actions-total-label">
-            {hasTouchedAny ? "Day total" : "Projected"}
-          </span>
-          <span className="sc-v2-entry-actions-total-value">
-            {hasTouchedAny ? "" : "~"}{fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}
-          </span>
+          {feeNoDollar ? (
+            <>
+              {/* Fee-no-dollar: no currency in the actions total.
+                  Reads feeServedTotals (single memo, L7 consolidation
+                  2026-07-25). Same numbers as MobileBooksBar and
+                  success screen by construction. */}
+              <span className="sc-v2-entry-actions-total-label">
+                {hasTouchedAny ? "Served" : "Scheduled"}
+              </span>
+              <span className="sc-v2-entry-actions-total-value">
+                {hasTouchedAny ? "" : "~"}
+                {(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()}
+                {" served"}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="sc-v2-entry-actions-total-label">
+                {hasTouchedAny ? "Day total" : "Projected"}
+              </span>
+              <span className="sc-v2-entry-actions-total-value">
+                {hasTouchedAny ? "" : "~"}{fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}
+              </span>
+            </>
+          )}
         </div>
         <button
           type="button"
@@ -1116,9 +1248,13 @@ function DayEntryV2({
         carries the entered/total count.
       */}
       <MobileBooksBar
-        barLabel={hasTouchedAny ? "Entered" : "Projected"}
-        barValue={`${hasTouchedAny ? "" : "~"}${fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}`}
-        barStatus={`${enteredCount} of ${totalToEnter} entered`}
+        barLabel={hasTouchedAny ? (feeNoDollar ? "Confirmed" : "Entered") : (feeNoDollar ? "Scheduled" : "Projected")}
+        barValue={
+          feeNoDollar
+            ? `${hasTouchedAny ? "" : "~"}${(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()} served`
+            : `${hasTouchedAny ? "" : "~"}${fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}`
+        }
+        barStatus={`${enteredCount} of ${totalToEnter} ${feeNoDollar ? "confirmed" : "entered"}`}
         open={mobileBillOpen}
         onOpenChange={setMobileBillOpen}
         controlsId="sc-v2-entry-rail-mobile"
@@ -1148,18 +1284,38 @@ function DayEntryV2({
 // a parallel .bulk-* variant - the same classes drive both surfaces,
 // which is what the computed-style diff on gate protects.
 //
-// hideAmount prop: bulk custom-entry omits the per-day Amount column
-// (amounts vary by day). ServiceRow drops its amount cell; group
-// footer drops its amount span; caller must apply the CSS variant
-// class .sc-day-ledger--no-amount on the wrapper (defined in
-// dayEntryV2.css). Match / projections / entry stays 4-col.
+// variant prop (Phase 2B gate-2, 2026-07-25) selects the table shape:
+//   undefined / "perMeal"  4-col Service · Rate · Qty · Amount
+//   "bulk"                 3-col Service · Rate · Qty
+//                          (bulk custom-entry: amounts vary by day)
+//   "fee"                  2-col Service · Served
+//                          (fee-no-dollar: prices are $0; rate cell
+//                           would leak "$0.00 / meal" on every row)
+//
+// Single enum by design - it is IMPOSSIBLE to ask for a fee table
+// that keeps the rate cell via prop mistake. ServiceRow reads the
+// same variant to drop matching cells; caller applies the matching
+// CSS wrapper class via the same variant.
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
   groupSummary, projectedGroupSummary,
   expanded,
-  hideAmount = false,
+  variant,           // undefined | "perMeal" | "bulk" | "fee"
+  unit = "meals",    // Phase 2B: fee-no-dollar variant passes "served"
 }) {
+  const wrapperClass = variant === "fee"
+    ? "sc-day-ledger sc-day-ledger--fee"
+    : variant === "bulk"
+      ? "sc-day-ledger sc-day-ledger--no-amount"
+      : "sc-day-ledger";
+  const head = variant === "fee"
+    ? LEDGER_HEAD_FEE
+    : variant === "bulk"
+      ? LEDGER_HEAD_NO_AMOUNT
+      : LEDGER_HEAD;
+  const hideAmount = variant === "bulk" || variant === "fee";
+  const hideRate = variant === "fee";
   const gsEntered = groupSummary(group);
   const gsProjected = projectedGroupSummary(group);
   const hasProjectedRevenue = gsProjected.revenue > 0;
@@ -1185,8 +1341,8 @@ export function GroupBlock({
           )}
         </div>
       </header>
-      <div className={`sc-day-ledger${hideAmount ? " sc-day-ledger--no-amount" : ""}`}>
-        {hideAmount ? LEDGER_HEAD_NO_AMOUNT : LEDGER_HEAD}
+      <div className={wrapperClass}>
+        {head}
         {group.services.map(s => (
           <ServiceRow
             key={s.colIndex}
@@ -1197,12 +1353,13 @@ export function GroupBlock({
             flashDelay={flashMap?.get(s.colIndex)}
             onChange={onChange}
             hideAmount={hideAmount}
+            hideRate={hideRate}
           />
         ))}
       </div>
       <footer className="sc-v2-entry-group-subtotal">
         <span className="sc-v2-entry-group-subtotal-label">
-          {gsEntered.meals.toLocaleString()} meals
+          {gsEntered.meals.toLocaleString()} {unit}
         </span>
         {!hideAmount && (
           <span className="sc-v2-entry-group-subtotal-amount">
@@ -1218,9 +1375,14 @@ export function GroupBlock({
 // inherits automatically. See DayDetail.js:837-914 for the shape.
 // Exported alongside GroupBlock (2026-07-24, owner Ruling 2) for
 // bulk custom-entry reuse.
-// hideAmount omits the trailing amount cell; caller's ledger wrapper
-// must carry .sc-day-ledger--no-amount so the subgrid is 3-col.
-export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false }) {
+//
+// Cell drops (GroupBlock composes these from its `variant` prop):
+//   hideAmount  - drop the trailing amount cell (bulk + fee)
+//   hideRate    - drop the rate cell (fee only; Phase 2B gate-2)
+// Caller's ledger wrapper must carry the matching subgrid variant:
+//   .sc-day-ledger--no-amount (3-col) for hideAmount
+//   .sc-day-ledger--fee (2-col) for both hideAmount and hideRate
+export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false }) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
@@ -1274,7 +1436,9 @@ export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange
       <div className="sc-day-row-left">
         <span className="sc-day-row-name">{svc.name}</span>
       </div>
-      <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
+      {!hideRate && (
+        <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
+      )}
       {qtyCell}
       {!hideAmount && (
         <span className="sc-day-row-amount">
@@ -1612,7 +1776,7 @@ function DiscardConfirm({ onKeepEditing, onDiscard, keepEditingBtnRef }) {
 //                             with concrete meals/services summary
 // No currency in either variant - server-derived; a wrong dollar
 // figure in a destructive dialog is worse than no dollar figure.
-function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnteredCounts, enteredMeals, enteredServices }) {
+function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnteredCounts, enteredMeals, enteredServices, unit = "meal", feeNoDollar = false }) {
   const title = dateLabel ? `Mark ${dateLabel} as no service?` : "Mark as no service?";
   return (
     <div className="sc-v2-entry-modal" role="alertdialog" aria-modal="true">
@@ -1620,7 +1784,11 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
         <h4 className="sc-v2-entry-modal-title">{title}</h4>
         {hasEnteredCounts ? (
           <p className="sc-v2-entry-modal-body">
-            This day has <strong>{enteredMeals.toLocaleString()} meal{enteredMeals === 1 ? "" : "s"}</strong> recorded across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
+            This day has <strong>
+              {feeNoDollar
+                ? `${enteredMeals.toLocaleString()} served`
+                : `${enteredMeals.toLocaleString()} meal${enteredMeals === 1 ? "" : "s"}`}
+            </strong> {feeNoDollar ? "confirmed" : "recorded"} across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
           </p>
         ) : (
           <p className="sc-v2-entry-modal-body">Every in-service service records zero. An audit note is appended.</p>
