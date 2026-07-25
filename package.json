@@ -18,6 +18,7 @@
     "backfill:invoice": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-invoice.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@fontsource/bebas-neue": "^5.2.7",
     "@fontsource/mulish": "^5.2.8",
     "@kitchfix-intranet/shared": "^1.0.1",

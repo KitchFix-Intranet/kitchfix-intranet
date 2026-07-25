@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v1.4
+**Version:** v1.7
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -15,17 +15,17 @@
 
 ## You are here (updated every revision)
 
-- **Now:** Phase A. #525 merged - Phase 0 DONE, the CK-8 record is closed. Phase A CC prompt delivered (tool layer + CLI probe, PR `feat/sousai-tools-phase-a`); this plan file lands in the repo in that PR. Data-surface discovery still runs in parallel.
-- **Next:** CC reports the probe results; Chat grades against the completeness map; Kevin merges PR A; Chat issues Phase B1 (agent loop + spike gate).
-- **Open decisions:** only Decision 5 (v1 data-tool pick), which closes on review of CC's discovery report.
+- **Now:** Phase B1. #528 merged - Phase A DONE, tools live on main. B1 CC prompt delivered: agent loop + prompt port + rule-7 spec amendment + the spike gate (branch `feat/sousai-agent-b1`; this plan v1.7 rides in, replacing v1.4). Data-surface discovery still parallel.
+- **Next:** CC reports the spike record; Chat grades; if the gate passes, Kevin merges and Chat issues B2 (route + streaming + flag). If the gate fails after one prompt-adjustment round, we stop and reassess - that is the kill switch working.
+- **Open decisions:** only Decision 5 (v1 data-tool pick), on the discovery report. Case 8 of the spike produces the evidence for the parked PB-001 TOKEN_CAP call.
 
 ## Status board
 
 | Phase | What | Gate | Status | PR |
 |---|---|---|---|---|
 | 0 | Close the CK-8 record (#525 corrections) | Kevin merges #525 | **DONE 2026-07-25** | #525 merged |
-| A | Tool layer + CLI probe | Probe passes all tiers incl. must-fail cases | IN FLIGHT - CC prompt delivered | PR A pending |
-| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases + latency. Kill switch.** | Not started | - |
+| A | Tool layer + CLI probe | Probe passes all tiers incl. must-fail cases | **DONE 2026-07-25** | #528 merged |
+| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | IN FLIGHT - CC prompt delivered | PR pending |
 | B2 | `/api/sousai` route, streaming, flag, admin-only | Route serves B1 behavior end to end | Not started | - |
 | C | Trajectory logging (migration + wiring) | Log rows visible in Supabase dashboard from first admin question | Not started | - |
 | D | Surface (UI): page first, then global corner-overlay launcher | Kevin approves renders, then build passes design review | Decision closed - awaits B2 | - |
@@ -51,7 +51,13 @@
 |---|---|---|---|
 | #525 | 0 | docs(sousai): retrieval regression at current corpus scale (CK-8) | **MERGED 2026-07-25** |
 | TBD | F-prep | docs(sousai): PG data-surface discovery (Decision 5 input) | CC prompt delivered 2026-07-25; read-only, own branch |
-| TBD | A | feat(sousai): phase A tool layer + probe | CC prompt delivered 2026-07-25; carries this plan file into the repo |
+| #528 | A | feat(sousai): phase A tool layer + probe | **MERGED 2026-07-25** - carried plan v1.4 into the repo |
+| TBD | B1 | feat(sousai): phase B1 agent loop + spike | CC prompt delivered 2026-07-25; carries plan v1.7, rule-7 spec amendment rides along |
+
+## Parked maintenance queue (small standalone PRs, Kevin schedules)
+
+1. **Character Spec §8 rule-7 amendment.** The template-as-canonical rule is enforced in the demo-branch prompt and missing from the spec. Small docs PR; should land before or alongside B1's prompt port so the spec and the shipped prompt agree.
+2. **Chunk language mislabel.** All chunks are stamped `language='en'` regardless of content - POL-006-ES (15 chunks) and POST-001-ES (1 chunk) carry Spanish text under en labels [ran, #528 verification]. Zero impact today; fix (derive language at embed time from frontmatter or the -ES suffix, re-embed 16 chunks) must land before any feature reads the language column as truth.
 
 ---
 
@@ -121,11 +127,13 @@ Plain server functions in `src/lib/sousai/tools/`, each callable and testable wi
 
 Gate A: probe passes at every tier with must-fail cases failing, [ran] evidence per Build Accuracy Protocol.
 
+**Phase A results (2026-07-25, PR #528):** probe 10 of 10 [ran]. Measured corpus: 248,200 tokens across 112 chunked docs (smaller than the planning estimate of 400-700k); average chunk ~172 tokens; largest doc PB-001 at 19,815. Doc-unit retrieval is cheaper than planned. Endorsed deviation: getDocument gates access before status, so a refusal cannot leak a restricted doc's status - better information hygiene than specced, surfaced by CC in the PR body. Parked for B1: PB-001 exceeds TOKEN_CAP (12,000) with no section-fetch path; the spike decides cap-raise vs a section parameter. Noted for the agent prompt: a billing-rate probe query top-hit a template (TPL-020) - live confirmation that rule 7 (template-as-canonical is invention) must survive into the loop.
+
 ### Phase B - the agent loop and route (PR B1, PR B2)
 
 PR B1 - the loop as a library plus CLI, no HTTP:
 
-- `src/lib/sousai/agent.js`: sends Claude the system prompt, tool definitions, and question; executes requested tool calls server-side; loops to final answer; enforces a tool-budget cap (start at 6). Returns `{answer, declined, decline_reason, sources, trajectory, usage}` - demo contract shape, extended.
+- `src/lib/sousai/agent.js`: sends Claude the system prompt, tool definitions, and question; executes requested tool calls server-side; loops to final answer; enforces a tool-budget cap of 8. The model-facing `get_document` accepts up to 6 doc ids per call (fanning out to the Phase A function unchanged) so enumeration questions fit the budget - this and the 6-to-8 budget raise are recorded B1 design deltas. Returns `{ answer, status, declined, decline_reason, sources, trajectory, usage }`. Status is the tri-state of §6 item 9, produced by a `[[STATUS: ...]]` footer the model emits and the loop parses and strips, with mechanical downgrade-only checks (phantom citations drop to partial; grounded with zero sources drops to partial).
 - System prompt ported from `feat/sousai-demo:generate.js` (all 7 hard-floor rules, decline voice, citation discipline, banned openers), adapted for tool use: when to search vs open vs list, answer only from tool results, data-answer provenance format. A re-tune, not a rewrite - every change diffed against the 344-line base.
 - Model: Sonnet-class. Prompt caching on system prompt + tool definitions.
 - Fast path: simple lookups resolve in one search-then-answer round trip; the budget cap bounds the slow path.
@@ -135,7 +143,7 @@ PR B2 - the route:
 
 - `/api/sousai` per the action-dispatch convention (actions: `ask`, `feedback`). Session resolves the caller's tier via opdAcl.js; the tier is injected into every tool call server-side. Streaming. Feature-flagged, admin-only at first.
 
-**Gate B - the spike gate, the kill switch for the whole direction.** B1's CLI runs a pre-written set with pass/fail authored before the run:
+**Gate B - the spike gate, the kill switch for the whole direction.** B1's CLI runs a pre-written set with pass/fail authored before the run, grounded in PG ground-truth checks. Every case runs twice - agents are stochastic, and a case passes only if both runs pass. Case 1 (synthesis) also reruns at operator scope with a no-leak criterion. A case 8 (informational, non-gating) probes a fact past PB-001's truncation point to produce the evidence for the parked TOKEN_CAP-vs-section-fetch decision.
 
 1. Synthesis ("which accounts are flat-fee") - correct enumeration from the full REC set, no partial view.
 2. Exact-ID ("show me FORM-003") - resolves via getDocument without a search detour.
@@ -206,6 +214,9 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v1.7 - 2026-07-25.** #528 merged; Phase A closed. B1 CC prompt issued. Recorded B1 design deltas: tool budget 6 to 8 with batched get_document (max 6 ids per call) so enumeration fits; status produced via a parsed `[[STATUS]]` footer with downgrade-only mechanical checks; spike cases run twice each with both-runs-pass required; case 1 gains an operator-scope no-leak rerun; case 8 added (informational PB-001 depth probe feeding the TOKEN_CAP decision). Rule-7 spec amendment folded into the B1 PR as the sanctioned spec-with-prompt exception to one-axis.
+- **v1.6 - 2026-07-25.** #528 language verification clean: all 1,445 chunks labeled en [ran], branch A (no code change), PR merge-ready. CC's original "no ES chunks" claim proven wrong-but-safe: POL-006-ES and POST-001-ES have chunks mislabeled en - filed as parked maintenance item 2 alongside the rule-7 spec amendment in a new Parked maintenance queue section.
+- **v1.5 - 2026-07-25.** PR #528 delivered and graded: 10/10 probe, plan v1.4 landed in repo. Recorded measured corpus (248,200 tokens; avg chunk ~172; PB-001 largest at 19,815), endorsed CC's access-before-status gate order, parked the PB-001 TOKEN_CAP question for the B1 spike, noted the TPL-020 rule-7 confirmation. One pre-merge verification in flight: [ran] evidence for the language="en" hardcode (silent-empty risk if non-en Live chunks exist).
 - **v1.4 - 2026-07-25.** Kevin confirmed Decisions 6 (SDK) and 7 (90/100 bar + tri-state badge). Register wording finalized; no scope change.
 - **v1.3 - 2026-07-25.** #525 merged; Phase 0 closed. Phase A CC prompt issued: three tools (searchDocuments doc-level aggregation, getDocument chunk-reconstruction with typed refusals and token cap, listDocuments) plus the 11-case CLI probe with must-fail access cases and the corpus token-totals measurement. This plan file enters the repo in PR A. Status board, ledger, You-are-here updated.
 - **v1.2 - 2026-07-25.** Kevin ruled: Decision 2 closed (open data access; PAF wage/reimbursement carve-out SLT-or-own-records, excluded from v1 surface); Decision 3 closed (page first, corner-overlay launcher as D2); Decision 4 closed (Live-only); Decision 6 closed (SDK); Decision 7 closed (90/100 bar plus tri-state answer badge, numeric confidence rejected - new §6 item 9). Decision 5 converted to discovery: CC data-surface report commissioned, ledger row added. Phases D and F rewritten to match rulings.
