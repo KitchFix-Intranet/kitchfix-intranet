@@ -103,6 +103,43 @@
   line-height: 1.4;
 }
 
+/* ─── Contract block (Phase 2B, 2026-07-25) ────────────────────
+   STL-FL fee-no-dollar rail addition. States the annual fee once
+   so the operator sees where the money went even though nothing
+   in the entry/queue surfaces carries a dollar figure. Cited
+   reference to the docs via contract.js. Same density and border
+   grammar as the queue section beneath it. */
+.scv2 .sc-rail-contract {
+  padding: var(--sc2-space-3) 0;
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-rail-contract-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--sc2-size-micro);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-rail-contract-label {
+  color: var(--sc2-rail-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-rail-contract-value {
+  color: var(--sc2-rail-text-item);
+  font-weight: var(--sc2-wt-medium);
+}
+.scv2 .sc-rail-contract-note {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+  font-style: italic;
+  margin-top: var(--sc2-space-1);
+}
+
 /* ─── Progress ─────────────────────────────────────────────── */
 .scv2 .sc-rail-progress {
   height: 6px;

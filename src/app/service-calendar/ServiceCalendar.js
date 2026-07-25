@@ -2716,6 +2716,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               mode="overview"
               scopeLabel={`SEASON · ${year} BOOKS`}
               hasHomestandSchedule={hasHomestandSchedule}
+              accountKey={selectedAccount}
               year={year}
               yearData={yearData}
               today={today}
@@ -2865,6 +2866,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               mode="drill"
               scopeLabel={periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : "PERIOD"}
               hasHomestandSchedule={hasHomestandSchedule}
+              accountKey={selectedAccount}
               year={year}
               yearData={yearData}
               today={today}
@@ -3069,6 +3071,7 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               mode="drill"
               scopeLabel={monthLabel}
               hasHomestandSchedule={hasHomestandSchedule}
+              accountKey={selectedAccount}
               year={year}
               yearData={yearData}
               today={today}
@@ -3241,6 +3244,31 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 Note: the mount matrix lives here to keep the flag gate load-bearing and one-place-only.
                 W7 PR 1/3 fix F3: props hoisted to a single object so PRs 2/3 edit ONE list, not two. */}
             {(() => {
+              // Phase 2B (2026-07-25): fee-no-dollar accounts (STL-FL)
+              // now mount DayEntryV2. `account` and `periodStats` are
+              // new props consumed by BillRailFee. Per-meal is unchanged
+              // (unused props are inert on the per-meal branch).
+              const periodStats = (() => {
+                if (!activeDrillDays) return null;
+                let daysConfirmed = 0;
+                let daysTotal = 0;
+                let servedToDate = 0;
+                for (const d of activeDrillDays) {
+                  // Skip non-scheduled statuses so denominator matches
+                  // "actionable days" the strip counts.
+                  if (d.status === "off-season" || d.status === "prep"
+                      || d.status === "exhibition" || d.status === "away") continue;
+                  daysTotal++;
+                  if (d.hasActuals) {
+                    daysConfirmed++;
+                    for (const v of Object.values(d.actual || {})) {
+                      const n = Number(v);
+                      if (Number.isFinite(n)) servedToDate += n;
+                    }
+                  }
+                }
+                return { daysConfirmed, daysTotal, servedToDate };
+              })();
               const dayEntryProps = {
                 ref: dayDetailRef,
                 day: focusDayData,
@@ -3256,18 +3284,23 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
                 accountName: acctObj?.name || "",
                 accountSegment: acctObj?.category || "",
                 isFeeAccount,
+                account: data?.account || null,
+                periodStats,
                 homestandContext: (periodHomestandMap || homestandMap)[focusDay] || null,
                 onPrev: canPrev ? () => navDay(-1) : null,
                 onNext: canNext ? () => navDay(1) : null,
                 onNextException: onNextExceptionHandler,
                 onClose: () => setFocusDay(null),
               };
-              // W7 PR 3/3 Phase 6 - scEntryV2 is now the effective gate
-              // (scV2 && !isFeeAccount already folded in via
-              // useScEntryV2Effective at the top of the component). The
-              // stored-off kill switch beats the cutover list; storedOn
-              // beats the cutover list too; absent falls through to env
-              // default OR ENTRY_V2_ACCOUNTS.has(accountKey).
+              // W7 PR 3/3 Phase 6 - scEntryV2 is the effective gate
+              // (scV2 folded in via useScEntryV2Effective at the top of
+              // the component). Phase 2B (2026-07-25): fee accounts are
+              // no longer categorically blocked - STL-FL passes via
+              // ENTRY_V2_ACCOUNTS cutover-set membership (see flags.js
+              // for the fee-account overlay). MLB fee stays out until
+              // Phase 4. Precedence unchanged: stored-off kill switch
+              // beats the cutover list; storedOn beats it too; absent
+              // falls through to env default OR ENTRY_V2_ACCOUNTS.has.
               return scEntryV2
                 ? <DayEntryV2 {...dayEntryProps} />
                 : <DayDetail {...dayEntryProps} />;

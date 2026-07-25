@@ -42,6 +42,9 @@ import {
   deriveOpsNotes,
   todayISO,
 } from "./opsRailDerive";
+// Phase 2B (2026-07-25): STL-FL contract block. Code-owned reference
+// to the docs (see contract.js header for provenance).
+import { getContractInfo } from "./contract";
 
 const QUEUE_TOP_N = 4;
 
@@ -50,6 +53,11 @@ export default function OpsRail({
   mode = "overview",           // "overview" | "drill"
   scopeLabel = "",             // "2026 BOOKS" | "P7" | "Jul 2026"
   hasHomestandSchedule = false,
+  // Phase 2B (2026-07-25): accountKey optional. Used only on the
+  // fee-no-dollar branch (STL-FL) to look up the contract block via
+  // contract.js. MLB branch ignores it (contract block is not part
+  // of the MLB rail spec).
+  accountKey = null,
   year,
   today,
   yearData,                    // full year - used for the overview + as the segment source
@@ -78,7 +86,7 @@ export default function OpsRail({
   if (loading) {
     return (
       <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
-        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED"} meta="fetching data" />
+        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED"} meta="fetching data" />
         <RailProgress pct={0} />
       </RailShell>
     );
@@ -117,20 +125,27 @@ export default function OpsRail({
   const heroTotal = isDrill
     ? scopedTotal
     : (hasHomestandSchedule ? seasonTotals.totalGameDays : seasonTotals.totalActionableDays);
-  const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS ENTERED";
-  const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS ENTERED";
+  // Phase 2B (2026-07-25): STL-FL branch (!hasHomestandSchedule under
+  // isFeeAccount at the mount) swaps "ENTERED" -> "CONFIRMED" and
+  // "meals" -> "served". MLB branch (hasHomestandSchedule) untouched.
+  // OpsRail is fee-only at the mount site (ServiceCalendar.js:2857),
+  // so the !hasHomestandSchedule branch is guaranteed STL-FL and the
+  // swap does not perturb any per-meal surface.
+  const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED";
+  const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS CONFIRMED";
   // Caption:
-  //  - Drill: entered/total + scoped meals. Homestand-count fact
+  //  - Drill: confirmed/total + scoped served. Homestand-count fact
   //    dropped on drill (aggregateWorkspaceMetrics doesn't carry
   //    homestand rollups; owner-accepted 2026-07-21 - strip doesn't
   //    show it either, so this matches the strip's minimalism).
-  //  - Overview: entered/total + season meals + (MLB) season
+  //  - Overview: confirmed/total + season served + (MLB) season
   //    homestand count - unchanged from OV-3 F10.
+  const unitWord = hasHomestandSchedule ? "meals" : "served";
   const heroCaption = isDrill
-    ? `${scopedComplete} of ${scopedTotal} · ${scopedMeals.toLocaleString("en-US")} meals`
+    ? `${scopedComplete} of ${scopedTotal} · ${scopedMeals.toLocaleString("en-US")} ${unitWord}`
     : (hasHomestandSchedule
         ? `${seasonTotals.gameDaysEntered} of ${seasonTotals.totalGameDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals · ${seasonTotals.homestandsComplete} of ${seasonTotals.totalHomestands} homestands`
-        : `${seasonTotals.daysEntered} of ${seasonTotals.totalActionableDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals`);
+        : `${seasonTotals.daysEntered} of ${seasonTotals.totalActionableDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} served`);
   // Projection on drill: "of {total}" - value + label + projection on
   // one baseline, matching DrillRail.js:163 + 176's per-meal shape.
   const heroProjection = isDrill ? `of ${heroTotal || 0}` : null;
@@ -184,11 +199,36 @@ export default function OpsRail({
         ? deriveOpsFooterActionMlb(yearData, iso)
         : deriveOpsFooterActionStlFl(yearData, iso));
 
+  // Phase 2B (2026-07-25): STL-FL contract block. Renders on the fee-
+  // no-dollar branch (STL-FL only - MLB has hasHomestandSchedule=true
+  // and skips this). Cited reference to the docs per contract.js; no
+  // computation. Provides the "where did the money go" affordance the
+  // spec calls for on a flat-fee account.
+  const contractInfo = !hasHomestandSchedule ? getContractInfo(accountKey) : null;
+
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
       {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
+
+      {contractInfo && (
+        <div className="sc-rail-contract" aria-label="Contract summary">
+          <div className="sc-rail-contract-row">
+            <span className="sc-rail-contract-label">Annual fee</span>
+            <span className="sc-rail-contract-value">
+              ${contractInfo.annualFee.toLocaleString()}
+            </span>
+          </div>
+          <div className="sc-rail-contract-row">
+            <span className="sc-rail-contract-label">Billing</span>
+            <span className="sc-rail-contract-value">{contractInfo.model}</span>
+          </div>
+          {contractInfo.note && (
+            <div className="sc-rail-contract-note">{contractInfo.note}</div>
+          )}
+        </div>
+      )}
 
       {/* V3 §S8.3 F-E2 + OV-3 G13 - OpsRail pinned queue.
           hasHomestandSchedule=true (MLB fee, MiLB AAA): "To enter"
@@ -214,13 +254,13 @@ export default function OpsRail({
         return (
           <div className="sc-rail-pinned">
             <RailSection
-              label={hasHomestandSchedule ? "To enter" : "NEEDS ENTRY"}
+              label={hasHomestandSchedule ? "To enter" : "NEEDS CONFIRMATION"}
               meta={railMeta}
               metaTone={railMetaTone}
             >
               {queueRows.length === 0 && (
                 <p className="sc-rail-queue-empty">
-                  {hasHomestandSchedule ? "No unentered game days." : "Nothing needs entry right now."}
+                  {hasHomestandSchedule ? "No unentered game days." : "Nothing needs confirmation right now."}
                 </p>
               )}
               {visibleQueue.map(row => (
@@ -492,13 +532,14 @@ function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) 
       label: `Enter oldest unentered${oppOld}`,
     };
   }
-  // STL-FL drill
+  // STL-FL drill (fee-no-dollar shape). Phase 2B: "Enter" -> "Confirm"
+  // per vocabulary swap. MLB drill branch above stays verbatim.
   const todayRow = queue.find(r => r.date === iso && r.status === "needs-entry");
   if (todayRow) {
     return {
       kind: "today",
       target: todayRow,
-      label: `Enter today`,
+      label: `Confirm today`,
     };
   }
   const oldestOverdue = queue.find(r => r.status === "overdue");
@@ -506,7 +547,7 @@ function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) 
     return {
       kind: "oldest-overdue",
       target: oldestOverdue,
-      label: `Enter oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`,
+      label: `Confirm oldest · ${oldestOverdue.aging} ${oldestOverdue.aging === 1 ? "day" : "days"} old`,
     };
   }
   // DP2-04 (2026-07-20): STL-FL drill oldest-needs branch now carries
@@ -523,7 +564,7 @@ function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) 
   return {
     kind: "oldest-needs",
     target: oldestNeeds,
-    label: `Enter oldest · ${aging} ${aging === 1 ? "day" : "days"} old`,
+    label: `Confirm oldest · ${aging} ${aging === 1 ? "day" : "days"} old`,
   };
 }
 

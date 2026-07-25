@@ -583,6 +583,68 @@
   color: var(--sc2-rail-text-ghost);
 }
 
+/* ─── BillRailFee (Phase 2B, 2026-07-25) ─────────────────────────
+   Fee-no-dollar variant of the per-service line. Two-column grid
+   (name + count) - no amount cell, no currency anywhere. Shares
+   the container, padding, and typography of the per-meal line;
+   only the grid template and the currency-bearing cells differ.
+   Solid/ghost states mirror the per-meal rail so the two variants
+   read the same at rest.
+
+   Month block: pinned stats row at the bottom of the rail. Same
+   density and typography grammar as the per-meal invoice subtotal;
+   only the shape differs. */
+.sc-v2-entry-rail-line-fee {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  padding: 5px 0;
+  font-size: var(--sc2-size-caption);
+  font-variant-numeric: tabular-nums;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+}
+.sc-v2-entry-rail-line-fee--solid {
+  color: var(--sc2-rail-text-item);
+}
+.sc-v2-entry-rail-line-fee--solid .sc-v2-entry-rail-line-count {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-bold);
+}
+.sc-v2-entry-rail-line-fee--ghost {
+  color: var(--sc2-rail-text-ghost);
+}
+.sc-v2-entry-rail-line-fee--ghost .sc-v2-entry-rail-line-count {
+  color: var(--sc2-rail-text-ghost);
+  font-weight: var(--sc2-wt-medium);
+}
+
+.sc-v2-entry-rail-month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-3) 0;
+  margin-top: var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+}
+.sc-v2-entry-rail-month-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--sc2-size-micro);
+  font-variant-numeric: tabular-nums;
+}
+.sc-v2-entry-rail-month-label {
+  color: var(--sc2-rail-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--sc2-wt-bold);
+}
+.sc-v2-entry-rail-month-value {
+  color: var(--sc2-rail-text-item);
+  font-weight: var(--sc2-wt-medium);
+}
+
 /* Ride-along note */
 .sc-v2-entry-rail-note {
   display: flex;
