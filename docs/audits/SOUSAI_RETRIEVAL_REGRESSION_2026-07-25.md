@@ -1,22 +1,41 @@
 # SousAI Retrieval Regression - 2026-07-25 (the CK-8 run)
 
-**One-line read:** the gap held at 0.126 (up from ~0.10 in June), 10 of 10 questions PASS, zero REC-class intrusion, but **the whole similarity distribution shifted up ~2x** and the 0.28 threshold now sits far below the no-answer ceiling. The threshold no longer separates real from miss - not because the gap compressed, because the scale moved.
+**One-line read:** the operator-scope gap held at 0.126, 10 of 10 questions PASS, and a supplementary manager-scope run confirmed zero REC-class intrusion (measured, not filtered). But **the whole similarity distribution shifted up ~2x since June**, and the driver is the A5 ingestion-pipeline change (Drive extract retired 2026-06-16, MDX extract with Fact/Include/SourceGoverns resolution and NonCanonical stripping took over), not corpus growth as this report originally claimed. The 0.28 threshold is broken because the scale moved beneath it, and any recalibrated absolute floor breaks the same way on the next pipeline change.
+
+**Amended 2026-07-25 (post-Chat review, same day).** Two corrections and two framing amendments applied on top of the original 2026-07-25 body:
+- **Correction 1:** the causal paragraph in §4.2 attributed the score shift primarily to corpus growth. That was wrong. Cosine similarity between a fixed question embedding and a fixed chunk embedding does not change when rows are added to the table. Chunks THEMSELVES changed via the A5 pipeline. Rewritten §4.2 states the evidence with commit dates.
+- **Correction 2:** the original REC-intrusion finding was tautological. The run used `ALLOWED_LEVELS=["unrestricted"]`, and all 11 REC docs carry `access_level=restricted` [ran], so REC chunks were filtered out by the RPC before scoring. A supplementary manager-scope run (§4.5b) with `ALLOWED_LEVELS=["unrestricted","restricted"]` was executed to measure it properly. Zero REC appearance at any score in that run too. Both are recorded; the manager-scope result is the meaningful one.
+- **Framing amendment A:** §4.1 now notes that the HEALTHY gap verdict is scale-dependent and the gap number alone is not the decision signal.
+- **Framing amendment B:** §5 Candidate A now names the Q5-vs-Q8 impossibility (0.347 < 0.502) plainly and adds the pipeline-change fragility argument.
 
 ---
 
 ## 1. Provenance
 
-- **Commit:** `abeb493` "Merge pull request #518 from KitchFix-Intranet/feat/sc-bulk-convergence" (origin/main tip).
-- **Worktree:** `/tmp/kf-regression-725` (detached, read-only).
+### Primary run (operator scope) - the CK-8 baseline
+
+- **Commit:** `abeb493` "Merge pull request #518 from KitchFix-Intranet/feat/sc-bulk-convergence" (origin/main tip at run time).
+- **Worktree:** `/tmp/kf-regression-725` (detached, read-only). Cleaned up post-run.
 - **DB target:** production PG via `SUPABASE_URL` from `.env.local`.
-- **Timestamp of run:** 2026-07-25T15:25:32Z.
-- **Command run:** `node --env-file=.env.local scripts/sousai-retrieval-test.mjs` (no env overrides).
+- **Timestamp:** 2026-07-25T15:25:32Z.
+- **Command:** `node --env-file=.env.local scripts/sousai-retrieval-test.mjs` (no env overrides).
 - **Effective `ALLOWED_LEVELS`:** `["unrestricted"]` (script default at `scripts/sousai-retrieval-test.mjs:39`; matches the normal operator viewer).
-- **Embedding model:** `text-embedding-3-small`, 1536-dim [code-read `src/lib/sousai/embed.js:24-25`]. Same model used for chunks per the L3 pipeline, so query and stored vectors live in the same latent space.
+
+### Supplementary run (manager scope) - added post-Chat review
+
+- **Same commit, branch `docs/sousai-retrieval-regression-2026-07-25`, worktree at `/tmp/kf-regression-amend`.**
+- **Timestamp:** 2026-07-25T15:56:39Z (31 minutes after primary; corpus state unchanged in that window).
+- **Command:** `ALLOWED_LEVELS="unrestricted,restricted" node --env-file=.env.local scripts/sousai-retrieval-test.mjs`.
+- **Effective `ALLOWED_LEVELS`:** `["unrestricted","restricted"]` (manager scope; `slt` deliberately excluded per amendment prompt - one document, out of scope for this measurement).
+- **Rationale:** the primary run's REC-intrusion check was tautological because REC docs carry `access_level=restricted` and were filtered out by the RPC before scoring. The manager-scope run makes REC chunks eligible for scoring so a genuine intrusion measurement can happen.
+
+### Common to both runs
+
+- **Embedding model:** `text-embedding-3-small`, 1536-dim [code-read `src/lib/sousai/embed.js:24-25`]. Same model used for stored chunks per the L3 pipeline, so query and stored vectors live in the same latent space.
 - **`match_document_chunks` signature called:** 3-arg `(query_embedding vector(1536), match_count int, allowed_levels text[])` [code-read `scripts/sousai-retrieval-test.mjs:145-149`]. The 2-arg overload was dropped in pr-7-12 [code-read `docs/migrations/pr-7-12-opd-drop-legacy-match-fn.sql`].
 - **`TOP_N`:** 5 [code-read `scripts/sousai-retrieval-test.mjs:26`].
 - **Question count:** 10 [code-read `scripts/sousai-retrieval-test.mjs:52-107`].
-- **Bounded exception invoked:** none. Harness ran clean, exit 0. No repairs made.
+- **Bounded exception invoked:** none in either run. Both exited clean.
 
 ---
 
@@ -42,6 +61,28 @@ Direct PG queries via a read-only probe I ran alongside the harness (see appendi
 ### The 80-vs-81 settle
 
 Yesterday's `OPD_STATE_REPORT_2026-07-24-post524.md` (my own report) said 80 Live. The workbook derived from the same snapshot said 81. Both were built from the same JSON file, so one of them was wrong. **Today's PG query says 81.** The single doc accounting for the delta since yesterday's report: **PB-012 Client & Account Management Playbook** - was `In Build` at the time of yesterday's snapshot, is now `Live`. Kevin flipped it in the cockpit between yesterday's audit and today's run. Not a probe bug; a real state change. The tracker workbook happened to be right for the wrong reason (81 was the correct number pre-flip too - one of my report-vs-workbook code paths had an off-by-one that self-corrected when the flip landed).
+
+### REC-class access_level at run time [ran]
+
+Direct PG query for every REC-class doc:
+
+| id | status | access_level | archived |
+|---|---|---|---|
+| REC-101 | Live | restricted | false |
+| REC-102 | Live | restricted | false |
+| REC-103 | Live | restricted | false |
+| REC-104 | Live | restricted | false |
+| REC-105 | Live | restricted | false |
+| REC-106 | Live | restricted | false |
+| REC-107 | Live | restricted | false |
+| REC-108 | Live | restricted | false |
+| REC-109 | Live | restricted | false |
+| REC-110 | Live | restricted | false |
+| REC-111 | Live | restricted | false |
+
+**All 11 REC docs are `restricted`.** This matches STD-004 v1.3's tiering rubric (operational-record-per-entity is restricted; reference-fact is unrestricted).
+
+**Implication for the primary run:** `ALLOWED_LEVELS=["unrestricted"]` excluded every REC chunk from `match_document_chunks` scoring before cosine distance was computed. The original §4.5 "zero REC intrusion" finding was therefore guaranteed by the filter, not measured. §4.5b (added below) fixes this with a manager-scope run.
 
 ---
 
@@ -228,7 +269,9 @@ Best expected-doc sim per Q1-Q4:
 
 **Verdict per Kevin's scale: HEALTHY** (>= 0.10).
 
-### 4.2 The scale-shift finding (the reason "healthy gap" is not the whole story)
+**Scale caveat (added on amendment).** The HEALTHY verdict is graded on a scale that assumed absolute similarity scores are stable across runs. That assumption failed - the whole distribution shifted up ~2x since June (see §4.2 for the evidence). A "healthy" 0.126 gap in July is not directly comparable to a "healthy" 0.10 gap in June, because they sit at different points on the score axis. The gap number alone is not the decision signal. What matters for a decline gate is whether the ceiling of a no-answer question sits below any usable threshold - and today's ceiling at 0.502 blows past the current 0.28 gate by 0.22 (see §4.2).
+
+### 4.2 The scale-shift finding, and what actually drove it
 
 The gap held. But it held around a completely different absolute range than in June.
 
@@ -241,12 +284,26 @@ The gap held. But it held around a completely different absolute range than in J
 
 **The 0.28 threshold is no longer a decline gate.** In June it sat cleanly between the two distributions and worked as designed - anything below 0.28 declined, anything above answered. Today it sits well below the no-answer ceiling. Every Q8 answer will pass the gate. Sous will confidently answer "what is the labor budget formula" from PB-010's Labor cost bullet.
 
-Why did the scale shift? Two hypotheses worth flagging (I'm reporting, not deciding):
+**What drove the shift (corrected).** The original version of this report attributed the shift to corpus growth and chunker enrichment. Both hypotheses failed a first-principles check: cosine similarity between a fixed question embedding and a fixed chunk embedding does not change when other rows are added, and the contextual "From: {title}, Section: {path}" chunker header was already in the June-4 pipeline. The actual driver is the ingestion pipeline change between the two runs.
 
-1. **Corpus expansion pulls scores up.** More docs means more chunks that are at least topically-adjacent to any query - the "confident miss" ceiling rises because there is always *something* topically adjacent in a 128-doc corpus. This is the standard reason RAG systems get less discriminating as they scale.
-2. **Chunker enrichment.** Structure-aware chunking with contextual "From: {title}, Section: {path}" headers means every chunk carries doc-level topical signal in addition to the section-level content. More topical signal per chunk narrows the similarity spread and pulls the whole distribution up. This is the choice made in `src/lib/sousai/chunk.js`.
+Timeline established from git [code-read + git log]:
 
-Both are consistent with what the numbers show. Neither is fixable by re-tuning the threshold alone - the scale will keep shifting as the corpus grows further.
+| Date | Event | Effect on chunk text |
+|---|---|---|
+| 2026-06-04 | `chunk.js` created (commit `cc3a5c3`); structure-aware chunker with contextual "From:" headers. June-4 baseline harness runs on Drive Docs API-extracted content. | Chunks: Drive-plain-text with contextual header. |
+| 2026-06-15 | `4b5d4a2` OPD content foundation: 101-doc MDX corpus + build pipeline + `content/facts/operational-facts.yaml` + resolver. | MDX exists but is not the SousAI ingestion source yet. |
+| 2026-06-16 14:00 | `0272283` pr-7-11 access_level filter added to `match_document_chunks`. | RPC filter, no chunk-text change. |
+| 2026-06-16 15:08 | `a82d0c3` Phase A A5 Part 1 - MDX ingestion built + pr-7-12 (drops 2-arg overload). | Pipeline change in flight. |
+| **2026-06-16 16:15** | **`001a8eb` A5 completes: `extract.js` retired, `extractMdx.js` takes over.** SousAI ingestion swaps from Drive Docs to MDX with `<Include>`/`<Fact>`/`<SourceGoverns>` resolution and `stripNonCanonical()` at extractMdx.js:114. | **Chunk text CHANGED.** Fact tokens expand to actual values (dollar figures, brand promise, allergen list). Includes inline cross-doc content. Non-canonical specimen blocks disappear from chunks. |
+| 2026-07-24 | `137f45d` pr-7-17 adds `d.status <> 'Retired'` filter to the RPC. | RPC filter, no chunk-text change. |
+
+**A5 is the load-bearing event.** The June-4 baseline ran against Drive-extracted chunks. Today's run runs against MDX-extracted chunks with Fact resolution and NonCanonical stripping applied. The scoring math (`1 - (embedding <=> query_embedding)`) is unchanged. What changed is the second half of that expression: chunk embeddings are computed from different text. That's why the same question against nominally-the-same documents scores differently. Fact resolution in particular expands token references into content-bearing words that embed against most operator questions, which pulls scores up systematically.
+
+Q8's ceiling shift has an additional independent contributor: PB-009 (Financial Operations Manual) and PB-010 (Site Operations Manual) landed as MDX on 2026-06-15 and were embedded shortly after. Both were absent from the June-4 corpus. Both are near-topic content for a labor-formula question (PB-010's "Site Financial Discipline > Labor cost" is exactly the kind of adjacent content a no-answer question can't discriminate from a real answer). Their appearance in Q8's top-5 (positions #1 and #2) accounts for most of the ceiling delta - not because corpus growth rescales scores, but because these two specific docs surface as new top hits when the corpus expands to include them.
+
+**What corpus growth alone does not do.** A fixed (question, chunk) pair keeps the same cosine similarity when other rows are added. Growth changes which rows appear in top-K rankings, and for a no-answer question it can raise the effective ceiling if newly-added docs happen to be more topically adjacent than the previous best miss. Growth does not scale existing scores.
+
+**The pipeline-change implication.** Every future change to the ingestion pipeline (chunker rewrite, contextual-header format change, Fact-registry expansion, `<Include>` policy change) will rescale absolute chunk scores the same way A5 did. Any absolute threshold calibrated today will drift when the next pipeline change lands. This is a durable argument against Candidate A in §5.
 
 ### 4.3 Discrimination (Q1-Q4 correctness + corpus-growth pollution)
 
@@ -275,13 +332,29 @@ Most are correct topical neighbors, not pollution. The only slightly concerning 
 
 **Q10 stub surfaces:** works. POST-002 at #1 (0.623).
 
-### 4.5 Specimen-figure intrusion (the money-risk check)
+### 4.5a Specimen-figure intrusion, primary run (operator scope) - AMENDED: filtered, not measured
 
-**Zero REC-class chunks appear in any top-5 result** across all 10 questions. Zero appear at any score, definitely zero at >= 0.28.
+Zero REC-class chunks appeared in any top-5 result across all 10 questions in the operator-scope run.
 
-The `stripNonCanonical()` call at `extractMdx.js:114` is working - the specimen figures inside REC files' NonCanonical blocks are excluded from chunks. And the surrounding REC prose is not drawing retrieval on these general-purpose questions.
+**This finding was not meaningful.** All 11 REC docs carry `access_level=restricted` (see §2 REC access_level table). The operator-scope run used `ALLOWED_LEVELS=["unrestricted"]`, so every REC chunk was excluded from `match_document_chunks` scoring by the RPC's `WHERE ... d.access_level = ANY(allowed_levels)` filter (pr-7-11) before cosine distance was computed. Zero REC intrusion was guaranteed by the filter, not measured by retrieval.
 
-**Caveat:** none of the 10 harness questions target account-specific content. A stronger test would be "what's CIN-AZ's service fee" or "when is TBJ-NY's next homestand" - either would surface REC-101 or REC-107. That is where a Sous-with-only-vector-retrieval risks answering from a specimen figure (marked in the corpus as post-SF billed rate, sticker rate, etc., all live values that MUST come from PG per the Price Book pattern REF-141 codifies). This measurement round confirms nothing bleeds through on the general questions; the specimen-vs-live-value risk on data questions is architectural, not measurable at this layer, and is addressed by the tool-calling agent phase Kevin has scoped.
+Retained here as the operator-scope record. The measured version is §4.5b immediately below.
+
+### 4.5b Specimen-figure intrusion, supplementary run (manager scope) - MEASURED
+
+Supplementary run at `ALLOWED_LEVELS=["unrestricted","restricted"]` (manager scope; `slt` deliberately excluded per amendment prompt). Same 10 questions, same commit, same DB state, 31 minutes after the primary run.
+
+**Result: byte-identical top-5 to the operator-scope run on every one of the 10 questions.**
+
+Verified via diff of the two stdout captures - the only differences are worktree-path strings in the Node warning header. Every question's top-5 doc/section/similarity is unchanged.
+
+**Zero REC-class chunks appear in any top-5 result.** Not at any similarity score. Definitely not at >= 0.28 (today's nominal threshold). Definitely not at >= 0.502 (today's measured no-answer ceiling from Q8).
+
+This is now a **measured zero**, not a filtered zero. REC chunks were eligible for scoring by the RPC and did not surface. On these 10 general-purpose questions, account-record content lacks the topical proximity to displace the top-5 results the operator-scope run already returned.
+
+**Money-risk statement (updated):** on the measured set (10 general-purpose questions), no REC chunk appears in any top-5 at any score under manager scope. No specimen figure is a candidate for confidently-wrong answering on these questions.
+
+**Caveat (unchanged from original):** none of the 10 harness questions target account-specific content. A directed test like "what's CIN-AZ's service fee" or "when is TBJ-NY's next homestand" would embed close to REC-101 or REC-107 content and would meaningfully test whether specimen figures surface. Those tests are not in this harness. The architectural risk on data questions (a live-money question routed to a specimen chunk instead of to a PG tool) is not resolved by this measurement round; it is addressed by the tool-calling agent phase Kevin has scoped. This run confirms nothing bleeds through on the 10 general questions; it does not confirm anything about the account-specific-question class.
 
 ---
 
@@ -289,13 +362,15 @@ The `stripNonCanonical()` call at `extractMdx.js:114` is working - the specimen 
 
 Do not pick a new threshold in this PR. Kevin owns the threshold decision paired with the port-vs-rebuild call on `feat/sousai-demo`. What follows are the candidate paths with the evidence each would need to survive.
 
-### Candidate A: recalibrate the absolute floor
+### Candidate A: recalibrate the absolute floor - eliminated as a sole fix
 
-Move 0.28 up to somewhere between the current no-answer ceiling (0.502) and the current real-hit floor (0.628). A value around 0.54-0.56 would put it slightly above the no-answer ceiling with margin.
+**Move 0.28 up** to somewhere between the current no-answer ceiling (0.502) and the current real-hit floor (0.628). A value around 0.54-0.56 would put it slightly above the no-answer ceiling with margin.
 
-**Evidence needed to trust it:** at least one more regression run, ideally against a larger set of no-answer questions than Q8 alone. One data point is not enough to trust a 0.502 ceiling; the true ceiling could be higher on a different negative question. Also: the corpus will keep growing. This threshold will drift again.
+**The Q5-vs-Q8 impossibility (stated plainly).** Q5's best real hit is 0.347. Q8's no-answer ceiling is 0.502. **0.347 < 0.502**, therefore no absolute floor can both pass Q5 (typo path Sous is documented to handle) and reject Q8 (labor-formula no-answer). Any threshold above 0.502 rejects the typo path. Any threshold below 0.347 accepts the confident-miss. There is no value in between that satisfies both. **This eliminates the recalibrate-only approach as a sole fix**, independent of any of the other arguments below.
 
-**Fragility:** Q5 (typo case) top score = 0.347. Any threshold above ~0.34 rejects the typo path Sous is documented to handle. So the recalibration is not just above Q8's 0.502 - it's below Q5's 0.347. **There is no single absolute value that both accepts typo-degraded real hits and rejects the labor-formula no-answer.** The threshold approach may be structurally broken here, not just needing a new number.
+**The pipeline-change fragility (from §4.2).** Even if the Q5/Q8 overlap could be worked around, any absolute threshold calibrated on today's numbers will drift when the next pipeline change lands. A5 rescaled scores ~2x when it swapped Drive extract for MDX-with-Fact-resolution; a future chunker rewrite, a header-format change, a Fact-registry expansion, or an `<Include>` policy tweak would do the same. Absolute thresholds are calibrated to the current pipeline's output distribution and break every time that distribution shifts.
+
+**Evidence that would still be needed** (for completeness, even though the two arguments above are decisive): at least one more regression run against a larger set of no-answer questions than Q8 alone. One data point is not enough to trust a 0.502 ceiling; the true ceiling could be higher on a different negative question.
 
 ### Candidate B: top-gap margin
 
@@ -330,7 +405,7 @@ Every numbered item in the prompt, marked done or explicitly not-done with reaso
 | Analysis 1 | No-answer gap number | DONE | §4.1 (gap = 0.126) |
 | Analysis 2 | Discrimination (Q1-Q4) + new-doc pollution list | DONE | §4.3 |
 | Analysis 3 | Degradation cases (Q7, Q9, Q10) | DONE | §4.4 |
-| Analysis 4 | REC-class intrusion (any score, and at >= 0.28) | DONE | §4.5 (zero) |
+| Analysis 4 | REC-class intrusion (any score, and at >= 0.28) | DONE (AMENDED - original was tautological; measured version in §4.5b) | §4.5a + §4.5b |
 | Deliverable 1 | Provenance block | DONE | §1 |
 | Deliverable 2 | Corpus snapshot including 80-vs-81 settle | DONE | §2 |
 | Deliverable 3 | Per-question results table with verdicts | DONE | §3 |
@@ -344,9 +419,31 @@ Every numbered item in the prompt, marked done or explicitly not-done with reaso
 | Discipline: one axis | Measurement only, no threshold pick | DONE | §5 explicitly names Kevin as decider |
 | Chat summary | Gap number, pass count, REC intrusion, one-paragraph read on 0.28 | DONE in chat message | See CC's chat message |
 
+## 6b. Completeness map for the 2026-07-25 amendment prompt
+
+| # | Item | Status | Location |
+|---|---|---|---|
+| Correction 1 - Task 1 | Establish pipeline-change timeline with commit dates | DONE [code-read + git log] | §4.2 timeline table |
+| Correction 1 - Task 2 | Rewrite causal paragraph to what evidence supports | DONE | §4.2 body |
+| Correction 1 - Task 3 | Add pipeline-change implication to Candidate A | DONE | §5 Candidate A ("The pipeline-change fragility") |
+| Correction 2 - Task 1 | Confirm REC access_level values at run time | DONE [ran] | §2 "REC-class access_level at run time" |
+| Correction 2 - Task 2 | Supplementary manager-scope run, capture stdout | DONE [ran] | §1 Supplementary run provenance + Appendix B (below) |
+| Correction 2 - Task 3 | New section: per-question deltas, REC appearances, >=0.28, >=0.502, updated money-risk statement | DONE | §4.5b |
+| Correction 2 - Task 4 | Keep original unrestricted run intact as baseline record | DONE | §4.5a retained with the "AMENDED - filtered, not measured" heading |
+| Framing amendment A | Gap-verdict scale-dependence caveat paragraph | DONE | §4.1 "Scale caveat (added on amendment)" |
+| Framing amendment B | State Q5-vs-Q8 impossibility plainly | DONE | §5 Candidate A "The Q5-vs-Q8 impossibility (stated plainly)" |
+| Deliverable A | Amended report on same branch, pushed to PR #525 | Push pending after this Edit series completes | PR #525 |
+| Deliverable B | Updated PR body: four-numbers block + causal note | Will do after Edit series | PR body |
+| Deliverable C | Short PR comment summarising deltas | Will do after Edit series | PR comment |
+| Deliverable D | Completeness map for amendment prompt | DONE | §6b (this table) |
+| Chat summary | A5 timeline answer, manager-scope REC result, anything else touched | DONE in chat message | See CC's chat message |
+| Discipline: labels | [ran] / [code-read] consistent | DONE | §2, §4.2, §4.5b |
+| Discipline: hyphens | No em-dashes | DONE | Hyphens throughout amendment |
+| Discipline: scope | No scope beyond amendment items; do not merge | DONE | No code changes; no threshold picks; PR stays open |
+
 ---
 
-## Appendix A - verbatim harness stdout
+## Appendix A - verbatim harness stdout (primary run, operator scope)
 
 ```
 (node:52235) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/tmp/kf-regression-725/src/lib/sousai/embed.js is not specified and it doesn't parse as CommonJS.
@@ -607,3 +704,28 @@ Script used for §2, run against production PG at 2026-07-25T15:25:32Z:
 ```
 
 Full probe: `/tmp/kf-regression-725/scripts/_probe_corpus_snapshot_725.mjs` in the local worktree. Output captured at `/tmp/regression-corpus-snapshot.txt`.
+
+## Appendix C - verbatim harness stdout (supplementary manager-scope run)
+
+Run at 2026-07-25T15:56:39Z with `ALLOWED_LEVELS="unrestricted,restricted"`. Same 10 questions, same commit, same corpus state. **Result: byte-identical top-5 to the operator-scope run in Appendix A** (verified via `diff`; the only variations are worktree-path strings in the Node boilerplate warning header at the top of stdout - the retrieval result blocks themselves are identical).
+
+Because the manager-scope result is byte-identical to the operator-scope result already inlined in Appendix A, it is not re-inlined here. The full capture lives at `/tmp/manager-run-stdout.txt` in the local worktree during the amendment session.
+
+Zero REC-class chunks appear at any similarity score. Because REC filtering by the RPC's `allowed_levels` clause is bypassed when `["unrestricted","restricted"]` is passed (REC docs carry `access_level=restricted`), this zero is a **measured** result, not a filtered one.
+
+## Appendix D - REC access_level probe (supplementary)
+
+Script used for §2 REC-class table:
+
+```javascript
+// Confirm access_level of every REC-class doc in PG at run time.
+import { createClient } from "@supabase/supabase-js";
+const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await s.from("documents")
+  .select("id, title, doc_class, status, access_level, archived")
+  .eq("doc_class", "REC")
+  .order("id");
+// ... reports one row per doc, plus access_level distribution.
+```
+
+Full probe: `/tmp/kf-regression-amend/scripts/_probe_rec_access_level_725.mjs` in the amendment-session worktree.
