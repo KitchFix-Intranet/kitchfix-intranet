@@ -1773,6 +1773,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       }
       if (!result.success) {
         showToast(result.error || "Failed to add note", "error");
+      } else {
+        // P3-A (2026-07-25): note-posted survivor per §8B toast policy
+        // (owner ruling 6). Brief accent-rail chip, --success (green),
+        // copy verbatim from RENDER_HANDOFF_BLENDED.html:141. Renders
+        // via page.js's existing toast surface using a new "note-posted"
+        // variant.
+        showToast({
+          variant: "note-posted",
+          title: "Note posted to the Ledger",
+          body: "Saved on its own - it does not wait for your counts.",
+        });
       }
       return result;
     } catch (err) {

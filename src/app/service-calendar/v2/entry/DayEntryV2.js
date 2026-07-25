@@ -158,6 +158,9 @@ import useAnimatedNumber from "../../useAnimatedNumber";
 import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
 import MobileBooksBar from "../MobileBooksBar";
 import "./dayEntryV2.css";
+// P3-A (2026-07-25): accent-rail primitive for the failure banner
+// + dialog top-rails.
+import "../accentRail.css";
 
 function DayEntryV2({
   day,
@@ -1046,9 +1049,11 @@ function DayEntryV2({
           Panel does not close - operator can fix the reason and retry
           in place. */}
       {saveError && (
-        <div className="sc-v2-entry-alert sc-v2-entry-alert--error" role="alert" aria-live="assertive">
-          <div className="sc-v2-entry-alert-head">Save failed - nothing recorded</div>
-          <div className="sc-v2-entry-alert-body">{saveError.message}</div>
+        <div className="sc-v2-entry-alert sc-ar sc-ar--danger" role="alert" aria-live="assertive">
+          <div className="sc-ar-content">
+            <div className="sc-ar-title">Save failed - nothing recorded</div>
+            <div className="sc-ar-body">{saveError.message}</div>
+          </div>
         </div>
       )}
 
@@ -1763,7 +1768,10 @@ function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef
 function DiscardConfirm({ onKeepEditing, onDiscard, keepEditingBtnRef }) {
   return (
     <div className="sc-v2-entry-modal" role="alertdialog" aria-modal="true">
-      <div className="sc-v2-entry-modal-inner">
+      {/* P3-A (2026-07-25): accent-rail top variant, amber (owner pick).
+          Applied via className extension on the modal-inner card so the
+          existing layout, padding, and radius are preserved. */}
+      <div className="sc-v2-entry-modal-inner sc-ar--top sc-ar--warning">
         <h4 className="sc-v2-entry-modal-title">Unsaved changes</h4>
         <p className="sc-v2-entry-modal-body">You have unsaved counts or a note draft. Discard them?</p>
         <div className="sc-v2-entry-modal-actions">
@@ -1785,7 +1793,10 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
   const title = dateLabel ? `Mark ${dateLabel} as no service?` : "Mark as no service?";
   return (
     <div className="sc-v2-entry-modal" role="alertdialog" aria-modal="true">
-      <div className="sc-v2-entry-modal-inner">
+      {/* P3-A (2026-07-25): accent-rail top variant, amber (owner pick).
+          Same treatment as DiscardConfirm above - one dialog pattern,
+          rail on top, two actions. Copy unchanged. */}
+      <div className="sc-v2-entry-modal-inner sc-ar--top sc-ar--warning">
         <h4 className="sc-v2-entry-modal-title">{title}</h4>
         {hasEnteredCounts ? (
           <p className="sc-v2-entry-modal-body">

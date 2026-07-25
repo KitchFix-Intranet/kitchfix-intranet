@@ -124,26 +124,15 @@
    values remain unchanged in the body below - failure is "the
    handoff didn't happen." Cleared by handleChange (retry) or
    day-nav in DayEntryV2. Tokens only (§13A). */
+/* P3-A (2026-07-25): the alert's own background / border-left /
+   head + body typography now come from the shared .sc-ar accent-rail
+   primitive (accentRail.css). This class remains as a panel-position
+   shim - it carries the panel-width margin and the bottom divider
+   that visually separates the alert from the two-pane body below. */
 .sc-v2-entry-alert {
-  padding: var(--sc2-space-3) var(--sc2-space-5);
-  border-left: var(--sc2-border-medium) solid transparent;
-  font-size: var(--sc2-size-caption);
+  margin: var(--sc2-space-3) var(--sc2-space-5) 0;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
-}
-.sc-v2-entry-alert--error {
-  background: var(--sc2-state-overdue-bg);
-  color: var(--sc2-state-overdue-fg);
-  border-left-color: var(--sc2-state-overdue-fg);
-}
-.sc-v2-entry-alert-head {
-  font-weight: var(--sc2-wt-display);
-  letter-spacing: 0.02em;
-}
-.sc-v2-entry-alert-body {
-  font-size: var(--sc2-size-micro);
-  color: var(--sc2-ink);
-  margin-top: var(--sc2-space-1);
-  word-break: break-word;
+  padding-bottom: var(--sc2-space-3);
 }
 
 /* ─── Two-pane ────────────────────────────────────────────── */

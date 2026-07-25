@@ -22,6 +22,7 @@ import {
   RailHero,
   RailHeroProgressCaption,
   RailProgress,
+  RailRing,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -209,7 +210,18 @@ export default function OpsRail({
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
-      {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
+      {/* P3-A (2026-07-25): STL-FL (!hasHomestandSchedule) swaps the
+          progress bar for an arc-only ring per owner pick "option A" -
+          the 2B days-confirmed hero already carries the fraction, so
+          no inner label duplicates it. MLB (hasHomestandSchedule)
+          keeps <RailProgress + RailHeroProgressCaption> byte-identical
+          - the composition here is the ONLY place OpsRail branches on
+          hasHomestandSchedule for the hero visualization. */}
+      {!incomplete && (
+        hasHomestandSchedule
+          ? <RailProgress pct={heroPct} complete={heroPct === 100} />
+          : <RailRing pct={heroPct} showLabel={false} complete={heroPct === 100} ariaLabel={heroCaption} />
+      )}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       {contractInfo && (

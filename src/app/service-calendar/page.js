@@ -4,10 +4,14 @@ import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
 import SubmissionToast from "./season/SubmissionToast";
+// P3-A (2026-07-25): note-posted chip uses the accent-rail primitive.
+// Import the CSS at the page level so the chip renders with correct
+// styles regardless of which SC subtree fires the toast.
 import "@/app/ops/css/ops-shared.css";
 import "./ops-sc.css";
 import "./dayDetail.css";
 import "./submissionToast.css";
+import "./v2/accentRail.css";
 
 // Page-level gate. Currently identical to SC_ADMINS - only the two
 // listed emails see the live tool; everyone else gets the Coming Soon
@@ -157,6 +161,27 @@ export default function ServiceCalendarPage() {
             // scope "outside" correctly.
             <div ref={toastCardRef}>
               <SubmissionToast {...toast} onDismiss={() => setToast(null)} />
+            </div>
+          ) : toast.variant === "note-posted" ? (
+            // P3-A: note-posted chip. Accent-rail primitive, --success
+            // (green). Copy verbatim from RENDER_HANDOFF_BLENDED.html:141.
+            // Auto-dismisses via the same 3.5s timer set by showToast.
+            <div
+              className="sc-ar sc-ar--success"
+              role="status"
+              aria-live="polite"
+              onClick={() => setToast(null)}
+              style={{ cursor: "pointer" }}
+            >
+              <span className="sc-ar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </span>
+              <div className="sc-ar-content">
+                <div className="sc-ar-title">{toast.title}</div>
+                <div className="sc-ar-body">{toast.body}</div>
+              </div>
             </div>
           ) : (
             <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>

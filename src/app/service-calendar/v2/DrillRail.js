@@ -31,6 +31,7 @@ import {
   RailHero,
   RailHeroProgressCaption,
   RailProgress,
+  RailRing,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -198,8 +199,20 @@ export default function DrillRail({
   return (
     <RailShell label={`${scope.toUpperCase()} · ${scopeLabel || ""}`}>
       {heroBlock}
-      {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
-      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
+      {/* P3-A (2026-07-25): ring replaces the progress bar in the
+          per-meal drill. Percent inside the ring; fraction caption
+          beside. RailProgress is UNTOUCHED (MLB rail keeps it via
+          OpsRail's hasHomestandSchedule branch). */}
+      {!incomplete && (
+        <div className="sc-rail-ringbox">
+          <RailRing
+            pct={heroPct}
+            complete={heroPct === 100}
+            ariaLabel={heroCaption}
+          />
+          <span className="sc-rail-ringbox-caption">{heroCaption}</span>
+        </div>
+      )}
 
       <RailScroll>
         {/* Needs-attention queue - identical semantics to overview

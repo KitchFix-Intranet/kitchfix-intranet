@@ -17,6 +17,12 @@
 import { useEffect, useRef, useState } from "react";
 import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
+// P3-A (2026-07-25): accent-rail primitive shared across surfaces
+// (rail chips, failure banner, dialog top-rails, notes chip). Imported
+// here so any consumer that pulls a Rail primitive gets the accent
+// language for free. Also imported explicitly by DayEntryV2 for the
+// panel's failure banner + dialog rails.
+import "./accentRail.css";
 
 // ─── Shell wrapper ─────────────────────────────────────────────
 export function RailShell({ label, children }) {
@@ -85,6 +91,77 @@ export function RailProgress({ pct, complete }) {
       aria-valuemax={100}
     >
       <div className="sc-rail-progress-fill" style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+// ─── Progress ring (P3-A, 2026-07-25) ──────────────────────────
+// Peer primitive to RailProgress. RailProgress is UNTOUCHED because
+// MLB rail composition must stay byte-identical (owner ruling: MLB
+// keeps <RailProgress + RailHeroProgressCaption>). RailRing is a
+// per-meal / fee-no-dollar swap-in.
+//
+// Geometry (SVG values from RENDER_HANDOFF_BLENDED.html:65-73):
+//   viewBox 0 0 92 92, cx=46, cy=46, r=39, stroke-width 8, dasharray
+//   2*pi*r = 245.04. Rotated -90deg so the arc starts at the top.
+//   Compact size (owner pick: 92px wrap; ring geometry is structural
+//   sizing, not type/spacing/radius, so px is sanctioned).
+//
+// Ambient sweep: CSS transition on `stroke-dashoffset` via a duration
+// token (rail.css). Any pct change animates the arc; prefers-reduced-
+// motion collapses the duration to 0ms via the --duration-* token
+// cascade (motion.js header rule).
+//
+// Variants:
+//   default (per-meal): `label` renders the percent inside the ring
+//     (e.g. "72%"). Caption OUTSIDE the ring (adjacent
+//     RailHeroProgressCaption) carries the fraction "N of M days
+//     entered". Both come from consumer scope.
+//   showLabel={false} (fee-no-dollar / STL-FL): arc only, no inner
+//     label. Caller keeps the existing hero + caption above / beside
+//     - the 2B days-confirmed hero already carries the fraction, so
+//     duplicating it inside the small ring is redundant (owner pick:
+//     option A).
+export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const C = 245.04; // 2 * PI * 39
+  const dashOffset = C - (C * clamped) / 100;
+  return (
+    <div
+      className={`sc-rail-ring${complete ? " sc-rail-ring--complete" : ""}`}
+      role="progressbar"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={ariaLabel || `${clamped} percent complete`}
+    >
+      <svg
+        className="sc-rail-ring-svg"
+        viewBox="0 0 92 92"
+        aria-hidden="true"
+      >
+        <circle
+          className="sc-rail-ring-bg"
+          cx="46"
+          cy="46"
+          r="39"
+          fill="none"
+        />
+        <circle
+          className="sc-rail-ring-fg"
+          cx="46"
+          cy="46"
+          r="39"
+          fill="none"
+          strokeLinecap="round"
+          style={{ strokeDasharray: C, strokeDashoffset: dashOffset }}
+        />
+      </svg>
+      {showLabel && (
+        <div className="sc-rail-ring-txt" aria-hidden="true">
+          <span className="sc-rail-ring-n">{label ?? `${clamped}%`}</span>
+        </div>
+      )}
     </div>
   );
 }
