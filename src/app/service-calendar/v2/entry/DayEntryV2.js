@@ -1196,9 +1196,14 @@ function DayEntryV2({
               {/* Fee-no-dollar: no currency in the actions total.
                   Reads feeServedTotals (single memo, L7 consolidation
                   2026-07-25). Same numbers as MobileBooksBar and
-                  success screen by construction. */}
+                  success screen by construction.
+                  P2B-b gate finding (2026-07-25): touched label was
+                  "Served" which duplicated the unit word already
+                  carried by the value ("N served"). Aligned to the
+                  per-meal grammar ("Day total"); value keeps its
+                  unit. Pristine stays "Scheduled". */}
               <span className="sc-v2-entry-actions-total-label">
-                {hasTouchedAny ? "Served" : "Scheduled"}
+                {hasTouchedAny ? "Day total" : "Scheduled"}
               </span>
               <span className="sc-v2-entry-actions-total-value">
                 {hasTouchedAny ? "" : "~"}

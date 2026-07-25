@@ -892,13 +892,16 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
             : (firstDayCell?.day?.meta?.week || null);
           const wm = rowKey && weekMetrics ? weekMetrics[rowKey] : null;
           const bandLabel = wm?.label || rowKey;
-          // Two-guard model (bundle scope §3):
+          // Two-guard model (bundle scope §3, plus P2B-b fee reopen):
           //  - !hasHomestandSchedule (SC-073 - MLB homestand accounts
           //    never see week cards or bands)
-          //  - !isFeeAccount (fee accounts' drill is otherwise untouched;
-          //    STL-FL's actRev is structurally $0 so the band would read
-          //    "$0.00" every week - not helpful, and out of policy)
-          const showBand = scV2 && !hasHomestandSchedule && !isFeeAccount && rowKey && wm;
+          //  - fee accounts NOW render bands with a served-count figure
+          //    (P2B-b, 2026-07-25). The prior !isFeeAccount block was
+          //    dollar-avoidance (STL-FL's actRev is structurally $0);
+          //    the fee band is a served count, not a dollar, so the
+          //    dollar-avoidance rationale dissolves. Per-meal band
+          //    unchanged - value expression branches at :944 below.
+          const showBand = scV2 && !hasHomestandSchedule && rowKey && wm;
           // DP1-11: period prefix. Single period -> "P7" (with the P
           // canon stripped-and-added so "7" and "P7" both format the
           // same); two or more -> "P7-8" and amber via data-straddle.
@@ -940,8 +943,14 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     )}
                     <span className="sc-workspace-band-label">{bandLabel}</span>
                   </span>
-                  <span className="sc-workspace-band-count">{wm.complete} of {wm.total} entered</span>
-                  <span className="sc-workspace-band-sum">{fmt$(wm.actRev)}</span>
+                  <span className="sc-workspace-band-count">
+                    {wm.complete} of {wm.total} {isFeeAccount ? "confirmed" : "entered"}
+                  </span>
+                  <span className="sc-workspace-band-sum">
+                    {isFeeAccount
+                      ? `${(wm.actMeals || 0).toLocaleString()} served`
+                      : fmt$(wm.actRev)}
+                  </span>
                 </div>
               )}
               <div role="row" className="sc-workspace-grid-row">
