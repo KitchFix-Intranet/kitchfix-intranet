@@ -197,6 +197,8 @@ export default function PeriodWorkspace({
       <BulkAffordance
         bulkMode={bulkMode}
         bulkSelected={bulkSelected}
+        periodDays={periodDays}
+        isFeeAccount={isFeeAccount}
         saving={saving}
         onToggle={onBulkModeToggle}
         onCancel={onBulkCancel}
@@ -619,40 +621,75 @@ function sumProjectedMeals(day) {
 // isSelected). Out of bulkMode, tile clicks open DayDetail. The mode
 // gate prevents the tap-to-open vs tap-to-select conflict the brief
 // pre-mortem flagged.
-function BulkAffordance({ bulkMode, bulkSelected, saving, onToggle, onCancel, onOpenPanel, onReview }) {
+function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, saving, onToggle, onCancel, onOpenPanel, onReview }) {
   // Rest-state trigger moved into TodayRail as "Bulk Update"; this
   // component now only renders the active-mode controls (selected count
   // + panel/confirm/cancel). Note: TodayRail only renders on the current
   // period, so past-period drill-ins lose the standalone entry into
   // bulk mode - flagged for follow-up if needed.
+  //
+  // Phase 2A (2026-07-24) additions:
+  // - P2-1 scroll-to-focus: the banner scrollIntoViewRM on mode-enter
+  //   so an operator scrolled down doesn't miss it appearing.
+  // - P2-5 selection guidance: "Select days to enter" copy while
+  //   count===0; actions disabled until something is selected; running
+  //   projected total renders as soon as count>0. Totals are server-
+  //   derived (day.totals.projectedRevenue), never client-computed.
+  const bannerRef = useRef(null);
+  useEffect(() => {
+    if (bulkMode && bannerRef.current) {
+      scrollIntoViewRM(bannerRef.current, { block: "start" });
+    }
+  }, [bulkMode]);
+
+  const runningTotal = useMemo(() => {
+    if (!bulkMode || !bulkSelected || bulkSelected.size === 0) return null;
+    let meals = 0, revenue = 0;
+    for (const d of periodDays || []) {
+      if (!bulkSelected.has(d.date)) continue;
+      for (const v of Object.values(d.projected || {})) meals += v || 0;
+      revenue += Math.round(Number(d.totals?.projectedRevenue) || 0);
+    }
+    return { meals, revenue };
+  }, [bulkMode, bulkSelected, periodDays]);
+
   if (!bulkMode) return null;
   const count = bulkSelected?.size || 0;
+  const noneSelected = count === 0;
   return (
-    <div className="sc-workspace-bulk-active" role="region" aria-label="Bulk entry">
+    <div ref={bannerRef} className="sc-workspace-bulk-active" role="region" aria-label="Bulk entry">
       <span className="sc-workspace-bulk-active-count">
-        {count} day{count !== 1 ? "s" : ""} selected
+        {noneSelected ? (
+          <>Select days to enter</>
+        ) : (
+          <>{count} day{count !== 1 ? "s" : ""} selected</>
+        )}
       </span>
       <div className="sc-workspace-bulk-active-actions">
-        {count > 0 && (
-          <>
-            <button
-              type="button"
-              className="sc-workspace-bulk-btn sc-workspace-bulk-btn--outline"
-              disabled={saving}
-              onClick={onReview}
-            >
-              {saving ? "Saving..." : "All match projections"}
-            </button>
-            <button
-              type="button"
-              className="sc-workspace-bulk-btn sc-workspace-bulk-btn--primary"
-              disabled={saving}
-              onClick={onOpenPanel}
-            >
-              Enter custom values
-            </button>
-          </>
+        {runningTotal && (
+          <span className="sc-workspace-bulk-active-total">
+            {runningTotal.meals.toLocaleString()} meals
+            {!isFeeAccount && Number.isFinite(runningTotal.revenue) && (
+              <>{" · "}{fmt$(runningTotal.revenue)}</>
+            )}
+          </span>
         )}
+        <button
+          type="button"
+          className="sc-workspace-bulk-btn sc-workspace-bulk-btn--outline"
+          disabled={saving || noneSelected}
+          onClick={onReview}
+        >
+          {saving ? "Saving..." : "All match projections"}
+        </button>
+        <button
+          type="button"
+          className="sc-workspace-bulk-btn sc-workspace-bulk-btn--primary"
+          disabled={saving || noneSelected}
+          onClick={onOpenPanel}
+        >
+          Enter custom values
+        </button>
         <button
           type="button"
           className="sc-workspace-bulk-cancel"
@@ -941,24 +978,55 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               const status = resolveDayStatus(d.status, loadState === "failed" ? "failed" : undefined);
               const isSelected = bulkMode && bulkSelected?.has(d.date);
               const content = loadState === "failed" ? null : buildLargeContent(d, kind, homestandMap, isMilb, accountKey, scheduleOverlay);
-              // Bulk-selectable gate: needs-entry / overdue / future
-              // days are always selectable. SC-069 widens the gate to
-              // also allow ENTERED FUTURE days so a fully-caught-up
-              // current period isn't a dead end - operators can
-              // revise forward projections in bulk. Past entered days
-              // stay LOCKED (bulk cannot stomp confirmed history).
-              // Off days ("off-season", any residual "off") never selectable.
-              const isEnteredFuture = d.hasActuals && d.date > today;
-              // sc-12: exhibition tiles are display-only. Bulk-select
-              // must skip them; onClick is also gated in the atom, but
-              // dropping the handler here removes the button role at
-              // the source and keeps keyboard/roving-tabindex semantics
-              // clean (no gridcell that pretends to be actionable).
-              // sc-13: away tiles share the display-only contract.
+              // Bulk-selectable gate. Phase 2A / Ruling 4 (2026-07-24):
+              // ENTERED PAST days are now selectable so the two
+              // operator workflows the no-service ruling identified
+              // - cancelled-after-entry, wrong-day - work in bulk too.
+              // Manual zeroing loses the audit signal; a bulk overwrite
+              // preserves it (BulkReview flags the row + the batch,
+              // Ledger records every value as old->new).
+              //
+              // Gate now reads SERVER status (d.status) not the resolved
+              // display status: `resolveDayStatus` maps both `no-service`
+              // AND `prep` to "off", which would conflate two different
+              // rulings.
+              //
+              // "no-service" splits on hasActuals - the classifier emits
+              // it for TWO distinct realities (serviceCalendar.js):
+              //   :303  hasAct && !anyNonZeroAct     -> recorded
+              //         cancellation (operator marked no-service; all-
+              //         zero actuals exist). Selectable - re-entry is
+              //         legitimate, audit trail via Ledger.
+              //   :310  !hasAct && hasProj &&        -> planned off-day
+              //         !anyNonZeroProj                (PR #167; nothing
+              //         ever scheduled). BLOCKED - schedule truth:
+              //         nothing scheduled, nothing to bulk-enter. A bulk
+              //         write here would inject zero-value rows into
+              //         sc_daily_actuals and flip the day's classifica-
+              //         tion from planned-off (:310) to recorded
+              //         no-service (:303), silently promoting a non-
+              //         scheduled day to a cancellation in the Ledger
+              //         and exports.
+              //
+              // Full 9-status partition (owner Ruling 5, 2026-07-24):
+              //   ALLOW:
+              //     entered, needs-entry, overdue, future,
+              //     no-service + hasActuals (kind 1)
+              //   BLOCK:
+              //     no-service + !hasActuals (kind 2),
+              //     off-season, prep,
+              //     exhibition, away (via isDisplayOnly)
+              //
+              // Do NOT drop the hasActuals term on no-service without
+              // reading serviceCalendar.js:303-310. Removing it re-
+              // admits planned off-days.
               const isExhibition = status === "exhibition";
               const isAway = status === "away";
               const isDisplayOnly = isExhibition || isAway;
-              const isBulkSelectable = bulkMode && status !== "off" && !isDisplayOnly && (!d.hasActuals || isEnteredFuture);
+              const dayNotScheduled = d.status === "off-season"
+                || d.status === "prep"
+                || (d.status === "no-service" && !d.hasActuals);
+              const isBulkSelectable = bulkMode && !dayNotScheduled && !isDisplayOnly;
               const isRoving = flatIdx === focusIdx;
               return (
                 <span
@@ -974,6 +1042,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     content={content}
                     isToday={isToday}
                     isSelected={isSelected}
+                    hasActuals={d.hasActuals}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
                     onClick={isDisplayOnly ? undefined : () => {

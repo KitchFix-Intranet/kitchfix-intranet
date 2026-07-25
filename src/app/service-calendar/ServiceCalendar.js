@@ -24,6 +24,12 @@ import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
 import MobileBooksBar from "./v2/MobileBooksBar";
+// Phase 2A bulk convergence (2026-07-24): shared review + pos-style
+// custom entry. Both bulk paths converge on BulkReview; BulkEntry
+// replaces the legacy .sc-day bulk shell.
+import BulkEntry from "./v2/bulk/BulkEntry";
+import BulkReview from "./v2/bulk/BulkReview";
+import "./v2/bulk/bulk.css";
 // HF-7 (2026-07-20) - overview ribbon Today-jump routes through
 // scrollIntoViewRM so the RM branch is respected.
 import { scrollIntoViewRM } from "./v2/motion";
@@ -3270,79 +3276,42 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         </div>
       )}
 
-      {/* Bulk entry overlay */}
-      {bulkPanelOpen && data?.serviceGroups && (
-        <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkPanelOpen(false); }}>
-          <div
-            ref={bulkOverlayCardRef}
-            className="sc-overlay-card"
-            data-density="comfortable"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sc-day-bulk-title"
-            tabIndex={-1}
-          >
-            <div className="sc-day">
-              <div className="sc-day-header">
-                <div>
-                  <h3 className="sc-day-title" id="sc-day-bulk-title">Bulk entry - {bulkSelected.size} days</h3>
-                </div>
-                <button className="sc-day-close" onClick={() => setBulkPanelOpen(false)} aria-label="Close">
-                  <X size="sm" />
-                </button>
-              </div>
-              <div className="sc-day-coaching sc-day-coaching--neutral">
-                Enter values once, apply to all {bulkSelected.size} selected days.
-              </div>
-              <div className="sc-day-body">
-                {data.serviceGroups.map(group => (
-                  <div key={group.name} className="sc-day-group">
-                    <div className="sc-day-group-header">
-                      <span className="sc-day-group-name">{group.name}</span>
-                      <span className="sc-day-group-price">${Number(group.services[0]?.price || 0).toFixed(2)}/plate</span>
-                    </div>
-                    {group.services.map(svc => (
-                      <div key={svc.colIndex} className="sc-day-row">
-                        <div className="sc-day-row-left">
-                          <span className="sc-day-row-name">{svc.name}</span>
-                        </div>
-                        <div className="sc-day-row-right">
-                          <input type="text" inputMode="numeric" pattern="[0-9]*"
-                            className="sc-day-input sc-day-input--ghost"
-                            placeholder="0" value={bulkValues[svc.colIndex] || ""}
-                            onChange={e => setBulkValues(prev => ({ ...prev, [svc.colIndex]: e.target.value.replace(/[^0-9]/g, "") }))} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <div className="sc-day-footer">
-                <div className="sc-day-actions">
-                  <button className="sc-btn sc-btn--outline" onClick={() => setBulkPanelOpen(false)}>Cancel</button>
-                  {/* SC-062: primary now routes through a review overlay
-                      so the operator confirms the money before the write
-                      lands. Enable only when at least one input has a
-                      value - matches handleBulkSave's own empty-guard
-                      but surfaces the constraint upfront. */}
-                  <button
-                    className="sc-btn sc-btn--primary"
-                    disabled={saving || !Object.values(bulkValues).some(v => v !== undefined && v !== "")}
-                    onClick={() => setBulkCustomReviewOpen(true)}
-                  >
-                    {`Review ${bulkSelected.size} days`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Bulk custom-entry - pos-style panel (Phase 2A 2026-07-24,
+          redline #11). Legacy .sc-day inline shell replaced by
+          <BulkEntry>, which reuses GroupBlock / ServiceRow from the
+          single-day modal for structural parity. First selected day
+          serves as the syntheticDay template (matches the pre-existing
+          "Init bulk values from first selected day's projections"
+          pattern at :2035). */}
+      {bulkPanelOpen && data?.serviceGroups && (() => {
+        const firstDate = Array.from(bulkSelected).sort()[0];
+        const syntheticDay = firstDate
+          ? (activeDrillDays?.find(d => d.date === firstDate) || dayMap?.[firstDate])
+          : null;
+        if (!syntheticDay) return null;
+        return (
+          <BulkEntry
+            cardRef={bulkOverlayCardRef}
+            daysCount={bulkSelected.size}
+            serviceGroups={data.serviceGroups}
+            values={bulkValues}
+            onChange={(colIndex, value) => setBulkValues(prev => ({ ...prev, [colIndex]: value }))}
+            onCancel={() => setBulkPanelOpen(false)}
+            onReview={() => { setBulkPanelOpen(false); setBulkCustomReviewOpen(true); }}
+            saving={saving}
+            accountSegment={data?.account?.category || ""}
+            syntheticDay={syntheticDay}
+          />
+        );
+      })()}
 
-      {/* Bulk review overlay - "All match projections" now routes through
-          a review step (mirrors the DayDetail review styling: navy
-          scoreboard + read-only list + action bar). Confirming here still
-          calls handleBulkConfirm, so the write path is unchanged. */}
+      {/* Bulk match-projections review (Phase 2A 2026-07-24, owner
+          Ruling 1). Was an inline IIFE; both bulk paths converge on
+          <BulkReview> now. Header revenue = sum of per-day rounded
+          server-derived projected revenue (Bundle 1 convention).
+          Per-service expand shows what each service will be written
+          for on each day (projected values). Overwrite warning
+          computed from day.actual for days that already have counts. */}
       {bulkReviewOverlayOpen && (() => {
         const days = [];
         for (const dk of bulkSelected) {
@@ -3350,103 +3319,86 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           if (d) days.push(d);
         }
         days.sort((a, b) => a.date.localeCompare(b.date));
-        // SC-051 (b): the header is the sum of what the rows display.
-        // Each row renders `fmt$(day.totals.projectedRevenue)` which
-        // rounds per-day. Summing the raw floats then rounding once
-        // gives an aggregate that doesn't match 6 rows of $3,582 (the
-        // $21,490 vs $21,492 artifact). Pre-rounding each day makes
-        // the arithmetic an operator can do on screen check out. Both
-        // still read the effective-dated per-day view value.
-        let totMeals = 0;
-        let totRev = 0;
+        // Header totals: server-derived per-day figures pre-rounded,
+        // then summed once. Same shape as pre-rewrite so the number
+        // an operator computes on screen still checks out.
+        let totMeals = 0, totRev = 0;
         for (const d of days) {
           for (const v of Object.values(d.projected || {})) totMeals += v || 0;
           totRev += Math.round(Number(d.totals?.projectedRevenue) || 0);
         }
+        // Overwrite detection: days with existing actuals. Counts +
+        // services only, no currency - meals summed from day.actual.
+        const overwrites = new Map();
+        for (const d of days) {
+          if (!d.hasActuals) continue;
+          let prevMeals = 0, prevServices = 0;
+          for (const v of Object.values(d.actual || {})) {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) { prevMeals += n; prevServices += 1; }
+          }
+          // hasActuals + all zeros = server-classified no-service day
+          // (all-zero actuals present). Owner ruling 2026-07-24: bulk
+          // re-entry over a no-service day is legitimate; the warning
+          // needs its own copy variant ("replacing 'no service' status")
+          // because prevMeals is 0 - the counts-based message would
+          // read "replacing 0 meals" which is wrong.
+          const isNoService = d.status === "no-service";
+          if (prevMeals > 0 || prevServices > 0 || isNoService) {
+            overwrites.set(d.date, { prevMeals, prevServices, isNoService });
+          }
+        }
+        // Per-service expand: emit one row per in-service service with
+        // its projected value on that day.
+        const perDayServices = (d) => {
+          const rows = [];
+          for (const g of data.serviceGroups) {
+            for (const s of g.services) {
+              const proj = d.projected?.[s.colIndex] ?? 0;
+              rows.push({ serviceId: s.colIndex, serviceName: s.name, value: proj });
+            }
+          }
+          return rows;
+        };
         return (
-          <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkReviewOpen(false); }}>
-            <div
-              ref={bulkReviewOverlayCardRef}
-              className="sc-overlay-card"
-              data-density="comfortable"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sc-bulk-review-title"
-              tabIndex={-1}
-            >
-              <div className="sc-day sc-day--review">
-                <div className="sc-day-scoreboard sc-day-review-board">
-                  <div className="sc-day-sb-row1">
-                    <div className="sc-day-sb-ctx">
-                      <span className="sc-day-review-title2" id="sc-bulk-review-title">
-                        Match projections - {days.length} day{days.length !== 1 ? "s" : ""}
-                      </span>
-                      {acctObj?.name && <span className="sc-day-sb-account">{acctObj.name}</span>}
-                    </div>
-                    <button className="sc-day-review-back" onClick={() => setBulkReviewOpen(false)}>‹ Go back</button>
-                  </div>
-                  <div className="sc-day-sb-line">
-                    <div className="sc-day-sb-fig">
-                      {!isFeeAccount && (
-                        <span className="sc-day-sb-amount sc-day-sb-amount--recorded">{fmt$(totRev)}</span>
-                      )}
-                      <span className="sc-day-sb-meals">{totMeals.toLocaleString()} meals</span>
-                    </div>
-                    <span className="sc-day-sb-status sc-day-sb-status--entry">projected totals</span>
-                  </div>
-                </div>
-                <div className="sc-day-body">
-                  <ul className="sc-bulk-review-list">
-                    {days.map(d => {
-                      let m = 0;
-                      for (const v of Object.values(d.projected || {})) m += v || 0;
-                      const r = d.totals?.projectedRevenue || 0;
-                      return (
-                        <li key={d.date} className="sc-bulk-review-item">
-                          <span className="sc-bulk-review-date">{fmtDateShort(d.date)}</span>
-                          <span className="sc-bulk-review-vals">
-                            <span className="sc-bulk-review-meals">{m.toLocaleString()} meals</span>
-                            {!isFeeAccount && <span className="sc-bulk-review-rev">{fmt$(r)}</span>}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-                <div className="sc-day-footer">
-                  <div className="sc-day-actions">
-                    <button className="sc-btn sc-btn--outline" onClick={() => setBulkReviewOpen(false)}>Go back</button>
-                    <button
-                      className="sc-btn sc-btn--primary"
-                      disabled={saving}
-                      onClick={() => { setBulkReviewOpen(false); handleBulkConfirm(); }}
-                    >
-                      {saving ? "Saving..." : "Confirm & save"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <BulkReview
+            cardRef={bulkReviewOverlayCardRef}
+            days={days}
+            serviceGroups={data.serviceGroups}
+            subtitle={`Match projections - ${days.length} day${days.length !== 1 ? "s" : ""}`}
+            statusPill="projected totals"
+            headerTotals={{ meals: totMeals, revenue: totRev }}
+            perDayRow={(d) => {
+              let m = 0;
+              for (const v of Object.values(d.projected || {})) m += v || 0;
+              return { meals: m, revenue: Number(d.totals?.projectedRevenue) || 0 };
+            }}
+            perDayServices={perDayServices}
+            overwrites={overwrites}
+            isFeeAccount={isFeeAccount}
+            acctName={acctObj?.name}
+            saving={saving}
+            confirmLabel="Confirm & save"
+            onConfirm={() => { setBulkReviewOpen(false); handleBulkConfirm(); }}
+            onBack={() => setBulkReviewOpen(false)}
+          />
         );
       })()}
 
-      {/* SC-062: bulk custom-values review overlay. Mirrors the match-
-          projections review anatomy (navy scoreboard + list body + action
-          bar) but the per-day row shows the SAME custom entries applied
-          to each selected day - meals identical, revenue effective-dated
-          per day (day.priceAtDate). Header = sum of per-day-rounded
-          revenue (Bundle 1 convention: header matches visible row sum).
-          Go back returns to the entry form with bulkValues intact. */}
+      {/* Bulk custom-values review (Phase 2A 2026-07-24). Same
+          <BulkReview> component as the match-projections path -
+          differs only in the four surface points identified in the
+          pre-build read (subtitle, pill, header source, per-row
+          meals source). Meals identical across days; revenue is
+          effective-dated per day via day.priceAtDate. */}
       {bulkCustomReviewOverlayOpen && (() => {
-        // Build entries once - same source of truth handleBulkSave will
-        // use when Confirm fires.
+        // Same entries the write path will send.
         const entries = [];
         for (const g of data.serviceGroups) {
           for (const s of g.services) {
             const val = bulkValues[s.colIndex];
             if (val !== undefined && val !== "") {
-              entries.push({ colIndex: s.colIndex, value: Number(val) });
+              entries.push({ colIndex: s.colIndex, serviceName: s.name, value: Number(val) });
             }
           }
         }
@@ -3472,69 +3424,47 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         for (const d of days) totRev += Math.round(perDayRev(d));
         const totMeals = totalMealsPerDay * days.length;
 
+        const overwrites = new Map();
+        for (const d of days) {
+          if (!d.hasActuals) continue;
+          let prevMeals = 0, prevServices = 0;
+          for (const v of Object.values(d.actual || {})) {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) { prevMeals += n; prevServices += 1; }
+          }
+          // hasActuals + all zeros = server-classified no-service day
+          // (all-zero actuals present). Owner ruling 2026-07-24: bulk
+          // re-entry over a no-service day is legitimate; the warning
+          // needs its own copy variant ("replacing 'no service' status")
+          // because prevMeals is 0 - the counts-based message would
+          // read "replacing 0 meals" which is wrong.
+          const isNoService = d.status === "no-service";
+          if (prevMeals > 0 || prevServices > 0 || isNoService) {
+            overwrites.set(d.date, { prevMeals, prevServices, isNoService });
+          }
+        }
         return (
-          <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBulkCustomReviewOpen(false); }}>
-            <div
-              ref={bulkCustomReviewOverlayCardRef}
-              className="sc-overlay-card"
-              data-density="comfortable"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sc-bulk-custom-review-title"
-              tabIndex={-1}
-            >
-              <div className="sc-day sc-day--review">
-                <div className="sc-day-scoreboard sc-day-review-board">
-                  <div className="sc-day-sb-row1">
-                    <div className="sc-day-sb-ctx">
-                      <span className="sc-day-review-title2" id="sc-bulk-custom-review-title">
-                        Custom values - {days.length} day{days.length !== 1 ? "s" : ""}
-                      </span>
-                      {acctObj?.name && <span className="sc-day-sb-account">{acctObj.name}</span>}
-                    </div>
-                    <button className="sc-day-review-back" onClick={() => setBulkCustomReviewOpen(false)}>‹ Go back</button>
-                  </div>
-                  <div className="sc-day-sb-line">
-                    <div className="sc-day-sb-fig">
-                      {!isFeeAccount && (
-                        <span className="sc-day-sb-amount sc-day-sb-amount--recorded">{fmt$(totRev)}</span>
-                      )}
-                      <span className="sc-day-sb-meals">{totMeals.toLocaleString()} meals</span>
-                    </div>
-                    <span className="sc-day-sb-status sc-day-sb-status--entry">custom totals</span>
-                  </div>
-                </div>
-                <div className="sc-day-body">
-                  <ul className="sc-bulk-review-list">
-                    {days.map(d => {
-                      const r = perDayRev(d);
-                      return (
-                        <li key={d.date} className="sc-bulk-review-item">
-                          <span className="sc-bulk-review-date">{fmtDateShort(d.date)}</span>
-                          <span className="sc-bulk-review-vals">
-                            <span className="sc-bulk-review-meals">{totalMealsPerDay.toLocaleString()} meals</span>
-                            {!isFeeAccount && <span className="sc-bulk-review-rev">{fmt$(r)}</span>}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-                <div className="sc-day-footer">
-                  <div className="sc-day-actions">
-                    <button className="sc-btn sc-btn--outline" onClick={() => setBulkCustomReviewOpen(false)}>Go back</button>
-                    <button
-                      className="sc-btn sc-btn--primary"
-                      disabled={saving}
-                      onClick={() => { setBulkCustomReviewOpen(false); handleBulkSave(); }}
-                    >
-                      {saving ? "Saving..." : "Confirm & save"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <BulkReview
+            cardRef={bulkCustomReviewOverlayCardRef}
+            days={days}
+            serviceGroups={data.serviceGroups}
+            subtitle={`Custom values - ${days.length} day${days.length !== 1 ? "s" : ""}`}
+            statusPill="custom totals"
+            headerTotals={{ meals: totMeals, revenue: totRev }}
+            perDayRow={(d) => ({ meals: totalMealsPerDay, revenue: perDayRev(d) })}
+            perDayServices={() => entries.map(e => ({
+              serviceId: e.colIndex,
+              serviceName: e.serviceName,
+              value: e.value,
+            }))}
+            overwrites={overwrites}
+            isFeeAccount={isFeeAccount}
+            acctName={acctObj?.name}
+            saving={saving}
+            confirmLabel="Confirm & save"
+            onConfirm={() => { setBulkCustomReviewOpen(false); handleBulkSave(); }}
+            onBack={() => setBulkCustomReviewOpen(false)}
+          />
         );
       })()}
 
