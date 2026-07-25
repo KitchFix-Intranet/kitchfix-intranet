@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import DayDetail from "./DayDetail";
+import DayDetail, { isInServiceOnDay } from "./DayDetail";
 import { X } from "./Icons";
 import { useDialogA11y } from "./useDialogA11y";
 import SeasonShell from "./season/SeasonShell";
@@ -1791,12 +1791,14 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // P0-1: only include services where the chef actually typed a value.
     // An untouched bulk input means "leave this service alone for each day"
     // - we must NOT write 0 to it (would zero out existing actuals).
+    // Attach the service object to each entry so the per-day archive
+    // filter below has activeUntil in hand without a second lookup.
     const entries = [];
     for (const g of data.serviceGroups) {
       for (const s of g.services) {
         const val = bulkValues[s.colIndex];
         if (val !== undefined && val !== "") {
-          entries.push({ colIndex: s.colIndex, value: Number(val) });
+          entries.push({ colIndex: s.colIndex, value: Number(val), svc: s });
         }
       }
     }
@@ -1814,15 +1816,46 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
     // Payload shape: entries carry per-day date (not top-level).
     // rideNote/auditNote are not accepted here (see route.js:716-721);
     // the two client loops didn't send them anyway.
+    //
+    // Archive-edge guard (2026-07-25, P2B archive-guard PR):
+    // isInServiceOnDay(svc, day.date) filters per-day pairs where the
+    // service has been archived (svc.activeUntil < day.date). Skipped
+    // pairs produce NO row - not a zero row.
+    //
+    // Semantics (from the owner Q&A, binding):
+    // - Archive-date check, NOT a projection check. A service with
+    //   zero projections that is still active passes and writes
+    //   normally. Unplanned service happens; the guard never blocks it.
+    // - A count on a retired (service, day) pair is already unbillable
+    //   (sc_daily_revenue view filters it) and already refused by the
+    //   single-day modal (archived chip, no input). The guard makes
+    //   bulk join the rule the rest of the pipeline enforces.
+    // - The legitimate path for a genuine service extension is to
+    //   update the service's active_until in the catalog; after that,
+    //   bulk / single-day / billing all accept it at once.
+    //
+    // The skip predicate here MUST MATCH the review's skip computation
+    // at ServiceCalendar.js:~3395 (match review) and :~3488 (custom
+    // review). Textual parallelism, not a shared object - reviewing
+    // days and writing days both call isInServiceOnDay(svc, day.date)
+    // with the same inputs, so the review's stated skips are exactly
+    // the pairs the write drops.
     const days = [];
     const perDayEntries = [];
     for (const dk of bulkSelected) {
       const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
-      days.push(day);
+      let pushedForThisDay = 0;
       for (const e of entries) {
+        if (!isInServiceOnDay(e.svc, day.date)) continue;
         perDayEntries.push({ colIndex: e.colIndex, date: day.date, value: e.value });
+        pushedForThisDay++;
       }
+      // Zero-applicable-day exclusion: if every typed entry was
+      // archived on this day, drop the day from `days` entirely -
+      // no rows for it, and successCount / newlyEntered / affected-
+      // months bookkeeping downstream stays honest.
+      if (pushedForThisDay > 0) days.push(day);
     }
     if (days.length === 0 || perDayEntries.length === 0) {
       setSaving(false);
@@ -1859,9 +1892,19 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           // enqueues so offline resilience is preserved - the batch
           // never touched the server, so there's no partial commit to
           // worry about. Replay is per-day via sc-submit-day, matching
-          // the queue's existing semantic.
+          // the queue's existing semantic. Filter entries per-day
+          // through the same archive predicate so a queued replay
+          // does not resurrect the archived-pair rows the guard
+          // just refused to write. Emit clean {colIndex, value}
+          // pairs (drop the svc handle used only by the filter).
           for (const day of days) {
-            scEnqueue({ accountKey: data.account.key, date: day.date, entries });
+            const cleanEntries = [];
+            for (const e of entries) {
+              if (!isInServiceOnDay(e.svc, day.date)) continue;
+              cleanEntries.push({ colIndex: e.colIndex, value: e.value });
+            }
+            if (cleanEntries.length === 0) continue;
+            scEnqueue({ accountKey: data.account.key, date: day.date, entries: cleanEntries });
             queuedCount++;
           }
         } else {
@@ -1907,17 +1950,35 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
   const handleBulkConfirm = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
     setSaving(true);
+    // Archive-edge guard (2026-07-25). Match-projections was writing
+    // ZERO-valued rows to archived (service, day) pairs pre-guard: the
+    // catalog `data.serviceGroups` includes services with active_until
+    // set, and `day.projected[s.colIndex]` on an archived-on-that-day
+    // service is undefined (the sc_daily_revenue view filters it), so
+    // the `?? 0` fallback pushed a zero-row for the archived pair.
+    // Filter matches handleBulkSave and the review skip computation
+    // at ServiceCalendar.js:~3395 (match review) and :~3488 (custom
+    // review). Same inputs, same predicate; review-stated skips are
+    // the pairs the write drops. See handleBulkSave comment for full
+    // semantics (archive not projection; already refused elsewhere;
+    // catalog end date is the lever).
     const days = [];
     const perDayEntries = [];
     for (const dk of bulkSelected) {
       const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
       if (!day) continue;
-      days.push(day);
+      let pushedForThisDay = 0;
       for (const g of data.serviceGroups) {
         for (const s of g.services) {
+          if (!isInServiceOnDay(s, day.date)) continue;
           perDayEntries.push({ colIndex: s.colIndex, date: day.date, value: day.projected[s.colIndex] ?? 0 });
+          pushedForThisDay++;
         }
       }
+      // Zero-applicable-day exclusion. Under match-projections this
+      // only fires if EVERY catalog service is archived on this day -
+      // rare. Kept for parity with handleBulkSave.
+      if (pushedForThisDay > 0) days.push(day);
     }
     if (days.length === 0 || perDayEntries.length === 0) {
       setSaving(false);
@@ -1949,13 +2010,18 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         if (scIsNetworkError(err)) {
           // Same per-day enqueue fallback as handleBulkSave. Each day's
           // slice of projected values enqueues under (accountKey, date).
+          // Same archive-edge filter (2026-07-25) so a queued replay
+          // does not resurrect the archived-pair zero-rows the guard
+          // just refused to write.
           for (const day of days) {
             const dayEntries = [];
             for (const g of data.serviceGroups) {
               for (const s of g.services) {
+                if (!isInServiceOnDay(s, day.date)) continue;
                 dayEntries.push({ colIndex: s.colIndex, value: day.projected[s.colIndex] ?? 0 });
               }
             }
+            if (dayEntries.length === 0) continue;
             scEnqueue({ accountKey: data.account.key, date: day.date, entries: dayEntries });
             queuedCount++;
           }
@@ -3381,7 +3447,35 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             overwrites.set(d.date, { prevMeals, prevServices, isNoService });
           }
         }
-        // Per-service expand: emit one row per in-service service with
+        // Archive-edge skip map (2026-07-25). Same predicate the write
+        // path applies at handleBulkConfirm:~1922 (in-place filter);
+        // review-stated skips are exactly the pairs the write drops.
+        // skips: Map<date, Set<serviceId>>. zeroApplicableDays: Set<date>
+        // for days where every catalog service is archived (rare on
+        // the match path - only if all services have been retired
+        // before this day). batchSkipCount: total pairs the guard
+        // will refuse across the batch (informational line above the
+        // list, quiet - amber stays reserved for overwrites).
+        const skips = new Map();
+        const zeroApplicableDays = new Set();
+        let batchSkipCount = 0;
+        for (const d of days) {
+          const daySkips = new Set();
+          let applicable = 0;
+          for (const g of data.serviceGroups) {
+            for (const s of g.services) {
+              if (isInServiceOnDay(s, d.date)) {
+                applicable++;
+              } else {
+                daySkips.add(s.colIndex);
+                batchSkipCount++;
+              }
+            }
+          }
+          if (daySkips.size > 0) skips.set(d.date, daySkips);
+          if (applicable === 0) zeroApplicableDays.add(d.date);
+        }
+        // Per-service expand: emit one row per catalog service with
         // its projected value on that day.
         const perDayServices = (d) => {
           const rows = [];
@@ -3408,6 +3502,9 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             }}
             perDayServices={perDayServices}
             overwrites={overwrites}
+            skips={skips}
+            batchSkipCount={batchSkipCount}
+            zeroApplicableDays={zeroApplicableDays}
             isFeeAccount={isFeeAccount}
             acctName={acctObj?.name}
             saving={saving}
@@ -3425,18 +3522,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           meals source). Meals identical across days; revenue is
           effective-dated per day via day.priceAtDate. */}
       {bulkCustomReviewOverlayOpen && (() => {
-        // Same entries the write path will send.
+        // Same entries the write path will send. Attach svc for the
+        // archive-edge skip computation below.
         const entries = [];
         for (const g of data.serviceGroups) {
           for (const s of g.services) {
             const val = bulkValues[s.colIndex];
             if (val !== undefined && val !== "") {
-              entries.push({ colIndex: s.colIndex, serviceName: s.name, value: Number(val) });
+              entries.push({ colIndex: s.colIndex, serviceName: s.name, value: Number(val), svc: s });
             }
           }
         }
-        const totalMealsPerDay = entries.reduce((s, e) => s + (Number(e.value) || 0), 0);
-
         const days = [];
         for (const dk of bulkSelected) {
           const d = activeDrillDays?.find(x => x.date === dk) || dayMap?.[dk];
@@ -3444,18 +3540,34 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
         }
         days.sort((a, b) => a.date.localeCompare(b.date));
 
+        // Archive-edge guard (2026-07-25): meals + rev computed per-day
+        // through the same isInServiceOnDay filter as the write path.
+        // Header totals and per-row meals reflect the POST-guard
+        // payload so the operator does not see numbers the write will
+        // not produce.
+        const perDayMeals = (d) => {
+          let n = 0;
+          for (const e of entries) {
+            if (!isInServiceOnDay(e.svc, d.date)) continue;
+            n += Number(e.value) || 0;
+          }
+          return n;
+        };
         const perDayRev = (d) => {
           let rev = 0;
           for (const e of entries) {
+            if (!isInServiceOnDay(e.svc, d.date)) continue;
             const price = d.priceAtDate?.[e.colIndex] ?? 0;
             rev += (Number(e.value) || 0) * price;
           }
           return rev;
         };
 
-        let totRev = 0;
-        for (const d of days) totRev += Math.round(perDayRev(d));
-        const totMeals = totalMealsPerDay * days.length;
+        let totRev = 0, totMeals = 0;
+        for (const d of days) {
+          totRev += Math.round(perDayRev(d));
+          totMeals += perDayMeals(d);
+        }
 
         const overwrites = new Map();
         for (const d of days) {
@@ -3476,6 +3588,29 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             overwrites.set(d.date, { prevMeals, prevServices, isNoService });
           }
         }
+        // Archive-edge skip map (2026-07-25). Same predicate the write
+        // path applies at handleBulkSave:~1836 (in-place filter);
+        // review-stated skips are exactly the pairs the write drops.
+        // Custom-review skips are scoped to TYPED entries only - a
+        // service the operator did not type into is not in the write
+        // payload, so it is not a "skip" (there is no drop to state).
+        const skips = new Map();
+        const zeroApplicableDays = new Set();
+        let batchSkipCount = 0;
+        for (const d of days) {
+          const daySkips = new Set();
+          let applicable = 0;
+          for (const e of entries) {
+            if (isInServiceOnDay(e.svc, d.date)) {
+              applicable++;
+            } else {
+              daySkips.add(e.colIndex);
+              batchSkipCount++;
+            }
+          }
+          if (daySkips.size > 0) skips.set(d.date, daySkips);
+          if (applicable === 0) zeroApplicableDays.add(d.date);
+        }
         return (
           <BulkReview
             cardRef={bulkCustomReviewOverlayCardRef}
@@ -3484,13 +3619,16 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
             subtitle={`Custom values - ${days.length} day${days.length !== 1 ? "s" : ""}`}
             statusPill="custom totals"
             headerTotals={{ meals: totMeals, revenue: totRev }}
-            perDayRow={(d) => ({ meals: totalMealsPerDay, revenue: perDayRev(d) })}
+            perDayRow={(d) => ({ meals: perDayMeals(d), revenue: perDayRev(d) })}
             perDayServices={() => entries.map(e => ({
               serviceId: e.colIndex,
               serviceName: e.serviceName,
               value: e.value,
             }))}
             overwrites={overwrites}
+            skips={skips}
+            batchSkipCount={batchSkipCount}
+            zeroApplicableDays={zeroApplicableDays}
             isFeeAccount={isFeeAccount}
             acctName={acctObj?.name}
             saving={saving}

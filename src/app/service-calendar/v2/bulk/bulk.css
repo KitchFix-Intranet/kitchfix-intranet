@@ -96,6 +96,42 @@
   font-weight: var(--sc2-wt-bold);
   color: var(--sc2-ink);
 }
+/* Archive-edge guard (2026-07-25) - skip signals. Informational only,
+   NOT destructive. Muted treatment, existing tokens, no amber (amber
+   is reserved for overwrites). Detail-row --skipped variant reuses
+   the base row layout; only the trailing cell changes. */
+.sc-bulk-review-skipnote {
+  margin: 0 0 var(--sc2-space-3);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  background: var(--sc2-surface-sunken);
+  border: var(--sc2-border-thin) solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  line-height: 1.4;
+}
+.sc-bulk-review-skipmark {
+  grid-column: 2 / -1;
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  font-style: italic;
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-bulk-review-item--not-offered .sc-bulk-review-date,
+.sc-bulk-review-item--not-offered .sc-bulk-review-meals,
+.sc-bulk-review-item--not-offered .sc-bulk-review-rev {
+  color: var(--sc2-ink-muted);
+}
+.sc-bulk-review-detail-row--skipped .sc-bulk-review-detail-name {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
+}
+.sc-bulk-review-detail-skip {
+  font-variant-numeric: normal;
+  font-weight: var(--sc2-wt-regular);
+  font-style: italic;
+  color: var(--sc2-ink-muted);
+}
 
 /* Footer contract line - "Saves as one batch. All N or none." above
    the action bar so the operator reads it BEFORE the primary button. */

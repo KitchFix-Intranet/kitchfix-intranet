@@ -19,6 +19,15 @@
 //   overwrites    - Map<date, { prevMeals, prevServices }> for days already
 //                   having actuals (counts only; no currency per standing
 //                   rule + owner ruling on destructive-context numbers)
+//   skips              - Map<date, Set<serviceId>> - (service, day) pairs the
+//                        write path will refuse (archive-edge guard, 2026-07-25).
+//                        Mount-site-computed, matches the write predicate.
+//   batchSkipCount     - total pair-count across the batch. Informational
+//                        line above the list, quiet treatment; amber stays
+//                        reserved for overwrites.
+//   zeroApplicableDays - Set<date> for days where every entry is skipped.
+//                        Row shows "No services offered this day" and is
+//                        excluded from the writable-N footer count.
 //   isFeeAccount  - hides revenue in the row's right cluster
 //   acctName      - scoreboard account label
 //   saving        - disables Confirm
@@ -45,6 +54,9 @@ export default function BulkReview({
   perDayRow,
   perDayServices,
   overwrites,
+  skips,
+  batchSkipCount = 0,
+  zeroApplicableDays,
   isFeeAccount,
   acctName,
   saving,
@@ -62,6 +74,11 @@ export default function BulkReview({
   });
 
   const overwriteCount = overwrites ? overwrites.size : 0;
+  // Writable-N = days that will produce at least one row. Excludes
+  // zero-applicable days (all pairs archived). Footer "All N or none"
+  // reflects the post-guard payload, not the pre-guard form.
+  const zeroApplicableCount = zeroApplicableDays ? zeroApplicableDays.size : 0;
+  const writableDays = days.length - zeroApplicableCount;
 
   return (
     <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onBack(); }}>
@@ -101,6 +118,12 @@ export default function BulkReview({
           </div>
 
           <div className="sc-day-body">
+            {batchSkipCount > 0 && (
+              <p className="sc-bulk-review-skipnote" role="note">
+                {batchSkipCount.toLocaleString()} value{batchSkipCount === 1 ? "" : "s"} will be skipped on days where the service is not offered.
+              </p>
+            )}
+
             {overwriteCount > 0 && (() => {
               // Split the batch line: some overwrites are entered days
               // with real counts; others are no-service cancellations
@@ -134,8 +157,10 @@ export default function BulkReview({
                 const row = perDayRow(d);
                 const isOpen = expanded.has(d.date);
                 const ow = overwrites?.get(d.date);
+                const daySkips = skips?.get(d.date);
+                const isZeroApplicable = zeroApplicableDays?.has(d.date);
                 return (
-                  <li key={d.date} className={`sc-bulk-review-item sc-bulk-review-item--expandable${isOpen ? " sc-bulk-review-item--open" : ""}`}>
+                  <li key={d.date} className={`sc-bulk-review-item sc-bulk-review-item--expandable${isOpen ? " sc-bulk-review-item--open" : ""}${isZeroApplicable ? " sc-bulk-review-item--not-offered" : ""}`}>
                     <div
                       className="sc-bulk-review-row sc-bulk-review-row--toggle"
                       role="button"
@@ -154,7 +179,11 @@ export default function BulkReview({
                           <span className="sc-bulk-review-rev">{fmt$(row.revenue)}</span>
                         )}
                       </span>
-                      {ow && (
+                      {isZeroApplicable ? (
+                        <span className="sc-bulk-review-skipmark">
+                          No services offered this day - will not be written
+                        </span>
+                      ) : ow ? (
                         <span className="sc-bulk-review-overwrite">
                           {"⚠ "}
                           {ow.isNoService ? (
@@ -163,16 +192,26 @@ export default function BulkReview({
                             <>replacing <strong>{ow.prevMeals.toLocaleString()} meal{ow.prevMeals === 1 ? "" : "s"}</strong>{ow.prevServices > 0 ? ` across ${ow.prevServices} service${ow.prevServices === 1 ? "" : "s"}` : ""}</>
                           )}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     {isOpen && (
                       <ul className="sc-bulk-review-detail">
-                        {perDayServices(d).map(en => (
-                          <li key={en.serviceId} className="sc-bulk-review-detail-row">
-                            <span className="sc-bulk-review-detail-name">{en.serviceName}</span>
-                            <span className="sc-bulk-review-detail-qty">{Number(en.value).toLocaleString()}</span>
-                          </li>
-                        ))}
+                        {perDayServices(d).map(en => {
+                          const skipped = daySkips?.has(en.serviceId);
+                          return (
+                            <li
+                              key={en.serviceId}
+                              className={`sc-bulk-review-detail-row${skipped ? " sc-bulk-review-detail-row--skipped" : ""}`}
+                            >
+                              <span className="sc-bulk-review-detail-name">{en.serviceName}</span>
+                              {skipped ? (
+                                <span className="sc-bulk-review-detail-skip">not offered this day</span>
+                              ) : (
+                                <span className="sc-bulk-review-detail-qty">{Number(en.value).toLocaleString()}</span>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </li>
@@ -181,7 +220,7 @@ export default function BulkReview({
             </ul>
 
             <p className="sc-bulk-review-footer-note">
-              Saves as one batch. All {days.length} or none.
+              Saves as one batch. All {writableDays.toLocaleString()} or none.
             </p>
           </div>
 
@@ -190,7 +229,7 @@ export default function BulkReview({
               <button className="sc-btn sc-btn--outline" onClick={onBack}>Go back</button>
               <button
                 className="sc-btn sc-btn--primary"
-                disabled={saving || days.length === 0}
+                disabled={saving || writableDays === 0}
                 onClick={onConfirm}
               >
                 {saving ? "Saving..." : confirmLabel}
