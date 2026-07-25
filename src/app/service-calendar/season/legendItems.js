@@ -147,17 +147,22 @@ const HOMESTAND = [
   },
 ];
 
+// P2B-b (2026-07-25) - FEE branch aligned to the confirm vocabulary
+// per owner ruling. Only STL-FL renders this branch (isFeeAccount &&
+// !hasHomestandSchedule per getLegendItems below). HOMESTAND (MLB fee
+// + MiLB AAA) uses its own array and stays byte-identical; PDC / MiLB
+// / MLB legends unchanged.
 const FEE = [
   {
     mod: "entered",
     icon: "",
-    label: "Entered",
+    label: "Confirmed",
     description: "Service confirmed, actuals recorded.",
   },
   {
     mod: "needs-entry",
     icon: "✎",
-    label: "Needs entry",
+    label: "Needs confirmation",
     description: "Past day with no actuals yet.",
   },
   {
