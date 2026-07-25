@@ -135,7 +135,7 @@ export default function BulkEntry({
                   groupSummary={groupSummary}
                   projectedGroupSummary={projectedGroupSummary}
                   expanded={true}
-                  hideAmount
+                  variant="bulk"
                 />
               ))}
             </div>

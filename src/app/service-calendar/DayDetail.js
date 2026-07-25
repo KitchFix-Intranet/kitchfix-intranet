@@ -219,6 +219,18 @@ export const LEDGER_HEAD_NO_AMOUNT = (
   </div>
 );
 
+// 2-col fee variant for fee-no-dollar accounts (STL-FL). NO Rate cell
+// (prices are $0 by design; a rate column would leak "$0.00 / meal"
+// on every row) and NO Amount cell. Column word is "Served" per the
+// vocab swap, not "Qty". Pairs with .sc-day-ledger--fee on the
+// wrapper (dayEntryV2.css). Phase 2B gate-2 fix (2026-07-25).
+export const LEDGER_HEAD_FEE = (
+  <div className="sc-day-ledger-head" aria-hidden="true">
+    <span className="sc-lh-name">Service</span>
+    <span className="sc-lh-qty">Served</span>
+  </div>
+);
+
 // In-service predicate: a (service, day) pair is in service iff the service
 // has no archive date OR the day is on or before its archive date. Mirrors
 // the sc_daily_revenue view's catalog JOIN (sc-6b) exactly. Used to gate

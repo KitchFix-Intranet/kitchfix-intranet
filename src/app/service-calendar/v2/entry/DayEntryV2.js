@@ -50,6 +50,7 @@ import {
   renderRate,
   LEDGER_HEAD,
   LEDGER_HEAD_NO_AMOUNT,
+  LEDGER_HEAD_FEE,
   isInServiceOnDay,
 } from "../../DayDetail";
 // Phase 2B (2026-07-25): fee-no-dollar variant. Sibling rail + vocab
@@ -620,6 +621,32 @@ function DayEntryV2({
     return { meals: served, revenue: 0 };
   }, [day.projected, day.date]);
 
+  // Phase 2B gate-2 (2026-07-25): fee mirror of `enteredTotals` /
+  // `dayProjection`. Extracted per owner's L7 ruling - three sites
+  // (actions total, MobileBooksBar value, success screen) previously
+  // pasted the same archive-gated served-sum loop; a drift risk that
+  // was consistent by luck. All three now read this single memo. No
+  // behavior change; identical rendered numbers by construction.
+  //
+  // Fee served derivations ignore isFlatFee (unlike per-meal's
+  // enteredTotals/dayProjection which skip isFlatFee services because
+  // they carry no per-meal count). On a fee account the operator's
+  // typed value IS the served count for every line.
+  const feeServedTotals = useMemo(() => {
+    let entered = 0, scheduled = 0;
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        scheduled += day.projected[s.colIndex] ?? 0;
+        if (touched.has(s.colIndex)) {
+          const v = editValues[s.colIndex];
+          if (v !== "" && v !== undefined) entered += Number(v) || 0;
+        }
+      }
+    }
+    return { entered, scheduled };
+  }, [serviceGroups, day.projected, day.date, touched, editValues]);
+
   // Confirm handler = DayDetail.js:664-735 executeSave verbatim (minus
   // the setShowReview lines that no longer apply on the v2 path -
   // Review screen deleted).
@@ -872,26 +899,15 @@ function DayEntryV2({
   // Success state - after clean save, celebration screen.
   // Fee-no-dollar variant: no currency hero; served count is the hero,
   // "Confirmed" replaces "Recorded" in the title (Ruling 3, vocabulary).
+  // Served count reads feeServedTotals.entered (post-save = touched values).
   if (justSaved) {
-    let feeServed = 0;
-    if (feeNoDollar) {
-      for (const g of serviceGroups) {
-        for (const s of g.services) {
-          if (!isInServiceOnDay(s, day.date)) continue;
-          const v = editValues[s.colIndex];
-          if (v !== "" && v !== undefined && touched.has(s.colIndex)) {
-            feeServed += Number(v) || 0;
-          }
-        }
-      }
-    }
     return (
       <div className="sc-v2-entry sc-v2-entry--success" role="status" aria-live="polite">
         <div className="sc-v2-entry-success-inner">
           <div className="sc-v2-entry-success-check">✓</div>
           <h3 className="sc-v2-entry-success-title">{feeNoDollar ? "Confirmed" : "Recorded"}</h3>
           <span className="sc-v2-entry-success-hero">
-            {feeNoDollar ? `${feeServed.toLocaleString()} served` : fmt$(summary.revenue)}
+            {feeNoDollar ? `${feeServedTotals.entered.toLocaleString()} served` : fmt$(summary.revenue)}
           </span>
           <p className="sc-v2-entry-success-sub">
             {feeNoDollar
@@ -1059,7 +1075,7 @@ function DayEntryV2({
               onFillProjections={fillGroupWithProjections}
               groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
               projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
-              hideAmount={feeNoDollar}
+              variant={feeNoDollar ? "fee" : undefined}
               unit={feeNoDollar ? "served" : "meals"}
               expanded={true}
             />
@@ -1080,7 +1096,7 @@ function DayEntryV2({
                   onFillProjections={fillGroupWithProjections}
                   groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
                   projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
-                  hideAmount={feeNoDollar}
+                  variant={feeNoDollar ? "fee" : undefined}
                   unit={feeNoDollar ? "served" : "meals"}
                   expanded={false}
                 />
@@ -1178,27 +1194,16 @@ function DayEntryV2({
           {feeNoDollar ? (
             <>
               {/* Fee-no-dollar: no currency in the actions total.
-                  The label reads "Served" and the value is the sum
-                  of typed counts (entered) or projections (pristine). */}
+                  Reads feeServedTotals (single memo, L7 consolidation
+                  2026-07-25). Same numbers as MobileBooksBar and
+                  success screen by construction. */}
               <span className="sc-v2-entry-actions-total-label">
                 {hasTouchedAny ? "Served" : "Scheduled"}
               </span>
               <span className="sc-v2-entry-actions-total-value">
-                {(() => {
-                  let n = 0;
-                  for (const g of serviceGroups) {
-                    for (const s of g.services) {
-                      if (!isInServiceOnDay(s, day.date)) continue;
-                      if (hasTouchedAny) {
-                        const v = editValues[s.colIndex];
-                        if (v !== "" && v !== undefined && touched.has(s.colIndex)) n += Number(v) || 0;
-                      } else {
-                        n += day.projected[s.colIndex] ?? 0;
-                      }
-                    }
-                  }
-                  return `${hasTouchedAny ? "" : "~"}${n.toLocaleString()} served`;
-                })()}
+                {hasTouchedAny ? "" : "~"}
+                {(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()}
+                {" served"}
               </span>
             </>
           ) : (
@@ -1246,21 +1251,7 @@ function DayEntryV2({
         barLabel={hasTouchedAny ? (feeNoDollar ? "Confirmed" : "Entered") : (feeNoDollar ? "Scheduled" : "Projected")}
         barValue={
           feeNoDollar
-            ? (() => {
-                let n = 0;
-                for (const g of serviceGroups) {
-                  for (const s of g.services) {
-                    if (!isInServiceOnDay(s, day.date)) continue;
-                    if (hasTouchedAny) {
-                      const v = editValues[s.colIndex];
-                      if (v !== "" && v !== undefined && touched.has(s.colIndex)) n += Number(v) || 0;
-                    } else {
-                      n += day.projected[s.colIndex] ?? 0;
-                    }
-                  }
-                }
-                return `${hasTouchedAny ? "" : "~"}${n.toLocaleString()} served`;
-              })()
+            ? `${hasTouchedAny ? "" : "~"}${(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()} served`
             : `${hasTouchedAny ? "" : "~"}${fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}`
         }
         barStatus={`${enteredCount} of ${totalToEnter} ${feeNoDollar ? "confirmed" : "entered"}`}
@@ -1293,19 +1284,38 @@ function DayEntryV2({
 // a parallel .bulk-* variant - the same classes drive both surfaces,
 // which is what the computed-style diff on gate protects.
 //
-// hideAmount prop: bulk custom-entry omits the per-day Amount column
-// (amounts vary by day). ServiceRow drops its amount cell; group
-// footer drops its amount span; caller must apply the CSS variant
-// class .sc-day-ledger--no-amount on the wrapper (defined in
-// dayEntryV2.css). Match / projections / entry stays 4-col.
+// variant prop (Phase 2B gate-2, 2026-07-25) selects the table shape:
+//   undefined / "perMeal"  4-col Service · Rate · Qty · Amount
+//   "bulk"                 3-col Service · Rate · Qty
+//                          (bulk custom-entry: amounts vary by day)
+//   "fee"                  2-col Service · Served
+//                          (fee-no-dollar: prices are $0; rate cell
+//                           would leak "$0.00 / meal" on every row)
+//
+// Single enum by design - it is IMPOSSIBLE to ask for a fee table
+// that keeps the rate cell via prop mistake. ServiceRow reads the
+// same variant to drop matching cells; caller applies the matching
+// CSS wrapper class via the same variant.
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
   groupSummary, projectedGroupSummary,
   expanded,
-  hideAmount = false,
-  unit = "meals",   // Phase 2B: fee-no-dollar variant passes "served"
+  variant,           // undefined | "perMeal" | "bulk" | "fee"
+  unit = "meals",    // Phase 2B: fee-no-dollar variant passes "served"
 }) {
+  const wrapperClass = variant === "fee"
+    ? "sc-day-ledger sc-day-ledger--fee"
+    : variant === "bulk"
+      ? "sc-day-ledger sc-day-ledger--no-amount"
+      : "sc-day-ledger";
+  const head = variant === "fee"
+    ? LEDGER_HEAD_FEE
+    : variant === "bulk"
+      ? LEDGER_HEAD_NO_AMOUNT
+      : LEDGER_HEAD;
+  const hideAmount = variant === "bulk" || variant === "fee";
+  const hideRate = variant === "fee";
   const gsEntered = groupSummary(group);
   const gsProjected = projectedGroupSummary(group);
   const hasProjectedRevenue = gsProjected.revenue > 0;
@@ -1331,8 +1341,8 @@ export function GroupBlock({
           )}
         </div>
       </header>
-      <div className={`sc-day-ledger${hideAmount ? " sc-day-ledger--no-amount" : ""}`}>
-        {hideAmount ? LEDGER_HEAD_NO_AMOUNT : LEDGER_HEAD}
+      <div className={wrapperClass}>
+        {head}
         {group.services.map(s => (
           <ServiceRow
             key={s.colIndex}
@@ -1343,6 +1353,7 @@ export function GroupBlock({
             flashDelay={flashMap?.get(s.colIndex)}
             onChange={onChange}
             hideAmount={hideAmount}
+            hideRate={hideRate}
           />
         ))}
       </div>
@@ -1364,9 +1375,14 @@ export function GroupBlock({
 // inherits automatically. See DayDetail.js:837-914 for the shape.
 // Exported alongside GroupBlock (2026-07-24, owner Ruling 2) for
 // bulk custom-entry reuse.
-// hideAmount omits the trailing amount cell; caller's ledger wrapper
-// must carry .sc-day-ledger--no-amount so the subgrid is 3-col.
-export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false }) {
+//
+// Cell drops (GroupBlock composes these from its `variant` prop):
+//   hideAmount  - drop the trailing amount cell (bulk + fee)
+//   hideRate    - drop the rate cell (fee only; Phase 2B gate-2)
+// Caller's ledger wrapper must carry the matching subgrid variant:
+//   .sc-day-ledger--no-amount (3-col) for hideAmount
+//   .sc-day-ledger--fee (2-col) for both hideAmount and hideRate
+export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false }) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
@@ -1420,7 +1436,9 @@ export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange
       <div className="sc-day-row-left">
         <span className="sc-day-row-name">{svc.name}</span>
       </div>
-      <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
+      {!hideRate && (
+        <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
+      )}
       {qtyCell}
       {!hideAmount && (
         <span className="sc-day-row-amount">
