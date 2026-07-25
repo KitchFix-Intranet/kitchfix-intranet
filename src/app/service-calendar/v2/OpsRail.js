@@ -84,14 +84,19 @@ export default function OpsRail({
   const [showAllQueue, setShowAllQueue] = useState(false);
   const iso = today || todayISO();
 
-  if (loading) {
-    return (
-      <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
-        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED"} meta="fetching data" />
-        <RailProgress pct={0} />
-      </RailShell>
-    );
-  }
+  // P3-A gate defect 1 fix (2026-07-25): the loading early-return
+  // unmounted the ring on the STL-FL branch during refetch, killing
+  // the ambient sweep. See DrillRail's fix block for the full node-
+  // stability rationale. MLB branch (hasHomestandSchedule) keeps
+  // <RailProgress> - the ref is only meaningful on !hasHomestandSchedule.
+  //
+  // Ring pct + caption are derived below (heroPct, heroCaption) once
+  // the full hero-derivation block runs. The lastRingRef capture
+  // happens AFTER those variables exist; the ringData fallback pattern
+  // then feeds the render. loading-with-no-prior-ring still falls
+  // through to the pre-P3-A skeleton (via the `!ringData` clause on
+  // the check below), so first-load behavior is unchanged.
+  const lastRingRef = useRef(null);
 
   // ─── Hero ─────────────────────────────────────────────────
   // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
@@ -207,6 +212,33 @@ export default function OpsRail({
   // spec calls for on a flat-fee account.
   const contractInfo = !hasHomestandSchedule ? getContractInfo(accountKey) : null;
 
+  // P3-A gate defect 1 fix (2026-07-25): capture last ring values on
+  // the STL-FL branch. MLB uses <RailProgress> and does not need this.
+  // Fresh-metrics test: not loading + not incomplete + has real total
+  // (heroPct=0 with total=0 is the pre-load state, not a valid ring
+  // value to hold). Fallback ringData is null on !hasHomestandSchedule
+  // when never-loaded (loading skeleton fires below via early-return).
+  const haveFreshRingMetrics = !hasHomestandSchedule && !incomplete && !loading && scopedTotal > 0;
+  if (haveFreshRingMetrics) {
+    lastRingRef.current = { pct: heroPct, complete: heroPct === 100, caption: heroCaption };
+  }
+  const ringData = !hasHomestandSchedule
+    ? (haveFreshRingMetrics
+        ? { pct: heroPct, complete: heroPct === 100, caption: heroCaption }
+        : lastRingRef.current)
+    : null;
+
+  // Loading + no prior ringData = true first-load. Fall back to the
+  // pre-P3-A skeleton so no ring flash before real data.
+  if (loading && (hasHomestandSchedule || !ringData)) {
+    return (
+      <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
+        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED"} meta="fetching data" />
+        <RailProgress pct={0} />
+      </RailShell>
+    );
+  }
+
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
@@ -220,7 +252,14 @@ export default function OpsRail({
       {!incomplete && (
         hasHomestandSchedule
           ? <RailProgress pct={heroPct} complete={heroPct === 100} />
-          : <RailRing pct={heroPct} showLabel={false} complete={heroPct === 100} ariaLabel={heroCaption} />
+          : ringData && (
+              <RailRing
+                pct={ringData.pct}
+                showLabel={false}
+                complete={ringData.complete}
+                ariaLabel={ringData.caption}
+              />
+            )
       )}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
