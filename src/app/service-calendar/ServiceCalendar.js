@@ -2919,7 +2919,32 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           //   per-meal -> DrillRail (money hero + weeks) with an
           //     optional HOMESTANDS section when hasHomestandSchedule
           //     (CIN-KY is the proof case).
-          const useDrillRail = scV2 && !isAdminView && !!periodMetrics;
+          // P3-A gate 3 fix (2026-07-28): dropped the `!!periodMetrics`
+          // clause. When handleSave delete-invalidates monthCache[mk],
+          // periodDays goes null for ~300-600ms while sc-load refetches;
+          // periodMetrics=null; `!!periodMetrics=false`; useDrillRail
+          // flips false; the rail branch bails; DrillRail/OpsRail
+          // UNMOUNTS. When new metrics arrive it remounts as a FRESH
+          // instance. Fresh instance = fresh useRef(null) = new
+          // <circle className="sc-rail-ring-fg"> DOM node. CSS
+          // transition needs the SAME node with an old value; there is
+          // none, so ringSweep never runs. Verified by code-read of
+          // handleSave -> monthCache -> periodDays -> periodMetrics ->
+          // useDrillRail chain.
+          //
+          // Fix: keep the rail mounted always when scV2 + !isAdminView.
+          // DrillRail/OpsRail handle null periodMetrics gracefully via
+          // the loading skeleton + lastRingRef fallback (P3-A gate 2).
+          // Same rail instance persists across save cycles = same
+          // <circle> node = transition fires on stroke-dashoffset old->
+          // new.
+          //
+          // Blast radius: TRUE first-load now shows the rail loading
+          // skeleton (RailHero "loading..." + RailProgress pct=0) briefly
+          // instead of no rail. Slight visual improvement, not a
+          // regression. Admin view still gated by !isAdminView; non-
+          // scV2 still gated by scV2.
+          const useDrillRail = scV2 && !isAdminView;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
             router.push(buildScUrl({
@@ -3123,7 +3148,12 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
               focusTargetDate={focusTargetDate}
             />
           );
-          const useDrillRail = scV2 && !isAdminView && !!monthMetrics;
+          // P3-A gate 3 fix (2026-07-28): same un-gate as the period-
+          // view mount above. See :2922+ for the full trace and blast-
+          // radius statement. Month view has the same monthCache-
+          // invalidate -> monthDays-null -> monthMetrics-null -> rail-
+          // unmount chain.
+          const useDrillRail = scV2 && !isAdminView;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
             router.push(buildScUrl({
