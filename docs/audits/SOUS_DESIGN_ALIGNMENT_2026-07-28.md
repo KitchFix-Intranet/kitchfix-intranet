@@ -1384,3 +1384,277 @@ Companion CSS-side beat durations at
 All seven groups covered. Values computed rather than estimated wherever
 runtime math applied; the CPL computation explicitly names its method
 (0.5 to 0.55 em advance for Inter body Latin) and shows the range.
+
+---
+
+# Appendix B - Prior OPD design intent (2026-07-28)
+
+> **Purpose.** Every deliberate past decision that constrains or should
+> inform the OPD reskin, extracted from the repo's own OPD/Playbook
+> documentation so the reskin honors what was thought through before -
+> or, where it consciously breaks with prior intent, does so on the
+> record. Observations only. Rulings are Kevin's.
+>
+> **Discovery method.** Broad `grep` across `docs/**/*.md`,
+> `content/documents/*.mdx`, `src/app/playbook/**`, `src/app/api/playbook/**`
+> for terms `playbook`, `OPD`, `doc reader`, `Oswald`, `print`, `STD-001`,
+> `pb-`, `Bebas`, `pb-print-cover`. Judgment-filtered from ~90 hits to
+> the docs actually about OPD/Playbook design or the print pipeline
+> that couples to it. `[doc-read]` = repo doc; `[code-read]` = source file.
+>
+> **Verdict summary.** STD-001 v1.3 is the binding format standard for
+> every OPD document, on screen and in print. STD-004 governs the
+> repository system. Together they anchor most of the design intent.
+> Two orphans surfaced (Bebas Neue never a screen face - always a
+> print-pipeline face; `--kf-playbook-teal-dark` used ~9x on the reader
+> vs `-teal` used dominantly - both consumed, no drift). Two conflicts
+> with the reskin direction called out for Kevin to rule on: the
+> `1024px` reader shell vs a 1520 universe, and Oswald as the display
+> face vs a navy-only reskin.
+
+## B.1 Documents discovered - reviewed vs skipped
+
+### Reviewed (design-relevant)
+
+- `[doc-read] content/documents/STD-001.mdx` - **binding** Documentation Format Standard v1.3, SLT-approved 2026-06-17.
+- `[doc-read] content/documents/STD-002.mdx` - **binding** Visual Communication Standard v0.3 (posters, POST, INFO, SIGN).
+- `[doc-read] content/documents/STD-004.mdx` - **binding** Documentation Repository Standard v1.4 (classes, shelves, access tiers).
+- `[doc-read] docs/OPD_PLAN.md` - working plan (296 lines).
+- `[doc-read] docs/opd/OPD_CC_HANDOFF.md` - builder handoff (120 lines).
+- `[doc-read] docs/opd/PLAYBOOK_ENGINE_AUDIT.md` - engine audit (534 lines).
+- `[doc-read] docs/opd/BUILD_DASHBOARD_ENGINE_MAP_CC.md` - engine-deep field map.
+- `[doc-read] docs/opd/BUILD_DASHBOARD_AUDIT_CC.md` - independent design audit of the Build Dashboard.
+- `[doc-read] docs/opd/foundation/PHASE_A_PR1_HANDOFF.md` - MDX foundation Phase A landing.
+- `[doc-read] docs/opd/audit/README.md` - Phase 2 Pass 0/1/2 audit inventory.
+- `[doc-read] docs/opd/audit/CRITICAL_SUMMARY.md` - Phase 2 audit critical findings.
+- `[doc-read] docs/phase2/OPD_Phase2_Master_Charter.md` - Phase 2 charter.
+- `[doc-read] docs/phase2/06_CONTENT_FOUNDATION_BRIEF_v2.md` - content-as-CCM reframe.
+- `[doc-read] docs/phase2/00_START_HERE_Project_Handoff.md` - project handoff front door.
+- `[doc-read] docs/audits/OPD_LIVE_CONTENT_GAPS_2026-07-24.md` - live content gaps follow-up.
+- `[code-read] src/app/playbook/playbook.css` - screen + print CSS.
+- `[code-read] src/app/playbook/d/[docId]/DocumentFullPageClient.js` - reader with print-only cover.
+- `[code-read] src/lib/print/assets.js` - Bebas Neue print asset (print pipeline).
+
+### Skipped (with reason)
+
+- `content/documents/STD-003.mdx` - Internal Communication Standard. Governs channel selection and tone; not a document-presentation standard, not design-relevant. **Skipped: out of scope.** `[doc-read]` confirmed at head only.
+- `docs/design/PDC_PRINT_REDESIGN.md` - Service Calendar PDC print, PARKED. Discusses SC print poster grammar, not OPD document rendering. **Skipped: SC-scoped, not OPD.**
+- `docs/design/PRINT_DATA_CENSUS.md` - SC print data census. **Skipped: SC-scoped.**
+- `docs/design/V3_OVERVIEW_SPEC.md`, `docs/design/SC_PRINT_SPEC_v1/v2.html` - SC design specs. **Skipped: SC.**
+- `docs/DESIGN_AUDIT_LEDGER.md` - Service Calendar audit ledger. **Skipped: SC only, contains no OPD findings.**
+- `docs/SC_DESIGN_TOKEN_README.md` - SC-scoped design language reference (drill-in alignment work). **Skipped: SC-scoped**. Confirms `--accent-sc = --accent-playbook = #0F6E56` intentional shared operational green; noted in Appendix A.
+- `docs/phase2/01-05, 07` numbered briefs + charter appendices - engineering runbook, code verification report, chunking readiness, etc. Read heads to confirm topic; none contained design intent Appendix B doesn't already have from the charter + foundation brief. **Skipped: engineering-scoped, not design-scoped.**
+- `docs/opd/audit/DEPENDENCY_MAP.md`, `LIBRARY_UNDERSTANDING.md`, `LIBRARY_FINDINGS.md`, `REMEDIATION_WORKLIST.md`, `ACTUALS_NEEDED.md`, `PUBLISH_READINESS.md`, `scorecards/*` - **Skipped: content-audit findings, not design intent.** Their outputs feed the reskin's data model but not its visual language.
+- `docs/opd/foundation/F1-F6.5` reports - **Skipped: MDX-tokenization mechanics, not design intent.** Referenced only to confirm the MDX-canonical direction is settled.
+- `docs/archive/handoffs/*`, `docs/archive/specs/*`, `docs/archive/migration/*` - **Skipped: historical**. Sampled `DOC_AUDIT_2026-05-29.md` - preserved for the record that the original documents-library migration was never committed (referenced in OPD_CC_HANDOFF as the reason for greenfield PG-only).
+
+## B.2 STD-001 v1.3 - the binding format standard
+
+**What it is.** `[doc-read] content/documents/STD-001.mdx:1-48` frontmatter: status Live, version 1.3, SLT-approved 2026-06-17, owner Sr Director of Operations, effective_date 2026-06-17, `applies_to: company-wide`. This is the format standard for every KitchFix internal document, on screen and in print. Sibling standards: STD-002 (visual comm), STD-003 (internal comm, pending), STD-004 (repo standard).
+
+**Design decisions still live** (verbatim citations).
+
+- **One source, two renderings.** "Every document is authored once as an MDX file. That single source produces two renderings, both governed by this Standard: Screen (the on-screen reader in The Playbook) and Print / PDF (the printed page or saved PDF, produced through the browser's print-to-PDF). The two renderings are siblings: same type system, same hierarchy, same brand, same callouts. They differ only where the medium demands it." `[doc-read] content/documents/STD-001.mdx:58-65`.
+- **Word / DOCX is retired.** "Print-to-PDF replaces it - the same way Google Drive hosting was retired in favor of MDX-rendered content." `[doc-read] content/documents/STD-001.mdx:67`.
+- **Type system: Oswald (display) + Inter (body), identical across screen + print.** "The type system is now Oswald (display) + Inter (body), applied identically across screen and print. v1.1 specified Mulish for body; the screen reader never used Mulish (it used Inter), so the Standard and the live screen diverged from day one. v1.2 resolves the divergence by making Inter the body face for both renderings." `[doc-read] content/documents/STD-001.mdx:137, 351-353`.
+- **Fonts, verbatim rule.** "Display - Oswald Medium. Document titles (cover), section opener titles (H1-equivalents), the section eyebrow label. Body - Inter (Regular / SemiBold / Bold). All other text. Fallback - Oswald falls to a condensed sans, then Arial; Inter falls to system sans, then Arial. One type system, both renderings. A document's type looks identical on screen and in print." `[doc-read] content/documents/STD-001.mdx:141-144`.
+- **Print type scale (the reference).** `[doc-read] content/documents/STD-001.mdx:150-162`. Cover Title 44pt Oswald Bold Navy; Cover Subtitle 14pt italic Inter Navy; Section Label eyebrow 9pt CAPS Oswald SemiBold Navy; H1 24pt Oswald Bold Navy; H2 14pt Inter Bold Navy; H3 11pt Inter Bold Navy; SubHead 10.5pt Inter Bold Navy; Lede 11pt italic Inter Gray; Body 10.5pt Inter Black; Body Bold 10.5pt Inter Bold Navy; Caption 9pt italic Inter Dark Gray. Screen inherits the same relative hierarchy scaled to the reading column.
+- **The SubHead device.** "The missing rung between H3 and body - the workhorse that makes dense operational content scannable. Bold navy, no rule." Two flavors: Flavor A sentence + prose; Flavor B noun phrase + bullets. `[doc-read] content/documents/STD-001.mdx:164-169`.
+- **Heading rule weights (sky-blue #7DB9D5).** H1 = 1.5pt heavy sky-blue rule; H2 = 0.75pt medium; H3 = 0.5pt faint; SubHead = no rule. `[doc-read] content/documents/STD-001.mdx:195-200`.
+- **Locked color palette (unchanged from v1.1).** `[doc-read] content/documents/STD-001.mdx:202-222`. 15 named tokens, exact hex:
+  - Navy `#153968` - all headings, primary banners, accent borders, table header fills, SubHead text, bullet labels.
+  - Navy Dark `#0E2647` - callout body text, cover metadata.
+  - Sky Blue `#7DB9D5` - heading rules, cover accent rule, eyebrow numbers.
+  - Anchor Tint `#C4E3E8` - Anchor Banner fill.
+  - Navy Tint `#E3EDF7` - Promise Callout fill.
+  - Note Gray `#EEF6F8` - Note Callout fill, zebra rows.
+  - Red Tint `#FCE4E4` - Critical Banner fill.
+  - Red Dark `#8B1F1F` - Critical Banner text.
+  - Mid Gray `#6B7785` - Lede, em-dash separators, footer chrome.
+  - Dark Gray `#303030` - captions, header chrome.
+  - Black `#000000` - body text.
+  - White `#FFFFFF` - reverse text on Navy fills.
+  - Table Border `#CCCCCC` - all table cell borders.
+  - Cover Hairline `#D0D7E2` - cover metadata row rules.
+  - Link `#153968` - navy underlined.
+- **Four callouts, exact fills, must print (not just borders).** "They render identically on screen and print - colored fills must print, not just borders." `[doc-read] content/documents/STD-001.mdx:236`. Promise `#E3EDF7`; Anchor `#C4E3E8` with "ANCHOR" Oswald SemiBold 9pt CAPS Navy label; Critical `#FCE4E4` label + text Red Dark `#8B1F1F`; Note `#EEF6F8` label "NOTE" Dark Gray. Page-break behavior: callouts never split across a page break. `[doc-read] content/documents/STD-001.mdx:238-242`.
+- **Cover uses the Vertical Navy mark.** `[doc-read] content/documents/STD-001.mdx:224-230`.
+- **Cover reads from frontmatter.** "The cover metadata block is read directly from the document's MDX frontmatter - no field is typed onto the cover by hand." Blank fields render em-dashes. `[doc-read] content/documents/STD-001.mdx:272-284`.
+- **Related Documents auto-rendered from frontmatter.** `[doc-read] content/documents/STD-001.mdx:252-256`.
+- **TOC auto-generated from H1s.** "The TOC is generated automatically from the document's H1 section titles (H1 only - not sub-sections), with page numbers. It appears on documents over 10 pages and where the class requires it. On screen, an optional in-page section list may stand in for the TOC." `[doc-read] content/documents/STD-001.mdx:331-333`.
+- **Per-class anatomy.** Universal skeleton (Cover / header / footer / body / Related Documents) plus per-class add-ons: PB (TOC + How-to-use), STD (Approval block), POL (counsel review notation), AGR (signature page), SOP (Purpose and Scope + Process Table), TPL (Instructions + example row), CHK (one-page + signature line + no TOC), REF (one-page, visual-heavy, no TOC), REC (long-form, TOC if >10 pages, NOT one-page). `[doc-read] content/documents/STD-001.mdx:317-329`.
+- **The Standard's own anchor.** "Trust is what we sell. Every document we produce is either earning that trust or eroding it. The Standard exists so that every leader, on every account, in every season, can recognize a KitchFix document at a glance and trust the format to mean the same thing every time." `[doc-read] content/documents/STD-001.mdx:56`.
+
+**Print/PDF couplings.** Screen H1/H2/H3 use sky-blue rules (identical to print). Callout fills MUST print, not just borders (this exact requirement drives `-webkit-print-color-adjust: exact` on the callouts in `playbook.css:2458-2461`). Cover-metadata reads from frontmatter and renders em-dashes for blanks - the mechanism must persist through the reskin because it drives `[code-read] src/app/playbook/d/[docId]/DocumentFullPageClient.js:327-334` where `.pb-print-cover-*` classes read live frontmatter.
+
+## B.3 STD-002 v0.3 - Visual Communication Standard (posters, POST, INFO, SIGN)
+
+**What it is.** `[doc-read] content/documents/STD-002.mdx:1-51` Live, version 0.3, effective 2026-07-23. Frontmatter marks `access_level: restricted`. Governs POST (postings), POSTER (posters), INFO (infographics), SIGN (signage). Distinct visual register from body docs: large-format, scannable from across a room, often laminated, quarterly reissue.
+
+**Design decisions still live.**
+- Different register from STD-001. STD-001 governs body docs; STD-002 governs visual artifacts. Different type sizes, layouts, iconography vocabulary (Iconify-aggregated, Lucide-first).
+- 14pt body minimum for visual artifacts (tile-internal exception).
+- Brand palette plus 4-tier severity, with an "S2 hybrid amber-plus-red border" severity coding.
+- Iconify aggregation; Lucide-first vocabulary.
+- Bilingual EN+ES recommended for postings.
+- Office-printer-first for POST + INFO. Editable PPTX master + PDF published.
+- Alpha-channel logo verification (pixel-perfect requirement).
+
+**Print/PDF coupling.** All STD-002 artifacts print. PPTX + PDF are the shipped surfaces; screen surfaces are secondary. `document.print_required` column drives the "Print on POST" affordance in the current reader (`AdminClient.js` column list at `[doc-read] docs/opd/BUILD_DASHBOARD_AUDIT_CC.md` - the `print_required` column is called out as hidden but operational).
+
+**Reskin note.** STD-002 is a separate visual register from the OPD reader; the reskin should not accidentally apply STD-001 body-doc typography to POST/POSTER/INFO/SIGN artifacts. The doc reader may render these as body docs today (they still go through `pb-fullpage-body`); STD-002's 14pt-body-minimum + tile-internal grammar suggests a per-class reader treatment may eventually be needed.
+
+## B.4 STD-004 v1.4 - Documentation Repository Standard
+
+**What it is.** `[doc-read] content/documents/STD-004.mdx:1-40` Live, v1.4. Governs the OPD library as a system (classes, shelves, access tiers, canonical sourcing, lifecycle, IDs). Explicitly complementary to STD-001: "STD-001 governs the inside of a document; STD-004 governs the system of documents." `[doc-read] content/documents/STD-004.mdx` (Purpose block).
+
+**Design decisions still live.**
+- Six shelves (canonical): Safety, Operations, HR & People, Culinary, Brand & Standards (added by `pr-7-6-opd-add-brand-shelf.sql`), Finance, Site & Client. `[doc-read] docs/opd/PLAYBOOK_ENGINE_AUDIT.md:95-98` notes the schema vs route drift at seven-vs-six values and the migration that resolved it.
+- Access tiers: `unrestricted / restricted / slt`. Consumed by `opdAcl.js`. `[code-read] src/lib/opdAcl.js` per PLAYBOOK_ENGINE_AUDIT.
+- Doc classes: PB, STD, POL, SOP, TPL, CHK, REF, AGR, REC, POST, POSTER, FORM, INFO, SIGN. Class prefix is the first part of every doc ID.
+- One-fact-one-home rule (Facts as canonical typed data; docs render from them via Fact/Include resolution).
+- Content/documents is the corpus; docs/ is developer/provenance space.
+
+**Print/PDF coupling.** STD-004 does not directly couple to print, but its class rubric flows through STD-001's per-class anatomy which does.
+
+## B.5 OPD_PLAN.md + OPD_CC_HANDOFF.md (foundational)
+
+**OPD_PLAN.md.** `[doc-read] docs/OPD_PLAN.md:1-30`. Confirms:
+- PG-only greenfield domain.
+- Module name `playbook`.
+- Six-shelf layout (Safety / Operations / HR & People / Culinary / Finance / Site & Client - though "Brand & Standards" was added by pr-7-6 per the audit).
+- CSS prefix `pb-` (mirrors `pp-` for People).
+- Tool accent `--kf-playbook-teal: #0F6E56` added to `tailwind.config.mjs` + `globals.css`.
+- "First per-hub token, though per-hub theming is an existing concept (DESIGN_SYSTEM_REFERENCE.md)."
+
+**OPD_CC_HANDOFF.md.** `[doc-read] docs/opd/OPD_CC_HANDOFF.md`. The building-brief. Confirms:
+- Slide-over reader was the initial reader surface. Now the surface has two: `SlideOverReader` (from the browsing page) and the full-page reader `/playbook/d/[docId]` (`DocumentFullPageClient.js`) added later.
+- Nav item: `{ href: '/playbook', label: 'The Playbook', icon: icons.playbook }`.
+- Report-issue affordance in the reader.
+- "Ask SousAI" is a v1 keyword search over `title`/`card_line`/`keywords`; the real SousAI is queued.
+- Owner-only page gate for v1.
+
+## B.6 Playbook Engine Audit + Build Dashboard docs
+
+**PLAYBOOK_ENGINE_AUDIT.md** `[doc-read] docs/opd/PLAYBOOK_ENGINE_AUDIT.md`. Key design-relevant notes:
+- **The "Ask SousAI" search bar at the top of `/playbook` is a client-side string filter.** It does NOT call SousAI. The real SousAI streaming endpoint at `/api/playbook/sous-demo` is wired to a separate `SousModal` component, not to the search bar. **F8's wiring point is the modal, not the hero search.** `[doc-read] :20`.
+- The catalog read path makes ZERO Drive API calls. The reader iframes `drive.google.com/file/d/{id}/preview` directly. `[doc-read] :215-232`. **This informs any reader redesign** - Drive iframe rendering is the current mechanism; the MDX-canonical direction retires it.
+- SlideOverReader consumes `document.*`, `relationships`, `surfaces`, four Drive URLs (EN/ES, view/preview). `[doc-read] :183-190`.
+- Bilingual works via two Drive IDs on one catalog row (EN + ES). POSTER-001 is the first bilingual row. `[doc-read] :251-259`.
+
+**BUILD_DASHBOARD_AUDIT_CC.md** `[doc-read] docs/opd/BUILD_DASHBOARD_AUDIT_CC.md`. Verdict was **rework**. Key design-relevant findings:
+- Density mode identified as Density (table-friendly). At 375px it fails floor-first ("normally P0"), logged P2 as single-user surface exception (owner-only surface at desk).
+- The "Archive flow" pattern is called out as genuinely good and rare (`ArchiveDialog` pre-fetches incoming relationships + chunk count) - **protect through any rebuild**.
+- Reusing `SlideOverReader` for in-place inspection - **protect**.
+- Inline edit ergonomics (optimistic write + green flash + reconcile-or-revert + error chip) - **protect the mechanics** but the field set is wrong (five silent-data-loss traps).
+- "The 9% 'Linked to Drive' progress bar measures a dimension - Drive linkage - that the doc-format arc has retired."
+
+**BUILD_DASHBOARD_ENGINE_MAP_CC.md** `[doc-read] docs/opd/BUILD_DASHBOARD_ENGINE_MAP_CC.md`. Confirms:
+- Decisions locked (not re-litigated): `status` -> overlay; `access_level` -> overlay; `sort_order` stays MDX; pin/archive already overlay; New Document deleted; everything authorial stays MDX read-only.
+- Field-by-field SOT map with post-rebuild projection behavior.
+
+## B.7 Phase 2 charter + content foundation (the MDX-canonical direction)
+
+**Phase 2 Master Charter** `[doc-read] docs/phase2/OPD_Phase2_Master_Charter.md:1-50`. Two workstreams: A (content review + revision + reconcile + enrich) and B (technical: catalog rows, Drive sharing, embed loop, retrieval). Method: knowledge-first, then revise. Pass 0 (build knowledge) -> Pass 1 (per-doc audit) -> Pass 2 (library-level audit) -> Pass 3 (revision).
+
+**Content Foundation Brief v2** `[doc-read] docs/phase2/06_CONTENT_FOUNDATION_BRIEF_v2.md:1-50`. **This is the reframe that the current OPD is being rebuilt against.**
+- "You are not building one canonical document. You are building a canonical content repository: many discrete structured files, governed as one system."
+- "The repo becomes canonical; Postgres and the SousAI corpus become generated projections of it."
+- Fits existing stack: git, VS Code, Supabase, Vercel. No new SaaS.
+- Print rendering explicitly OUT of the content-foundation phase - "it remains in the architecture as a renderer that plugs into the same source later" using WeasyPrint / cairosvg / pdf-lib.
+- Facts model (§3.2-3.3) with the override dimension; audience-scoped retrieval (§6).
+- Includes translation-parity (-ES pattern) and validation gate at every change.
+
+**Phase A PR1 handoff** `[doc-read] docs/opd/foundation/PHASE_A_PR1_HANDOFF.md`. The MDX foundation is LIVE:
+- pr-7-8 dropped Draft status, tightened to 6 values.
+- pr-7-9 created `document_pins` overlay.
+- pr-7-10 created `document_content` table (empty; projection populates it).
+- `scripts/content/project-catalog.mjs` builds the projection.
+- MDX foundation frontmatter schema at `content/schema/frontmatter.schema.json`.
+
+## B.8 Live-content readiness
+
+**OPD Live Content Gaps** `[doc-read] docs/audits/OPD_LIVE_CONTENT_GAPS_2026-07-24.md`. 20 docs are `Live` in PG but their MDX still says `In Build`. Two groups:
+- Group 1 (16 legal-class): missing `approval:` frontmatter block (POL / AGR). Fix: add approval blocks.
+- Group 2 (5 REC/REF with TBD tokens): body contains literal `TBD`. Fix: either rewrite or make `number_hygiene` quote-aware.
+
+**Design implication.** The reskin must not lock the reader on "content complete." The gap between PG-live and MDX-live is 20 docs; several are governance-blocked, not build-blocked.
+
+## B.9 Phase 2 audit critical findings (design-adjacent)
+
+`[doc-read] docs/opd/audit/CRITICAL_SUMMARY.md`. Not primarily design, but two findings affect the reader:
+- **Live cross-references to RETIRED documents** (system corruption risk). Six live pointers into retired docs, including SOP-002 -> TPL-017, POL-009 -> POL-016 (retired without a superseding doc, gap), PB-007 -> REF-008 (retired). **Reskin implication:** the reader's Related Documents block must not surface these until repointed; a "retired" state in the target doc should visibly degrade the link.
+- **SOP-015 §03 Power-Loss Decision Table contradicts SOP-008.** Two rows carry factually wrong food-safety rules. Blocks Live promotion. **Reskin implication:** this is content, not design - but if the reader adds a "verified by" chip, this is the class of finding it must surface.
+
+## B.10 Print / PDF pipeline couplings - the ones the reskin must not break
+
+Every place where screen CSS feeds or mirrors the print pipeline. If the reskin changes any of these, print parity is at risk.
+
+- **Bebas Neue.** Loaded ONLY in `src/lib/print/assets.js:31, 106, 109, 110, 222, 250` for the SC print pipeline (`.band .bk`, `.mo`, `.yr`, `.smo h4`, `.ymo h5`). NOT a screen face. `[code-read] src/lib/print/assets.js:31`. **The reskin must leave Bebas Neue alone unless it also rebuilds the SC print monthSheet/seasonSheet/opsCalendarSheet templates.** The Ops Hub design docs (`DESIGN_TOKENS.md:91-96`) omit Bebas Neue from the screen font set correctly. This is a design-doc-vs-code drift only if you thought it was on screen.
+- **STD-001 v1.2 header comment in globals.css.** `[code-read] src/app/globals.css:1-3` says "STD-001 v1.2 type system: Oswald (display) + Inter (body), one system across screen + print. Mulish retained as fallback for any remaining legacy references but is no longer required by the standard." Direct STD-001 -> code coupling.
+- **The Playbook reader print block.** `[code-read] src/app/playbook/playbook.css:2412-2484` is the `@media print` block. It:
+  - Strips global chrome (`nav`, `.kf-topnav`, `.pb-fullpage-no-print`).
+  - Zeros `.pb-fullpage-wrap` max-width + padding.
+  - Zeros `.pb-fullpage-article` border, box-shadow, padding, radius.
+  - Forces `-webkit-print-color-adjust: exact` on body, all callouts, and TH (so callout fills print, per STD-001 §7).
+  - Sets print type sizes: title 22pt, body 11pt line-height 1.5, H1 16pt, H2 13pt, H3 11pt.
+  - `page-break-after: avoid` on headings, `page-break-inside: avoid` on blockquotes + tables.
+  - `.pb-fullpage-head` bottom rule = 2pt navy.
+- **STD-001 v1.2 phase 2 cover page.** `[code-read] src/app/playbook/playbook.css:2486-2597`. `.pb-print-cover` block. Vertical Navy logo 1.4in width. Cover title Oswald 44pt/700 Navy, letter-spacing -0.5pt, line-height 1.05. Cover subtitle. Cover rule (sky-blue). Cover metadata read from frontmatter with em-dash for blanks. `.pb-print-only` visibility helper (hidden on screen, block on print).
+- **Consumer.** `[code-read] src/app/playbook/d/[docId]/DocumentFullPageClient.js:321-334` renders the print cover:
+  ```
+  <section className="pb-print-cover pb-print-only" aria-hidden="true">
+    <img className="pb-print-cover-logo" ... />
+    <h1 className="pb-print-cover-title">{orDash(doc.title)}</h1>
+    {doc.card_line && <p className="pb-print-cover-sub">{doc.card_line}</p>}
+    <div className="pb-print-cover-rule" aria-hidden="true" />
+    <dl className="pb-print-cover-meta"> ... </dl>
+  </section>
+  ```
+- **`@page` rules** for running header (doc ID + version + title) and footer (KITCHFIX + classification + Page X of Y). `[code-read] src/app/playbook/playbook.css:2486-2500` (declaration + description; rules follow).
+- **admin.css guard comment.** `[code-read] src/app/playbook/admin/admin.css:7` "Inter only for screen UI (Mulish demoted; Oswald not in system)". Confirms admin surface is Inter-only, not screen-Oswald.
+
+## B.11 Orphaned decisions
+
+Documented decisions that were resolved but never built or have drifted:
+
+1. **Bebas Neue as a print-only face is unstated in the design-token narrative.** `docs/DESIGN_TOKENS.md:91-96` explicitly omits Bebas Neue from the screen font set. Its role - the SC print pipeline face - is not documented in the design-tokens doc chain (it lives only in the print assets file's inline comment `[code-read] src/lib/print/assets.js`). Not a bug, but a design-doc completeness gap. **Not a reskin conflict**; a documentation debt.
+2. **"Print rendering is out of this phase" (Content Foundation Brief v2) vs live print pipeline in playbook.css.** The content-foundation direction defers print to a later phase. The current playbook.css already ships a full `@media print` + `.pb-print-cover` implementation. The two are not contradictory (the shipped print block is called the "print isn't embarrassing now scaffolding until STD-001 v1.2 phase 2 comprehensive fix lands" per `[code-read] src/app/playbook/playbook.css:2422-2425`), but the reskin should be careful not to retire the scaffolding before the CCM-based renderer replaces it.
+3. **Slide-over reader vs full-page reader coexistence.** OPD_CC_HANDOFF specified the slide-over as the reader (`[doc-read] docs/opd/OPD_CC_HANDOFF.md:76`). The full-page `/playbook/d/[docId]` route was added later. Both are live. The reskin either picks one or documents the two-surface split. If both survive, the print pipeline currently only exists on the full-page reader (`.pb-fullpage-*` classes) - the slide-over cannot print.
+4. **Client-side keyword search bar labeled "Ask SousAI."** Documented in the engine audit as intentional-during-v1 (`[doc-read] docs/opd/PLAYBOOK_ENGINE_AUDIT.md:20`). The real SousAI is wired to a separate SousModal, not the search bar. This is not a design orphan - it is deliberate - but any reskin that renames or restyles the hero search must know that the real Sous integration point is the modal.
+5. **`--kf-playbook-teal-dark` (`#0a5a45`) vs `--accent-sc-dark` (`#085041`).** Two "dark green" tokens with different hex values live side by side. The Playbook uses `--kf-playbook-teal-dark`; SC uses `--accent-sc-dark`. The base greens agree (`#0F6E56`) but the dark stops diverge. Neither is wrong; the reskin should notice the mismatch if it targets consistency.
+
+## B.12 Conflicts with the current reskin direction
+
+These are the places where past intent collides with what has been floated for the reskin. Flag only; rulings are Kevin's.
+
+1. **1024px reader shell vs 1520 universe.** The Playbook reader shell (`.pb-fullpage-wrap`) is `max-width: 880px` in body text and `max-width: 1024px` on the browsing shell (`.pb-shell`). If the reskin adopts SC v2's 1520 universe shell as its baseline for OPD too, the reader becomes ~2x wider, blowing past the current 776px prose column (see Appendix A CPL). Prior intent: STD-001 §3.2 "Comfortable reading column width, centered." Rationale: the reader is a doc, not a dashboard. **What the reskin proposes:** unified 1520 universe shell. **What Kevin needs to rule on:** whether the reader's prose column stays at ~780px inside a 1520 outer shell (permissible) or grows.
+2. **Oswald as the display face vs navy-only reskin.** STD-001 v1.3 mandates Oswald for cover titles and section-opener H1s. If the reskin adopts a navy-only visual language and drops Oswald, it breaks the print/screen sibling law (STD-001 §1: "same look, same behavior"). The cover title (Oswald 44pt/700) is load-bearing for STD-001's "recognize a KitchFix document at a glance" anchor. **What the reskin proposes:** navy-first with no called-out display face. **What Kevin needs to rule on:** whether Oswald retires (requires an STD-001 v1.4 rev) or the reskin honors it (the reskin's system-font policy needs a display-face slot).
+3. **Cool page ground (`#f0f4f8`) vs STD-001 palette (`#F4F2EC` warm cream implied).** The STD-001 palette table (`[doc-read] content/documents/STD-001.mdx:202-222`) does not name a "page background" - it names Note Gray `#EEF6F8` as the note-callout fill. The site-wide body background is `--kf-bg: #f0f4f8` (cool grey-blue), which is not in the STD-001 palette. `--surface-page` at `#F4F2EC` (warm cream) is defined in tokens but not applied to body. **What the reskin proposes:** cool page ground. **Prior intent:** neither the current cool ground nor the token-defined warm cream is anchored in STD-001. This is a design-token drift, not a doctrinal conflict.
+4. **Navy action buttons vs the current teal-primary reader.** The reader today uses `--kf-playbook-teal` (`#0F6E56`) for focus rings, hover borders, and the Ask SousAI CTA (`[code-read] src/app/playbook/playbook.css:203-220`). If the reskin adopts navy action buttons app-wide, the reader's teal-primary interactive layer either survives (Playbook keeps its Tier-3 accent identity) or retires (uniformity). Prior intent: OPD_PLAN §"Nav" (`[doc-read] docs/OPD_PLAN.md:82`) explicitly added the teal token as a per-hub identity. **What the reskin proposes:** navy actions. **What Kevin needs to rule on:** whether the teal is Playbook's tool-accent identity (parallel to Vendor Portal's mustard, Directory's Cardinals red) or a legacy that navy retires.
+5. **Ladder snapping vs the current 20px + 12px reader radii.** The reader uses `20px` on `.pb-hero`, `16px` on `.pb-fullpage-article`, `12px` on `.pb-card`, `12px` on `.pb-fullpage-article` mobile, `8px` on `.pb-fullpage-back`, `4px` on blockquotes. Six distinct radii - not "on a ladder." SC v2's ladder is `6 / 8 / 9 / 11 / 12 / 14`. Prior intent: no explicit reader-radius rule in STD-001; the current values are ad-hoc. **What the reskin proposes:** ladder snapping. **What Kevin needs to rule on:** which reader radii promote to the ladder and which are load-bearing at their current value (the 20px hero radius reads as "the biggest surface in the module" - dropping it to 14 changes hierarchy).
+6. **Screen H2/H3 use pt-based sky-blue rules (0.75pt / 0.5pt) that don't render at web-native px.** STD-001 §4.6 heading rules are 1.5pt / 0.75pt / 0.5pt. The reader implements them at `1.5pt`, `0.75pt`, `0.5pt` `[code-read] src/app/playbook/playbook.css:2287, 2310, 2319`. Browsers render sub-1px rules unpredictably. Prior intent (STD-001) is print-native; the reader inherited pt values without a screen translation table. **What the reskin proposes:** (unknown - the reskin's typography spec is what Kevin will settle). **What Kevin needs to rule on:** whether STD-001 §4.6 adds a "screen-equivalent" column or the reader translates pt to px explicitly.
+
+## B.13 Completeness map
+
+Every file discovered by the initial grep sweep, categorized.
+
+**Reviewed (17):**
+`content/documents/STD-001.mdx`, `content/documents/STD-002.mdx`, `content/documents/STD-004.mdx`, `docs/OPD_PLAN.md`, `docs/opd/OPD_CC_HANDOFF.md`, `docs/opd/PLAYBOOK_ENGINE_AUDIT.md`, `docs/opd/BUILD_DASHBOARD_ENGINE_MAP_CC.md`, `docs/opd/BUILD_DASHBOARD_AUDIT_CC.md`, `docs/opd/foundation/PHASE_A_PR1_HANDOFF.md`, `docs/opd/audit/README.md`, `docs/opd/audit/CRITICAL_SUMMARY.md`, `docs/phase2/OPD_Phase2_Master_Charter.md`, `docs/phase2/06_CONTENT_FOUNDATION_BRIEF_v2.md`, `docs/phase2/00_START_HERE_Project_Handoff.md`, `docs/audits/OPD_LIVE_CONTENT_GAPS_2026-07-24.md`, `src/app/playbook/playbook.css` (design-relevant sections), `src/app/playbook/d/[docId]/DocumentFullPageClient.js` (print cover consumer), `src/lib/print/assets.js` (Bebas Neue).
+
+**Skipped with reason (10):**
+- `content/documents/STD-003.mdx` - communication channels, not presentation.
+- `docs/design/PDC_PRINT_REDESIGN.md` - SC, not OPD.
+- `docs/design/PRINT_DATA_CENSUS.md` - SC.
+- `docs/design/V3_OVERVIEW_SPEC.md`, `docs/design/SC_PRINT_SPEC_v1.html`, `docs/design/SC_PRINT_SPEC_v2.html` - SC.
+- `docs/DESIGN_AUDIT_LEDGER.md` - SC audit ledger, zero OPD findings.
+- `docs/SC_DESIGN_TOKEN_README.md` - SC-scoped design ref (`--accent-sc` family). Read enough to confirm the shared `#0F6E56` intent; noted in Appendix A already.
+- `docs/phase2/01_CODE_VERIFICATION_REPORT.md`, `02_ENGINEERING_RUNBOOK.md`, `03_ENGINEERING_ORIENTATION.md`, `04_CC_VERIFIED_UPDATE_FOR_CONTENT_CHAT.md`, `05_DOC_SET_1_CHUNKING_READINESS.md`, `07_SEQUENCE_ADDENDUM_AUDIT_ADDITIONS.md` - engineering not design.
+- `docs/opd/audit/DEPENDENCY_MAP.md`, `LIBRARY_UNDERSTANDING.md`, `LIBRARY_FINDINGS.md`, `REMEDIATION_WORKLIST.md`, `ACTUALS_NEEDED.md`, `PUBLISH_READINESS.md`, `scorecards/*` - content audit outputs (feed the reskin's data model, not its visual language).
+- `docs/opd/foundation/F1_CK_A_SAMPLE_ROUND_TRIP.md`, `F1_5_CK_B_PILOT_REPORT.md`, `F2_CK_C_CONVERSION_REPORT.md`, `F3_CK_D_TOKENIZATION_REPORT.md`, `F5_CK_E_REVISION_REPORT.md`, `F6_CK_F_DEDUP_REPORT.md`, `F6_5_CK_G_DEDUP_FIX_REPORT.md`, `REGISTER_RECONCILIATION.md`, `REVIEW_PACKET_SOURCE.md` - MDX tokenization/dedup mechanics, not design.
+- `docs/phase2/OPD_Library_Audit_Brief_v2.md`, `OPD_Per-Document_Scorecard_v2.md`, `OPD_Intelligence_and_SousAI_Brief_v2.md` - audit methodology + SousAI briefs; not design intent for the reader.
+- `docs/archive/handoffs/*`, `docs/archive/specs/*`, `docs/archive/migration/*` - historical, not current intent.
+
+**Not skipped, referenced from Appendix A:** `src/app/tokens.css`, `src/app/globals.css`, `src/components/TopNav.css`, `src/app/service-calendar/*` (SC-side citations already recorded).
+
+All discovered files categorized. All decisions cited with either a `[doc-read]` doc path or a `[code-read]` file:line. Observations only. Rulings are Kevin's.
