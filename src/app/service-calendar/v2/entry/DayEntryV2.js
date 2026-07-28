@@ -201,6 +201,13 @@ function DayEntryV2({
   // (flat_fee + !hasHomestandSchedule) reads true. Vocabulary helpers
   // and rail branching read this single derived boolean.
   const feeNoDollar = isFeeNoDollar(account);
+  // P3-B re-gate 6 hotfix (2026-07-28): coordinator handle pulled to
+  // the TOP of the hook block, above every useCallback. Previous
+  // position (below executeMarkNoService) tripped a TDZ crash on the
+  // dep array of executeMarkNoService itself - `handoff` was named
+  // before its `let` binding initialized. Must remain the earliest
+  // possible position, unconditional.
+  const handoff = useHandoffSafe();
   // ═══════════════════════════════════════════════════════════════
   // State - byte-identical to v1 DayDetail (see DayDetail.js:208-263).
   // Values: "" = untouched (ghost), "0" = explicit zero, "123" = entered
@@ -690,8 +697,8 @@ function DayEntryV2({
 
   // Confirm handler = DayDetail.js:664-735 executeSave verbatim (minus
   // the setShowReview lines that no longer apply on the v2 path -
-  // Review screen deleted).
-  const handoff = useHandoffSafe();
+  // Review screen deleted). `handoff` is captured from the top-of-
+  // hook-block useHandoffSafe() call (see :204).
   const executeConfirm = useCallback(async () => {
     const entries = [];
     for (const g of serviceGroups) {
