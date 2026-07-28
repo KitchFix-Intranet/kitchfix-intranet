@@ -1,0 +1,143 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Accent-rail primitive (Phase 3-A, 2026-07-25).
+   ═══════════════════════════════════════════════════════════════════
+
+   ONE class family, four semantic types. §13B: no per-surface forks.
+   Every accent-carrying element in the product routes through this.
+
+   Consumers landing in P3-A:
+     - v2 inline failure banner (.sc-v2-entry-alert becomes .sc-ar--danger)
+     - NEW note-posted chip (.sc-ar--success)
+     - Confirmation dialogs top-rail variant (--top --warning)
+   Future consumers (Phase 3-B and later):
+     - Confirmed pill (--success, in-modal, animated)
+     - Session strip (--success)
+     - Offline chip surface when defined (--info; SYNCING per-tile
+       badge in shared DaySquare is out of scope here)
+
+   Types (from RENDER_HANDOFF_BLENDED.html:127-135):
+     --success  green   var(--sc2-accent-green)          #1f8b52 family
+     --danger   red     var(--sc2-state-overdue-fg)      #8a3a2c family
+     --warning  amber   var(--sc2-state-needs-fg-strong) #5c4310 family
+     --info     navy    var(--sc2-cmd-bg)                #1a3050 family
+
+   Owner-picked colors reuse existing --sc2-* tokens; no new hex.
+   The render's --ok/--bad/--amber/--navy hexes are its own demo
+   palette; the mapped tokens above are the closest AAA/AA-compliant
+   equivalents already in tokens.css.
+
+   Rail thickness: 4px per render. §13A permits px on structural
+   border-width (not type/spacing/radius).
+
+   Layout: left-rail by default (chips + banners). `--top` variant
+   promotes the rail to the container top edge (confirmation dialogs).
+
+   ─── P3-A gate defect 2 fix (2026-07-25) ────────────────────────
+   The --sc2-* tokens this primitive consumes are declared inside
+   `.scv2 { }` in tokens.css. Consumers rendered OUTSIDE the .scv2
+   scope (the note-posted chip lives at page-level in `.oh-app >
+   .oh-toast-container`, never inside `.sc-root.scv2`) resolve every
+   var() to nothing. In that state:
+     - `border: var(--sc2-border-thin) solid var(--sc2-line)` is an
+       invalid shorthand and the browser drops the declaration.
+     - `border-left: 4px solid var(--sc2-accent-green)` fails the
+       same way; declaration is dropped; browser reports the initial
+       value `0px none`.
+   That was the winning rule at the note-posted chip (measured live).
+   Failure banner + dialogs paint correctly because they render inside
+   .scv2 (DayEntryV2 tree) where tokens resolve.
+
+   Fix: every var() below carries an explicit literal fallback matching
+   the token's value in .scv2 (see tokens.css line refs in the map
+   above). When inside .scv2, the token wins (fluid clamps for spacing,
+   themable colors, etc.). When outside .scv2, the fallback resolves so
+   the primitive paints in ANY context. Cascade-stable: no new
+   selectors, no specificity fights - the browser's var-fallback
+   mechanism is deterministic and requires nothing to override.
+
+   Token line refs (fallbacks track these values):
+     --sc2-space-1       tokens.css:235  fluid clamp; static 4px
+     --sc2-space-2       tokens.css:236  fluid clamp; static 8px
+     --sc2-space-3       tokens.css:237  fluid clamp; static 12px
+     --sc2-radius-container tokens.css:247 11px
+     --sc2-border-thin   tokens.css:249  1px
+     --sc2-line          tokens.css:463  #eae4d6
+     --sc2-ink           tokens.css:308  #1f2d3d
+     --sc2-ink-muted     tokens.css:309  #697077
+     --sc2-surface-card  tokens.css:296  #ffffff
+     --sc2-accent-green  tokens.css:443  #2f7d4f
+     --sc2-state-overdue-fg tokens.css:390 #8a3a2c
+     --sc2-state-needs-fg-strong tokens.css:379 #5c4310
+     --sc2-cmd-bg        tokens.css:314  #1a3050
+     --sc2-size-body     tokens.css:221  fluid clamp; static 14px
+     --sc2-size-caption  tokens.css:220  fluid clamp; static 12px
+     --sc2-wt-bold       tokens.css:278  700
+*/
+
+.sc-ar {
+  display: flex;
+  gap: var(--sc2-space-2, 8px);
+  padding: var(--sc2-space-3, 12px);
+  background: var(--sc2-surface-card, #ffffff);
+  border: var(--sc2-border-thin, 1px) solid var(--sc2-line, #eae4d6);
+  border-radius: var(--sc2-radius-container, 11px);
+  box-shadow: 0 3px 10px rgba(21, 57, 104, 0.08);
+  color: var(--sc2-ink, #1f2d3d);
+  font-size: var(--sc2-size-caption, 12px);
+  line-height: 1.4;
+}
+
+/* Left-rail by type - REQUIRES the base .sc-ar class. This keeps
+   the type modifier composable with --top (which sets a top rail on
+   ANY container without pulling in the base layout). Without the
+   .sc-ar coupling, applying just --warning would paint a border-left
+   on any element that adopts it. */
+.sc-ar.sc-ar--success { border-left: 4px solid var(--sc2-accent-green, #2f7d4f); }
+.sc-ar.sc-ar--danger  { border-left: 4px solid var(--sc2-state-overdue-fg, #8a3a2c); }
+.sc-ar.sc-ar--warning { border-left: 4px solid var(--sc2-state-needs-fg-strong, #5c4310); }
+.sc-ar.sc-ar--info    { border-left: 4px solid var(--sc2-cmd-bg, #1a3050); }
+
+/* Top-rail variant for confirmation dialogs. `--top` sets ONLY the
+   top border-color rule; unlike the base .sc-ar the modifier does NOT
+   assume the target has .sc-ar's layout. Use --top + type on any
+   existing container to add the 4px accent stripe at the top edge
+   without changing the container's own layout / padding / radius.
+   When both a base .sc-ar and --top are set on the same element,
+   --top overrides the default left-rail with a top-rail (the type
+   modifier below still sets border-left with the current color, so
+   composing --top + type on an .sc-ar base gives a corner-L; drop
+   the base class when a pure top-rail is wanted, as the dialogs do). */
+.sc-ar--top.sc-ar--success { border-top: 4px solid var(--sc2-accent-green, #2f7d4f); }
+.sc-ar--top.sc-ar--danger  { border-top: 4px solid var(--sc2-state-overdue-fg, #8a3a2c); }
+.sc-ar--top.sc-ar--warning { border-top: 4px solid var(--sc2-state-needs-fg-strong, #5c4310); }
+.sc-ar--top.sc-ar--info    { border-top: 4px solid var(--sc2-cmd-bg, #1a3050); }
+
+/* Content slots. Icon left, title + body stack right. */
+.sc-ar-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.sc-ar-icon svg {
+  width: var(--sc2-size-body, 14px);
+  height: var(--sc2-size-body, 14px);
+}
+.sc-ar--success .sc-ar-icon { color: var(--sc2-accent-green, #2f7d4f); }
+.sc-ar--danger  .sc-ar-icon { color: var(--sc2-state-overdue-fg, #8a3a2c); }
+.sc-ar--warning .sc-ar-icon { color: var(--sc2-state-needs-fg-strong, #5c4310); }
+.sc-ar--info    .sc-ar-icon { color: var(--sc2-cmd-bg, #1a3050); }
+
+.sc-ar-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1, 4px);
+}
+.sc-ar-title {
+  font-weight: var(--sc2-wt-bold, 700);
+  color: var(--sc2-ink, #1f2d3d);
+}
+.sc-ar-body {
+  color: var(--sc2-ink-muted, #697077);
+}

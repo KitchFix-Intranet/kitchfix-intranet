@@ -22,6 +22,7 @@ import {
   RailHero,
   RailHeroProgressCaption,
   RailProgress,
+  RailRing,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -83,14 +84,19 @@ export default function OpsRail({
   const [showAllQueue, setShowAllQueue] = useState(false);
   const iso = today || todayISO();
 
-  if (loading) {
-    return (
-      <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
-        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED"} meta="fetching data" />
-        <RailProgress pct={0} />
-      </RailShell>
-    );
-  }
+  // P3-A gate defect 1 fix (2026-07-25): the loading early-return
+  // unmounted the ring on the STL-FL branch during refetch, killing
+  // the ambient sweep. See DrillRail's fix block for the full node-
+  // stability rationale. MLB branch (hasHomestandSchedule) keeps
+  // <RailProgress> - the ref is only meaningful on !hasHomestandSchedule.
+  //
+  // Ring pct + caption are derived below (heroPct, heroCaption) once
+  // the full hero-derivation block runs. The lastRingRef capture
+  // happens AFTER those variables exist; the ringData fallback pattern
+  // then feeds the render. loading-with-no-prior-ring still falls
+  // through to the pre-P3-A skeleton (via the `!ringData` clause on
+  // the check below), so first-load behavior is unchanged.
+  const lastRingRef = useRef(null);
 
   // ─── Hero ─────────────────────────────────────────────────
   // OV-3 F10 (2026-07-19) - fee/homestand hero adopts the per-meal
@@ -206,10 +212,55 @@ export default function OpsRail({
   // spec calls for on a flat-fee account.
   const contractInfo = !hasHomestandSchedule ? getContractInfo(accountKey) : null;
 
+  // P3-A gate defect 1 fix (2026-07-25): capture last ring values on
+  // the STL-FL branch. MLB uses <RailProgress> and does not need this.
+  // Fresh-metrics test: not loading + not incomplete + has real total
+  // (heroPct=0 with total=0 is the pre-load state, not a valid ring
+  // value to hold). Fallback ringData is null on !hasHomestandSchedule
+  // when never-loaded (loading skeleton fires below via early-return).
+  const haveFreshRingMetrics = !hasHomestandSchedule && !incomplete && !loading && scopedTotal > 0;
+  if (haveFreshRingMetrics) {
+    lastRingRef.current = { pct: heroPct, complete: heroPct === 100, caption: heroCaption };
+  }
+  const ringData = !hasHomestandSchedule
+    ? (haveFreshRingMetrics
+        ? { pct: heroPct, complete: heroPct === 100, caption: heroCaption }
+        : lastRingRef.current)
+    : null;
+
+  // Loading + no prior ringData = true first-load. Fall back to the
+  // pre-P3-A skeleton so no ring flash before real data.
+  if (loading && (hasHomestandSchedule || !ringData)) {
+    return (
+      <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
+        <RailHero value="loading..." label={hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED"} meta="fetching data" />
+        <RailProgress pct={0} />
+      </RailShell>
+    );
+  }
+
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
-      {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
+      {/* P3-A (2026-07-25): STL-FL (!hasHomestandSchedule) swaps the
+          progress bar for an arc-only ring per owner pick "option A" -
+          the 2B days-confirmed hero already carries the fraction, so
+          no inner label duplicates it. MLB (hasHomestandSchedule)
+          keeps <RailProgress + RailHeroProgressCaption> byte-identical
+          - the composition here is the ONLY place OpsRail branches on
+          hasHomestandSchedule for the hero visualization. */}
+      {!incomplete && (
+        hasHomestandSchedule
+          ? <RailProgress pct={heroPct} complete={heroPct === 100} />
+          : ringData && (
+              <RailRing
+                pct={ringData.pct}
+                showLabel={false}
+                complete={ringData.complete}
+                ariaLabel={ringData.caption}
+              />
+            )
+      )}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
 
       {contractInfo && (
@@ -510,6 +561,15 @@ function buildQueue({ mode, hasHomestandSchedule, yearData, iso, periodRange }) 
 }
 
 function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) {
+  // P3-A gate 4 fix (2026-07-28): cold `?period=P6` deep links can
+  // reach here before periodRanges resolves, leaving periodRange=null.
+  // Prior to gate 3, useDrillRail's `!!periodMetrics` clause hid the
+  // rail during this window; that gate was dropped to keep the ring
+  // node mounted across save refetches (see ServiceCalendar.js:2922+).
+  // Guard here so the rail renders a caught-up footer during the cold
+  // window instead of throwing. buildQueue at :552 already had this
+  // guard - parity restored.
+  if (!periodRange) return { kind: "caught-up", target: null };
   const queue = hasHomestandSchedule
     ? deriveOpsDrillQueueMlb(yearData, iso, periodRange.start, periodRange.end)
     : deriveOpsDrillQueueStlFl(yearData, iso, periodRange.start, periodRange.end);

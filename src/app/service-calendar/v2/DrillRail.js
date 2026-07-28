@@ -25,12 +25,13 @@
 //     treatment; retry reachable via the ribbon's AsOf (always visible
 //     above the rail).
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
   RailHeroProgressCaption,
   RailProgress,
+  RailRing,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -81,6 +82,44 @@ export default function DrillRail({
   const heroDaysEntered = m?.complete || 0;
   const heroTotalDays = m?.total || 0;
   const heroPct = heroTotalDays > 0 ? Math.round((heroDaysEntered / heroTotalDays) * 100) : 0;
+  const heroCaption = `${heroDaysEntered} of ${heroTotalDays} days entered`;
+
+  // ─── P3-A gate defect 1 fix (2026-07-25) - ring node stability ──
+  // The ring's dashoffset transition is meaningless without a stable
+  // DOM node. Two prior unmount paths killed the tween:
+  //   1. `if (loading) return <skeleton>` (below) replaces the whole
+  //      subtree during save-refetch, unmounting the ring.
+  //   2. `{!incomplete && ...}` conditional gate on partial fetch.
+  // Both cases put a FRESH DOM node in place at final pct with no
+  // FROM value; CSS transition needs before + after on the same node.
+  //
+  // Fix: lastRingRef holds the last fresh {pct, complete, caption}.
+  // Render ring UNCONDITIONALLY once we've ever had fresh metrics.
+  // During loading/incomplete/refetch, ring re-renders with SAME
+  // values from ref = no visual change AND same DOM node (React
+  // reconciliation by tree position). When new metrics arrive,
+  // dashoffset transitions old -> new on the same node = ambient
+  // sweep fires.
+  //
+  // NODE-STABILITY GUARANTEE (owner requirement): the ring's
+  // <div className="sc-rail-ringbox">...<circle>...</div> lives in
+  // ONE fixed position in the JSX tree (see the RailShell body below,
+  // after heroBlock). React reconciles by position + type + key, so
+  // the ring's <circle className="sc-rail-ring-fg"> is the SAME DOM
+  // node across every re-render for the life of this DrillRail
+  // instance. The lastRingRef fallback ensures that instance stays
+  // alive across refetch cycles.
+  //
+  // First-load: lastRingRef.current is null; ring does not render;
+  // loading skeleton hero shows; no ring flash before real data.
+  const lastRingRef = useRef(null);
+  const haveFreshMetrics = !loading && !incomplete && m && heroTotalDays > 0;
+  if (haveFreshMetrics) {
+    lastRingRef.current = { pct: heroPct, complete: heroPct === 100, caption: heroCaption };
+  }
+  const ringData = haveFreshMetrics
+    ? { pct: heroPct, complete: heroPct === 100, caption: heroCaption }
+    : lastRingRef.current;
 
   // Week lines (only when SC-073 guard permits).
   // PR-D drill Phase 1: buckets carry .label + .startDate/.endDate for
@@ -163,29 +202,37 @@ export default function DrillRail({
     footerAction = null;
   }
 
-  if (loading) {
-    return (
-      <RailShell label={`${scope.toUpperCase()} · ${scopeLabel || ""}`}>
-        <RailHero value="loading..." label="ENTERED" meta="fetching data" />
-        <RailProgress pct={0} />
-      </RailShell>
-    );
-  }
+  // P3-A gate defect 1 fix (2026-07-25): the loading early-return was
+  // the primary unmount path. Retired in favor of one tree with a
+  // conditional heroBlock. When loading with prior ringData available,
+  // the ring stays mounted at its last pct; the rest of the rail
+  // (queue / weeks / notes / footer) shows empty state or hides.
+  // First-load (loading && !ringData) still shows the minimal
+  // skeleton hero + empty rail per the pre-P3-A behavior.
 
   // Drill P1 PR-C (2026-07-20) DP1-14 - hero matches SeasonRail's
   // per-meal grammar (Wave 4a / G2 / F10):
   //   Line 1: value + label + projection inline on one baseline.
-  //   Progress bar.
-  //   Caption below the bar: "N of M days entered" via
-  //   RailHeroProgressCaption (same slot the overview uses).
+  //   Ring + caption below.
   const heroProjection = `of ${fmt$(heroProjRev)}`;
-  const heroCaption = `${heroDaysEntered} of ${heroTotalDays} days entered`;
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
       <span className="sc-rail-hero-label">ENTERED</span>
       <span className="sc-rail-hero-meta">Use the refresh button in the header to retry the fetch.</span>
     </div>
+  ) : loading && !ringData ? (
+    <RailHero value="loading..." label="ENTERED" meta="fetching data" />
+  ) : loading ? (
+    // Refetch with ringData available: hero shows last-known value
+    // (no "loading..." flash on background refresh). Hero picks up
+    // fresh metrics when the refetch lands.
+    <RailHero
+      value={heroActRev}
+      format={fmt$}
+      label="ENTERED"
+      projection={heroProjection}
+    />
   ) : (
     <RailHero
       value={heroActRev}
@@ -198,9 +245,28 @@ export default function DrillRail({
   return (
     <RailShell label={`${scope.toUpperCase()} · ${scopeLabel || ""}`}>
       {heroBlock}
-      {!incomplete && <RailProgress pct={heroPct} complete={heroPct === 100} />}
-      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
+      {/* P3-A (2026-07-25): ring replaces the progress bar in the
+          per-meal drill. Percent inside the ring; fraction caption
+          beside. RailProgress is UNTOUCHED (MLB rail keeps it via
+          OpsRail's hasHomestandSchedule branch). Ring renders from
+          ringData (fresh metrics OR lastRingRef fallback), so the
+          DOM node stays mounted across refetch cycles and the CSS
+          transition on stroke-dashoffset fires old->new. */}
+      {ringData && (
+        <div className="sc-rail-ringbox">
+          <RailRing
+            pct={ringData.pct}
+            complete={ringData.complete}
+            ariaLabel={ringData.caption}
+          />
+          <span className="sc-rail-ringbox-caption">{ringData.caption}</span>
+        </div>
+      )}
 
+      {/* Body sections only render when we have fresh metrics.
+          Loading fallback would show stale queue/notes which is worse
+          UX than briefly hiding them; the ring above still holds. */}
+      {haveFreshMetrics && (
       <RailScroll>
         {/* Needs-attention queue - identical semantics to overview
             queue but limited to the drill range. Rows target the
@@ -339,17 +405,22 @@ export default function DrillRail({
           </RailSection>
         )}
       </RailScroll>
+      )}
 
       {/* Footer: primary CTA (or caught-up). Drill P1 PR-A DP1-08
           adds a secondary-tier row below (Enter today + Bulk entry)
           for the three-CTA two-tier layout the deleted TodayRail
-          used to host. */}
-      <RailFooter
-        kind={footerKind}
-        label={footerLabel}
-        onClick={footerAction}
-      />
-      {(() => {
+          used to host. Footer only renders when fresh metrics exist -
+          the CTAs derive from queueRows which are empty during
+          refetch. */}
+      {haveFreshMetrics && (
+        <RailFooter
+          kind={footerKind}
+          label={footerLabel}
+          onClick={footerAction}
+        />
+      )}
+      {haveFreshMetrics && (() => {
         // DP1-08 secondary tier. Enter-today shows ONLY when today is
         // in scope + needs entry AND the primary is NOT already
         // Enter today (i.e. primary is Enter-oldest, so today is a
