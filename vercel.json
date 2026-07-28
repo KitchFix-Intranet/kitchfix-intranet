@@ -15,6 +15,18 @@
     {
       "path": "/api/cron/schedule-drift",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/sousai-daily",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/sousai-weekly",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/sousai-monthly",
+      "schedule": "0 12 1 * *"
     }
   ]
 }
