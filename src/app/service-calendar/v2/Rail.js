@@ -15,18 +15,14 @@
 // overviewDerive.js.
 
 import { useEffect, useRef, useState } from "react";
-// P3-B gate-4 (2026-07-28): ring transition write deferred via
-// double-rAF - see committedOffset state below. Owner ruling: the
-// paint pipeline had no start value at the write moment (ancestor
-// hidden at the frame boundary), so the browser reappeared the ring
-// already at the new value. Deferring TWO frames lets the browser
-// paint the current (old) value, ancestor visibility restore, then
-// the new value trip the transition on a painted node.
-//
-// Retirement plan: when the gate-4 fix verifies (transitionrun +
-// transitionend fire), the paint-state log + committed-offset lag
-// stay; the gate-3 write/commit/mutation logs get pulled in the same
-// commit per owner's one-deletion promise (see comments below).
+// P3-B (2026-07-28): ring transition write deferred via double-rAF -
+// see committedOffset state below. Paint pipeline had no start value
+// at the write moment (ancestor transiently hidden at the frame
+// boundary), so the browser reappeared the ring already at the new
+// value. Deferring TWO frames lets the browser paint the current
+// value, ancestor visibility restore, then the new value trip the
+// transition on a painted node. Gate-4 receipt: STL-FL Jul 8, pct
+// 10 -> 14, transitionrun @249858 + transitionend @249133 (274ms).
 import { useHandoffSafe } from "./handoff/coordinator";
 import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
@@ -139,14 +135,12 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
   const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
   const C = 245.04; // 2 * PI * 39
   const dashOffset = C - (C * clamped) / 100;
-  // P3-B gate-4 fix (2026-07-28): double-rAF defer of the SVG style
-  // write. Applied ONLY when the pct actually changes from the last
-  // rendered value (first mount + no-op updates skip the lag). The
-  // paint-state log below reports which ancestor was hidden at the
-  // write moment. This defer buys two frames for React to commit,
-  // the browser to paint the current value, and any transiently-
-  // hidden ancestor to restore its render tree state. Then the
-  // NEW value writes onto a painted node, tripping the transition.
+  // P3-B (2026-07-28): double-rAF defer of the SVG style write. When
+  // the pct actually changes from the last rendered value, we buy two
+  // animation frames before writing the new dashoffset. Frame 1
+  // paints the current (old) value. Frame 2 sets the new value on a
+  // painted node, tripping the CSS transition. First mount + no-op
+  // updates short-circuit (no lag steady-state).
   const [committedOffset, setCommittedOffset] = useState(dashOffset);
   useEffect(() => {
     if (committedOffset === dashOffset) return undefined;
@@ -162,14 +156,10 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
       if (raf2 != null) cancelAnimationFrame(raf2);
     };
   }, [dashOffset, committedOffset]);
-  // P3-B gate-2 fix (2026-07-28): register the ring container as the
-  // handoff target. Deps pinned to the STABLE `registerRingTarget`
-  // callback (empty-deps useCallback in coordinator) - NOT the full
-  // context value. The full value re-identifies on every phase change
-  // (isFlippingDate closes over phase), which caused cleanup+register
-  // churn 5x per save. Node identity unaffected either way, but the
-  // churn was noise. Instance stamp below (data-ring-instance) proves
-  // <circle> node stability across refetch cycles.
+  // P3-B (2026-07-28): register the ring container as the handoff
+  // target. Deps pinned to the STABLE `registerRingTarget` callback -
+  // NOT the full context value, which re-identifies on every phase
+  // change and caused cleanup+register churn 5x per save.
   const containerRef = useRef(null);
   const { registerRingTarget } = useHandoffSafe();
   useEffect(() => {
@@ -177,101 +167,6 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
     if (!el) return undefined;
     return registerRingTarget(el);
   }, [registerRingTarget]);
-  // Instance stamp: one random ID per RailRing mount, written to the
-  // <circle>'s data-ring-instance. If the ID changes between saves,
-  // the ring was remounted (transition cannot fire from a fresh node).
-  // P3-B gate-2 evidence for the code-read stability claim.
-  const instanceIdRef = useRef(null);
-  if (instanceIdRef.current == null) {
-    instanceIdRef.current = `r${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // P3-B GATE-3 INSTRUMENTATION (2026-07-28) - dashoffset write trace
-  // ═══════════════════════════════════════════════════════════════
-  // Owner report: node identity preserved + transition armed at 280ms
-  // but ZERO transitionrun events on a pct-moving save. Three logs
-  // (all dev-only, gated on NODE_ENV):
-  //   A) render-scope log - every render's computed dashOffset value
-  //      with perf.now(), so we can correlate React commits with
-  //      transition events.
-  //   B) MutationObserver on the <circle>'s style attribute - catches
-  //      EVERY write (React, foreign scripts, direct DOM manip). If
-  //      React re-applies the SAME value in the same frame twice, or
-  //      applies while hidden, the observer picks it up.
-  //   C) transitionrun / transitionend listeners on the SAME node -
-  //      the acceptance signal.
-  // Retire when P0 lands - kept as `if (isDev)` gate so removal is
-  // one deletion, not a scavenger hunt.
-  const isDev = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
-  useEffect(() => {
-    if (!isDev) return undefined;
-    // eslint-disable-next-line no-console
-    console.log(`[ring ${instanceIdRef.current}] commit dashoffset=${dashOffset.toFixed(2)} pct=${clamped} @${performance.now().toFixed(1)}ms`);
-    return undefined;
-  }, [dashOffset, clamped, isDev]);
-  useEffect(() => {
-    if (!isDev) return undefined;
-    const container = containerRef.current;
-    if (!container) return undefined;
-    const fg = container.querySelector(".sc-rail-ring-fg");
-    if (!fg) return undefined;
-    const id = instanceIdRef.current;
-    const onRun = (e) => {
-      if (e.propertyName !== "stroke-dashoffset") return;
-      // eslint-disable-next-line no-console
-      console.log(`[ring ${id}] transitionrun stroke-dashoffset @${performance.now().toFixed(1)}ms`);
-    };
-    const onEnd = (e) => {
-      if (e.propertyName !== "stroke-dashoffset") return;
-      // eslint-disable-next-line no-console
-      console.log(`[ring ${id}] transitionend stroke-dashoffset @${performance.now().toFixed(1)}ms`);
-    };
-    const onCancel = (e) => {
-      if (e.propertyName !== "stroke-dashoffset") return;
-      // eslint-disable-next-line no-console
-      console.log(`[ring ${id}] transitioncancel stroke-dashoffset @${performance.now().toFixed(1)}ms`);
-    };
-    fg.addEventListener("transitionrun", onRun);
-    fg.addEventListener("transitionend", onEnd);
-    fg.addEventListener("transitioncancel", onCancel);
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.attributeName !== "style") continue;
-        const t = performance.now().toFixed(1);
-        // eslint-disable-next-line no-console
-        console.log(`[ring ${id}] style mutation @${t}ms: ${fg.getAttribute("style")}`);
-        // P3-B gate-4 (2026-07-28) - paint-state at the mutation
-        // moment. Owner ruling: transition suppressed because element
-        // not painted at write time. Walk the ring's ancestor chain
-        // and capture display/visibility/opacity/clientRects for each.
-        // One save's output pinpoints which ancestor collapsed.
-        const chain = [
-          ["fg", fg],
-          ["ringbox", fg.closest(".sc-rail-ringbox")],
-          ["rail", fg.closest(".sc-rail")],
-          ["aside", fg.closest("aside")],
-          ["drill", fg.closest(".sc-drill")],
-          ["scroot", fg.closest(".sc-root")],
-        ];
-        for (const [name, el] of chain) {
-          if (!el) continue;
-          const cs = window.getComputedStyle(el);
-          // eslint-disable-next-line no-console
-          console.log(`[ring ${id}]   ${name} display=${cs.display} visibility=${cs.visibility} opacity=${cs.opacity} rects=${el.getClientRects().length}`);
-        }
-      }
-    });
-    observer.observe(fg, { attributes: true, attributeFilter: ["style"] });
-    // eslint-disable-next-line no-console
-    console.log(`[ring ${id}] instrumented @${performance.now().toFixed(1)}ms; getComputedStyle transition=${window.getComputedStyle(fg).transition}`);
-    return () => {
-      fg.removeEventListener("transitionrun", onRun);
-      fg.removeEventListener("transitionend", onEnd);
-      fg.removeEventListener("transitioncancel", onCancel);
-      observer.disconnect();
-    };
-  }, [isDev]);
   return (
     <div
       ref={containerRef}
@@ -301,10 +196,6 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
           r="39"
           fill="none"
           strokeLinecap="round"
-          data-ring-instance={instanceIdRef.current}
-          /* P3-B gate-4: strokeDashoffset reads the double-rAF-deferred
-             `committedOffset`, NOT the freshly-computed `dashOffset`,
-             so the DOM write lands on a painted node. */
           style={{ strokeDasharray: C, strokeDashoffset: committedOffset }}
         />
       </svg>
