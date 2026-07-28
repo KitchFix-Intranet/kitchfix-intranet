@@ -526,3 +526,132 @@ Text-delta events: 12
 The refactor is agent-code only. No prompt edits, no acceptance regressions, no adjustment round.
 
 ### Delta-streaming gate findings: 0
+
+---
+
+## SC corpus alignment batch - 2026-07-28
+
+Closes every corpus finding from the #533 audit and the 2026-07-28 quick-reference verification (Chat-approved draft v2). This session touches operator-visible money; every figure was re-verified against REF-141 header + PG `sc_fee_schedule` at load time before edits landed.
+
+### Changes per document
+
+**Content:**
+
+- `content/documents/REF-127.mdx` - added supersede annotation immediately after the $452,812 verbatim contract quote. The contract number is preserved as historical record; the annotation names the 2026 billed $515,712 with sources REF-141 + REC-106 + finance §W and the date 2026-07-28. Uses the established `[superseded: <new>; <context>; see <source>]` house convention already found in REF-140 lines 368-372.
+- `content/documents/REF-140.mdx` - three edits:
+  1. **§Per-topic model (c) Flat-SF row** (line 174): TBJ-FL number gets inline supersede annotation naming $515,712 per REF-141 + REC-106.
+  2. **§Per-topic model (c) No-SF row** (line 175): added TBR-FL MLB (per REC-108 ruling) and BGC (per REF-121; second-client stream on TBR-FL commissary, prepaid 4-week periods) - closes the taxonomy gap the #533 audit surfaced (O1).
+  3. **§(d) tables** (lines 198-199): same two additions applied for consistency.
+- `content/documents/REC-103.mdx` - reconciled chunk 1 vs chunk 5 drift. Identity paragraph now records the PG state as `$376,686 escalated row` with the migration date 2026-07-16 (matching what chunk 5 already said). Also updated the "should be updated" language in the Billing Record section and flipped the Rulings table entry from "→ migration pending" to "(decision + migration)".
+- `content/documents/PB-009.mdx` - Related Documents table statuses corrected (three rows): REF-140, REC-101..111, REF-121..132 flipped from `In build` to `Live` (all Live in PG since well before this batch; #533 O5).
+
+**New document:**
+
+- `content/documents/REF-142.mdx` - **Billing Model Quick Reference.** access_level `unrestricted`, status `Live`, next REF id in sequence (141 -> 142). Content per Chat's approved draft v2:
+  - Four billing shapes (SF%, Flat-SF, No-SF, Flat_fee) with definitions and account lists sourced from REF-140 §c.
+  - 13-entity table (entity, shape, 2026 headline figure, notes) - deliberately no per-meal rates. Every figure sourced to REF-141 header line and cross-checked against PG.
+  - TBJ-FL row explicitly names the $515,712 finance-confirmed figure and calls out the contract's $452,812 as superseded.
+  - BGC row calls out contractual independence from TBR-FL, the May 21 2026 expiry, and check-only payment.
+  - Four special cases (STL-FL counts-not-billing, TXR-TX-V carve-in + Season Tracker, BGC independence, TBR-FL as two billing entities).
+  - Postseason mechanics for CIN-OH and STL-MO.
+  - Service-fee tax treatment per account.
+  - Where-details-live precedence block naming REF-141 as the ONLY canonical price-values document.
+
+### Pipeline apply
+
+- **Validator** (`scripts/content/validate.mjs`): 0 errors across all 5 edited/new docs.
+- **Project catalog apply** (`scripts/content/project-catalog.mjs --apply`): 1 insert (REF-142), 0 update / archive, 444 relationship edges, 10 surfaces, 129 content rows upserted. All 5 steps OK.
+- **Re-embed** (`scripts/sousai-embed-doc.mjs <id>` per doc):
+
+| Doc | Chunks | Token min/max/avg |
+|---|---|---|
+| REF-127 | 13 | 64 / 668 / 377 |
+| REF-140 | 20 | 50 / 579 / 304 |
+| REC-103 | 7 | 88 / 627 / 301 |
+| PB-009 | 14 | 93 / 281 / 187 |
+| REF-142 | 7 | 114 / 810 / 327 |
+
+All rows have non-null 1536-dim embeddings. **Zero orphaned chunks** from the edits (the `replaceChunksForDoc` orchestrator deletes-then-inserts atomically per (doc_id, language)).
+
+### Figure diff-check at load time `[ran]`
+
+Every fee figure in the new REF-142 and every corrected figure in REF-127 / REF-140 was re-verified against REF-141 header + PG `sc_fee_schedule` before the docs were embedded.
+
+| Account | Figure in REF-142 | REF-141 header line | PG `sc_fee_schedule.amount` | Match? |
+|---|---|---|---|---|
+| CIN-AZ | $445,716 | `Service Fee **$445,716**` | not in fee_schedule (SF% out-of-band) | REF-141 verbatim, N/A |
+| CIN-KY | None | `**None**` | not in fee_schedule (No-SF) | REF-141 verbatim, N/A |
+| CIN-OH | $376,686 | `Service Fee **$376,686** (2026 escalated; base $362,500)` | $376,686 | ✅ |
+| STL-FL | $1,400,000 flat | `Florida Services Fee **$1,400,000 flat**` | $1,400,000 | ✅ |
+| STL-MO | $489,497 | `Service Fee **$489,497 billed** (base $473,000)` | $489,497 | ✅ |
+| TBJ-FL | $515,712 | `Service Fee **$515,712 negotiated billable**` | not in fee_schedule (Flat-SF out-of-band) | REF-141 verbatim, N/A |
+| TBJ-NY | None | `**None**` | not in fee_schedule | REF-141 verbatim, N/A |
+| TBR-FL MiLB | $457,768 | `Recurring MiLB Service Fee **$457,768**` | not in fee_schedule (SF% out-of-band) | REF-141 verbatim, N/A |
+| TXR-AZ deposit | $301,623 | `2026 deposit **$301,623**` | not in fee_schedule (deposit out-of-band) | REF-141 verbatim, N/A |
+| TXR-TX-H | $604,032 | `Service Fee **$604,032**` | $604,032 | ✅ |
+| TXR-TX-V | $0 covered by H | `**None** (covered by TXR-TX-H's $604,032 contract carve-in)` | $0, covered_by=TXR-TX-H | ✅ |
+| BGC | $6.50/meal | not in REF-141 headers (sub-client detail); REF-121 §B.2 source-of-record | not in fee_schedule (per-meal, prepaid) | REF-121 verbatim, N/A |
+
+**Zero mismatches. Diff-check clean.**
+
+### Outcome acceptance - the real gate `[ran]`
+
+Both queries run at operator scope (`accessLevels = ["unrestricted"]`) against the freshly re-embedded corpus.
+
+**Q1: "what is TBJ-FL's service fee?"**
+
+```
+status:   partial
+sources:  [REF-141, REF-142, REF-127]
+trajectory:
+  [2184ms] search_documents({"query":"TBJ-FL service fee"})
+answer:
+  TBJ-FL's 2026 service fee is $515,712 - billed in three installments
+  of $171,904 (Jan/Feb/Mar). The contract's original $452,812 figure is
+  superseded and outdated; do not use it for billing.
+
+  Source: REF-141 (TBJ-FL Price Book entry) and REF-142 (Billing Model
+  Quick Reference); confirmed by REF-127 §B.3 supersede note and REC-106.
+```
+
+- Contains `$515,712`: ✅
+- Does not present `$452,812` as current: ✅ (explicitly labels it "superseded and outdated")
+- Sources include the corrected corpus: REF-141 (fresh), REF-142 (new), REF-127 (supersede annotation).
+
+**Q2: "which accounts are flat-fee?"**
+
+```
+status:   grounded
+sources:  [REF-142, REF-140]
+trajectory:
+  [196ms]  list_documents({"docClass":"REC"})
+  [659ms]  search_documents({"query":"flat-fee accounts billing model"})
+answer:
+  The flat-fee accounts are: CIN-OH, STL-MO, STL-FL, TXR-TX-H, and
+  TXR-TX-V. On these accounts the contracted fee is the revenue.
+  Per-meal counts exist in the Service Calendar for planning and ops
+  only - they do not drive the invoice.
+
+  Source: REF-142 (Billing Model Quick Reference), billing shape table;
+  confirmed by REF-140 §(c) and §(d).
+```
+
+- All 5 flat_fee accounts named: ✅
+- REF-142 cited as primary source: ✅ (surfaced by the search, cited before REF-140)
+- Status grounded: ✅
+
+**REF-142 visibility at operator scope:**
+
+```
+available: true
+title:     Billing Model Quick Reference
+docClass:  REF
+tokens:    2291
+sections:  7
+```
+
+Confirmed retrievable via `getDocument("REF-142", { accessLevels: ["unrestricted"] })`. No restricted content leaked into it (REC-content stakeholder identity, fee-model-conversion watches, ruling context etc. all live behind restricted access - REF-142 only references documents at their own tiers).
+
+### Corpus alignment gate findings: 0
+
+Every task in the batch landed. Diff-check clean. Outcome acceptance PASS both queries. No restricted-content leak. Zero orphaned chunks.

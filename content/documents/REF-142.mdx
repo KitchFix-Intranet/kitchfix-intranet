@@ -1,0 +1,104 @@
+---
+id: REF-142
+title: "Billing Model Quick Reference"
+doc_class: REF
+shelf: "Service Delivery & Client Accounts"
+subshelf: "Financial Reference"
+status: Live
+version: "1.0"
+card_line: "One-page operator reference for KitchFix billing model per entity - shape, 2026 headline figure, and where to look for current rates."
+summary: "Operator-facing quick reference for the KitchFix billing taxonomy per entity. Names the four billing shapes (SF%, Flat-SF, No-SF, Flat_fee) with definitions from REF-140 §c, and enumerates all 13 billing entities (11 REC accounts plus TXR-TX-V bundled with H, plus BGC as a second-client stream on TBR-FL). Every 2026 headline figure is quoted from REF-141 and cross-checked against PG sc_fee_schedule. Deliberately does NOT include per-meal rates - those live in REF-141, and the delegation is the point (a second rate surface is a second staleness surface). Covers the four operational-vs-billing special cases (STL-FL counts-not-billing, TXR-TX-V carve-in + Season Tracker, BGC independence, TBR-FL as two billing entities) and postseason mechanics for the flat_fee accounts."
+keywords:
+  - billing model
+  - quick reference
+  - per-account
+  - flat_fee
+  - SF%
+  - Flat-SF
+  - No-SF
+  - service fee
+  - REF-142
+owner: "Senior Director of Operations"
+approver: "Senior Director of Operations"
+audience: corporate
+classification: "KitchFix Internal - Commercial Confidential"
+access_level: unrestricted
+lang: en
+in_corpus: true
+applies_to: company-wide
+review_interval_months: 3
+sort_order: 142
+relationships:
+  - { to: REF-140, type: references, from_section: "taxonomy source" }
+  - { to: REF-141, type: references, from_section: "current rates" }
+  - { to: PB-009, type: references, from_section: "financial hub" }
+effective_date: 2026-07-28
+last_reviewed: 2026-07-28
+---
+
+# Billing Model Quick Reference
+
+**Purpose.** Answer "what is the billing model for `<account>`?" and "what is `<account>`'s 2026 service fee?" in one hop, at operator scope. **Rates are NOT here** - they live in REF-141 (the generated Price Book), which is the ONLY canonical price-values document. That delegation is deliberate: a second rate surface is a second staleness surface.
+
+**How this file is kept honest.** Shapes come from REF-140 §Per-topic model (c). Headline figures come from REF-141 per-account headers and are cross-checked against PG `sc_fee_schedule` on every regeneration. Any figure discrepancy stops the batch that regenerates this doc.
+
+## The four billing shapes (from REF-140 §c)
+
+| Shape | Meaning | Which accounts |
+|---|---|---|
+| **SF%** | Per-meal + Service Fee that DISCOUNTS the per-meal rate (the SF% is baked into the invoice rate). | CIN-AZ (30%), TXR-AZ (20% via deposit-triggered discount), TBR-FL MiLB (25% via buy-down) |
+| **Flat-SF** | Per-meal + Service Fee that runs INDEPENDENT of the per-meal invoice (SF billed on its own schedule; per-meal at full sticker). | TBJ-FL |
+| **No-SF** | Pure per-meal, no separate service fee. | CIN-KY, TBJ-NY, TBR-FL MLB, BGC (second-client on TBR-FL, prepaid 4-week periods) |
+| **Flat_fee** | Contracted flat fee is the money. Per-meal counts exist in SC for planning only; the fee lives in `sc_fee_schedule`. | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V |
+
+## The 13 billing entities
+
+| Entity | Shape | 2026 headline figure | Notes |
+|---|---|---|---|
+| CIN-AZ | SF% (30%) | Service Fee **$445,716** (2026 accrued; 2023 base $402,016 = 30% of pre-tax budget); billed 75% Feb 1 / 25% Mar 15 | See REF-141 CIN-AZ for per-meal rates. Coffee + Fountain Bev flat-fee ancillary lines. |
+| CIN-KY | No-SF | **None** - per-meal only; estimated annual investment ~$186,462 (§4.b contract) | Type 1 / Type 2 rate structure; see REF-141 CIN-KY. Weekly billing. |
+| CIN-OH | Flat_fee | Service Fee **$376,686** (2026 escalated; base $362,500); 6 monthly Mar-Aug at $61,907.08 pre-tax; tax-TAXABLE at 7.80% | Escalation: CPI-U Food Away from Home, August reset, 1% floor / 4% cap. Postseason: 1/81-of-fee per game = $4,413.58/game if Reds qualify. |
+| STL-FL | Flat_fee (fee-no-dollar variant) | Florida Services Fee **$1,400,000 flat** (quarterly Nov/Feb/May/Aug, 4x $350,000); SF is tax-EXEMPT | See §Special cases below for why chefs still enter counts. $900K food + $30K equipment out-of-band. |
+| STL-MO | Flat_fee | Service Fee **$489,497 billed** (base $473,000 = $423K meal-services + $50K Road Food); 6 monthly Mar-Aug 6x $73,249.50 + $50K annual March; SF is tax-NON-TAXABLE | Only the meal-services portion CPI-escalates; Road Food held flat. Postseason: per-game (Game $5,222.22 / Workout $2,777.78 / Road Food $600), NOT escalated. |
+| TBJ-FL | Flat-SF | Service Fee **$515,712** negotiated billable (3x $171,904 Jan/Feb/Mar) | **Contract's $452,812 is outdated, superseded by finance-confirmed $515,712.** REF-127 preserves the contract number as historical record; REF-141 and REC-106 carry the current billable. |
+| TBJ-NY | No-SF | **None** documented (uniform per-meal at $27.34, Kevin + invoice-confirmed) | Only historical 2019 SOW on file; no operative 2026 contract. |
+| TBR-FL MLB | No-SF | **None** - MLB has no SF; per-meal only | MLB and MiLB bill to SEPARATE cost centers. |
+| TBR-FL MiLB | SF% (25%) | Recurring MiLB Service Fee **$457,768** (2026 = $200,000 static installment 1 + $257,768 variable installment 2) | 25% MiLB rate credit reduces MiLB per-meal to 75% of base. |
+| BGC (second-client on TBR-FL) | No-SF | **None** - $6.50/meal, prepaid 4-week periods | Boys & Girls Club of Charlotte County. **Contractually INDEPENDENT** from TBR-FL parent (REF-121 §D). **TERM ENDS MAY 21, 2026** - no BGC service after that until school-year renewal. Payment: Check only per §VII. |
+| TXR-AZ | SF% (20%) | 2026 deposit **$301,623** (3x $100,541 Jan/Feb/Mar; triggers the 20% discount); escalated from 2025 deposit $297,419 at fixed 2.5%/yr | 20% deposit-triggered discount (not a %-of-budget SF). Cleanest escalator of all 11 accounts. |
+| TXR-TX-H | Flat_fee | Service Fee **$604,032** (6x $100,672 Apr-Sep pre-tax; $108,977.44 with-tax); SF is tax-TAXABLE at 8.25% (Arlington TX gross-up) | No escalator - annual negotiation. Contract text notes +10% negotiated for 2026. |
+| TXR-TX-V | Flat_fee $0 covered by TXR-TX-H | **None** - covered by TXR-TX-H's $604,032 contract carve-in for G&G/snacks/coffee | Real visiting-team direct-sales revenue tracked in Season Tracker (out of SC scope). |
+
+## Four special cases
+
+**STL-FL is billing-model flat_fee but chefs enter meal counts.** From REF-140 §g: "STL-FL is billing-model `flat_fee` but operationally a PDC (phases, camps, MiLB affiliates). Chefs enter meal counts for planning. The tile SHOULD show meals, not dollars - the calendar's `isFeeAccount && hasHomestandMap` gate correctly falls through to per-meal display (`fee-no-dollar` variant) because STL-FL has no homestand schedule (it's a PDC, not an MLB). Chefs get the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for the KPI dashboard." The count entry is for planning / ordering / labor / waste; not for billing.
+
+**TXR-TX-V is $0 covered by H's carve-in.** The `sc_fee_schedule` entry for TXR-TX-V is amount=0 with `covered_by_account_key = "TXR - TX - H"`. This covers the visiting-clubhouse G&G / snacks / coffee that TXR-TX-H's $604,032 contract carve-in includes. **The real visiting-team direct-sales catering revenue is a separate stream tracked in the Season Tracker workflow** (sold-through revenue x 19.23% labor model), out of scope for both SC and the fee schedule. When someone asks "does the visiting clubhouse make money for KitchFix?" the answer is "yes, via direct-sales catering in Season Tracker; no separate fee schedule entry."
+
+**BGC is contractually independent from TBR-FL.** REF-121 §D: "BGC is fully independent contractually; the commissary-model overlap is operational, not contractual." Billing entity = "Boys & Girls Clubs of Charlotte County" at 21500 Gibralter Drive, Port Charlotte, FL - a distinct entity from the Tampa Bay Rays. **Term ends May 21, 2026 (no auto-renew).** Half of the 2026 calendar year has no BGC service until a school-year renewal lands. **Payment method: Check only** (§VII; ACH and CC are unchecked in the contract).
+
+**TBR-FL is two billing entities in one operation.** MLB (per-meal, NO SF) and MiLB (per-meal + 25% buy-down via SF) bill to SEPARATE client cost centers (Erik Hart for MLB, Sean "Sunny" Jones for MiLB). One commissary, one operation, two invoice streams by design. Plus BGC as a THIRD billing entity on the same commissary.
+
+## Postseason mechanics (flat_fee accounts only)
+
+- **CIN-OH postseason:** 1/81-of-fee per game = **$4,413.58/game** if the Reds qualify. Same escalation as the regular-season fee.
+- **STL-MO postseason:** flat per-game (**Game $5,222.22 / Workout $2,777.78 / Road Food $600**), NOT escalated. Differs from CIN-OH which escalates its postseason rate alongside its regular season.
+- **TXR-TX-H:** no postseason mentioned as escalating (annual negotiation).
+
+## Service-fee tax treatment
+
+- **SF tax-TAXABLE:** CIN-OH 7.80%, TXR-TX-H 8.25% (Arlington TX gross-up)
+- **SF tax-EXEMPT:** STL-FL (invoice-confirmed)
+- **SF NON-TAXABLE:** STL-MO (Cardinals' legal position, invoice-confirmed K300168469)
+- **Ancillary tax-free lines:** CIN-AZ Coffee + Fountain Bev (weekly flat); TBR-FL BGC Lunch ($6.50, after-school supper program)
+
+## Where details live - precedence
+
+- **Rates (per-meal $, unit-flat $):** REF-141 Price Book. Regenerated from PG on any price change. This is the ONLY canonical price-values document.
+- **Fee amounts (2026 headline figure):** REF-141 header line per account; PG `sc_fee_schedule` for the flat_fee subset. Both cohere at load time.
+- **Contract source-of-record:** REF-121 through REF-132 (Contract Digests). These are historical + verbatim; supersede annotations name when a stale contract number has been overtaken by finance-confirmed figures (see TBJ-FL for the pattern - REF-127's $452,812 vs finance $515,712).
+- **Per-account rulings + operational context + stakeholder identity:** REC-101 through REC-111 (Account Records; restricted).
+- **Billing shape taxonomy definitions + why:** REF-140 §Per-topic model (c) + (d) + (g).
+- **This quick reference:** REF-142 (this file) - operator-scope, unrestricted, no per-meal rates.
+
+If a figure here disagrees with REF-141 or PG, **REF-141 and PG win** and this file gets regenerated.
