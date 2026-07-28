@@ -37,9 +37,10 @@ import "./seasonStepper.css";
 export default function SeasonStepper({
   yearData,                   // months[] from sc-year-summary
   todayDate,                  // "YYYY-MM-DD" | null
+  accountKey,                 // M-0: MLB-only gate inside deriveHomestandSegments
   onSegmentClick,             // (homestandId) => void; drills into the period
 }) {
-  const segments = deriveHomestandSegments(yearData, todayDate);
+  const segments = deriveHomestandSegments(yearData, todayDate, { accountKey });
   if (!segments.length) return null;
   const focus = pickFocusSegment(segments);
 

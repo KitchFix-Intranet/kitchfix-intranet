@@ -127,7 +127,7 @@ export default function OpsRail({
   const scopedComplete = periodMetrics?.complete || 0;
   const scopedTotal = periodMetrics?.total || 0;
   const scopedMeals = periodMetrics?.actMeals || 0;
-  const seasonTotals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso);
+  const seasonTotals = deriveOpsHeroTotals(yearData, hasHomestandSchedule, iso, { accountKey });
   const heroValue = isDrill
     ? scopedComplete
     : (hasHomestandSchedule ? seasonTotals.gameDaysEntered : seasonTotals.daysEntered);
@@ -189,8 +189,8 @@ export default function OpsRail({
   // ─── Homestand ledger (MLB fee variant only) ─────────────
   const ledger = hasHomestandSchedule
     ? (mode === "drill" && periodRange
-        ? deriveOpsHomestandLedgerScoped(yearData, iso, periodRange.start, periodRange.end)
-        : deriveOpsHomestandLedger(yearData, iso))
+        ? deriveOpsHomestandLedgerScoped(yearData, iso, periodRange.start, periodRange.end, { accountKey })
+        : deriveOpsHomestandLedger(yearData, iso, { accountKey }))
     : [];
 
   // ─── Notes (drill only) ──────────────────────────────────
