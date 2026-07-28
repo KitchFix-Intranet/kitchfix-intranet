@@ -3104,6 +3104,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               periodDays={periodDays}
               periodRange={drillPeriodRange}
               hasHomestandSchedule={hasHomestandSchedule}
+              accountKey={selectedAccount}
               yearData={yearData}
               today={today}
               loading={loading && !periodDays}
@@ -3314,6 +3315,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               periodDays={monthDays}
               periodRange={monthRange}
               hasHomestandSchedule={hasHomestandSchedule}
+              accountKey={selectedAccount}
               yearData={yearData}
               today={today}
               loading={loading && !monthDays}

@@ -197,6 +197,7 @@ export default function SeasonShell({
         <SeasonStepper
           yearData={yearData}
           todayDate={todayDate}
+          accountKey={account?.key}
           onSegmentClick={handleSegmentClick}
         />
       ) : (
@@ -319,6 +320,10 @@ export default function SeasonShell({
           syncingDates={syncingDates}
           springDateSet={springDateSet}
           scV2={scV2}
+          /* M-0: PeriodCard's subtitle re-derives from full-season
+             blocks scoped to this period, so both yearData and the
+             account key thread down through PeriodGrid. */
+          accountKey={account?.key}
         />
       )}
       </div>
@@ -395,6 +400,9 @@ function PeriodGrid({
   syncingDates,
   springDateSet,
   scV2 = false,
+  // M-0: forwarded to PeriodCard so its `deriveHomestandSubtitle`
+  // can re-derive full-season blocks and filter to this period.
+  accountKey,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -421,6 +429,11 @@ function PeriodGrid({
             onClick={onPeriodClick}
             syncingDates={syncingDates}
             springDateSet={springDateSet}
+            /* M-0: for the homestand subtitle, PeriodCard derives
+               full-season blocks and filters to this period so
+               ordinal labels line up with the SeasonStepper. */
+            yearData={yearData}
+            accountKey={accountKey}
           />
         </div>
       ))}

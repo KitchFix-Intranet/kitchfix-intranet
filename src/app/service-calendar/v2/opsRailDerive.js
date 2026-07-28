@@ -59,7 +59,15 @@ function daysAgo(iso, todayIso) {
 //   daysEntered / totalActionableDays via dayPredicates.
 //   mealsYTD = sum of month.actualCovers.
 // ═══════════════════════════════════════════════════════════════
-export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate) {
+// M-0 (2026-08-04): every call to deriveHomestandSegments now threads
+// `accountKey` so the MLB-only gate holds. Callers that don't have an
+// accountKey handy pass `undefined`; the derivation returns [] for
+// non-MLB accounts, matching the pre-M-0 behavior for CIN-KY / TBJ-NY
+// (empty stored ids also gave []) and never reaching STL-FL / TBJ-FL /
+// PDC through outer gates. `accountKey` is an object option (not a
+// positional arg) so future guards can extend the shape without churn.
+export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate, opts = {}) {
+  const { accountKey } = opts;
   const totals = {
     gameDaysEntered: 0,
     totalGameDays: 0,
@@ -88,7 +96,7 @@ export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate) {
   }
 
   if (hasHomestandSchedule) {
-    const segments = deriveHomestandSegments(yearData, todayDate || todayISO());
+    const segments = deriveHomestandSegments(yearData, todayDate || todayISO(), { accountKey });
     totals.totalHomestands = segments.length;
     for (const s of segments) {
       if (s.gameCount > 0 && s.gameCount === s.gameEntered) {
@@ -134,15 +142,18 @@ export function deriveOpsHeroTotals(yearData, hasHomestandSchedule, todayDate) {
 // segments' game-day dates - a separate helper (`deriveOpsQueue`)
 // filters day records to the actionable set.
 // ═══════════════════════════════════════════════════════════════
-export function deriveOpsHomestandLedger(yearData, todayDate) {
+export function deriveOpsHomestandLedger(yearData, todayDate, opts = {}) {
+  const { accountKey } = opts;
   const iso = todayDate || todayISO();
-  const segments = deriveHomestandSegments(yearData, iso);
+  const segments = deriveHomestandSegments(yearData, iso, { accountKey });
   return segments.map(seg => {
     let status = seg.status; // done/now/next from the base derivation
     if (status === "now") status = "current";
     if (status === "done" && seg.gameEntered < seg.gameCount) status = "in-progress";
     return {
-      key: seg.homestandId,
+      // M-0: React key uses the DERIVATION's stable key (first game's
+      // gamePk, else startDate), not the ordinal display label.
+      key: seg.key,
       homestandId: seg.homestandId,
       opponents: seg.opponents,
       opponentLabel: seg.opponents.length > 0 ? seg.opponents.join(" / ") : "TBD",
@@ -161,56 +172,47 @@ export function deriveOpsHomestandLedger(yearData, todayDate) {
 // segments to those overlapping the [start,end] range, then trims each
 // remaining segment's counts to the days within the window. Uses the
 // same helper output structure - all filters preserved.
-export function deriveOpsHomestandLedgerScoped(yearData, todayDate, rangeStart, rangeEnd) {
+export function deriveOpsHomestandLedgerScoped(yearData, todayDate, rangeStart, rangeEnd, opts = {}) {
+  const { accountKey } = opts;
   const iso = todayDate || todayISO();
-  const segments = deriveHomestandSegments(yearData, iso);
+  const segments = deriveHomestandSegments(yearData, iso, { accountKey });
   const scoped = segments.filter(seg =>
     seg.startDate <= rangeEnd && seg.endDate >= rangeStart
   );
   if (!scoped.length) return [];
 
-  // For scope-filtered rows, we need per-HS in-window counts. Walk
-  // yearData once, filtered to the window + the load-bearing filters
-  // (skip !homestandId, EXHIBITION, AWAY - same as
-  // deriveHomestandSegments) to compute scoped gameCount/gameEntered/
-  // meals. This is scope-scoping over the same filtered set, not a
-  // parallel bucket.
-  const scopedById = new Map();
-  for (const m of yearData || []) {
-    if (!m.days) continue;
-    for (const d of m.days) {
-      if (d.date < rangeStart || d.date > rangeEnd) continue;
-      if (!d.homestandId) continue;
-      if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
-      let s = scopedById.get(d.homestandId);
-      if (!s) {
-        s = { gameCount: 0, gameEntered: 0, meals: 0 };
-        scopedById.set(d.homestandId, s);
-      }
-      if (d.dayType === "GAME") {
-        s.gameCount += 1;
-        if (d.status === "entered") s.gameEntered += 1;
-      }
-      if (d.actualMeals != null) s.meals += Number(d.actualMeals) || 0;
-    }
-  }
-
+  // M-0 (2026-08-04): match by DATE RANGE, not by stored homestand_id.
+  // For each scoped segment, walk yearData days within the intersection
+  // of the segment's date range and the requested window; count GAME
+  // rows (entered + meals). Same shape as the pre-M-0 output.
   return scoped.map(seg => {
-    const sc = scopedById.get(seg.homestandId) || { gameCount: 0, gameEntered: 0, meals: 0 };
+    const winStart = seg.startDate > rangeStart ? seg.startDate : rangeStart;
+    const winEnd = seg.endDate < rangeEnd ? seg.endDate : rangeEnd;
+    let gameCount = 0, gameEntered = 0, meals = 0;
+    for (const m of yearData || []) {
+      if (!m.days) continue;
+      for (const d of m.days) {
+        if (d.date < winStart || d.date > winEnd) continue;
+        if (d.dayType !== "GAME") continue;
+        gameCount += 1;
+        if (d.status === "entered") gameEntered += 1;
+        if (d.actualMeals != null) meals += Number(d.actualMeals) || 0;
+      }
+    }
     let status = seg.status;
     if (status === "now") status = "current";
-    if (status === "done" && sc.gameEntered < sc.gameCount) status = "in-progress";
+    if (status === "done" && gameEntered < gameCount) status = "in-progress";
     return {
-      key: seg.homestandId,
+      key: seg.key,
       homestandId: seg.homestandId,
       opponents: seg.opponents,
       opponentLabel: seg.opponents.length > 0 ? seg.opponents.join(" / ") : "TBD",
       startDate: seg.startDate,
       endDate: seg.endDate,
       dateRange: formatHomestandRange(seg.startDate, seg.endDate),
-      gameCount: sc.gameCount,
-      gameEntered: sc.gameEntered,
-      meals: sc.meals,
+      gameCount,
+      gameEntered,
+      meals,
       status,
     };
   });

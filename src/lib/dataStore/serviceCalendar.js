@@ -1,5 +1,14 @@
 import { getServiceClient } from "@/lib/supabase";
 import { isDualWrite } from "@/lib/cutover";
+// M-0 (2026-08-04): homestandSummary.homestandIds for MLB accounts is
+// now derived from GAME/AWAY blocks, not from stored homestand_id.
+// Non-MLB accounts fall through to the pre-M-0 stored-id path (STL-FL
+// gets [] either way; empty stored ids). Import is client-file-free -
+// homestandDerivation.js has no React / DOM dependencies.
+import {
+  deriveHomestandSegments,
+  DERIVE_HOMESTANDS_ACCOUNTS,
+} from "@/app/service-calendar/season/homestandDerivation";
 
 // ── Schedule-truth fallback (shared) ──────────────────────────────────
 //
@@ -1000,7 +1009,7 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from("sc_homestand_schedule")
-    .select("service_date, homestand_id, day_type, opponent, day_night, game_time, is_doubleheader")
+    .select("service_date, homestand_id, day_type, opponent, day_night, game_time, is_doubleheader, game_pk")
     .eq("account_key", accountKey)
     .gte("service_date", firstDate)
     .lte("service_date", lastDate)
@@ -1026,6 +1035,11 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
       // small "DH" affix on the opponent chip when true. Defaults to
       // false on rows that predate sc-16 or aren't loader-owned.
       isDoubleheader: !!r.is_doubleheader,
+      // M-0 (2026-08-04): MLB Stats API game_pk passes through so the
+      // client-side derivation can use it as the block's stable key
+      // (survives reschedules; the service_date does not). Nullable
+      // on AWAY / EXHIBITION rows.
+      gamePk:      r.game_pk || null,
     };
   }
   return map;
@@ -1274,6 +1288,9 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       // sc-16 (2026-07-11): DH affix flag passes through so the
       // renderer can decorate the opponent chip.
       dayEntry.isDoubleheader = hs.isDoubleheader;
+      // M-0 (2026-08-04): gamePk is the block's stable key across
+      // reschedules. Nullable - AWAY / EXHIBITION rows keep null.
+      dayEntry.gamePk = hs.gamePk;
     }
     // sc-18 (2026-07-12): boolean-per-date overlay presence for the
     // sm-tile game-day wedge. Purely presentational; never touches
@@ -1314,9 +1331,29 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   // this block entirely (homestandSummary omitted from response).
   const homestandSummaryByMonth = new Map();
   if (billingModel === "flat_fee" && hasHomestandData) {
+    // M-0 (2026-08-04): for MLB accounts (DERIVE_HOMESTANDS_ACCOUNTS),
+    // homestandIds per month is DERIVED from GAME/AWAY blocks scoped
+    // to that month, not from stored homestand_id. STL-FL falls through
+    // the derivation (not in the set → []) and lands on the pre-M-0
+    // stored-id path below, which for STL-FL returns [] too (stored
+    // ids are empty on its overlay rows). Same effective output.
+    const isDerivedAccount = DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey);
+    // Build the derive input from daysByMonth (same shape yearData has
+    // client-side). One derivation covers the whole year; per-month
+    // slices come from overlap filtering below.
+    let derivedBlocks = [];
+    if (isDerivedAccount) {
+      const yearDataForDerive = [...daysByMonth.entries()].map(
+        ([month, days]) => ({ month, days })
+      );
+      const todayIso = today.toISOString().slice(0, 10);
+      derivedBlocks = deriveHomestandSegments(yearDataForDerive, todayIso, { accountKey });
+    }
+    const useDerived = isDerivedAccount && derivedBlocks.length > 0;
+
     for (const [monthKey, days] of daysByMonth.entries()) {
       let gameDays = 0, gameDaysEntered = 0, prepDays = 0;
-      const homestandIds = new Set();
+      const storedIds = new Set();
       for (const d of days) {
         // sc-12 (2026-07-10): EXHIBITION rows are billed outside the
         // contract and must not inflate the month rollups. Skip before
@@ -1340,19 +1377,33 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
         } else if (d.dayType) {
           prepDays++;
         }
-        if (d.homestandId) homestandIds.add(d.homestandId);
+        if (!useDerived && d.homestandId) storedIds.add(d.homestandId);
       }
-      homestandSummaryByMonth.set(monthKey, {
-        gameDays,
-        gameDaysEntered,
-        prepDays,
-        homestandIds: [...homestandIds].sort((a, b) => {
+      let homestandIds;
+      if (useDerived) {
+        // Month bounds are string-comparable ISO dates. "2026-07-31"
+        // is a safe upper bound for July (any real date "2026-07-DD"
+        // sorts <= it, and August dates sort > it).
+        const monthStart = `${monthKey}-01`;
+        const monthEnd = `${monthKey}-31`;
+        const overlapping = derivedBlocks.filter(b =>
+          b.startDate <= monthEnd && b.endDate >= monthStart
+        );
+        homestandIds = overlapping.map(b => b.homestandId);
+      } else {
+        homestandIds = [...storedIds].sort((a, b) => {
           // Sort HS1, HS2, ... numerically rather than lexicographically
           // so HS10 doesn't sort before HS2.
           const na = parseInt(String(a).replace(/[^0-9]/g, ""), 10) || 0;
           const nb = parseInt(String(b).replace(/[^0-9]/g, ""), 10) || 0;
           return na - nb;
-        }),
+        });
+      }
+      homestandSummaryByMonth.set(monthKey, {
+        gameDays,
+        gameDaysEntered,
+        prepDays,
+        homestandIds,
       });
     }
   }

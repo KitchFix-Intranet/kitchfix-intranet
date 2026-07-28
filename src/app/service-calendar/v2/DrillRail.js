@@ -51,6 +51,9 @@ export default function DrillRail({
   periodDays,        // per-day array for queue + notes derivation
   periodRange,       // { start, end } - drill window
   hasHomestandSchedule,
+  accountKey,        // M-0 (2026-08-04): MLB-only gate inside
+                     // deriveOpsHomestandLedgerScoped. Non-MLB drill
+                     // scopes get [] and skip the HOMESTANDS section.
   yearData,          // W6: for the optional HOMESTANDS section on
                      // per-meal accounts w/ hasHomestandSchedule=true
                      // (CIN-KY). The ledger derives from the year
@@ -324,7 +327,8 @@ export default function DrillRail({
             yearData,
             today,
             periodRange.start,
-            periodRange.end
+            periodRange.end,
+            { accountKey }
           );
           if (!ledger.length) return null;
           return (

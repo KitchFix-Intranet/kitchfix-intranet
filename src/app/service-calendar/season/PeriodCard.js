@@ -28,6 +28,11 @@ import { CANONICAL_PHASES } from "./phaseCalendar";
 import { mlbPeriodPhaseLabel } from "./mlbSeasonPhase";
 import ProgressBar from "./ProgressBar";
 import { countActionableDays, countEnteredActionable } from "./dayPredicates";
+// M-0 (2026-08-04): the homestand subtitle is now derived from
+// full-season GAME/AWAY blocks rather than grouping by the stored
+// `homestand_id`. Full-season is required so the ordinal labels
+// (HS1..HSN) line up with the SeasonStepper's numbering.
+import { deriveHomestandSegments } from "./homestandDerivation";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -41,14 +46,20 @@ export default function PeriodCard({
   onClick,                    // (periodKey) => void
   syncingDates,               // F3: Set<YYYY-MM-DD> for current account
   springDateSet,              // sc-19: Set<YYYY-MM-DD> for Spring Training dates (client-derived from phaseCalendar.js)
+  yearData,                   // M-0: full year for the homestand-subtitle re-derivation
+  accountKey,                 // M-0: MLB-only gate is applied inside deriveHomestandSegments
 }) {
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
-  // derive a homestand-based subtitle from the bucketed days (every
-  // day carries homestandId + opponent + dayType for fee accounts).
-  // Falls back to NULL when the period has no homestand activity -
-  // we suppress the subtitle entirely rather than render
-  // "phase pending" / "PHASE PENDING" placeholder copy.
-  const homestandSubtitle = hasHomestandSchedule ? deriveHomestandSubtitle(days) : null;
+  // derive a homestand-based subtitle from full-season blocks scoped
+  // to this period. M-0 (2026-08-04): the subtitle used to group by
+  // stored `homestand_id`; it now overlaps the full-season derived
+  // block list against periodRange. The full-season list gives us
+  // stable HS ordinals so the subtitle reads consistently with the
+  // SeasonStepper. Falls back to NULL when the period has no
+  // homestand activity (subtitle suppressed).
+  const homestandSubtitle = hasHomestandSchedule
+    ? deriveHomestandSubtitle({ yearData, accountKey, todayDate, periodRange })
+    : null;
 
   const periodLabel = String(periodRange.period);
   const periodNum = periodLabel.replace(/^P/i, "");
@@ -349,51 +360,30 @@ function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-// Build a homestand-based subtitle for the 4 MLB-fee accounts. Reads
-// each day's homestandId + opponent (the dataStore writes these onto
-// each day record for fee accounts). Returns:
-//   - "HS8 vs ARI -> MIA"          single homestand in this period
-//   - "HS8-9 vs ARI -> MIA / MIL"  two homestands straddling the period
-//   - "Off-season" / null           no homestand activity at all
-// The format mirrors the SeasonStepper's caption so the two surfaces
-// read consistently.
-function deriveHomestandSubtitle(days) {
-  if (!days?.length) return null;
-  const byHs = new Map();
-  for (const d of days) {
-    if (!d.homestandId) continue;
-    // sc-12: exhibition homestands (EXH1) are outside the regular-
-    // season slate; the subtitle should read as if they weren't there.
-    // sc-13: AWAY rows carry homestand_id=NULL and are already excluded
-    // by the `!d.homestandId` guard above; defensive skip for reader
-    // clarity in case a future seed pass attaches an id.
-    if (d.dayType === "EXHIBITION" || d.dayType === "AWAY") continue;
-    let bucket = byHs.get(d.homestandId);
-    if (!bucket) {
-      bucket = { opponents: [], opponentSet: new Set() };
-      byHs.set(d.homestandId, bucket);
-    }
-    if (d.dayType === "GAME" && d.opponent && !bucket.opponentSet.has(d.opponent)) {
-      bucket.opponentSet.add(d.opponent);
-      bucket.opponents.push(d.opponent);
-    }
-  }
-  if (byHs.size === 0) return null;
-  // Sort by homestand number for a stable label.
-  const ids = [...byHs.keys()].sort((a, b) => hsNum(a) - hsNum(b));
-  const opps = [];
-  for (const id of ids) {
-    const bucket = byHs.get(id);
-    const oppLabel = bucket.opponents.length > 0 ? bucket.opponents.join("/") : "TBD";
-    opps.push(oppLabel);
-  }
-  const idLabel = ids.length === 1
-    ? ids[0]
-    : `HS${hsNum(ids[0])}-${hsNum(ids[ids.length - 1])}`;
+// M-0 (2026-08-04): derived from full-season blocks (GAME/AWAY rule
+// via deriveHomestandSegments), filtered to segments overlapping the
+// period range. Ordinal labels come from position in the full-season
+// list so the "HS8" here matches the SeasonStepper's "HS8" exactly.
+// MLB-only via the accountKey gate inside deriveHomestandSegments;
+// AAA / STL-FL / TBJ-FL / PDC accounts land on the null branch below.
+//
+// Return format (unchanged from pre-M-0):
+//   - "HS8 vs ARI / MIA"           single block overlaps the period
+//   - "HS8-9 vs ARI/MIA / MIL/ATL" multiple blocks overlap the period
+//   - null                         no homestand activity in this period
+function deriveHomestandSubtitle({ yearData, accountKey, todayDate, periodRange }) {
+  if (!periodRange?.start || !periodRange?.end) return null;
+  const allBlocks = deriveHomestandSegments(yearData, todayDate, { accountKey });
+  if (!allBlocks.length) return null;
+  const overlapping = allBlocks
+    .map((b, i) => ({ ...b, ordinal: i + 1 }))
+    .filter(b => b.startDate <= periodRange.end && b.endDate >= periodRange.start);
+  if (!overlapping.length) return null;
+  const opps = overlapping.map(b =>
+    b.opponents.length > 0 ? b.opponents.join("/") : "TBD"
+  );
+  const idLabel = overlapping.length === 1
+    ? `HS${overlapping[0].ordinal}`
+    : `HS${overlapping[0].ordinal}-${overlapping[overlapping.length - 1].ordinal}`;
   return `${idLabel} vs ${opps.join(" / ")}`;
-}
-
-function hsNum(id) {
-  const n = parseInt(String(id).replace(/^HS/i, ""), 10);
-  return Number.isFinite(n) ? n : 0;
 }
