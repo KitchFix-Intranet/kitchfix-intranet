@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v1.7
+**Version:** v1.9
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -12,12 +12,14 @@
 - Kevin merges nothing whose plan section does not match what actually shipped. A mismatch is a bounce, same as any Build Accuracy Protocol failure.
 - The Status board, Decision register, PR ledger, and Changelog below are the alignment surface. If a section and reality disagree, the repo and PG are canonical and this doc gets corrected in the next revision, flagged as doc-drift.
 - Roles, standing: Kevin decides and merges. Chat drives - specs, prompts, this plan, design review. CC builds - code, git, PG, reports with [ran]/[code-read] labels.
+- **Plan drop protocol:** Kevin downloads each revision to `~/Downloads` without renaming (browsers append `(N)` rather than overwrite - expected). CC globs `~/Downloads/SOUSAI_AGENT_PLAN*.md` and selects the file whose line-3 version exactly matches the version the prompt demands, deduping byte-identical copies. Zero matches, or different files claiming the same version: stop and ask. The version line is the gate; the filename never is.
 
 ## You are here (updated every revision)
 
-- **Now:** Phase B1. #528 merged - Phase A DONE, tools live on main. B1 CC prompt delivered: agent loop + prompt port + rule-7 spec amendment + the spike gate (branch `feat/sousai-agent-b1`; this plan v1.7 rides in, replacing v1.4). Data-surface discovery still parallel.
-- **Next:** CC reports the spike record; Chat grades; if the gate passes, Kevin merges and Chat issues B2 (route + streaming + flag). If the gate fails after one prompt-adjustment round, we stop and reassess - that is the kill switch working.
-- **Open decisions:** only Decision 5 (v1 data-tool pick), on the discovery report. Case 8 of the spike produces the evidence for the parked PB-001 TOKEN_CAP call.
+- **Now:** B1 closure. Kevin ruled: **1b = Ruling A** (operator access to REF contract rates is intended; exam corrected) and **language = English-only contract** (Decision 8, below; Spanish sub-case 5b drops to informational). Closure v2 prompt delivered; gating set is 1a, 1b-corrected, 2, 3, 4, 5a, 6 - six already clean-clean, 1b re-running under the corrected criterion. Grounding evidence check still runs as Phase E input.
+- **Next:** CC closes the spike record; Kevin merges #531; Chat issues B2 (route + streaming + flag).
+- **Grading integrity principle (on the record):** exam criteria change only when ground truth or a Kevin ruling proves the criterion wrong - never because the agent failed it.
+- **Open decisions:** only Decision 5 (discovery report).
 
 ## Status board
 
@@ -25,7 +27,7 @@
 |---|---|---|---|---|
 | 0 | Close the CK-8 record (#525 corrections) | Kevin merges #525 | **DONE 2026-07-25** | #525 merged |
 | A | Tool layer + CLI probe | Probe passes all tiers incl. must-fail cases | **DONE 2026-07-25** | #528 merged |
-| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | IN FLIGHT - CC prompt delivered | PR pending |
+| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | Spike run: architecture PASS, 6/7 formal; closure pending 1b ruling + 5b evidence | #531 |
 | B2 | `/api/sousai` route, streaming, flag, admin-only | Route serves B1 behavior end to end | Not started | - |
 | C | Trajectory logging (migration + wiring) | Log rows visible in Supabase dashboard from first admin question | Not started | - |
 | D | Surface (UI): page first, then global corner-overlay launcher | Kevin approves renders, then build passes design review | Decision closed - awaits B2 | - |
@@ -44,6 +46,7 @@
 | 5 | Data-half v1 scope | Phase F size | **IN DISCOVERY** | CC data-surface report commissioned 2026-07-25; Kevin + Chat pick the v1 tool set from it. Wishlist recorded: directory, inventory, periods/homestands, all SC projections + actuals, period financial data (in-build - wire only what exists), invoices, vendors. |
 | 6 | Anthropic SDK vs raw fetch | Phase B1 | **CLOSED 2026-07-25** | Official Anthropic SDK, confirmed by Kevin. Vendor client library, not new tooling - the agent loop uses exactly the streaming + tool-block features where hand-rolling breeds bugs. |
 | 7 | Eval pass bar | Phase G | **CLOSED 2026-07-25** | Confirmed by Kevin: 90 percent aggregate on every run, 100 percent on the zero-tolerance subset. Plus a runtime answer-status badge (Grounded / Partial / Declined) on every answer - see §6 item 9. Numeric confidence scores explicitly rejected as false precision. |
+| 8 | Language policy | Prompt, spike, eval | **CLOSED 2026-07-25** | English-only contract: Sous always answers in English (enforced in the prompt). Spanish comprehension is free best-effort behavior - never guaranteed, tested, or gated. No Spanish questions in the gated eval set. Spanish docs remain pointable corpus content; a "mention the ES variant when one exists" prompt line is parked for the next sanctioned prompt revision. Lowers (does not remove) the urgency of parked maintenance item 2. |
 
 ## PR ledger
 
@@ -52,7 +55,7 @@
 | #525 | 0 | docs(sousai): retrieval regression at current corpus scale (CK-8) | **MERGED 2026-07-25** |
 | TBD | F-prep | docs(sousai): PG data-surface discovery (Decision 5 input) | CC prompt delivered 2026-07-25; read-only, own branch |
 | #528 | A | feat(sousai): phase A tool layer + probe | **MERGED 2026-07-25** - carried plan v1.4 into the repo |
-| TBD | B1 | feat(sousai): phase B1 agent loop + spike | CC prompt delivered 2026-07-25; carries plan v1.7, rule-7 spec amendment rides along |
+| #531 | B1 | feat(sousai): phase B1 agent loop + spike | Open - spike run [ran]: 6/7 both-runs, avg $0.053/question (max $0.32), latency 2.4s best / 24.4s enumeration worst; rule-7 spec amendment and plan v1.7 aboard; closure continuation in flight |
 
 ## Parked maintenance queue (small standalone PRs, Kevin schedules)
 
@@ -155,10 +158,13 @@ PR B2 - the route:
 
 Fail after one round of prompt adjustment: stop and reassess before any UI or data work exists.
 
+**B1 spike results (2026-07-25, PR #531):** architecture PASS. One sanctioned prompt round spent on an answer-in-English rule (Spanish queries were mirror-answered). Latency: ~2.4s simple lookups, ~24.4s for 12-doc enumeration (director-at-desk question class); cost avg $0.053/question, max $0.32. Case 8 closed the parked TOKEN_CAP question: search snippets answered a past-cap fact both runs without opening the doc - no cap raise, no section-fetch for v1; revisit only if eval shows whole-doc-read failures. **Rulings applied 2026-07-25:** case 1b = Ruling A (operator visibility of REF contract rates is intended; exam criterion corrected; consistent with STD-004 v1.3 and Decision 2); language = Decision 8 (5b Spanish sub-case reclassified informational; gating set is 1a, 1b-corrected, 2, 3, 4, 5a, 6). The 5b grounding evidence check runs regardless - its outcome feeds Phase E's cited-sources-contain-their-supporting-text requirement, since the question is language-independent.
+
 ### Phase C - trajectory logging (PR C)
 
 - Migration (pr-7 series): `sousai_questions` - question, user, resolved tier, full tool trajectory (JSONB), answer, sources, declined flag, latency, model, token usage, thumbs feedback, timestamp.
 - Wired into the route from the first admin-visible day. Immediately observable in the Supabase dashboard - real day-one visibility with zero admin-UI build.
+- API failures are logged as their own distinct kind (auth, credit-exhausted, rate-limit, timeout), never blended into generic errors - so the day the credit balance hits zero, the dashboard says exactly that instead of presenting a mystery outage. (Added after the 2026-07-25 credit-blocker episode.)
 
 ### Phase D - the surface (PR D, then D2)
 
@@ -214,6 +220,8 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v1.9 - 2026-07-25.** Kevin's two rulings recorded: 1b = Ruling A (REF contract-rate operator visibility intended; exam corrected) and Decision 8 = English-only language contract (5b reclassified informational; no Spanish in the gated eval; ES-variant-mention prompt line parked; maintenance item 2 urgency lowered). Gating set restated as seven cases. Closure v2 prompt issued superseding v1. Plan drop protocol added to How-this-works: CC selects by version line via glob; filenames never gate.
+- **v1.8 - 2026-07-25.** B1 spike run recorded: architecture PASS, 6/7 formal both-runs; latency and cost numbers logged; English-answer rule was the one prompt round. Case 8 evidence closes the parked TOKEN_CAP item (no action v1). Case 1b escalated to Kevin as ruling A/B (REF contract-rate visibility); case 5b pending the Include-expansion grounding check. Grading-integrity principle recorded. Phase C gains distinct API-failure logging (credit-blocker lesson). Ledger #531 added.
 - **v1.7 - 2026-07-25.** #528 merged; Phase A closed. B1 CC prompt issued. Recorded B1 design deltas: tool budget 6 to 8 with batched get_document (max 6 ids per call) so enumeration fits; status produced via a parsed `[[STATUS]]` footer with downgrade-only mechanical checks; spike cases run twice each with both-runs-pass required; case 1 gains an operator-scope no-leak rerun; case 8 added (informational PB-001 depth probe feeding the TOKEN_CAP decision). Rule-7 spec amendment folded into the B1 PR as the sanctioned spec-with-prompt exception to one-axis.
 - **v1.6 - 2026-07-25.** #528 language verification clean: all 1,445 chunks labeled en [ran], branch A (no code change), PR merge-ready. CC's original "no ES chunks" claim proven wrong-but-safe: POL-006-ES and POST-001-ES have chunks mislabeled en - filed as parked maintenance item 2 alongside the rule-7 spec amendment in a new Parked maintenance queue section.
 - **v1.5 - 2026-07-25.** PR #528 delivered and graded: 10/10 probe, plan v1.4 landed in repo. Recorded measured corpus (248,200 tokens; avg chunk ~172; PB-001 largest at 19,815), endorsed CC's access-before-status gate order, parked the PB-001 TOKEN_CAP question for the B1 spike, noted the TPL-020 rule-7 confirmation. One pre-merge verification in flight: [ran] evidence for the language="en" hardcode (silent-empty risk if non-en Live chunks exist).

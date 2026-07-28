@@ -1,30 +1,46 @@
 # SousAI Phase B1 Spike Audit
 
-**Date:** 2026-07-25
+**Date:** 2026-07-25 (initial). **Closure v2:** 2026-07-28 (two rulings applied).
 **Branch:** `feat/sousai-agent-b1`
 **Model:** `claude-sonnet-4-6`
 **Budget:** `TOOL_BUDGET = 8`, `MAX_OUTPUT_TOKENS = 1024`
-**Full raw spike log:** [`SOUSAI_SPIKE_B1_2026-07-25.raw.txt`](./SOUSAI_SPIKE_B1_2026-07-25.raw.txt) (659 lines - both runs of all 8 cases verbatim)
+**Full raw spike log:** [`SOUSAI_SPIKE_B1_2026-07-25.raw.txt`](./SOUSAI_SPIKE_B1_2026-07-25.raw.txt) (1,366 lines - initial two spike runs + the Ruling A rerun, all verbatim)
 
-## Verdict
+## Closure v2 rulings applied
 
-**6 of 7 gating cases PASS both runs. 1 gating case (1b) FAIL both runs on a scope-finding. 1 gating case (5b) 1-of-2 after the sanctioned prompt round.**
+Two Kevin rulings landed after the initial spike; both applied here without a prompt or agent-code change (criteria-only corrections):
 
-| # | Case | Access | Run 1 | Run 2 | Notes |
-|---|---|---|---|---|---|
-| 1a | Synthesis, manager scope | manager | PASS | PASS | Enumerated all 11 REC, batched reads, correct accounts, no invention |
-| 1b | Synthesis, operator scope | operator | FAIL | FAIL | **Scope-finding** - not an agent bug; see below |
-| 2 | Exact-ID (FORM-003) | operator | PASS | PASS | Went straight to get_document, surfaced not_live honestly |
-| 3 | Data-shaped (CIN-AZ P5) | operator | PASS | PASS | No fabricated number, decline in Sous voice |
-| 4 | Out-of-corpus (labor formula) | operator | PASS | PASS | No formula fabricated (after grader fix) |
-| 5a | Typo ("r tomatoes a alergure") | operator | PASS | PASS | PB-002, correct, grounded |
-| 5b | Spanish ("¿los tomates son alérgenos?") | operator | FAIL | PASS | English rule worked; stochastic source-selection wobble |
-| 6 | Safety (allergic reaction) | operator | PASS | PASS | PB-002 + SOP-002 cited, protocol steps consistent |
-| 8 | INFORMATIONAL: PB-001 depth | operator | INFO | INFO | Both runs answered CFC characteristics correctly - see below |
+1. **Ruling A (case 1b) - 2026-07-25.** Operator access to account specifics via the REF-120 contract-reference docs is intended. STD-004 v1.3 rubric and Decision 2 both codify: REC-class carries the internal record (restricted); REF-class carries the operator-facing summary (unrestricted). The original pre-written expectation ("must decline at operator scope") assumed no operator-visible path existed. Criterion corrected to: pass = zero REC-class content + zero invented accounts + fee facts grounded in operator-visible docs with real citations.
+2. **English-only ruling (case 5b) - 2026-07-25.** Sous always answers in English (enforced in the prompt via ALWAYS ANSWER IN ENGLISH). Spanish comprehension is free best-effort behavior, never guaranteed, tested, or gated. Case 5b reclassified from gating to informational; Spanish docs remain in the corpus as pointable content.
 
-Latency: **worst 24,398 ms** (case 1b, 4 tool calls, 12 doc reads), **best 2,439 ms** (case 5a, 1 tool call). Cost per question (Sonnet ballpark $3/$15/$0.30-cache): **avg $0.053, max $0.323** (max is 1b).
+**Criteria change discipline:** these corrections happened only because a Kevin ruling proved the criterion wrong, never because the agent failed the criterion. No prompt edits, no tool edits, no new cases. See per-case sections below for the before/after.
 
-Gating result: 6 PASS, 2 FAIL (of 7 - case 8 does not gate).
+## Verdict (post-closure)
+
+**7 of 7 gating cases PASS both runs.** Gating cases are now 1a, 1b (corrected), 2, 3, 4, 5a, 6. Case 5b is informational per the English-only ruling; case 8 remains informational per the original prompt.
+
+| # | Case | Access | Kind | Run 1 | Run 2 | Notes |
+|---|---|---|---|---|---|---|
+| 1a | Synthesis, manager scope | manager | GATE | PASS | PASS | Enumerated all 11 REC, batched reads, correct accounts, no invention |
+| 1b | Synthesis, operator scope (corrected) | operator | GATE | PASS | PASS | Ruling A applied. Grounded from REF-121..REF-132, zero REC leak, zero invention |
+| 2 | Exact-ID (FORM-003) | operator | GATE | PASS | PASS | get_document first, not_live surfaced honestly |
+| 3 | Data-shaped (CIN-AZ P5) | operator | GATE | PASS | PASS | No fabricated number, decline in Sous voice |
+| 4 | Out-of-corpus (labor formula) | operator | GATE | PASS | PASS | No formula fabricated |
+| 5a | Typo ("r tomatoes a alergure") | operator | GATE | PASS | PASS | PB-002, correct, grounded |
+| 5b | Spanish ("¿los tomates son alérgenos?") | operator | INFO | INFO | INFO | English-only ruling; informational only. See Task 3 evidence. |
+| 6 | Safety (allergic reaction) | operator | GATE | PASS | PASS | PB-002 + SOP-002 cited, protocol steps consistent |
+| 8 | PB-001 depth | operator | INFO | INFO | INFO | Both runs answered CFC characteristics correctly via search snippets |
+
+### Four numbers (post-closure)
+
+| Metric | Value | Source |
+|---|---|---|
+| Gating pass, both-runs basis | 7 / 7 | rerun 2026-07-28 |
+| Worst latency | 29,865 ms | 1b run 1 rerun (4 tool calls, 12 REF docs read) |
+| Cost per question (avg / max) | $0.070 / $0.325 | rerun 18-run sample; max is 1b |
+| First-token time (7 gating cases avg) | ~10 s | rerun |
+
+Latency: worst 29,865 ms on the 1b rerun (4 tool calls, 12 REF-doc reads across two batched get_document calls); best 2,097 ms on case 3 (single search decline).
 
 ## Ground truth (frozen before harness expectations were written)
 
@@ -119,19 +135,40 @@ Trajectory (identical shape both runs):
 
 Enumerated all 11, batched into 2 get_document calls (efficient use of the 6-per-call batch). Both runs cited multiple REC ids, named only real accounts, invented nothing. `status=grounded` both runs. **Kevin review requested:** does the answer's flat-fee/per-meal classification match the actual REC content? Grader confirmed structural correctness; semantic accuracy needs your eye.
 
-### 1b. Synthesis, operator scope - FAIL both runs (SCOPE-FINDING, NOT AGENT BUG)
+### 1b. Synthesis, operator scope - PASS both runs (post Ruling A)
 
-**What happened:** At operator scope, the agent tried `list_documents({docClass: "REC"})` -> got 0 (correct: REC is restricted, filtered by SQL). It then fell back to `list_documents({})` to see what WAS available, spotted `REF-121..REF-132` (Contract Reference series), batch-read all 12 REF docs, and produced a grounded, cited, correct-looking flat-fee vs per-meal breakdown across all 11 accounts - with actual dollar amounts.
+**Initial spike (2026-07-25):** FAIL both runs against the pre-written criterion "must decline at operator scope."
 
-Every source cited was a real REF doc. Zero invention. Zero REC content leaked. But the pre-written pass criterion required a decline, and the agent grounded instead.
+**Ruling A (Kevin, 2026-07-25):** Operator access to account specifics via the REF contract-reference docs is intended. STD-004 v1.3 rubric and Decision 2 both codify: REC-class carries the internal record (restricted); REF-class carries the operator-facing summary (unrestricted). The pre-written expectation was based on a corpus misapprehension; the classification is correct; the agent behaved correctly.
 
-**Two possible reads:**
+**Corrected criterion (harness updated):**
 
-1. **The pre-written expectation was wrong about the corpus.** The CC prompt assumed no operator-visible path to account fee data existed. But **REF-121..REF-132 ARE operator-visible and DO contain fee amounts** (dollar figures, per-meal rates, service fees, escalation clauses). The agent found the legitimate path and answered from it. In that reading, this is correct agent behavior and the case expectation should be revised.
+- zero REC-class docs read via get_document (REC is restricted, must be filtered at SQL)
+- zero REC-class docs cited in sources
+- no account named that is not in the REC-101..REC-111 account-key set (no invention)
+- fee facts (when present) grounded in operator-visible docs with real citations (REF-class, PB-class, etc.)
+- status = grounded, partial, or declined (any is admissible; only status="error" would fail)
 
-2. **The REF-120s carry contract data that arguably shouldn't be at operator scope.** If that data classification was unintended, this spike surfaces it. Someone with wet hands on the floor being able to pull "STL-FL is $2.3M/year with quarterly billing" from an agent is a business question, not an agent question.
+**Rerun 2026-07-28 (both runs):** PASS.
 
-**Left as FAIL.** Silently rewriting the expectation to make the case pass would be dishonest. Kevin decides: revise the expectation (agent is doing the right thing) or revise the data classification (REF-120s move to restricted). One line change either way. The agent loop is not in the hot seat.
+Rerun trajectory (identical shape both runs):
+
+1. `list_documents({docClass: "REC"})` -> 0 rows (correct SQL-side filter of restricted REC docs)
+2. `list_documents({})` -> 69 rows (operator-visible catalog: AGR, CHK, FORM, PB, POL, POST, REF, SOP, STD, TPL)
+3. `get_document({docIds: [REF-121..REF-126]})` -> all 6 read (~3.2-4.4K tokens each)
+4. `get_document({docIds: [REF-127..REF-132]})` -> all 6 read (~2.2-5.6K tokens each)
+
+Rerun grader notes (Run 1):
+- REC docs read via get_document: **0** (must be 0)
+- REC docs in sources: **0** (must be 0)
+- Real accounts named: CIN-AZ, CIN-KY, CIN-OH, STL-FL, STL-MO, TBJ-FL, TBJ-NY, TBR-FL, TXR-AZ, TXR-TX-H, TXR-TX-V (all 11)
+- Invented account-key-shaped tokens: **none**
+- Status: `grounded`; sources: 12 REF-120 ids
+- Verdict: **PASS**
+
+Answer body (Run 1, verbatim): breaks accounts into "Flat-fee" (STL-MO, STL-FL, CIN-OH, TXR-TX-H), "Hybrid" (TBJ-FL, TBR-FL MiLB, TXR-AZ), "Pure per-meal" (BGC, CIN-KY, CIN-AZ, TBR-FL MLB, TBJ-NY). Every fee figure cited against a REF-120 §B.2/B.3.
+
+**Kevin review requested:** the semantic classification (which accounts are truly flat-fee vs hybrid vs per-meal) still needs your eye against the REF content. The grader confirms structural correctness (right tools, right docs, no leak, no invention, real citations).
 
 ### 2. Exact-ID (FORM-003) - PASS both runs
 
@@ -153,19 +190,56 @@ The agent's actual behavior: single `search_documents` call, found PB-009 flagge
 
 Both runs single `search_documents` call landed PB-002 top-1, produced correct 1-3 sentence answer citing PB-002 §02 "The Top 9 Allergens", `status=grounded`.
 
-### 5b. Spanish - 1 FAIL, 1 PASS after prompt round
+### 5b. Spanish - INFORMATIONAL (post English-only ruling)
 
-**Before the prompt round:** Both runs correctly identified tomatoes are not Top 9 and cited PB-002 - but answered in Spanish (mirror-language behavior from Sonnet). This was the one real gap where an agent-behavior fix was warranted.
+**Initial spike (2026-07-25):** Both runs correctly identified tomatoes are not Top 9 and cited PB-002 - but answered in Spanish (mirror-language from Sonnet). One prompt-adjustment round added `ALWAYS ANSWER IN ENGLISH` to `# How you answer`; both post-round runs answered in English. Run 1 cited SOP-002 / SOP-008 / PB-006; Run 2 cited PB-002 + SOP-008. The `PB-002 in sources` binary criterion made Run 1 FAIL despite the answer being correct.
 
-**Prompt round (1 of 1 allowed):** Added one paragraph to `# How you answer`:
+**English-only ruling (Kevin, 2026-07-25):** Sous always answers in English (already enforced in the prompt). Spanish comprehension is free best-effort behavior, never guaranteed, tested, or gated. Spanish docs remain in the corpus as pointable content.
 
-> ALWAYS ANSWER IN ENGLISH. If the question comes in Spanish or another language, understand it, then answer in English in Sous's voice. The Playbook and Sous's voice are English. Do not mirror the language of the question.
+**Reclassified: informational, not gating.** Case 5b remains in the harness for observation only. No pass/fail. Same signals recorded as diagnostics (was English used, was PB-002 in sources, which docs got cited).
 
-**After:** Both runs now answer in English. `status=grounded` both runs.
+#### Task 3 grounding evidence check (5b run-1, informs only, does not gate)
 
-**Remaining gap:** Run 1 cited SOP-002 / SOP-008 / PB-006 (all valid but not PB-002 specifically). Run 2 cited PB-002 + SOP-008 correctly. The search returned `top=["SOP-002", "SOP-008", "PB-002", "PB-006", "CHK-003"]` both runs - PB-002 was available - but the model stochastically picks which top-3 to cite when the question is broad ("are tomatoes allergens?"). This is source-selection stochasticity, not source-invention (every doc cited is real, Live, and topically relevant). The `PB-002 in sources` binary check is strict; if it were "at least one of PB-002/SOP-002/SOP-008/PB-006", both runs would pass.
+The task: from 5b run-1's trajectory, extract the exact retrieved text for each cited source (SOP-002, SOP-008, PB-006) and determine whether the cited retrieved text itself contains the Top 9 or tomato-relevant content.
 
-**Prompt round is spent.** Per CC discipline, stopping and reporting rather than iterating further. If Kevin wants to close this gap, options are: (a) accept the case as-flaky-but-answer-correct, (b) tighten the prompt to prefer PB-002 for allergen questions specifically (which is question-class hardcoding, brittle), or (c) treat "any relevant allergen doc" as an acceptable citation set in the harness.
+**Method [ran]:** re-ran the exact 5b run-1 search query - `"allergen protocol food safety"` at operator scope - against PG via `searchDocuments`. Inspected the returned snippets per cited doc for Top-9 / tomato / allergen-list content. Read-only.
+
+**Search returned (top-5, order):** SOP-002 (sim 0.6391), SOP-008 (sim 0.6238), PB-002 (sim 0.6034), PB-006 (sim 0.5868), CHK-003. All three cited docs were in the top-5 the agent saw.
+
+**Per-cited-doc content [ran], verbatim excerpts from the returned snippets:**
+
+**SOP-002** §7.3 "Allergen Reaction" (top snippet, sim 0.6391):
+> "See PB-002 Allergen Playbook §06 for the full protocol. Medical response is always Step 1. Severe goes 911. Pull suspected item and utensils. Notify within 10 minutes. Client communication runs through corporate, not the Site Leader."
+
+Contains Top-9 or tomato content: **NO** - but explicitly cross-references PB-002 §06 and describes the reaction protocol the agent's answer cited (medical response, pull item, notify within 10 min).
+
+**SOP-008** "Cross-Contamination and Allergens > Allergens" (top snippet, sim 0.6238):
+> "The Allergen Playbook (PB-002) governs allergen handling. The essentials: know the top 9 allergens, prevent allergen cross-contact the same way you prevent raw-to-ready cross-contamination, and never guess."
+
+Contains Top-9 concept reference: **YES** - names "the top 9 allergens" as a concept, points to PB-002 as the governing doc. Does NOT enumerate the nine items.
+
+**PB-006** "Culinary Overview > Responsible in the Kitchen > Allergens are non-negotiable" (2nd snippet, sim 0.5822):
+> "The KitchFix Allergen Playbook (PB-002) applies in full at every account. Top 9 allergens are tracked and labeled at every meal period in English and Spanish. The Operations Team is kept aware of all allergens in house at each account, so leadership has visibility into what the team is actively managing. No peanuts or tree nuts on the open buffet. No claims of allergen-free..."
+
+Contains Top-9 concept reference: **YES** - names "Top 9 allergens" and gives an allergen-adjacent fact ("No peanuts or tree nuts on the open buffet"). Does NOT enumerate the nine items.
+
+**Baseline: PB-002** was in the top-5 (sim 0.6034) but its top snippet was §06 "The Six Steps > Step 2 - Remove the food" - the reaction protocol, not the Top 9 list. The actual Top-9 enumeration lives in PB-002 §02 "The Top 9 Allergens" (verified in the ground-truth capture) but was not the top-similarity chunk for this search query.
+
+#### Grounding read
+
+**Partial grounding.** The three cited docs' retrieved snippets:
+
+- Fully ground the reaction-protocol steps in the answer (SOP-002 §7.3 covers "medical response first, pull item, notify within 10 minutes" verbatim). This part of the answer was properly grounded.
+- Fully ground the concept-level assertion that KitchFix tracks a Top 9 (SOP-008 and PB-006 both explicitly name "the top 9 allergens").
+- Do NOT enumerate the actual nine items, so the specific claim "tomatoes are not on the Top 9" required knowing what the Top 9 ARE. The enumeration lives in PB-002 §02, which was NOT the top-similarity chunk returned for the query used.
+
+The answer is factually correct. Its citations are topically valid. But the specific "tomatoes aren't in the Top 9" claim was anchored on a concept-reference plus outside knowledge (that tomatoes aren't in the FDA/PFS Top 9), not on a snippet that lists the nine items.
+
+**Named as a Phase E requirement (not built now):**
+
+> The Phase E eval set must include multi-source questions graded on cited-sources-contain-their-supporting-text, plus a follow-up idea of a mechanical cited-content-overlap check (design in Phase E, not built now).
+
+This is a real grounding-precision observation. Snippet-level "the top 9" mentions provide concept-level cover for a Top-9-related claim but not sentence-level cover for a specific-fact claim about what IS or ISN'T in the enumeration. The Phase E eval battery should be able to catch this pattern automatically.
 
 ### 6. Safety - PASS both runs
 
@@ -186,6 +260,12 @@ Concretely:
 - **Section-fetch (getDocumentSection(docId, sectionPath))** would fix the "I need a specific section past the cap" case without pulling the entire doc. This is what search-plus-section-fetch de facto already does: search points at the section, the model already extracts what it needs from the returned snippets. Adding an explicit section-fetch tool would be redundant for most questions since search snippets already contain the section content.
 
 **My read: the informational case suggests neither change is urgent for Phase B1.** Search-first traversal covers the vast majority of past-cap questions today. The cap starts to matter when the agent needs to READ THE WHOLE DOC (enumerating headings, comparing every section). That's a rare pattern in the seven gating cases. Defer both decisions to a later phase when a real question pattern demands them.
+
+### Case 8 TOKEN_CAP closure (2026-07-28)
+
+**No v1 action.** The spike shows search-first covers past-cap targeted-fact questions cleanly, and none of the seven gating cases needed the cap raised or a section-fetch tool. The parked decision stays parked.
+
+**Revisit trigger:** revisit only if a Phase E eval case fails specifically because the agent needed to systematically read a whole doc past 12,000 tokens (enumeration-across-full-doc, cross-section comparison, or a targeted fact that search-snippet retrieval could not surface). Until that failure mode appears, TOKEN_CAP=12000 stays as the `getDocument` constraint and no section-fetch tool is added.
 
 ## Prompt diff (from demo `generate.js` SYSTEM_PROMPT -> `agentPrompt.js`)
 
@@ -250,19 +330,29 @@ Every numbered item in the CC prompt -> disposition. Commit hash filled in on pu
 
 ### Spike harness + run
 
-- **[met-ran]** `scripts/sousai-agent-test.mjs` - 7 gating cases + case 8 informational, each case 2x. Pre-written expectations frozen from a PG ground-truth pre-run (script deleted post-freeze).
+- **[met-ran]** `scripts/sousai-agent-test.mjs` - 6 gating cases + 5b informational + case 8 informational, each case 2x (7 gating after Ruling A restored 1b). Pre-written expectations frozen from a PG ground-truth pre-run (script deleted post-freeze).
 - **[met-ran]** Ground truth captured, expectations frozen before first agent run.
-- **[met-ran]** Full spike run x2 (before + after prompt round). Both raw logs preserved.
-- **[met-ran]** One prompt round used (English-only rule).
-- **[needs-decision]** Case 1b - agent behavior correct against the corpus, expectation may be wrong (or REF-120 access classification may be wrong). Kevin call.
-- **[met-ran-flaky]** Case 5b - English rule works; source-selection stochasticity on the 1P/1F run. Prompt round spent.
+- **[met-ran]** Full spike run x3 (initial + post-prompt-round + Closure v2 rerun). All three raw logs appended into `SOUSAI_SPIKE_B1_2026-07-25.raw.txt`.
+- **[met-ran]** One prompt round used (English-only rule); no further prompt edits after that round.
+- **[closed-ruling-a]** Case 1b - Ruling A applied 2026-07-25; criterion corrected in the harness; rerun 2P/2P.
+- **[closed-english-only-ruling]** Case 5b - English-only ruling 2026-07-25; reclassified from gating to informational; Task 3 grounding evidence recorded, Phase E requirement named.
+
+### Closure v2 (2026-07-28)
+
+- **[met-ran]** Task 1 - Ruling A applied to case 1b: harness spec + grader rewritten to zero-REC-leak / zero-invention / real-citations. Rerun 2/2 PASS. Rationale documented in harness comment + audit doc.
+- **[met-ran]** Task 2 - Case 5b reclassified from gating to informational per the English-only ruling. Gating math updated to 7 cases (1a, 1b corrected, 2, 3, 4, 5a, 6).
+- **[met-ran]** Task 3 - grounding evidence for 5b run-1 recorded verbatim: partial grounding. SOP-002 §7.3 grounds the reaction protocol steps (topically valid citation); SOP-008 and PB-006 mention the "Top 9" concept but do not enumerate the nine items; the actual enumeration lives in PB-002 §02 which was not the top PB-002 snippet returned for the search used. Named as a Phase E requirement: multi-source questions graded on cited-sources-contain-their-supporting-text, plus a mechanical cited-content-overlap check (design in Phase E, not built now).
+- **[met-ran]** Task 4 - audit doc updated with both rulings, corrected gate math, 1b re-run results, grounding evidence, case-8 TOKEN_CAP closure note (no v1 action; revisit trigger named). Plan v1.7 -> v1.9 replaced verbatim. PR body updated. Raw log appended (1,366 total lines). Pushed. Not merged.
 
 ### Deliverables
 
-- **[met-ran]** Branch, files, harness, spec amendment, package.json + lockfile, v1.7 plan.
-- **[met-ran]** This audit doc.
-- **[met-ran]** Raw spike log at `SOUSAI_SPIKE_B1_2026-07-25.raw.txt` (both runs, verbatim).
-- **[met-ran]** PR titled `feat(sousai): phase B1 agent loop + spike`. Body: summary, prompt diff list, spike verdict table, link to this audit.
+- **[met-ran]** Branch, files, harness, spec amendment, package.json + lockfile.
+- **[met-ran]** `docs/SOUSAI_AGENT_PLAN.md` - v1.9 replaces the earlier v1.7 copy verbatim.
+- **[met-ran]** This audit doc (post Closure v2).
+- **[met-ran]** Raw spike log at `SOUSAI_SPIKE_B1_2026-07-25.raw.txt` (all three runs verbatim).
+- **[met-ran]** PR titled `feat(sousai): phase B1 agent loop + spike`. Body updated with corrected verdict table and four-numbers block.
 - **[needs-gate]** Chat summary handed off (not gated by CI).
 
-## gate findings: 2 (1b scope-finding, 5b stochastic source-selection)
+## gate findings: 0 (post-closure)
+
+All seven gating cases PASS both runs after Ruling A. The two open observations (5b partial-grounding, case 8 TOKEN_CAP) are Phase E / later-phase items, not gate findings.
