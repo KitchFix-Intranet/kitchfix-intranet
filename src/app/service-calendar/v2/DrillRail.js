@@ -503,9 +503,13 @@ function SessionStrip({ variant }) {
   const isFee = variant === "fee";
   const dayWord = days === 1 ? "day" : "days";
   const verbWord = isFee ? "confirmed" : "entered";
+  // P3-B re-gate 6 rider (2026-07-28): per-meal figure runs through
+  // fmt$ so a no-service-only session reads "$0" (money), not a bare
+  // "0" (count). Matches the rail hero + queue money format. Fee
+  // variant is a count of served units, no currency by design.
   const detail = isFee
     ? `${unitsSum.toLocaleString()} served`
-    : `${(revenueSum > 0 ? "$" : "")}${revenueSum.toLocaleString()}`;
+    : fmt$(revenueSum);
   // P3-B gate-3 (2026-07-28): clean structural split (count vs prose)
   // restored - owner asked for the gap TOKEN, not text tricks. CSS
   // now uses margin-inline-end on -n (bulletproof against flex-gap
