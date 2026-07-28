@@ -36,6 +36,42 @@ export function canViewPlaybook(actualEmail) {
   return (actualEmail || '').toLowerCase() === PLAYBOOK_OWNER;
 }
 
+// ── Sous Reports viewer allowlist ─────────────────────────────────────────────
+//
+// SINGLE SOURCE OF TRUTH for who sees /sousai/reports. Both the page gate
+// (src/app/sousai/reports/page.js) and the profile-dropdown nav link
+// (src/components/TopNav.js, resolved server-side in src/app/layout.js) call
+// canViewSousReports(email). Widening happens here or in the env var; there
+// is no third surface to keep in sync. A link that renders for someone who
+// then gets a 404 would be a bug, and two independent gates guarantee that
+// bug eventually - so there is only one gate.
+//
+// Env var: SOUSAI_REPORTS_VIEWERS
+//   Comma-separated emails. Case-insensitive compare, per-item trimmed.
+//   Empty items dropped. Whitespace-only value treated as unset.
+//
+// Fail-closed default: when SOUSAI_REPORTS_VIEWERS is unset, empty, or
+// whitespace-only, the allowlist collapses to SOUS_REPORTS_DEFAULT_VIEWERS
+// (Kevin only). A missing env var must never widen access.
+
+export const SOUS_REPORTS_DEFAULT_VIEWERS = Object.freeze(['k.fietek@kitchfix.com']);
+
+function parseSousReportsViewers(raw) {
+  if (typeof raw !== 'string') return SOUS_REPORTS_DEFAULT_VIEWERS;
+  const items = raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0);
+  return items.length > 0 ? items : SOUS_REPORTS_DEFAULT_VIEWERS;
+}
+
+export function canViewSousReports(actualEmail) {
+  const email = (actualEmail || '').toLowerCase().trim();
+  if (!email) return false;
+  const allowlist = parseSousReportsViewers(process.env.SOUSAI_REPORTS_VIEWERS);
+  return allowlist.includes(email);
+}
+
 // ── pr-7-11: 3-tier access gate ─────────────────────────────────────────────
 //
 // Hierarchical. A viewer sees their tier AND all tiers below:

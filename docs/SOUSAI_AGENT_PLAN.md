@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.14
+**Version:** v2.21
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -17,9 +17,9 @@
 
 ## You are here (updated every revision)
 
-- **Now:** **Phase C CLOSED - production-accepted 2026-07-28.** The acceptance row: grounded PB-002 answer, sanitized trajectory verified on real data (docIds + tokens + availability, zero document text), feedback round-trip {ok:true}, asker-only path exercised. Instrumentation observation: `token_burst_ms == latency_ms` (8,955 = 8,955) - the replay behavior measured in-schema; delta streaming's success will be visible as that number diverging. **R1 (Reports page) CC prompt delivered**; the migration-gate fix prompt is also in Kevin's paste queue (order: gate fix first, then R1).
-- **Next:** R1 lands -> Chat grades -> Kevin merges + visual acceptance screenshot. Then R1.5 (needs the Slack privacy ruling), the SC corpus alignment batch, then D. Kevin today: API key rotation (screenshot exposure).
-- **Open decisions:** Decision 5 (discovery report); the four audit nods; the Slack channel privacy ruling.
+- **Now:** R1 closed and production-accepted. **New small PR specced: Sous Reports nav link** in the profile dropdown, Kevin-only - with the binding design call that ONE helper (`canViewSousReports`, env `SOUSAI_REPORTS_VIEWERS`, fail-closed default to Kevin) governs both the page gate and the link, so they cannot drift into dead-link territory. Consequence recorded: this narrows the page from slt-or-corporate to the allowlist; widening is a 30-second env edit. Kevin's remaining queue: gate-fix session result, quick-ref verification run, renders approval.
+- **Next:** nav-link PR -> merge -> dropdown check. Verification report -> draft v2 -> quick-ref approval -> corpus batch. Renders approval -> R1.5. Then Phase D (delta-streaming precondition first).
+- **Open decisions:** Decision 5; renders approval; quick-ref approval (post-verification).
 
 ## Status board
 
@@ -31,7 +31,7 @@
 | B2 | `/api/sousai` route, streaming, flag, slt-only | Acceptance gates + post-revision harness 7/7 both runs | **DONE 2026-07-28** - production-accepted via Kevin's live trace | #534 merged |
 | C | Trajectory logging (migration + feedback + wiring) | Log rows visible in Supabase dashboard from first admin question | **DONE 2026-07-28** - production-accepted via the live row | #535 merged |
 | R0 | SQL report pack (daily/weekly/monthly, 13 queries) | Kevin can run reports by hand | **DELIVERED 2026-07-28** | - |
-| R1 | Sous Reports page (slt-gated, live-computed tabs) | Page renders the R0 views on production data | IN FLIGHT - CC prompt delivered | PR pending |
+| R1 | Sous Reports page (slt-gated, live-computed tabs) | Page renders the R0 views on production data | **DONE 2026-07-28** - production-accepted via screenshot | #536 merged |
 | R1.5 | Scheduled delivery: daily Slack + weekly/monthly email | First scheduled digest arrives on time in the right channel | Queued post-R1; Kevin prereqs (webhook, privacy rule, times) | - |
 | R2 | Narrative reports + delivery + topic grouping | Kevin decision point | Queued post-D | - |
 | D | Surface (UI): page first, then global corner-overlay launcher | Kevin approves renders, then build passes design review | Decision closed - awaits B2 | - |
@@ -51,6 +51,7 @@
 | 6 | Anthropic SDK vs raw fetch | Phase B1 | **CLOSED 2026-07-25** | Official Anthropic SDK, confirmed by Kevin. Vendor client library, not new tooling - the agent loop uses exactly the streaming + tool-block features where hand-rolling breeds bugs. |
 | 7 | Eval pass bar | Phase G | **CLOSED 2026-07-25** | Confirmed by Kevin: 90 percent aggregate on every run, 100 percent on the zero-tolerance subset. Plus a runtime answer-status badge (Grounded / Partial / Declined) on every answer - see §6 item 9. Numeric confidence scores explicitly rejected as false precision. |
 | 8 | Language policy | Prompt, spike, eval | **CLOSED 2026-07-25** | English-only contract: Sous always answers in English (enforced in the prompt). Spanish comprehension is free best-effort behavior - never guaranteed, tested, or gated. No Spanish questions in the gated eval set. Spanish docs remain pointable corpus content; a "mention the ES variant when one exists" prompt line is parked for the next sanctioned prompt revision. Lowers (does not remove) the urgency of parked maintenance item 2. |
+| 9 | SC corpus alignment rulings | Corpus, eval | **CLOSED 2026-07-28** | Four-part Kevin ruling on the #533 audit: (1) REF-140 is the canonical billing taxonomy - eval grades against its vocabulary; (2) the finance-confirmed TBJ-FL $515,712 is operator-shareable - REF-127 supersede annotation authorized; (3) the corpus alignment batch is a GO (post-R1, pre-E), incl. the new operator-scope billing quick reference (Chat draft delivered for approval); (4) the five SC brief-family docs stay engineering docs - never corpus-loaded (duplication breeds contradiction). |
 
 ## PR ledger
 
@@ -68,6 +69,10 @@
 
 | #533 | audit | docs(sc): account-knowledge audit - taxonomy, STL-FL, CIN-OH escalation | Open - read-only findings, merge anytime; flags 1-2 closed by citation; spawned the SC corpus alignment batch |
 | TBD | corpus | SC corpus alignment batch (post-B2): REF-127 supersede annotation, REF-140 escalated figures, REC-103 + PB-009 nits, NEW REF-BILLING-MODEL-QUICK-REFERENCE | Gated on Kevin's four nods; before Phase E |
+
+| TBD | R1 | feat(sousai): R1 Sous Reports page | Delivered as PR #536 - **MERGED 2026-07-28**, production-accepted; notFound posture + /sousai tree ratified by merge |
+
+| TBD | R1+ | feat(sousai): Sous Reports nav link + viewer allowlist | CC prompt delivered 2026-07-28; one helper governs page gate and link visibility; env allowlist fail-closed to Kevin |
 
 ## Parked maintenance queue (small standalone PRs, Kevin schedules)
 
@@ -191,7 +196,7 @@ The question log's payoff layer. Three stages, sequenced by data availability:
 
 - **R0 (delivered):** the SQL report pack - 13 copy-paste queries for Supabase Studio covering daily digest, weekly trends, monthly adoption, declines-as-doc-gap-radar, most-cited docs, feedback, cost. Usable the day C merges.
 - **R1 (small PR, post-C merge, pre-D):** a Sous Reports page on the intranet, slt-gated behind the same gate pattern as the route. Daily / Weekly / Monthly tabs computed live from `sousai_questions` - the R0 queries as UI. No cron, no email, no LLM.
-- **R1.5 (small PR right after R1): scheduled push delivery, mechanical numbers only.** Vercel cron -> daily Slack digest (incoming webhook; scoreboard + declines + thumbs-downs + cost) and weekly email digest via the intranet's existing mailer (CC code-reads the mailer path; monthly email joins at one month of data). Defaults: daily 7:00 AM CT, weekly Monday 7:00 AM, monthly the 1st. Kevin prereqs: create the Slack webhook (env secret, never committed), rule on channel privacy, confirm times. **Privacy gate:** verbatim questions ship only to a private slt-audience channel; any wider audience gets counts-only until Kevin explicitly rules otherwise. CC verifies the Vercel plan's cron capabilities before building (B2 maxDuration pattern).
+- **R1.5 (small PR right after R1): scheduled push delivery, mechanical numbers only.** Vercel cron -> daily Slack digest (incoming webhook; scoreboard + declines + thumbs-downs + cost) and weekly email digest via the intranet's existing mailer (CC code-reads the mailer path; monthly email joins at one month of data). Defaults: daily 7:00 AM CT, weekly Monday 7:00 AM, monthly the 1st. **Email recipients: env `SOUSAI_REPORT_RECIPIENTS`, ruled 2026-07-28 = `k.fietek@kitchfix.com` only; expansion (Josh, Joe first) at Phase G on Kevin's explicit word; every addressee must sit inside the SLT privacy circle or their copy drops to counts-only.** Slack audience = the private channel membership. Kevin prereqs: DONE (webhook stored, channel ruled private, times defaulted). **Privacy gate:** verbatim questions ship only to a private slt-audience channel; any wider audience gets counts-only until Kevin explicitly rules otherwise. CC verifies the Vercel plan's cron capabilities before building (B2 maxDuration pattern).
 - **R2 (post-D, when operator volume exists, Kevin decision point):** the narrative layer - Sous writes the weekly and monthly summary (what people needed, where it declined, which docs to write next) upgrading what R1.5's deliveries say, plus smarter topic grouping (candidate design: agent emits a topic tag at log time vs batch LLM tagging - decide then).
 
 Standing caution: reports quote questions verbatim. Fine at slt-only scope; the day the page audience widens, who-reads-colleagues'-questions becomes an explicit Kevin decision.
@@ -254,6 +259,13 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v2.21 - 2026-07-28.** Sous Reports nav link specced (profile dropdown, Kevin-only). Binding design call: a single `canViewSousReports` helper governs both the page gate and link visibility - two independent gates would eventually render a link that 404s. Backed by env `SOUSAI_REPORTS_VIEWERS` with a hardcoded fail-closed default to Kevin; visibility resolved server-side, never in client code. Narrows the page from slt-or-corporate to the allowlist by design; widening is an env edit. CC worktree-location lesson carried into the prompt.
+- **v2.20 - 2026-07-28.** R1 production-accepted via Kevin's screenshot: tabs, four-state legend, honest empty states, the logged question, and numbers verified against the source row (latency and hand-checked cost). notFound-for-unauthorized and the /sousai/* tree ratified by the merge. First SousAI screen in production. Remaining Kevin queue restated: gate-fix result, quick-ref verification run, renders approval.
+- **v2.19 - 2026-07-28.** R1 delivered (PR #536), graded merge-recommended: 55/55 fixture assertions, real timezone-drift bug caught pre-ship by hand-computed expectations, build PASS, all bindings held. Placement `/sousai/reports` establishes the /sousai tree D will share; notFound-for-unauthorized proposed as the slt-page house standard - Kevin ratification pending (rec yes). Standing CC practice recorded: next-build worktrees live under ~/dev with local installs (Turbopack rejects /tmp symlinked node_modules). Visual acceptance checklist set for Kevin's screenshot (tabs, legend, honest empty states, the logged question). Repo plan at v2.14 via #536; v2.15-19 ride the next PR.
+- **v2.18 - 2026-07-28.** Kevin reordered quick-ref verification ahead of his approval - correct call, adopted. Read-only CC verification prompt issued: fill every [VERIFY] from REF-140/REF-141 verbatim, three-way diff-check every filled cell (draft vs corpus vs PG), special-case wording verification, omissions sweep. Flow becomes: report -> draft v2 -> Kevin approves a fully verified doc -> batch loads it. Draft-then-verify-then-approve recorded as the standing pattern for Chat-authored corpus content.
+- **v2.17 - 2026-07-28.** Email roster ruled: `SOUSAI_REPORT_RECIPIENTS = k.fietek@kitchfix.com` only through dogfooding; expansion (Josh, Joe first) at Phase G on Kevin's explicit word; SLT-circle-or-counts-only rule attached to every future addressee. All R1.5 prereqs now closed.
+- **v2.16 - 2026-07-28.** R1.5 delivery renders delivered for Kevin approval: daily Slack digest (scoreboard, verbatim declines, amber-barred thumbs-downs and errors, privacy footer) and weekly email (stat cards with deltas, day-by-day, repeats, doc-gaps table, most-cited, feedback, CTA) plus the monthly delta note. Sample data rendered at volume. One boundary item flagged for Kevin: the interpretive "Read:" line under doc gaps - keep in R1.5 or defer interpretation to R2. Approved renders become the binding R1.5 spec.
+- **v2.15 - 2026-07-28.** Decision 9 closed: Kevin's four audit rulings recorded (REF-140 canonical; TBJ-FL $515,712 operator-shareable; alignment batch GO post-R1 pre-E; briefs stay engineering docs). Quick-reference draft delivered for approval - deliberately points to REF-141 for line rates instead of copying them (anti-divergence), [VERIFY] markers for CC to fill diff-checked against the price book and PG. Slack channel ruled private (R1.5 ships full verbatim digests). API key rotated - screenshot exposure closed.
 - **v2.14 - 2026-07-28.** Phase C production-accepted: the live row verified every contract point (sanitized trajectory on real data, feedback round-trip, asker-only path). token_burst_ms == latency_ms recorded as the streaming baseline observable. R1 CC prompt issued: slt-gated Reports page, server-side gate, service-role-only reads, zero-migration JS aggregation over a 30-day window (trajectory excluded), no new dependencies, the three tracker non-negotiables (legend, no-silent-zero on fetch failure, honest empty states), visual acceptance = Kevin's post-deploy screenshot. Paste order set: gate fix, then R1.
 - **v2.13 - 2026-07-28.** Phase C MERGED (#535) via documented admin bypass: the migration-gate confirm path rejected the owner's canonical comment on its first real execution (org-repo author_association hypothesis; the workflow's admitted untestable-solo path). Gate spirit satisfied pre-merge (Studio apply + probe). CC fix prompt issued: evidence-first diagnosis from run logs, login allowlist alongside OWNER, honest header correction, audit-trail comment on #535, verification event named as the next migration-bearing PR. Production acceptance sequence in flight. API key rotation owed (screenshot exposure - third credential catch of the day).
 - **v2.12 - 2026-07-28.** Migration-gate discovery recorded: #535's red check was the repo's own `migration-gate.yml` required check firing for the first time in the SousAI series (first migration-adding PR), by design. The guarded condition was already satisfied (Studio apply + probe verification happened at the CC stop-points); the unlock is Kevin's canonical PR comment. Protocol added to How-this-works so every future migration-bearing PR anticipates the ceremony: apply -> probe -> comment -> green -> merge, per-SHA.
