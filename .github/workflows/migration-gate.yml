@@ -14,13 +14,32 @@ name: migration-gate
 #
 # Trigger 2 — issue_comment (created) on a PR
 #   Job B ("confirm-and-emit") filters on comments whose body contains
-#   `applied in Studio: YES`. It validates that the comment author has
-#   author_association == 'OWNER' (the maintainer), resolves the PR's
-#   current head SHA via the pulls API, and emits a "Migration gate"
-#   check_run on that SHA as success via the Checks API. GitHub's required-
-#   check aggregation reads the LATEST check_run with a given name on a
-#   given SHA, so this flips the ruleset gate green even if the scan
-#   previously ran red on the same SHA.
+#   `applied in Studio: YES`. It validates that the comment author is
+#   either author_association == 'OWNER' OR the author's login is in the
+#   ALLOWED_CONFIRMERS array below, resolves the PR's current head SHA
+#   via the pulls API, and emits a "Migration gate" check_run on that
+#   SHA as success via the Checks API. GitHub's required-check
+#   aggregation reads the LATEST check_run with a given name on a given
+#   SHA, so this flips the ruleset gate green even if the scan previously
+#   ran red on the same SHA.
+#
+# 2026-07-28 first-real-execution correction. The pre-2026-07-28 header
+# claimed OWNER for org-owned repos would fire on the maintainer's
+# comments. That claim held: on PR #535 Kevin's canonical comments were
+# reported with author_association=`OWNER` and login=`KitchFix-Intranet`
+# (Job B logged this verbatim - see run 30380589805). Job B correctly
+# emitted a `Migration gate` check_run with conclusion=success on the
+# PR head SHA. YET the required check under `main protection` stayed red
+# and Kevin admin-bypassed the merge. The likely mechanism: GitHub's
+# required-check aggregation appears to group check_runs by check_suite
+# (or by workflow_run), not purely by name-latest across suites; Job A's
+# failure check_run in the pull_request check_suite is what the ruleset
+# actually reads, and Job B's API-created check_run in a separate
+# suite is invisible to it. The ALLOWED_CONFIRMERS array below is a
+# defensive guard, not the root-cause fix - a follow-up PR needs to
+# either (a) update Job A's existing check_run in place rather than
+# creating a new one, or (b) switch to the commit-status API. That
+# investigation is scoped as its own item.
 #
 # Per-SHA reset. A confirmation applies only to the SHA it was posted for.
 # Any subsequent push fires pull_request/synchronize, which re-runs Job A
@@ -160,6 +179,23 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            // ─────────────────────────────────────────────────────────────
+            // ALLOWED_CONFIRMERS - explicit login allowlist.
+            // One human per line. Extend deliberately.
+            //
+            // On PR #535 (2026-07-28, first real execution) the canonical
+            // confirmation comments from Kevin were reported by GitHub as
+            // login=`KitchFix-Intranet` (the org login, not his personal
+            // account) with author_association=`OWNER`. That login is
+            // pinned here so future confirmations continue to pass even
+            // if GitHub changes what author_association it returns for
+            // the same commenter.
+            // ─────────────────────────────────────────────────────────────
+            const ALLOWED_CONFIRMERS = [
+              'KitchFix-Intranet',  // confirmed on PR #535 2026-07-28 - the org login the maintainer's comment surfaces as
+              'k-fietek',           // Kevin's personal GitHub login - defensive; the org form has fired historically but the personal form is a plausible alt
+            ];
+
             const comment = context.payload.comment;
             const issue = context.payload.issue;
             const association = comment.author_association;
@@ -169,33 +205,27 @@ jobs:
 
             // Author validation.
             //
-            // Accept only comments where author_association === 'OWNER'.
-            // In GitHub's data model this returns 'OWNER' for the actual
-            // repo owner (personal owner OR the org login for org-owned
-            // repos where the commenter has owner-level rights). In
-            // practice on this repo the only person who commenting with
-            // OWNER is Kevin.
-            //
-            // Solo-maintainer constraint: we cannot adversarially test
-            // the rejection path (no second user to comment on our own
-            // PRs). If a non-OWNER comment happens to contain the exact
-            // phrase, this job enters (the outer `if:` matches the
-            // phrase but not the author), then fails at this step,
-            // producing a red check_run on the DEFAULT BRANCH SHA —
-            // irrelevant to the PR's required check. The PR's own
-            // "Migration gate" red status (from Job A) remains
-            // unchanged; the merge is still blocked.
-            //
-            // If maintainer count changes (multiple humans allowed to
-            // confirm), extend to an allowlist of logins here.
-            if (association !== 'OWNER') {
+            // Accept when EITHER of the following is true:
+            //   1. author_association === 'OWNER' - the classic path,
+            //      confirmed working on PR #535 (2026-07-28) with the org
+            //      login KitchFix-Intranet.
+            //   2. login is in ALLOWED_CONFIRMERS - explicit allowlist
+            //      that survives any future GitHub reclassification of
+            //      what author_association it reports for the same
+            //      commenter. Widening from one-owner to a small allowed
+            //      set is deliberate and audit-traceable via git diff.
+            const ownerOk = association === 'OWNER';
+            const allowlistOk = ALLOWED_CONFIRMERS.includes(login);
+            if (!ownerOk && !allowlistOk) {
               core.setFailed(
-                `Comment author '${login}' has author_association '${association}', not 'OWNER'. ` +
+                `Comment author '${login}' has author_association '${association}', not 'OWNER', ` +
+                `and login is not in ALLOWED_CONFIRMERS. ` +
                 `Only the repo owner's canonical comment counts as a Studio-apply confirmation. ` +
                 `Migration gate remains unchanged on PR #${issue.number}.`
               );
               return;
             }
+            core.info(`Authorization ok: ownerOk=${ownerOk} allowlistOk=${allowlistOk}.`);
 
             // Resolve the PR's current head SHA via the pulls API.
             // Cannot use context.payload.pull_request — issue_comment
