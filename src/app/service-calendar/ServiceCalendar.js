@@ -383,7 +383,7 @@ export default function ServiceCalendar(props) {
 //      showToast dedupes by variant + shown-until-dismissed pattern;
 //      here we re-fire on every syncingKeys.size transition to non-
 //      zero and clear when it drops to zero (via a null toast).
-function HandoffAmbient({ selectedAccount, scope, periodKey, monthKey, syncingKeys, showToast, activeMetrics, scopeLabel }) {
+function HandoffAmbient({ selectedAccount, scope, periodKey, monthKey, syncingKeys, showToast, activeMetrics, scopeLabel, scopeName }) {
   const handoff = useHandoffSafe();
   const { resetSession, phase, sessionMap } = handoff;
   // Reset session on account / scope / period / month change.
@@ -420,17 +420,18 @@ function HandoffAmbient({ selectedAccount, scope, periodKey, monthKey, syncingKe
     const prev = prevCompleteRef.current;
     prevCompleteRef.current = complete;
     if (total > 0 && complete === total && prev < total && Object.keys(sessionMap || {}).length > 0) {
-      handoff.startHandoff({
-        dayDate: null,
-        totals: null,
-        monthComplete: {
-          title: "Month cleared",
-          body: `Every day in this ${scopeLabel} is entered.`,
-          stayLabel: `Stay in ${scopeLabel}`,
-        },
+      // P3-B re-gate 5 fix 1+2 (2026-07-28): stayLabel takes the
+      // DISPLAY name (e.g. "Stay in June", "Stay in P6"), not the
+      // generic word. Route through showMonthComplete - a dedicated
+      // state-set that never touches the day sequence's timers or
+      // finalizeRef, so a completing save's finalize still fires.
+      handoff.showMonthComplete({
+        title: "Month cleared",
+        body: `Every day in this ${scopeLabel} is entered.`,
+        stayLabel: `Stay in ${scopeName || scopeLabel}`,
       });
     }
-  }, [activeMetrics, sessionMap, scopeLabel, handoff]);
+  }, [activeMetrics, sessionMap, scopeLabel, scopeName, handoff]);
   return null;
 }
 
@@ -2550,6 +2551,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         scopeLabel={scope === "month" ? "month" : "period"}
         onBackToSeason={() => router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false })}
       />
+      {/* P3-B re-gate 5 fix 1 (2026-07-28): scopeName is the DISPLAY
+          NAME the card renders inside "Stay in {name}". Month drill
+          resolves to the English month word ("June"); period drill
+          resolves to "P6" using the same convention the drill header
+          uses. Fallback to the generic word so the card never blanks. */}
       <HandoffAmbient
         selectedAccount={selectedAccount}
         scope={scope}
@@ -2559,6 +2565,9 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         showToast={showToast}
         activeMetrics={scope === "month" ? monthMetrics : periodMetrics}
         scopeLabel={scope === "month" ? "month" : "period"}
+        scopeName={scope === "month"
+          ? (monthKey ? new Date(`${monthKey}-01T00:00:00`).toLocaleString("en-US", { month: "long" }) : "month")
+          : (periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : "period")}
       />
       {scV2 && (() => {
         /* Drill P1 PR-A DP1-02: drill-scope controls that ChromeBar

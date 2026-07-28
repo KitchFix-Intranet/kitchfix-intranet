@@ -136,15 +136,19 @@ export function HandoffProvider({ children }) {
   // DayEntryV2 (two-clock risk). Now stored in finalizeRef and fired
   // on the coordinator's own phase-5 timer, so if the sequence is
   // cancelled (unmount, account change) the callback drops cleanly.
-  const startHandoff = useCallback(({ dayDate, totals, monthComplete: mc, onFinalize }) => {
-    // Month-complete card can fire without a dayDate (activeMetrics
-    // transition edge). Preserve the legacy dayDate-required path for
-    // regular saves; month-complete goes straight to setMonthComplete
-    // without commitSession or the beat clock.
+  //
+  // P3-B re-gate 5 fix 2 (2026-07-28): month-complete is NO LONGER
+  // routed through startHandoff. The old shape called startHandoff
+  // with dayDate=null, which cleared the pending day sequence's
+  // timers + finalizeRef even when a day save had just kicked off
+  // its own sequence - the day modal stayed open behind the card
+  // because onFinalize never fired. showMonthComplete below owns
+  // the card path exclusively; it's a one-shot state set with no
+  // side effects on the day sequence.
+  const startHandoff = useCallback(({ dayDate, totals, onFinalize }) => {
+    if (!dayDate) return;
     clearTimers();
     finalizeRef.current = typeof onFinalize === "function" ? onFinalize : null;
-    if (mc) setMonthComplete(mc);
-    if (!dayDate) return;
     commitSession(dayDate, totals);
     setHandoffDay(dayDate);
     setHandoffTotals(totals);
@@ -200,6 +204,25 @@ export function HandoffProvider({ children }) {
 
   const dismissMonthComplete = useCallback(() => setMonthComplete(null), []);
 
+  // P3-B re-gate 5 fix 2 (2026-07-28): dedicated month-complete entry
+  // point. Sets the card state and NOTHING else - no clearTimers, no
+  // finalizeRef overwrite, no commitSession. Callable from any effect
+  // that detects the completing edge without racing an in-flight day
+  // sequence. HandoffAmbient at ServiceCalendar.js:433 now uses this.
+  const showMonthComplete = useCallback((mc) => {
+    if (mc) setMonthComplete(mc);
+  }, []);
+
+  // P3-B re-gate 5 fix 3 (2026-07-28): expose sessionMap commit
+  // separately from startHandoff so no-service saves can add their
+  // day to the strip at zero units without firing the beat clock
+  // (Ruling 5: no pill, no toast). Callers use this on save success
+  // paths that must NOT trigger the Handoff sequence.
+  const commitSessionOnly = useCallback((dayDate, totals) => {
+    if (!dayDate) return;
+    commitSession(dayDate, totals);
+  }, [commitSession]);
+
   const value = useMemo(() => ({
     phase,
     handoffDay,
@@ -213,6 +236,8 @@ export function HandoffProvider({ children }) {
     isFlippingDate,
     resetSession,
     dismissMonthComplete,
+    showMonthComplete,
+    commitSessionOnly,
     // Ref accessors for HandoffLayer (does not participate in React
     // subscription - reads the current DOM element at the moment it
     // schedules the flight).
@@ -221,6 +246,7 @@ export function HandoffProvider({ children }) {
     phase, handoffDay, handoffTotals, sessionMap, monthComplete,
     startHandoff, cancelHandoff, registerRingTarget, registerPillSource,
     isFlippingDate, resetSession, dismissMonthComplete,
+    showMonthComplete, commitSessionOnly,
   ]);
 
   return (
@@ -251,6 +277,8 @@ export function useHandoffSafe() {
     isFlippingDate: () => false,
     resetSession: () => {},
     dismissMonthComplete: () => {},
+    showMonthComplete: () => {},
+    commitSessionOnly: () => {},
     _refs: { ringTargetRef: { current: null }, pillSourceRef: { current: null } },
   };
 }

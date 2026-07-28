@@ -338,7 +338,12 @@ function DayEntryV2({
     setNoteEntries(day.noteEntries || []);
     setHistoryEntries(day.historyEntries || []);
     setExpandedGroups(new Set());
-    setJustSaved(false);
+    // P3-B re-gate 5 fix 4 (2026-07-28): justSaved reset MOVED to its
+    // own [day.date] effect below. Previously reset here, which
+    // clobbered the no-service success screen when refetch landed on
+    // the SAME day (day.actual changes → this effect runs → screen
+    // vanishes into the edit view ~300-1000ms post-save). Owner probed
+    // at +3s and correctly found the screen missing.
     setShowDiscardConfirm(false);
     setShowNoServiceConfirm(false);
     setStandaloneDraft("");
@@ -468,9 +473,15 @@ function DayEntryV2({
       } else {
         setJustSaved(true);
         setNotes("");
+        // P3-B re-gate 5 fix 3 (2026-07-28, Ruling 5): commit the
+        // no-service day to the session strip at zero units. The
+        // Handoff sequence never fires for no-service (correct - no
+        // pill, no toast); we still expose the resolved day via the
+        // strip so "N days confirmed" stays honest across cancels.
+        handoff.commitSessionOnly?.(day.date, { units: 0, revenue: 0 });
       }
     }
-  }, [serviceGroups, day, notes, onSave, onClose]);
+  }, [serviceGroups, day, notes, onSave, onClose, handoff]);
 
   // handleAddNote - matches DayDetail.js:458-479. Standalone Activity
   // composer post via onAddNote (write path unchanged).
@@ -504,6 +515,24 @@ function DayEntryV2({
     });
     return () => cancelAnimationFrame(rafId);
   }, [justSaved]);
+
+  // P3-B re-gate 5 fix 4 (2026-07-28): justSaved reset scoped to the
+  // day-navigation trigger. Fires only when day.date changes so a
+  // successful no-service confirmation survives the same-day refetch
+  // driven by monthCache invalidation post-save.
+  useEffect(() => {
+    setJustSaved(false);
+  }, [day.date]);
+
+  // P3-B re-gate 5 fix 4 (2026-07-28): explicit auto-close for the
+  // no-service inline success screen. 1500ms - long enough to read
+  // "Confirmed no service" and register the resolve without stalling
+  // the operator's flow. Cancel on unmount (day nav / manual close).
+  useEffect(() => {
+    if (!justSaved) return undefined;
+    const id = setTimeout(() => onClose?.(), 1500);
+    return () => clearTimeout(id);
+  }, [justSaved, onClose]);
 
   const fillGroupWithProjections = useCallback((group) => {
     const newVals = { ...editValues };
