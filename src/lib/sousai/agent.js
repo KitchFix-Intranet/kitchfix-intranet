@@ -291,6 +291,36 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
 
   let toolsUsed = 0;
   let finalRawText = null;
+  let firstTokenFired = false;
+
+  // Every turn streams. Text deltas emit as `text-delta` events on the fly;
+  // the route layer forwards them as `token` events to the client. Tool-use
+  // turns typically emit no text, but if the model does emit text-before-tool
+  // ("let me look that up"), those deltas stream too - the client sees them
+  // as part of the answer surface.
+  //
+  // stream.finalMessage() returns the same shape as messages.create's
+  // response (content blocks + stop_reason + usage), so the loop math is
+  // unchanged. This replaces the previous split behavior where intermediate
+  // turns used messages.create and only the budget-exhausted terminal used
+  // streaming - now terminal turns stream too, which is the whole point.
+  async function streamedTurn() {
+    const stream = client.messages.stream({
+      model: SOUSAI_AGENT_MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: systemBlocks,
+      tools: cachedTools,
+      messages,
+    });
+    stream.on("text", (chunk) => {
+      if (!firstTokenFired) {
+        firstTokenFired = true;
+        emit({ kind: "first-token", t: Date.now() });
+      }
+      emit({ kind: "text-delta", t: chunk });
+    });
+    return await stream.finalMessage();
+  }
 
   while (true) {
     const budgetLeft = TOOL_BUDGET - toolsUsed;
@@ -302,33 +332,27 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
         content:
           "Tool budget exhausted. Answer from what you have or decline honestly in the established voice. Do not request further tools.",
       });
-      const finalResp = await streamFinal(client, systemBlocks, cachedTools, messages, usage, emit);
-      finalRawText = finalResp.text;
+      const finalResp = await streamedTurn();
+      addUsage(usage, finalResp.usage);
+      finalRawText = finalResp.content
+        .filter((c) => c.type === "text")
+        .map((c) => c.text)
+        .join("");
       trajectory.push({ tool: null, kind: "final", stop_reason: finalResp.stop_reason });
       break;
     }
 
-    // Non-streaming intermediate turn (tool orchestration).
-    const resp = await client.messages.create({
-      model: SOUSAI_AGENT_MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemBlocks,
-      tools: cachedTools,
-      messages,
-    });
+    const resp = await streamedTurn();
     addUsage(usage, resp.usage);
 
     if (resp.stop_reason !== "tool_use") {
-      // Model chose to answer. Re-run this same request but streamed so we
-      // can measure time-to-first-token. Simpler alt: use the just-received
-      // text and skip the extra call. We take the simpler path since the
-      // "final turn streams" contract is measurement-driven and calling the
-      // model twice for the same input burns tokens + latency.
+      // Model chose to answer. Assemble the full text from the streamed
+      // content blocks for downstream checks ([[STATUS]] parse, citation
+      // scan). The deltas already emitted live during the stream.
       finalRawText = resp.content
         .filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("");
-      emit({ kind: "first-token", t: Date.now() });
       trajectory.push({ tool: null, kind: "final", stop_reason: resp.stop_reason });
       break;
     }
@@ -429,26 +453,8 @@ function addUsage(usage, u) {
   usage.cache_creation_input_tokens += u.cache_creation_input_tokens || 0;
 }
 
-async function streamFinal(client, systemBlocks, cachedTools, messages, usage, emit) {
-  const stream = client.messages.stream({
-    model: SOUSAI_AGENT_MODEL,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    system: systemBlocks,
-    tools: cachedTools,
-    messages,
-  });
-  let firstToken = null;
-  stream.on("text", (chunk) => {
-    if (firstToken === null) {
-      firstToken = Date.now();
-      emit({ kind: "first-token", t: firstToken });
-    }
-  });
-  const finalMessage = await stream.finalMessage();
-  addUsage(usage, finalMessage.usage);
-  const text = finalMessage.content
-    .filter((c) => c.type === "text")
-    .map((c) => c.text)
-    .join("");
-  return { text, stop_reason: finalMessage.stop_reason };
-}
+// The standalone `streamFinal` helper was folded into the main loop as
+// `streamedTurn` (declared inside runSousAgent) - every turn now streams,
+// which removes the split behavior where intermediate turns used
+// messages.create and only the terminal used messages.stream. See the
+// runSousAgent while-loop for the unified path.
