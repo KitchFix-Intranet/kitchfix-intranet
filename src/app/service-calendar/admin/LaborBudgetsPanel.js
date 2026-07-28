@@ -10,7 +10,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const PERIODS = ["P4", "P5", "P6", "P7", "P8", "P9", "P10"];
+// sc-21 (2026-08-15): storage is BARE NUMERIC ("4"..."10"), matching
+// sc_day_metadata's house convention. Display adds the "P" prefix at
+// render (see fmtPeriod below). Never store the P-form; the join
+// against sc_day_metadata.period would break silently.
+const PERIODS = ["4", "5", "6", "7", "8", "9", "10"];
+const fmtPeriod = (p) => `P${p}`;
 
 const REVENUE_FLEX_ACCOUNTS = new Set(["TXR - TX - V"]);
 
@@ -39,7 +44,7 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
   const [budgets, setBudgets] = useState([]); // live rows
   const [laborRatio, setLaborRatio] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [editingPeriod, setEditingPeriod] = useState(null); // "P4" | null
+  const [editingPeriod, setEditingPeriod] = useState(null); // "4" | null (bare numeric per sc-21)
   const [editingRatio, setEditingRatio] = useState(false);
 
   useEffect(() => {
@@ -114,7 +119,7 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
               const b = byPeriod[p];
               return (
                 <tr key={p}>
-                  <td><strong>{p}</strong></td>
+                  <td><strong>{fmtPeriod(p)}</strong></td>
                   <td>{b?.hourly_budget != null ? fmtAmount(b.hourly_budget) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
                   <td>{b?.salary_budget != null ? fmtAmount(b.salary_budget) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
                   <td>{b?.revenue_forecast != null ? fmtAmount(b.revenue_forecast) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>

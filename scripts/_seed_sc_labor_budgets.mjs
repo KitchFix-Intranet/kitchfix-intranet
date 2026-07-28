@@ -24,15 +24,24 @@ const supa = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
+// sc-21 (2026-08-15): period is now BARE NUMERIC ("4"..."10"), matching
+// sc_day_metadata's house convention. Display formats add "P" at
+// render (admin: "P" + period).
+//
+// TXR-TX-H P10 is 15714.26 (not 15714.29). Six periods × 15714.29 +
+// one at 15714.26 = 110,000.00 exactly. Owner ruling: the season
+// total is the constraint; the per-period figure absorbs the 3¢
+// drift on the last chronological slot. Do NOT restore the uniform
+// value later - the intent is exact.
 const HOURLY = {
-  "CIN - OH":     { P4: 16709,    P5: 16709,    P6: 15316,    P7: 20886,    P8: 13924,    P9: 16709,    P10: 9747 },
-  "STL - MO":     { P4: 17778,    P5: 17778,    P6: 17778,    P7: 25185,    P8: 14815,    P9: 13333,    P10: 13333 },
-  "TXR - TX - H": { P4: 15714.29, P5: 15714.29, P6: 15714.29, P7: 15714.29, P8: 15714.29, P9: 15714.29, P10: 15714.29 },
-  "TXR - TX - V": { P4: 4154,     P5: 12000,    P6: 6000,     P7: 12000,    P8: 9231,     P9: 9231,     P10: 7385 },
+  "CIN - OH":     { "4": 16709,    "5": 16709,    "6": 15316,    "7": 20886,    "8": 13924,    "9": 16709,    "10": 9747 },
+  "STL - MO":     { "4": 17778,    "5": 17778,    "6": 17778,    "7": 25185,    "8": 14815,    "9": 13333,    "10": 13333 },
+  "TXR - TX - H": { "4": 15714.29, "5": 15714.29, "6": 15714.29, "7": 15714.29, "8": 15714.29, "9": 15714.29, "10": 15714.26 },
+  "TXR - TX - V": { "4": 4154,     "5": 12000,    "6": 6000,     "7": 12000,    "8": 9231,     "9": 9231,     "10": 7385 },
 };
 
 const REVENUE = {
-  "TXR - TX - V": { P4: 21600, P5: 62400, P6: 31200, P7: 62400, P8: 48000, P9: 48000, P10: 38400 },
+  "TXR - TX - V": { "4": 21600, "5": 62400, "6": 31200, "7": 62400, "8": 48000, "9": 48000, "10": 38400 },
 };
 
 const RATIO = { "TXR - TX - V": 0.1923 };

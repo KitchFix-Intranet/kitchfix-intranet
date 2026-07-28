@@ -34,7 +34,7 @@
 // sold-revenue value (per-homestand). When sold revenue is absent,
 // `adjustedEnvelope` is null.
 
-import { DERIVE_HOMESTANDS_ACCOUNTS } from "./homestandDerivation";
+import { DERIVE_HOMESTANDS_ACCOUNTS } from "./homestandDerivation.js";
 
 // Public: the M-1 gate. Same set as M-0 - the two planes align by
 // design; a promotion needs both.
