@@ -170,6 +170,12 @@ Answer body (Run 1, verbatim): breaks accounts into "Flat-fee" (STL-MO, STL-FL, 
 
 **Kevin review requested:** the semantic classification (which accounts are truly flat-fee vs hybrid vs per-meal) still needs your eye against the REF content. The grader confirms structural correctness (right tools, right docs, no leak, no invention, real citations).
 
+**Pre-merge semantic evidence + BGC integrity check (2026-07-28).** Chat review flagged two items on the 1b answer: an entity token "BGC" outside the frozen 11-REC ground truth (that the invention-detector regex could not structurally flag), and a tension between the agent's "STL-FL is flat-fee" and the Service Calendar engine treating STL-FL as per-meal entry. Read-only queries against `document_chunks` at manager scope:
+
+- **BGC integrity check:** BGC is real. REF-121 is titled `Contract Digest - BGC (Boys & Girls Club, second client on TBR-FL)` with 22 verbatim hits. BGC is a second-client stream on the TBR-FL commissary, independent contract, $6.50/meal, prepaid 4-week periods. Also referenced in REF-141 (price book), REF-140 (money model), and REC-108 title. **Branch A applies:** the 1b grounding stands, no re-open. The REF-visible billing-entity universe exceeds the 11-REC set by design (REC = internal account records; REF = contract-facing entities including sub-clients).
+- **Grader-regex gap:** the account-invention regex `\b([A-Z]{2,4})-([A-Z]{2,3})(?:-[A-Z])?\b` structurally cannot flag entity tokens without the hyphenated account-key shape (e.g. `BGC`). **Named as a Phase E harness-design item** (not built now): the invention detector needs a fixture-driven allow-list of billing-entity names sourced from the REF-120 corpus, not a hyphen-shape regex.
+- **Semantic evidence table + flags for Kevin's review:** full §B.2/§B.3 verbatim per REF doc plus three flag lines (STL-FL contract vs SC engine tension; CIN-AZ classification inconsistency in the agent's own grouping; CIN-OH 2026 figure unverified from the excerpts pulled) posted as PR #531 comment titled "1b semantic-review evidence + BGC check". Kevin rules on semantics.
+
 ### 2. Exact-ID (FORM-003) - PASS both runs
 
 Both runs first tool call: `get_document({docIds: "FORM-003"})`. No search detour. `available:false reason:not_live` returned. Both answers surfaced this in Sous voice: "FORM-003 is a Coaching and Verbal Warning Record, but it's still in build - not published yet. Once it's Live in the Playbook, I'll pull it. Check with HR for the current process." Or similar. `status=declined` both runs.
