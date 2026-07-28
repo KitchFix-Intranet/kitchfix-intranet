@@ -467,3 +467,62 @@ The persisted trajectory must let Chat's improvement digest triage declines into
 Initial migration cargo-culted a `GRANT ... TO anon, authenticated` from `pr-7-1`. Kevin's ruling: "TRUNCATE is a destructive data privilege, not a neutral one. Zero grants to those roles is the correct posture for a service-role-only table." Migration file corrected so the committed record matches - service-role only, zero grants to anon/authenticated. Verified against production (Kevin ran only line 1 of the two GRANTs); probe still passes end-to-end after correction.
 
 ### Phase C gate findings: 0
+
+---
+
+## Delta-streaming re-cert - 2026-07-28
+
+The Phase D precondition. B2 shipped `token` events by chunking the settled answer after `runSousAgent` returned - tool events streamed live, answer text did not (`token_burst_ms == latency_ms` in the log was the tell). This PR makes the terminal turn stream from the SDK; text deltas surface through `onEvent` as `text-delta` events; the route forwards them as `token` events live.
+
+### What changed
+
+- `src/lib/sousai/agent.js` - every turn now uses `client.messages.stream(...).finalMessage()` (previously only the budget-exhausted terminal did). A `streamedTurn()` inner helper wires the `stream.on("text", delta => emit({kind: "text-delta", t: delta}))` handler, and `emit({kind: "first-token", t: Date.now()})` fires exactly once on the first delta. The buffered post-settle terminal branch is gone. `stream.finalMessage()` returns the same content-blocks-plus-stop_reason shape as `messages.create` did, so the loop math (`stop_reason === "tool_use"` -> execute tools; otherwise assemble text + break) is unchanged. `[[STATUS]]` parsing, phantom-citation checks, and the log payload all continue to work on the full-text assembled from `resp.content` after `finalMessage()` returns.
+- `src/app/api/sousai/route.js` - `onEvent` gained a `text-delta` handler that writes `token` events live. The post-settle chunk loop (`for (let i = 0; i < text.length; i += TOKEN_CHUNK_SIZE)`) is deleted. `TOKEN_CHUNK_SIZE` constant deleted. `token_burst_ms` now captures the wallclock of the first `text-delta`, which is the true time-to-first-LLM-token.
+- The standalone `streamFinal` helper is deleted (folded into `streamedTurn`).
+
+### Wire contract to the client
+
+Unchanged. The client still sees `tool_start` -> `tool_end` -> `token`* -> `done`. Only the timing is real now: `token` events arrive as the model writes each delta, not in a post-settle burst.
+
+### Re-cert result: 7/7 gating both runs
+
+| # | Case | Run 1 | Run 2 |
+|---|---|---|---|
+| 1a | Synthesis, manager scope | PASS | PASS |
+| 1b | Synthesis, operator scope | PASS | PASS |
+| 2 | Exact-ID (FORM-003) | PASS | PASS |
+| 3 | Data-shaped (CIN-AZ P5) | PASS | PASS |
+| 4 | Out-of-corpus (labor formula) | PASS | PASS |
+| 5a | Typo | PASS | PASS |
+| 5b | Spanish (informational) | INFO | INFO |
+| 6 | Safety | PASS | PASS |
+| 8 | PB-001 depth (informational) | INFO | INFO |
+
+Metrics: worst latency 18,244 ms; best 2,501 ms; avg cost $0.039, max $0.195. Raw log appended to `SOUSAI_SPIKE_B1_2026-07-25.raw.txt` (lines ~3,330-3,996).
+
+### The streaming proof (direct-invocation) `[ran]`
+
+Ran `runSousAgent` on `"what do I do if someone has an allergic reaction?"` at operator scope with an `onEvent` timer:
+
+```
+Answer length: 1143 chars
+Sources: [SOP-002, PB-002]
+Status: grounded
+
+latency_ms       = 11113ms  (runSousAgent settle)
+token_burst_ms   = 6213ms   (first text-delta event)
+gap              = 4900ms   (time spent streaming deltas after first)
+
+Text-delta events: 12
+  first delta at:  6213ms
+  last delta at:   11111ms
+  avg gap between: 445.3ms
+```
+
+**Proof:** `token_burst_ms` (6,213 ms) is **4,900 ms less than** `latency_ms` (11,113 ms). Under the pre-refactor code the two numbers were equal by construction (both measured at settle). The 4.9-second gap of live delta streaming is the observable the refactor works.
+
+### No prompt-adjustment round used
+
+The refactor is agent-code only. No prompt edits, no acceptance regressions, no adjustment round.
+
+### Delta-streaming gate findings: 0

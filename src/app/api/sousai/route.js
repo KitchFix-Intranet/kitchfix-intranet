@@ -37,14 +37,21 @@
 // prejudice: even if a client sends {accessLevels: ["slt"]}, the server uses
 // the session-derived value. The runSousAgent contract never trusts the wire.
 //
-// Streaming shape note (unchanged from B2):
-//   The B1 agent loop returns the assembled answer as one string and only
-//   emits `first-token` (a marker) - not per-delta text events. For now the
-//   route chunks the resolved answer into ~40-char pieces and emits token
-//   events after runSousAgent settles. `token_burst_ms` here is the time
-//   from stream start to the FIRST token event we emit (chunk 0). It will
-//   become the true time-to-first-LLM-token when the agent gains per-delta
-//   streaming - additive change with no wire-contract impact.
+// Streaming shape note (updated Phase D precondition, 2026-07-28):
+//   The agent loop now streams every turn via client.messages.stream and
+//   emits `text-delta` events as the model writes each delta. The route
+//   forwards those as `token` events LIVE - the client sees text arrive
+//   as the model generates it, not after settle.
+//
+//   `token_burst_ms` captures the wallclock of the first `text-delta`,
+//   which is the true time-to-first-LLM-token. Under the old post-settle
+//   chunk-loop, token_burst_ms was equal to latency_ms (both measured at
+//   settle). Under the new live-delta path, token_burst_ms is materially
+//   smaller than latency_ms - that divergence is the observable that the
+//   refactor worked.
+//
+//   Wire contract unchanged from the client's perspective: token events
+//   still arrive between tool_end and done. Only the timing is real now.
 //
 // Vercel maxDuration: 60s (matches sibling routes).
 // ════════════════════════════════════════════════════════════════════════════
@@ -59,7 +66,9 @@ import { logSousaiQuestion, updateSousaiFeedback } from "./log.js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const TOKEN_CHUNK_SIZE = 40;
+// (removed 2026-07-28) TOKEN_CHUNK_SIZE - the post-settle chunk loop that
+// used it is gone; the agent now emits `text-delta` events live and the
+// route forwards them as `token` events one delta at a time.
 
 // Deps bundle for the gate (module-level constant, no per-request rebuild).
 const GATE_DEPS = { viewerTier, isCorporateEmail, allowedAccessLevels };
@@ -180,11 +189,21 @@ async function handleAsk(gate) {
       const streamStart = Date.now();
       let firstTokenAt = null;
 
+      // Forward agent events onto the SSE wire live. The agent now emits
+      // `text-delta` events as the model writes each delta - we forward
+      // them as `token` events. token_burst_ms captures the wallclock of
+      // the first `text-delta`, which is the true time-to-first-LLM-token
+      // (used to be `latency_ms` when the whole answer was chunked after
+      // settle - the divergence between these two numbers is the proof
+      // this refactor worked; see PR body).
       const onEvent = (ev) => {
         if (ev.kind === "tool-start") {
           write("tool_start", { tool: ev.tool, summary: summarizeToolStart(ev.tool, ev.input) });
         } else if (ev.kind === "tool-end") {
           write("tool_end", { tool: ev.tool, ms: ev.ms });
+        } else if (ev.kind === "text-delta") {
+          if (firstTokenAt === null) firstTokenAt = Date.now();
+          write("token", { t: ev.t });
         }
       };
 
@@ -192,14 +211,6 @@ async function handleAsk(gate) {
       let mappedError = null;
       try {
         result = await runSousAgent({ question, accessLevels, onEvent });
-
-        // Chunk the final answer into token events. Record the first-token
-        // wallclock so we can persist token_burst_ms.
-        const text = result.answer || "";
-        for (let i = 0; i < text.length; i += TOKEN_CHUNK_SIZE) {
-          if (i === 0) firstTokenAt = Date.now();
-          write("token", { t: text.slice(i, i + TOKEN_CHUNK_SIZE) });
-        }
       } catch (err) {
         mappedError = mapSdkError(err);
         write("error", mappedError);
