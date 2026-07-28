@@ -11,6 +11,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import FeeEditPanel from "./FeeEditPanel";
+import LaborBudgetsPanel from "./LaborBudgetsPanel";
+// M-1 (2026-08-09): Labor budgets are MLB-only. Same gate the
+// derivation uses.
+const MLB_LABOR_BUDGET_ACCOUNTS = new Set([
+  "CIN - OH",
+  "STL - MO",
+  "TXR - TX - H",
+  "TXR - TX - V",
+]);
 
 function fmtAmount(n) {
   return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -167,6 +176,10 @@ export default function FeeAccountEditor({ accountKey, onBack, showToast }) {
           onSaved={handleSaved}
           showToast={showToast}
         />
+      )}
+
+      {MLB_LABOR_BUDGET_ACCOUNTS.has(accountKey) && (
+        <LaborBudgetsPanel accountKey={accountKey} showToast={showToast} />
       )}
 
       <section className="sc-admin-fee-history">
