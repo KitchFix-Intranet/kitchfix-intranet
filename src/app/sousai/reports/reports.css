@@ -1,0 +1,248 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   /sousai/reports · reports.css
+   Uses semantic tokens from tokens.css. No new dependencies, no chart libs.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.kf-sousai-reports {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  color: var(--n-900);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.kf-sousai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--n-300);
+  margin-bottom: 16px;
+}
+.kf-sousai-h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  color: var(--navy-700);
+  font-weight: 700;
+}
+.kf-sousai-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--n-700);
+}
+.kf-sousai-sub code {
+  background: var(--n-100);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.kf-sousai-refresh a {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--n-100);
+  color: var(--navy-700);
+  border: 1px solid var(--n-300);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.kf-sousai-refresh a:hover {
+  background: var(--n-200);
+}
+
+.kf-sousai-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--n-300);
+}
+.kf-sousai-tabs a {
+  padding: 10px 18px;
+  text-decoration: none;
+  color: var(--n-700);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.kf-sousai-tabs a.active {
+  color: var(--navy-700);
+  border-bottom-color: var(--navy-700);
+}
+.kf-sousai-tabs a:hover:not(.active) {
+  color: var(--navy-600);
+}
+
+.kf-sousai-daytoggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.kf-sousai-daytoggle a {
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: var(--n-100);
+  color: var(--n-700);
+  text-decoration: none;
+  font-size: 13px;
+  border: 1px solid var(--n-300);
+}
+.kf-sousai-daytoggle a.active {
+  background: var(--navy-700);
+  color: var(--n-0);
+  border-color: var(--navy-700);
+}
+
+.kf-sousai-h2 {
+  font-size: 15px;
+  color: var(--navy-700);
+  margin: 24px 0 10px;
+  font-weight: 600;
+}
+
+.kf-sousai-scoreboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.kf-sousai-scoreboard > div {
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kf-sousai-metric {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--navy-700);
+  line-height: 1.1;
+}
+.kf-sousai-label {
+  font-size: 11px;
+  color: var(--n-700);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.kf-sousai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 8px;
+  background: var(--n-0);
+}
+.kf-sousai-table th, .kf-sousai-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--n-300);
+  text-align: left;
+  vertical-align: top;
+}
+.kf-sousai-table th {
+  background: var(--n-100);
+  color: var(--n-800);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.kf-sousai-table tbody tr:hover {
+  background: var(--n-50);
+}
+.kf-sousai-question {
+  color: var(--navy-800);
+  max-width: 380px;
+}
+.kf-sousai-preview {
+  color: var(--n-700);
+  max-width: 420px;
+}
+.kf-sousai-email {
+  color: var(--n-700);
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.kf-sousai-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.kf-sousai-pill-grounded {
+  background: var(--green-50);
+  color: var(--green-700);
+  border: 1px solid var(--green-200);
+}
+.kf-sousai-pill-partial {
+  background: var(--amber-50);
+  color: var(--amber-700);
+  border: 1px solid var(--amber-200);
+}
+.kf-sousai-pill-declined {
+  background: var(--n-100);
+  color: var(--n-700);
+  border: 1px solid var(--n-300);
+}
+.kf-sousai-pill-error {
+  background: var(--red-50);
+  color: var(--red-700);
+  border: 1px solid var(--red-200);
+}
+
+.kf-sousai-empty {
+  padding: 12px;
+  color: var(--n-600);
+  font-size: 13px;
+  background: var(--n-50);
+  border-radius: 6px;
+  border: 1px dashed var(--n-300);
+  margin: 0;
+}
+
+.kf-sousai-error {
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--red-50);
+  color: var(--red-700);
+  border: 1px solid var(--red-200);
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.kf-sousai-error code {
+  background: var(--red-100);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.kf-sousai-footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--n-300);
+}
+.kf-sousai-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--n-700);
+  margin-bottom: 8px;
+}
+.kf-sousai-legend-label {
+  font-weight: 600;
+  color: var(--n-800);
+}
+.kf-sousai-note {
+  font-size: 12px;
+  color: var(--n-600);
+  margin: 0;
+}
