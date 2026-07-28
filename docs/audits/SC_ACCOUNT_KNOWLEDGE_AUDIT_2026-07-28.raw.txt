@@ -1,0 +1,1603 @@
+=== Inventory: explicit-id docs ===
+  REF-121    REF    Live       unrestricted archived=false  "Contract Digest - BGC (Boys & Girls Club, second client on TBR-FL)"
+  REF-122    REF    Live       unrestricted archived=false  "Contract Digest - CIN-AZ (Cincinnati Reds, Goodyear AZ)"
+  REF-123    REF    Live       unrestricted archived=false  "Contract Digest - CIN-KY (Louisville Bats)"
+  REF-124    REF    Live       unrestricted archived=false  "Contract Digest - CIN-OH (Cincinnati Reds MLB)"
+  REF-125    REF    Live       unrestricted archived=false  "Contract Digest - STL-FL (Cardinals, Jupiter FL)"
+  REF-126    REF    Live       unrestricted archived=false  "Contract Digest - STL-MO (Cardinals MLB)"
+  REF-127    REF    Live       unrestricted archived=false  "Contract Digest - TBJ-FL (Blue Jays, Dunedin FL)"
+  REF-128    REF    Live       unrestricted archived=false  "Contract Digest - TBJ-NY (Buffalo Bisons)"
+  REF-129    REF    Live       unrestricted archived=false  "Contract Digest - TBR-FL (Rays, commissary PDC)"
+  REF-130    REF    Live       unrestricted archived=false  "Contract Digest - TXR-AZ (Rangers, Surprise AZ)"
+  REF-131    REF    Live       unrestricted archived=false  "Contract Digest - TXR-TX-H (Rangers MLB home)"
+  REF-132    REF    Live       unrestricted archived=false  "Contract Digest - TXR-TX-V (Rangers visiting-team)"
+  REF-140    REF    Live       unrestricted archived=false  "Money Model - Service Calendar Billing Mechanics"
+  REF-141    REF    Live       unrestricted archived=false  "Price Book - Live Account Pricing (generated)"
+  REC-101    REC    Live       restricted   archived=false  "Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ)"
+  REC-102    REC    Live       restricted   archived=false  "Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA))"
+  REC-103    REC    Live       restricted   archived=false  "Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park))"
+  REC-104    REC    Live       restricted   archived=false  "Account Record - STL-FL (St. Louis Cardinals (Jupiter FL PDC))"
+  REC-105    REC    Live       restricted   archived=false  "Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium))"
+  REC-106    REC    Live       restricted   archived=false  "Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC))"
+  REC-107    REC    Live       restricted   archived=false  "Account Record - TBJ-NY (Buffalo Bisons (Blue Jays AAA))"
+  REC-108    REC    Live       restricted   archived=false  "Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC))"
+  REC-109    REC    Live       restricted   archived=false  "Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC))"
+  REC-110    REC    Live       restricted   archived=false  "Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home))"
+  REC-111    REC    Live       restricted   archived=false  "Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life))"
+  PB-009     PB     Live       unrestricted archived=false  "Financial Operations Manual"
+
+=== Title-pattern search results (all matches) ===
+  [service calendar] REF-140      REF    Live       unrestricted archived=false  "Money Model - Service Calendar Billing Mechanics"
+
+=== Title-pattern search: content-side (search title AND content headers for the named set) ===
+  0 additional-hit candidates via lowercase tokens:
+
+=== Chunk-content search for SC-family terminology (top 20 matches; distinct docs) ===
+  "billing model" -> 0 distinct docs: 
+  "flat-fee" -> 7 distinct docs: REF-141, REC-110, REC-111, REF-140, REC-103, REC-104, REC-105
+  "flat fee" -> 1 distinct docs: REF-140
+  "per-meal" -> 10 distinct docs: REF-125, REF-126, REF-128, REF-127, REF-130, REF-129, REF-132, REF-131, REF-141, PB-005
+  "per meal" -> 9 distinct docs: REF-126, REF-128, REF-127, REF-130, REF-141, REF-122, REF-123, REF-140, REF-121
+  "hybrid" -> 3 distinct docs: STD-002, REC-101, PB-010
+  "fee schedule" -> 1 distinct docs: REF-140
+  "prepaid" -> 4 distinct docs: REF-124, REF-123, REC-108, REF-121
+
+=== Docs whose chunks mention 'flat-fee' AND at least one account key ===
+  REC-101: mentions [CIN-AZ] near "flat...fee"
+  REC-103: mentions [CIN-AZ, CIN-KY, CIN-OH, STL-FL] near "flat...fee"
+  REC-104: mentions [STL-FL, STL-MO] near "flat...fee"
+  REC-105: mentions [STL-MO] near "flat...fee"
+  REC-106: mentions [TBJ-FL, TBJ-NY] near "flat...fee"
+  REC-108: mentions [CIN-KY, TBJ-FL, TBR-FL, BGC] near "flat...fee"
+  REC-110: mentions [TXR-TX-H, TXR-TX-V, CIN-OH] near "flat...fee"
+  REC-111: mentions [TXR-TX-V, CIN-KY, TXR-TX-H] near "flat...fee"
+  REF-121: mentions [TBR-FL, BGC] near "flat...fee"
+  REF-122: mentions [CIN-AZ] near "flat...fee"
+  REF-125: mentions [STL-FL] near "flat...fee"
+  REF-126: mentions [STL-MO] near "flat...fee"
+  REF-140: mentions [CIN-AZ, CIN-KY, CIN-OH, STL-FL, STL-MO, TBJ-FL, TBJ-NY, TBR-FL, TXR-AZ, TXR-TX-H, TXR-TX-V, BGC] near "flat...fee"
+  REF-141: mentions [BGC, CIN-AZ, CIN-OH, STL-FL, STL-MO, TBJ-FL, TXR-TX-H] near "flat...fee"
+==============================================================================
+REF-140 - "Money Model - Service Calendar Billing Mechanics"  (status=Live, access=unrestricted)
+  Chunks: 20, total tokens: 5996
+==============================================================================
+
+[chunk 0] section="null"
+From: Money Model - Service Calendar Billing Mechanics (REF-140)
+
+> CANONICAL for money-model concepts and mechanics. PB-009 (Financial Operations) is the narrative hub that defers DOWN to this REF and does not independently restate money-model figures. Per-account specimen figures below are non-canonical - live values resolve from the Price Book (generated from PG).
+**This doc wins conflicts. Every other doc defers here.**
+Locked 2026-07-09 (Kevin + Chat-Claude + CC alignment). Supersedes the "RESOLVED BILLING
+DECISIONS" section in the SC working record, the "Pricing model in one line"
+statement at the SC working record line 33, and the canonical-price ruling at
+the SC working record line 66. Those docs remain valuable as contract-language
+extractions, per-account digests, and importer layout references respectively; on any
+money-model conflict, this doc rules.
+Plain-language first in every section. Mechanism + citation next. Written to be read cold
+by a chef, a director, a future Claude, or a KPI-dashboard implementer.
+---
+
+[chunk 1] section="The one-line model"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: The one-line model
+
+**Per-meal accounts:** the client's per-meal invoice equals `actual_count × post-SF invoice
+rate`. Any Service Fee (SF) is billed separately as a flat annual amount on its own
+schedule. On accounts where the SF discounts the per-meal rate (CIN-AZ, TXR-AZ,
+TBR-FL MiLB), the post-SF invoice rate is `sticker × (1 - SF%)`. On accounts where the SF
+does not discount per-meal (TBJ-FL) or where there's no SF at all (CIN-KY, TBJ-NY), the
+invoice rate equals the sticker. On flat_fee accounts (CIN-OH, STL-MO, STL-FL, TXR-TX-H,
+TXR-TX-V), the client is not per-meal-billed at all - the fee schedule is the money.
+**The operator's KPI target** is per-meal invoice revenue plus service-fee revenue,
+combined as two ADDITIVE lines per the P&L (2400.1 Meal Service (Home) + 2300 Service
+Charges + 2200 Catering Revenue). It is NOT sticker × count. There is no "sticker
+revenue" as a first-class computation anywhere in this model - sticker prices are a
+reference number that lives in the workbooks for planning-tab arithmetic, not a lens the
+KPI dashboard or app displays.
+---
+
+[chunk 2] section="Sources of truth (in priority order)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Sources of truth (in priority order)
+
+1. **Price Review v3** (Joe Lessard + Kevin Fietek, week of 2026-06-16) - the operative
+   per-service price sheet for the 2026 season. This is the record that moved
+   `sc_service_prices` on 2026-06-16 from workbook projection-tab values to the post-SF
+   invoice rate. It is the authority on which number goes into `sc_service_prices` today.
+2. **Executed contracts** (see contract inventory in the SC working record
+   sections 1-2) - authority on Service Fee amounts, escalation clauses, billing
+   cadence, postseason rates.
+3. **The 2026 legacy Service Calendar workbooks** at
+   the finance workbooks - authority on
+   which per-service line items exist, what group they belong to, which are flat_fee /
+   tax_free / non_revenue. The workbook cells `=sticker * factor` on SF% accounts'
+   actuals tabs are the primary evidence that the actuals-tab price is the invoice-line
+   figure, not the projections-tab price. See `docs/the SC working record` Part A.
+4. **P&L structure** - the three-line revenue breakdown (2400.1 Meal Service (Home) /
+   2300 Service Charges / 2200 Catering Revenue) is fixed and non-negotiable; the KPI
+   dashboard consumes this exact shape.
+5. **`docs/the SC working record`** - the 2026-07-09 timeline + contradiction
+   register + rationale for this doc. Read that to understand *why* the model is the way
+   it is.
+---
+
+[chunk 3] section="Terminology (used consistently below)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Terminology (used consistently below)
+
+- **Sticker rate.** The workbook projection-tab price. Historical planning number. NOT the
+  invoice. Reference-only.
+- **Post-SF invoice rate.** The workbook actuals-tab price. What the client is billed
+  per meal on the per-meal invoice line. For SF% accounts this equals `sticker × (1 -
+  SF%)`; for flat-SF, no-SF, and flat_fee-tracking accounts, sticker equals post-SF
+  (the two rates are the same number). This is the ONE per-meal-price concept the app
+  displays.
+  Historical doc language sometimes called this "cost basis" (see
+  the SC working record line 33, older bible text, seed script comment
+  `scripts/_seed_sc_from_xlsx.mjs:440-445`). That name is misleading - it's not COGS,
+  it's the invoice line. Use "post-SF invoice rate" going forward.
+- **Service Fee (SF).** A separate contracted amount billed alongside per-meal (SF%
+  accounts and flat-SF accounts) or in place of per-meal (flat_fee accounts). Paid on
+  its own schedule per contract; typically flat annual.
+- **KPI / all-in revenue.** What operators are measured on: per-meal invoice + SF, as
+  two additive P&L lines. This is NOT `sticker × count`; it's `post-SF invoice ×
+  count + SF flat`. Both come from the same underlying `sticker × count` decomposition
+  when you re-derive the SF portion, but the model never uses sticker directly - it
+  uses the two additive contract-defined revenue lines.
+---
+
+[chunk 4] section="Per-topic model > (a) Projections - what a projected count and projected price mean"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (a) Projections - what a projected count and projected price mean
+
+**Plain:** A projection is a planning estimate for a day - "we think we'll serve 100 MiLB
+lunches." It is not billing; it is budgeting. The price attached to a projection is the
+**post-SF invoice rate** (`sc_service_prices` `price_kind = 'projected'` today - the name
+of the column is legacy from before the alignment; the price it holds is the invoice
+rate per Price Review v3). Projected revenue on the app equals `projected_count ×
+post-SF invoice rate`, which is what the client would be per-meal-invoiced if the
+projection came in exactly.
+**Mechanism:**
+- Sheet: workbook projection-tab row-2 price = sticker rate. Legacy artifact for
+  building an annual budget forecast.
+- PG: `sc_daily_projections(account_key, service_id, service_date, projected_count)`
+  holds the counts. `sc_service_prices(service_id, price_kind='projected',
+  effective_date, price)` holds the price valuing them. Since 2026-06-16, this price
+  is the post-SF invoice rate (Price Review v3), not the sticker.
+- View: `projected_revenue = projected_count × pr_proj.price` in
+  `sc_daily_revenue` (sc-8b line 241).
+- App: modal group header + tile rail + workspace strip all read this price.
+
+[chunk 5] section="Per-topic model > (b) Actuals - what saving actuals means, which price values them"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (b) Actuals - what saving actuals means, which price values them
+
+**Plain:** When an operator saves 100 MiLB Lunch actuals, KitchFix served 100 meals that
+day. The per-meal invoice line for that day equals `100 × post-SF invoice rate`. On
+CIN-AZ MiLB that's `100 × $12.90 = $1,290`.
+**Mechanism:**
+- Sheet: workbook actuals-tab row-2 price = post-SF invoice rate. For SF% accounts
+  this appears in the sheet as a literal `=sticker * factor` formula (CIN-AZ:
+  `=29.00888*0.7`; TXR-AZ: `=35.72125*0.8`; TBR-FL MiLB: `=23.77*0.75`). For flat-SF
+  / no-SF accounts it equals the projection-tab price.
+- PG: `sc_daily_actuals(account_key, service_id, service_date, actual_count)` holds
+  counts. Post-sc-8c (this migration), NO `'actual'`-kind rows exist in
+  `sc_service_prices` - the view's `COALESCE(pr_act.price, pr_proj.price)` falls back
+  to `pr_proj.price` (the post-SF invoice rate) for every account.
+- View: `actual_revenue = actual_count × COALESCE(pr_act.price, pr_proj.price, 0)`
+  in `sc_daily_revenue` (sc-8b line 242). With sc-8c applied, this equals
+  `actual_count × post-SF invoice rate` for every account.
+- App: DayDetail toast / aggregate / week card echo this from the view via the #361
+  server-authoritative saved-totals path.
+
+[chunk 6] section="Per-topic model > (c) Invoicing - the client's invoice math per account shape"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (c) Invoicing - the client's invoice math per account shape
+
+Four account shapes. The model for each:
+| Shape | Accounts | Per-meal invoice line (bi-weekly / weekly) | Service Fee line (separate) | Passthrough |
+|---|---|---|---|---|
+| **SF% (per-meal + SF discounts per-meal)** | CIN-AZ (30%), TXR-AZ (20%), TBR-FL MiLB (25%) | `actual_count × post-SF invoice rate` | Yes, flat annual on separate schedule (CIN-AZ $402,016 Feb+Mar; TXR-AZ 20% deposit Jan/Feb/Mar; TBR-FL front-loaded 2024) | None inside these accounts |
+| **Flat-SF (per-meal + SF independent)** | TBJ-FL ($452,812/yr) | `actual_count × post-SF invoice rate` (= sticker; no discount) | Yes, flat annual on separate schedule (Jan/Feb/Mar split per ABR OneSheeter) | None |
+| **No-SF (pure per-meal)** | CIN-KY, TBJ-NY | `actual_count × post-SF invoice rate` (= sticker; no discount, no SF) | None | None |
+| **Flat_fee** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | **Not per-meal.** Contracted flat fee via `sc_fee_schedule` | The flat fee IS the money | Yes on some accounts (see topic (h)) |
+**Important:** fee-account operators never had an actuals workflow before the Service
+Calendar. Their teams did not enter meal counts anywhere. The SC's actuals surface is
+the first place these accounts have per-meal telemetry - it exists for planning,
+ordering, labor, waste, and future analytics, not for billing. Their billing is the
+`sc_fee_schedule` fee, not `count × price`. This is why their per-meal prices are $0 in
+PG and their calendar revenue displays show zero-dollar / operational-only.
+**Reads and citations:**
+- SF% mechanic: workbook actuals tabs (formula evidence, see memo Part A) +
+  the SC working record §Resolved line 87 + the SC working record §5.2 line
+  109 + the SC working record lines 39-45 + the SC working record lines 471-472.
+- Flat-SF mechanic: the SC working record §TBJ-FL.
+- Flat_fee mechanic: the SC working record §"Fee schedule" + admin surface
+  seeded via sc-5 (PR #221).
+
+[chunk 7] section="Per-topic model > (d) Service fees - three structures, per account"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (d) Service fees - three structures, per account
+
+| SF structure | Accounts | Amount | Billed how | On the SC calendar dollars? |
+|---|---|---|---|---|
+| **Percentage-based SF (discounts per-meal)** | CIN-AZ 30%, TXR-AZ 20% (deposit), TBR-FL MiLB 25% (amortization) | CIN-AZ $402,016; TXR-AZ 2025 deposit $297,419; TBR-FL 2024 one-time $382,448 | Flat annual, separate schedule; per-meal invoice arrives at the discounted rate | **No** - contract-revenue layer. The SC calendar displays per-meal invoice only |
+| **Flat SF (independent of per-meal)** | TBJ-FL $452,812/yr | Flat annual | Split monthly Jan/Feb/Mar per ABR OneSheeter; per-meal invoice runs in parallel at full rate | **No** - contract-revenue layer, `sc_fee_schedule` extension work not yet done |
+| **No SF** | CIN-KY, TBJ-NY | n/a | n/a | n/a |
+| **Flat_fee (fee IS the money)** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | See table (c) | Contract-defined installments | **No** - lives in `sc_fee_schedule`, seeded 2026-06-19 |
+
+[chunk 8] section="Per-topic model > (e) The KPI / all-in lens"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (e) The KPI / all-in lens
+
+**Plain:** Operators are measured on total revenue "all-in with service fees." Per the
+P&L that leadership reviews, revenue is three additive lines:
+- **2400.1 Meal Service (Home)** = per-meal invoice = `actual_count × post-SF invoice
+  rate`.
+- **2300 Service Charges** = Service Fee attributable to the review period. For an SF%
+  account this is the SF% component of the corresponding meal service (the flat-annual
+  SF, prorated per period per operator convention). For flat-SF it's the SF flat
+  prorated. For flat_fee it's the fee-schedule amount prorated to the period.
+- **2200 Catering Revenue** = smaller, account-specific extras (some contracts have
+  side revenue lines - see per-account digest in the SC working record).
+  - **Named ancillary line (out of SC scope): CIN-AZ Owners Week Caterings + Fantasy Camp** = the CIN-AZ P&L 2200 Catering Revenue line (~$52,000/yr). Discrete special-event caterings, billed separately, NOT part of the recurring service-calendar meal model - excluded from the SC per-meal export. Contrast with TBR-FL's BGC, which IS in-scope SC revenue. Do not treat the two 2200 lines the same. [A-10 CONFIRMED, LEDGER §T]
+**KPI total = 2400.1 + 2300 + 2200.**
+**Not** `sticker × count`. There is no reason for the KPI to compute `sticker × count`
+directly - the same figure lands via `2400.1 + 2300` because the SF and the per-meal
+discount are two sides of the same contract mechanic. This is why:
+- No `'sticker'` `price_kind` exists in `sc_service_prices` today.
+- The KPI dashboard consumes `sc_daily_revenue.actual_revenue` (= 2400.1) plus
+  `sc_fee_schedule` (= 2300) per the SC_KPI_PUSH_CONTRACT.
+- The SC calendar UI does NOT show the KPI/all-in figure. It shows the per-meal
+  invoice (2400.1). Operators mentally add the SF band; the KPI dashboard shows both
+  additively.
+If a future decision decides the SC calendar should ALSO show the all-in figure
+on-screen, the implementation reads both `sc_daily_revenue` and `sc_fee_schedule` and
+sums - no schema change needed.
+**Citations:** the SC working record §5.1 lines 97-104; the SC working record
+lines 17-29.
+
+[chunk 9] section="Per-topic model > (f) Post-SF invoice rate terminology (Q5 rename)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (f) Post-SF invoice rate terminology (Q5 rename)
+
+The 70% / 80% / 75% number is **the per-meal invoice line item**, not a COGS figure.
+True COGS (labor + food + supplies per meal) lives in downstream cost pipelines, out of
+SC scope (the SC working record §"What the SC does NOT push" lines 49-59;
+the SC working record the Billing Record section "Scope boundary").
+**Going forward:** use "post-SF invoice rate" or "contracted per-meal rate" everywhere
+this number is discussed. "Cost basis" is banned - it caused doc drift on the
+2026-06-16 → 2026-06-24 window and remains a misleading name.
+Doc + code cleanup:
+- the SC working record line 33 rewritten below (§Doc corrections).
+- the SC working record §Resolved line 87 rewritten inline (§Doc corrections).
+- `scripts/_seed_sc_from_xlsx.mjs:440-450` seed comment retains historical detail but
+  reframed as "post-SF invoice rate."
+- `the Service Calendar data-store module, :474` sibling comments updated (this PR).
+
+[chunk 10] section="Per-topic model > (g) Flat-fee accounts - what the SC tracks vs where their money lives"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (g) Flat-fee accounts - what the SC tracks vs where their money lives
+
+**Plain:** For CIN-OH / STL-MO / STL-FL / TXR-TX-H / TXR-TX-V, the operator still enters
+headcounts into the SC for planning (ordering, labor, waste, future analytics). The
+DOLLARS come from `sc_fee_schedule`, not from `count × price`. Per-meal prices in
+`sc_service_prices` are $0 for these accounts (STL-FL zeroed 2026-06-16; others by
+design). The SC calendar displays operational tracking only for these accounts - no
+dollar figure on the tile.
+**STL-FL per-meal-display-on-flat-fee rationale:** STL-FL is billing-model `flat_fee`
+but operationally a PDC (phases, camps, MiLB affiliates). Chefs enter meal counts for
+planning. The tile SHOULD show meals, not dollars - the calendar's `isFeeAccount &&
+hasHomestandMap` gate correctly falls through to per-meal display (`fee-no-dollar`
+variant) because STL-FL has no homestand schedule (it's a PDC, not an MLB). Chefs get
+the operational surface they need; the $1.4M fee lives in `sc_fee_schedule` for the
+KPI dashboard. Detail in the SC billing-model audit (repo-side).
+**STL-FL prorated allocation:** the $1.4M is spread PHASE-AWARE across the 13 periods
+per the P&L pattern (**P1 $45,553 · P2 $171,367 · P3 $407,375 (peak) · P4 $132,755 ·
+P5-P9 $98,915 each (FCL plateau) · P10 $57,267 · P11 $52,061 · P12 $39,047 · P13 $0**).
+Source: the PFS Service Fees 2026 workbook, Accrual Schedule (finance-owned), verified against
+the 2026 P&L appendix (repo-side) row R25 (2026-07-17); year total $1,400,000
+EXACT. Note: pricing-summit CONFLICT_REGISTER A-9 / D-3 (filed 2026-07-14) argued
+GOTCHAS was stale on P1 and peak-period, but that finding was based on a broken R25
+transcription (missing P1 cell); the appendix was corrected 2026-07-17 and the
+original GOTCHAS phrasing turned out to be right. `sc_fee_schedule` today holds the
+annual $1.4M; the per-period allocation is a future KPI-dashboard concern.
+**TXR-TX-V revenue flexibility:** the fee schedule entry for TXR-TX-V is $0 (marker:
+"covered by TXR-TX-H contract"). Real visiting-team direct-sales revenue is tracked in
+the Season Tracker workflow (sold-through revenue × 19.23% labor model), out of scope
+for the SC and the fee schedule.
+
+[chunk 11] section="Per-topic model > (h) Passthrough - never revenue"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (h) Passthrough - never revenue
+
+Some contracts include a "food, packaging, supplies" budget that KitchFix collects and
+pays straight to suppliers. Zero margin. **Excluded from all revenue figures.**
+Passthrough lines (excluded from `sc_fee_schedule` amounts):
+- CIN - OH: food and disposable supplies budget (at cost, Net 30)
+- STL - MO: $225,000 food/packaging/supplies budget
+- STL - FL: $900,000 food/packaging/supplies budget
+Detail: the SC working record §"Passthrough is never revenue" lines 44-70.
+
+[chunk 12] section="Per-topic model > (i) Non-revenue services + tax-free / flat-fee add-ons"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (i) Non-revenue services + tax-free / flat-fee add-ons
+
+Some line items look like services but are not billable per-meal revenue:
+- **`is_non_revenue`** (sc-1b, 2026-06-19): "Fun Money" / "Fun $$$$ Allocated" is an
+  internal team-event budget. View SUMs skip it for revenue rollup.
+- **`is_flat_fee`**: per-unit flat-fee add-ons (Extra Protein - Beef/Seafood, MLB
+  Extra MTO Sm/Med/Lrg, Coffee Service, Fountain Beverages). Not per-meal-discounted -
+  they always price at the flat unit rate whether they appear on projections tab or
+  actuals tab.
+- **`is_tax_free`**: subset of flat-fee (Coffee Service, Fountain Beverages) exempted
+  from sales tax per contract; the view excludes them from taxable revenue for the
+  billing pipeline downstream.
+Detail per account: the SC working record §per-account tables.
+
+[chunk 13] section="Per-topic model > (j) Effective-dating - how price changes over time are represented"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (j) Effective-dating - how price changes over time are represented
+
+**Plain:** Price history is preserved. A CPI bump or contract renegotiation is a NEW
+row in `sc_service_prices` with a later `effective_date` - the old row stays. Historic
+invoices continue to price at whatever rate was effective on the service date.
+**Mechanism:**
+- `sc_service_prices(service_id, effective_date, price_kind, price)` with UNIQUE
+  `(service_id, effective_date, price_kind)` after sc-8a.
+- View joins via LATERAL: latest row where `effective_date at or before service_date`.
+**Escalations land in PG via the admin backdate flow, never in sheets.** The legacy
+workbooks carried in-cell escalation machinery (`=22.25*(1+$E$362)` in TBJ-FL,
+`=24.98*1.039` in CIN-KY etc.) - that was fine for the sheet era. PG is canonical
+now; a new escalated rate = a new `sc_service_prices` row, applied via the admin
+price editor (PR #224 for fenced backdate mode). This is a GOTCHAS entry as of this
+PR - if a future maintainer opens a workbook and sees the escalator formula, that's
+historical, not operative.
+
+[chunk 14] section="Per-topic model > (k) Two-layer architecture (per-meal / operational vs contract revenue)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Per-topic model > (k) Two-layer architecture (per-meal / operational vs contract revenue)
+
+**Plain:** SC calendar dollars = per-meal revenue only. Everything else (flat fees,
+service fees, postseason per-game) lives in a separate "contract revenue layer"
+managed via admin + `sc_fee_schedule`, read by the future KPI dashboard - NOT the
+calendar.
+**Mechanism:**
+- SC calendar reads: `sc_daily_revenue` (view). Per-meal invoice line item.
+- Admin surfaces: `sc_service_prices` (per-meal price editor) + `sc_fee_schedule`
+  (contract-revenue editor). Both managed one place.
+- KPI dashboard (future) reads: `sc_daily_revenue.actual_revenue` (= P&L 2400.1
+  Meal Service Home) + `sc_fee_schedule` (= P&L 2300 Service Charges), summed
+  additively per period.
+**Citation:** the SC working record §"The architecture" lines 17-42 +
+the SC working record §5.
+---
+
+[chunk 15] section="Open paperwork gaps (Q4 + Q6 register)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Open paperwork gaps (Q4 + Q6 register)
+
+Not resolved by this alignment. Tracked here so future work has a discoverable list.
+
+[chunk 16] section="Open paperwork gaps (Q4 + Q6 register) > CIN - AZ operative 2026 pricing paperwork (Q4)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Open paperwork gaps (Q4 + Q6 register) > CIN - AZ operative 2026 pricing paperwork (Q4)
+
+The 2023 CIN-AZ contract's base rates ($17.88 MLB Breakfast, $11.35 MiLB Breakfast)
+don't CPI-escalate to the operative 2026 rates ($29.01 / $18.42 sticker as recorded in
+the workbook). A 2026 SOW or contract amendment must exist and is not in the executed-
+contracts folder. Operationally not blocking (Price Review v3 confirmed the rates
+with Kevin + Joe); administratively worth chasing before the 2027 renewal decision.
+**Note added per Q4 ruling:** the operative 2026 rates are workbook-recorded + Price
+Review v3-confirmed; source contract amendment paperwork not yet obtained. Owner: Kevin (Ashley
+at the Reds is the counterparty).
+
+[chunk 17] section="Open paperwork gaps (Q4 + Q6 register) > TBJ - NY Buffalo Bisons (Q6)"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Open paperwork gaps (Q4 + Q6 register) > TBJ - NY Buffalo Bisons (Q6)
+
+[resolved 2026-07: $27.34 invoice-confirmed, K300168849 - see the TBJ-NY account record (REC-107). Register text below preserved as the historical Q6 record.]
+No contract in the package. Prices in workbook + PG ($27.34) are assumption-only. Not
+resolved this pass; parked. Bundle SC Bundle 3 candidate or a business-side chase for
+a contract + written confirmation of the operating model.
+---
+
+[chunk 18] section="Doc corrections applied in this PR"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Doc corrections applied in this PR
+
+Every money-touching doc reviewed 2026-07-09 (per the alignment report Part 3). Where
+correct as-is, a one-line pointer to this doc is added. Where wrong, corrected. Where
+superseded, banner + pointer added.
+- the SC working record (contract bible): correct on money model; adds
+  pointer here. §Resolved line 87 rewritten to use "post-SF invoice rate" language.
+- the SC working record: line 33 rewritten (was wrong on SF% invoice direction).
+  Top-of-doc banner added: money-model claims defer to this doc.
+- the SC working record: line 66 area gets a dated note that "canonical =
+  $29.01 the bill rate" was a pre-2026-06-16 ruling; superseded by Price Review v3.
+- the SC working record: correct; adds pointer.
+- the SC working record: correct; adds pointer.
+- the SC working record: existing money entries (lines 471-475) are correct; adds pointer +
+  three new entries (§10 below).
+- the Service Calendar data-store module: stale "planning/sticker price" comments at
+  the catalog-loader anchors updated to "post-SF invoice rate (per
+  this money model)."
+- the sc-8 migration (committed): dated postscript added noting
+  supersession by sc-8c and the shifted-input assumption failure.
+Historical artifacts committed to `docs/` as institutional memory:
+- `docs/the SC working record` (2026-07-09 workbook + PG audit)
+- `docs/the SC working record` (2026-07-09 three-way alignment report + timeline)
+---
+
+[chunk 19] section="Cross-references"
+From: Money Model - Service Calendar Billing Mechanics (REF-140), Section: Cross-references
+
+- Timeline + rationale: `docs/the SC working record` Part 4.
+- Workbook evidence (formula-level): `docs/the SC working record` Part A.
+- Per-account contract language: `docs/the SC working record`.
+- Per-account operational digest: `docs/the SC working record`.
+- Vision + lens strategy: `docs/the SC working record`.
+- KPI push spec (future dashboard): `docs/the SC working record`.
+- Fee schedule seed: the sc-5-fee-schedule (repo-side) + admin surface PR #221.
+- Price-fix data migration: the sc-8 migration (committed).
+**When this doc conflicts with any other doc: this doc wins.**
+
+==============================================================================
+REF-141 - "Price Book - Live Account Pricing (generated)"  (status=Live, access=unrestricted)
+  Chunks: 15, total tokens: 5868
+==============================================================================
+
+[chunk 0] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT
+
+**Generated:** 2026-07-22 16:04:48Z by `scripts/generate-price-book.mjs`  
+**PG snapshot:** 2026-07-22T16:04:06.162Z  
+**Certified as of:** 2026-07-17 (see `STAGE3_CERTIFICATION_AUDIT.md`, this folder)  
+**Regenerate:** `node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json && node scripts/generate-price-book.mjs`
+---
+
+[chunk 1] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > What this is"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > What this is
+
+The Price Book is the human-readable projection of PG's live SC price catalog under each account's contract terms. **PG owns the live prices; this book is PG's projection.** Regenerate on ANY change - Studio apply, admin backdate, Kevin directive.
+**Data policy:**
+- Prices, flags, effective_date, and active state come from PG only (via `scripts/audit-sc-prices.mjs`).
+- Per-account header lines (money shape / 2026 fee / escalation / notes) are static config maintained inside the generator, each cited to `docs/pricing-summit/accounts/ACCOUNT_<KEY>.md` §2.
+- Contract clauses, rulings, and rationale live in the account files. This book does not restate them - it points at them.
+**Scope:** 11 accounts, all services (active + inactive), all latest-effective prices. Snapshot line-count and per-account service counts appear in the summary below.
+
+[chunk 2] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > Snapshot summary"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > Snapshot summary
+
+- **Accounts covered:** 11 of 11
+- **Total services:** 105
+- **Services with a projected-price row in PG:** 105
+- **Flat-fee marked:** 16
+- **Non-revenue marked:** 2
+- **Tax-free marked:** 3
+- **Inactive (active=false or active_until in past):** 2
+| Account | Services | Notes |
+|---|---:|---|
+| CIN - AZ | 13 | Cincinnati Reds - Goodyear PDC |
+| CIN - KY | 5 | Louisville Bats (AAA affiliate of CIN) |
+| CIN - OH | 4 | Cincinnati Reds - Great American Ballpark (MLB) |
+| STL - FL | 11 | St. Louis Cardinals - Jupiter PDC |
+| STL - MO | 4 | St. Louis Cardinals - Busch Stadium (MLB) |
+| TBJ - FL | 21 | Toronto Blue Jays - Dunedin PDC |
+| TBJ - NY | 6 | Buffalo Bisons (AAA affiliate of TBJ) |
+| TBR - FL | 20 | Tampa Bay Rays - Charlotte Sports Park PDC + BGC second-client stream |
+| TXR - AZ | 13 | Texas Rangers - Surprise PDC |
+| TXR - TX - H | 4 | Texas Rangers - Globe Life Field (MLB Home) |
+| TXR - TX - V | 4 | Texas Rangers - Globe Life Field (MLB Visiting) |
+---
+
+[chunk 3] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - AZ"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - AZ
+
+**Account:** Cincinnati Reds - Goodyear PDC
+**Money shape:** actuals_drive_invoice (per-meal count x post-SF rate = invoice; SF billed separately)  
+**2026 Service Fee / deposit:** Service Fee **$445,716** (2026 accrued; 2023 base $402,016 = 30% of pre-tax budget). Billed 75% Feb 1 / 25% Mar 15.  
+**Escalation:** CPI-U Food Away from Home (CUUR0000SEFV), October reset, 2% floor / 5% cap.  
+**Notes:** MLB rates carry a 30% SF discount (billed = full x 0.70). Two flat-fee ancillary lines (Coffee Service, Fountain Bev) at 45-week/yr cap, tax-exempt.
+Source: [`accounts/ACCOUNT_CIN-AZ.md` §2](accounts/ACCOUNT_CIN-AZ.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League | Breakfast | $20.31 | per meal | - | 2026-06-18 | active |
+| Major League | Dinner | $20.31 | per meal | - | 2026-06-16 | active |
+| Major League | Lunch | $20.31 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast | $12.90 | per meal | - | 2026-06-16 | active |
+| Minor League | Coffee Service | $511.05 | per week (flat) | flat, tax-free | 2026-01-01 | active |
+| Minor League | Dinner | $12.90 | per meal | - | 2026-06-16 | active |
+| Minor League | Fountain Bev | $283.92 | per week (flat) | flat, tax-free | 2026-01-01 | active |
+| Minor League | Lunch | $12.90 | per meal | - | 2026-06-26 | active |
+| Minor League | Pre-Game Snack | $5.12 | per meal | - | 2026-06-16 | active |
+| Rehab | Breakfast | $12.90 | per meal | - | 2026-06-16 | active |
+| Rehab | Continental Plus | $6.36 | per meal | - | 2026-06-16 | active |
+| Rehab | Dinner | $12.90 | per meal | - | 2026-06-16 | active |
+| Rehab | Lunch | $12.90 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 4] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - KY"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - KY
+
+**Account:** Louisville Bats (AAA affiliate of CIN)
+**Money shape:** actuals_drive_invoice (uniform per-meal rate; no SF, no discount).  
+**2026 Service Fee / deposit:** **None** (per-meal, no SF). Estimated annual investment ~$186,462 (§4.b contract).  
+**Escalation:** None - renegotiated yearly.  
+**Notes:** Two contract categories - Type 1 ($25.95, Breakfast/Lunch/Post-Game/Umpire) and Type 2 ($8.64, Snack).
+Source: [`accounts/ACCOUNT_CIN-KY.md` §2](accounts/ACCOUNT_CIN-KY.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Louisville Bats | Breakfast | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Lunch | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Post-Game | $25.95 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Snack | $8.64 | per meal | - | 2026-01-01 | active |
+| Louisville Bats | Umpire | $25.95 | per meal | - | 2026-01-01 | active |
+---
+
+[chunk 5] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - OH"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > CIN - OH
+
+**Account:** Cincinnati Reds - Great American Ballpark (MLB)
+**Money shape:** flat_fee (fee IS the money; per-meal rows are operational counts only, $0 billing).  
+**2026 Service Fee / deposit:** Service Fee **$376,686** (2026 escalated; base $362,500). 6 monthly Mar-Aug (installments $61,907.08 pre-tax). Fee is tax-TAXABLE at 7.80%.  
+**Escalation:** CPI-U Food Away from Home (CUUR0000SEFV), August reset, 1% floor / 4% cap. PG carries the escalated figure (migration 2026-07-16).  
+**Notes:** Postseason mechanic: 1/81-of-fee per game = $4,413.58/game if the Reds qualify.
+Source: [`accounts/ACCOUNT_CIN-OH.md` §2](accounts/ACCOUNT_CIN-OH.md)
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Cincinnati Reds | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Cincinnati Reds | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 6] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > STL - FL"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > STL - FL
+
+**Account:** St. Louis Cardinals - Jupiter PDC
+**Money shape:** flat_fee, fee-no-dollar variant (per-meal rows $0 by design; SC displays operational counts).  
+**2026 Service Fee / deposit:** Florida Services Fee **$1,400,000 flat** (quarterly Nov/Feb/May/Aug, 4x $350,000). $900K food budget = passthrough, excluded. SF is tax-EXEMPT (invoice-confirmed).  
+**Escalation:** None (flat annual). Amendment explicitly does NOT extend the STL-MO CPI clause to FL.  
+**Notes:** $900K food/packaging passthrough + $30K equipment upkeep run out-of-band, NOT part of the $1.4M fee.
+Source: [`accounts/ACCOUNT_STL-FL.md` §2](accounts/ACCOUNT_STL-FL.md)
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Fun Money | Fun Money allocation | $0.00 | non-revenue | flat, non-revenue | 2026-06-16 | active |
+| MiLB | Breakfast | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Breakfast - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Lunch | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Lunch - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MiLB | Snack | $0.00 | per meal | - | 2026-06-16 | active |
+| MLB | Breakfast - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| MLB | Lunch - ST | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Palm Beach Cardinals | Pre-game | $0.00 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 7] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > STL - MO"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > STL - MO
+
+**Account:** St. Louis Cardinals - Busch Stadium (MLB)
+**Money shape:** flat_fee (per-meal rows $0; revenue = fee).  
+**2026 Service Fee / deposit:** Service Fee **$489,497 billed** (base $473,000 = $423K meal-services + $50K Road Food). 6 monthly Mar-Aug (meal-services 6x $73,249.50 + $50K annual March). SF is tax-NON-TAXABLE (invoice-confirmed).  
+**Escalation:** CPI-U parent CUUR0000SEFV (Food Away from Home), August reset, no cap. Only the $423K meal-services portion escalates; $50K Road Food held flat. PG carries the escalated figure (migration 2026-07-16).  
+**Notes:** Postseason mechanic: flat per-game (Game $5,222.22 / Workout $2,777.78 / Road Food $600), NOT escalated. Differs from CIN-OH postseason.
+Source: [`accounts/ACCOUNT_STL-MO.md` §2](accounts/ACCOUNT_STL-MO.md)
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| St. Louis Cardinals | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| St. Louis Cardinals | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 8] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBJ - FL"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBJ - FL
+
+**Account:** Toronto Blue Jays - Dunedin PDC
+**Money shape:** actuals_drive_invoice + flat SF (per-meal invoiced weekly, SF billed on its own schedule).  
+**2026 Service Fee / deposit:** Service Fee **$515,712 negotiated billable** (3x $171,904 Jan/Feb/Mar; contract's $452,812 base is outdated, superseded by finance).  
+**Escalation:** 100% CPI-U Food Away from Home (CUUR0000SEFV parent), Q4 basis. Provider-initiated, gated on documented cost basis + Club written approval per §12(c). (2026 operative SF is negotiated, not formula-derived.)  
+**Notes:** Five groups: Major League - PDC, Minor League - PDC (FCL), Single A Jays (FSL), SSM, Other. 'Fun $$$$ Allocated' is non-revenue.
+Source: [`accounts/ACCOUNT_TBJ-FL.md` §2](accounts/ACCOUNT_TBJ-FL.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League - PDC | Breakfast | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Dinner | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Lunch | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Post Game Meal | $23.12 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Snack | $1.70 | per meal | - | 2026-01-01 | active |
+| Major League - PDC | Umpire | $23.12 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Breakfast | $11.55 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Dinner | $11.55 | per meal | - | 2026-01-01 | active |
+| Minor League - PDC | Lunch | $11.55 | per meal | - | 2026-01-01 | active |
+| Other | Fun $$$$ Allocated | $0.00 | non-revenue | flat, non-revenue | 2026-06-17 | active |
+| Other | Media Meals | $16.00 | per meal | - | 2026-06-16 | active |
+| Other | MiLB G&G - Pantry | $1.70 | per meal | - | 2026-01-01 | active |
+| Other | MLB - Catering | $38.00 | per meal | - | 2026-01-01 | active |
+| Other | MLB G&G - Pantry | $1.70 | per meal | - | 2026-01-01 | active |
+| Other | Scout Meals | $11.55 | per meal | - | 2026-01-01 | active |
+| Other | Team Canada | $11.55 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Breakfast | $16.51 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Post-Game | $16.51 | per meal | - | 2026-01-01 | active |
+| Single A Jays | Pre-Game | $16.51 | per meal | - | 2026-01-01 | active |
+| SSM | Florida Ops - PDC | $11.55 | per meal | - | 2026-01-01 | active |
+| SSM | Stadium Staff Meals | $16.51 | per meal | - | 2026-01-01 | active |
+---
+
+[chunk 9] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBJ - NY"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBJ - NY
+
+**Account:** Buffalo Bisons (AAA affiliate of TBJ)
+**Money shape:** actuals_drive_invoice (uniform per-meal rate).  
+**2026 Service Fee / deposit:** **None** (no documented Service Fee).  
+**Escalation:** None documented. $27.34 uniform rate is Kevin+invoice-confirmed.  
+**Notes:** Snack/Shake service lines exist in the catalog but are deactivated (active=false).
+Source: [`accounts/ACCOUNT_TBJ-NY.md` §2](accounts/ACCOUNT_TBJ-NY.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Buffalo Bisons | Breakfast | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Lunch | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Post-Game | $27.34 | per meal | - | 2026-01-01 | active |
+| Buffalo Bisons | Shake | $0.00 | per meal | - | 2026-01-01 | INACTIVE |
+| Buffalo Bisons | Snack | $0.00 | per meal | - | 2026-01-01 | INACTIVE |
+| Buffalo Bisons | Umpire | $27.34 | per meal | - | 2026-01-01 | active |
+---
+
+[chunk 10] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBR - FL"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TBR - FL
+
+**Account:** Tampa Bay Rays - Charlotte Sports Park PDC + BGC second-client stream
+**Money shape:** actuals_drive_invoice on both MLB and MiLB sides (separate cost centers). Boys & Girls Club runs as a second-client stream on the same commissary.  
+**2026 Service Fee / deposit:** Recurring MiLB Service Fee **$457,768** (2026 = $200,000 static installment 1 + $257,768 variable installment 2). MLB has no SF. 25% MiLB rate credit reduces MiLB per-meal to 75% of base.  
+**Escalation:** 75% x CPI-U Food Away - Full Service Meals & Snacks (CUUR0000SEFV01, sub-index), November reset. Per-meal rates auto-escalate; SF is SOW-gated (variable second installment set per year).  
+**Notes:** BGC (Boys & Girls Club of Charlotte County) B&G Lunch = tax-exempt after-school supper program; contract runs Aug 2025 - May 2026 school year. See ACCOUNT_TBR-FL.md §2d.
+Source: [`accounts/ACCOUNT_TBR-FL.md` §2](accounts/ACCOUNT_TBR-FL.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Boys & Girls Club | **B&G Lunch** _(BGC second-client stream)_ | $6.50 | per meal | tax-free | 2026-01-01 | active |
+| Major League | Breakfast | $35.63 | per meal | - | 2026-01-01 | active |
+| Major League | Dinner | $39.48 | per meal | - | 2026-01-01 | active |
+| Major League | Extra Protein - Beef/Seafood | $162.17 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Extra Protein - Chicken/Pork | $111.84 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Lunch | $39.48 | per meal | - | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Lrg | $15.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Med | $10.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | MLB - Extra MTO - Sm | $5.00 | per order (flat) | flat | 2026-01-01 | active |
+| Major League | Umpire Meal | $39.48 | per meal | - | 2026-01-01 | active |
+| Minor League | AFTER HOURS MEALS | $20.96 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast - MiLB | $17.83 | per meal | - | 2026-01-01 | active |
+| Minor League | Breakfast - MiLB ST | $17.83 | per meal | - | 2026-06-16 | active |
+| Minor League | Dinner | $20.96 | per meal | - | 2026-06-16 | active |
+| Minor League | Extended Day Labor | $280.00 | per day (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Beef/Seafood | $162.17 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Chicken/Pork | $111.84 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Lunch - MiLB | $21.68 | per meal | - | 2026-01-01 | active |
+| Minor League | Lunch - MiLB ST | $21.68 | per meal | - | 2026-06-16 | active |
+| Minor League | Road Sandwiches - MiLB | $15.00 | per meal | - | 2026-01-01 | active |
+---
+
+[chunk 11] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - AZ"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - AZ
+
+**Account:** Texas Rangers - Surprise PDC
+**Money shape:** actuals_drive_invoice + 20% deposit-triggered discount (billed = full x 0.80).  
+**2026 Service Fee / deposit:** 2026 deposit **$301,623** (3x $100,541 Jan/Feb/Mar; triggers the 20% discount). Escalated from 2025 deposit $297,419 at fixed 2.5%.  
+**Escalation:** Fixed 2.5%/yr per §2.a (NOT CPI). Cleanest escalator of all 11 accounts.  
+**Notes:** 5 rate lines: MLB (Breakfast/Lunch/Dinner), MiLB (Breakfast/Lunch/Dinner), plus 3 MiLB add-ons (Continental Breakfast, Pre-Game Hot Snack, Regular Snack). Extra Protein pans flat.
+Source: [`accounts/ACCOUNT_TXR-AZ.md` §2](accounts/ACCOUNT_TXR-AZ.md)
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Major League | Breakfast | $28.58 | per meal | - | 2026-06-16 | active |
+| Major League | Dinner | $28.58 | per meal | - | 2026-06-16 | active |
+| Major League | Extra Protein - Beef/Seafood | $165.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Extra Protein - Chicken/Pork | $115.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Major League | Lunch | $28.58 | per meal | - | 2026-06-16 | active |
+| Minor League | Breakfast | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Continental Breakfast | $6.56 | per meal | - | 2026-06-16 | active |
+| Minor League | Dinner | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Extra Protein - Beef/Seafood | $165.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Extra Protein - Chicken/Pork | $115.00 | per pan (flat) | flat | 2026-01-01 | active |
+| Minor League | Lunch | $14.29 | per meal | - | 2026-06-16 | active |
+| Minor League | Pre-Game Hot Snack | $10.93 | per meal | - | 2026-06-16 | active |
+| Minor League | Regular Snack | $5.89 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 12] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - TX - H"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - TX - H
+
+**Account:** Texas Rangers - Globe Life Field (MLB Home)
+**Money shape:** flat_fee (per-meal rows $0; revenue = fee).  
+**2026 Service Fee / deposit:** Service Fee **$604,032** (6x $100,672 Apr-Sep pre-tax; $108,977.44 with-tax). SF is tax-TAXABLE at 8.25% (Arlington TX, contract-stated gross-up).  
+**Escalation:** None - annual negotiation. Contract text notes +10% negotiated for 2026 (2024 $528K -> 2025 $549,120 +4% -> 2026 $604,032 +10%).  
+**Notes:** Companion account TXR - TX - V (visiting) is operationally paired but billed separately - see below.
+Source: [`accounts/ACCOUNT_TXR-TX-H.md` §2](accounts/ACCOUNT_TXR-TX-H.md)
+> **Fee-account note:** per-meal rows are $0 by design - revenue = the flat/escalated Service Fee (see header above). PG stores the fee in `sc_fee_schedule`, not on per-meal rows.
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Texas Rangers | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 13] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - TX - V"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > TXR - TX - V
+
+**Account:** Texas Rangers - Globe Life Field (MLB Visiting)
+**Money shape:** operational-only (no billing prices by design; fee-schedule $0 marker).  
+**2026 Service Fee / deposit:** **None** (covered by TXR-TX-H's $604,032 contract carve-in for G&G/snacks/coffee). Opt-in direct sales to visiting teams (catering menu) is out of SC scope; tracked in Season Tracker.  
+**Escalation:** None applicable.  
+**Notes:** Included here for catalog completeness. All 4 rows carry $0 in PG by design; the SC UI displays operational counts only.
+Source: [`accounts/ACCOUNT_TXR-TX-V.md` §2](accounts/ACCOUNT_TXR-TX-V.md)
+> **Operational-only:** no billing prices by design. Every row is $0; the SC UI shows operational counts only. Direct-sales revenue is tracked in the Season Tracker workflow.
+| Group | Service | Price | Unit-ish | Flags | Effective | Active |
+|---|---|---:|---|---|---|---|
+| Texas Rangers | Arrival | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post BP | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Post-Game | $0.00 | per meal | - | 2026-06-16 | active |
+| Texas Rangers | Umpire | $0.00 | per meal | - | 2026-06-16 | active |
+---
+
+[chunk 14] section="KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > Source of truth"
+From: Price Book - Live Account Pricing (generated) (REF-141), Section: KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT > Source of truth
+
+- **PG (`sc_service_prices` join `sc_services` join `sc_service_groups`)** = LIVE PRICE AUTHORITY. Every price shown above is the latest-effective-date row per `(service_id, price_kind='projected')` at the PG snapshot time.
+- **This book** = PG's projection at the moment of generation. It is intentionally read-only. If a rate changes in PG (Studio apply, admin edit, backdate), this book is stale until regenerated.
+- **`docs/pricing-summit/accounts/ACCOUNT_<KEY>.md`** = per-account CONTRACT + RULING context (money-shape decisions, SF cadence, escalation clauses, per-account rulings). This book cites those files for terms but does not restate them.
+- **`docs/pricing-summit/CONTRACT_DIGEST_*.md`** = verbatim contract clauses with page cites.
+- **`KitchFix_Service_Calendar_Price_Review_v3_FINAL.xlsx` → "Billing Price"** = ATTESTED authority (Joe Lessard-signed). PG matches signed at 2dp on 103/105 rows as of the certification audit; the 2 catalogued signed-side notes are documented in `STAGE3_CERTIFICATION_AUDIT.md` §3.
+**Regeneration triggers:**
+- Any Studio apply to `sc_service_prices`, `sc_services`, or `sc_service_groups`.
+- Any admin-panel price edit or fenced-backdate write.
+- Any signed-sheet refresh (v3 -> v4) that shifts the certification denominator.
+- Any per-account contract renewal that changes a header line above.
+**To regenerate:**
+```sh
+set -a && source .env.local && set +a
+node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json
+node scripts/generate-price-book.mjs
+```
+_Generated 2026-07-22T16:04:48.913Z from PG snapshot 2026-07-22T16:04:06.162Z._
+
+==============================================================================
+PB-009 - "Financial Operations Manual"  (status=Live, access=unrestricted)
+  Chunks: 14, total tokens: 2623
+==============================================================================
+
+[chunk 0] section="Purpose & How to Use"
+From: Financial Operations Manual (PB-009), Section: Purpose & How to Use
+
+How KitchFix manages the financial side of the business - from the site P&L to company reporting.
+> ANCHOR: Margin is made or lost on the site floor every day, and protected by clean reporting and controls behind it. This manual connects the two - what the Executive Chef controls daily, and how it rolls into the company's books.
+This manual defines KitchFix's financial operations: the two contract models, how a site's P&L is owned and managed, cost discipline for food and labor, budgeting, invoicing and billing, reporting, and the controls that keep it all clean. It applies to everyone who touches site finances - Executive Chefs, RDOs, and the Accounting team.
+> NOTE: [OPEN - FINANCE INPUT] The reporting pack structure, approval thresholds, and the invoicing/billing workflow detail below are framework placeholders to be confirmed and filled in with Accounting (Sebastian Castro) before this manual goes Live.
+
+[chunk 1] section="The Two Financial Models"
+From: Financial Operations Manual (PB-009), Section: The Two Financial Models
+
+> ANCHOR: This manual is the financial hub. It orients on how KitchFix money works and points down to the detail: the money-model mechanics live in REF-140 (Money Model), and each account's specifics live in its Account Record (REC-101 through REC-111) and Contract Digest. This hub defers to REF-140 for money-model mechanics and does not independently restate money-model figures; live prices resolve from the Price Book.
+Every account runs on one of two models, and the model changes how the EC manages money.
+
+[chunk 2] section="The Two Financial Models > Fee model"
+From: Financial Operations Manual (PB-009), Section: The Two Financial Models > Fee model
+
+The client owns the food cost; KitchFix manages purchasing and operations and is paid a management fee. The food budget is the client's money - managed tightly, reported transparently. This is the better-margin model for KitchFix because food cost is a pass-through, not a risk.
+
+[chunk 3] section="The Two Financial Models > Full-service model"
+From: Financial Operations Manual (PB-009), Section: The Two Financial Models > Full-service model
+
+KitchFix buys the food and delivers the operation under a single all-inclusive fee. Food cost is KitchFix's risk - over-ordering or waste comes straight out of margin, so cost discipline matters even more.
+> NOTE: Know your account's model before you order, schedule, or report. The same action - an extra case ordered "to be safe" - is a client conversation under fee and a margin hit under full-service.
+
+[chunk 4] section="Site P&L Ownership"
+From: Financial Operations Manual (PB-009), Section: Site P&L Ownership
+
+The Executive Chef owns the site's P&L - not as a finance exercise, but as daily operating discipline.
+The GM/EC is accountable for the site's financial result: food cost, labor cost, and the revenue or fee terms of the account. The RDO oversees P&L performance across the region; Accounting maintains the books and reporting.
+- Food cost - driven by ordering, production, portioning, waste, and storage (Section 04).
+- Labor cost - driven by scheduling to the business and to target (Section 05).
+- Fee / revenue - governed by the account's SLA and model (Section 02).
+> ANCHOR: Owning the P&L means knowing your numbers before someone asks for them. An EC who can't say where food and labor cost stand this period isn't yet running the site's finances - they're reacting to them.
+
+[chunk 5] section="Food Cost Management"
+From: Financial Operations Manual (PB-009), Section: Food Cost Management
+
+Buy what you need, use what you buy, and lose nothing to waste or spoilage.
+- Order to par and forecast - order to the menu, the production plan, and forecasted covers - not habit (PB-010).
+- Portion to spec - standardized recipes and portions keep food cost predictable plate to plate.
+- Control waste - track waste honestly; it's the fastest signal of over-ordering, over-production, or rotation failure.
+- Store & rotate - FIFO and correct storage so product isn't lost to spoilage.
+- Inventory - count on the account's cadence; inventory value is part of the cost picture.
+> NOTE: Under full-service, every one of these is margin. Under fee, every one is the client's trust. Either way, the discipline is the same.
+
+[chunk 6] section="Labor Cost Management"
+From: Financial Operations Manual (PB-009), Section: Labor Cost Management
+
+The right coverage to hit the standard, scheduled to the target - with accurate time, always.
+- Schedule to the business - build the Rippling schedule to forecast and the labor target - enough to hit the standard, no more.
+- Control overtime - overtime is approved in advance; worked overtime is always paid (POL-008). Unplanned OT is a scheduling signal to fix.
+- Accurate time - every hour recorded; no off-the-clock work, ever (POL-008).
+- Seasonal scaling - staff to the season - the workforce swings with the baseball calendar (POL-013).
+> NOTE: Labor is the lever the EC controls most directly in the moment. The schedule is a financial document as much as an operational one.
+
+[chunk 7] section="Budgeting & Forecasting"
+From: Financial Operations Manual (PB-009), Section: Budgeting & Forecasting
+
+Plan the numbers before the period, so you're managing to a target instead of explaining a surprise.
+- The budget - each account operates to a budget set with the RDO and Accounting - food, labor, and the fee/revenue terms.
+- Forecasting covers - forecast covers from the schedule (homestands, road trips, events) to drive ordering and staffing.
+- Re-forecast - update the forecast as the schedule changes; a stale forecast drives bad orders and schedules.
+> NOTE: [OPEN - FINANCE INPUT] Budget format, cadence, and ownership thresholds to be confirmed with Accounting and reflected here.
+
+[chunk 8] section="Invoicing & Accounts Payable"
+From: Financial Operations Manual (PB-009), Section: Invoicing & Accounts Payable
+
+Pay for what we received, verified and approved - no exceptions.
+1. Verify against receiving - match every vendor invoice to what was actually received (PB-010, Section receiving).
+2. Flag discrepancies - short shipments, price changes, and quality rejections are documented and resolved with the vendor.
+3. Approve - invoices are approved per the approval matrix before payment.
+4. Submit to Accounting - approved invoices route to Accounting on the account's cadence.
+> NOTE: [OPEN - FINANCE INPUT] Approval thresholds, the AP workflow, and Accounting hand-off detail to be confirmed with Sebastian and filled in.
+
+[chunk 9] section="Client Billing & Receivables"
+From: Financial Operations Manual (PB-009), Section: Client Billing & Receivables
+
+Bill the client correctly and on time, per the model and the SLA.
+- Fee accounts - invoice the management fee and any pass-through food cost per the SLA terms.
+- Full-service accounts - invoice the all-inclusive fee per the SLA cadence.
+- Backup & transparency - provide the documentation the SLA requires - fee accounts especially run on transparent food-cost reporting.
+- Receivables - Accounting tracks receivables; the RDO supports resolution of any client billing question.
+> NOTE: [OPEN - FINANCE INPUT] Billing cadence, invoice format, and receivables process to be confirmed with Accounting.
+> CRITICAL: Price Book dual-touch. A per-meal rate change flows automatically from PG to the Price Book on regeneration. But a Service Fee or escalation change touches TWO places: the account's OPD document AND the Price Book generator's static per-account config (a code edit plus regenerate). Changing one without the other leaves the Price Book and the record out of sync. Any fee or escalation change is not done until both are updated.
+
+[chunk 10] section="Financial Reporting"
+From: Financial Operations Manual (PB-009), Section: Financial Reporting
+
+Numbers the RDO and SLT can act on - on a rhythm, in a consistent format.
+Each account reports its financial performance on a regular cadence - food cost, labor cost, fee/revenue, and variance to budget - rolled from the site to the region to the company. Reporting is restricted: financials are shared only with those who need them, by site, with sensitive lines (such as individual pay) removed before any team-level sharing.
+> NOTE: [OPEN - FINANCE INPUT] The reporting pack - its tabs, metrics, and cadence - is built with Accounting. It is broken into site-specific views, stored in a restricted location, and shared only with the relevant site lead, RDO, and SLT.
+
+[chunk 11] section="Controls & Approvals"
+From: Financial Operations Manual (PB-009), Section: Controls & Approvals
+
+The basics that keep the money clean: approvals, separation, and a record.
+- Approval matrix - spending and invoices are approved at the right level - not by whoever is closest.
+- Separation of duties - the person who orders is not the only person who approves and reconciles.
+- Documentation - every transaction has backup - the order, the receiving, the invoice, the approval.
+- Restricted access - financial detail is shared on a need-to-know basis, by site, with sensitive lines removed.
+> NOTE: [OPEN - FINANCE INPUT] The approval matrix and control thresholds to be set with Accounting.
+
+[chunk 12] section="Variance Management & Escalation"
+From: Financial Operations Manual (PB-009), Section: Variance Management & Escalation
+
+Catch the variance early, explain it, and fix it - don't let it compound.
+A variance to budget is information, not a failure - as long as it's surfaced early. The EC reviews food and labor against target on the reporting cadence and flags variances to the RDO before they become the period's story.
+| Situation | What to do |
+|---|---|
+| Food cost over target | Review ordering, production, waste, and portioning; correct and report the cause. |
+| Labor cost over target | Review the schedule against covers; adjust coverage to the business. |
+| Billing or invoice dispute | Document, resolve with the vendor or client, and loop in Accounting and the RDO. |
+| Material or repeated variance | Escalate to the RDO and Accounting early - with the cause, not just the number. |
+> ANCHOR: A small variance explained now beats a large one discovered later. The RDO would always rather hear it early.
+
+[chunk 13] section="Related Documents"
+From: Financial Operations Manual (PB-009), Section: Related Documents
+
+Documents this references or governs. Cross-references use the Document ID, which resolves to the current version.
+| Document ID | Title | Status |
+|---|---|---|
+| PB-010 | Site Operations Manual | In review |
+| PB-005 | SLA OS Handbook | In review |
+| POL-008 | Wage & Hour Policy | In review |
+| POL-013 | Employee Classification & Seasonal | In review |
+| PB-012 | Client & Account Management Playbook | In review |
+| REF-140 | Money Model - Billing Mechanics | In build |
+| REC-101..111 | Account Records (per account) | In build |
+| REF-121..132 | Contract Digests (per account) | In build |
+| STD-001 | Documentation Format Standard | Live (v1.2) |
+
+==============================================================================
+REC records - chunks that mention billing-shape keywords
+==============================================================================
+
+### REC-101 (access=restricted) - "Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ)"  [4 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ) (REC-101), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `CIN-AZ`
+    - **Team / entity**: Cincinnati Reds - Goodyear, AZ (Player Development Complex / Spring Training)
+    - **Level / tier**: PDC (MLB Spring Training + year-round MiLB training + rehab)
+    - **Search aliases** (how people actually look for this): "Reds AZ", "Goodyear", "GY", "Cincinnati Spring Training", "Reds Arizona", "Reds Goodyear"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `CIN-AZ`
+    - **PG `accounts`** - team_key `CIN - AZ` · name "Cincinnati Reds" · level `PDC` · billing_model `actuals_drive_invoice` · has_homestand_schedule `false` · has_schedule_overlay `false`
+    - **PG `sc_service_prices` (via `sc_services`)** - service rows: "Breakfast", "Lunch", "Dinner" (MLB + MiLB share names, distinguished by price), "Pre-Game Snack", "Continental Plus", "Coffee Service (tax-free)", "Fountain Bev (tax-free)"
+    - **QuickBooks (invoice `Item`)** - "REDS MLB - Meal Service", "REDS MiLB - Meal Service", "REDS MiLB - Snack", "REDS Coffee Service", "REDS Fountain Beverages"
+    - **QuickBooks (invoice memo)** - "This invoice is for the Cincinnati Reds @ Goodyear, AZ - 2026 [MLB/MiLB] Meal Service"
+    - **P&L file** - Cincinnati Reds - GY / Goodyear rows (shares the "Cincinnati Reds" relationship with CIN-OH; P&L separates GY from the OH clubhouse)
+    - **ABR OneSheeter tab** - "CINCINNATI REDS" (SHARED tab - also covers CIN-OH; the tab blends/distinguishes "ML"=OH from "MiLB ST"/"GY"=AZ)
+    - **Contract folder** - `/Contracts/CIN AZ/`
+    - **Invoice recipients** - sgrossman@reds.com [contract §V.D]; recent invoices show Bill-To "Sarah Vedder / Cincinnati Reds" (contract §V.D originally named Ashley Meuser ameuser@reds.com - now departed, see the History section)
+    - **Client stakeholder**: **Rachel Sharley** - client dietitian for CIN-AZ (current primary contact) *src: Kevin, 2026-07-15, high*
+    > NOTE: Capture completeness - **PARTIAL (near-full)** - contract fully banked, all rates confirmed against PG + invoices, 2026 SF confirmed ($445,716), rulings closed. Remaining open (all non-blocking): 2026 renewal-notice paperwork, Joe #2 (2300 computed-vs-billed). One live watch: fee-model conversion.
+
+  [chunk 3] section="Operations Record"
+    From: Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ) (REC-101), Section: Operations Record
+    
+    - **Client stakeholders**: **Rachel Sharley** - client dietitian, current primary contact *src: Kevin, 2026-07-15, high*. Invoices Bill-To Sarah Vedder, sent to sgrossman@reds.com. (Ashley Meuser was the prior contact - left the Reds ~Apr/May 2026; see §6.)
+    - **Service pattern / seasonal shape**: MLB Spring Training (~115 people) + year-round MiLB training across phases - Early Camp, MiLB ST, Extended ST, Arizona Summer League, Fall Instructs, First Year Player Camp - plus rehab. **Headcount swings ~75 to ~240 MiLB** depending on phase; the widest swings of any account type. *ACCOUNT_SERVICES_BRIEF, med*
+    - **Service groups**: MLB (ST only), MiLB, Rehab (priced as MiLB), plus weekly Coffee/Fountain and Pre-Game Snack.
+    - **Count/invoice mechanics**: Club provides preliminary weekly count → final count one day before Monday → KitchFix provides actual count day-after service (§V.A). Invoices every 15 days in arrears, Net 30 (§V.B-C). **Overage bills at actuals price; underage is NOT reconciled** (contract §V.C confirms "charge for the additional meals" over projection; no under-true-up). *MONEY_MODEL R3/R4; evidence §2.10 "overage at actuals price CONFIRMED verbatim"*
+    - **Force-majeure proration**: fees (except the 75% Feb-1 SF installment) prorate by (days-not-served ÷ 240 service days). *§IV.F*
+    - **Operational truth not in contracts**: MLB and MiLB are invoiced separately during ST (operational practice, not contract-required). *evidence §3.3*
+    - **FEE-MODEL CONVERSION (watch item)**: a 2025 client conversation confirmed moving GY (CIN-AZ) to a flat_fee account would be the ideal shape for both KitchFix and the Reds. Contract negotiations have not begun; the decision sits above Rachel Sharley (not hers alone to make). Originally surfaced by Ashley Meuser (now departed). **Not executed.** If it lands, CIN-AZ's shape would change from SF%-hybrid to flat_fee (MONEY_MODEL + this file would need updating). Watch alongside the Nov 1, 2026 renewal decision. *src: Kevin 2026-07-23; originator ABR Deeper Dive 2025 p18*
+
+  [chunk 5] section="Open Items"
+    From: Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ) (REC-101), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | Exhibit-B volume tier (C-17) | **CLOSED** | Kevin | No |
+    | 2026 renewal notice document | OPEN | Kevin | No (risk-accepted) |
+    | P&L 2300 computed-vs-billed (Joe #2) | OPEN (async, non-blocking) | Joe | No |
+    | Fee-model conversion watch | UNDER-REVIEW | Kevin | No |
+    **Detail**
+    - **Exhibit-B volume tier (C-17)** - Kevin ruling 2026-07-17: annual projection billed at post-SF as floor; under-attendance bills full projection; overage stays post-SF. 2023 tier language outdated. Do not reopen.
+    - **2026 renewal notice document** - Base agreement's renewal-option mechanic covers 2026 by formula; the Club's written renewal notice isn't in the folder. Correspondence check, not a contract gap. Chase via current contact (Rachel Sharley) - NOT Ashley (departed). Next: 2027 renewal notice due Nov 1, 2026.
+    - **P&L 2300 computed-vs-billed (Joe #2)** - 2026 SF ($445,716) is confirmed operative, but whether the P&L 2300 line is the *billed* fee or a *computed* SF-component recognition is still open. Doesn't block this file - the number is confirmed either way.
+    - **Fee-model conversion watch** - Ashley's GY→fee-account conversation. If executed, shape changes to flat_fee. Not yet contracted.
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - CIN-AZ (Cincinnati Reds, Goodyear AZ) (REC-101), Section: Provenance & Attribution
+    
+    - **Contract facts**: page-cited in the Contract Digest (REF-122) (authoritative, verbatim).
+    - **Per-service prices**: signed Price Review v3, **Joe Lessard**-attested. Confirmed against PG (`sc_service_prices`) + sampled invoices K300168587 (MLB) + K300168736 (MiLB).
+    - **Money shape / two-layer architecture**: the Money Model (REF-140) (canonical; wins until amended - several 2026-07-14/15 rulings are pending amendments to it).
+    - **Operational/tribal facts** (service groups, phases, personnel, fee-conversion conversation, stakeholders): the Account Services Brief (repo-side) (2026-06-16) + ABR OneSheeter/Deeper Dive 2025. Tagged inline with confidence; *src: unattributed* where person/date unknown (not researched).
+    - **Rulings**: LEDGER (repo-side provenance) §K/§M/§O/§P/§Q/§T (C-1, A-14, C-17, A-10).
+    - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (pilot build).
+    ---
+    *Completeness: PARTIAL (near-full). Contract banked + all rates confirmed (PG + invoice) + 2026 SF confirmed ($445,716) + rulings closed + operational detail + worked example. Remaining OPEN (all non-blocking): 2026 renewal-notice paperwork, Joe #2 (2300 computed-vs-billed). Live watch: fee-model conversion (originator departed - re-confirm currency).*
+
+### REC-102 (access=restricted) - "Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA))"  [4 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA)) (REC-102), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `CIN-KY`
+    - **Team / entity**: Louisville Bats - Cincinnati Reds AAA affiliate, Louisville Slugger Field (Louisville, KY)
+    - **Level / tier**: AAA (MiLB)
+    - **Search aliases**: "Louisville", "Louisville Bats", "Bats", "Slugger Field", "Reds AAA", "Louisville Kentucky"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `CIN-KY`
+    - **PG `accounts`** - team_key `CIN - KY` · name "Louisville Bats" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false`
+    - **PG `sc_service_prices`** - "Breakfast Buffet", "Lunch Buffet", "Snack", "Post-Game (planned)", "Umpire"
+    - **QuickBooks (invoice `Item`)** - Activity = **"Meal Service - PFS (Home)"** (meal type carried in the Description column, e.g. "Lunch - 45 & Postgame - 45. Total = 90."). **`PFS` = Performance Food Service** (KitchFix parent/product-family brand). The "(Home)" suffix pairs with a confirmed **"PFS (Away)"** variant (seen on TXR-V visiting-team catering) - the Home/Away split is a real KitchFix taxonomy. *invoice K300168861; (Away) confirmed via TXR-V K300168675; PFS expansion Kevin 2026-07-16*
+    - **P&L file** - Louisville Bats rows
+    - **ABR OneSheeter tab** - shares the "CINCINNATI REDS" relationship tab context, but Louisville is a distinct AAA account
+    - **Contract folder** - `/Contracts/CIN KY/`
+    - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side; also covers CIN-AZ) *src: Kevin, 2026-07-15, high*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** - all three years' contracts banked verbatim, rate history complete, structure is the simplest of the 11 (pure per-meal, no SF, no passthrough). The only gaps are non-blocking: no invoice in the sample (so no worked example / tax-rate confirmation), and net-payment days unstated in the executed contract.
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA)) (REC-102), Section: Rulings & Decisions
+    
+    *All rates as-of 2026-07-14.*
+    | ID | Status | LEDGER ref |
+    |---|---|---|
+    | C-18 | CLOSED (removal confirmed verbatim) | §P (C-18) |
+    | Type-labeling | CLOSED (informational) | §12 (evidence) |
+    **Detail**
+    - **C-18** - The $28,000 upfront lump-sum ($2,000 credit × 14 homestands) present in 2024 + 2025 was **REMOVED in the executed 2026 contract** → pure weekly per-meal. Anything downstream still assuming the lump-sum/credit is STALE.
+    - **Type-labeling** - Contract uses "Type 1 / Type 2"; PG + MONEY_MODEL use named services (Breakfast Buffet / Post-Game / Umpire etc.). Not a conflict - Type-1 rate ($25.95) maps to all Type-1 services; Type-2 ($8.64) is Snack. Naming alignment only.
+
+  [chunk 5] section="Open Items"
+    From: Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA)) (REC-102), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | Post-game service in SC projections | OPEN | Kevin / ops | No |
+    | KY sales-tax rate | CONFIRMED (6.00%) | - | No |
+    | Net-payment terms | CONFIRMED (Net 30) | - | No |
+    | "PFS" meaning + "(Home)"/"(Away)" variant | RESOLVED | Kevin | No |
+    | Homestand count (13 vs 14) | OPEN (verify) | - | No |
+    | Invoice sample for golden test | RECEIVED | - | closes CIN-KY slice of Sebastian #3 |
+    **Detail**
+    - **Post-game service in SC projections** - Post-game is on-request-only (72hr advance, rare) - NOT a standing service. Ensure the SC doesn't project Post-Game as opening-day/standing; it should appear only when actually requested + served.
+    - **KY sales-tax rate** - Invoice K300168861 confirms 6.00% exact (no local Louisville tax). Was pending; now closed.
+    - **Net-payment terms** - Invoice K300168861: Net 30, weekly Sunday-dated invoicing, 6-day service period (Tue-Sun). Was UNKNOWN; now closed.
+    - **"PFS" meaning + "(Home)"/"(Away)" variant** - **`PFS` = Performance Food Service** (Kevin, 2026-07-16). The **"(Away)" variant is CONFIRMED** (TXR-V visiting-team catering, invoice K300168675). CIN-KY itself is Home-only per-meal; the Away stream is the separate visiting-team catering lane (TXR-V), not CIN-KY road-food. Glossary closed.
+    - **Homestand count (13 vs 14)** - 2026 = 13 homestands (was 14 under the removed credit structure). Verify Price Review v3 uses 13.
+    - **Invoice sample for golden test** - Invoice K300168861 (PAID) obtained + worked example built (§2e). CIN-KY golden-test coverage complete.
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - CIN-KY (Louisville Bats (Cincinnati Reds AAA)) (REC-102), Section: Provenance & Attribution
+    
+    - **Contract facts**: page-cited in the Contract Digest (REF-123) (authoritative, verbatim; all three years).
+    - **Per-service prices**: signed Price Review v3 (Joe **Lessard**-attested), confirmed against PG. No invoice sample to cross-check (Sebastian #3 pending).
+    - **Money shape**: the Money Model (REF-140) (No-SF pure per-meal).
+    - **Operational facts**: contract Exhibit A + the Account Services Brief (repo-side) (2026-06-16).
+    - **Rulings**: LEDGER (repo-side provenance) §P (C-18).
+    - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
+    ---
+    *Completeness: FULLY-CAPTURED. Simplest account - pure per-meal, no SF/passthrough/ancillary. All three years' contracts banked, rate history complete, C-18 lump-sum removal confirmed. Invoice K300168861 (PAID) confirms rates ($25.95/$8.64), KY tax (6.00%), Net 30, and provides a golden-test seed ($11,546.55 pre-tax). Minor open threads: homestand count verify, $186,462 reconciliation. ("PFS"=Performance Food Service + "(Away)" variant now CONFIRMED - glossary closed.) No open rulings.*
+
+### REC-103 (access=restricted) - "Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park))"  [4 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park)) (REC-103), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `CIN-OH`
+    - **Team / entity**: Cincinnati Reds MLB - Great American Ball Park (Cincinnati, OH)
+    - **Level / tier**: MLB
+    - **Search aliases**: "Reds MLB", "Cincinnati", "GABP", "Great American Ball Park", "Reds Ohio", "Reds home", "REDS OH", "REDS CIN", "REDS CINN"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `CIN-OH`
+    - **PG `accounts`** - team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+    - **PG `sc_fee_schedule`** - $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section
+    - **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+    - **QuickBooks (invoice `Item`)** - SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+    - **Finance schedule** - "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W*
+    - **P&L file** - Cincinnati Reds - GABP / MLB rows (shares "Cincinnati Reds" relationship with CIN-AZ; P&L separates the OH clubhouse from GY)
+    - **ABR OneSheeter tab** - "CINCINNATI REDS" (SHARED tab - blends/distinguishes OH from AZ)
+    - **Contract folder** - `/Contracts/CINN/`
+    - **Invoice recipients** - Ashley Meuser through ~5/10/2026; **Sarah Vedder** thereafter (AP handover ~May 2026) *§X*
+    - **Client stakeholders**: **Rachel Sharley** - client dietitian (Reds-side, covers CIN-AZ + CIN-OH + CIN-KY); **Sarah Vedder** - AP/billing recipient (post-Ashley) *§X, high*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($376,686 accrued / $371,442.48 billed), SF + both reimbursable tracks invoice-confirmed, tax treatment confirmed (SF taxable 7.80%, reimbursables tax-zero), postseason mechanic banked. Non-blocking opens: the "seven installments" contract typo (cosmetic), postseason per-game invoice unsampled (Phase E).
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park)) (REC-103), Section: Rulings & Decisions
+    
+    | ID | Status | as-of | LEDGER ref |
+    |---|---|---|---|
+    | R11 | CLOSED | 2026-07 | R11 |
+    | SF-tax (per-account) | CLOSED | 2026-07-16 | §X |
+    | Fee figure | CLOSED | 2026-07-16 | §W |
+    | PG carries escalated | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+    **Detail**
+    - **R11** - Flat-fee postseason = "same rate + additional days" via the 1/81-of-annual-fee mechanic. CIN-OH's $4,413.58/game satisfies it.
+    - **SF-tax (per-account)** - CIN-OH SF is **TAXABLE (7.80%)** - invoice-confirmed. SF-taxability is per-account (contrast STL-FL exempt); bill export carries it as an account attribute.
+    - **Fee figure** - 2026 SF = $376,686 accrued / $371,442.48 billed (finance-confirmed), escalated from $362,500 base.
+    - **PG carries escalated** - PG `sc_fee_schedule` should carry the **escalated** $376,686, not the $362,500 base. Kevin ruling.
+
+  [chunk 5] section="Open Items"
+    From: Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park)) (REC-103), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | "Seven installments" contract typo | OPEN (cosmetic) | - | No |
+    | PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No |
+    | Postseason per-game invoice | N/A unless Reds qualify | accounting | No |
+    | 2027 extension | OPEN (future) | Kevin | No |
+    | Reimbursable due-date convention | OPEN (minor) | Sebastian | No |
+    **Detail**
+    - **"Seven installments" contract typo** - Contract §2.a says "seven (7) installments" but the table shows 6 monthly $56,250 (2025) + 1× $20,000 (Jan 1 2027). Math works ($357,500). The $20K is a 2025-season revenue tail landing in 2027 cash - a recognition-timing note.
+    - **PG fee-schedule migration to escalated** - Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: CIN-OH `sc_fee_schedule` flipped from $362,500 base → $376,686 escalated (changed_by `kf-fee-escalation-2026-07`). Companion STL-MO migration ran same day ($473K → $489,497). Any future escalating-fee account follows this pattern.
+    - **Postseason per-game invoice** - This invoice type only gets created IF the Reds make the postseason (Kevin). No postseason invoice exists to sample unless/until they qualify. The $4,413.58 mechanic is contract-defined; a real invoice is contingent on a playoff berth, so it's NOT a standing Phase-E gap.
+    - **2027 extension** - Reds notice by Oct 1, 2026, else meet-and-confer by Nov 1. The ABR planning doc floats a 2027+ MSA restructure.
+    - **Reimbursable due-date convention** - Reimbursables invoiced ~40-44 day effective terms despite "Net 30". Confirm the finance convention.
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - CIN-OH (Cincinnati Reds MLB (Great American Ball Park)) (REC-103), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-124) (verbatim, page-cited).
+    - **2026 fee + cadence + accrual**: finance schedule `PFS Service Fees 2026.xlsx` (§W) - high authority for the SF layer.
+    - **SF tax + reimbursable structure + AP handover**: invoices K300168479 (SF), K300168777/K300168859 (Food reimb), K300168860 (Clubhouse Snacks reimb) (§X).
+    - **Money shape**: the Money Model (REF-140) (flat_fee). NOTE: MONEY_MODEL's fee figure ($362,500 base) is superseded by finance's escalated $376,686 - pending batch-doc-PR annotation.
+    - **Rulings**: LEDGER (repo-side provenance) R11, §W, §X.
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+    ---
+    *Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; 2026 SF finance-confirmed ($376,686 accrued / $371,442 billed, escalated from $362,500 base); SF taxable 7.80% (invoice-confirmed, per-account attribute vs STL-FL exempt); both reimbursable tracks (Food + Clubhouse Snacks) invoice-confirmed as tax-zero weekly lumps; postseason 1/81 mechanic banked. Non-blocking opens: "seven installments" typo (cosmetic), postseason invoice unsampled (Phase E), PG-stores-base decision.*
+
+### REC-104 (access=restricted) - "Account Record - STL-FL (St. Louis Cardinals (Jupiter FL PDC))"  [3 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - STL-FL (St. Louis Cardinals (Jupiter FL PDC)) (REC-104), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `STL-FL`
+    - **Team / entity**: St. Louis Cardinals - Jupiter, FL (Roger Dean Chevrolet Stadium PDC: MLB Spring Training + MiLB ST + Palm Beach Cardinals + FCL)
+    - **Level / tier**: PDC
+    - **Search aliases**: "Cardinals FL", "Jupiter", "Roger Dean", "Palm Beach Cardinals", "PBC", "Cards spring training", "STL Florida"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `STL-FL`
+    - **PG `accounts`** - team_key `STL - FL` · name "St Louis Cardinals" · level `PDC` · billing_model `flat_fee` · has_schedule_overlay `true`
+    - **PG `sc_fee_schedule`** - $1,400,000 (2026-01-01, annual, quarterly cadence)
+    - **PG `sc_service_prices`** - per-meal rows all $0 (zeroed 2026-06-16; flat-fee planning only) - incl. "Fun Money allocation" ($0, is_non_revenue)
+    - **QuickBooks (invoice `Item`)** - SF: **"Service Fees (PFS)"** *K300168340-343* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+    - **Finance schedule** - "STL - FL" - accrued P1-P12, billed 4× $350,000 *§W*
+    - **P&L file** - St. Louis Cardinals - Jupiter / FL rows
+    - **ABR OneSheeter tab** - NOT included (STL excluded from 2025 ABR)
+    - **Contract folder** - `/Contracts/STL FL/` (Amendment; base agreement lives in `/Contracts/STL MO/`)
+    - **Invoice recipients** - St. Louis Cardinals / Jupiter FL / **Linda Brauer** *K300168343*
+    - **Client stakeholders**: **Carl Kochan** - top stakeholder (Jen & Linda's boss), ckochan@cardinals.com; **Jen Goldstein** - site contact, RD/Dietitian; **Linda Brauer** - Finance/AP, lbrauer@cardinals.com *src: Kevin, 2026-07-16, high*
+    > NOTE: Capture completeness - **FULLY-CAPTURED (SF layer)** - Amendment banked, $1.4M fee finance-confirmed, SF non-taxable confirmed, quarterly cadence confirmed, the $24,500 credit mechanic explained, 2027 work-stoppage lock-in captured. Upkeep-ownership RESOLVED (Cardinals-reimbursed passthrough) and the full food/snack/beverage stream confirmed as reimbursable passthrough (Kevin). One honest gap: the passthrough reimbursable invoices weren't sampled (structure mirrors STL-MO's; see §2c).
+
+  [chunk 5] section="Open Items"
+    From: Account Record - STL-FL (St. Louis Cardinals (Jupiter FL PDC)) (REC-104), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | $900K passthrough invoice | PENDING (accounting) | accounting | No |
+    | Finance-doc credit note placement | OPEN (minor) | Sebastian | No |
+    | Fun Money allocation | OPEN (planned) | Kevin | No |
+    | STL-FL MiLB Snack price missing | OPEN (minor) | Kevin | No |
+    **Detail**
+    - **$900K passthrough invoice** - STL-FL reimbursable invoice not sampled. Structure inferred from STL-MO (single-line lump, tax-zero, at-cost). Confirm when obtained - the STL-FL $900K is the largest passthrough of the 11.
+    - **Finance-doc credit note placement** - The $24,500 credit note in the finance workbook (§W) sits on installment 3, but the credit actually applied on installment 4 (per invoice K300168343). Off-by-one in the finance doc; not a billing error. Flag for correction.
+    - **Fun Money allocation** - $25,000 "Fun Money" (not contractually defined) - `is_non_revenue`, planned to move to the Fun Money Tracker.
+    - **STL-FL MiLB Snack price missing** - Snack projection price blank in the SC - reconcile (flat-fee, so $0 anyway, but the service row is incomplete).
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - STL-FL (St. Louis Cardinals (Jupiter FL PDC)) (REC-104), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-125) (the Amendment, verbatim) + the Contract Digest (REF-125) (the base agreement it amends).
+    - **2026 fee + quarterly cadence + accrual + the credit-note trail**: finance schedule (§W).
+    - **SF non-taxable + the $24,500 credit**: invoice K300168343 (evidence §3.1) + Kevin (§U, §X).
+    - **Stakeholders (Kochan/Goldstein/Brauer) + upkeep-passthrough resolution + full-passthrough confirmation**: Kevin, 2026-07-16.
+    - **Money shape**: the Money Model (REF-140) (flat_fee, fee-no-dollar variant).
+    - **Rulings**: LEDGER (repo-side provenance) §U (A-6 SF non-taxable), §W (fee), §X (credit).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+    ---
+    *Completeness: FULLY-CAPTURED (SF layer). Flat-fee. Amendment banked; $1.4M Florida Services Fee finance+invoice-confirmed; SF non-taxable (with the first-installment tax-then-credit story fully explained); quarterly cadence; 2027 work-stoppage lock-in captured; the $24,500 credit mechanic understood. Upkeep-ownership RESOLVED (Cardinals-reimbursed passthrough); full food/snack/beverage stream confirmed as reimbursable passthrough. One honest gap: the passthrough reimbursable invoices weren't sampled (structure mirrors STL-MO). SF non-taxable (Cardinals' legal position; they bear liability risk). Non-blocking opens: Fun Money.*
+
+### REC-105 (access=restricted) - "Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium))"  [4 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium)) (REC-105), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `STL-MO`
+    - **Team / entity**: St. Louis Cardinals MLB - Busch Stadium (St. Louis, MO)
+    - **Level / tier**: MLB
+    - **Search aliases**: "Cardinals MLB", "St. Louis", "Busch", "Busch Stadium", "Cards home", "Cardinals Missouri"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `STL-MO`
+    - **PG `accounts`** - team_key `STL - MO` · name "St Louis Cardinals" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+    - **PG `sc_fee_schedule`** - $473,000 base row (2026-01-01, annual, monthly-6) - NOTE: base; 2026 escalated actual bills at $489,497 (see the Billing Record section)
+    - **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee; planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+    - **QuickBooks (invoice `Item`)** - reimbursables: **"STL-MO Reimbursables - Food"** + **"STL-MO Reimbursables - Food-Beverages"** *K300168851, K300168853*; SF: Activity **"Service Fees (PFS)"** but Description reads **"Management Fee"** (not "Service Fee" - STL-MO-specific QB convention) *K300168469* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+    - **Finance schedule** - "STL - MO" - accrued P4-P10, billed 6× $73,249.50 + 1× $50,000 road food *§W*
+    - **P&L file** - St. Louis Cardinals - Busch / MLB rows
+    - **ABR OneSheeter tab** - NOT included (STL excluded from 2025 ABR - flat-fee accounts run a different review track)
+    - **Contract folder** - `/Contracts/STL MO/`
+    - **Invoice recipients** - St. Louis Cardinals (entity-level on the sampled reimbursables) · **Linda Brauer** (Finance) is the AP contact *§X, Kevin*
+    - **Client stakeholders**: **Carl Kochan** - client (ckochan@cardinals.com); **Linda Brauer** - Finance/AP (lbrauer@cardinals.com) *src: Kevin, 2026-07-16, high*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, 2026 fee finance-confirmed ($489,497), the $489K/$698K/$473K figure question RESOLVED, reimbursable structure invoice-confirmed, postseason mechanic banked. SF non-taxable (Cardinals' legal position). Non-blocking: PG migration to escalated figure.
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium)) (REC-105), Section: Rulings & Decisions
+    
+    | ID | Status | as-of | LEDGER ref |
+    |---|---|---|---|
+    | Figure resolution | CLOSED | 2026-07-16 | §W |
+    | R11 | CLOSED | 2026-07 | R11 |
+    | Reimbursable tax | CLOSED | 2026-07-16 | §X |
+    | PG carries escalated | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+    | SF tax | CLOSED | 2026-07-16 | §Y + SF-invoice |
+    | SF description naming | NOTED | 2026-07-16 | SF-invoice |
+    **Detail**
+    - **Figure resolution** - $698K gross / $473K base (PG) / **$489,497 escalated 2026 actual (bills)**. Old "$489,431" = the escalated figure, not a contradiction. CLOSED.
+    - **R11** - Flat-fee postseason = 1/81-of-fee mechanic ($5,222.22/game). Satisfied.
+    - **Reimbursable tax** - Reimbursables bill **tax-zero** because tax is already paid on the underlying vendor invoices (avoids double-tax). General rule across accounts.
+    - **PG carries escalated** - PG `sc_fee_schedule` should carry the **escalated** $489,497, not the $473K base. Kevin ruling.
+    - **SF tax** - STL-MO SF is **NON-TAXABLE** (Cardinals' legal position; they bear the risk) - **invoice-confirmed** K300168469 (tax $0.00).
+    - **SF description naming** - STL-MO SF invoices read **"Management Fee"** (not "Service Fee"); Activity code still `Service Fees (PFS)`. "Management Fee" and "Service Fee" are functionally the same at STL-MO (Kevin). Bill export must handle both Description strings.
+
+  [chunk 5] section="Open Items"
+    From: Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium)) (REC-105), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | PG fee-schedule migration to escalated | CLOSED / DONE | Kevin/CC | No |
+    | $225K passthrough true-up | MANAGED (tracked vs goal) | Kevin | No |
+    **Detail**
+    - **PG fee-schedule migration to escalated** - Kevin ruled PG carries the **escalated** figure. Migration ran 2026-07-16: STL-MO `sc_fee_schedule` flipped from $473,000 base → $489,497 escalated (changed_by `kf-fee-escalation-2026-07`). Companion CIN-OH migration ran same day ($362,500 → $376,686).
+    - **$225K passthrough true-up** - $225K is the goal/budget with wiggle room. KitchFix tracks invoices and keeps the Cardinals aware of spending against the budget. Savings revert to Cardinals; overage billable (§2.a.iii). No SF-level true-up mechanic - managed operationally against the target. *Kevin, 2026-07-23*
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - STL-MO (St. Louis Cardinals MLB (Busch Stadium)) (REC-105), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-126) (verbatim, page-cited).
+    - **2026 fee + cadence + accrual + figure resolution**: finance schedule (§W).
+    - **Reimbursable structure**: invoices K300168851 (Food) + K300168853 (Food-Beverages) (§X).
+    - **Money shape**: the Money Model (REF-140) (flat_fee). NOTE: MONEY_MODEL's $473K figure is the base; superseded for 2026 billing by finance's $489,497 - pending batch-doc-PR annotation.
+    - **Rulings**: LEDGER (repo-side provenance) §W (figure), R11 (postseason).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+    ---
+    *Completeness: FULLY-CAPTURED. Flat-fee. Contract banked; the $489K/$698K/$473K figure question RESOLVED ($473K base → $489,497 escalated 2026 actual, finance-confirmed); reimbursable structure invoice-confirmed (Food + Food-Beverages, tax-zero weekly lumps); postseason 1/81 mechanic banked. SF non-taxable - invoice-confirmed (K300168469, tax $0.00); STL-MO invoices label the SF "Management Fee". PG migration to escalated DONE (2026-07-16).*
+
+### REC-106 (access=restricted) - "Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC))"  [4 keyword-matching chunks of 7]
+
+  [chunk 0] section="null"
+    From: Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC)) (REC-106)
+    
+    > Canonical record. Current-state above the fold; history preserved below (the History section). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-127).
+    >
+    > **FLAT SF + PER-MEAL, IN PARALLEL, ACROSS TWO GROUPS/LOCATIONS.** TBJ-FL carries a flat annual Service Fee ($515,712 in 2026) AND per-meal billing, split across MLB, FCL (at the PDC), and FSL (Dunedin Single-A, produced at the PDC + delivered to TD Ballpark). Buffalo (TBJ-NY) is an affiliated sub-scope on the same Toronto master.
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC)) (REC-106), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TBJ-FL`
+    - **Team / entity**: Toronto Blue Jays - Dunedin, FL (TD Ballpark + the 3031 Garrison Road PDC). MLB spring training + FCL + FSL (Dunedin Blue Jays, Single-A) affiliates.
+    - **Level / tier**: PDC (`billing_model=actuals_drive_invoice`, `has_schedule_overlay=true`)
+    - **Search aliases**: "Blue Jays", "Toronto Blue Jays", "Dunedin", "TD Ballpark", "TBJ", "TBJ-FL", "Dunedin Blue Jays", "FCL", "FSL", "Rogers Blue Jays"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TBJ-FL`
+    - **PG `accounts`** - team_key `TBJ - FL` · name "Toronto Blue Jays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_schedule_overlay `true`
+    - **PG `sc_service_prices`** - MLB Meal $23.12; FCL (MiLB at PDC) $11.55; FSL (Single-A at TD Ballpark) $16.51. Plus a broad service catalog (see §2b). **NO `sc_fee_schedule` row** - SF is out-of-band (see the Billing Record section).
+    - **QuickBooks (invoice `Item`)** - `TBJ MLB - Breakfast/Lunch/Dinner`, `TBJ MiLB - Breakfast/Lunch/Dinner` (FCL). SF Item expected `Service Fees (PFS)`. *K300168548 MLB, K300168872 MiLB*
+    - **Finance schedule (§W)** - 2026 **SF = $515,712** (3× $171,904, Jan/Feb/Mar) - the BILLABLE amount, negotiated. NOT in `sc_fee_schedule` - out-of-band.
+    - **P&L file** - Blue Jays - MLB + MiLB meal revenue → 2400.1; SF → 2300 ($515,712, full-year P1-P13 spread).
+    - **ABR OneSheeter tab** - "TORONTO BLUE JAYS"
+    - **Contract folder** - `/Contracts/TBJ FL/` - `Complete_with_DocuSign_Final_Dunedin_Caterin - Final.pdf` (shared Services Agreement + Schedule "A" SOW #1; same doc governs the Toronto relationship)
+    - **Affiliated** - **TBJ-NY (Buffalo)** bills through this Toronto PDC master (Dec 2018 Rogers/Toronto MSA) - an affiliated sub-scope (see the Operations Record section).
+    - **Client stakeholders**: **MLB → Katarina Dimino** (client contact for BOTH TBJ accounts - replaced the departed Michelle Rodgers). **MiLB → Charlie Wilson** (AP/billing recipient, Toronto PDC). MLB and MiLB bill to SEPARATE cost centers (see the Operations Record section). *Kevin 2026-07-16; K300168548, K300168872*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** (model + rates + fee confirmed). Contract verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoice not sampled (golden seed - Phase E).
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC)) (REC-106), Section: Rulings & Decisions
+    
+    *All rates as-of 2026-07-16.*
+    | ID | Status | LEDGER ref |
+    |---|---|---|
+    | SF amount | CLOSED | §W, Kevin |
+    | SF cadence | CLOSED | §W |
+    | SF vs per-meal | CLOSED | digest |
+    | FCL vs FSL | CLOSED | §T, Kevin |
+    | Media Meals | CLOSED | §U |
+    | Buffalo cross-ref | CLOSED | §V |
+    | Escalation | CLOSED | digest |
+    **Detail**
+    - **SF amount** - $515,712 for 2026 = the BILLABLE negotiated figure (finance §W). Contract $452,812 = outdated/superseded. NOT an escalation to reconcile.
+    - **SF cadence** - 3× $171,904 Jan/Feb/Mar; period totals in the PFS Service Fees 2026 sheet.
+    - **SF vs per-meal** - Flat SF + per-meal in PARALLEL - the SF does NOT buy down per-meal rates. Out-of-band (not PG).
+    - **FCL vs FSL** - Two distinct groups/locations: FCL $11.55 (at PDC), FSL $16.51 (Single-A, produced at PDC → delivered to TD Ballpark). NOT a blend.
+    - **Media Meals** - $16 (not stale $15).
+    - **Buffalo cross-ref** - TBJ-NY (Buffalo) = affiliated sub-scope on the Toronto master. Katarina Dimino contacts both.
+    - **Escalation** - 100% CPI Food-Away (broad), Q4, provider-initiated + Club approval. Differs from TBR-FL (75%/SEFV01). (2026 SF is negotiated, not formula.)
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - TBJ-FL (Toronto Blue Jays (Dunedin FL PDC)) (REC-106), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-127) (shared Dunedin Services Agreement + Schedule A SOW).
+    - **Rates + tax + worked examples**: invoices K300168548 (MLB) + K300168872 (MiLB/FCL), via `EVIDENCE_TBJ-FL.md`.
+    - **SF amount + cadence**: finance §W (`PFS Service Fees 2026.xlsx`) - the negotiated billable figure.
+    - **FCL/FSL two-groups + TD Ballpark delivery**: §T + Kevin build ruling (2026-07-16).
+    - **Buffalo cross-ref**: §V (TBJ-NY rolls up to the Toronto master).
+    - **Contacts + build rulings**: LEDGER (repo-side provenance) Batch-3 build rulings (Kevin, 2026-07-16).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TBJ-FL build).
+    ---
+    *Completeness: FULLY-CAPTURED (model + rates + fee). Flat SF ($515,712 for 2026 - the negotiated billable figure per finance §W; contract's $452,812 is outdated) + per-meal in parallel (the SF does NOT buy down rates). Per-meal across MLB $23.12, FCL $11.55 (at PDC), FSL $16.51 (Single-A, produced at PDC → delivered to TD Ballpark ~15 min) - FCL and FSL are two distinct groups/locations, NOT a blend. Broad PDC catalog (Media/Scout/Team Canada/Stadium Staff/pantries/"Fun $$$" non-revenue). SF out-of-band (not PG), 3× $171,904 Jan/Feb/Mar. FL 7% tax exact. 100% CPI escalation (differs from TBR-FL's 75%). Buffalo (TBJ-NY) = affiliated sub-scope on the Toronto master; Katarina Dimino contacts both. Pending: SF golden seed (Phase E), FSL signed-sheet currency verify.*
+
+### REC-107 (access=restricted) - "Account Record - TBJ-NY (Buffalo Bisons (Blue Jays AAA))"  [3 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TBJ-NY (Buffalo Bisons (Blue Jays AAA)) (REC-107), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TBJ-NY`
+    - **Team / entity**: Buffalo Bisons - Toronto Blue Jays AAA affiliate, Sahlen Field (Buffalo, NY)
+    - **Level / tier**: AAA (MiLB)
+    - **Search aliases**: "Buffalo", "Buffalo Bisons", "Bisons", "Sahlen Field", "Blue Jays AAA", "Buffalo New York"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TBJ-NY`
+    - **PG `accounts`** - team_key `TBJ - NY` · name "Buffalo Bisons" · level `AAA` · billing_model `actuals_drive_invoice` · has_homestand_schedule `true` · has_schedule_overlay `false`
+    - **PG `sc_service_prices`** - "Breakfast", "Lunch", "Post-Game", "Umpire" (all $27.34); "Snack", "Shake" (deactivated, $0)
+    - **QuickBooks (invoice `Item`)** - Activity = **"Buffalo Meal Service"** (meal type in Description; all meal types bill at $27.34). *invoice K300168849*
+    - **Invoice Bill-To / billing entity** - **Rogers Blue Jays Baseball Partnership** / Toronto Blue Jays Player Development Complex / 3031 Garrison Road, Dunedin FL 34698 - i.e. Buffalo bills through the **parent Toronto PDC address** (SAME as TBJ-FL), NOT a Buffalo entity. Invoice recipient ("Sent to"): **Charlie Wilson**. *invoice K300168849*
+    - **P&L file** - Buffalo Bisons rows
+    - **ABR OneSheeter tab** - NOT included (the OneSheeter's "TORONTO BLUE JAYS" tab covers the relationship but Buffalo is treated as adjacent; ABR notes "How is Buffalo going?" as an open question)
+    - **Contract folder** - `/Contracts/TBJ NY/` (contained only a 2019 historical draft SOW - see the Contract section/the History section)
+    - **Client stakeholders**: **Katarina Dimino** - client contact for both TBJ accounts (TBJ-NY + TBJ-FL) *src: Kevin, 2026-07-16, high*. (Invoice K300168849 was "Sent to" Charlie Wilson at the Toronto PDC - the AP/billing recipient, distinct from the account contact. Michelle, the prior relationship contact, left the org.)
+    > NOTE: Capture completeness - **PARTIAL** (upgraded from THIN by invoice K300168849). No standalone Buffalo contract, but the invoice confirms Buffalo bills through the Toronto parent PDC (Rogers Blue Jays / Dunedin) - a sub-scope of the Toronto master (Dec 2018 MSA), not an orphaned account. Operative rate $27.34 is invoice-confirmed (+ Kevin + Joe + PG); tax/terms/cadence/worked-example all confirmed. Remaining gap is the Buffalo SOW document under the Toronto MSA - a chase, not a billing-accuracy hole.
+
+  [chunk 3] section="Operations Record"
+    From: Account Record - TBJ-NY (Buffalo Bisons (Blue Jays AAA)) (REC-107), Section: Operations Record
+    
+    - **Client stakeholders**: **Katarina Dimino** - client contact for both TBJ accounts *src: Kevin, 2026-07-16, high*. Invoice recipient (AP) is Charlie Wilson at the Toronto PDC; Michelle (prior contact) left the org.
+    - **Billing structure**: Buffalo bills through the **Toronto Blue Jays parent PDC** (Rogers Blue Jays Baseball Partnership, Dunedin FL) - the same billing address as TBJ-FL. Buffalo is a sub-scope of the Toronto relationship, not a standalone contracting entity. *invoice K300168849*
+    - **Service pattern**: AAA per-meal, **confirmed weekly Sunday-invoiced cadence, ~6-day service period (Tue-Sun)** - matches CIN-KY's pattern. Invoice K300168849 covered 6/16-6/21 (Breakfast/Lunch/Postgame at 50-55 counts/meal). *invoice K300168849*
+    - **Operational truth**: still thin on contract, but billing mechanics now observed (rate, cadence, tax, entity all confirmed from the invoice).
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - TBJ-NY (Buffalo Bisons (Blue Jays AAA)) (REC-107), Section: Provenance & Attribution
+    
+    - **Contract facts**: the ONLY document is the 2019 historical draft, verbatim in the Contract Digest (REF-128). No operative contract exists to cite.
+    - **Per-service price ($27.34)**: signed Price Review v3 (Joe **Lessard**-attested) + PG match + invoice-confirmed (K300168849).
+    - **Money shape**: the Money Model (REF-140) (No-SF).
+    - **Rulings**: LEDGER (repo-side provenance) §O (C-10), §K/§P (Q6 gap).
+    - **Last reviewed**: 2026-07-15 by Kevin + Chat-Claude (Batch 1).
+    ---
+    *Completeness: THIN → PARTIAL (upgraded by invoice K300168849, 2026-07-16). No standalone Buffalo contract, but the invoice traces billing to the Toronto parent PDC (Rogers Blue Jays / Dunedin) - Buffalo is a sub-scope of the Toronto master (Dec 2018 MSA), not an orphan. Rate $27.34 now INVOICE-CONFIRMED (+ Kevin + Joe + PG); NY tax 8.75%, Net 30, weekly cadence confirmed; worked example built ($12,713.10 pre-tax). Snack/Shake deactivated (confirmed by invoice). Client contact = Katarina Dimino. Remaining open: the Buffalo SOW under the Toronto MSA. Doc-risk materially reduced from the pre-invoice posture.*
+
+### REC-108 (access=restricted) - "Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC))"  [5 keyword-matching chunks of 7]
+
+  [chunk 0] section="null"
+    From: Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC)) (REC-108)
+    
+    > Canonical record. Current-state above the fold; history preserved below (the History section). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-129).
+    >
+    > **TWO SERVICE LEVELS + A SECOND CLIENT.** TBR-FL spans MLB (per-meal, NO SF) and MiLB (per-meal, 25% buy-down via a recurring SF), billed to SEPARATE client cost centers. It is the only account that runs a **commissary model serving a PDC**, which is why it carries **BGC (Boys & Girls Club) as an in-scope second client** on the same operation.
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC)) (REC-108), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TBR-FL`
+    - **Team / entity**: Tampa Bay Rays - MLB (spring training @ Charlotte Sports Park; regular season billed to Tropicana Field HQ) + MiLB (Charlotte County PDC). Plus **BGC** (Boys & Girls Club - a second client on the commissary).
+    - **Level / tier**: PDC (`billing_model=actuals_drive_invoice`)
+    - **Search aliases**: "Rays", "Tampa Bay Rays", "TBR", "Charlotte Sports Park", "Tropicana", "TBR-FL", "Rays PDC", "BGC" (second client)
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TBR-FL`
+    - **PG `accounts`** - team_key `TBR - FL` · name "Tampa Bay Rays" · level `PDC` · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false`
+    - **PG `sc_service_prices`** - MLB (no discount): Breakfast $35.63, Lunch/Dinner $39.48. MiLB (post-25%-SF): Breakfast $17.83, Lunch $21.68, Dinner $20.96. Add-ons: Road Sandwiches $15, Extra Protein. **NO `sc_fee_schedule` row** - MiLB SF is out-of-band (see the Billing Record section).
+    - **QuickBooks (invoice `Item`)** - `TBR MLB - Breakfast`, `TBR MLB - Lunch/Dinner`, `TBR MiLB - Breakfast`, `TBR MiLB - Lunch/Dinner`, `TBR MiLB - Road Sandwiches`, `Labor Fee`, `Extra Protein (TBR) - Chicken/Pork`. Meal lines T-flagged. *K300168545 MLB, K300168871 MiLB*
+    - **Finance schedule (§W)** - 2026 MiLB **SF = $457,768** = $200,000 (installment 1, static) + $257,768 (installment 2, variable). NOT in `sc_fee_schedule` - out-of-band.
+    - **P&L file** - Rays - MLB + MiLB meal revenue → 2400.1; MiLB SF → 2300 ($457,768); **BGC → 2200 ($79,950)**.
+    - **ABR OneSheeter tab** - "TAMPA BAY RAYS"
+    - **Contract folder** - `/Contracts/TBR FL/` - 4 executed 2024 docs (MLB Agreement + MLB SOW + MiLB Agreement + MiLB SOW). **BGC contract: EXTRACTED → the Contract Digest (REF-129) (2025-26 school year; term ends May 21, 2026).**
+    - **Client stakeholders**: **MLB → Erik Hart** (with the MLB club; at Charlotte Sports Park during spring training, then Tropicana Field after). **MiLB → Sean "Sunny" Jones** (year-round at the complex). MLB and MiLB bill to SEPARATE cost centers (see the Operations Record section). BGC = separate client billed directly. *Kevin 2026-07-16; K300168545, K300168871*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** (models + rates + fees confirmed). Contracts verbatim + MLB/MiLB per-meal invoices + finance-confirmed SF. Non-blocking gaps: SF installment invoices not sampled (golden seeds - Phase E); the **BGC contract-digest is complete** (the Contract Digest (REF-129); $6.50 confirmed, tax-exempt, school-year term ending May 21, 2026) - no BGC 2026-27 renewal on file yet (fall-2026 gap).
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC)) (REC-108), Section: Rulings & Decisions
+    
+    *All rates as-of 2026-07-16.*
+    | ID | Status | LEDGER ref |
+    |---|---|---|
+    | MLB shape | CLOSED | digest, invoices |
+    | MiLB shape | CLOSED | §O, Kevin |
+    | MiLB SF | CLOSED (2026) | §W |
+    | BGC | CLOSED (in-scope) | §T, DIGEST_BGC |
+    | Commissary | CLOSED | Kevin |
+    | Add-ons | CLOSED | K300168871 |
+    | Escalation | CLOSED | digest |
+    **Detail**
+    - **MLB shape** - Per-meal, NO SF. Breakfast $35.63, Lunch/Dinner $39.48.
+    - **MiLB shape** - Per-meal with 25% buy-down (SF-funded). Breakfast $17.83, Lunch $21.68, Dinner $20.96 (three distinct rates).
+    - **MiLB SF** - Recurring: $200K static + variable 2nd installment. 2026 = $457,768 ($200K + $257,768). Out-of-band (not PG). Going-forward variable-derivation = Joe #3 (non-blocking).
+    - **BGC** - IN-SCOPE second client. $6.50/meal flat (any type), tax-exempt, school-year term (ends May 21, 2026). Contract-digest complete.
+    - **Commissary** - TBR-FL = only commissary serving a PDC (CIN-KY also commissary but serves MiLB). Enables the BGC second-client stream.
+    - **Add-ons** - Road Sandwiches $15, Labor Fee $280, Extra Protein C/P $111.84. Mixed per-line taxability.
+    - **Escalation** - 75% CPI (SEFV01, Nov). Per-meal only, not SF. Differs from TBJ-FL (100%).
+
+  [chunk 5] section="Open Items"
+    From: Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC)) (REC-108), Section: Open Items
+    
+    | Item | Status | Owner | Blocking cert? |
+    |---|---|---|---|
+    | BGC 2026-27 renewal | OPEN (paperwork) | Kevin | No |
+    | SF golden seed | PENDING | accounting | Phase E only |
+    | BGC golden seed | PENDING | accounting | Phase E only |
+    | SF variable-derivation method | OPEN (Joe #3) | Joe/Kevin | No (2026 answered) |
+    | Add-on taxability | OPEN (Sebastian) | Sebastian | No |
+    | 2025/2026 MiLB SOWs | OPEN (paperwork) | Kevin | No |
+    | Memo typo | OPEN (cosmetic) | Sebastian | No |
+    **Detail**
+    - **BGC 2026-27 renewal** - BGC contract ends May 21, 2026 (no auto-renew). Fall-2026 service needs a new contract not yet on file. BGC's 2026 projection is spring-only until renewed.
+    - **SF golden seed** - SF installment invoices (K300168375/376) not sampled; amounts finance-confirmed (§W).
+    - **BGC golden seed** - No BGC invoice sampled; rate $6.50 contract-confirmed, tax-exempt, prepaid-period.
+    - **SF variable-derivation method** - HOW the variable 2nd installment is set each year (2026 = $257,768; no visible formula). Non-blocking - 2026 amount is finance-confirmed.
+    - **Add-on taxability** - MiLB add-on lines showed blended ~6.93% vs 7% buffet - confirm per-line tax flags (Road Sandwiches / Labor Fee / Extra Protein).
+    - **2025/2026 MiLB SOWs** - SF recurs but each year is SOW-gated; 2026 amount finance-confirmed. Low-priority chase.
+    - **Memo typo** - Both TBR invoices read "2025" in the memo despite being 2026 (D-2, ignore/fix at rollover).
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - TBR-FL (Tampa Bay Rays (commissary PDC + BGC)) (REC-108), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-129) (4 executed 2024 docs). BGC: the Contract Digest (REF-129) (2025-26 school-year catering contract, extracted 2026-07-16).
+    - **Rates + tax + worked examples**: invoices K300168545 (MLB) + K300168871 (MiLB, incl. add-ons), via `EVIDENCE_TBR-FL.md` + the Batch-3 extraction.
+    - **SF amount + cadence**: finance §W (`PFS Service Fees 2026.xlsx`).
+    - **Three MiLB rates**: signed Price Review v3 (§O) + Kevin confirmation (Dinner $20.96, 2026-07-16).
+    - **BGC in-scope + commissary model**: §T (Kevin ruling) + Batch-3 build rulings.
+    - **Contacts + build rulings**: LEDGER (repo-side provenance) Batch-3 build rulings (Kevin, 2026-07-16).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TBR-FL build).
+    ---
+    *Completeness: FULLY-CAPTURED (models + rates + fees). Two levels: MLB per-meal no-SF ($35.63/$39.48) + MiLB per-meal with 25% buy-down (three distinct rates $17.83/$21.68/$20.96), billed to separate cost centers (Erik Hart MLB / Sunny Jones MiLB). MiLB SF recurring $200K-static + variable = $457,768 for 2026, out-of-band (not PG). Commissary model serving a PDC (unique among the 11; CIN-KY is commissary-but-serves-MiLB) enables BGC as an IN-SCOPE second client ($6.50/meal flat, tax-exempt, after-school supper; school-year term ending May 21, 2026, so spring-only for calendar 2026 absent a fall renewal; P&L 2200 ~$79,950 = the 2025-26 school-year total). Add-ons (Road Sandwiches $15, Labor Fee $280, Extra Protein $111.84) with mixed per-line taxability. 75% CPI escalation (differs from TBJ-FL's 100%). Pending: SF+BGC golden seeds (Phase E), BGC 2026-27 renewal (paperwork), Joe #3 variable-derivation (non-blocking).*
+
+### REC-109 (access=restricted) - "Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC))"  [4 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC)) (REC-109), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TXR-AZ`
+    - **Team / entity**: Texas Rangers - Surprise, AZ spring-training complex (Surprise Stadium)
+    - **Level / tier**: PDC (spring training + non-MLB food service)
+    - **Search aliases**: "Rangers Surprise", "TXR Surprise", "Surprise AZ", "Rangers spring training", "TXR-AZ", "Surprise Stadium"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TXR-AZ`
+    - **PG `accounts`** - team_key `TXR - AZ` · name "Texas Rangers" · level `PDC` · city Surprise · billing_model **`actuals_drive_invoice`** · has_homestand_schedule `false`
+    - **PG `sc_service_prices`** - per-meal rates (post-deposit): MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. **NO `sc_fee_schedule` row** - the deposit is not a PG fee cell (see the Billing Record section).
+    - **QuickBooks (invoice `Item`)** - `TXR-AZ MLB - Breakfast/Lunch/Dinner`, `TXR-AZ MiLB - Breakfast/Lunch/Dinner`, `TXR-AZ - Pre-Game Hot Snack`, `TXR-AZ - Regular Snack`. All T-flagged (taxable). *K300168585 MLB, K300168870 MiLB*
+    - **Finance schedule (§W)** - 2026 **Annual Deposit $301,623** (3× $100,541, Jan/Feb/Mar). This is the DEPOSIT, not a service-fee installment.
+    - **P&L file** - Texas Rangers Surprise - meal revenue → 2400.1; deposit/SF-component → 2300 (~$301,621).
+    - **ABR OneSheeter tab** - "TEXAS RANGERS" (Surprise section)
+    - **Contract folder** - `/Contracts/TXR AZ/` - `Texas Rangers 2025-2027 Surprise Food Service Agreement.pdf` (operative) + 2022 (superseded)
+    - **Client stakeholders**: **MLB → Brandon Boyd** (same Brandon Boyd who is TXR-TX-H's clubhouse manager - the MLB Rangers relationship runs through him at both the home clubhouse and Surprise); **MiLB → Stanton "Stosh" Hoover** (AP recipient, MiLB invoices). MLB and MiLB bill to SEPARATE client cost centers (see the Operations Record section). *Kevin 2026-07-16; K300168870*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** - contract verbatim + 2 invoices (MLB + MiLB) confirming rates to the penny + AZ tax + all snack rates. The cleanest end-to-end trace of the corpus (contract → 2.5% escalation → signed sheet → PG → invoice all cohere). Non-blocking gaps: 2026 SOW is a paperwork-memorialization gap only (rates derive from the master + 2.5%; invoices confirm); the 2026 deposit invoice was not sampled (golden-test seed for the deposit line - Phase E).
+
+  [chunk 3] section="Operations Record"
+    From: Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC)) (REC-109), Section: Operations Record
+    
+    - **Service model**: on-site food service at Surprise Stadium during spring training (MLB) + non-MLB (MiLB) service. Weekly per-meal billing (Mon-Sun), Net 30. *digest §B.8*
+    - **Billing routing - MLB vs MiLB = SEPARATE cost centers**: MLB meals and MiLB meals bill to different client-side contacts/cost centers (one operation, two invoice streams by design - do NOT treat as a data inconsistency). MLB → Brandon Boyd; MiLB → Stanton "Stosh" Hoover. Emit MLB and MiLB as separate invoices, routed to the correct payer. *Kevin 2026-07-16*
+    - **Count verification**: weekly invoicing on meals-provided basis; NO client sign-off gate (the Operations Record section). *digest §B.9*
+    - **Contacts are point-in-time** - review periodically + refresh at year-start. Stosh Hoover (MiLB) surfaced on the July invoice; Brandon Boyd (MLB) is the durable Rangers relationship contact.
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC)) (REC-109), Section: Rulings & Decisions
+    
+    *All rates as-of 2026-07-16.*
+    | ID | Status | LEDGER ref |
+    |---|---|---|
+    | Model | CLOSED | §W, §Z, digest |
+    | Deposit | CLOSED | §W |
+    | Rates | CLOSED | §W, invoices |
+    | Tax | CLOSED | invoices |
+    | MLB Dinner | NOTED | Kevin |
+    **Detail**
+    - **Model** - 20% deposit-triggered discount + fixed 2.5%/yr escalation. `actuals_drive_invoice` - deposit out-of-band, not in PG.
+    - **Deposit** - 2026 Annual Deposit = $301,623 (3× $100,541 Jan/Feb/Mar), finance-confirmed. Not a PG fee cell.
+    - **Rates** - Post-deposit: MLB $28.58, MiLB $14.29, Pre-Game Hot Snack $10.93, Regular Snack $5.89. All invoice-confirmed.
+    - **Tax** - AZ 9.5% (Surprise) on meals/snacks, invoice-confirmed exact.
+    - **MLB Dinner** - Contract lists MLB B+L only; PG has MLB Dinner @ $28.58 (operationally served, same rate).
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - TXR-AZ (Texas Rangers (Surprise AZ PDC)) (REC-109), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-130) (2025-2027 master + 2025 SOW).
+    - **Rates + tax + worked examples**: invoices K300168585 (MLB) + K300168870 (MiLB), via `EVIDENCE_TXR-AZ.md` + the Batch-3 SF/deposit extraction (snack rates).
+    - **Deposit amount + cadence**: finance §W (`PFS Service Fees 2026.xlsx`).
+    - **Money shape / fee-model**: fee-model probe (§Z) - `actuals_drive_invoice`, deposit out-of-band.
+    - **Contacts + build rulings**: LEDGER (repo-side provenance) Batch-3 build rulings (Kevin, 2026-07-16).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TXR-AZ build).
+    ---
+    *Completeness: FULLY-CAPTURED. Per-meal with 20% deposit-triggered discount; fixed 2.5%/yr escalation (cleanest of the 11 - contract→escalation→signed→PG→invoice all cohere). Post-deposit rates invoice-confirmed to the penny (MLB $28.58, MiLB $14.29, snacks $10.93/$5.89), AZ 9.5% tax exact. 2026 deposit $301,623 (3× $100,541) finance-confirmed; not a PG cell (actuals_drive_invoice). MLB Dinner operationally served at $28.58 despite SOW listing B+L only. Non-blocking: deposit golden seed (Phase E), 2026 SOW memorialization, Continental 2026 price.*
+
+### REC-110 (access=restricted) - "Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home))"  [3 keyword-matching chunks of 7]
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home)) (REC-110), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TXR-TX-H`
+    - **Team / entity**: Texas Rangers MLB - home clubhouse, Globe Life Field (Arlington, TX)
+    - **Level / tier**: MLB
+    - **Search aliases**: "Rangers home", "Globe Life", "Arlington", "TXR home", "Rangers MLB home", "Rangers Texas"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TXR-TX-H`
+    - **PG `accounts`** - team_key `TXR - TX - H` · name "Texas Rangers Home" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+    - **PG `sc_fee_schedule`** - $604,032 (2026-01-01, annual, monthly-6)
+    - **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
+    - **QuickBooks (invoice `Item`)** - SF: Activity **"Service Fees (PFS)"**, Description "2026 Service Fee - N of 6" *K300168474* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
+    - **Finance schedule** - **"TXR - HOME"** (their label) - accrued P4-P10, billed 6× $100,672 *§W*
+    - **P&L file** - Texas Rangers - Globe Life / home rows
+    - **ABR OneSheeter tab** - "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction)
+    - **Contract folder** - `/Contracts/TXR H&V/` (shared with TXR-TX-V)
+    - **Client stakeholders**: **Brandon Boyd** - Clubhouse Manager, main client (bboyd@texasrangers.com); **Katie McInnes** - RD/Dietitian (kmcinnis@texasrangers.com); Ross Fenstermaker - GM, contract signatory *src: Kevin, 2026-07-16, high*
+    > NOTE: Capture completeness - **FULLY-CAPTURED** - contract banked, $604,032 fee finance+contract-confirmed (exact), monthly cadence + 8.25% tax gross-up confirmed, postseason pro-rata mechanic banked. Non-blocking opens: the missing-§2(d) contract defect (cosmetic), SF invoice not sampled (Phase E), single-year contract (2027 TBD).
+
+  [chunk 4] section="Rulings & Decisions"
+    From: Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home)) (REC-110), Section: Rulings & Decisions
+    
+    | ID | Status | as-of | LEDGER ref |
+    |---|---|---|---|
+    | R11 | CLOSED | 2026-07 | R11 |
+    | SF-tax (per-account) | CLOSED | 2026-07-16 | §X |
+    | Fee figure | CLOSED | 2026-07-16 | §W |
+    **Detail**
+    - **R11** - Flat-fee postseason = pro-rata-of-fee mechanic (~$7,457.19/game). Satisfied.
+    - **SF-tax (per-account)** - TXR-TX-H SF is **TAXABLE (8.25% Arlington)** - contract states the with-tax figure ($108,977.44). Per-account attribute.
+    - **Fee figure** - 2026 SF = $604,032 (finance + contract exact). No escalator; +10% YoY was negotiated.
+
+  [chunk 6] section="Provenance & Attribution"
+    From: Account Record - TXR-TX-H (Texas Rangers MLB (Globe Life home)) (REC-110), Section: Provenance & Attribution
+    
+    - **Contract facts**: the Contract Digest (REF-131) (verbatim, page-cited; all three years).
+    - **2026 fee + cadence + accrual**: finance schedule (labeled "TXR - HOME") (§W) - matches contract exactly.
+    - **SF tax (8.25%)**: stated in the contract's own payment table. *digest §B.2*
+    - **Money shape**: the Money Model (REF-140) (flat_fee).
+    - **Stakeholders (Boyd/McInnes)**: Kevin, 2026-07-16.
+    - **Rulings**: LEDGER (repo-side provenance) R11 (postseason), §W (fee), §X (SF-tax).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (Batch 2).
+    ---
+    *Completeness: FULLY-CAPTURED. Flat-fee. Contract banked (all 3 years); $604,032 fee finance+contract+invoice-confirmed; monthly cadence + 8.25% tax gross-up invoice-confirmed (K300168474, $108,977.44 matches contract to the penny); postseason pro-rata mechanic banked. Note the ingredients/supplies are baked into the fee (no separate passthrough), unlike CIN-OH/STL. Non-blocking opens: the missing-§2(d) drafting defect, postseason denominator derivation, SF invoice unsampled (Phase E), single-year (2027 not yet contracted).*
+
+### REC-111 (access=restricted) - "Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life))"  [4 keyword-matching chunks of 9]
+
+  [chunk 0] section="null"
+    From: Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life)) (REC-111)
+    
+    > Canonical record. Current-state above the fold; history preserved below (the History section). Primary key is the intranet account name. Reasoning/decisions journaled in LEDGER (repo-side provenance); verbatim contract terms in the Contract Digest (REF-132).
+    >
+    > **STRUCTURALLY UNIQUE ACCOUNT.** TXR-V is NOT a flat-fee or per-meal contract account like the other 10. It is a **per-team catering operation** run inside the Rangers' visiting clubhouse, where **each visiting MLB team is an independent client** billed directly. This file departs from the standard template accordingly (see the Billing Record section).
+
+  [chunk 1] section="Identity & Aliases"
+    From: Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life)) (REC-111), Section: Identity & Aliases
+    
+    - **Primary key (intranet)**: `TXR-TX-V`
+    - **Team / entity**: Texas Rangers - **visiting clubhouse** catering, Globe Life Field (Arlington, TX). Clients = the visiting MLB teams, not the Rangers.
+    - **Level / tier**: MLB (visiting-clubhouse service)
+    - **Search aliases**: "Rangers visiting", "visiting clubhouse", "TXR visiting", "visiting team catering", "Arlington visiting", "away clubhouse", "TXR-V"
+    **Crosswalk to other systems**
+    - **Intranet (PRIMARY)** - `TXR-TX-V`
+    - **PG `accounts`** - team_key `TXR - TX - V` · name "Texas Rangers Visiting" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
+    - **PG `sc_fee_schedule`** - **$0**, `covered_by_account_key = TXR - TX - H` - the visiting-clubhouse *contract carve-in* (G&G/snacks/coffee) is paid through TXR-H's $604,032. The **catering revenue** is a separate stream NOT in `sc_fee_schedule` (see the Billing Record section).
+    - **PG `sc_service_prices`** - per-meal rows all $0 (planning only)
+    - **QuickBooks (invoice `Item`)** - **"Meal Service - PFS (Away)"** - the `(Away)` mirror of CIN-KY's `PFS (Home)`. `PFS` = Performance Food Service. *invoice K300168675*
+    - **Finance schedule** - NOT present (no service fee - TXR-V has no SF row; it's catering revenue, not a fee) *§W*
+    - **P&L file** - Texas Rangers - visiting-catering revenue → **P&L 2400.1** (opt-in sales revenue, ~$312K ledger reference)
+    - **ABR OneSheeter tab** - "TEXAS RANGERS" (relationship tab; the H/V split is a KitchFix internal distinction)
+    - **Contract folder** - `/Contracts/TXR H&V/` (shared 2026 MLB agreement with TXR-TX-H)
+    - **Season / Revenue Tracker** - The per-series catering activity log (currently a **standalone tool** - `TXR VISITING CATERING.xlsx`, "2026 Season" tab). Kevin roadmap: migrate INTO the SC (future). *§Z*
+    - **Menu (pricing authority)** - `THE VITAL PARTNER.pdf` (2026 Visiting Team Catering Menu) + `New Catering Items.pdf` addendum - **the price source of record for TXR-V** (no signed Price Review). *§Z*
+    - **Client stakeholders**: EACH VISITING TEAM has its own AP contact (see the Operations Record section for the roster). KitchFix-side: **Bethany Ham** (Visiting Clubhouse Catering Coordinator, client POC); **Jordan Rogers** (Visiting Clubhouse Exec Chef); **Britt Chernikovich** (Director of Culinary, Ops cc + recipe authority); **Kevin Fietek** (Ops cc); **Sebastian** (AP/billing); **Mason** (Rangers Clubhouse Manager, BEO recipient). *§Z*
+    > NOTE: Capture completeness - **FULLY-CAPTURED (model + pricing authority)** - contract carve-in banked, catering model + menu + SOP + billing workflow captured, invoice-confirmed (Yankees K300168675 maps to menu). One spot-check pending: the Cubs invoice (to confirm the per-team pattern holds identically across teams).
+
+  [chunk 6] section="Rulings & Decisions"
+    From: Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life)) (REC-111), Section: Rulings & Decisions
+    
+    *All rates as-of 2026-07-16.*
+    | ID | Status | LEDGER ref |
+    |---|---|---|
+    | Model | CLOSED | §Z |
+    | Pricing authority | CLOSED | §Z |
+    | Two streams | CLOSED | §Z |
+    | Revenue location | CLOSED (current) / FUTURE (migration) | §Z |
+    | Off-menu pricing | CLOSED | §Z |
+    | `PFS (Away)` | CLOSED | §X, §Y |
+    **Detail**
+    - **Model** - TXR-V = per-team catering (each visiting team = independent client, billed directly, per-series). NOT flat-fee/per-meal-contract.
+    - **Pricing authority** - The 2026 menu (`THE VITAL PARTNER.pdf` + addendum) IS the price source. No signed Price Review; no per-team pricing.
+    - **Two streams** - Carve-in (G&G/snacks/coffee) = $0, covered by TXR-H $604K. Catering = separate direct-bill revenue. Keep distinct.
+    - **Revenue location** - CURRENT: standalone Season Tracker → P&L 2400.1, SC operational-only. FUTURE: migrate tracker into SC (Kevin roadmap, not yet done).
+    - **Off-menu pricing** - One-off/off-menu requests priced case-by-case (internal). Bill export must allow ad-hoc line items.
+    - **`PFS (Away)`** - Confirmed activity code for visiting-team catering (mirror of `PFS (Home)`). PFS = Performance Food Service.
+
+  [chunk 8] section="Provenance & Attribution"
+    From: Account Record - TXR-TX-V (Texas Rangers (visiting-team, Globe Life)) (REC-111), Section: Provenance & Attribution
+    
+    - **Contract facts (carve-in)**: the Contract Digest (REF-132) (shares the 2026 MLB agreement with TXR-TX-H).
+    - **The catering model + menu + SOP + billing workflow + contacts**: `TXRV_DOC_EXTRACTION.md` (§Z) - the 4 docs (contacts xlsx, `THE VITAL PARTNER.pdf` menu, `New Catering Items.pdf`, `Texas Catering System 2.0.pdf` SOP).
+    - **The pricing authority**: `THE VITAL PARTNER.pdf` (2026 menu) - the price source of record for TXR-V.
+    - **Direct-bill + `PFS (Away)` + 4% CC**: invoice K300168675 (Yankees) (§X, §Z).
+    - **Money shape / revenue location**: the Money Model (REF-140) (flat_fee $0 covered-by-H for the carve-in) + §Z (catering revenue → P&L 2400.1, Season Tracker, future SC migration).
+    - **Build rulings**: LEDGER (repo-side provenance) §Z + §Z follow-ups (Kevin, 2026-07-16).
+    - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TXR-V build).
+    ---
+    *Completeness: FULLY-CAPTURED (model + pricing authority). STRUCTURALLY UNIQUE - per-team catering, not flat-fee. Two money streams: the contract carve-in (G&G/snacks/coffee, $0, covered by TXR-H's $604K) and the direct-to-team catering revenue (menu-priced, per-series, P&L 2400.1). The 2026 menu IS the pricing authority (no signed Price Review). MTO ($1,000/day, or $600 w/ 2+ services) is the outside-catering supplement. 4% CC fee documented. Billed directly to each visiting team by Sebastian per-series. Revenue currently in a standalone Season Tracker (future: migrate into SC). Invoice K300168675 (Yankees) confirms the model + menu mapping. Pending: Cubs invoice spot-check; SC buffet-row cleanup (off-contract but real); year-start contact refresh.*
+
+==============================================================================
+STD-002 'hybrid' mentions (2 hits reported)
+==============================================================================
+
+### STD-002 - "Visual Communication Standard" (access=restricted, status=Live)
+  2 keyword-matching chunks:
+
+  [chunk 6] section="Color System for Visuals"
+    From: Visual Communication Standard (STD-002), Section: Color System for Visuals
+    
+    Brand colors from STD-001 plus the severity color system. Severity tiers map to fills and tints:
+    - S1 Critical Red #B53030, Red Tint #FCE4E4. Reserved for life safety.
+    - S2 Caution Amber #D87E1E, Amber Tint #FBEFD0. Hybrid treatment: Amber Tint fill with Critical Red border 1.5pt to signal medical-attention urgency without using full Critical Red.
+    - S3 Standard Green #1F7A3D, Green Tint #DFF0E2. First-aid-resolved incidents.
+    - S4 Standard Green, Green Tint, distinguished from S3 by icon.
+    > ANCHOR: Color is never the only signal. Every severity color pairs with a text label and an icon. The triple-signal pattern is non-negotiable.
+
+  [chunk 20] section="Approval and Changes"
+    From: Visual Communication Standard (STD-002), Section: Approval and Changes
+    
+    v0.2 promotes STD-002 from draft to live status. Material changes from v0.1: tile-internal exception, whitespace ceiling, S2 hybrid treatment, Iconify-aggregated icon library, severity icon mapping confirmed, during/after time separation, reactive-above-reflective, phone-tree gap pattern, bilingual softened to recommended, alpha-channel verification, editable source files (PPTX master + PDF), source-of-truth SOP cross-check, approval companion .docx codified.
+
+### PB-010 - "Site Operations Manual" (access=unrestricted, status=Live)
+  1 keyword-matching chunks:
+
+  [chunk 17] section="Menu & Production Planning > Recipe management"
+    From: Site Operations Manual (PB-010), Section: Menu & Production Planning > Recipe management
+    
+    Recipe management at KitchFix is currently hybrid. Galley is in partial use as a recipe database; broader rollout is paused while the team evaluates longer-term solutions. In practice, chefs also work from their own recipes and from historical recipes maintained across the shared Drive. There is no single recipe system of record today; the Culinary Operating System (PB-006) and the planned culinary platform are intended to consolidate this.
+    > NOTE: Culinary standards and recipes are owned in the culinary playbook (PB-006 / PB-011). This section is the site's execution of planning - forecasting, producing, and ordering to the menu.
+
+### PB-005 - "SLA OS Handbook" (access=unrestricted, status=In Build)
+  0 keyword-matching chunks:
+
+==============================================================================
+PG cross-check: sc_fee_schedule (all rows)
+==============================================================================
+  {"id":"5f4cd389-72db-41f0-9f9b-f2f02319a45c","account_key":"CIN - OH","amount":376686,"effective_date":"2026-01-01","period_type":"annual","payment_cadence":"monthly-6","covered_by_account_key":null,"reason":"CPI escalation per contract §2.a: base $362,500 → $376,686 (2026 CPI-U Food Away from Home, Aug 2024→Aug 2025). Finance-confirmed (PFS Service Fees 2026). LEDGER §W.","requested_by":null,"changed_by":"kf-fee-escalation-2026-07","created_at":"2026-06-19T15:53:30.536428+00:00"}
+  {"id":"85e2abad-48fe-4ddf-bb61-894ca2283360","account_key":"STL - FL","amount":1400000,"effective_date":"2026-01-01","period_type":"annual","payment_cadence":"quarterly","covered_by_account_key":null,"reason":"Seed: locked 2026 contract-year annual fee from SC_CONTRACT_BILLING_SUMMARY.md (Bundle 1 Stage 2).","requested_by":null,"changed_by":"seed-script","created_at":"2026-06-19T15:53:31.285372+00:00"}
+  {"id":"30cbdfd2-c7a1-4300-88ef-46408b163c93","account_key":"STL - MO","amount":489497,"effective_date":"2026-01-01","period_type":"annual","payment_cadence":"monthly-6","covered_by_account_key":null,"reason":"CPI escalation per contract §2.d (CUUR0000SEFV, Aug 2025): base $473,000 → $489,497 = $439,497 meal services ($73,249.50×6) + $50,000 road food. Finance-confirmed (PFS Service Fees 2026). LEDGER §W.","requested_by":null,"changed_by":"kf-fee-escalation-2026-07","created_at":"2026-06-19T15:53:30.787087+00:00"}
+  {"id":"8b3ffb94-6dab-46bb-a7ce-a9aff87d87d7","account_key":"TXR - TX - H","amount":604032,"effective_date":"2026-01-01","period_type":"annual","payment_cadence":"monthly-6","covered_by_account_key":null,"reason":"Seed: locked 2026 contract-year annual fee from SC_CONTRACT_BILLING_SUMMARY.md (Bundle 1 Stage 2).","requested_by":null,"changed_by":"seed-script","created_at":"2026-06-19T15:53:30.950725+00:00"}
+  {"id":"0a3eb397-f636-417c-b142-b347d4bbf8b7","account_key":"TXR - TX - V","amount":0,"effective_date":"2026-01-01","period_type":"annual","payment_cadence":null,"covered_by_account_key":"TXR - TX - H","reason":"Seed: locked 2026 contract-year annual fee from SC_CONTRACT_BILLING_SUMMARY.md (Bundle 1 Stage 2).","requested_by":null,"changed_by":"seed-script","created_at":"2026-06-19T15:53:31.120987+00:00"}
+
+PG cross-check: sc_service_prices - CIN-OH + STL-FL + STL-MO + TXR-TX-H + TXR-TX-V (fee accounts, all $0?)
+  QUERY FAILED: column sc_service_prices.account_key does not exist
+
+PG cross-check: sc_service_prices - CIN-AZ (should show post-SF invoice rate = $20.31 MLB / $12.90 MiLB)
+  CIN-AZ rows: 0
