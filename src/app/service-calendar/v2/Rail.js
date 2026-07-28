@@ -15,6 +15,15 @@
 // overviewDerive.js.
 
 import { useEffect, useRef, useState } from "react";
+// P3-B (2026-07-28): ring transition write deferred via double-rAF -
+// see committedOffset state below. Paint pipeline had no start value
+// at the write moment (ancestor transiently hidden at the frame
+// boundary), so the browser reappeared the ring already at the new
+// value. Deferring TWO frames lets the browser paint the current
+// value, ancestor visibility restore, then the new value trip the
+// transition on a painted node. Gate-4 receipt: STL-FL Jul 8, pct
+// 10 -> 14, transitionrun @249858 + transitionend @249133 (274ms).
+import { useHandoffSafe } from "./handoff/coordinator";
 import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
 // P3-A (2026-07-25): accent-rail primitive shared across surfaces
@@ -126,8 +135,41 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
   const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
   const C = 245.04; // 2 * PI * 39
   const dashOffset = C - (C * clamped) / 100;
+  // P3-B (2026-07-28): double-rAF defer of the SVG style write. When
+  // the pct actually changes from the last rendered value, we buy two
+  // animation frames before writing the new dashoffset. Frame 1
+  // paints the current (old) value. Frame 2 sets the new value on a
+  // painted node, tripping the CSS transition. First mount + no-op
+  // updates short-circuit (no lag steady-state).
+  const [committedOffset, setCommittedOffset] = useState(dashOffset);
+  useEffect(() => {
+    if (committedOffset === dashOffset) return undefined;
+    const target = dashOffset;
+    let raf2 = null;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setCommittedOffset(target);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2 != null) cancelAnimationFrame(raf2);
+    };
+  }, [dashOffset, committedOffset]);
+  // P3-B (2026-07-28): register the ring container as the handoff
+  // target. Deps pinned to the STABLE `registerRingTarget` callback -
+  // NOT the full context value, which re-identifies on every phase
+  // change and caused cleanup+register churn 5x per save.
+  const containerRef = useRef(null);
+  const { registerRingTarget } = useHandoffSafe();
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    return registerRingTarget(el);
+  }, [registerRingTarget]);
   return (
     <div
+      ref={containerRef}
       className={`sc-rail-ring${complete ? " sc-rail-ring--complete" : ""}`}
       role="progressbar"
       aria-valuenow={clamped}
@@ -154,7 +196,7 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
           r="39"
           fill="none"
           strokeLinecap="round"
-          style={{ strokeDasharray: C, strokeDashoffset: dashOffset }}
+          style={{ strokeDasharray: C, strokeDashoffset: committedOffset }}
         />
       </svg>
       {showLabel && (

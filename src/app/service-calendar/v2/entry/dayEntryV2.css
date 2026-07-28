@@ -1004,10 +1004,6 @@
   .sc-v2-entry--success .sc-v2-entry-success-check {
     animation: sc-v2-entry-seal-check var(--duration-slow) var(--ease-emphasized);
   }
-  .sc-v2-entry--success .sc-v2-entry-success-hero {
-    animation: sc-v2-entry-seal-hero var(--duration-base) var(--ease-standard) both;
-    animation-delay: var(--duration-fast);
-  }
 }
 
 /* Screen-reader-only utility class - used by the hero's live region
@@ -1206,21 +1202,9 @@
   color: var(--sc2-ink-muted);
   font-weight: var(--sc2-wt-semibold);
 }
-.sc-v2-entry-success-hero {
-  font-size: var(--sc2-size-display);
-  font-weight: var(--sc2-wt-display);
-  color: var(--sc2-ink-strong);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
 .sc-v2-entry-success-sub {
   margin: 0;
   color: var(--sc2-ink-soft);
-  font-size: var(--sc2-size-caption);
-}
-.sc-v2-entry-success-caughtup {
-  color: var(--sc2-accent-green-deep);
-  font-weight: var(--sc2-wt-semibold);
   font-size: var(--sc2-size-caption);
 }
 .sc-v2-entry-success-actions {

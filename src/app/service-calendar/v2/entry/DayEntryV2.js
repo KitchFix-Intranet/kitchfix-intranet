@@ -58,6 +58,11 @@ import {
 // tree stays consistent on STL-FL without perturbing per-meal or MLB.
 import BillRailFee from "./BillRailFee";
 import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
+// P3-B (2026-07-28): handoff coordinator - executeConfirm success
+// branch drives the sequence via startHandoff. Pill source ref
+// registered by the confirmed pill JSX below. prefersReducedMotion
+// is already imported below via ../motion.
+import { useHandoffSafe } from "../handoff/coordinator";
 
 // ═══════════════════════════════════════════════════════════════════
 // groupActivity - v2's grouped Activity feed for the Ledger (Phase 1).
@@ -155,7 +160,7 @@ function groupActivity(noteEntries, historyEntries) {
   return rows;
 }
 import useAnimatedNumber from "../../useAnimatedNumber";
-import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
+import { scrollIntoViewRM } from "../motion";
 import MobileBooksBar from "../MobileBooksBar";
 import "./dayEntryV2.css";
 // P3-A (2026-07-25): accent-rail primitive for the failure banner
@@ -196,6 +201,13 @@ function DayEntryV2({
   // (flat_fee + !hasHomestandSchedule) reads true. Vocabulary helpers
   // and rail branching read this single derived boolean.
   const feeNoDollar = isFeeNoDollar(account);
+  // P3-B re-gate 6 hotfix (2026-07-28): coordinator handle pulled to
+  // the TOP of the hook block, above every useCallback. Previous
+  // position (below executeMarkNoService) tripped a TDZ crash on the
+  // dep array of executeMarkNoService itself - `handoff` was named
+  // before its `let` binding initialized. Must remain the earliest
+  // possible position, unconditional.
+  const handoff = useHandoffSafe();
   // ═══════════════════════════════════════════════════════════════
   // State - byte-identical to v1 DayDetail (see DayDetail.js:208-263).
   // Values: "" = untouched (ghost), "0" = explicit zero, "123" = entered
@@ -333,7 +345,12 @@ function DayEntryV2({
     setNoteEntries(day.noteEntries || []);
     setHistoryEntries(day.historyEntries || []);
     setExpandedGroups(new Set());
-    setJustSaved(false);
+    // P3-B re-gate 5 fix 4 (2026-07-28): justSaved reset MOVED to its
+    // own [day.date] effect below. Previously reset here, which
+    // clobbered the no-service success screen when refetch landed on
+    // the SAME day (day.actual changes → this effect runs → screen
+    // vanishes into the edit view ~300-1000ms post-save). Owner probed
+    // at +3s and correctly found the screen missing.
     setShowDiscardConfirm(false);
     setShowNoServiceConfirm(false);
     setStandaloneDraft("");
@@ -446,7 +463,11 @@ function DayEntryV2({
     const literal = "Service cancelled - marked no service";
     const auditNote = trimmed ? `${trimmed}\n${literal}` : literal;
     setShowNoServiceConfirm(false);
-    const result = await onSave(day, entries, { noService: true, auditNote });
+    // P3-B (2026-07-28): silentSuccess suppresses the parent's
+    // recorded-toast fire on success. No-service confirmation lives
+    // in this panel's inline justSaved screen + tile flip + ambient
+    // ring/queue updates (owner Ruling 5). No Handoff fires here.
+    const result = await onSave(day, entries, { noService: true, auditNote, silentSuccess: true });
     if (result?.success) {
       if (result.queued) {
         const hasDraft = (notes || "").trim().length > 0;
@@ -459,9 +480,15 @@ function DayEntryV2({
       } else {
         setJustSaved(true);
         setNotes("");
+        // P3-B re-gate 5 fix 3 (2026-07-28, Ruling 5): commit the
+        // no-service day to the session strip at zero units. The
+        // Handoff sequence never fires for no-service (correct - no
+        // pill, no toast); we still expose the resolved day via the
+        // strip so "N days confirmed" stays honest across cancels.
+        handoff.commitSessionOnly?.(day.date, { units: 0, revenue: 0 });
       }
     }
-  }, [serviceGroups, day, notes, onSave, onClose]);
+  }, [serviceGroups, day, notes, onSave, onClose, handoff]);
 
   // handleAddNote - matches DayDetail.js:458-479. Standalone Activity
   // composer post via onAddNote (write path unchanged).
@@ -495,6 +522,24 @@ function DayEntryV2({
     });
     return () => cancelAnimationFrame(rafId);
   }, [justSaved]);
+
+  // P3-B re-gate 5 fix 4 (2026-07-28): justSaved reset scoped to the
+  // day-navigation trigger. Fires only when day.date changes so a
+  // successful no-service confirmation survives the same-day refetch
+  // driven by monthCache invalidation post-save.
+  useEffect(() => {
+    setJustSaved(false);
+  }, [day.date]);
+
+  // P3-B re-gate 5 fix 4 (2026-07-28): explicit auto-close for the
+  // no-service inline success screen. 1500ms - long enough to read
+  // "Confirmed no service" and register the resolve without stalling
+  // the operator's flow. Cancel on unmount (day nav / manual close).
+  useEffect(() => {
+    if (!justSaved) return undefined;
+    const id = setTimeout(() => onClose?.(), 1500);
+    return () => clearTimeout(id);
+  }, [justSaved, onClose]);
 
   const fillGroupWithProjections = useCallback((group) => {
     const newVals = { ...editValues };
@@ -652,7 +697,8 @@ function DayEntryV2({
 
   // Confirm handler = DayDetail.js:664-735 executeSave verbatim (minus
   // the setShowReview lines that no longer apply on the v2 path -
-  // Review screen deleted).
+  // Review screen deleted). `handoff` is captured from the top-of-
+  // hook-block useHandoffSafe() call (see :204).
   const executeConfirm = useCallback(async () => {
     const entries = [];
     for (const g of serviceGroups) {
@@ -670,18 +716,38 @@ function DayEntryV2({
     // does NOT fire its floating "Save failed" toast. The failure
     // renders inline in this panel instead (per §8B "failure is the
     // absence of the handoff"). Panel stays open, counts intact.
-    const result = await onSave(day, entries, { rideNote, silentFailure: true });
+    // P3-B (2026-07-28): silentSuccess suppresses the parent's
+    // recorded-toast fire on clean save. The Handoff (below)
+    // replaces the toast for the confirmation.
+    const result = await onSave(day, entries, { rideNote, silentFailure: true, silentSuccess: true });
     if (result?.success) {
       setSaveError(null);   // any prior failure state is stale now
       if (result.queued) {
         setNotes("");
         onClose?.();
-      } else if (result.noteFailed || result.auditNoteFailed) {
-        onClose?.();
-      } else {
-        setJustSaved(true);
-        setNotes("");
+        return;
       }
+      if (result.noteFailed || result.auditNoteFailed) {
+        onClose?.();
+        return;
+      }
+      // P3-B (2026-07-28): trigger the Handoff sequence. Coordinator
+      // owns the beat clock (fadeSvc -> pillIn -> pillFly -> ringSweep
+      // -> slideNext -> idle @ ~1850ms) AND owns the finalize callback
+      // that advances the drill (one clock, not two). On RM the
+      // coordinator fires onFinalize immediately.
+      const totals = feeNoDollar
+        ? { units: feeServedTotals.entered, revenue: 0 }
+        : { units: summary.meals, revenue: summary.revenue };
+      setNotes("");
+      handoff.startHandoff({
+        dayDate: day.date,
+        totals,
+        onFinalize: () => {
+          if (onNextException) onNextException();
+          else onClose?.();
+        },
+      });
     } else {
       // Nothing committed. Panel stays open, counts intact.
       setSaveError({
@@ -689,7 +755,7 @@ function DayEntryV2({
         serviceId: result?.serviceId || null,
       });
     }
-  }, [serviceGroups, touched, getVal, day, onSave, onClose, notes]);
+  }, [serviceGroups, touched, getVal, day, onSave, onClose, notes, feeNoDollar, feeServedTotals, summary, handoff, onNextException]);
 
   // Status + coaching = DayDetail.js:741-835.
   const dayIsPast = isPastDate(day.date);
@@ -899,32 +965,22 @@ function DayEntryV2({
   // Header nav - DayDetail day nav for prev/next.
   const showDayNav = onPrev || onNext;
 
-  // Success state - after clean save, celebration screen.
-  // Fee-no-dollar variant: no currency hero; served count is the hero,
-  // "Confirmed" replaces "Recorded" in the title (Ruling 3, vocabulary).
-  // Served count reads feeServedTotals.entered (post-save = touched values).
+  // P3-B (2026-07-28): the justSaved success screen is RETIRED. The
+  // Handoff sequence (coordinator + HandoffLayer) replaces both the
+  // toast and this screen with a transition. executeConfirm no longer
+  // calls setJustSaved(true); the state remains only for legacy
+  // no-service path fallback (setJustSaved(true) at :438 in
+  // executeMarkNoService). No-service still fires its own confirmation
+  // via the panel inline state per owner Ruling 5.
   if (justSaved) {
     return (
       <div className="sc-v2-entry sc-v2-entry--success" role="status" aria-live="polite">
         <div className="sc-v2-entry-success-inner">
           <div className="sc-v2-entry-success-check">✓</div>
-          <h3 className="sc-v2-entry-success-title">{feeNoDollar ? "Confirmed" : "Recorded"}</h3>
-          <span className="sc-v2-entry-success-hero">
-            {feeNoDollar ? `${feeServedTotals.entered.toLocaleString()} served` : fmt$(summary.revenue)}
-          </span>
-          <p className="sc-v2-entry-success-sub">
-            {feeNoDollar
-              ? formatDate(day.date)
-              : <>{summary.meals.toLocaleString()} meals · {formatDate(day.date)}</>
-            }
-          </p>
+          <h3 className="sc-v2-entry-success-title">{feeNoDollar ? "Confirmed no service" : "No service recorded"}</h3>
+          <p className="sc-v2-entry-success-sub">{formatDate(day.date)}</p>
           <div className="sc-v2-entry-success-actions">
-            {onNextException ? (
-              <button ref={successPrimaryBtnRef} className="sc-btn sc-btn--primary" onClick={onNextException}>Next needing entry →</button>
-            ) : (
-              <span className="sc-v2-entry-success-caughtup">✓ All caught up</span>
-            )}
-            <button ref={onNextException ? undefined : successPrimaryBtnRef} className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
+            <button ref={successPrimaryBtnRef} className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>
@@ -1185,6 +1241,16 @@ function DayEntryV2({
           )}
         </aside>
       </div>
+
+      {/* P3-B (2026-07-28): confirmed pill. Renders only during the
+          Handoff sequence (phase >= 2). Absolute positioning inside
+          the actions row so its rect stays reliable for the flight
+          layer's source rect. The pill's <span> ref is registered
+          with the coordinator on mount so HandoffLayer can read
+          `getBoundingClientRect()` for the pillFly beat. Copy: "Confirmed"
+          on all shapes (fee vocab is already captured by the sequence's
+          totals hand-off). */}
+      <HandoffPill />
 
       {/* B3 (2026-07-24): pinned actions row per §8C. Desktop-only
           via CSS media query; mobile keeps its MobileBooksBar stickyAction
@@ -1814,6 +1880,41 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
           <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Mark no service</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// P3-B (2026-07-28): confirmed pill for the Handoff. Renders
+// exclusively during phase >= 2 (pillIn beat onward). Source ref
+// registered with the coordinator so HandoffLayer's fixed-position
+// clone reads its viewport rect for the pillFly beat. Positioned
+// absolutely relative to .sc-v2-entry so it does not perturb the
+// actions row layout.
+function HandoffPill() {
+  const handoff = useHandoffSafe();
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current) return undefined;
+    return handoff.registerPillSource(ref.current);
+  }, [handoff]);
+  const active = handoff.phase >= 2;
+  if (!active) return null;
+  const flying = handoff.phase >= 3;
+  return (
+    <div
+      ref={ref}
+      className={`sc-v2-entry-pill sc-ar sc-ar--success${flying ? " sc-v2-entry-pill--flying" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="sc-ar-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </span>
+      <span className="sc-ar-content">
+        <span className="sc-ar-title">Confirmed</span>
+      </span>
     </div>
   );
 }

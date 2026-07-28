@@ -46,6 +46,9 @@ import {
 // Phase 2B (2026-07-25): STL-FL contract block. Code-owned reference
 // to the docs (see contract.js header for provenance).
 import { getContractInfo } from "./contract";
+// P3-B (2026-07-28): session strip + Handoff CSS.
+import { useHandoffSafe } from "./handoff/coordinator";
+import "./handoff/handoff.css";
 
 const QUEUE_TOP_N = 4;
 
@@ -262,6 +265,7 @@ export default function OpsRail({
             )
       )}
       {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
+      {!hasHomestandSchedule && <OpsSessionStrip />}
 
       {contractInfo && (
         <div className="sc-rail-contract" aria-label="Contract summary">
@@ -726,4 +730,28 @@ function deriveOverviewMonthList(yearData, year, iso, hasHomestandSchedule) {
     });
   }
   return lines;
+}
+
+// P3-B (2026-07-28): session strip for the STL-FL branch. Reads
+// sessionMap from the handoff coordinator. Fee-no-dollar semantics:
+// count + served, no currency. Owner Ruling 3.
+function OpsSessionStrip() {
+  const { sessionMap } = useHandoffSafe();
+  const dates = Object.keys(sessionMap || {});
+  if (dates.length === 0) return null;
+  let unitsSum = 0;
+  for (const d of dates) unitsSum += Number(sessionMap[d]?.units) || 0;
+  const days = dates.length;
+  const dayWord = days === 1 ? "day" : "days";
+  // P3-B gate-3 (2026-07-28): clean count/prose split; separator
+  // enforced via CSS margin-inline-end on -n + leading space text
+  // node in the label. See handoff.css :80+.
+  return (
+    <div className="sc-rail-session" role="status" aria-live="polite">
+      <span className="sc-rail-session-n">{days}</span>
+      <span className="sc-rail-session-label">
+        {" "}{dayWord} confirmed · {unitsSum.toLocaleString()} served this session
+      </span>
+    </div>
+  );
 }

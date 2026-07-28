@@ -29,8 +29,6 @@ import { useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
-  RailHeroProgressCaption,
-  RailProgress,
   RailRing,
   RailSection,
   RailScroll,
@@ -42,6 +40,7 @@ import {
 import { fmt$ } from "../season/format";
 import { deriveOpsHomestandLedgerScoped } from "./opsRailDerive";
 import { scrollIntoViewRM } from "./motion";
+import { useHandoffSafe } from "./handoff/coordinator";
 
 const QUEUE_TOP_N = 4;
 
@@ -251,7 +250,8 @@ export default function DrillRail({
           OpsRail's hasHomestandSchedule branch). Ring renders from
           ringData (fresh metrics OR lastRingRef fallback), so the
           DOM node stays mounted across refetch cycles and the CSS
-          transition on stroke-dashoffset fires old->new. */}
+          transition on stroke-dashoffset fires old->new.
+          P3-B (2026-07-28): SessionStrip below the ring caption. */}
       {ringData && (
         <div className="sc-rail-ringbox">
           <RailRing
@@ -262,6 +262,8 @@ export default function DrillRail({
           <span className="sc-rail-ringbox-caption">{ringData.caption}</span>
         </div>
       )}
+      <SessionStrip variant="per-meal" />
+
 
       {/* Body sections only render when we have fresh metrics.
           Loading fallback would show stale queue/notes which is worse
@@ -480,6 +482,48 @@ function fmtShortDate(iso) {
   const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${DOW[date.getDay()]}, ${MON[date.getMonth()]} ${date.getDate()}`;
+}
+
+// P3-B (2026-07-28): session strip. Renders below the ring caption.
+// Reads sessionMap from the handoff coordinator; empty state hides.
+// Per-meal variant: `N days entered · $M this session`.
+// STL-FL variant: `N days confirmed · M served this session`.
+// No-service days count at zero units (Ruling 5).
+function SessionStrip({ variant }) {
+  const { sessionMap } = useHandoffSafe();
+  const dates = Object.keys(sessionMap || {});
+  if (dates.length === 0) return null;
+  let unitsSum = 0, revenueSum = 0;
+  for (const d of dates) {
+    const v = sessionMap[d];
+    unitsSum += Number(v?.units) || 0;
+    revenueSum += Number(v?.revenue) || 0;
+  }
+  const days = dates.length;
+  const isFee = variant === "fee";
+  const dayWord = days === 1 ? "day" : "days";
+  const verbWord = isFee ? "confirmed" : "entered";
+  // P3-B re-gate 6 rider (2026-07-28): per-meal figure runs through
+  // fmt$ so a no-service-only session reads "$0" (money), not a bare
+  // "0" (count). Matches the rail hero + queue money format. Fee
+  // variant is a count of served units, no currency by design.
+  const detail = isFee
+    ? `${unitsSum.toLocaleString()} served`
+    : fmt$(revenueSum);
+  // P3-B gate-3 (2026-07-28): clean structural split (count vs prose)
+  // restored - owner asked for the gap TOKEN, not text tricks. CSS
+  // now uses margin-inline-end on -n (bulletproof against flex-gap
+  // resolving to 0) AND a JSX leading space in the label as belt +
+  // suspenders. The space is a literal text node inside the label -
+  // survives display: flex / block / inline. See handoff.css :80+.
+  return (
+    <div className="sc-rail-session" role="status" aria-live="polite">
+      <span className="sc-rail-session-n">{days}</span>
+      <span className="sc-rail-session-label">
+        {" "}{dayWord} {verbWord} · {detail} this session
+      </span>
+    </div>
+  );
 }
 
 // Best-effort: does today's date fall in this week's date range?

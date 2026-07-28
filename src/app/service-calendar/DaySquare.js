@@ -1,5 +1,6 @@
 "use client";
 
+
 // DaySquare - the universal day atom (Stage 0 of the SC redesign).
 //
 // ONE component, used at every level of the redesigned SC. Renders a
@@ -110,6 +111,18 @@ export default function DaySquare({
   // BulkReview. Emits the `sc-daysq--has-actuals` class; the ring
   // override lives in DaySquare.css.
   hasActuals = false,
+  // Phase 3-B (2026-07-28): flip animation gate. When true (per-meal
+  // + STL-FL via workspace mount), the one-shot .sc-daysq--flipped-in
+  // class fires when `justFlipped` also arrives (P3-B gate-2 change:
+  // workspace-level detection - see PeriodWorkspace prevHasActualsMap).
+  // MLB stays false (Handoff sequence does not fire on v1 modal saves).
+  entryMotion = false,
+  // P3-B gate-2 (2026-07-28): externally-driven flip signal. Set by
+  // PeriodWorkspace's per-date hasActuals-diff (stable across refetch).
+  // Read-only from this atom's perspective - the parent owns the
+  // half-second window; when justFlipped goes false again the class
+  // drops naturally on the next render.
+  justFlipped = false,
 
   // polymorphic content
   kind = "per-meal",       // "per-meal" | "mlb-fee" | "milb" | "fee-no-dollar"
@@ -207,6 +220,14 @@ export default function DaySquare({
   //   TOP-RIGHT = event; BOTTOM-LEFT = season. Any future sm mark
   //   needs an explicit Kevin ruling - do NOT quietly reopen the
   //   icon channel by inheriting from these two lines.
+  // P3-B gate-2 (2026-07-28): flip class is now purely prop-driven.
+  // Internal ref-based hasActuals-diff was RETIRED - it failed when
+  // DaySquare remounted mid-refetch (fresh useRef initialized to the
+  // already-true value; false->true invisible). Detection moved up to
+  // PeriodWorkspace's stable prev-map; DaySquare renders the class
+  // while `justFlipped` is true, drops it when parent clears the set.
+  const flippedIn = entryMotion && justFlipped;
+
   const cls = [
     "sc-daysq",
     `sc-daysq--${size}`,
@@ -215,6 +236,7 @@ export default function DaySquare({
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
     hasActuals && "sc-daysq--has-actuals",
+    flippedIn && "sc-daysq--flipped-in",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
     /* V3 §6.7 - period-wash marker; drives inset shadow. */
