@@ -561,6 +561,15 @@ function buildQueue({ mode, hasHomestandSchedule, yearData, iso, periodRange }) 
 }
 
 function buildDrillFooter({ hasHomestandSchedule, yearData, iso, periodRange }) {
+  // P3-A gate 4 fix (2026-07-28): cold `?period=P6` deep links can
+  // reach here before periodRanges resolves, leaving periodRange=null.
+  // Prior to gate 3, useDrillRail's `!!periodMetrics` clause hid the
+  // rail during this window; that gate was dropped to keep the ring
+  // node mounted across save refetches (see ServiceCalendar.js:2922+).
+  // Guard here so the rail renders a caught-up footer during the cold
+  // window instead of throwing. buildQueue at :552 already had this
+  // guard - parity restored.
+  if (!periodRange) return { kind: "caught-up", target: null };
   const queue = hasHomestandSchedule
     ? deriveOpsDrillQueueMlb(yearData, iso, periodRange.start, periodRange.end)
     : deriveOpsDrillQueueStlFl(yearData, iso, periodRange.start, periodRange.end);

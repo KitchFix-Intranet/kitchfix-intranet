@@ -364,11 +364,20 @@ export function deriveOpsFooterActionStlFl(yearData, todayDate) {
 }
 
 // Drill-scoped queue (filters year queue rows to [start,end]).
+// P3-A gate 4 fix (2026-07-28): defense-in-depth. Callers already
+// guard - buildQueue at OpsRail.js:552, buildDrillFooter at :565,
+// DrillRail's inline homestand ledger at :320 - but a null/undefined
+// rangeStart/rangeEnd here would silently return an empty queue
+// (`r.date >= undefined` is always false), which reads as caught-up
+// on a cold deep link. Explicit early-return makes the null case
+// obvious to callers reading traces / doing follow-up debugging.
 export function deriveOpsDrillQueueMlb(yearData, todayDate, rangeStart, rangeEnd) {
+  if (rangeStart == null || rangeEnd == null) return [];
   return deriveOpsQueueMlb(yearData, todayDate)
     .filter(r => r.date >= rangeStart && r.date <= rangeEnd);
 }
 export function deriveOpsDrillQueueStlFl(yearData, todayDate, rangeStart, rangeEnd) {
+  if (rangeStart == null || rangeEnd == null) return [];
   return deriveOpsQueueStlFl(yearData, todayDate)
     .filter(r => r.date >= rangeStart && r.date <= rangeEnd);
 }
