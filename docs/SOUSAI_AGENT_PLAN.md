@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.5
+**Version:** v2.9
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -16,9 +16,9 @@
 
 ## You are here (updated every revision)
 
-- **Now:** B2 in flight (route + prompt round 2). **Knowledge audit landed (PR #533): all three flag answers were documented.** Flag 2 CLOSED by REF-140's four-shape taxonomy (SF% / Flat-SF / No-SF / Flat_fee - the agent's hybrid/per-meal buckets were improvised over a documented system); flag 1 CLOSED by REF-140 §(g) (STL-FL design intentional; PG matches REF-141 to the dollar on every 2026 fee). One real contradiction found: **C-1, TBJ-FL** - operator-visible REF-127 carries the superseded $452,812 while finance-confirmed $515,712 lives behind restricted REC-106. Live money-wrongness path at operator scope.
-- **Next:** B2 lands and merges -> the SC corpus alignment batch (REF-127 supersede annotation, REF-140 stale-figure fixes, two nits, NEW REF-BILLING-MODEL-QUICK-REFERENCE at operator scope drafted by Chat). Kevin's four nods pending (taxonomy ratify, $515,712 operator-shareable, batch go, briefs-stay-engineering-docs). Merge #533 anytime.
-- **Open decisions:** Decision 5 (discovery report); the four audit nods above.
+- **Now:** Phase C. **B2 is DONE and production-accepted** - Sous's first live answer landed 2026-07-28: grounded, PB-002 + SOP-002 cited, full wire contract held, prompt cache confirmed (7,566 tokens read). The trace also measured the delta-streaming gap in the wild: 7.6s of dead air between last tool event and first text - the pre-D precondition's evidence. C CC prompt delivered: `sousai_questions` log, feedback action, question_id contract addition, riding fix for the fake PB-002-ES example (full harness re-cert - any prompt touch re-certifies, no exceptions).
+- **Next:** CC delivers C (possible mid-session Kevin stop-point to apply the SQL); Chat grades; Kevin merges, redeploys, runs snippet v2, confirms his row in the Supabase dashboard. Then: the SC corpus alignment batch, then D (renders first, delta streaming precondition).
+- **Open decisions:** Decision 5 (discovery report); the four audit nods.
 
 ## Status board
 
@@ -27,8 +27,11 @@
 | 0 | Close the CK-8 record (#525 corrections) | Kevin merges #525 | **DONE 2026-07-25** | #525 merged |
 | A | Tool layer + CLI probe | Probe passes all tiers incl. must-fail cases | **DONE 2026-07-25** | #528 merged |
 | B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | **DONE 2026-07-28** - 7/7, all flags resolved with evidence | #531 merged |
-| B2 | `/api/sousai` route, streaming, flag, slt-only | Acceptance gates + post-revision harness 7/7 both runs | IN FLIGHT - CC prompt delivered | PR pending |
-| C | Trajectory logging (migration + wiring) | Log rows visible in Supabase dashboard from first admin question | Not started | - |
+| B2 | `/api/sousai` route, streaming, flag, slt-only | Acceptance gates + post-revision harness 7/7 both runs | **DONE 2026-07-28** - production-accepted via Kevin's live trace | #534 merged |
+| C | Trajectory logging (migration + feedback + wiring) | Log rows visible in Supabase dashboard from first admin question | IN FLIGHT - CC prompt delivered | PR pending |
+| R0 | SQL report pack (daily/weekly/monthly, 13 queries) | Kevin can run reports by hand | **DELIVERED 2026-07-28** | - |
+| R1 | Sous Reports page (slt-gated, live-computed tabs) | Page renders the R0 views on production data | Queued post-C merge, pre-D | - |
+| R2 | Narrative reports + delivery + topic grouping | Kevin decision point | Queued post-D | - |
 | D | Surface (UI): page first, then global corner-overlay launcher | Kevin approves renders, then build passes design review | Decision closed - awaits B2 | - |
 | E | Eval set + runner | 40-60 questions, runner green per Decision 7 bar (90/100) | Draftable now; complete before G | - |
 | F | Data tools | Per-domain PRs, eval questions ride along | Decision 2 closed; awaiting Decision 5 discovery review | - |
@@ -55,7 +58,8 @@
 | TBD | F-prep | docs(sousai): PG data-surface discovery (Decision 5 input) | CC prompt delivered 2026-07-25; read-only, own branch |
 | #528 | A | feat(sousai): phase A tool layer + probe | **MERGED 2026-07-25** - carried plan v1.4 into the repo |
 | #531 | B1 | feat(sousai): phase B1 agent loop + spike | **MERGED 2026-07-28** - 7/7 gating, three flags resolved with evidence, plan v1.9 aboard |
-| TBD | B2 | feat(sousai): phase B2 route + streaming + prompt revision | CC prompt delivered 2026-07-28; carries plan v2.4; feedback action deferred to C |
+| #534 | B2 | feat(sousai): phase B2 route + streaming + prompt revision | **MERGED 2026-07-28** - production-accepted; first live Sous answer on record |
+| TBD | C | feat(sousai): phase C question log + feedback | CC prompt delivered 2026-07-28; carries plan v2.7; PB-002-ES fix rides with full re-cert |
 
 | TBD | B1-tail | docs(sousai): SC account-knowledge audit (flags 1-2 evidence + alignment sweep) | CC prompt delivered 2026-07-28; read-only, own branch |
 
@@ -67,7 +71,8 @@
 1. **Character Spec §8 rule-7 amendment.** The template-as-canonical rule is enforced in the demo-branch prompt and missing from the spec. Small docs PR; should land before or alongside B1's prompt port so the spec and the shipped prompt agree.
 2. **Chunk language mislabel.** All chunks are stamped `language='en'` regardless of content - POL-006-ES (15 chunks) and POST-001-ES (1 chunk) carry Spanish text under en labels [ran, #528 verification]. Zero impact today; fix (derive language at embed time from frontmatter or the -ES suffix, re-embed 16 chunks) must land before any feature reads the language column as truth. Urgency lowered by Decision 8.
 3. **B2 prompt revision (MANDATORY, the next sanctioned round):** (a) money-verbatim rule - dollar figures cited only when stated in retrieved text; derived figures labeled as derived, with basis (from flag 3); (b) list-assertion rule - when asserting something is or is not on a documented list, open the doc that enumerates the list (from the 5b partial-grounding finding); (c) mention the ES variant when a cited doc has one. **Round-3 candidate (after B2, after the corpus alignment batch):** doc-precedence for current figures - price book and account records supersede contract digests; the digest records the contract, the price book records what finance bills (from C-1).
-4. **Phase E harness-design notes:** cited-sources-contain-their-supporting-text grading; mechanical cited-content-overlap check; invention detector via fixture-driven billing-entity allow-list from the REF-120 corpus (not hyphen-shape regex - the BGC gap); same-evidence-same-label consistency grading against REF-140's canonical vocabulary (never "hybrid" as a grading keyword - overloaded in STD-002 and PB-010); money-figure verbatim-traceability inside the zero-tolerance subset; TBJ-FL 2026 service fee as a zero-tolerance question (correct answer $515,712 post-alignment); Phase F schema note - `sc_service_prices` has no `account_key`, join via `sc_services` (audit F8).
+4. **Phase E harness-design notes:** cited-sources-contain-their-supporting-text grading; mechanical cited-content-overlap check; invention detector via fixture-driven billing-entity allow-list from the REF-120 corpus (not hyphen-shape regex - the BGC gap); same-evidence-same-label consistency grading against REF-140's canonical vocabulary (never "hybrid" as a grading keyword - overloaded in STD-002 and PB-010); money-figure verbatim-traceability inside the zero-tolerance subset; TBJ-FL 2026 service fee as a zero-tolerance question (correct answer $515,712 post-alignment); **at least one synthesis question with NO enumerating doc, forcing the multi-document stitch path** (the B2 1a Path-B widening means the spike no longer guarantees it); Phase F schema note - `sc_service_prices` has no `account_key`, join via `sc_services` (audit F8).
+5. **Rides Phase C:** fix the ES-variant prompt example - it cites nonexistent "PB-002-ES"; use the real POL-006 pair. An illustrative example with a fake doc id is rule-7's hazard in miniature.
 
 ---
 
@@ -176,7 +181,21 @@ Fail after one round of prompt adjustment: stop and reassess before any UI or da
 - Wired into the route from the first admin-visible day. Immediately observable in the Supabase dashboard - real day-one visibility with zero admin-UI build.
 - API failures are logged as their own distinct kind (auth, credit-exhausted, rate-limit, timeout), never blended into generic errors - so the day the credit balance hits zero, the dashboard says exactly that instead of presenting a mystery outage. (Added after the 2026-07-25 credit-blocker episode.)
 
+### Phase R - Sous reporting (Kevin-commissioned 2026-07-28)
+
+The question log's payoff layer. Three stages, sequenced by data availability:
+
+- **R0 (delivered):** the SQL report pack - 13 copy-paste queries for Supabase Studio covering daily digest, weekly trends, monthly adoption, declines-as-doc-gap-radar, most-cited docs, feedback, cost. Usable the day C merges.
+- **R1 (small PR, post-C merge, pre-D):** a Sous Reports page on the intranet, slt-gated behind the same gate pattern as the route. Daily / Weekly / Monthly tabs computed live from `sousai_questions` - the R0 queries as UI. No cron, no email, no LLM.
+- **R2 (post-D, when operator volume exists, Kevin decision point):** the narrative layer - Sous writes the weekly and monthly summary (what people needed, where it declined, which docs to write next), optional scheduled email delivery, smarter topic grouping (candidate design: agent emits a topic tag at log time vs batch LLM tagging - decide then).
+
+Standing caution: reports quote questions verbatim. Fine at slt-only scope; the day the page audience widens, who-reads-colleagues'-questions becomes an explicit Kevin decision.
+
+**R-Chat - the improvement loop (commissioned 2026-07-28).** A companion digest pack built for Chat, not Kevin: window vitals with behavior signals (tool-budget pressure, first-text latency), a per-question ledger, full trajectories for every flagged row (declines, errors, partials, thumbs-downs, budget-maxed), keyword-crude Phase F tool votes, a money/safety rule-audit sample, and an eval-candidate miner. Cadence: **weekly digest to Chat (primary), monthly deep review (feeds phase planning and the doc queue), daily as red-flag ad hoc only** - daily-to-Chat is busywork until operator volume exists; revisit post-D. Contract: Kevin pastes raw digest output; Chat returns a structured improvement memo (corpus items with demand counts, Phase E promotions with zero-tolerance flags, retrieval observations, prompt-rule audit results, Phase F votes, CC-ready prompts as needed). **Binding on Phase C (addendum issued mid-session): trajectories are forensics-grade** - search entries carry returned docIds + bestSimilarity, get_document entries carry docId + available/reason, list entries carry filter + row count, no content in trajectories. Decline triage depends on it: corpus-gap vs retrieval-miss vs correct-decline are indistinguishable without scores, and unlogged rows are blind forever.
+
 ### Phase D - the surface (PR D, then D2)
+
+**Precondition (boarded 2026-07-28): true delta streaming.** B2's token events replay the settled answer; tool events stream live, answer text does not. Before any operator-facing UI ships, agent.js exposes real text deltas through onEvent and the route forwards them live - small change, full harness re-cert after, wire contract unchanged client-side.
 
 Decision 3 closed: v1 is a dedicated page; the full-rollout target is a persistent chat icon opening a corner-overlay helper on every page (D2, its own later PR sharing the same route and components). Renders and mockups precede each build. Includes: question box, streamed answer, the answer-status badge (§6 item 9), source chips linking into the reader, provenance line on data answers, thumbs feedback wired to the log. Design review per DESIGN_REVIEW_PERSONA before merge.
 
@@ -230,6 +249,10 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v2.9 - 2026-07-28.** R-Chat improvement loop commissioned: Chat digest pack delivered (CD1-CD6 - vitals, ledger, flagged-row forensics, Phase F keyword votes, money/safety rule-audit sample, eval-candidate miner). Cadence set with honest pushback: weekly primary, monthly deep, daily red-flag ad hoc only until operator volume. Memo-back contract defined. Forensics-grade trajectory requirement pinned as a binding mid-session addendum to Phase C (docIds + bestSimilarity in search entries) - decline triage into corpus-gap vs retrieval-miss vs correct-decline depends on it.
+- **v2.8 - 2026-07-28.** Kevin commissioned Sous reporting; recorded as Phase R with three stages: R0 SQL pack delivered (13 queries: daily digest, weekly trends, monthly adoption, declines-as-doc-gaps, most-cited docs, feedback, cost); R1 Reports page queued post-C pre-D; R2 narrative + delivery + topic grouping queued post-D as a Kevin decision point. Verbatim-questions privacy caution restated as a standing gate on audience widening.
+- **v2.7 - 2026-07-28.** B2 production-accepted: first live Sous answer over the wire (grounded, PB-002 + SOP-002 cited, cache read 7,566, total 12.2s, single search sufficed). Delta-streaming gap measured in production: 7.6s dead air between last tool event and first text - the pre-D precondition now has field evidence. Phase C CC prompt issued: sousai_questions schema pinned, fire-and-forget logging, asker-only feedback, gate-rejections-not-logged, done envelope gains question_id, riding PB-002-ES fix with full harness re-cert (any-prompt-touch-re-certifies rule stated). Kevin stop-point anticipated for SQL application.
+- **v2.6 - 2026-07-28.** B2 delivered (PR #534) and graded: merge recommended. 10/10 acceptance with the SSE happy path honestly declared partial; harness 7/7 both runs; sanctioned prompt round unused; latency and cost improved by the rule-9 REF-140 shortcut. Streaming gap surfaced and accepted with a boarded fix: token events replay the settled answer - true delta streaming is now a Phase D precondition (agent.js change + harness re-cert). Grader widenings ratified (5a phrasing, 1a Path-B per merged audit #533 + rule 9 exception b) with a safeguard: Phase E gains a mandatory no-enumerating-doc synthesis question. PB-002-ES fake-id prompt example flagged; fix rides Phase C.
 - **v2.5 - 2026-07-28.** Knowledge audit landed (PR #533): all three flag answers documented. Flags 1-2 CLOSED by citation (REF-140 four-shape taxonomy; §(g) STL-FL design; PG matches REF-141 to the dollar). One real contradiction: C-1 TBJ-FL stale $452,812 operator-visible vs finance-confirmed $515,712 behind restricted REC-106 - live money-wrongness path, fixed corpus-first via REF-127 supersede annotation. Spawned the SC corpus alignment batch (post-B2, pre-E) incl. the new operator-scope REF-BILLING-MODEL-QUICK-REFERENCE; briefs recommended to stay engineering docs. Doc-precedence prompt rule parked for round 3. Eval notes gain REF-140-vocabulary grading, the "hybrid" keyword ban, and the TBJ-FL zero-tolerance question. Four Kevin nods pending.
 - **v2.4 - 2026-07-28.** #531 merged; B1 closed. B2 CC prompt issued: flag-gated slt-only streaming route with the pinned SSE wire contract (distinct error kinds pre-wire Phase C outage visibility), sanctioned prompt round 2 (money-verbatim, list-assertion, ES-variant soft mention) gated on a full spike-harness rerun at 7/7. Design deltas recorded: `feedback` action moved to Phase C with its table; trajectory never ships to the client (log-only in C); Kevin deploy checklist (Vercel env key + flag) is part of the PR.
 - **v2.3 - 2026-07-28.** Flag 3 CLOSED: STATED. REF-124 §B.4 stipulates the $362,500 2026 base verbatim (a stipulated base jump, then CPI-U on top, floor 1 percent cap 4 percent). Chat's computed-CPI hypothesis was wrong - the 357,500 x 1.014 near-match was coincidence; recorded honestly. The corpus's §D cross-check flag pre-empted the exact misreading - first field evidence of governance armoring paying off. Money-verbatim rule remains in the mandatory B2 bundle as insurance despite the exoneration. #531 declared merge-ready; flags 1-2 explicitly de-coupled from the B1 gate (their outcomes are corpus docs and eval rules, never B1 code).
