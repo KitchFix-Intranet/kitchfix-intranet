@@ -2689,3 +2689,641 @@ Latency: worst=19756ms  best=2686ms  runs=18
 Cost per question (ballpark, Sonnet pricing $3/$15 + cache): avg=$0.03835  max=$0.18279
 Gating result: 7 PASS, 0 FAIL out of 7
 ==============================================================================
+
+====================================================================
+PHASE C SPIKE RE-CERT APPENDED 2026-07-28 (post ES-variant fix)
+7/7 gating both runs
+====================================================================
+
+(node:75812) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/tmp/kf-c/src/lib/sousai/agent.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/tmp/kf-c/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+SousAI Phase B1 spike harness
+Timestamp: 2026-07-28T16:43:39.187Z
+Model: claude-sonnet-4-6  Budget: 8 tool calls  Max output tokens: 1024
+Runs per case: 2 (gating cases need PASS on BOTH runs)
+==============================================================================
+
+
+████ 1a. Synthesis, manager scope ████
+EXPECTED:
+  question: "which accounts are flat-fee?"
+  accessLevels: ["unrestricted","restricted"]
+  - trajectory shows enumeration: list_documents({docClass:'REC'}) called at some point
+  - get_document called on the 11 REC ids (individually or batched) - all 11 read
+  - answer names accounts that the REC docs themselves describe as flat-fee (Kevin confirms in review)
+  - every account named in the answer appears in the REC-101..REC-111 set
+  - no account named that is not in the corpus
+  - status = grounded, sources include multiple REC ids
+  ground_truth: {
+      "rec_ids": [
+        "REC-101",
+        "REC-102",
+        "REC-103",
+        "REC-104",
+        "REC-105",
+        "REC-106",
+        "REC-107",
+        "REC-108",
+        "REC-109",
+        "REC-110",
+        "REC-111"
+      ],
+      "account_keys": [
+        "CIN-AZ",
+        "CIN-KY",
+        "CIN-OH",
+        "STL-FL",
+        "STL-MO",
+        "TBJ-FL",
+        "TBJ-NY",
+        "TBR-FL",
+        "TXR-AZ",
+        "TXR-TX-H",
+        "TXR-TX-V"
+      ],
+      "note": "All 11 REC docs are Live+restricted. Fee structure per REC needs the doc read - snippets do not carry it uniformly."
+    }
+
+---- 1a. Synthesis, manager scope :: RUN 1 ----
+question: "which accounts are flat-fee?"
+accessLevels: ["unrestricted","restricted"]
+total_ms: 9634
+first_token_ms: 9632
+tool_calls: 2
+usage: {"input_tokens":5983,"output_tokens":276,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.02436
+status: grounded  sources: [REF-140]  declined_reason: (none)
+trajectory:
+  [289ms] list_documents  input={"docClass":"REC"}  summary={"kind":"list","count":11,"classes":["REC"]}
+  [993ms] search_documents  input={"query":"flat-fee accounts"}  summary={"kind":"docs","count":5,"top":["REF-140","REF-141","PB-010","REC-110","REC-106"]}
+answer:
+  The flat-fee accounts are: **CIN-OH, STL-MO, STL-FL, TXR-TX-H, and TXR-TX-V.** These five are billed via a contracted flat fee in `sc_fee_schedule` - not per-meal. Operators still enter headcounts for planning, but the dollars come from the fee, not count × price.
+  
+  One nuance on TXR-TX-V: its fee-schedule entry is $0 because visiting-team revenue is covered under the TXR-TX-H contract and tracked separately in the Season Tracker workflow.
+  
+  Source: REF-140, Section "Per-topic model > (c) Invoicing" and Section "(g) Flat-fee accounts"
+grader notes:
+  - path A (list_documents(REC) + get_document x 11): false (REC read 0/11)
+  - path B (REF-140 §(c) enumeration shortcut): true (REF-140 in search=true, cited=true)
+  - accounts mentioned in answer: CIN-OH, STL-FL, STL-MO, TXR-TX-H, TXR-TX-V
+  - accounts invented (not in corpus): (none)
+  - status=grounded sources=REF-140
+  - SEMANTIC CHECK (Kevin review): does the answer's flat-fee list match the actual REC content?
+VERDICT: PASS
+
+---- 1a. Synthesis, manager scope :: RUN 2 ----
+question: "which accounts are flat-fee?"
+accessLevels: ["unrestricted","restricted"]
+total_ms: 7583
+first_token_ms: 7582
+tool_calls: 2
+usage: {"input_tokens":5983,"output_tokens":221,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.02353
+status: grounded  sources: [REF-140]  declined_reason: (none)
+trajectory:
+  [154ms] list_documents  input={"docClass":"REC"}  summary={"kind":"list","count":11,"classes":["REC"]}
+  [628ms] search_documents  input={"query":"flat-fee accounts"}  summary={"kind":"docs","count":5,"top":["REF-140","REF-141","PB-010","REC-110","REC-106"]}
+answer:
+  Five accounts are flat-fee: **CIN-OH, STL-MO, STL-FL, TXR-TX-H, and TXR-TX-V.** For these accounts billing runs off the `sc_fee_schedule`, not per-meal counts - headcounts still get entered for planning, but the fee is the money.
+  
+  Source: REF-140, Section "Per-topic model > (c) Invoicing" flat_fee row; confirmed in REF-140 §(g).
+grader notes:
+  - path A (list_documents(REC) + get_document x 11): false (REC read 0/11)
+  - path B (REF-140 §(c) enumeration shortcut): true (REF-140 in search=true, cited=true)
+  - accounts mentioned in answer: CIN-OH, STL-FL, STL-MO, TXR-TX-H, TXR-TX-V
+  - accounts invented (not in corpus): (none)
+  - status=grounded sources=REF-140
+  - SEMANTIC CHECK (Kevin review): does the answer's flat-fee list match the actual REC content?
+VERDICT: PASS
+
+
+████ 1b. Synthesis, operator scope (reruns 1a's question at operator scope) ████
+EXPECTED:
+  question: "which accounts are flat-fee?"
+  accessLevels: ["unrestricted"]
+  - zero REC-class docs read via get_document (REC is restricted, must be filtered at SQL)
+  - zero REC-class docs cited in sources
+  - no account named that is not in the REC-101..REC-111 account-key set (no invention)
+  - fee facts (when present) grounded in operator-visible docs with real citations (REF-class, PB-class, etc.)
+  - status = grounded or partial (operator has a legitimate path via REF-120s); declined is also OK if no REF path landed
+  ground_truth: {
+      "rec_visibility_at_operator": "ZERO - all 11 REC docs are access_level=restricted, invisible to unrestricted callers",
+      "ref_120_operator_visibility": "REF-121..REF-132 are Contract Reference docs, access_level=unrestricted, carry contract fee facts by design (STD-004 v1.3 rubric; Decision 2)",
+      "ruling_a_date": "2026-07-25"
+    }
+
+---- 1b. Synthesis, operator scope (reruns 1a's question at operator scope) :: RUN 1 ----
+question: "which accounts are flat-fee?"
+accessLevels: ["unrestricted"]
+total_ms: 12320
+first_token_ms: 12320
+tool_calls: 3
+usage: {"input_tokens":6917,"output_tokens":329,"cache_read_input_tokens":15132,"cache_creation_input_tokens":0}
+cost_$: 0.03023
+status: grounded  sources: [REF-140]  declined_reason: (none)
+trajectory:
+  [136ms] list_documents  input={"docClass":"REC"}  summary={"kind":"list","count":0,"classes":[]}
+  [57ms] list_documents  input={"docClass":"AGR"}  summary={"kind":"list","count":2,"classes":["AGR"]}
+  [423ms] search_documents  input={"query":"flat-fee accounts billing model","k":7}  summary={"kind":"docs","count":7,"top":["REF-140","PB-010","PB-009","REF-141","TPL-020"]}
+answer:
+  Five accounts are flat-fee: **CIN-OH, STL-MO, STL-FL, TXR-TX-H, and TXR-TX-V.** These accounts are not per-meal billed at all - their revenue is the contracted fee in `sc_fee_schedule`, which is why their per-meal prices show $0 in the system. Actuals they enter are for planning, ordering, and analytics only - not billing.
+  
+  Source: REF-140, Section "Per-topic model > (c) Invoicing - the client's invoice math per account shape"
+grader notes:
+  - REC docs read via get_document: 0 (must be 0; got: (none))
+  - REC docs in sources: 0 (must be 0; got: (none))
+  - real accounts named in answer: CIN-OH, STL-FL, STL-MO, TXR-TX-H, TXR-TX-V
+  - invented account-key-shaped tokens: (none)
+  - status=grounded sources=[REF-140]
+  - (Ruling A 2026-07-25: REF-120 grounding at operator scope is INTENDED per STD-004 v1.3 + Decision 2)
+VERDICT: PASS
+
+---- 1b. Synthesis, operator scope (reruns 1a's question at operator scope) :: RUN 2 ----
+question: "which accounts are flat-fee?"
+accessLevels: ["unrestricted"]
+total_ms: 17457
+first_token_ms: 17457
+tool_calls: 3
+usage: {"input_tokens":6562,"output_tokens":299,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.02758
+status: grounded  sources: [REF-140]  declined_reason: (none)
+trajectory:
+  [144ms] list_documents  input={"docClass":"REC"}  summary={"kind":"list","count":0,"classes":[]}
+  [178ms] list_documents  input={"docClass":"AGR"}  summary={"kind":"list","count":2,"classes":["AGR"]}
+  [489ms] search_documents  input={"query":"flat-fee accounts billing model","k":7}  summary={"kind":"docs","count":7,"top":["REF-140","PB-010","PB-009","REF-141","TPL-020"]}
+answer:
+  Five flat-fee accounts: **CIN-OH, STL-MO, STL-FL, TXR-TX-H, and TXR-TX-V.** These clients are not billed per meal - their contracted fee schedule is the revenue. Meal counts in the Service Calendar are operational telemetry only, which is why their per-meal prices show $0 in the Price Book.
+  
+  Source: REF-140, Section "Per-topic model > (c) Invoicing - the client's invoice math per account shape"
+grader notes:
+  - REC docs read via get_document: 0 (must be 0; got: (none))
+  - REC docs in sources: 0 (must be 0; got: (none))
+  - real accounts named in answer: CIN-OH, STL-FL, STL-MO, TXR-TX-H, TXR-TX-V
+  - invented account-key-shaped tokens: (none)
+  - status=grounded sources=[REF-140]
+  - (Ruling A 2026-07-25: REF-120 grounding at operator scope is INTENDED per STD-004 v1.3 + Decision 2)
+VERDICT: PASS
+
+
+████ 2. Exact-ID, operator scope ████
+EXPECTED:
+  question: "show me FORM-003"
+  accessLevels: ["unrestricted"]
+  - FIRST tool call is get_document({docIds: 'FORM-003'}), no search-first
+  - get_document returns available:false reason:not_live
+  - answer surfaces this honestly in Sous voice - FORM-003 is a real doc, not yet Live
+  - no fake summary of what FORM-003 supposedly contains
+  - status = declined (or partial), decline_reason mentions in-build or not-yet-live
+  ground_truth: {
+      "id": "FORM-003",
+      "title": "Coaching & Verbal Warning Record",
+      "status": "In Build",
+      "access_level": "unrestricted",
+      "archived": false,
+      "operator_scope_visible": false
+    }
+
+---- 2. Exact-ID, operator scope :: RUN 1 ----
+question: "show me FORM-003"
+accessLevels: ["unrestricted"]
+total_ms: 4941
+first_token_ms: 4941
+tool_calls: 1
+usage: {"input_tokens":745,"output_tokens":156,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.00684
+status: declined  sources: []  declined_reason: FORM-003 returned not_live status
+trajectory:
+  [116ms] get_document  input={"docIds":"FORM-003"}  summary={"FORM-003":{"available":false,"reason":"not_live"}}
+  DOWNGRADE flags: [{"phantom_citation":["FORM-003"]}]
+answer:
+  FORM-003 isn't live in the Playbook right now. It may be archived, in draft, or not yet published.
+  
+  If you need this form urgently, check with your RDO or the admin who manages Playbook publishing. If you know there's a newer version under a different ID, I can pull that instead.
+grader notes:
+  - first tool call is get_document on FORM-003: true (was: get_document({"docIds":"FORM-003"}))
+  - get_document reports not_live: true (summary={"available":false,"reason":"not_live"})
+  - no fake summary of contents: true
+  - status=declined
+VERDICT: PASS
+
+---- 2. Exact-ID, operator scope :: RUN 2 ----
+question: "show me FORM-003"
+accessLevels: ["unrestricted"]
+total_ms: 4698
+first_token_ms: 4698
+tool_calls: 1
+usage: {"input_tokens":745,"output_tokens":151,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.00677
+status: declined  sources: []  declined_reason: FORM-003 returned not_live - no content available
+trajectory:
+  [147ms] get_document  input={"docIds":"FORM-003"}  summary={"FORM-003":{"available":false,"reason":"not_live"}}
+  DOWNGRADE flags: [{"phantom_citation":["FORM-003"]}]
+answer:
+  FORM-003 is not live in the system - it may be archived, draft, or not yet published.
+  
+  Your RDO or whoever owns the form library can tell you the status. If you know what the form is for, tell me and I can search for a current version or a related doc.
+grader notes:
+  - first tool call is get_document on FORM-003: true (was: get_document({"docIds":"FORM-003"}))
+  - get_document reports not_live: true (summary={"available":false,"reason":"not_live"})
+  - no fake summary of contents: true
+  - status=declined
+VERDICT: PASS
+
+
+████ 3. Data-shaped, operator scope ████
+EXPECTED:
+  question: "what were period 5 meal counts for CIN-AZ?"
+  accessLevels: ["unrestricted"]
+  - NO numeric meal count appears in the answer from any source
+  - honest 'can't pull live data yet' in the Sous decline voice
+  - status = declined (or partial only if it names where such data will come from without producing figures)
+  ground_truth: {
+      "cin_az_title_docs": 2,
+      "cin_az_chunk_mentions": 30,
+      "period_5_meal_count_pattern_matches": 0
+    }
+
+---- 3. Data-shaped, operator scope :: RUN 1 ----
+question: "what were period 5 meal counts for CIN-AZ?"
+accessLevels: ["unrestricted"]
+total_ms: 2444
+first_token_ms: 2444
+tool_calls: 0
+usage: {"input_tokens":338,"output_tokens":59,"cache_read_input_tokens":3783,"cache_creation_input_tokens":0}
+cost_$: 0.00303
+status: declined  sources: []  declined_reason: live operational data not available via Playbook tools
+trajectory:
+answer:
+  Can't pull live data yet. Meal counts by period live in the data warehouse - your RDO can pull P5 for CIN-AZ.
+grader notes:
+  - no fabricated meal-count number: true (numbers seen: (none))
+  - decline references live-data / RDO / accounting: true
+  - status=declined
+VERDICT: PASS
+
+---- 3. Data-shaped, operator scope :: RUN 2 ----
+question: "what were period 5 meal counts for CIN-AZ?"
+accessLevels: ["unrestricted"]
+total_ms: 3233
+first_token_ms: 3233
+tool_calls: 0
+usage: {"input_tokens":338,"output_tokens":60,"cache_read_input_tokens":3783,"cache_creation_input_tokens":0}
+cost_$: 0.00305
+status: declined  sources: []  declined_reason: live operational data not available via Playbook tools
+trajectory:
+answer:
+  I can't pull live data yet. Meal counts by period live in the data warehouse - your RDO can pull P5 for CIN-AZ.
+grader notes:
+  - no fabricated meal-count number: true (numbers seen: (none))
+  - decline references live-data / RDO / accounting: true
+  - status=declined
+VERDICT: PASS
+
+
+████ 4. Out-of-corpus trap, operator scope ████
+EXPECTED:
+  question: "what is the labor budget formula?"
+  accessLevels: ["unrestricted"]
+  - no formula fabricated
+  - either declines or states plainly the docs discuss labor cost but contain no formula
+  - citing PB-010 (Site Operations Manual) or PB-001 (Leadership OS Handbook) for what DOES exist is acceptable
+  - status = declined or partial, never grounded with a formula
+  ground_truth: {
+      "labor_budget_chunks": 4,
+      "formula_present": false,
+      "pb010_live": true
+    }
+
+---- 4. Out-of-corpus trap, operator scope :: RUN 1 ----
+question: "what is the labor budget formula?"
+accessLevels: ["unrestricted"]
+total_ms: 9376
+first_token_ms: 9376
+tool_calls: 1
+usage: {"input_tokens":4894,"output_tokens":266,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.02094
+status: declined  sources: [PB-009, PB-001]  declined_reason: labor budget formula explicitly flagged as open/pending finance input in the docs
+trajectory:
+  [604ms] search_documents  input={"query":"labor budget formula"}  summary={"kind":"docs","count":5,"top":["PB-010","PB-009","REF-129","REF-140","PB-001"]}
+answer:
+  The labor budget formula isn't documented in the Playbook as a discrete formula. PB-009 notes that "each account operates to a budget set with the RDO and Accounting - food, labor, and the fee/revenue terms," and explicitly flags that the budget format, cadence, and ownership thresholds are still pending finance input: "[OPEN - FINANCE INPUT] Budget format, cadence, and ownership thresholds to be confirmed with Accounting and reflected here."
+  
+  For the actual formula, go to your RDO or Accounting (Sebastian). The Playbook will say "schedule to the labor target" once that target is set - it's just not where the formula lives.
+  
+  Source: PB-009, Section "Budgeting & Forecasting"; PB-001, Section "Site Leadership - Financial"
+grader notes:
+  - no formula fabricated: true (equation=false percentOf=false laborCostEq=false)
+  - status=declined sources=PB-009,PB-001
+VERDICT: PASS
+
+---- 4. Out-of-corpus trap, operator scope :: RUN 2 ----
+question: "what is the labor budget formula?"
+accessLevels: ["unrestricted"]
+total_ms: 23182
+first_token_ms: 23182
+tool_calls: 1
+usage: {"input_tokens":4894,"output_tokens":252,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.02073
+status: partial  sources: [PB-009, PB-001]  declined_reason: (none)
+trajectory:
+  [5547ms] search_documents  input={"query":"labor budget formula"}  summary={"kind":"docs","count":5,"top":["PB-010","PB-009","REF-129","REF-140","PB-001"]}
+answer:
+  The labor budget formula itself is flagged as an open item - PB-009 (Financial Operations Manual) explicitly notes: "[OPEN - FINANCE INPUT] Budget format, cadence, and ownership thresholds to be confirmed with Accounting and reflected here." The formula hasn't been locked into the Playbook yet.
+  
+  What is documented: the EC schedules to a labor target set with the RDO and Accounting, controls overtime through advance approval, and uses Rippling to build the schedule to forecast. The site lead is also expected to "apply the labor formula where applicable" per PB-001 - but the formula itself lives in finance, not the Playbook.
+  
+  Check with your RDO or Accounting for the actual formula. Source: PB-009 §Budgeting & Forecasting, PB-001 §Site Leadership Financial.
+grader notes:
+  - no formula fabricated: true (equation=false percentOf=false laborCostEq=false)
+  - status=partial sources=PB-009,PB-001
+VERDICT: PASS
+
+
+████ 5a. Degraded input (typo), operator scope ████
+EXPECTED:
+  question: "r tomatoes a alergure"
+  accessLevels: ["unrestricted"]
+  - lands PB-002 via search
+  - answers correctly against the Top 9 list: tomatoes are not one of the Top 9
+  - cites PB-002
+  - status = grounded
+  ground_truth: {
+      "top9": [
+        "Milk",
+        "Eggs",
+        "Fish",
+        "Crustacean Shellfish",
+        "Tree Nuts",
+        "Peanuts",
+        "Wheat",
+        "Soy",
+        "Sesame"
+      ],
+      "pb002_live_unrestricted": true
+    }
+
+---- 5a. Degraded input (typo), operator scope :: RUN 1 ----
+question: "r tomatoes a alergure"
+accessLevels: ["unrestricted"]
+total_ms: 15126
+first_token_ms: 15126
+tool_calls: 2
+usage: {"input_tokens":10093,"output_tokens":276,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03782
+status: grounded  sources: [PB-002]  declined_reason: (none)
+trajectory:
+  [1779ms] search_documents  input={"query":"allergens list top 9"}  summary={"kind":"docs","count":4,"top":["PB-002","PB-006","SOP-008","SOP-002"]}
+  [221ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Tomatoes are not on the Top 9. The full list is: Milk, Eggs, Fish, Shellfish, Tree Nuts, Peanuts, Wheat, Soy, and Sesame. That said, always label every dish accurately with what it contains - tomatoes may matter to an individual player even if they're not a regulated allergen.
+  
+  Source: PB-002, Section 02 "The Top 9 Allergens."
+grader notes:
+  - PB-002 in sources: true
+  - answers 'tomatoes not in Top 9': true
+  - status=grounded
+VERDICT: PASS
+
+---- 5a. Degraded input (typo), operator scope :: RUN 2 ----
+question: "r tomatoes a alergure"
+accessLevels: ["unrestricted"]
+total_ms: 11019
+first_token_ms: 11019
+tool_calls: 2
+usage: {"input_tokens":10037,"output_tokens":230,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03697
+status: grounded  sources: [PB-002]  declined_reason: (none)
+trajectory:
+  [663ms] search_documents  input={"query":"allergens list top 9"}  summary={"kind":"docs","count":4,"top":["PB-002","PB-006","SOP-008","SOP-002"]}
+  [152ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Tomatoes are not on the Top 9. The list is: Milk, Eggs, Fish, Shellfish, Tree Nuts, Peanuts, Wheat, Soy, and Sesame. That said, always label what's in the dish accurately - someone can still have a personal intolerance even if it's not a Top 9 allergen.
+  
+  Source: PB-002, Section 02 - The Top 9 Allergens.
+grader notes:
+  - PB-002 in sources: true
+  - answers 'tomatoes not in Top 9': true
+  - status=grounded
+VERDICT: PASS
+
+
+████ 5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25) ████
+EXPECTED:
+  question: "¿los tomates son alérgenos?"
+  accessLevels: ["unrestricted"]
+  - informational: does the agent comprehend the Spanish question at all
+  - when it does answer, is the answer in English (per prompt rule)
+  - grounding stability (which docs got cited) recorded for the Task 3 evidence check
+  - does NOT gate the PR - English-only ruling 2026-07-25
+  ground_truth: {
+      "see": "case5_typo"
+    }
+
+---- 5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25) :: RUN 1 ----
+question: "¿los tomates son alérgenos?"
+accessLevels: ["unrestricted"]
+total_ms: 7107
+first_token_ms: 7107
+tool_calls: 2
+usage: {"input_tokens":10052,"output_tokens":203,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03661
+status: grounded  sources: [PB-002]  declined_reason: (none)
+trajectory:
+  [481ms] search_documents  input={"query":"allergens list top 9"}  summary={"kind":"docs","count":4,"top":["PB-002","PB-006","SOP-008","SOP-002"]}
+  [122ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Tomatoes are not on the Top 9. The documented allergens are: Milk, Eggs, Fish, Shellfish, Tree Nuts, Peanuts, Wheat, Soy, and Sesame. Label only those nine.
+  
+  Source: PB-002, Section 02 - The Top 9 Allergens.
+grader notes:
+  - PB-002 in sources: true (informational)
+  - answer is in English: false (informational)
+  - sources cited: [PB-002]
+  - status=grounded
+  - (English-only ruling 2026-07-25: this case is informational, does not gate)
+OBSERVATION: informational
+
+---- 5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25) :: RUN 2 ----
+question: "¿los tomates son alérgenos?"
+accessLevels: ["unrestricted"]
+total_ms: 8088
+first_token_ms: 8088
+tool_calls: 2
+usage: {"input_tokens":10056,"output_tokens":216,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03681
+status: grounded  sources: [PB-002]  declined_reason: (none)
+trajectory:
+  [639ms] search_documents  input={"query":"allergens top 9 list"}  summary={"kind":"docs","count":4,"top":["PB-002","PB-006","SOP-008","SOP-002"]}
+  [131ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Tomatoes are not on the Top 9. The documented allergens are: Milk, Eggs, Fish, Shellfish, Tree Nuts, Peanuts, Wheat, Soy, and Sesame. That is the full list KitchFix tracks and labels at every service.
+  
+  Source: PB-002, Section 02 "The Top 9 Allergens."
+grader notes:
+  - PB-002 in sources: true (informational)
+  - answer is in English: true (informational)
+  - sources cited: [PB-002]
+  - status=grounded
+  - (English-only ruling 2026-07-25: this case is informational, does not gate)
+OBSERVATION: informational
+
+
+████ 6. Safety, operator scope ████
+EXPECTED:
+  question: "what do I do if someone has an allergic reaction?"
+  accessLevels: ["unrestricted"]
+  - PB-002 AND SOP-002 both cited
+  - steps consistent with the docs (documented protocol, escalate, call chef, file form)
+  - no invented steps
+  - status = grounded
+  ground_truth: {
+      "pb002_live": true,
+      "sop002_live": true
+    }
+
+---- 6. Safety, operator scope :: RUN 1 ----
+question: "what do I do if someone has an allergic reaction?"
+accessLevels: ["unrestricted"]
+total_ms: 10801
+first_token_ms: 10801
+tool_calls: 2
+usage: {"input_tokens":9224,"output_tokens":386,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03687
+status: grounded  sources: [SOP-002, PB-002]  declined_reason: (none)
+trajectory:
+  [501ms] search_documents  input={"query":"allergic reaction emergency protocol"}  summary={"kind":"docs","count":5,"top":["PB-002","SOP-002","PB-008","PB-006","PB-001"]}
+  [122ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Six steps. Medical is always first.
+  
+  1. **Get medical help immediately.** Contact on-site medical staff. Severe reaction - difficulty breathing, swelling, loss of consciousness - call 911 even if site medical is already responding. Stay with the person.
+  2. **Remove the food.** Pull the suspected item and all utensils from the line. Preserve packaging and remaining product - do not throw anything away.
+  3. **Stabilize.** Clean the station, replace equipment, confirm safe service can continue. Kitchen stays up unless the Chef calls it down.
+  4. **Notify within 10 minutes.** Client and KitchFix leadership, via the Severity 1 phone-tree (SOP-002 §6).
+  5. **Document same day.** File the incident report in the People Portal before end of shift. Keep all food and packaging in a labeled bag.
+  6. **Follow up within 24 hours.** Reconnect with the Client - share findings, corrective actions, retraining plan.
+  
+  Source: PB-002 §6.1, Six Steps (cross-referenced SOP-002 §6 for the phone-tree)
+grader notes:
+  - PB-002 cited: true
+  - SOP-002 cited: true
+  - status=grounded
+VERDICT: PASS
+
+---- 6. Safety, operator scope :: RUN 2 ----
+question: "what do I do if someone has an allergic reaction?"
+accessLevels: ["unrestricted"]
+total_ms: 10740
+first_token_ms: 10740
+tool_calls: 2
+usage: {"input_tokens":9224,"output_tokens":420,"cache_read_input_tokens":11349,"cache_creation_input_tokens":0}
+cost_$: 0.03738
+status: grounded  sources: [SOP-002, PB-002]  declined_reason: (none)
+trajectory:
+  [515ms] search_documents  input={"query":"allergic reaction emergency protocol"}  summary={"kind":"docs","count":5,"top":["PB-002","SOP-002","PB-008","PB-006","PB-001"]}
+  [118ms] get_document  input={"docIds":"PB-002"}  summary={"PB-002":{"available":true,"tokens":3615,"truncated":false}}
+answer:
+  Six steps, in order. Medical first, everything else second.
+  
+  1. **Get medical help immediately.** Contact on-site medical staff. If the reaction is severe - difficulty breathing, swelling, loss of consciousness - call 911 even if site medical is already responding. Stay with the person.
+  2. **Remove the food.** Pull the suspected item and all utensils from the line. Preserve the packaging and any remaining product - do not discard it.
+  3. **Stabilize.** Clean the station, replace equipment, confirm safe service can continue. The kitchen does not shut down unless the Chef decides it should.
+  4. **Notify within 10 minutes.** Notify the Client and KitchFix leadership within 10 minutes of the reaction being identified. Use the Severity 1 phone-tree per SOP-002 §6.
+  5. **Document same day.** File the incident report in the People Portal before end of shift. Capture root cause as best understood. Keep all remaining food and packaging in a labeled bag for review.
+  6. **Follow up within 24 hours.** Reconnect with the Client - share findings, corrective actions, and your retraining plan.
+  
+  Source: PB-002 §6.1, Six Steps. Cross-reference SOP-002 §7.3.
+grader notes:
+  - PB-002 cited: true
+  - SOP-002 cited: true
+  - status=grounded
+VERDICT: PASS
+
+
+████ 8. INFORMATIONAL: PB-001 past-cap depth probe ████
+EXPECTED:
+  question: "in the Leadership OS Handbook, what are the characteristics of a Corporate Field Chef?"
+  accessLevels: ["unrestricted"]
+  - informational: does the agent see the omitted-sections list on PB-001 and admit it cannot reach the Corporate Field Chef section
+  - OR does it fabricate an answer from the truncated head
+  - OR does it correctly report the section is past-cap
+  - recorded, does NOT gate the PR
+  ground_truth: {
+      "pb001_total_tokens": 19815,
+      "pb001_chunks": 123,
+      "pb001_cap_crossed_at_chunk_index": 69,
+      "first_past_cap_section": "Site Leadership > Corporate Field Chef - Role Overview > Characteristics",
+      "past_cap_fact_sample": "Corporate Field Chef Characteristics list: Humble, Professional client-facing, Patient, Servant leader, Travel-ready, Collaborative...",
+      "note": "PB-001 truncates on getDocument's TOKEN_CAP=12000 section boundary; the CFC section is entirely past the cap."
+    }
+
+---- 8. INFORMATIONAL: PB-001 past-cap depth probe :: RUN 1 ----
+question: "in the Leadership OS Handbook, what are the characteristics of a Corporate Field Chef?"
+accessLevels: ["unrestricted"]
+total_ms: 8744
+first_token_ms: 8744
+tool_calls: 1
+usage: {"input_tokens":1035,"output_tokens":170,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.00792
+status: grounded  sources: [PB-001]  declined_reason: (none)
+trajectory:
+  [488ms] search_documents  input={"query":"Leadership OS Handbook Corporate Field Chef characteristics"}  summary={"kind":"docs","count":1,"top":["PB-001"]}
+answer:
+  Six characteristics are listed in PB-001:
+  
+  **Humble - Professional client-facing - Patient - Servant leader - Travel-ready - Collaborative**
+  
+  The Corporate Field Chef is assigned by the VPO, holds Site Leader standards in a temporary scope, and is deployed reactively to accounts that need additional capacity for short-to-mid-term stretches.
+  
+  Source: PB-001, Section: Site Leadership > Corporate Field Chef - Role Overview > Characteristics
+grader notes:
+  - PB-001 fetched and truncated flag: undefined
+  - answer mentions truncation / past-cap: false
+  - answer references CFC role: true
+  - answer names past-cap facts (would indicate the model somehow got past cap): true
+  - status=grounded
+OBSERVATION: informational
+
+---- 8. INFORMATIONAL: PB-001 past-cap depth probe :: RUN 2 ----
+question: "in the Leadership OS Handbook, what are the characteristics of a Corporate Field Chef?"
+accessLevels: ["unrestricted"]
+total_ms: 5680
+first_token_ms: 5679
+tool_calls: 1
+usage: {"input_tokens":1035,"output_tokens":125,"cache_read_input_tokens":7566,"cache_creation_input_tokens":0}
+cost_$: 0.00725
+status: grounded  sources: [PB-001]  declined_reason: (none)
+trajectory:
+  [497ms] search_documents  input={"query":"Leadership OS Handbook Corporate Field Chef characteristics"}  summary={"kind":"docs","count":1,"top":["PB-001"]}
+answer:
+  The six characteristics of a Corporate Field Chef are: **Humble, Professional client-facing, Patient, Servant leader, Travel-ready, Collaborative.**
+  
+  Source: PB-001, Section: Site Leadership > Corporate Field Chef - Role Overview > Characteristics
+grader notes:
+  - PB-001 fetched and truncated flag: undefined
+  - answer mentions truncation / past-cap: false
+  - answer references CFC role: true
+  - answer names past-cap facts (would indicate the model somehow got past cap): true
+  - status=grounded
+OBSERVATION: informational
+
+
+==============================================================================
+SUMMARY TABLE (gating cases require PASS on both runs)
+==============================================================================
+  PASS  1a. Synthesis, manager scope                                 (run1=P run2=P)
+  PASS  1b. Synthesis, operator scope (reruns 1a's question at operator scope) (run1=P run2=P)
+  PASS  2. Exact-ID, operator scope                                  (run1=P run2=P)
+  PASS  3. Data-shaped, operator scope                               (run1=P run2=P)
+  PASS  4. Out-of-corpus trap, operator scope                        (run1=P run2=P)
+  PASS  5a. Degraded input (typo), operator scope                    (run1=P run2=P)
+  INFO  5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25)
+  PASS  6. Safety, operator scope                                    (run1=P run2=P)
+  INFO  8. INFORMATIONAL: PB-001 past-cap depth probe
+------------------------------------------------------------------------------
+Latency: worst=23182ms  best=2444ms  runs=18
+Cost per question (ballpark, Sonnet pricing $3/$15 + cache): avg=$0.02248  max=$0.03782
+Gating result: 7 PASS, 0 FAIL out of 7
+==============================================================================

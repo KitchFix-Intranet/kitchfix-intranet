@@ -422,3 +422,48 @@ Both failures were **grader-lag false-negatives**, not prompt-adjustment trigger
 The one sanctioned adjustment round remained unused in B2. Both regressions surfaced were harness-lag false-negatives, fixed by widening graders without changing the prompt.
 
 ### B2 gate findings: 0
+
+---
+
+## Phase C re-cert - 2026-07-28
+
+Phase C (PR `feat/sousai-logging-c`) adds the `sousai_questions` log table, wires fire-and-forget logging + `question_id` in the done envelope, ships the feedback action, and rides one cosmetic prompt fix (nonexistent example doc id `PB-002-ES` -> real pair `POL-006-ES`). Any prompt touch re-certifies the spike, no exceptions.
+
+### The riding prompt fix
+
+Single-line diff in `# How you answer` -> Spanish variants example:
+
+- **Before:** `"Source: PB-002 (Spanish variant: PB-002-ES)"` (fake doc id)
+- **After:** `"Source: POL-006 (Spanish variant: POL-006-ES)"` (real pair; POL-006-ES is a real Live doc)
+
+### Re-cert result: 7/7 gating both runs
+
+| # | Case | Run 1 | Run 2 |
+|---|---|---|---|
+| 1a | Synthesis, manager scope | PASS | PASS |
+| 1b | Synthesis, operator scope | PASS | PASS |
+| 2 | Exact-ID (FORM-003) | PASS | PASS |
+| 3 | Data-shaped (CIN-AZ P5) | PASS | PASS |
+| 4 | Out-of-corpus (labor formula) | PASS | PASS |
+| 5a | Typo | PASS | PASS |
+| 5b | Spanish (informational) | INFO | INFO |
+| 6 | Safety | PASS | PASS |
+| 8 | PB-001 depth (informational) | INFO | INFO |
+
+Metrics: worst latency 23,182 ms (1a Path B, 12 REF-doc reads); best 2,444 ms; avg cost $0.022 (cheaper than B2 - cache read tokens are now baseline); max cost $0.038. Full raw log appended to `SOUSAI_SPIKE_B1_2026-07-25.raw.txt` (lines ~2,692-3,329).
+
+### Chat's forensics-grade trajectory addendum (mid-session binding, codified in plan v2.9)
+
+The persisted trajectory must let Chat's improvement digest triage declines into corpus-gap vs retrieval-miss vs correct-decline. Implemented in `src/app/api/sousai/log.js:sanitizeTrajectoryForLog()`:
+
+- **search_documents:** `{query, k, docs: [{docId, docClass, bestSimilarity}], ms}` - `bestSimilarity` rounded to 2 decimals. No snippet content.
+- **get_document:** `{docIds, results: {[id]: {available, tokens?, truncated?} | {available:false, reason}}, ms}`. No document text.
+- **list_documents:** `{filter, count, classes, ms}`.
+
+`rawResult` (carries snippets on search results and full text on get_document) is stripped from every trajectory step before insert. Verified by acceptance case C12 with a synthetic trajectory containing "SECRET SNIPPET CONTENT" and "SECRET DOC BODY" strings - post-sanitizer JSON contains neither.
+
+### GRANT correction (Kevin ruling 2026-07-28)
+
+Initial migration cargo-culted a `GRANT ... TO anon, authenticated` from `pr-7-1`. Kevin's ruling: "TRUNCATE is a destructive data privilege, not a neutral one. Zero grants to those roles is the correct posture for a service-role-only table." Migration file corrected so the committed record matches - service-role only, zero grants to anon/authenticated. Verified against production (Kevin ran only line 1 of the two GRANTs); probe still passes end-to-end after correction.
+
+### Phase C gate findings: 0
