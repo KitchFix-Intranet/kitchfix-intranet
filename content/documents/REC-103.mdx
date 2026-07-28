@@ -44,7 +44,7 @@ relationships:
 
 - **Intranet (PRIMARY)** - `CIN-OH`
 - **PG `accounts`** - team_key `CIN - OH` · name "Cincinnati Reds" · level `MLB` · billing_model `flat_fee` · has_homestand_schedule `true`
-- **PG `sc_fee_schedule`** - $362,500 base row (2026-01-01, annual, monthly-6) - **should be updated to carry the escalated $376,686** (Kevin: PG carries the escalated figure, not the base) - see the Billing Record section + the Open Items section
+- **PG `sc_fee_schedule`** - **$376,686 escalated row** (2026-01-01, annual, monthly-6). Migration ran 2026-07-16 (changed_by `kf-fee-escalation-2026-07`), flipping from the $362,500 base to the current billed figure per Kevin's ruling (PG carries the escalated figure, not the base). See the Rulings section (chunk 4) and Open Items (chunk 5) which confirm the migration is done.
 - **PG `sc_service_prices`** - per-meal rows all $0 (flat-fee; meals tracked for planning only) - "Arrival", "Post BP", "Post-Game", "Umpire"
 - **QuickBooks (invoice `Item`)** - SF: **"Service Fees (PFS)"**; reimbursables: **"Food"** + **"Clubhouse Snacks"** *invoices K300168479, K300168777, K300168859, K300168860* · **`PFS` = Performance Food Service** (KitchFix's parent/product-family brand - the code root on all Item names). *Kevin, 2026-07-16*
 - **Finance schedule** - "CIN - OH" - accrued P4-P10, billed 6× $61,907.08 *§W*
@@ -71,7 +71,7 @@ relationships:
 ## Money shape
 - **Shape**: **Flat-fee** - fixed annual Services Fee + food/supplies passthrough + Clubhouse Extras passthrough. NO per-meal billing (meals tracked for planning; PG stores per-meal at $0). *MONEY_MODEL flat_fee; billing_model flat_fee*
 - **2026 Services Fee**: **$376,686 accrued / $371,442.48 billed** (finance §W) - the CPI-escalated figure (~3.9% Aug-CPI escalation from the $362,500 base). Billed as **6 monthly installments of $61,907.08** (invoice-confirmed K300168479 = "4 of 6"). · as-of 2026 · source: finance schedule + invoice *§W, §X*
-  - **Base was $362,500** (contract's stipulated 2026 base, before CPI). The escalated actual that bills is $376,686. **PG should carry the escalated $376,686** (Kevin ruling 2026-07-16) - PG's `sc_fee_schedule` currently holds the $362,500 base and needs updating. *digest §B.4, §W*
+  - **Base was $362,500** (contract's stipulated 2026 base, before CPI). The escalated actual that bills is $376,686. **PG carries the escalated $376,686** (Kevin ruling 2026-07-16, migration done 2026-07-16). *digest §B.4, §W*
   - The small accrued-vs-billed gap ($376,686 − $371,442.48 = $5,243.52) is an annualized-fee-vs-invoiceable rounding artifact, not an error. *§W*
 - **SF cadence**: 6 consecutive equal monthly installments, **March 1 → August 1** (contract §2.a). Accrued across **P4-P10** (regular-season 7 periods) per finance JE labels. *digest §B.3, §W*
 - **SF TAX: TAXABLE at 7.80%** (Cincinnati/Hamilton County; Ohio 5.75% state + 2.05% local). Invoice K300168479: $61,907.08 + $4,828.75 tax = $66,735.83. *§X*
@@ -121,7 +121,7 @@ Two reimbursement tracks, invoiced **per-homestand/weekly, Net 30** (contract §
 | R11 | CLOSED | 2026-07 | R11 |
 | SF-tax (per-account) | CLOSED | 2026-07-16 | §X |
 | Fee figure | CLOSED | 2026-07-16 | §W |
-| PG carries escalated | CLOSED (decision) → migration pending | 2026-07-16 | §W |
+| PG carries escalated | CLOSED (decision + migration) | 2026-07-16 | §W |
 
 **Detail**
 

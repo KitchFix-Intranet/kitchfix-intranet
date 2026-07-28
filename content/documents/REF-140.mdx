@@ -171,8 +171,8 @@ Four account shapes. The model for each:
 | Shape | Accounts | Per-meal invoice line (bi-weekly / weekly) | Service Fee line (separate) | Passthrough |
 |---|---|---|---|---|
 | **SF% (per-meal + SF discounts per-meal)** | CIN-AZ (30%), TXR-AZ (20%), TBR-FL MiLB (25%) | `actual_count × post-SF invoice rate` | Yes, flat annual on separate schedule (CIN-AZ $402,016 Feb+Mar; TXR-AZ 20% deposit Jan/Feb/Mar; TBR-FL front-loaded 2024) | None inside these accounts |
-| **Flat-SF (per-meal + SF independent)** | TBJ-FL ($452,812/yr) | `actual_count × post-SF invoice rate` (= sticker; no discount) | Yes, flat annual on separate schedule (Jan/Feb/Mar split per ABR OneSheeter) | None |
-| **No-SF (pure per-meal)** | CIN-KY, TBJ-NY | `actual_count × post-SF invoice rate` (= sticker; no discount, no SF) | None | None |
+| **Flat-SF (per-meal + SF independent)** | TBJ-FL ($452,812/yr [superseded: 2026 billable is $515,712 per REF-141 + REC-106; contract number retained here for taxonomy classification only]) | `actual_count × post-SF invoice rate` (= sticker; no discount) | Yes, flat annual on separate schedule (Jan/Feb/Mar split per ABR OneSheeter) | None |
+| **No-SF (pure per-meal)** | CIN-KY, TBJ-NY, TBR-FL MLB (per REC-108), BGC (per REF-121; second-client on TBR-FL commissary, prepaid 4-week periods) | `actual_count × post-SF invoice rate` (= sticker; no discount, no SF) | None | None |
 | **Flat_fee** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | **Not per-meal.** Contracted flat fee via `sc_fee_schedule` | The flat fee IS the money | Yes on some accounts (see topic (h)) |
 
 **Important:** fee-account operators never had an actuals workflow before the Service
@@ -195,8 +195,8 @@ PG and their calendar revenue displays show zero-dollar / operational-only.
 | SF structure | Accounts | Amount | Billed how | On the SC calendar dollars? |
 |---|---|---|---|---|
 | **Percentage-based SF (discounts per-meal)** | CIN-AZ 30%, TXR-AZ 20% (deposit), TBR-FL MiLB 25% (amortization) | CIN-AZ $402,016; TXR-AZ 2025 deposit $297,419; TBR-FL 2024 one-time $382,448 | Flat annual, separate schedule; per-meal invoice arrives at the discounted rate | **No** - contract-revenue layer. The SC calendar displays per-meal invoice only |
-| **Flat SF (independent of per-meal)** | TBJ-FL $452,812/yr | Flat annual | Split monthly Jan/Feb/Mar per ABR OneSheeter; per-meal invoice runs in parallel at full rate | **No** - contract-revenue layer, `sc_fee_schedule` extension work not yet done |
-| **No SF** | CIN-KY, TBJ-NY | n/a | n/a | n/a |
+| **Flat SF (independent of per-meal)** | TBJ-FL $452,812/yr [superseded: 2026 billable is $515,712 per REF-141 + REC-106] | Flat annual | Split monthly Jan/Feb/Mar per ABR OneSheeter; per-meal invoice runs in parallel at full rate | **No** - contract-revenue layer, `sc_fee_schedule` extension work not yet done |
+| **No SF** | CIN-KY, TBJ-NY, TBR-FL MLB, BGC (second-client on TBR-FL) | n/a | n/a | n/a |
 | **Flat_fee (fee IS the money)** | CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V | See table (c) | Contract-defined installments | **No** - lives in `sc_fee_schedule`, seeded 2026-06-19 |
 
 ### (e) The KPI / all-in lens
