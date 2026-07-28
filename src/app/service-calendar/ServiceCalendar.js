@@ -30,6 +30,11 @@ import MobileBooksBar from "./v2/MobileBooksBar";
 import BulkEntry from "./v2/bulk/BulkEntry";
 import BulkReview from "./v2/bulk/BulkReview";
 import "./v2/bulk/bulk.css";
+// Phase 3-B (2026-07-28): Handoff sequence.
+import { HandoffProvider, useHandoffSafe } from "./v2/handoff/coordinator";
+import HandoffLayer from "./v2/handoff/HandoffLayer";
+import MonthCompleteCard from "./v2/handoff/MonthCompleteCard";
+import "./v2/handoff/handoff.css";
 // HF-7 (2026-07-20) - overview ribbon Today-jump routes through
 // scrollIntoViewRM so the RM branch is respected.
 import { scrollIntoViewRM } from "./v2/motion";
@@ -358,7 +363,78 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-export default function ServiceCalendar({ showToast, session, heroImage, firstName, isDev = false }) {
+// P3-B (2026-07-28): wrap the root export in HandoffProvider so every
+// SC surface can consume useHandoff. Provider owns beat state,
+// sessionMap, and ref registration. Inner component keeps its full
+// hook list intact.
+export default function ServiceCalendar(props) {
+  return (
+    <HandoffProvider>
+      <ServiceCalendarInner {...props} />
+    </HandoffProvider>
+  );
+}
+
+// P3-B (2026-07-28): ambient side-effects for the Handoff coordinator.
+// Splits into a helper component so the hooks live at a leaf (rules
+// of hooks) and the parent doesn't add per-render churn.
+//   1. Session strip resets on account or scope change (per Ruling 3).
+//   2. Offline chip fires while syncingKeys.size > 0. Non-persistent
+//      showToast dedupes by variant + shown-until-dismissed pattern;
+//      here we re-fire on every syncingKeys.size transition to non-
+//      zero and clear when it drops to zero (via a null toast).
+function HandoffAmbient({ selectedAccount, scope, periodKey, monthKey, syncingKeys, showToast, activeMetrics, scopeLabel }) {
+  const handoff = useHandoffSafe();
+  const { resetSession, phase, sessionMap } = handoff;
+  // Reset session on account / scope / period / month change.
+  useEffect(() => {
+    resetSession();
+  }, [selectedAccount, scope, periodKey, monthKey, resetSession]);
+  // Offline chip lifecycle. When syncingKeys.size > 0, show the chip;
+  // when it drops back to 0, clear it. Uses the page-level toast
+  // surface (showToast injected from page.js) with the offline-chip
+  // variant handled there.
+  const wasNonEmpty = useRef(false);
+  useEffect(() => {
+    const now = syncingKeys.size > 0;
+    if (now && !wasNonEmpty.current) {
+      showToast({
+        variant: "offline-chip",
+        title: `${syncingKeys.size} save${syncingKeys.size === 1 ? "" : "s"} queued`,
+        body: "Your entries will send when the connection returns.",
+        persistent: true,
+      });
+    } else if (!now && wasNonEmpty.current) {
+      showToast({ variant: "offline-chip", dismiss: true });
+    }
+    wasNonEmpty.current = now;
+  }, [syncingKeys, showToast]);
+  // Month-complete card trigger. When activeMetrics.complete transitions
+  // to activeMetrics.total (>= 1) AND the session has recorded at
+  // least one save, fire monthComplete. Gates on sessionMap size so
+  // a cold-load already-complete scope does not pop the card on mount.
+  const prevCompleteRef = useRef(0);
+  useEffect(() => {
+    const complete = activeMetrics?.complete || 0;
+    const total = activeMetrics?.total || 0;
+    const prev = prevCompleteRef.current;
+    prevCompleteRef.current = complete;
+    if (total > 0 && complete === total && prev < total && Object.keys(sessionMap || {}).length > 0) {
+      handoff.startHandoff({
+        dayDate: null,
+        totals: null,
+        monthComplete: {
+          title: "Month cleared",
+          body: `Every day in this ${scopeLabel} is entered.`,
+          stayLabel: `Stay in ${scopeLabel}`,
+        },
+      });
+    }
+  }, [activeMetrics, sessionMap, scopeLabel, handoff]);
+  return null;
+}
+
+function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -1591,7 +1667,17 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
           showToast("Saved - note couldn't post, use Add note", "error");
         } else if (result.auditNoteFailed) {
           showToast("Saved - no-service note couldn't post", "error");
-        } else {
+        } else if (!opts.silentSuccess) {
+          // P3-B (2026-07-28): silentSuccess suppresses the recorded
+          // toast on clean single-day saves from v2 (DayEntryV2's
+          // Handoff sequence replaces the toast). v1 DayDetail
+          // (MLB fee) does NOT pass silentSuccess, so this toast
+          // still fires for MLB - preserves the MLB byte-identical
+          // rule since MLB never sees the Handoff. No-service saves
+          // from v2 also pass silentSuccess (Ruling 5: no-service
+          // toast dies with no Handoff; the panel's inline state
+          // is the confirmation).
+          //
           // PR-B kept toast fix (2026-07-22): guard amount/meals on
           // Number.isFinite. If server response omits either total
           // (queued replay or future server variant), pass null so
@@ -2455,6 +2541,25 @@ export default function ServiceCalendar({ showToast, session, heroImage, firstNa
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
+      {/* P3-B (2026-07-28): Handoff flight layer. Fixed-position clone
+          under .sc-root - sibling of the modal overlay so its
+          viewport-relative positioning is not trapped by the modal's
+          backdrop-filter containing block. */}
+      <HandoffLayer />
+      <MonthCompleteCard
+        scopeLabel={scope === "month" ? "month" : "period"}
+        onBackToSeason={() => router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false })}
+      />
+      <HandoffAmbient
+        selectedAccount={selectedAccount}
+        scope={scope}
+        periodKey={periodKey}
+        monthKey={monthKey}
+        syncingKeys={syncingKeys}
+        showToast={showToast}
+        activeMetrics={scope === "month" ? monthMetrics : periodMetrics}
+        scopeLabel={scope === "month" ? "month" : "period"}
+      />
       {scV2 && (() => {
         /* Drill P1 PR-A DP1-02: drill-scope controls that ChromeBar
            used to host now flow into the Ribbon. Compute the two

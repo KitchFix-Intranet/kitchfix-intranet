@@ -15,6 +15,7 @@
 // overviewDerive.js.
 
 import { useEffect, useRef, useState } from "react";
+import { useHandoffSafe } from "./handoff/coordinator";
 import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
 // P3-A (2026-07-25): accent-rail primitive shared across surfaces
@@ -126,8 +127,21 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
   const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
   const C = 245.04; // 2 * PI * 39
   const dashOffset = C - (C * clamped) / 100;
+  // P3-B (2026-07-28): register the ring container as the handoff
+  // target. The confirmed pill's flight lands on this element's
+  // getBoundingClientRect() center. Container (the outer <div>) is
+  // more stable than the inner <circle> - <div> reads full ring
+  // bounds; <circle> would need SVG->viewport coord conversion.
+  const containerRef = useRef(null);
+  const handoff = useHandoffSafe();
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    return handoff.registerRingTarget(el);
+  }, [handoff]);
   return (
     <div
+      ref={containerRef}
       className={`sc-rail-ring${complete ? " sc-rail-ring--complete" : ""}`}
       role="progressbar"
       aria-valuenow={clamped}

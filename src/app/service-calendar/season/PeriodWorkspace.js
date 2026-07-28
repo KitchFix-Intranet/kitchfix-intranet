@@ -1052,6 +1052,10 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     isToday={isToday}
                     isSelected={isSelected}
                     hasActuals={d.hasActuals}
+                    /* P3-B (2026-07-28): tile flip animation gate.
+                       true = per-meal + STL-FL (P3-B in scope).
+                       false = MLB fee homestand (byte-identical). */
+                    entryMotion={!(isFeeAccount && hasHomestandSchedule)}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
                     onClick={isDisplayOnly ? undefined : () => {

@@ -27,9 +27,20 @@ export default function ServiceCalendarPage() {
     // "recorded" variant renders <SubmissionToast />; SC-068 aligns its
     // auto-dismiss with the plain oh-toast timing (3.5s) so a toast
     // never lingers past the operator's next intent.
+    // P3-B (2026-07-28): persistent variants (offline-chip) do NOT
+    // auto-dismiss; they stay until an explicit `{dismiss: true}` fires
+    // OR the state that produced them clears. `{dismiss: true}` clears
+    // any current toast (used by HandoffAmbient to drop the chip when
+    // the queue empties).
     if (msgOrObj && typeof msgOrObj === "object") {
+      if (msgOrObj.dismiss) {
+        setToast(null);
+        return;
+      }
       setToast(msgOrObj);
-      setTimeout(() => setToast(null), 3500);
+      if (!msgOrObj.persistent) {
+        setTimeout(() => setToast(null), 3500);
+      }
     } else {
       setToast({ msg: String(msgOrObj || ""), type });
       setTimeout(() => setToast(null), 3500);
@@ -176,6 +187,32 @@ export default function ServiceCalendarPage() {
               <span className="sc-ar-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </span>
+              <div className="sc-ar-content">
+                <div className="sc-ar-title">{toast.title}</div>
+                <div className="sc-ar-body">{toast.body}</div>
+              </div>
+            </div>
+          ) : toast.variant === "offline-chip" ? (
+            // P3-B (2026-07-28): offline chip. Accent-rail --warning
+            // (amber). Persistent (no auto-dismiss) while the save
+            // queue is non-empty; HandoffAmbient re-fires the toast
+            // with {dismiss: true} when the queue empties.
+            <div
+              className="sc-ar sc-ar--warning"
+              role="status"
+              aria-live="polite"
+              style={{ minWidth: 260 }}
+            >
+              <span className="sc-ar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 1l22 22" />
+                  <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                  <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                  <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                  <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                  <line x1="12" y1="20" x2="12.01" y2="20" />
                 </svg>
               </span>
               <div className="sc-ar-content">

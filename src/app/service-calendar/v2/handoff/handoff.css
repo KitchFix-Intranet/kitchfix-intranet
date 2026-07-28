@@ -1,0 +1,249 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Handoff sequence (Phase 3-B, 2026-07-28)
+   ═══════════════════════════════════════════════════════════════════
+
+   Beat timings anchored to RENDER_HANDOFF_BLENDED.html:
+     fadeSvc   .26s (@0ms, stagger .02/.05/.08/.11 - handled inline)
+     pillIn    .3s  (@.2s, overshoot)
+     pillFly   .55s (@.66s)
+     ringSweep .95s (@1.02s, ambient CSS transition already live)
+     flipIn    .46s (@.96s)
+     clearRow  .48s (@1.05s)
+     slideNext .5s  (@1.35s)
+     closeRing 1.15s (month-complete only)
+     checkDraw .5s  (@1s, month-complete)
+
+   §13A: durations use --duration-* tokens where available; specific
+   named animations use literal ms since the token ladder does not
+   name every beat. Structural motion values (transform distances,
+   opacity endpoints) are pattern-locked to the render.
+
+   RM: every animation uses --duration-* or wraps in a media query.
+   The token cascade collapses to 0ms under prefers-reduced-motion.
+*/
+
+/* ─── Confirmed pill (inside DayEntryV2) ───────────────────────
+   Renders during phase >= 2. Absolute positioning so its rect stays
+   stable for HandoffLayer's source-rect capture. On phase 2 entry,
+   pillIn keyframe forms it with an overshoot bezier. On phase 3
+   entry, --flying triggers a fade-away in place (HandoffLayer's
+   fixed clone carries the visual flight). */
+.sc-v2-entry-pill {
+  position: fixed;
+  right: var(--sc2-space-5, 20px);
+  bottom: calc(var(--sc2-space-8, 40px) + var(--sc2-space-5, 20px));
+  animation: sc-pillIn .3s cubic-bezier(.34, 1.56, .64, 1) both;
+  z-index: 20;
+  pointer-events: none;
+}
+.sc-v2-entry-pill--flying {
+  animation: sc-pillFade .3s ease-out forwards;
+}
+@keyframes sc-pillIn {
+  0%   { opacity: 0; transform: scale(.9); }
+  70%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes sc-pillFade {
+  to { opacity: 0; transform: scale(.7); }
+}
+
+/* ─── HandoffLayer flight clone ────────────────────────────────
+   Fixed-position clone at page level. Transform + opacity carry the
+   flight. Timing: .55s cubic-bezier(.4, 0, .2, 1). Reduced-motion:
+   the JS coordinator skips this beat entirely; CSS is safe by omit. */
+.sc-handoff-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10001;
+}
+.sc-handoff-clone {
+  transition:
+    transform .55s cubic-bezier(.4, 0, .2, 1),
+    opacity   .55s cubic-bezier(.4, 0, .2, 1);
+}
+.sc-handoff-clone--flying {
+  /* Marker class set by JS after the start-position snap. Transform
+     target values are set inline via style. */
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-handoff-clone { transition: none; }
+  .sc-v2-entry-pill { animation: none; opacity: 0; }
+}
+
+/* ─── Session strip ────────────────────────────────────────────
+   Below the ring caption (per Ruling 3). Accent-rail --success on
+   the left. Per-meal: "N days entered · $M this session".
+   STL-FL: "N days confirmed · M served this session". Empty state
+   (session empty) hides the strip entirely. */
+.sc-rail-session {
+  margin-top: var(--sc2-space-2, 8px);
+  padding: var(--sc2-space-2, 8px) var(--sc2-space-3, 12px);
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 4px solid var(--sc2-accent-green, #2f7d4f);
+  border-radius: var(--sc2-radius-container, 11px);
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-item);
+  display: flex;
+  gap: var(--sc2-space-2, 8px);
+  align-items: baseline;
+}
+.sc-rail-session-n {
+  color: var(--sc2-rail-accent-success, #8fd6ab);
+  font-weight: var(--sc2-wt-bold, 700);
+  font-variant-numeric: tabular-nums;
+}
+.sc-rail-session-label {
+  color: var(--sc2-rail-text-muted);
+}
+
+/* ─── Tile flip (DaySquare --flipped-in) ───────────────────────
+   Fires on hasActuals false->true when entryMotion is true (per-meal
+   + STL-FL). MLB (fee homestand) never gets entryMotion=true and
+   never flips. .46s cubic-bezier(.4, 0, .2, 1). */
+.sc-daysq--flipped-in {
+  animation: sc-flipIn .46s cubic-bezier(.4, 0, .2, 1) both;
+}
+@keyframes sc-flipIn {
+  0%   { transform: rotateY(0deg); }
+  50%  { transform: rotateY(90deg); }
+  100% { transform: rotateY(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-daysq--flipped-in { animation: none; }
+}
+
+/* ─── Queue row exit (clearRow) ────────────────────────────────
+   Applied to a queue row that just cleared. Height collapses to 0,
+   opacity fades. Natural DOM removal happens after the animation.
+   Consumers apply .sc-rail-queue-row--clearing on props diff. */
+.sc-rail-queue-row--clearing {
+  animation: sc-clearRow .48s cubic-bezier(.4, 0, .2, 1) forwards;
+  overflow: hidden;
+}
+@keyframes sc-clearRow {
+  0%   { max-height: 40px; opacity: 1; margin: initial; padding: initial; }
+  100% { max-height: 0; opacity: 0; margin: 0; padding: 0; }
+}
+
+/* ─── Badge tick (RailSection meta pulse) ──────────────────────
+   One-shot flash on count change. Consumers apply
+   .sc-rail-section-meta--ticked; class clears via animationend. */
+.sc-rail-section-meta--ticked {
+  animation: sc-badgeTick .38s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+@keyframes sc-badgeTick {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Slide next (DayEntryV2 modal on onNextException) ─────────
+   The modal's content re-seeds with the new day's data; the class
+   fires a horizontal slide. */
+.sc-v2-entry--sliding-next {
+  animation: sc-slideNext .5s cubic-bezier(.4, 0, .2, 1) both;
+}
+@keyframes sc-slideNext {
+  from { transform: translateX(12%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ─── Month-complete card ──────────────────────────────────────
+   Bright green #25a866 (owner pick - amber reserved for needs).
+   closeRing 1.15s + check draw .5s @1s. Actions: Stay in month /
+   Back to season. */
+.sc-monthcomplete-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 42, 77, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  animation: sc-fadein .2s ease both;
+}
+.sc-monthcomplete-card {
+  background: #ffffff;
+  border-radius: var(--sc2-radius-container, 11px);
+  padding: var(--sc2-space-6, 24px) var(--sc2-space-5, 20px);
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 24px 60px rgba(15, 42, 77, 0.35);
+  text-align: center;
+  position: relative;
+  border-top: 4px solid #25a866;
+}
+.sc-monthcomplete-ring {
+  width: 112px;
+  height: 112px;
+  margin: 0 auto var(--sc2-space-3, 12px);
+  position: relative;
+}
+.sc-monthcomplete-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.sc-monthcomplete-ring-bg {
+  fill: none;
+  stroke: rgba(21, 57, 104, 0.08);
+  stroke-width: 9;
+}
+.sc-monthcomplete-ring-fg {
+  fill: none;
+  stroke: #25a866;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 301;
+  stroke-dashoffset: 301;
+  animation: sc-closeRing 1.15s .2s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+@keyframes sc-closeRing {
+  to { stroke-dashoffset: 0; }
+}
+.sc-monthcomplete-check {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sc-monthcomplete-check svg {
+  width: 42px;
+  height: 42px;
+  color: #25a866;
+  stroke-dasharray: 42;
+  stroke-dashoffset: 42;
+  animation: sc-checkDraw .5s 1s cubic-bezier(.65, 0, .35, 1) forwards;
+}
+@keyframes sc-checkDraw {
+  to { stroke-dashoffset: 0; }
+}
+.sc-monthcomplete-title {
+  margin: 0 0 var(--sc2-space-2, 8px);
+  font-size: var(--sc2-size-h2);
+  font-weight: var(--sc2-wt-bold, 700);
+  color: #1a3050;
+}
+.sc-monthcomplete-body {
+  margin: 0 0 var(--sc2-space-4, 16px);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted, #697077);
+}
+.sc-monthcomplete-actions {
+  display: flex;
+  gap: var(--sc2-space-2, 8px);
+  justify-content: center;
+}
+@keyframes sc-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-monthcomplete-backdrop { animation: none; }
+  .sc-monthcomplete-ring-fg { animation: none; stroke-dashoffset: 0; }
+  .sc-monthcomplete-check svg { animation: none; stroke-dashoffset: 0; }
+}

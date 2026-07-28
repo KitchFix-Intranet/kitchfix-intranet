@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 // DaySquare - the universal day atom (Stage 0 of the SC redesign).
 //
 // ONE component, used at every level of the redesigned SC. Renders a
@@ -110,6 +112,11 @@ export default function DaySquare({
   // BulkReview. Emits the `sc-daysq--has-actuals` class; the ring
   // override lives in DaySquare.css.
   hasActuals = false,
+  // Phase 3-B (2026-07-28): flip animation gate. When true (per-meal
+  // + STL-FL via workspace mount), a false->true hasActuals transition
+  // fires the one-shot .sc-daysq--flipped-in class. MLB stays false
+  // (Handoff sequence does not fire on v1 modal saves).
+  entryMotion = false,
 
   // polymorphic content
   kind = "per-meal",       // "per-meal" | "mlb-fee" | "milb" | "fee-no-dollar"
@@ -207,6 +214,27 @@ export default function DaySquare({
   //   TOP-RIGHT = event; BOTTOM-LEFT = season. Any future sm mark
   //   needs an explicit Kevin ruling - do NOT quietly reopen the
   //   icon channel by inheriting from these two lines.
+  // P3-B (2026-07-28): one-shot flip class fires when hasActuals
+  // transitions false -> true and entryMotion is on. Cleared via
+  // animationend to keep the class transient. Same node persists
+  // (DaySquare's DOM element does not remount when hasActuals
+  // toggles - just re-renders with the new prop).
+  const [flippedIn, setFlippedIn] = useState(false);
+  const prevHasActualsRef = useRef(hasActuals);
+  useEffect(() => {
+    const prev = prevHasActualsRef.current;
+    prevHasActualsRef.current = hasActuals;
+    if (!entryMotion) return undefined;
+    if (prev === false && hasActuals === true) {
+      setFlippedIn(true);
+      // Clear the class after the flipIn keyframe (.46s per beat table).
+      // Duration token would collapse under RM.
+      const id = setTimeout(() => setFlippedIn(false), 500);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [hasActuals, entryMotion]);
+
   const cls = [
     "sc-daysq",
     `sc-daysq--${size}`,
@@ -215,6 +243,7 @@ export default function DaySquare({
     isSelected && "sc-daysq--selected",
     isFocused && "sc-daysq--focused",
     hasActuals && "sc-daysq--has-actuals",
+    flippedIn && "sc-daysq--flipped-in",
     onClick && !isDisplayOnly && "sc-daysq--interactive",
     isGameDayOverlay && "sc-daysq--game-day",
     /* V3 §6.7 - period-wash marker; drives inset shadow. */
