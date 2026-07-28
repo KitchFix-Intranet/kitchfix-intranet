@@ -506,16 +506,17 @@ function SessionStrip({ variant }) {
   const detail = isFee
     ? `${unitsSum.toLocaleString()} served`
     : `${(revenueSum > 0 ? "$" : "")}${revenueSum.toLocaleString()}`;
-  // P3-B gate-2 (2026-07-28): flex gap collapsed on some breakpoints,
-  // rendering "2days". Bake the space into the count span so the
-  // strip never reads as one token even if the flex gap resolves to
-  // 0 (e.g., under a token override). The count + day-word share
-  // the emphasis, then the label continues.
+  // P3-B gate-3 (2026-07-28): clean structural split (count vs prose)
+  // restored - owner asked for the gap TOKEN, not text tricks. CSS
+  // now uses margin-inline-end on -n (bulletproof against flex-gap
+  // resolving to 0) AND a JSX leading space in the label as belt +
+  // suspenders. The space is a literal text node inside the label -
+  // survives display: flex / block / inline. See handoff.css :80+.
   return (
     <div className="sc-rail-session" role="status" aria-live="polite">
-      <span className="sc-rail-session-n">{days} {dayWord}</span>
+      <span className="sc-rail-session-n">{days}</span>
       <span className="sc-rail-session-label">
-        {verbWord} · {detail} this session
+        {" "}{dayWord} {verbWord} · {detail} this session
       </span>
     </div>
   );

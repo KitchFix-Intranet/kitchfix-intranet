@@ -150,6 +150,73 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
   if (instanceIdRef.current == null) {
     instanceIdRef.current = `r${Math.random().toString(36).slice(2, 8)}`;
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // P3-B GATE-3 INSTRUMENTATION (2026-07-28) - dashoffset write trace
+  // ═══════════════════════════════════════════════════════════════
+  // Owner report: node identity preserved + transition armed at 280ms
+  // but ZERO transitionrun events on a pct-moving save. Three logs
+  // (all dev-only, gated on NODE_ENV):
+  //   A) render-scope log - every render's computed dashOffset value
+  //      with perf.now(), so we can correlate React commits with
+  //      transition events.
+  //   B) MutationObserver on the <circle>'s style attribute - catches
+  //      EVERY write (React, foreign scripts, direct DOM manip). If
+  //      React re-applies the SAME value in the same frame twice, or
+  //      applies while hidden, the observer picks it up.
+  //   C) transitionrun / transitionend listeners on the SAME node -
+  //      the acceptance signal.
+  // Retire when P0 lands - kept as `if (isDev)` gate so removal is
+  // one deletion, not a scavenger hunt.
+  const isDev = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
+  useEffect(() => {
+    if (!isDev) return undefined;
+    // eslint-disable-next-line no-console
+    console.log(`[ring ${instanceIdRef.current}] commit dashoffset=${dashOffset.toFixed(2)} pct=${clamped} @${performance.now().toFixed(1)}ms`);
+    return undefined;
+  }, [dashOffset, clamped, isDev]);
+  useEffect(() => {
+    if (!isDev) return undefined;
+    const container = containerRef.current;
+    if (!container) return undefined;
+    const fg = container.querySelector(".sc-rail-ring-fg");
+    if (!fg) return undefined;
+    const id = instanceIdRef.current;
+    const onRun = (e) => {
+      if (e.propertyName !== "stroke-dashoffset") return;
+      // eslint-disable-next-line no-console
+      console.log(`[ring ${id}] transitionrun stroke-dashoffset @${performance.now().toFixed(1)}ms`);
+    };
+    const onEnd = (e) => {
+      if (e.propertyName !== "stroke-dashoffset") return;
+      // eslint-disable-next-line no-console
+      console.log(`[ring ${id}] transitionend stroke-dashoffset @${performance.now().toFixed(1)}ms`);
+    };
+    const onCancel = (e) => {
+      if (e.propertyName !== "stroke-dashoffset") return;
+      // eslint-disable-next-line no-console
+      console.log(`[ring ${id}] transitioncancel stroke-dashoffset @${performance.now().toFixed(1)}ms`);
+    };
+    fg.addEventListener("transitionrun", onRun);
+    fg.addEventListener("transitionend", onEnd);
+    fg.addEventListener("transitioncancel", onCancel);
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName !== "style") continue;
+        // eslint-disable-next-line no-console
+        console.log(`[ring ${id}] style mutation @${performance.now().toFixed(1)}ms: ${fg.getAttribute("style")}`);
+      }
+    });
+    observer.observe(fg, { attributes: true, attributeFilter: ["style"] });
+    // eslint-disable-next-line no-console
+    console.log(`[ring ${id}] instrumented @${performance.now().toFixed(1)}ms; getComputedStyle transition=${window.getComputedStyle(fg).transition}`);
+    return () => {
+      fg.removeEventListener("transitionrun", onRun);
+      fg.removeEventListener("transitionend", onEnd);
+      fg.removeEventListener("transitioncancel", onCancel);
+      observer.disconnect();
+    };
+  }, [isDev]);
   return (
     <div
       ref={containerRef}

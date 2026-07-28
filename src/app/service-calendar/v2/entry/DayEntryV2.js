@@ -704,10 +704,23 @@ function DayEntryV2({
         ? { units: feeServedTotals.entered, revenue: 0 }
         : { units: summary.meals, revenue: summary.revenue };
       setNotes("");
+      // P3-B gate-3 instrumentation (2026-07-28): log onNextException
+      // presence at click time AND at finalize time. Owner said the
+      // sequence closes instead of advancing "on both saves" - branch
+      // selection must be surfaced. Dev-only.
+      const isDev = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
+      if (isDev) {
+        // eslint-disable-next-line no-console
+        console.log(`[handoff-click] day=${day.date} onNextException=${typeof onNextException} onClose=${typeof onClose} @${performance.now().toFixed(1)}ms`);
+      }
       handoff.startHandoff({
         dayDate: day.date,
         totals,
         onFinalize: () => {
+          if (isDev) {
+            // eslint-disable-next-line no-console
+            console.log(`[handoff-finalize] day=${day.date} onNextException=${typeof onNextException} branch=${onNextException ? "advance" : "close"} @${performance.now().toFixed(1)}ms`);
+          }
           if (onNextException) onNextException();
           else onClose?.();
         },

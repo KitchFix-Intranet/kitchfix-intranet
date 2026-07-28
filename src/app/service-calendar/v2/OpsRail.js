@@ -743,13 +743,14 @@ function OpsSessionStrip() {
   for (const d of dates) unitsSum += Number(sessionMap[d]?.units) || 0;
   const days = dates.length;
   const dayWord = days === 1 ? "day" : "days";
-  // P3-B gate-2: count + day-word share the emphasis span to guarantee
-  // a visible separator even if the flex gap resolves to 0px.
+  // P3-B gate-3 (2026-07-28): clean count/prose split; separator
+  // enforced via CSS margin-inline-end on -n + leading space text
+  // node in the label. See handoff.css :80+.
   return (
     <div className="sc-rail-session" role="status" aria-live="polite">
-      <span className="sc-rail-session-n">{days} {dayWord}</span>
+      <span className="sc-rail-session-n">{days}</span>
       <span className="sc-rail-session-label">
-        confirmed · {unitsSum.toLocaleString()} served this session
+        {" "}{dayWord} confirmed · {unitsSum.toLocaleString()} served this session
       </span>
     </div>
   );

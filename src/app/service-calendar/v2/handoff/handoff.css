@@ -85,14 +85,16 @@
   border-radius: var(--sc2-radius-container, 11px);
   font-size: var(--sc2-size-micro);
   color: var(--sc2-rail-text-item);
-  display: flex;
-  gap: var(--sc2-space-2, 8px);
-  align-items: baseline;
+  /* P3-B gate-3 (2026-07-28): inline text flow, not flex. Flex-gap
+     resolved to 0 at the strip's viewport (owner report: "2 dayentered").
+     Explicit margin-inline-end on -n + JSX leading space in -label
+     guarantees the separator across every display mode + token state. */
 }
 .sc-rail-session-n {
   color: var(--sc2-rail-accent-success, #8fd6ab);
   font-weight: var(--sc2-wt-bold, 700);
   font-variant-numeric: tabular-nums;
+  margin-inline-end: var(--sc2-space-2, 8px);
 }
 .sc-rail-session-label {
   color: var(--sc2-rail-text-muted);
