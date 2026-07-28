@@ -29,8 +29,6 @@ import { useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
-  RailHeroProgressCaption,
-  RailProgress,
   RailRing,
   RailSection,
   RailScroll,
@@ -508,11 +506,16 @@ function SessionStrip({ variant }) {
   const detail = isFee
     ? `${unitsSum.toLocaleString()} served`
     : `${(revenueSum > 0 ? "$" : "")}${revenueSum.toLocaleString()}`;
+  // P3-B gate-2 (2026-07-28): flex gap collapsed on some breakpoints,
+  // rendering "2days". Bake the space into the count span so the
+  // strip never reads as one token even if the flex gap resolves to
+  // 0 (e.g., under a token override). The count + day-word share
+  // the emphasis, then the label continues.
   return (
     <div className="sc-rail-session" role="status" aria-live="polite">
-      <span className="sc-rail-session-n">{days}</span>
+      <span className="sc-rail-session-n">{days} {dayWord}</span>
       <span className="sc-rail-session-label">
-        {dayWord} {verbWord} · {detail} this session
+        {verbWord} · {detail} this session
       </span>
     </div>
   );

@@ -154,6 +154,31 @@ export default function PeriodWorkspace({
     [isCurrentPeriod, periodDays, today]
   );
 
+  // P3-B gate-2 fix (2026-07-28): tile-flip detection lives HERE, not
+  // in DaySquare. Mechanism: DaySquare's `useRef(hasActuals)` inside a
+  // possibly-remounting subtree initializes to the ALREADY-true value
+  // on the fresh instance, so a false->true transition is invisible.
+  // Cells can churn (buildWorkspaceWeekGrid emits null placeholders
+  // during refetch, flipping the outer <span key={d.date}> in/out).
+  // PeriodWorkspace is stably mounted across refetch, so the prev-map
+  // here persists across the whole session.
+  const prevHasActualsMapRef = useRef(new Map());
+  const [justFlippedDates, setJustFlippedDates] = useState(() => new Set());
+  useEffect(() => {
+    if (!Array.isArray(periodDays) || periodDays.length === 0) return undefined;
+    const newlyFlipped = [];
+    for (const d of periodDays) {
+      if (!d?.date) continue;
+      const prev = prevHasActualsMapRef.current.get(d.date);
+      if (prev === false && d.hasActuals === true) newlyFlipped.push(d.date);
+      prevHasActualsMapRef.current.set(d.date, !!d.hasActuals);
+    }
+    if (newlyFlipped.length === 0) return undefined;
+    setJustFlippedDates(new Set(newlyFlipped));
+    const id = setTimeout(() => setJustFlippedDates(new Set()), 500);
+    return () => clearTimeout(id);
+  }, [periodDays]);
+
   // ─── Loading / partial / empty branches ──────────────────────
   // SC-047: on total drill failure, skip the loading skeleton and
   // render the workspace shell; cells resolve to the dashed atom via
@@ -229,6 +254,8 @@ export default function PeriodWorkspace({
         /* PR-D drill Phase 1: month scope keys band lookup by the row's
            Monday date (calendar-week), not by day.meta.week (fiscal). */
         scope={scope}
+        /* P3-B gate-2: per-date one-shot flip signal. Set<date>. */
+        justFlippedDates={justFlippedDates}
       />
 
       {/* W5: WeekSubtotals cards do not render under scV2 - their
@@ -717,7 +744,7 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period" }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period", justFlippedDates = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -1056,6 +1083,8 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                        true = per-meal + STL-FL (P3-B in scope).
                        false = MLB fee homestand (byte-identical). */
                     entryMotion={!(isFeeAccount && hasHomestandSchedule)}
+                    /* P3-B gate-2: workspace-level flip signal. */
+                    justFlipped={!!(justFlippedDates && justFlippedDates.has(d.date))}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
                     onClick={isDisplayOnly ? undefined : () => {

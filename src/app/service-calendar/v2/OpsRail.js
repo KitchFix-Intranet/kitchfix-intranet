@@ -742,11 +742,14 @@ function OpsSessionStrip() {
   let unitsSum = 0;
   for (const d of dates) unitsSum += Number(sessionMap[d]?.units) || 0;
   const days = dates.length;
+  const dayWord = days === 1 ? "day" : "days";
+  // P3-B gate-2: count + day-word share the emphasis span to guarantee
+  // a visible separator even if the flex gap resolves to 0px.
   return (
     <div className="sc-rail-session" role="status" aria-live="polite">
-      <span className="sc-rail-session-n">{days}</span>
+      <span className="sc-rail-session-n">{days} {dayWord}</span>
       <span className="sc-rail-session-label">
-        day{days === 1 ? "" : "s"} confirmed · {unitsSum.toLocaleString()} served this session
+        confirmed · {unitsSum.toLocaleString()} served this session
       </span>
     </div>
   );

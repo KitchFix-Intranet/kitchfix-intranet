@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 
 // DaySquare - the universal day atom (Stage 0 of the SC redesign).
 //
@@ -113,10 +112,17 @@ export default function DaySquare({
   // override lives in DaySquare.css.
   hasActuals = false,
   // Phase 3-B (2026-07-28): flip animation gate. When true (per-meal
-  // + STL-FL via workspace mount), a false->true hasActuals transition
-  // fires the one-shot .sc-daysq--flipped-in class. MLB stays false
-  // (Handoff sequence does not fire on v1 modal saves).
+  // + STL-FL via workspace mount), the one-shot .sc-daysq--flipped-in
+  // class fires when `justFlipped` also arrives (P3-B gate-2 change:
+  // workspace-level detection - see PeriodWorkspace prevHasActualsMap).
+  // MLB stays false (Handoff sequence does not fire on v1 modal saves).
   entryMotion = false,
+  // P3-B gate-2 (2026-07-28): externally-driven flip signal. Set by
+  // PeriodWorkspace's per-date hasActuals-diff (stable across refetch).
+  // Read-only from this atom's perspective - the parent owns the
+  // half-second window; when justFlipped goes false again the class
+  // drops naturally on the next render.
+  justFlipped = false,
 
   // polymorphic content
   kind = "per-meal",       // "per-meal" | "mlb-fee" | "milb" | "fee-no-dollar"
@@ -214,26 +220,13 @@ export default function DaySquare({
   //   TOP-RIGHT = event; BOTTOM-LEFT = season. Any future sm mark
   //   needs an explicit Kevin ruling - do NOT quietly reopen the
   //   icon channel by inheriting from these two lines.
-  // P3-B (2026-07-28): one-shot flip class fires when hasActuals
-  // transitions false -> true and entryMotion is on. Cleared via
-  // animationend to keep the class transient. Same node persists
-  // (DaySquare's DOM element does not remount when hasActuals
-  // toggles - just re-renders with the new prop).
-  const [flippedIn, setFlippedIn] = useState(false);
-  const prevHasActualsRef = useRef(hasActuals);
-  useEffect(() => {
-    const prev = prevHasActualsRef.current;
-    prevHasActualsRef.current = hasActuals;
-    if (!entryMotion) return undefined;
-    if (prev === false && hasActuals === true) {
-      setFlippedIn(true);
-      // Clear the class after the flipIn keyframe (.46s per beat table).
-      // Duration token would collapse under RM.
-      const id = setTimeout(() => setFlippedIn(false), 500);
-      return () => clearTimeout(id);
-    }
-    return undefined;
-  }, [hasActuals, entryMotion]);
+  // P3-B gate-2 (2026-07-28): flip class is now purely prop-driven.
+  // Internal ref-based hasActuals-diff was RETIRED - it failed when
+  // DaySquare remounted mid-refetch (fresh useRef initialized to the
+  // already-true value; false->true invisible). Detection moved up to
+  // PeriodWorkspace's stable prev-map; DaySquare renders the class
+  // while `justFlipped` is true, drops it when parent clears the set.
+  const flippedIn = entryMotion && justFlipped;
 
   const cls = [
     "sc-daysq",

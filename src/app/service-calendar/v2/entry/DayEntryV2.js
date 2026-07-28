@@ -160,7 +160,7 @@ function groupActivity(noteEntries, historyEntries) {
   return rows;
 }
 import useAnimatedNumber from "../../useAnimatedNumber";
-import { scrollIntoViewRM, prefersReducedMotion } from "../motion";
+import { scrollIntoViewRM } from "../motion";
 import MobileBooksBar from "../MobileBooksBar";
 import "./dayEntryV2.css";
 // P3-A (2026-07-25): accent-rail primitive for the failure banner
@@ -697,24 +697,21 @@ function DayEntryV2({
       }
       // P3-B (2026-07-28): trigger the Handoff sequence. Coordinator
       // owns the beat clock (fadeSvc -> pillIn -> pillFly -> ringSweep
-      // -> slideNext -> idle @ ~1850ms). The confirmed pill JSX below
-      // reads phase >= 2 to render + form. The RM path bypasses the
-      // beats and applies the end state instantly.
+      // -> slideNext -> idle @ ~1850ms) AND owns the finalize callback
+      // that advances the drill (P3-B gate-2 fix: one clock, not two).
+      // On RM the coordinator fires onFinalize immediately.
       const totals = feeNoDollar
         ? { units: feeServedTotals.entered, revenue: 0 }
         : { units: summary.meals, revenue: summary.revenue };
-      handoff.startHandoff({ dayDate: day.date, totals });
       setNotes("");
-      // Slide-next / close happens at the end of the sequence (beat 5).
-      // Post-motion callback: if we have onNextException, advance to
-      // it; else close the panel. RM: fire immediately; non-RM: fire
-      // at phase 5 start (~1350ms).
-      const finalize = () => {
-        if (onNextException) onNextException();
-        else onClose?.();
-      };
-      if (prefersReducedMotion()) finalize();
-      else setTimeout(finalize, 1350);
+      handoff.startHandoff({
+        dayDate: day.date,
+        totals,
+        onFinalize: () => {
+          if (onNextException) onNextException();
+          else onClose?.();
+        },
+      });
     } else {
       // Nothing committed. Panel stays open, counts intact.
       setSaveError({

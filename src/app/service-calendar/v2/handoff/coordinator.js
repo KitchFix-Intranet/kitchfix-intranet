@@ -79,10 +79,23 @@ export function HandoffProvider({ children }) {
   const ringTargetRef = useRef(null);
   const pillSourceRef = useRef(null);
   const timeoutIdsRef = useRef([]);
+  // P3-B gate-2 fix (2026-07-28): finalize (onNextException / onClose)
+  // runs on the coordinator's clock, NOT a separate setTimeout inside
+  // DayEntryV2. One clock. Stored as a ref so a mid-sequence cancel
+  // (unmount / account change) can drop the callback without firing.
+  const finalizeRef = useRef(null);
 
   const clearTimers = useCallback(() => {
     for (const id of timeoutIdsRef.current) clearTimeout(id);
     timeoutIdsRef.current = [];
+  }, []);
+
+  // P3-B gate-2: fire the pending finalize callback once, then drop.
+  // Called from the coordinator's phase-5 timer (or immediately on RM).
+  const fireFinalize = useCallback(() => {
+    const fn = finalizeRef.current;
+    finalizeRef.current = null;
+    if (typeof fn === "function") fn();
   }, []);
 
   const registerRingTarget = useCallback((el) => {
@@ -117,26 +130,38 @@ export function HandoffProvider({ children }) {
   }, []);
 
   // Main entry point.
-  const startHandoff = useCallback(({ dayDate, totals, monthComplete: mc }) => {
-    if (!dayDate) return;
+  //
+  // P3-B gate-2 (2026-07-28): accepts `onFinalize` - the slide-next /
+  // close callback that used to run on a separate setTimeout inside
+  // DayEntryV2 (two-clock risk). Now stored in finalizeRef and fired
+  // on the coordinator's own phase-5 timer, so if the sequence is
+  // cancelled (unmount, account change) the callback drops cleanly.
+  const startHandoff = useCallback(({ dayDate, totals, monthComplete: mc, onFinalize }) => {
+    // Month-complete card can fire without a dayDate (activeMetrics
+    // transition edge). Preserve the legacy dayDate-required path for
+    // regular saves; month-complete goes straight to setMonthComplete
+    // without commitSession or the beat clock.
     clearTimers();
+    finalizeRef.current = typeof onFinalize === "function" ? onFinalize : null;
+    if (mc) setMonthComplete(mc);
+    if (!dayDate) return;
     commitSession(dayDate, totals);
     setHandoffDay(dayDate);
     setHandoffTotals(totals);
-    if (mc) setMonthComplete(mc);
 
     if (prefersReducedMotion()) {
       // RM path: skip every intermediate beat. sessionMap is already
       // committed; consumers pick up the new value on next render.
-      // No pill, no flight, no flip class - the underlying data
-      // truth carries the confirmation.
+      // finalize fires immediately - the drill still needs to advance.
       setPhase(0);
       setHandoffDay(null);
+      fireFinalize();
       return;
     }
 
     // Full sequence: schedule phase transitions per BEAT_DELAYS.
-    // Phase 1 fires immediately (fadeSvc begins).
+    // Phase 1 fires immediately (fadeSvc begins). Phase 5 fires the
+    // slideNext callback (finalize) on the SAME clock - no drift.
     setPhase(1);
     const schedule = (nextPhase) => {
       const id = setTimeout(() => setPhase(nextPhase), BEAT_DELAYS[nextPhase]);
@@ -145,17 +170,25 @@ export function HandoffProvider({ children }) {
     schedule(2);
     schedule(3);
     schedule(4);
-    schedule(5);
+    const phase5Id = setTimeout(() => {
+      setPhase(5);
+      fireFinalize();
+    }, BEAT_DELAYS[5]);
+    timeoutIdsRef.current.push(phase5Id);
     const dropId = setTimeout(() => {
       setPhase(0);
       setHandoffDay(null);
       setHandoffTotals(null);
     }, BEAT_DELAYS[0]);
     timeoutIdsRef.current.push(dropId);
-  }, [clearTimers, commitSession]);
+  }, [clearTimers, commitSession, fireFinalize]);
 
   const cancelHandoff = useCallback(() => {
     clearTimers();
+    // Drop the pending finalize on cancel - the surface owning the
+    // callback is going away, we should not push it into an unmounted
+    // consumer.
+    finalizeRef.current = null;
     setPhase(0);
     setHandoffDay(null);
     setHandoffTotals(null);

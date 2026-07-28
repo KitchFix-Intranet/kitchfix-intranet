@@ -81,12 +81,17 @@ export default function HandoffLayer() {
     clone.style.transform = "translate(0, 0) scale(1)";
   }, [phase]);
 
+  // P3-B gate-2 (2026-07-28): "idle means idle" - descendants
+  // (icon svg + polyline + content spans, 6 nodes total) mount only
+  // during the sequence. The clone <div> itself stays mounted so the
+  // CSS transition on transform has a stable target node before +
+  // after (same P3-A gate-3 lesson: fresh nodes cannot transition).
+  // Between saves the layer wrap is empty; the clone div is present
+  // but visually + interactively inert (opacity 0, pointer-events
+  // none, aria-hidden).
+  const active = phase > 0;
   return (
     <div className="sc-handoff-layer" aria-hidden="true">
-      {/* Clone element is always mounted; opacity 0 until flight
-          starts. Same node across the whole session so the transition
-          fires reliably (see P3-A gate 3 lesson: transition needs
-          same node before + after). */}
       <div
         ref={cloneRef}
         className="sc-handoff-clone sc-ar sc-ar--success"
@@ -99,14 +104,18 @@ export default function HandoffLayer() {
           zIndex: 10001,
         }}
       >
-        <span className="sc-ar-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </span>
-        <span className="sc-ar-content">
-          <span className="sc-ar-title">Confirmed</span>
-        </span>
+        {active && (
+          <>
+            <span className="sc-ar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+            <span className="sc-ar-content">
+              <span className="sc-ar-title">Confirmed</span>
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

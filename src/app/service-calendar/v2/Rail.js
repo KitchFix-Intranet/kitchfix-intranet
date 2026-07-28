@@ -127,18 +127,29 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
   const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
   const C = 245.04; // 2 * PI * 39
   const dashOffset = C - (C * clamped) / 100;
-  // P3-B (2026-07-28): register the ring container as the handoff
-  // target. The confirmed pill's flight lands on this element's
-  // getBoundingClientRect() center. Container (the outer <div>) is
-  // more stable than the inner <circle> - <div> reads full ring
-  // bounds; <circle> would need SVG->viewport coord conversion.
+  // P3-B gate-2 fix (2026-07-28): register the ring container as the
+  // handoff target. Deps pinned to the STABLE `registerRingTarget`
+  // callback (empty-deps useCallback in coordinator) - NOT the full
+  // context value. The full value re-identifies on every phase change
+  // (isFlippingDate closes over phase), which caused cleanup+register
+  // churn 5x per save. Node identity unaffected either way, but the
+  // churn was noise. Instance stamp below (data-ring-instance) proves
+  // <circle> node stability across refetch cycles.
   const containerRef = useRef(null);
-  const handoff = useHandoffSafe();
+  const { registerRingTarget } = useHandoffSafe();
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
-    return handoff.registerRingTarget(el);
-  }, [handoff]);
+    return registerRingTarget(el);
+  }, [registerRingTarget]);
+  // Instance stamp: one random ID per RailRing mount, written to the
+  // <circle>'s data-ring-instance. If the ID changes between saves,
+  // the ring was remounted (transition cannot fire from a fresh node).
+  // P3-B gate-2 evidence for the code-read stability claim.
+  const instanceIdRef = useRef(null);
+  if (instanceIdRef.current == null) {
+    instanceIdRef.current = `r${Math.random().toString(36).slice(2, 8)}`;
+  }
   return (
     <div
       ref={containerRef}
@@ -168,6 +179,7 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
           r="39"
           fill="none"
           strokeLinecap="round"
+          data-ring-instance={instanceIdRef.current}
           style={{ strokeDasharray: C, strokeDashoffset: dashOffset }}
         />
       </svg>
