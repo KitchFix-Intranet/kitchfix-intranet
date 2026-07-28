@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.4
+**Version:** v2.5
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -16,9 +16,9 @@
 
 ## You are here (updated every revision)
 
-- **Now:** Phase B2. #531 merged - B1 DONE, the agent lives on main. B2 CC prompt delivered: flag-gated slt-only streaming route (`feat/sousai-route-b2`), the pinned SSE wire contract, and sanctioned prompt round 2 (money-verbatim, list-assertion, ES-variant mention) re-certified by a full spike-harness rerun at 7/7. Plan v2.4 rides in. Knowledge audit still running in parallel.
-- **Next:** CC delivers B2; Chat grades; Kevin merges, adds `ANTHROPIC_API_KEY_SOUS` + `SOUSAI_ROUTE_ENABLED` to Vercel env, runs the browser verification snippet. Then Phase C (logging + feedback action with its table). Flags 1-2 rulings follow the audit evidence whenever it lands.
-- **Open decisions:** Decision 5 (discovery report); flags 1-2 (pending audit evidence).
+- **Now:** B2 in flight (route + prompt round 2). **Knowledge audit landed (PR #533): all three flag answers were documented.** Flag 2 CLOSED by REF-140's four-shape taxonomy (SF% / Flat-SF / No-SF / Flat_fee - the agent's hybrid/per-meal buckets were improvised over a documented system); flag 1 CLOSED by REF-140 §(g) (STL-FL design intentional; PG matches REF-141 to the dollar on every 2026 fee). One real contradiction found: **C-1, TBJ-FL** - operator-visible REF-127 carries the superseded $452,812 while finance-confirmed $515,712 lives behind restricted REC-106. Live money-wrongness path at operator scope.
+- **Next:** B2 lands and merges -> the SC corpus alignment batch (REF-127 supersede annotation, REF-140 stale-figure fixes, two nits, NEW REF-BILLING-MODEL-QUICK-REFERENCE at operator scope drafted by Chat). Kevin's four nods pending (taxonomy ratify, $515,712 operator-shareable, batch go, briefs-stay-engineering-docs). Merge #533 anytime.
+- **Open decisions:** Decision 5 (discovery report); the four audit nods above.
 
 ## Status board
 
@@ -59,12 +59,15 @@
 
 | TBD | B1-tail | docs(sousai): SC account-knowledge audit (flags 1-2 evidence + alignment sweep) | CC prompt delivered 2026-07-28; read-only, own branch |
 
+| #533 | audit | docs(sc): account-knowledge audit - taxonomy, STL-FL, CIN-OH escalation | Open - read-only findings, merge anytime; flags 1-2 closed by citation; spawned the SC corpus alignment batch |
+| TBD | corpus | SC corpus alignment batch (post-B2): REF-127 supersede annotation, REF-140 escalated figures, REC-103 + PB-009 nits, NEW REF-BILLING-MODEL-QUICK-REFERENCE | Gated on Kevin's four nods; before Phase E |
+
 ## Parked maintenance queue (small standalone PRs, Kevin schedules)
 
 1. **Character Spec §8 rule-7 amendment.** The template-as-canonical rule is enforced in the demo-branch prompt and missing from the spec. Small docs PR; should land before or alongside B1's prompt port so the spec and the shipped prompt agree.
 2. **Chunk language mislabel.** All chunks are stamped `language='en'` regardless of content - POL-006-ES (15 chunks) and POST-001-ES (1 chunk) carry Spanish text under en labels [ran, #528 verification]. Zero impact today; fix (derive language at embed time from frontmatter or the -ES suffix, re-embed 16 chunks) must land before any feature reads the language column as truth. Urgency lowered by Decision 8.
-3. **B2 prompt revision (MANDATORY, the next sanctioned round):** (a) money-verbatim rule - dollar figures cited only when stated in retrieved text; derived figures labeled as derived, with basis (from flag 3); (b) list-assertion rule - when asserting something is or is not on a documented list, open the doc that enumerates the list (from the 5b partial-grounding finding); (c) mention the ES variant when a cited doc has one.
-4. **Phase E harness-design notes:** cited-sources-contain-their-supporting-text grading; mechanical cited-content-overlap check; invention detector via fixture-driven billing-entity allow-list from the REF-120 corpus (not hyphen-shape regex - the BGC gap); same-evidence-same-label consistency grading across entities (from flag 2); money-figure verbatim-traceability inside the zero-tolerance subset.
+3. **B2 prompt revision (MANDATORY, the next sanctioned round):** (a) money-verbatim rule - dollar figures cited only when stated in retrieved text; derived figures labeled as derived, with basis (from flag 3); (b) list-assertion rule - when asserting something is or is not on a documented list, open the doc that enumerates the list (from the 5b partial-grounding finding); (c) mention the ES variant when a cited doc has one. **Round-3 candidate (after B2, after the corpus alignment batch):** doc-precedence for current figures - price book and account records supersede contract digests; the digest records the contract, the price book records what finance bills (from C-1).
+4. **Phase E harness-design notes:** cited-sources-contain-their-supporting-text grading; mechanical cited-content-overlap check; invention detector via fixture-driven billing-entity allow-list from the REF-120 corpus (not hyphen-shape regex - the BGC gap); same-evidence-same-label consistency grading against REF-140's canonical vocabulary (never "hybrid" as a grading keyword - overloaded in STD-002 and PB-010); money-figure verbatim-traceability inside the zero-tolerance subset; TBJ-FL 2026 service fee as a zero-tolerance question (correct answer $515,712 post-alignment); Phase F schema note - `sc_service_prices` has no `account_key`, join via `sc_services` (audit F8).
 
 ---
 
@@ -227,6 +230,7 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v2.5 - 2026-07-28.** Knowledge audit landed (PR #533): all three flag answers documented. Flags 1-2 CLOSED by citation (REF-140 four-shape taxonomy; §(g) STL-FL design; PG matches REF-141 to the dollar). One real contradiction: C-1 TBJ-FL stale $452,812 operator-visible vs finance-confirmed $515,712 behind restricted REC-106 - live money-wrongness path, fixed corpus-first via REF-127 supersede annotation. Spawned the SC corpus alignment batch (post-B2, pre-E) incl. the new operator-scope REF-BILLING-MODEL-QUICK-REFERENCE; briefs recommended to stay engineering docs. Doc-precedence prompt rule parked for round 3. Eval notes gain REF-140-vocabulary grading, the "hybrid" keyword ban, and the TBJ-FL zero-tolerance question. Four Kevin nods pending.
 - **v2.4 - 2026-07-28.** #531 merged; B1 closed. B2 CC prompt issued: flag-gated slt-only streaming route with the pinned SSE wire contract (distinct error kinds pre-wire Phase C outage visibility), sanctioned prompt round 2 (money-verbatim, list-assertion, ES-variant soft mention) gated on a full spike-harness rerun at 7/7. Design deltas recorded: `feedback` action moved to Phase C with its table; trajectory never ships to the client (log-only in C); Kevin deploy checklist (Vercel env key + flag) is part of the PR.
 - **v2.3 - 2026-07-28.** Flag 3 CLOSED: STATED. REF-124 §B.4 stipulates the $362,500 2026 base verbatim (a stipulated base jump, then CPI-U on top, floor 1 percent cap 4 percent). Chat's computed-CPI hypothesis was wrong - the 357,500 x 1.014 near-match was coincidence; recorded honestly. The corpus's §D cross-check flag pre-empted the exact misreading - first field evidence of governance armoring paying off. Money-verbatim rule remains in the mandatory B2 bundle as insurance despite the exoneration. #531 declared merge-ready; flags 1-2 explicitly de-coupled from the B1 gate (their outcomes are corpus docs and eval rules, never B1 code).
 - **v2.2 - 2026-07-28.** Kevin deferred flags 1-2 pending corpus evidence: SC account-knowledge audit commissioned (taxonomy definitions, account classifications, STL-FL entry-mode rationale, CIN-OH cross-check, full cross-doc consistency table, four-way alignment flags). Principle recorded: documented answers get cited, gaps get filled as corpus docs (rulings become documented facts, not harness lines), contradictions get caught before Sous inherits them.
