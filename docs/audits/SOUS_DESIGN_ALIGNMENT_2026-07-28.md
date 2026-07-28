@@ -668,3 +668,719 @@ Not read (out of D0 scope; deferred to a future audit if Kevin asks):
 
 *Read-only extraction. No code changes. This document is D0 input for
 the Sous design direction and is not itself a spec.*
+
+---
+
+# Appendix A - Measured values (2026-07-28)
+
+> **Purpose.** Replace recalled or paraphrased design values with
+> measurements taken directly from the source tree so the OPD reskin and
+> Sous D0 work off numbers, not memory. Every value carries a `[code-read]`
+> file:line. Runtime-computed values are shown as expression AND arithmetic
+> at a viewport of 1440px with `--sc2-scale: 0.9`. Where a value cannot be
+> determined statically it is called out - not estimated.
+>
+> Method note. SC v2 fluid sizes are `calc(clamp(min, calc(intercept +
+> slope * vw), max) * scale)`. At viewport 1440 the linear branch equals
+> the max value (slopes solved for value = max at 1440). So each token's
+> effective value at 1440 is `max * scale`. That is the arithmetic path
+> used below.
+
+## A.1 Shell and layout (measured)
+
+### SC v2 shell tokens
+
+- `--sc2-shell-max: 1520px` (overview + drill two-pane shells).
+  `[code-read] src/app/tokens.css:136`.
+- `--sc2-entry-max: 1240px` (DayEntryV2 overlay - narrower because the
+  modal is a focused billing surface, not a landing dashboard).
+  `[code-read] src/app/tokens.css:137`.
+- `--sc2-mobile-bar-h: 60px` (read-surface footer).
+  `[code-read] src/app/tokens.css:524`.
+- `--sc2-mobile-footer-h: 116px` (entry-surface footer: bar + Confirm CTA
+  stacked). `[code-read] src/app/tokens.css:525`.
+- `--sc2-canvas: #edeff2` (L0 canvas, hoisted to `:root` so `.oh-app`
+  ancestor can consume it via `:has(.scv2)`).
+  `[code-read] src/app/tokens.css:150`.
+- SC v1 chrome bar and card sit inside `.sc-root`: `background:
+  var(--surface-card)` (white), `border-radius: var(--radius-container-lg)`
+  (14), `box-shadow: var(--elevation-raised)` (`--sh-md`).
+  `[code-read] src/app/service-calendar/ops-sc.css:13-17`.
+
+### OPD (Playbook) shells
+
+- `.pb-shell` - the browsing shell: `max-width: 1024px; margin: 0 auto;
+  padding: 16px 14px 80px`. `[code-read] src/app/playbook/playbook.css:8-10`.
+- `.pb-fullpage-wrap` - the doc-reader shell: `max-width: 880px; margin:
+  0 auto; padding: 16px 16px 80px; font-family: 'Inter', sans-serif;
+  color: var(--kf-navy)`. `[code-read] src/app/playbook/playbook.css:2150-2156`.
+- `.pb-fullpage-article` (the reader white card that holds the prose):
+  `background: white; border-radius: 16px; border: 1px solid
+  var(--kf-border); padding: 32px 36px; box-shadow: 0 2px 8px
+  rgba(15, 48, 87, 0.04)`.
+  `[code-read] src/app/playbook/playbook.css:2205-2211`.
+  Mobile (max-width 768px): article padding drops to `20px 18px`, radius
+  drops to `12px`. `[code-read] src/app/playbook/playbook.css:2402-2410`.
+
+### Global shell
+
+- `.kf-desktop-wrapper`: `max-width: 1024px; margin: 0 auto; padding:
+  24px 20px 0 20px`. `[code-read] src/app/globals.css:48-52`.
+- `.kf-topnav-inner`: `max-width: 1200px; padding: 0 20px; height: 56px;
+  display: flex; align-items: center; justify-content: space-between`.
+  Mobile (max-width `<=767px` per the query below): `padding: 0 12px;
+  height: 52px`. `[code-read] src/components/TopNav.css:16-24, 477`.
+- `.kf-topnav` outer: `position: sticky; top: 0; z-index: 1000; background:
+  rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom:
+  1px solid var(--kf-border); box-shadow: 0 1px 3px rgba(15, 48, 87,
+  0.04)`. `[code-read] src/components/TopNav.css:5-14`.
+
+### OPD hero total vertical cost (Playbook browsing shell)
+
+`.pb-hero` block. `[code-read] src/app/playbook/playbook.css:90-98, 236-244`.
+- Padding: mobile `20px 20px 14px`; `>=640px` bumps to `24px 28px 18px`.
+- Min-height: `200px` (drives the empty-photo-well behavior).
+- Content classes stacked inside: `.pb-hero-tag` (title, 26px mobile /
+  36px `>=640px`), `.pb-hero-sub` (13px mobile / 15px `>=640px`, `margin:
+  0 0 12px`), then `.pb-search-row` (48px search + Ask SousAI stub, `gap:
+  10px`). Bottom accent rule: 3px teal via `::after`.
+- Total vertical cost at `>=640px` = padding-top 24 + title h1 (~40 line
+  box: 36px * 1.1 lead ~= 40 rounded) + `.pb-hero-tag` bottom margin 4 +
+  subtitle line box 15 * 1.4 ~= 21 + subtitle bottom margin 12 + search
+  row 48 + padding-bottom 18 + hero bottom margin 16 = **~183px content
+  cost**. Because `.pb-hero` sets `min-height: 200px`, the actual painted
+  hero always occupies at least 200px + 16px bottom margin = **216px** in
+  the vertical rhythm before mobile queries. Mobile (`<640px`): padding
+  20/20/14, title box ~29 (26 * 1.1), sub box ~18 (13 * 1.4) + 12,
+  search row still 48, sum ~131 vs 200 min = **216px** still.
+
+### OPD reader prose column effective width + CPL
+
+- Reader shell inner width at desktop: `.pb-fullpage-wrap` = 880 outer,
+  padding 16 each side, so inner = **848px**.
+- Article inner text width at desktop: 848 - (article padding 36 * 2) =
+  **776px**. `[code-read] src/app/playbook/playbook.css:2150-2156, 2205-2211`.
+- Body typography: `.pb-fullpage-body { font-family: 'Inter'; font-size:
+  15px; line-height: 1.6; color: #1f2937 }`.
+  `[code-read] src/app/playbook/playbook.css:2270-2278`.
+
+**Characters-per-line, method + result.** Inter's mean glyph advance for
+mixed-case English body copy tracks around 0.5 to 0.55 em (Latin letters
+of the "en" family, no italics). Method: take mid-range 0.52em * 15px =
+7.8px per character. CPL desktop = 776 / 7.8 = **~99 characters**. Range
+lookups at the two edges: 0.5em -> 15/2 = 7.5, CPL = **103**; 0.55em ->
+8.25, CPL = **94**. All three are well above the 66-75-character
+comfortable-reading window (Bringhurst, TypeWolf). Mobile (max-width 768):
+outer 375, wrap inner = 375 - 32 = 343; article inner = 343 - 36 = 307;
+body font drops to 14 at `<=768px`. Same method: 307 / (0.52 * 14) =
+**~42 characters** - which is the opposite failure mode (below the
+comfortable floor of 45-50). **The desktop reader runs long, the mobile
+reader runs short.** Neither is a typo; both are values in the code today.
+
+### Sous panel (coming-soon shell inside Playbook slide-over)
+
+- `.pb-sous-panel`: fixed right, top-to-bottom, `width: 100%; max-width:
+  480px; background: white; z-index: 4001; box-shadow: -8px 0 32px
+  rgba(0, 0, 0, 0.18); animation: pb-slide-in 0.25s cubic-bezier(0.4, 0,
+  0.2, 1)`. Mobile `<=1023px` widens to `max-width: 100vw`.
+  `[code-read] src/app/playbook/playbook.css:2006-2022`.
+- `.pb-sous-head`: header row `padding: 14px 16px; border-bottom: 1px
+  solid var(--kf-border); flex-shrink: 0`.
+  `[code-read] src/app/playbook/playbook.css:2023-2030`.
+- `.pb-sous-title h2`: Inter 16 (weight not measured here; next line
+  extends past the read window). `[code-read] src/app/playbook/playbook.css:2037-2039`.
+
+### Coming-soon inline stub inside SlideOverReader
+
+`.pb-sousai` - the "Ask SousAI about this doc" affordance rendered inside
+the slide-over reader (`SlideOverReader.js:362-374`). Metrics:
+`display: flex; padding: 10px 14px; background: rgba(15, 110, 86, 0.04)`
+(teal wash at 4% alpha); `border: 1px dashed var(--kf-playbook-teal);
+border-radius: 10px; cursor: not-allowed; margin-bottom: 18px`.
+`[code-read] src/app/playbook/playbook.css:1678-1690`.
+
+## A.2 SC report's *(recalled)* items - settled
+
+### Card shadow claim (`0 3px 10px rgba(21,57,104,.08)`)
+
+That shadow value exists in code exactly once, on the SC v2 accent-rail
+card: `.sc-rail-accent-card { box-shadow: 0 3px 10px rgba(21, 57, 104,
+0.08) }`. `[code-read] src/app/service-calendar/v2/accentRail.css:84`.
+
+That is NOT the SC main card shadow. The main SC container `.sc-root`
+consumes `--elevation-raised`, which resolves to `--sh-md: 0 4px 12px
+rgba(15,23,42,0.08)`. `[code-read] src/app/tokens.css:45, 111`,
+`src/app/service-calendar/ops-sc.css:16`.
+
+The report treats accent-rail card shadow as if it were the general SC
+card shadow; it is a specialized rail component's shadow. **Correct
+values:**
+- SC main card (`.sc-root`): `--sh-md` = `0 4px 12px rgba(15, 23, 42,
+  0.08)` [`[code-read] src/app/tokens.css:45`].
+- SC v2 accent rail card: `0 3px 10px rgba(21, 57, 104, 0.08)` [`[code-read]
+  src/app/service-calendar/v2/accentRail.css:84`].
+- SC v2 tiered T-table shadows:
+  - widget over canvas (`--sc2-el-widget`): `0 2px 8px rgba(18,34,56,0.08),
+    0 12px 32px rgba(18,34,56,0.06)`.
+  - L2 card rest (`--sc2-el-card`): `0 1px 3px rgba(18,34,56,0.08),
+    0 2px 8px rgba(18,34,56,0.05)`.
+  - L2 card hover (`--sc2-el-hover`): `0 2px 6px rgba(18,34,56,0.10),
+    0 6px 16px rgba(18,34,56,0.07)`.
+  - Inset half-step (`--sc2-el-inset`): `0 1px 2px rgba(18,34,56,0.04),
+    0 1px 4px rgba(18,34,56,0.03)`.
+  `[code-read] src/app/tokens.css:476-483`.
+
+### SC font family stack
+
+Two-track reality:
+- SC v1 CSS applies `font-family: inherit` on `.sc-daysq` and most
+  `.sc-*` controls. `[code-read] src/app/service-calendar/DaySquare.css:25,
+  src/app/service-calendar/ops-sc.css:116, 123, 181, 245`. The inherit
+  chain resolves via `.oh-app` -> `--oh-font-body: "Mulish",
+  -apple-system, sans-serif`.
+  `[code-read] src/app/ops/css/ops-shared.css:30, 47`.
+- SC v2 explicitly sets `font-family: var(--sc2-font-ui)` on the v2 root:
+  `.sc-root.scv2 { font-family: var(--sc2-font-ui) }`, and `--sc2-font-ui:
+  var(--font-ui)` = Inter.
+  `[code-read] src/app/service-calendar/v2/overview.css:165,
+  src/app/tokens.css:273`.
+
+**Practical read.** SC v1 renders in Mulish (via `.oh-app` inheritance).
+SC v2 renders in Inter (explicit set). This is one more instance of the
+existing "Mulish on `body`" P2 already flagged in the D0 audit.
+
+### Ops shell body vs head font stacks
+
+- `--oh-font-body: "Mulish", -apple-system, sans-serif`.
+- `--oh-font-head: "Inter", -apple-system, sans-serif`.
+- Consumers: `.oh-app`, `.oh-tool-bar`, `.oh-card`, `.oh-modal`,
+  `.oh-input`, `.oh-widget-body` etc. `[code-read] src/app/ops/css/ops-shared.css:30-31, 47, 150, 260, 271, 278, 295, 446, 555, 629`.
+
+## A.3 Type, exact
+
+### SC v1 primitive sizes (from `:root` `--size-*`)
+
+Micro 10 / caption 12 / body 14 / subhead 17 / h3 20 / h2 24 / h1 29 /
+display 35. `[code-read] src/app/tokens.css:33-34`.
+Weights: 400 / 500 / 600 / 700 / 800.
+`[code-read] src/app/tokens.css:35`.
+Leading: tight 1.1 / snug 1.25 / normal 1.5.
+`[code-read] src/app/tokens.css:36`.
+
+### SC v2 Standard T-table scale under `--sc2-scale: 0.9`
+
+Standard values (T-table, F5 correction): micro 11 / caption 12 / body 14
+/ subhead 15 / h3 18 / h2 20 / h1 24 / display 30 / rail-total 30.
+`[code-read] src/app/tokens.css:571-579`.
+Controls: `--sc2-control-h: 36px * scale`, `--sc2-control-h-icon: 32px *
+scale`. `[code-read] src/app/tokens.css:581-582`.
+
+Effective values at `--sc2-scale: 0.9` (each is `base * 0.9`):
+- micro 11 -> **9.9px**
+- caption 12 -> **10.8px**
+- body 14 -> **12.6px**
+- subhead 15 -> **13.5px**
+- h3 18 -> **16.2px**
+- h2 20 -> **18px**
+- h1 24 -> **21.6px**
+- display 30 -> **27px**
+- rail-total 30 -> **27px**
+- control h 36 -> **32.4px**
+- control h icon 32 -> **28.8px**
+
+The fluid clamps at `:root` (`.scv2` :219-226) resolve at viewport 1440
+to the max branch of each clamp AND are multiplied by scale. Standard
+overrides at :571-582 pin explicit values above the fluid clamp for
+consistency; the effective values above come from that Standard block.
+
+Line heights consumed as literals in components stay at whatever the
+component declared (owner-noted ratio drift at 0.9).
+`[code-read] src/app/tokens.css:558-571`.
+
+### OPD rendered sizes/weights (screen)
+
+Cover title + shell (Playbook browsing):
+- `.pb-hero-tag`: Inter 800, mobile 26px / letter-spacing -0.4px;
+  `>=640px` 36px / -0.6px. `[code-read] src/app/playbook/playbook.css:141-148, 240`.
+- `.pb-hero-sub`: 13px mobile / 15px `>=640px`, line-height 1.4, color
+  `rgba(255,255,255,0.78)`, max-width 560px.
+  `[code-read] src/app/playbook/playbook.css:149-155, 244`.
+- `.pb-sous-btn` (Ask SousAI CTA): Inter 700 13px, letter-spacing 0.1px,
+  min-height 48, padding 12/16, radius 12, teal fill white text.
+  `[code-read] src/app/playbook/playbook.css:203-220`.
+- `.pb-search-bar`: white, radius 12, padding 12/14, shadow `0 4px 14px
+  rgba(0,0,0,0.18)`. `[code-read] src/app/playbook/playbook.css:167-177`.
+- `.pb-search-input`: Inter 14, no border. `[code-read] src/app/playbook/playbook.css:179-188`.
+
+Card grid + doc card:
+- `.pb-card`: white, `border: 1px solid var(--kf-border)`, `border-radius:
+  12px`, `padding: 14px 14px 12px`, `box-shadow: 0 1px 2px rgba(15, 48,
+  87, 0.04)`, `min-height: 184px`, entrance `pb-card-in 200ms ease-out`.
+  `[code-read] src/app/playbook/playbook.css:937-967`.
+- Hover-alive: `translateY(-2px); box-shadow: 0 6px 14px rgba(15, 48, 87,
+  0.1); border-color: var(--kf-playbook-teal)`.
+  `[code-read] src/app/playbook/playbook.css:981-985`.
+- Recessed: `opacity: 0.55; filter: saturate(0.7)`.
+  `[code-read] src/app/playbook/playbook.css:992-1001`.
+- Focus-visible: `outline: 2px solid var(--kf-playbook-teal); outline-offset:
+  2px`. `[code-read] src/app/playbook/playbook.css:1003-1006`.
+- `.pb-card-title`: Inter 800 14px navy, line-height 1.3.
+  `[code-read] src/app/playbook/playbook.css:1114-1121`.
+- `.pb-card-line`: 12.5px, `#64748b`, line-height 1.4, 2-line clamp.
+  `[code-read] src/app/playbook/playbook.css:1122-1131`.
+- `.pb-class-chip`: Inter 10/700, uppercase, letter-spacing 0.3px, padding
+  2/7, radius 5, four family tints (gov navy / proc teal / tool sand /
+  ref manila) at 10% alpha over white.
+  `[code-read] src/app/playbook/playbook.css:1037-1055`.
+- `.pb-class-chip--lg` (slide-over + reader header variant): 11/700,
+  padding 3/9, letter-spacing 0.4px. `[code-read] src/app/playbook/playbook.css:1058-1063`.
+- `.pb-status-pill`: Inter 10/700, padding 3/9, radius 999px, letter-spacing
+  0.3px, border 1px transparent.
+  `[code-read] src/app/playbook/playbook.css:1143-1150`.
+- `.pb-status-pill--lg`: 11px, padding 4/11, letter-spacing 0.4px.
+  `[code-read] src/app/playbook/playbook.css:1162-1166`.
+
+Reader (`/playbook/d/[docId]`):
+- `.pb-fullpage-title`: Oswald 36/700 navy, letter-spacing -0.2px,
+  line-height 1.1. Mobile 22px.
+  `[code-read] src/app/playbook/playbook.css:2235-2243, 2407`.
+- `.pb-fullpage-cardline`: Inter 15 `#475569` line-height 1.5.
+  `[code-read] src/app/playbook/playbook.css:2244-2250`.
+- `.pb-fullpage-meta`: Inter 12 `#6B7785`.
+  `[code-read] src/app/playbook/playbook.css:2251-2259`.
+- `.pb-fullpage-id`: JetBrains Mono 700 navy.
+  `[code-read] src/app/playbook/playbook.css:2260-2264`.
+- `.pb-fullpage-head` bottom rule: `border-bottom: 1.5px solid #7DB9D5;
+  margin-bottom: 28px; padding-bottom: 20px`.
+  `[code-read] src/app/playbook/playbook.css:2218-2222`.
+- `.pb-fullpage-body`: Inter 15, line-height **1.6**, `#1f2937`.
+  Mobile 14. `[code-read] src/app/playbook/playbook.css:2270-2278, 2408`.
+- H1 in body: Oswald 26/700 navy, `margin: 36px 0 10px`, letter-spacing
+  -0.2px, line-height 1.1, `padding-bottom: 8px; border-bottom: 1.5pt
+  solid #7DB9D5`. `[code-read] src/app/playbook/playbook.css:2279-2290`.
+- H1 eyebrow (`::before`): Oswald 11/600 uppercase, letter-spacing 1.5px,
+  navy, `SECTION 01` via counter.
+  `[code-read] src/app/playbook/playbook.css:2291-2301`.
+- H2 in body: Inter 18/700 navy, `margin: 28px 0 8px`, `border-bottom:
+  0.75pt solid #7DB9D5; padding-bottom: 4px`.
+  `[code-read] src/app/playbook/playbook.css:2303-2311`.
+- H3 in body: Inter 15/700 navy, `margin: 20px 0 6px; border-bottom:
+  0.5pt solid #7DB9D5; padding-bottom: 3px`.
+  `[code-read] src/app/playbook/playbook.css:2312-2320`.
+- Paragraph margin: `10px 0`.
+  `[code-read] src/app/playbook/playbook.css:2321`.
+- List margin: `10px 0 10px 24px`.
+  `[code-read] src/app/playbook/playbook.css:2322`.
+- Code: JetBrains Mono 13, `background: #f1f5f9`, `padding: 1px 5px`,
+  `border-radius: 4px`.
+  `[code-read] src/app/playbook/playbook.css:2324-2330`.
+- Blockquote base: `margin: 14px 0; padding: 12px 16px; border-left: 3px
+  solid var(--kf-playbook-teal); background: #f8fafc; border-radius: 4px`.
+  `[code-read] src/app/playbook/playbook.css:2331-2337`.
+- Callout variants:
+  - `.callout` bumps left border to 4px. `[code-read] src/app/playbook/playbook.css:2338-2340`.
+  - `.callout-critical`: `border-left-color: #B53030; background: #FCE4E4`.
+    `[code-read] src/app/playbook/playbook.css:2341-2344`.
+  - `.callout-anchor`: `border-left-color: var(--kf-navy); background:
+    #C4E3E8`. `[code-read] src/app/playbook/playbook.css:2345-2348`.
+  - `.callout-note`: `border-left-color: #2563eb; background: #eff6ff`.
+    `[code-read] src/app/playbook/playbook.css:2349-2352`.
+  - `.callout-warning`: `border-left-color: #d97706; background: #FBEFD0`.
+    `[code-read] src/app/playbook/playbook.css:2353-2356`.
+- Table: `border-collapse: collapse; width: 100%; margin: 14px 0;
+  font-size: 14px`. Cells: `border: 1px solid var(--kf-border); padding:
+  8px 10px; text-align: left; vertical-align: top`. TH: `background:
+  #f8fafc; font-weight: 700; color: var(--kf-navy)`.
+  `[code-read] src/app/playbook/playbook.css:2357-2374`.
+
+### Body line-height, both products
+
+- OPD reader body (`.pb-fullpage-body`): `line-height: 1.6`.
+  `[code-read] src/app/playbook/playbook.css:2273`.
+- SC v1: token roles `--lead-tight 1.1 / --lead-snug 1.25 / --lead-normal
+  1.5`; consumers apply per-atom (e.g. `.sc-daysq-date` uses `--lead-tight`).
+  `[code-read] src/app/tokens.css:36, src/app/service-calendar/DaySquare.css:115`.
+- SC v2 body (from Standard T-table): body 14/20 = 1.43; caption 12/16 =
+  1.33; the Standard block declares "Line-heights stay on the 4px grid".
+  `[code-read] src/app/tokens.css:544-546`.
+
+## A.4 Color inventory for the sweep
+
+### `#0F6E56` (or its token) - action-vs-status classification
+
+Every occurrence of the teal-green hex plus every token consumer.
+
+- Raw hex declarations (the roots):
+  - `--kf-playbook-teal: #0F6E56` [`[code-read] src/app/globals.css:32`].
+  - `--kf-playbook-teal-dark: #0a5a45` [`[code-read] src/app/globals.css:33`].
+  - `--kf-playbook-teal-light: #d4ebe2` [`[code-read] src/app/globals.css:34`].
+  - `--accent-playbook: #0F6E56` [`[code-read] src/app/tokens.css:79`].
+  - `--accent-sc: #0F6E56` [`[code-read] src/app/tokens.css:81`].
+  - `--accent-sc-dark: #085041` [`[code-read] src/app/tokens.css:81`].
+  - `--accent-sc-subtle: #E1F5EE` [`[code-read] src/app/tokens.css:81`].
+  - `--accent-sc-tint: #F0FDF4` [`[code-read] src/app/tokens.css:81`].
+
+- Consumer counts (`grep -rn "accent-sc\|kf-playbook-teal" src/`):
+  - `--kf-playbook-teal*` (OPD only): **75+ usage sites** in
+    `src/app/playbook/playbook.css` and `src/app/playbook/admin/admin.css`.
+    Dominant intents: focus rings (`outline: 2px solid`), hover borders,
+    active pill fill, chip active state, blockquote left-rail, dashed
+    coming-soon border, teal accents on navy hero.
+  - `--accent-sc*` (SC + its submission toast): **141 CSS-line hits**
+    across `src/app/service-calendar/`. Dominant intents: focus rings,
+    dropdown active bg, selected-cell inset ring, primary button fill
+    (`.sc-btn--primary`), submission-toast gradient, chrome bar today
+    CTA, back-link tint.
+
+- Action-vs-status classification.
+  - **Action / identity** (both surfaces): focus rings, primary buttons,
+    hover borders, active nav / today CTA. The shared `#0F6E56` reads as
+    the ops-hub operator-green.
+  - **Status**: neither OPD nor SC uses `#0F6E56` for status. Status is
+    always drawn from `--status-*` (SC) or the `.pb-status-pill--*`
+    family (OPD).
+
+- **Green-collision sweep count.** Rough gauge for scoping the sweep -
+  the sweep touches everywhere OPD + SC currently paint operator-green
+  and would need to keep that meaning in the reskin. Total unique
+  consumers: **~216 lines** across two surfaces (75 OPD + 141 SC),
+  before de-duplicating same-selector rules. That is the sweep size.
+
+### Both ambers
+
+- `#D97706` (`--amber-500`) - the canonical amber.
+  Declarations:
+  - `--amber-500: #D97706` [`[code-read] src/app/tokens.css:15`].
+  - `--kf-ops-amber: #d97706` (Playbook admin) [`[code-read] src/app/playbook/admin/admin.css:34`].
+  - `--oh-mustard: #d97706` (ops shell) [`[code-read] src/app/ops/css/ops-shared.css:17`].
+  Consumer surfaces: News feed (bookmark), Playbook reader (callout-warning
+  border), Playbook admin, Ops shared header/tickets, Ops Vendor Portal
+  (heavy identity use), People Portal (pending chip), Financial tool,
+  Incident-reminder email, home dashboard accent (`src/app/page.js:181
+  accent: "#d97706"`). Also `nf-` news feed (globals.css:1004-1005,
+  1153-1154, 1183).
+- **`#D9892F` does not appear anywhere in the tree.** `grep -rn
+  "D9892F\|d9892f\|D9890F\|d9890f" src/` returns zero hits. If a report
+  cited that hex, it is a fabrication of memory - not present in code.
+- Related ambers/mustards in globals (not the ops accent):
+  - `--kf-mustard: #fbbf24` (bright yellow) [`[code-read] src/app/globals.css:21`].
+  - `--kf-mustard-light: #fffbeb` [`[code-read] src/app/globals.css:22`].
+  - `--kf-mustard-text: #92400e` [`[code-read] src/app/globals.css:23`].
+  - `--kf-bronze: #b45309` [`[code-read] src/app/globals.css:27`].
+  - `--kf-bronze-light: #fffbeb` [`[code-read] src/app/globals.css:28`].
+  - `--oh-mustard-dark: #b45309` (implied from ops-vendor.css:2212).
+
+### Page-ground usage map
+
+Which route sits on which ground:
+- `--surface-page: var(--n-100) = #F4F2EC` (warm cream) - token-declared.
+  `[code-read] src/app/tokens.css:23, 62`. Consumers: any surface that
+  reads `--surface-page`. Also embedded as raw hex in
+  `src/lib/sousai/reports/formatDigests.js:228, 234` (report HTML).
+- `--kf-bg: #f0f4f8` (cool grey-blue) - declared at
+  `[code-read] src/app/globals.css:17` and applied by `body { background:
+  var(--kf-bg) }` at `[code-read] src/app/globals.css:42`. **This is the
+  actual site-wide page ground** because it is set on `body`. Also used
+  by Directory pill fills (directory.css:594, 703, 839, 852) and People
+  Portal skeleton bg (people.css:1680, 1805).
+- `--n-50: #FAF9F5` (warm off-white) - the SC "sunken" surface.
+  `[code-read] src/app/tokens.css:23, 62`. Consumer: `--surface-sunken`
+  role.
+- `--sc2-canvas: #edeff2` (cool grey L0) - SC v2 only, scoped via
+  `.oh-app:has(.scv2) { background: var(--sc2-canvas) }`.
+  `[code-read] src/app/tokens.css:150`,
+  `src/app/service-calendar/v2/overview.css:78-102`.
+- `--sc2-surface-page: #e8e3d8` - a legacy warm-cream SC v2 surface,
+  labeled "legacy; scheduled for retirement in downstream V3 sweeps".
+  `[code-read] src/app/tokens.css:297`.
+
+**Practical read.** The site-wide page ground is `#f0f4f8` (cool
+grey-blue), NOT `#F4F2EC` (warm cream). The token `--surface-page` at
+`#F4F2EC` is defined but the `body` background overrides it globally via
+`--kf-bg`. This is another P2 doc-vs-code drift: the token system's
+`--surface-page` intent is warm cream, but the shipped page ground is
+cool grey-blue.
+
+## A.5 Spacing and radius ladders
+
+### SC v1 space primitives (from tokens.css)
+
+`--space-1 4 / --space-2 8 / --space-3 12 / --space-4 16 / --space-5 20
+/ --space-6 24 / --space-7 32 / --space-8 40`.
+`[code-read] src/app/tokens.css:39`.
+
+### SC v2 fluid space at scale 0.9 (effective values at viewport 1440)
+
+Each token is `calc(clamp(min, calc(intercept + slope * vw), max) *
+--sc2-scale)`. At 1440 the linear branch equals the max; effective =
+max * 0.9. `[code-read] src/app/tokens.css:235-242`.
+
+- `--sc2-space-1` max 4 -> **3.6px**
+- `--sc2-space-2` max 8 -> **7.2px**
+- `--sc2-space-3` max 12 -> **10.8px**
+- `--sc2-space-4` max 16 -> **14.4px**
+- `--sc2-space-5` max 20 -> **18px**
+- `--sc2-space-6` max 24 -> **21.6px**
+- `--sc2-space-7` max 32 -> **28.8px**
+- `--sc2-space-8` max 40 -> **36px**
+
+SC's "six steps computed at 0.9" per the prompt = the six mid-band tokens
+(1..6): **3.6, 7.2, 10.8, 14.4, 18, 21.6 px**.
+
+### SC v1 radii
+
+`--rad-4 4 / --rad-6 6 / --rad-10 10 / --rad-14 14 / --rad-pill 9999 /
+--rad-circle 50%`. `[code-read] src/app/tokens.css:41`.
+Semantic roles:
+- `--radius-cell: var(--rad-4)` (4)
+- `--radius-control: var(--rad-10)` (10)
+- `--radius-container: var(--rad-10)` (10)
+- `--radius-container-lg: var(--rad-14)` (14)
+- `--radius-pill: var(--rad-pill)` (9999)
+- `--radius-circle: var(--rad-circle)` (50%)
+`[code-read] src/app/tokens.css:108-109`.
+
+### SC v2 radii (static, not scaled)
+
+`--sc2-radius-cell 6 / --sc2-radius-control 9 / --sc2-radius-container 11
+/ --sc2-radius-card 12 / --sc2-radius-tile 8 / --sc2-radius-modal 14 /
+--sc2-radius-pill 9999`. `[code-read] src/app/tokens.css:245-270`.
+
+### OPD radii and card paddings as shipped
+
+- `.pb-hero`: `border-radius: 20px; padding: 20px 20px 14px` (mobile) /
+  `padding: 24px 28px 18px` (`>=640px`).
+  `[code-read] src/app/playbook/playbook.css:90-98, 236-244`.
+- `.pb-card`: `border-radius: 12px; padding: 14px 14px 12px`.
+  `[code-read] src/app/playbook/playbook.css:937-949`.
+- `.pb-card-grid`: `gap: 12px` at `>=640` (2 cols) / `>=960` (3 cols).
+  `[code-read] src/app/playbook/playbook.css:829-835`.
+- `.pb-search-bar`: `border-radius: 12px; padding: 12px 14px`.
+  `[code-read] src/app/playbook/playbook.css:167-177`.
+- `.pb-sous-btn`: `border-radius: 12px; padding: 12px 16px`.
+  `[code-read] src/app/playbook/playbook.css:203-220`.
+- `.pb-fullpage-article`: `border-radius: 16px; padding: 32px 36px`,
+  mobile `padding: 20px 18px; border-radius: 12px`.
+  `[code-read] src/app/playbook/playbook.css:2205-2211, 2402-2410`.
+- `.pb-fullpage-back`: `border-radius: 8px; padding: 8px 12px`.
+  `[code-read] src/app/playbook/playbook.css:2165-2178`.
+- `.pb-fullpage-print`: `border-radius: 8px; padding: 9px 14px`.
+  `[code-read] src/app/playbook/playbook.css:2189-2203`.
+- `.pb-class-chip`: `border-radius: 5px; padding: 2px 7px`;
+  `.pb-class-chip--lg` `padding: 3px 9px`.
+  `[code-read] src/app/playbook/playbook.css:1037-1063`.
+- `.pb-status-pill`: `border-radius: 999px; padding: 3px 9px`;
+  `.pb-status-pill--lg` `padding: 4px 11px`.
+  `[code-read] src/app/playbook/playbook.css:1143-1166`.
+- `.pb-sousai` stub: `border-radius: 10px; padding: 10px 14px`.
+  `[code-read] src/app/playbook/playbook.css:1678-1690`.
+- Reader blockquote: `border-radius: 4px; padding: 12px 16px`.
+  `[code-read] src/app/playbook/playbook.css:2331-2337`.
+- Reader code: `border-radius: 4px; padding: 1px 5px`.
+  `[code-read] src/app/playbook/playbook.css:2324-2330`.
+
+## A.6 Motion constants
+
+### SC Handoff beat table (code, not recall)
+
+`BEAT_DELAYS` object at `[code-read] src/app/service-calendar/v2/handoff/coordinator.js:53-60`:
+```
+const BEAT_DELAYS = {
+  1: 0,      // idle -> fadeSvc immediately
+  2: 200,    // fadeSvc -> pillIn
+  3: 660,    // pillIn -> pillFly + flip
+  4: 1020,   // pillFly -> ringSweep + queue clear
+  5: 1350,   // ringSweep -> slideNext
+  0: 1850,   // slideNext -> idle (drop the sequence)
+};
+```
+
+Companion CSS-side beat durations at
+`[code-read] src/app/service-calendar/v2/handoff/handoff.css:5-14`
+(comment table) and applied on classes:
+- `sc-pillIn`: `.3s cubic-bezier(.34, 1.56, .64, 1) both` (overshoot).
+  `[code-read] src/app/service-calendar/v2/handoff/handoff.css:35`.
+- `sc-pillFade`: `.3s ease-out forwards`.
+  `[code-read] src/app/service-calendar/v2/handoff/handoff.css:40`.
+- `.sc-handoff-clone` (pillFly transition): `.55s cubic-bezier(.4, 0, .2,
+  1)` for transform + opacity.
+  `[code-read] src/app/service-calendar/v2/handoff/handoff.css:62-64`.
+- `MonthCompleteCard.js:8` comment: `check draw .5s @1s per the render's
+  beat table`.
+
+### SC v1 base motion tokens
+
+- `--duration-fast: 120ms`, `--duration-base: 180ms`, `--duration-slow:
+  280ms`. `[code-read] src/app/tokens.css:47`.
+- Eases: `--ease-standard: cubic-bezier(.2, 0, 0, 1)`,
+  `--ease-emphasized: cubic-bezier(.3, 0, 0, 1)`, `--ease-exit:
+  cubic-bezier(.4, 0, 1, 1)`.
+  `[code-read] src/app/tokens.css:48`.
+- Roles: `--motion-control: var(--duration-fast) var(--ease-standard)`,
+  `--motion-surface: var(--duration-base) var(--ease-emphasized)`.
+  `[code-read] src/app/tokens.css:114`.
+- Reduced-motion collapses the three durations to 0ms at token layer.
+  `[code-read] src/app/tokens.css:160-162`.
+
+### SC overlay entrance
+
+- `.sc-overlay-backdrop` `scOverlayIn 0.2s ease`.
+  `[code-read] src/app/service-calendar/ops-sc.css:147`.
+- `.sc-overlay-card` `scCardUp 0.25s ease` translateY(16)+scale(.98).
+  `[code-read] src/app/service-calendar/ops-sc.css:156-158`.
+
+### OPD transitions
+
+- `.pb-card` transition: `all 0.15s`.
+  `[code-read] src/app/playbook/playbook.css:948`.
+- `.pb-sous-btn`: `transform 120ms ease, box-shadow 120ms ease`.
+  `[code-read] src/app/playbook/playbook.css:218`.
+- `.pb-sous-panel` slide-in: `pb-slide-in 0.25s cubic-bezier(0.4, 0, 0.2,
+  1)`. `[code-read] src/app/playbook/playbook.css:2018`.
+- `.pb-fullpage-back`: `border-color 120ms ease, background 120ms ease`.
+  `[code-read] src/app/playbook/playbook.css:2178`.
+- `.pb-fullpage-print`: `background 120ms ease`.
+  `[code-read] src/app/playbook/playbook.css:2202`.
+- Card entrance: `pb-card-in 200ms ease-out backwards` with staggered
+  `--idx` delay capped at 12 * 30ms.
+  `[code-read] src/app/playbook/playbook.css:966-967`.
+- `.pb-sous-panel` overlay fade: `pb-fade-in 0.18s ease`.
+  `[code-read] src/app/playbook/playbook.css:2004`.
+
+## A.7 Component dimensions
+
+### Nav
+
+- `.kf-topnav` height 56 desktop / 52 mobile (`<=767px` per the query
+  location); inner max-width 1200; padding 0 20 desktop / 0 12 mobile.
+  `[code-read] src/components/TopNav.css:16-24, 477`.
+- `.kf-topnav-logo`: 32x32, `border-radius: 10`, Inter 800/16, `box-shadow:
+  0 2px 6px rgba(15, 48, 87, 0.2)`.
+  `[code-read] src/components/TopNav.css:35-48`.
+- `.kf-topnav-wordmark`: Inter 800/17, letter-spacing -0.3px.
+  `[code-read] src/components/TopNav.css:50-56`.
+- `.kf-topnav-link`: padding 8/14, radius 10, Inter 700/13,
+  `color: #64748b`.
+  `[code-read] src/components/TopNav.css:72-85`.
+- `.kf-topnav-icon-btn`: 36x36, radius 10, transparent bg -> `#f1f5f9`
+  hover. Bell badge: min-width 16, height 16, radius 8, red `#ef4444`,
+  Inter 800/10 white.
+  `[code-read] src/components/TopNav.css:120-159`.
+- `.kf-topnav-avatar`: 34x34 circle, 2px `#e2e8f0` border, navy fill,
+  Inter 800/12 white, hover scale(1.05) + blue glow.
+  `[code-read] src/components/TopNav.css:167-190`.
+- `.kf-topnav-separator`: 1x24 vertical rule, 8px horizontal margin.
+  `[code-read] src/components/TopNav.css:110-117`.
+
+### OPD doc card
+
+- Padding 14 14 12; radius 12; box-shadow `0 1px 2px rgba(15, 48, 87,
+  0.04)`; border 1px `--kf-border`; min-height 184.
+  `[code-read] src/app/playbook/playbook.css:937-959`.
+- Hover-alive: `translateY(-2px)` + `0 6px 14px rgba(15, 48, 87, 0.1)`
+  shadow + teal border.
+  `[code-read] src/app/playbook/playbook.css:981-985`.
+- Recessed: `opacity: 0.55; filter: saturate(0.7)`.
+  `[code-read] src/app/playbook/playbook.css:992-1001`.
+
+### Status pill
+
+- Base: Inter 10/700 uppercase-ish, padding 3/9, radius 999, letter-spacing
+  0.3px, 1px transparent border.
+  `[code-read] src/app/playbook/playbook.css:1143-1150`.
+- Ghost variant: `border-color: #e2e8f0`.
+  `[code-read] src/app/playbook/playbook.css:1155-1157`.
+- Large variant (slide-over + reader header): 11px, padding 4/11,
+  letter-spacing 0.4px.
+  `[code-read] src/app/playbook/playbook.css:1162-1166`.
+
+### Doc-class chip
+
+- Base: Inter 10/700 uppercase, padding 2/7, radius 5, letter-spacing
+  0.3px, bg `#f1f5f9`, color `#64748b`.
+  `[code-read] src/app/playbook/playbook.css:1037-1048`.
+- Family tints (all at 10% alpha over white):
+  - `--gov`: `rgba(33, 78, 130, 0.10)` + `#214e82`.
+  - `--proc`: `rgba(15, 110, 86, 0.10)` + `--kf-playbook-teal-dark`.
+  - `--tool`: `rgba(193, 122, 35, 0.10)` + `#7a4a1a`.
+  - `--ref`: `rgba(120, 80, 35, 0.10)` + `#6b4f25`.
+  `[code-read] src/app/playbook/playbook.css:1052-1055`.
+- Large variant: 11/700, padding 3/9, letter-spacing 0.4px.
+  `[code-read] src/app/playbook/playbook.css:1058-1063`.
+
+### Reader TOC card
+
+- **No TOC card is shipped in the current reader.** Grep for `pb-toc`,
+  `pb-fullpage-toc`, `pb-reader-toc`, `pb-fullpage-nav` returns zero
+  matches across `src/app/playbook/`. The doc reader today is the wrap +
+  toolbar + article; there is no side/inline TOC component to measure.
+  If the reskin adds one, it is a new component - no existing metrics to
+  match against.
+
+### Anchor callout rail
+
+- `.callout-anchor` in the reader: `border-left-color: var(--kf-navy);
+  background: #C4E3E8`. Rail width comes from the base blockquote rule:
+  `border-left: 3px solid ...` at the plain blockquote, bumped to `4px`
+  by the `.callout` modifier. Padding `12px 16px`, radius `4px`, margin
+  `14px 0`.
+  `[code-read] src/app/playbook/playbook.css:2331-2348`.
+- SlideOverReader mirror: `callout-anchor` at `[code-read]
+  src/app/playbook/playbook.css:1559` uses `border-left-color:
+  var(--kf-navy); background: #eef2f7`. Screen-and-slide-over grounds
+  intentionally differ (reader `#C4E3E8` mid-teal vs slide-over `#eef2f7`
+  soft blue).
+
+## A.8 Completeness map (all seven groups)
+
+- **Group 1 - Shell and layout.** Measured: SC v2 shell tokens (1520 /
+  1240 / 60 / 116 / canvas), SC v1 root recipe (surface-card / radius 14
+  / elevation-raised), `.pb-shell` 1024, `.pb-fullpage-wrap` 880,
+  `.pb-fullpage-article` 32/36 padding + radius 16, `.kf-desktop-wrapper`
+  1024, `.kf-topnav-inner` 1200 x 56 desktop / 52 mobile, OPD hero total
+  vertical cost (200 min + margin), reader prose column effective width
+  776 desktop / 307 mobile with method-noted CPL (99 desktop / 42
+  mobile), coming-soon Sous panel width 480 / 100vw mobile. `[all
+  code-read]`.
+- **Group 2 - Recalled items.** Card shadow: the report's
+  `0 3px 10px rgba(21,57,104,.08)` is real but scoped to
+  `.sc-rail-accent-card` at `src/app/service-calendar/v2/accentRail.css:84`
+  - not the general SC card shadow. General SC card `.sc-root` shadow is
+  `--sh-md: 0 4px 12px rgba(15,23,42,0.08)`. SC font stack: v1 inherits
+  Mulish through `.oh-app`, v2 explicitly reads `var(--sc2-font-ui)` =
+  Inter. `[all code-read]`.
+- **Group 3 - Type.** SC v1 primitive scale, SC v2 Standard T-table scale
+  with scale-0.9 arithmetic for eight sizes + control heights, OPD
+  browsing + reader typography (hero, card, chip, pill, cover title, H1
+  with SECTION eyebrow, H2, H3, body, code, blockquote, callout family,
+  table). Body line-height per product. `[all code-read]`.
+- **Group 4 - Color.** `#0F6E56` inventory - all raw hex declarations
+  (five in tokens + globals) plus consumer counts (75+ OPD + 141 SC =
+  ~216 lines total). Both ambers: `#D97706` maps to five declared
+  tokens across four files; `#D9892F` returns zero hits (not present).
+  Page-ground map: `--surface-page` (#F4F2EC) declared but overridden by
+  `body { background: var(--kf-bg) = #f0f4f8 }` for the site, `--sc2-canvas
+  = #edeff2` for SC v2 via `:has()`. `[all code-read]`.
+- **Group 5 - Spacing + radius.** SC v1 primitive ladder (4-40),
+  SC v2 fluid ladder max * 0.9 six steps (3.6 / 7.2 / 10.8 / 14.4 / 18 /
+  21.6 px), SC v1 semantic radius roles, SC v2 six-role radius set.
+  OPD radii + paddings: hero 20 rad + 20/20/14, card 12 rad + 14/14/12,
+  search-bar 12/12/14, article 16 rad + 32/36 (mobile 12 + 20/18),
+  chip/pill/stub radii. `[all code-read]`.
+- **Group 6 - Motion.** SC handoff `BEAT_DELAYS` object at coordinator.js
+  :53-60 (0/200/660/1020/1350/1850), handoff.css duration values (.3s
+  pillIn, .55s pillFly, .3s pillFade). SC base motion tokens
+  (120/180/280). SC overlay .2s / .25s. OPD transitions: card .15s,
+  sous-btn 120ms, sous-panel .25s + fade .18s, card entrance 200ms with
+  30ms stagger cap. `[all code-read]`.
+- **Group 7 - Component dimensions.** Nav (height / logo / wordmark /
+  link / icon-btn / bell badge / avatar / separator). OPD doc card
+  (padding + radius + shadow + hover), status pill (base / ghost / lg),
+  doc-class chip (base + 4 family tints + lg). Reader TOC card: **not
+  shipped**, called out. Anchor callout rail (3px base -> 4px `.callout`,
+  navy border, `#C4E3E8` reader ground, padding 12/16, radius 4). `[all
+  code-read]`.
+
+All seven groups covered. Values computed rather than estimated wherever
+runtime math applied; the CPL computation explicitly names its method
+(0.5 to 0.55 em advance for Inter body Latin) and shows the range.
