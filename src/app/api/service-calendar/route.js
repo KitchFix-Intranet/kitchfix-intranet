@@ -25,6 +25,18 @@ import {
   addServiceWithAudit,
   addServiceGroup,
 } from "@/lib/dataStore/serviceCalendar";
+// M-1 (2026-08-09): labor budget plane. MLB-only via the
+// DERIVE_HOMESTANDS_ACCOUNTS set from M-0 - matched at the API layer
+// so a non-MLB accountKey is rejected before touching the dataStore.
+import {
+  readLiveLaborBudgets,
+  readLaborBudgetHistory,
+  updateLaborBudget,
+  readLaborRatio,
+  updateLaborRatio,
+  readLaborRatioHistory,
+} from "@/lib/dataStore/laborBudgets";
+import { DERIVE_HOMESTANDS_ACCOUNTS } from "@/app/service-calendar/season/homestandDerivation";
 
 // SHEETS REMOVED - PG orchestrator now handles all reads/writes.
 // Imports preserved (commented) so a rollback during shadow validation
@@ -599,6 +611,60 @@ export async function GET(request) {
       return NextResponse.json({ success: true, accountKey, history });
     }
 
+    // ── sc-admin-labor-budgets-list: all live rows for one MLB account ──
+    // Returns per-period budgets + labor_ratio. MLB-only via the M-0 set.
+    if (action === "sc-admin-labor-budgets-list") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const accountKey = searchParams.get("account");
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing account param" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Labor budgets are MLB-only" }, { status: 400 });
+      }
+      const [budgets, ratio] = await Promise.all([
+        readLiveLaborBudgets(accountKey),
+        readLaborRatio(accountKey),
+      ]);
+      return NextResponse.json({ success: true, accountKey, budgets, laborRatio: ratio.laborRatio });
+    }
+
+    // ── sc-admin-labor-budget-history: full history for one (account, period) ──
+    if (action === "sc-admin-labor-budget-history") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const accountKey = searchParams.get("account");
+      const period = searchParams.get("period");
+      if (!accountKey || !period) {
+        return NextResponse.json({ success: false, error: "Missing account or period param" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Labor budgets are MLB-only" }, { status: 400 });
+      }
+      const history = await readLaborBudgetHistory(accountKey, period);
+      return NextResponse.json({ success: true, accountKey, period, history });
+    }
+
+    // ── sc-admin-labor-ratio-history: full sc_config_changelog history
+    //    for one account's labor_ratio edits ──
+    if (action === "sc-admin-labor-ratio-history") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const accountKey = searchParams.get("account");
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing account param" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Labor ratio is MLB-only" }, { status: 400 });
+      }
+      const history = await readLaborRatioHistory(accountKey);
+      return NextResponse.json({ success: true, accountKey, history });
+    }
+
     return NextResponse.json(
       { success: false, error: "Unknown action" },
       { status: 400 }
@@ -1087,6 +1153,91 @@ export async function POST(request) {
           requestedBy:    requestedBy ? requestedBy.trim() : null,
           paymentCadence: paymentCadence ?? undefined,
         },
+        email
+      );
+      return NextResponse.json(result);
+    }
+
+    // ── sc-admin-labor-budget-set: write one (account, period) labor
+    //    budget change. Reason required. Supersedes the previous live
+    //    row; response includes the supersede count for symmetry with
+    //    fee edits' history read. MLB-only. ──
+    if (action === "sc-admin-labor-budget-set") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const { accountKey, period, hourlyBudget, salaryBudget, revenueForecast, effectiveFrom, reason, requestedBy } = body;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Labor budgets are MLB-only" }, { status: 400 });
+      }
+      if (!period || !/^P([1-9]|1[0-3])$/.test(String(period))) {
+        return NextResponse.json({ success: false, error: "period required (P1..P13)" }, { status: 400 });
+      }
+      if (!effectiveFrom || !/^\d{4}-\d{2}-\d{2}$/.test(String(effectiveFrom))) {
+        return NextResponse.json({ success: false, error: "effectiveFrom required (YYYY-MM-DD)" }, { status: 400 });
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json({ success: false, error: "reason must be 280 characters or fewer" }, { status: 400 });
+      }
+      const validNumOrNull = (v) => v == null || (typeof v === "number" && !isNaN(v) && v >= 0) || (typeof v === "string" && /^\d+(\.\d+)?$/.test(v));
+      if (!validNumOrNull(hourlyBudget)) {
+        return NextResponse.json({ success: false, error: "hourlyBudget must be numeric >= 0 or null" }, { status: 400 });
+      }
+      if (!validNumOrNull(salaryBudget)) {
+        return NextResponse.json({ success: false, error: "salaryBudget must be numeric >= 0 or null" }, { status: 400 });
+      }
+      if (!validNumOrNull(revenueForecast)) {
+        return NextResponse.json({ success: false, error: "revenueForecast must be numeric >= 0 or null" }, { status: 400 });
+      }
+      const result = await updateLaborBudget(
+        accountKey,
+        {
+          period,
+          hourlyBudget:    hourlyBudget != null ? Number(hourlyBudget) : null,
+          salaryBudget:    salaryBudget != null ? Number(salaryBudget) : null,
+          revenueForecast: revenueForecast != null ? Number(revenueForecast) : null,
+          effectiveFrom,
+          reason:          reason.trim(),
+          requestedBy:     requestedBy ? String(requestedBy).trim() : null,
+        },
+        email
+      );
+      return NextResponse.json(result);
+    }
+
+    // ── sc-admin-labor-ratio-set: write TXR-V-style labor_ratio change.
+    //    Value stored on accounts.labor_ratio; audit in sc_config_changelog.
+    //    MLB-only. Value bounded (0, 1) at the schema level. ──
+    if (action === "sc-admin-labor-ratio-set") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const { accountKey, laborRatio, reason, requestedBy } = body;
+      if (!accountKey) {
+        return NextResponse.json({ success: false, error: "Missing accountKey" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Labor ratio is MLB-only" }, { status: 400 });
+      }
+      const n = Number(laborRatio);
+      if (isNaN(n) || n <= 0 || n >= 1) {
+        return NextResponse.json({ success: false, error: "laborRatio must be a number in (0, 1)" }, { status: 400 });
+      }
+      if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json({ success: false, error: "reason required" }, { status: 400 });
+      }
+      if (reason.length > 280) {
+        return NextResponse.json({ success: false, error: "reason must be 280 characters or fewer" }, { status: 400 });
+      }
+      const result = await updateLaborRatio(
+        accountKey,
+        { laborRatio: n, reason: reason.trim(), requestedBy: requestedBy ? String(requestedBy).trim() : null },
         email
       );
       return NextResponse.json(result);
