@@ -221,6 +221,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sc2-space-2);
+  /* Match/Clear (2026-08-01): overflow: hidden so the Clear button
+     hides visually behind Match's rect while translated off. */
+  overflow: hidden;
+  border-radius: var(--sc2-radius-control);
 }
 .sc-v2-entry-group-match {
   padding: 4px 10px;
@@ -232,12 +236,67 @@
   font-weight: var(--sc2-wt-bold);
   cursor: pointer;
   letter-spacing: 0.03em;
+  /* Match/Clear (2026-08-01): the "holds state" half of the ruling.
+     Match transitions to the held look on --held; --duration-slow
+     token so RM collapses this too. */
+  transition:
+    background var(--duration-slow, 300ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1)),
+    border-color var(--duration-slow, 300ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1));
 }
 .sc-v2-entry-group-match:hover {
   background: var(--sc2-accent-green-wash);
   border-color: var(--sc2-accent-green-line);
 }
 .sc-v2-entry-group-match:focus-visible {
+  outline: 2px solid var(--sc2-accent-green);
+  outline-offset: 2px;
+}
+/* Match/Clear (2026-08-01): held state - Match keeps the "filled"
+   look after click. Same accent-green wash the hover state uses; adds
+   the accent-line border so it reads as a settled state, not a
+   transient hover. Clear peeks out from behind via the sibling rules
+   below. */
+.sc-v2-entry-group-match--held {
+  background: var(--sc2-accent-green-wash);
+  border-color: var(--sc2-accent-green-line);
+}
+/* Match/Clear (2026-08-01): Clear button.
+   Rest: translated 100% + gap to the RIGHT of its natural slot,
+   which - given source order (Clear left, Match right) + the actions
+   container's `overflow: hidden` - places it directly under Match's
+   rect. When --cleared arms, translateX(0) slides Clear out from
+   behind Match to its natural position. --duration-slow = 300ms per
+   the ruling; RM collapses to 0ms via the token cascade (motion.js
+   header rule). Opacity + pointer-events gate focus + interactivity
+   at rest so tab-order skips it and screen readers don't announce a
+   hidden button. */
+.sc-v2-entry-group-clear {
+  padding: 4px 10px;
+  border: var(--sc2-border-thin) solid var(--sc2-line-2);
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink-muted);
+  border-radius: var(--sc2-radius-control);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transform: translateX(calc(100% + var(--sc2-space-2, 8px)));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--duration-slow, 300ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1)),
+    opacity var(--duration-slow, 300ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1));
+}
+.sc-v2-entry-group-actions[data-cleared="true"] .sc-v2-entry-group-clear {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.sc-v2-entry-group-clear:hover {
+  background: var(--sc2-surface-sunken);
+  color: var(--sc2-ink-strong);
+}
+.sc-v2-entry-group-clear:focus-visible {
   outline: 2px solid var(--sc2-accent-green);
   outline-offset: 2px;
 }

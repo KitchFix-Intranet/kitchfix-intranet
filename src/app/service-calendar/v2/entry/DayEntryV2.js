@@ -248,6 +248,22 @@ function DayEntryV2({
   // hooks CSS layout, no behavior fork. Desktop (>=768) ignores this
   // entirely - the media query gates every rule that reads it.
   const [mobileBillOpen, setMobileBillOpen] = useState(false);
+  // ═══════════════════════════════════════════════════════════════
+  // Match/Clear (2026-08-01) - per-group pre-Match snapshot.
+  // ═══════════════════════════════════════════════════════════════
+  // matchSnapshots :: { [groupName]: { editValues: {colIndex: str},
+  //                                    touched:    Set<colIndex> } }
+  // Snapshot captured at Match time (pre-fill). Clear restores. Match
+  // on group A never arms Clear on group B (per-group keys). Snapshots
+  // drop with the panel (component unmount) and on day.date change
+  // (own effect below - matches justSaved's day-scoped lifecycle).
+  //
+  // Owner Ruling (edge): on a day with SAVED actuals, the pre-Match
+  // state IS those saved values (already in editValues + touched at
+  // Match time), so Clear naturally restores them. No lie: Clear
+  // returns the group to whatever it looked like the instant before
+  // Match, projections OR saved.
+  const [matchSnapshots, setMatchSnapshots] = useState({});
   const flashTimeoutsRef = useRef(new Map());
   useEffect(() => () => {
     // Cleanup on unmount: cancel any pending flash clears so we
@@ -542,6 +558,24 @@ function DayEntryV2({
   }, [justSaved, onClose]);
 
   const fillGroupWithProjections = useCallback((group) => {
+    // Match/Clear (2026-08-01): capture the pre-Match snapshot for
+    // THIS group before we mutate. Snapshot holds the group's own
+    // service values + touched flags exactly - restoring later
+    // returns the group to the instant before Match was clicked
+    // (unentered day -> ghosts; entered day -> the seeded actuals).
+    // Cross-group state is not captured; Match on A never touches B.
+    const groupCols = new Set();
+    for (const s of group.services) groupCols.add(s.colIndex);
+    const snapValues = {};
+    const snapTouched = new Set();
+    for (const c of groupCols) {
+      snapValues[c] = editValues[c] ?? "";
+      if (touched.has(c)) snapTouched.add(c);
+    }
+    setMatchSnapshots(prev => ({
+      ...prev,
+      [group.name]: { editValues: snapValues, touched: snapTouched },
+    }));
     const newVals = { ...editValues };
     const newTouched = new Set(touched);
     // Motion: Match-projections cascade. Each newly-solid row gets a
@@ -570,6 +604,42 @@ function DayEntryV2({
     setEditValues(newVals);
     setTouched(newTouched);
   }, [editValues, touched, day.projected, day.date, markFlash]);
+
+  // Match/Clear (2026-08-01): Clear undoes THIS group's Match by
+  // restoring the pre-Match snapshot. Non-snapshot columns (other
+  // groups' services) are untouched. Snapshot is consumed on Clear
+  // - Match must be re-clicked to arm Clear again.
+  const clearGroupToPreMatch = useCallback((group) => {
+    const snap = matchSnapshots[group.name];
+    if (!snap) return;
+    const groupCols = new Set();
+    for (const s of group.services) groupCols.add(s.colIndex);
+    setEditValues(prev => {
+      const next = { ...prev };
+      for (const c of groupCols) next[c] = snap.editValues[c] ?? "";
+      return next;
+    });
+    setTouched(prev => {
+      const next = new Set(prev);
+      for (const c of groupCols) {
+        if (snap.touched.has(c)) next.add(c);
+        else next.delete(c);
+      }
+      return next;
+    });
+    setMatchSnapshots(prev => {
+      const next = { ...prev };
+      delete next[group.name];
+      return next;
+    });
+  }, [matchSnapshots]);
+
+  // Match/Clear (2026-08-01): drop every snapshot on day nav. Matches
+  // justSaved's [day.date] lifecycle - snapshots are strictly local
+  // to the panel-day session, never cross days or survive close.
+  useEffect(() => {
+    setMatchSnapshots({});
+  }, [day.date]);
 
   // getVal + memos - byte-identical to DayDetail (see DayDetail.js:549-662).
   const getVal = useCallback((colIndex) => {
@@ -1134,6 +1204,8 @@ function DayEntryV2({
               accountSegment={accountSegment}
               onChange={handleChange}
               onFillProjections={fillGroupWithProjections}
+              onClearToPreMatch={clearGroupToPreMatch}
+              hasMatchSnapshot={!!matchSnapshots[group.name]}
               groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
               projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
               variant={feeNoDollar ? "fee" : undefined}
@@ -1155,6 +1227,8 @@ function DayEntryV2({
                   accountSegment={accountSegment}
                   onChange={handleChange}
                   onFillProjections={fillGroupWithProjections}
+                  onClearToPreMatch={clearGroupToPreMatch}
+                  hasMatchSnapshot={!!matchSnapshots[group.name]}
                   groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
                   projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
                   variant={feeNoDollar ? "fee" : undefined}
@@ -1375,6 +1449,11 @@ function DayEntryV2({
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
+  // Match/Clear (2026-08-01): Clear renders when parent flags a live
+  // snapshot for this group. onClearToPreMatch restores the group to
+  // pre-Match state. Both undefined = pre-2026-08 caller (bulk paths
+  // etc. do not participate in Match/Clear).
+  onClearToPreMatch, hasMatchSnapshot = false,
   groupSummary, projectedGroupSummary,
   expanded,
   variant,           // undefined | "perMeal" | "bulk" | "fee"
@@ -1405,15 +1484,40 @@ export function GroupBlock({
             <span className="sc-v2-entry-group-seg">{accountSegment}</span>
           )}
         </div>
-        <div className="sc-v2-entry-group-actions">
+        {/* Match/Clear (2026-08-01):
+            - `data-cleared` on the actions container drives Clear's
+              slide-out transform (`--duration-slow` token = 300ms;
+              collapses to 0ms under reduced-motion via the token
+              cascade so no RM fork needed).
+            - Match holds `--held` when a snapshot exists so the
+              button reads "filled" state at rest instead of the
+              inert click-and-forget look it had before.
+            - Clear is always in the DOM when Match is (so the
+              transition has both endpoint styles to animate between);
+              CSS + pointer-events gate visibility + focusability. */}
+        <div
+          className="sc-v2-entry-group-actions"
+          data-cleared={hasProjectedRevenue && hasMatchSnapshot ? "true" : "false"}
+        >
           {hasProjectedRevenue && (
-            <button
-              type="button"
-              className="sc-v2-entry-group-match"
-              onClick={() => onFillProjections(group)}
-            >
-              Match projections
-            </button>
+            <>
+              <button
+                type="button"
+                className="sc-v2-entry-group-clear"
+                onClick={() => onClearToPreMatch?.(group)}
+                aria-hidden={hasMatchSnapshot ? undefined : "true"}
+                tabIndex={hasMatchSnapshot ? 0 : -1}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className={`sc-v2-entry-group-match${hasMatchSnapshot ? " sc-v2-entry-group-match--held" : ""}`}
+                onClick={() => onFillProjections(group)}
+              >
+                Match projections
+              </button>
+            </>
           )}
         </div>
       </header>
