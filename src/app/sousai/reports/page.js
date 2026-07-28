@@ -1,19 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// /sousai/reports · Sous Reports · R1 (slt-gated, server-rendered)
+// /sousai/reports · Sous Reports · R1 (viewer-allowlisted, server-rendered)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // SERVER COMPONENT. Gate order (all server-side):
 //   1. middleware (edge) - redirects unauth requests to /login
-//   2. this component - await auth() re-check + tier check
-//        - no session -> notFound() (defensive; middleware caught it)
-//        - not slt AND not corporate -> notFound()
+//   2. this component - await auth() re-check + canViewSousReports check
+//        - no session -> notFound()
+//        - not on the SOUSAI_REPORTS_VIEWERS allowlist -> notFound()
 //
-// notFound() is the house-standard behavior for tier failures on server-
-// rendered pages. There is no prior slt-only server-rendered page in this
-// app (playbook uses a client-render + API bootstrap "coming soon" pattern).
-// R1 proposes notFound() because it exposes zero information about the
-// route's existence to non-authorized users - a stronger posture than the
-// coming-soon stub for internal analytics.
+// canViewSousReports() is the SINGLE SOURCE OF TRUTH for who sees Sous
+// Reports. It also gates the profile-dropdown nav-link visibility (via a
+// server-resolved prop from src/app/layout.js -> src/components/TopNav.js).
+// One helper, one env var; there is no second surface to keep in sync -
+// see src/lib/opdAcl.js for rationale and the fail-closed default.
+//
+// notFound() is the house-standard behavior for viewer-gated server pages -
+// exposes zero information about the route's existence to non-authorized
+// users. Ratified via #536 (R1) placement decision.
 //
 // Tab switching + Today/Yesterday toggle use search params so the page is
 // pure server-render with no client JS. Refresh affordance: <a href="...">
@@ -28,7 +31,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { viewerTier, isCorporateEmail } from "@/lib/opdAcl";
+import { canViewSousReports } from "@/lib/opdAcl";
 import { fetchReportRows } from "./data.js";
 import "./reports.css";
 import {
@@ -323,9 +326,7 @@ export default async function SousaiReportsPage({ searchParams }) {
   const session = await auth();
   const email = session?.user?.email;
   if (!email) notFound();
-  const tier = viewerTier(email);
-  const isCorp = await isCorporateEmail(email);
-  if (tier !== "slt" && !isCorp) notFound();
+  if (!canViewSousReports(email)) notFound();
 
   const now = new Date();
   const { rows, error } = await fetchReportRows(now);
