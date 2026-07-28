@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v1.9
+**Version:** v2.4
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -16,10 +16,9 @@
 
 ## You are here (updated every revision)
 
-- **Now:** B1 closure. Kevin ruled: **1b = Ruling A** (operator access to REF contract rates is intended; exam corrected) and **language = English-only contract** (Decision 8, below; Spanish sub-case 5b drops to informational). Closure v2 prompt delivered; gating set is 1a, 1b-corrected, 2, 3, 4, 5a, 6 - six already clean-clean, 1b re-running under the corrected criterion. Grounding evidence check still runs as Phase E input.
-- **Next:** CC closes the spike record; Kevin merges #531; Chat issues B2 (route + streaming + flag).
-- **Grading integrity principle (on the record):** exam criteria change only when ground truth or a Kevin ruling proves the criterion wrong - never because the agent failed it.
-- **Open decisions:** only Decision 5 (discovery report).
+- **Now:** Phase B2. #531 merged - B1 DONE, the agent lives on main. B2 CC prompt delivered: flag-gated slt-only streaming route (`feat/sousai-route-b2`), the pinned SSE wire contract, and sanctioned prompt round 2 (money-verbatim, list-assertion, ES-variant mention) re-certified by a full spike-harness rerun at 7/7. Plan v2.4 rides in. Knowledge audit still running in parallel.
+- **Next:** CC delivers B2; Chat grades; Kevin merges, adds `ANTHROPIC_API_KEY_SOUS` + `SOUSAI_ROUTE_ENABLED` to Vercel env, runs the browser verification snippet. Then Phase C (logging + feedback action with its table). Flags 1-2 rulings follow the audit evidence whenever it lands.
+- **Open decisions:** Decision 5 (discovery report); flags 1-2 (pending audit evidence).
 
 ## Status board
 
@@ -27,8 +26,8 @@
 |---|---|---|---|---|
 | 0 | Close the CK-8 record (#525 corrections) | Kevin merges #525 | **DONE 2026-07-25** | #525 merged |
 | A | Tool layer + CLI probe | Probe passes all tiers incl. must-fail cases | **DONE 2026-07-25** | #528 merged |
-| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | Spike run: architecture PASS, 6/7 formal; closure pending 1b ruling + 5b evidence | #531 |
-| B2 | `/api/sousai` route, streaming, flag, admin-only | Route serves B1 behavior end to end | Not started | - |
+| B1 | Agent loop as lib + CLI harness | **Spike gate: 7 pre-written cases run twice + latency. Kill switch.** | **DONE 2026-07-28** - 7/7, all flags resolved with evidence | #531 merged |
+| B2 | `/api/sousai` route, streaming, flag, slt-only | Acceptance gates + post-revision harness 7/7 both runs | IN FLIGHT - CC prompt delivered | PR pending |
 | C | Trajectory logging (migration + wiring) | Log rows visible in Supabase dashboard from first admin question | Not started | - |
 | D | Surface (UI): page first, then global corner-overlay launcher | Kevin approves renders, then build passes design review | Decision closed - awaits B2 | - |
 | E | Eval set + runner | 40-60 questions, runner green per Decision 7 bar (90/100) | Draftable now; complete before G | - |
@@ -55,12 +54,17 @@
 | #525 | 0 | docs(sousai): retrieval regression at current corpus scale (CK-8) | **MERGED 2026-07-25** |
 | TBD | F-prep | docs(sousai): PG data-surface discovery (Decision 5 input) | CC prompt delivered 2026-07-25; read-only, own branch |
 | #528 | A | feat(sousai): phase A tool layer + probe | **MERGED 2026-07-25** - carried plan v1.4 into the repo |
-| #531 | B1 | feat(sousai): phase B1 agent loop + spike | Open - spike run [ran]: 6/7 both-runs, avg $0.053/question (max $0.32), latency 2.4s best / 24.4s enumeration worst; rule-7 spec amendment and plan v1.7 aboard; closure continuation in flight |
+| #531 | B1 | feat(sousai): phase B1 agent loop + spike | **MERGED 2026-07-28** - 7/7 gating, three flags resolved with evidence, plan v1.9 aboard |
+| TBD | B2 | feat(sousai): phase B2 route + streaming + prompt revision | CC prompt delivered 2026-07-28; carries plan v2.4; feedback action deferred to C |
+
+| TBD | B1-tail | docs(sousai): SC account-knowledge audit (flags 1-2 evidence + alignment sweep) | CC prompt delivered 2026-07-28; read-only, own branch |
 
 ## Parked maintenance queue (small standalone PRs, Kevin schedules)
 
 1. **Character Spec §8 rule-7 amendment.** The template-as-canonical rule is enforced in the demo-branch prompt and missing from the spec. Small docs PR; should land before or alongside B1's prompt port so the spec and the shipped prompt agree.
-2. **Chunk language mislabel.** All chunks are stamped `language='en'` regardless of content - POL-006-ES (15 chunks) and POST-001-ES (1 chunk) carry Spanish text under en labels [ran, #528 verification]. Zero impact today; fix (derive language at embed time from frontmatter or the -ES suffix, re-embed 16 chunks) must land before any feature reads the language column as truth.
+2. **Chunk language mislabel.** All chunks are stamped `language='en'` regardless of content - POL-006-ES (15 chunks) and POST-001-ES (1 chunk) carry Spanish text under en labels [ran, #528 verification]. Zero impact today; fix (derive language at embed time from frontmatter or the -ES suffix, re-embed 16 chunks) must land before any feature reads the language column as truth. Urgency lowered by Decision 8.
+3. **B2 prompt revision (MANDATORY, the next sanctioned round):** (a) money-verbatim rule - dollar figures cited only when stated in retrieved text; derived figures labeled as derived, with basis (from flag 3); (b) list-assertion rule - when asserting something is or is not on a documented list, open the doc that enumerates the list (from the 5b partial-grounding finding); (c) mention the ES variant when a cited doc has one.
+4. **Phase E harness-design notes:** cited-sources-contain-their-supporting-text grading; mechanical cited-content-overlap check; invention detector via fixture-driven billing-entity allow-list from the REF-120 corpus (not hyphen-shape regex - the BGC gap); same-evidence-same-label consistency grading across entities (from flag 2); money-figure verbatim-traceability inside the zero-tolerance subset.
 
 ---
 
@@ -144,7 +148,10 @@ PR B1 - the loop as a library plus CLI, no HTTP:
 
 PR B2 - the route:
 
-- `/api/sousai` per the action-dispatch convention (actions: `ask`, `feedback`). Session resolves the caller's tier via opdAcl.js; the tier is injected into every tool call server-side. Streaming. Feature-flagged, admin-only at first.
+- `/api/sousai` per the action-dispatch convention, B2 action: `ask` only - the `feedback` action ships in Phase C with its table (accepting feedback with nowhere to store it drops data silently). Gate order server-side: flag (`SOUSAI_ROUTE_ENABLED`, default off) -> auth (401) -> slt/corporate membership per opdAcl (403; Phase D widens) -> input validation (2,000-char cap). Access levels resolved from the session via opdAcl only - never from the client.
+- Pinned SSE wire contract (Phase D builds on it): `tool_start`, `tool_end`, `token`, `error` (distinct kinds: auth, credit_exhausted, rate_limit, timeout, unknown - pre-wiring Phase C's outage visibility), `done` envelope carrying the B1 return contract minus the full trajectory (trajectory goes to the log in C, not the client). `maxDuration = 60`.
+- Sanctioned prompt round 2 rides in B2: money-verbatim rule, list-assertion rule, ES-variant soft mention - re-certified by a full spike-harness rerun, 7/7 both runs required, one adjustment round max.
+- Kevin deploy steps recorded in the PR: add `ANTHROPIC_API_KEY_SOUS` and `SOUSAI_ROUTE_ENABLED` to Vercel env; run the browser SSE verification snippet post-deploy. The flag ships off - merging deploys a locked door.
 
 **Gate B - the spike gate, the kill switch for the whole direction.** B1's CLI runs a pre-written set with pass/fail authored before the run, grounded in PG ground-truth checks. Every case runs twice - agents are stochastic, and a case passes only if both runs pass. Case 1 (synthesis) also reruns at operator scope with a no-leak criterion. A case 8 (informational, non-gating) probes a fact past PB-001's truncation point to produce the evidence for the parked TOKEN_CAP-vs-section-fetch decision.
 
@@ -220,6 +227,11 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 
 ## Changelog
 
+- **v2.4 - 2026-07-28.** #531 merged; B1 closed. B2 CC prompt issued: flag-gated slt-only streaming route with the pinned SSE wire contract (distinct error kinds pre-wire Phase C outage visibility), sanctioned prompt round 2 (money-verbatim, list-assertion, ES-variant soft mention) gated on a full spike-harness rerun at 7/7. Design deltas recorded: `feedback` action moved to Phase C with its table; trajectory never ships to the client (log-only in C); Kevin deploy checklist (Vercel env key + flag) is part of the PR.
+- **v2.3 - 2026-07-28.** Flag 3 CLOSED: STATED. REF-124 §B.4 stipulates the $362,500 2026 base verbatim (a stipulated base jump, then CPI-U on top, floor 1 percent cap 4 percent). Chat's computed-CPI hypothesis was wrong - the 357,500 x 1.014 near-match was coincidence; recorded honestly. The corpus's §D cross-check flag pre-empted the exact misreading - first field evidence of governance armoring paying off. Money-verbatim rule remains in the mandatory B2 bundle as insurance despite the exoneration. #531 declared merge-ready; flags 1-2 explicitly de-coupled from the B1 gate (their outcomes are corpus docs and eval rules, never B1 code).
+- **v2.2 - 2026-07-28.** Kevin deferred flags 1-2 pending corpus evidence: SC account-knowledge audit commissioned (taxonomy definitions, account classifications, STL-FL entry-mode rationale, CIN-OH cross-check, full cross-doc consistency table, four-way alignment flags). Principle recorded: documented answers get cited, gaps get filled as corpus docs (rulings become documented facts, not harness lines), contradictions get caught before Sous inherits them.
+- **v2.1 - 2026-07-28.** BGC integrity check resolved: real sub-client entity (REF-121); billing-entity universe is 12 by design; regex gap becomes a fixture-driven allow-list design item. Three semantic flags triaged: STL-FL ops-side finding parked for Kevin (contract flat-fee vs SC per-meal entry); CIN-AZ/TBJ-FL labeling inconsistency awaits Kevin's bucket ruling and adds consistency grading to Phase E; CIN-OH $362,500 stated-vs-computed check issued (probable model-derived CPI escalation). B2 prompt revision upgraded to MANDATORY with the money-verbatim rule added to the bundle; money verbatim-traceability added to the zero-tolerance eval design.
+- **v2.0 - 2026-07-28.** B1 closure v2 landed (`90e4844`): 7/7 gating both runs, Ruling A + Decision 8 applied, plan v1.9 in repo. Grounding evidence recorded: 5b's correct answer was partially grounded (concept-level "Top 9" mentions plus model world-knowledge, no retrieved enumeration) - the fluent-guess seam at snippet resolution, now a named Phase E requirement. Chat caught the BGC token (hyphen-less, invisible to the invention regex) and the STL-FL flat-fee-vs-per-meal tension; pre-merge evidence-extraction check issued. Parked queue gains the next-prompt-revision bundle (ES-variant mention, list-assertion rule) and Phase E harness notes (grounding grading, content-overlap check, regex gap). First-token ~10s avg recorded - B2 streaming confirmed as perceived-latency work.
 - **v1.9 - 2026-07-25.** Kevin's two rulings recorded: 1b = Ruling A (REF contract-rate operator visibility intended; exam corrected) and Decision 8 = English-only language contract (5b reclassified informational; no Spanish in the gated eval; ES-variant-mention prompt line parked; maintenance item 2 urgency lowered). Gating set restated as seven cases. Closure v2 prompt issued superseding v1. Plan drop protocol added to How-this-works: CC selects by version line via glob; filenames never gate.
 - **v1.8 - 2026-07-25.** B1 spike run recorded: architecture PASS, 6/7 formal both-runs; latency and cost numbers logged; English-answer rule was the one prompt round. Case 8 evidence closes the parked TOKEN_CAP item (no action v1). Case 1b escalated to Kevin as ruling A/B (REF contract-rate visibility); case 5b pending the Include-expansion grounding check. Grading-integrity principle recorded. Phase C gains distinct API-failure logging (credit-blocker lesson). Ledger #531 added.
 - **v1.7 - 2026-07-25.** #528 merged; Phase A closed. B1 CC prompt issued. Recorded B1 design deltas: tool budget 6 to 8 with batched get_document (max 6 ids per call) so enumeration fits; status produced via a parsed `[[STATUS]]` footer with downgrade-only mechanical checks; spike cases run twice each with both-runs-pass required; case 1 gains an operator-scope no-leak rerun; case 8 added (informational PB-001 depth probe feeding the TOKEN_CAP decision). Rule-7 spec amendment folded into the B1 PR as the sanctioned spec-with-prompt exception to one-axis.

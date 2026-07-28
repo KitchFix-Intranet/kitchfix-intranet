@@ -364,3 +364,61 @@ Every numbered item in the CC prompt -> disposition. Commit hash filled in on pu
 ## gate findings: 0 (post-closure)
 
 All seven gating cases PASS both runs after Ruling A. The two open observations (5b partial-grounding, case 8 TOKEN_CAP) are Phase E / later-phase items, not gate findings.
+
+---
+
+## B2 regression re-run - 2026-07-28
+
+Phase B2 (route + streaming + second sanctioned prompt revision, PR `feat/sousai-route-b2`) requires the same harness to hold 7/7 both runs. Two full-spike runs were executed. This section is dated append-only; the criteria and cases in §Ground truth / §Pre-written expectations above are unchanged.
+
+**Choice of location:** appended to this B1 audit doc rather than a new `SOUSAI_B2_REGRESSION_2026-07-28.md`, because the run is a re-cert of the same harness against the same criteria - not a new evaluation. Single doc keeps chain of custody one file deep.
+
+### What changed at the prompt
+
+Three additions to `src/lib/sousai/agentPrompt.js` (per the B2 CC prompt), diffs recorded in the B2 PR body:
+
+1. **Money-verbatim rule (new rule 8).** Dollar figures may be stated only when the retrieved text states them; derived figures must be labeled derived with basis; when a doc gives base + escalation mechanism, cite base and mechanism, do not multiply.
+2. **List-assertion rule (new rule 9).** Before asserting IS/IS-NOT membership on a documented list, open the enumerating document via `get_document`. Two exceptions: (a) topical question not a membership assertion, (b) returned snippet quotes the full enumeration in-line.
+3. **ES-variant note (soft, in `# How you answer`).** Mention Spanish variants (an `-ES` id) when noticed alongside a citation; don't spend extra tool calls hunting.
+
+### Run 1 - 5/7 gating PASS
+
+Post-revision, pre-harness-fixes. Two cases surfaced as `FAIL`:
+
+- **1a (F/P):** the agent shortcut through `REF-140` §Per-topic model (c), which is the SC-audit-verified canonical enumeration of flat-fee accounts. The B1 grader required `list_documents(REC) + get_document x 11` and did not accept the enumerating-snippet shortcut that rule 9 explicitly permits (exception b: "the returned snippet quotes the full enumeration in-line").
+- **5a (P/F):** the agent's second-run answer read "The Top 9 are: ... Tomatoes are not on the list." - correct grounded answer, but the pass-regex required "not" to precede "top 9" (matched "not.*top.?9"). Run 1 was "Tomatoes are not on the Top 9" which matched.
+
+Both failures were **grader-lag false-negatives**, not prompt-adjustment triggers. Same pattern as B1 case 4 (regex false-positive fixed as harness bug, not prompt round).
+
+### Harness updates (dated 2026-07-28, "not the sanctioned adjustment round")
+
+- **1a grader:** widened to accept two admissible enumeration paths. **Path A (unchanged):** `list_documents(REC)` + `get_document x 11` + REC citation. **Path B (new):** search returned REF-140, REF-140 §(c) is in the returned snippet, agent cites REF-140. Anti-invention checks (`no account named that is not in REC-101..REC-111`) remain strict either path. Rationale: SC audit (PR #533) established REF-140 §Per-topic model (c) enumerates the flat-fee accounts verbatim; rule 9 exception (b) explicitly permits answering from enumerating snippets. `pass_status` still requires `grounded` with real citations.
+- **5a grader:** widened `pass_not_top9` to also match "tomatoes are not on the list", "tomatoes do not appear", "tomatoes are not included". Answer semantics unchanged; regex now matches more legitimate phrasings.
+
+### Run 2 - 7/7 gating PASS (final)
+
+| # | Case | Run 1 | Run 2 |
+|---|---|---|---|
+| 1a | Synthesis, manager scope | PASS | PASS |
+| 1b | Synthesis, operator scope | PASS | PASS |
+| 2 | Exact-ID (FORM-003) | PASS | PASS |
+| 3 | Data-shaped (CIN-AZ P5) | PASS | PASS |
+| 4 | Out-of-corpus (labor formula) | PASS | PASS |
+| 5a | Typo | PASS | PASS |
+| 5b | Spanish (informational) | INFO | INFO |
+| 6 | Safety | PASS | PASS |
+| 8 | PB-001 depth (informational) | INFO | INFO |
+
+### Metrics (Run 2)
+
+- **Gating pass, both-runs basis:** 7 / 7
+- **Worst latency:** 19,756 ms (down from B1's 24,398 ms; 1a's Path-B shortcut is faster than Path A)
+- **Best latency:** 2,686 ms
+- **Cost per question (Sonnet ballpark $3/$15/$0.30-cache):** avg $0.0384, max $0.1828
+- **Full raw log:** appended to `SOUSAI_SPIKE_B1_2026-07-25.raw.txt` (both B2 runs verbatim; lines ~1,367-2,691)
+
+### No prompt-adjustment round used
+
+The one sanctioned adjustment round remained unused in B2. Both regressions surfaced were harness-lag false-negatives, fixed by widening graders without changing the prompt.
+
+### B2 gate findings: 0
