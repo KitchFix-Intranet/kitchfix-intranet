@@ -133,16 +133,32 @@ COMMENT ON COLUMN accounts.labor_ratio IS
 -- Ratio audit hangs off the existing changelog with a new entity_type.
 -- The CHECK constraint needs to be DROP + ADD; there is no ALTER
 -- CHECK IN Postgres.
+--
+-- CORRECTION (post-apply, fix/sc-20-do-block, 2026-08-14):
+-- The predicate here originally matched on
+--   pg_get_constraintdef(c.oid) LIKE '%entity_type%IN%'
+-- to skip the DDL when the constraint had already been extended.
+-- That predicate NEVER MATCHES a real Postgres CHECK: the planner
+-- normalises `IN (a, b, c)` to `= ANY (ARRAY[a, b, c])` on storage,
+-- so the literal token `IN` is not present in the definition text.
+-- The block silently no-op'd, the constraint stayed at the sc-4
+-- shape, and a fresh environment applying the merged file would
+-- reject the first `labor_ratio` audit write at write time - with
+-- no trail back to this migration.
+--
+-- Owner applied the corrected DDL by hand in Studio; on this
+-- environment the constraint is live and includes labor_ratio.
+-- File corrected here so a fresh apply lands the same shape without
+-- the silent no-op. Detects by CONSTRAINT NAME (sc-4's known label)
+-- with the idempotency guard retained via a NOT LIKE '%labor_ratio%'
+-- check on the same definition string. No re-apply needed here.
 DO $$
 BEGIN
-  -- Look up the current CHECK constraint name (Supabase-generated).
-  -- Assumes standard sc-4 naming pattern; NO-OP if the constraint
-  -- shape has already drifted.
   IF EXISTS (
     SELECT 1 FROM pg_constraint c
     JOIN pg_class t ON t.oid = c.conrelid
-    WHERE t.relname = 'sc_config_changelog' AND c.contype = 'c'
-      AND pg_get_constraintdef(c.oid) LIKE '%entity_type%IN%'
+    WHERE t.relname = 'sc_config_changelog'
+      AND c.conname = 'sc_config_changelog_entity_type_check'
       AND pg_get_constraintdef(c.oid) NOT LIKE '%labor_ratio%'
   ) THEN
     -- Drop and recreate with the extended enum.
