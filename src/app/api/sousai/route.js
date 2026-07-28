@@ -62,6 +62,7 @@ import { getServiceClient } from "@/lib/supabase";
 import { runSousAgent, SOUSAI_AGENT_MODEL } from "@/lib/sousai/agent.js";
 import { evaluateGates } from "./gate.js";
 import { logSousaiQuestion, updateSousaiFeedback } from "./log.js";
+import { initFooterState, advance as advanceFooterState, flush as flushFooterState } from "./suppressFooter.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -189,21 +190,33 @@ async function handleAsk(gate) {
       const streamStart = Date.now();
       let firstTokenAt = null;
 
-      // Forward agent events onto the SSE wire live. The agent now emits
-      // `text-delta` events as the model writes each delta - we forward
-      // them as `token` events. token_burst_ms captures the wallclock of
-      // the first `text-delta`, which is the true time-to-first-LLM-token
-      // (used to be `latency_ms` when the whole answer was chunked after
-      // settle - the divergence between these two numbers is the proof
-      // this refactor worked; see PR body).
+      // Trailing-sentinel suppression for the machine `[[STATUS: ...]]`
+      // footer. Before delta streaming (#541), the route chunked
+      // `result.answer` after settle - answer was already stripped by
+      // parseAnswer(), so the footer never reached the wire. Under live
+      // deltas the model writes the footer as the last text chunk and it
+      // leaks. `advanceFooterState` holds back the longest suffix that
+      // could still turn into the sentinel; on sentinel appearance it
+      // returns "hit" and all subsequent deltas are dropped. On stream
+      // end, any held-back non-sentinel prose flushes onto the wire.
+      let footerState = initFooterState();
+
+      // Forward agent events onto the SSE wire live.
+      // token_burst_ms captures the wallclock of the first FORWARDED
+      // character (not the first raw delta) - a delta that gets held
+      // back for sentinel-check doesn't count as time-to-first-token.
       const onEvent = (ev) => {
         if (ev.kind === "tool-start") {
           write("tool_start", { tool: ev.tool, summary: summarizeToolStart(ev.tool, ev.input) });
         } else if (ev.kind === "tool-end") {
           write("tool_end", { tool: ev.tool, ms: ev.ms });
         } else if (ev.kind === "text-delta") {
-          if (firstTokenAt === null) firstTokenAt = Date.now();
-          write("token", { t: ev.t });
+          const { forward, next } = advanceFooterState(footerState, ev.t);
+          footerState = next;
+          if (forward.length > 0) {
+            if (firstTokenAt === null) firstTokenAt = Date.now();
+            write("token", { t: forward });
+          }
         }
       };
 
@@ -214,6 +227,15 @@ async function handleAsk(gate) {
       } catch (err) {
         mappedError = mapSdkError(err);
         write("error", mappedError);
+      }
+
+      // Flush any pending footer buffer as a final token event. This only
+      // fires when held-back chars never became the sentinel (edge case:
+      // stream ends mid-prefix). If suppression fired, this is a no-op.
+      const tail = flushFooterState(footerState);
+      if (tail.length > 0) {
+        if (firstTokenAt === null) firstTokenAt = Date.now();
+        write("token", { t: tail });
       }
 
       const latencyMs = Date.now() - streamStart;
