@@ -19,6 +19,15 @@ import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
 import { useScV2, useScEntryV2Effective } from "./v2/flags";
+// M-2 (2026-07-29): pilot allow-list for the homestand scope + detail
+// surface. Client-side gate at every render decision that could route
+// a non-pilot account into the new surface. Server payload emit uses
+// the same set (see lib/dataStore/serviceCalendar.js).
+import { M2_HOMESTAND_ACCOUNTS } from "./v2/pilots";
+// M-2 (2026-07-29): homestand detail surface. Mounted only on
+// scope === "homestand" AND M2_HOMESTAND_ACCOUNTS.has(account).
+import HomestandDetail from "./v2/homestand/HomestandDetail";
+import "./v2/homestand/homestand.css";
 import Ribbon from "./v2/Ribbon";
 import SeasonRail from "./v2/SeasonRail";
 import DrillRail from "./v2/DrillRail";
@@ -106,10 +115,16 @@ const CAT_LABELS = { PDC: "Player Development", MLB: "Major League", MiLB: "Mino
 // URL-sync re-fire that follows the push sees no scope/lens/etc
 // change and no-ops. This is the unidirectional flow that #399
 // tried and failed to achieve.
-function buildScUrl({ account, period, month, view, day } = {}) {
+function buildScUrl({ account, period, month, homestand, view, day } = {}) {
   const params = new URLSearchParams();
   if (view)    params.set("view", view);
   if (account) params.set("account", account);
+  // M-2 (2026-07-29): ?homestand=<key> wins over ?period= and ?month=.
+  // Key is the segment's stable identifier (game_pk or startDate) -
+  // NEVER the "HS7" ordinal. Ordinals shift on reschedule; the key
+  // stays put. URL parse in the URL-sync effect below matches the
+  // precedence (homestand -> period -> month) declared here.
+  if (homestand) params.set("homestand", String(homestand));
   if (period)  params.set("period", period);
   if (month)   params.set("month", month);
   // W5: ?day=YYYY-MM-DD is a drill-only tile-targeting param. Scrolls
@@ -502,6 +517,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // undefined and returns envDefault only.
   const scEntryV2 = useScEntryV2Effective(selectedAccount || undefined, isFeeAccount);
   const [yearData, setYearData] = useState(null);
+  // M-2 (2026-07-29): the homestands[] array from sc-year-summary,
+  // set only when the response carries it (server gates on pilot set).
+  // Non-pilot accounts leave this null - `isHomestandView` guards
+  // every consumer.
+  const [yearHomestands, setYearHomestands] = useState(null);
   // SC-033: track the year-summary fetch state so a whole-fetch failure
   // renders the failed atoms on every overview cell instead of silently
   // stalling on the loading skeleton (the pre-fix behavior).
@@ -528,6 +548,12 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   //   partialError = null | { failedMonth: "2026-07" } for the honest
   //                  partial-data state.
   const [periodKey, setPeriodKey] = useState(null);
+  // M-2 (2026-07-29): homestand scope key. Same layer as periodKey +
+  // monthKey. Value is the segment's stable key (game_pk or
+  // startDate), never the "HS7" ordinal. URL-sync effect below sets
+  // this from ?homestand=; the render gates on both scope === "homestand"
+  // AND M2_HOMESTAND_ACCOUNTS.has(selectedAccount).
+  const [homestandKey, setHomestandKey] = useState(null);
   // Month drill: which calendar month ("YYYY-MM") the user drilled into
   // from the Calendar overview. Mutually exclusive with periodKey - the
   // URL sync effect below picks one via the ?period / ?month gate.
@@ -586,6 +612,31 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const isYearView   = !isAdminView && scope === "year"   && (lens === "calendar" || lens === "period");
   const isPeriodView = !isAdminView && scope === "period" && lens === "period";
   const isMonthView  = !isAdminView && scope === "month"  && lens === "calendar";
+  // M-2 (2026-07-29): the homestand scope's derived predicate. Same
+  // discipline as the three above - use isHomestandView for RENDER
+  // conditions; effects must depend on the underlying `scope` /
+  // `homestandKey` state so they don't over-fire. The account gate
+  // stays OFF this predicate on purpose - it lives at the render
+  // boundary via M2_HOMESTAND_ACCOUNTS.has(selectedAccount) so the
+  // URL-sync effect at :927 can remain account-blind and keep its
+  // pre-#399 dep shape [searchParams, isAdmin].
+  const isHomestandView = !isAdminView && scope === "homestand";
+  // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce): a
+  // non-pilot account with `?homestand=` in the URL used to render
+  // an empty .sc-body - the mount check gated on the pilot set but
+  // the season view's `isYearView` gate was still false (scope
+  // !== "year"). Shareable URL that degrades to a blank page.
+  //
+  // Corrected: derive an EFFECTIVE isYearView that also fires when
+  // scope === "homestand" but the account is not in the pilot set.
+  // Renders the same year overview a chef would have seen without
+  // the ?homestand= param. Matches "land them where they would have
+  // been." A companion effect below strips ?homestand= from the URL
+  // so the visible state and the URL agree - shareable link works
+  // for anyone who reaches it later.
+  const isHomestandOnPilot = isHomestandView && M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
+  const isHomestandOnNonPilot = isHomestandView && selectedAccount && !M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
+  const isYearViewEffective = isYearView || isHomestandOnNonPilot;
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -701,6 +752,9 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   useEffect(() => {
     setData(null);
     setYearData(null);
+    // M-2 (2026-07-29): homestands[] is per-account. Clear on switch
+    // so the prior account's data cannot flash on a slow refetch.
+    setYearHomestands(null);
     setYearToday(null);
     // PR-B2: also clear period state on account-switch. monthCache
     // is per-account; without clearing it a switch would render the
@@ -782,7 +836,10 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     // sc-year-summary endpoint; already fires on year + period; now
     // month too. Account-switch reset at :620 still clears everything;
     // fetch re-fires under the new account.
-    const needsYearData = isYearView || isMonthView;
+    // M-2 (2026-07-29): homestand view also reads yearData - the
+    // detail surface pulls the days in the block's span from the
+    // months[] structure for the day strip's cell content.
+    const needsYearData = isYearView || isMonthView || isHomestandView;
     const needsPeriodRanges = lens === "period";
     if (!selectedAccount || (!needsYearData && !needsPeriodRanges)) return;
     // reloadKey is in the dep array so a save in the month view also
@@ -795,6 +852,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         setYearData(d.months);
         setYearToday(d.today || null);
         if (d.periodRanges) setPeriodRanges(d.periodRanges);
+        // M-2 (2026-07-29): homestands[] arrives only for pilot
+        // accounts (server gates on M2_HOMESTAND_ACCOUNTS). Null
+        // otherwise - `isHomestandView` renders never reach into
+        // this when it is null (mount checks account first).
+        setYearHomestands(d.homestands || null);
         setYearLoadState("loaded");
         // Design Batch 2: stamp the load time once data lands.
         setAsOf(new Date());
@@ -926,10 +988,39 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // the self-refire loop in #399.
   useEffect(() => {
     const view = searchParams?.get("view") || null;
+    const homestand = searchParams?.get("homestand") || null;
     const period = searchParams?.get("period") || null;
     const month = searchParams?.get("month") || null;
     if (view === "admin" && isAdmin) {
-      setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
+      setIsAdminView(true); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null); setHomestandKey(null);
+    } else if (homestand) {
+      // M-2 (2026-07-29): ?homestand=<key> opens the homestand detail
+      // surface. The key is the segment's stable identifier (game_pk
+      // or startDate), never the "HS7" ordinal - the URL contract
+      // matches the derivation's `key` field (homestandDerivation.js:185).
+      //
+      // Precedence: homestand -> period -> month -> year. Wins over
+      // period + month if all present, mirroring the way ?period= wins
+      // over ?month= today.
+      //
+      // Account gate is DELIBERATELY NOT enforced here. The effect's
+      // deps are [searchParams, isAdmin] and adding selectedAccount
+      // re-opens the #399 self-refire loop the URL-sync effect was
+      // built to avoid. The gate lives at the render boundary via
+      // M2_HOMESTAND_ACCOUNTS.has(selectedAccount) - a non-pilot
+      // account with ?homestand= in the URL falls to the Season
+      // overview with no scope side effects.
+      //
+      // lens=calendar (not "period") is deliberate. lens is the v1-era
+      // Calendar/Period toggle field, meaningful ONLY inside scope=year;
+      // once scope leaves year the field is dead state. The admin,
+      // month, and year branches above/below all set lens="calendar"
+      // for the same reason. Choosing "period" here would produce a
+      // weird combo state (scope=homestand + lens=period) that neither
+      // isYearView, isPeriodView, isMonthView nor isHomestandView reads,
+      // but that a future predicate could accidentally trip on.
+      setIsAdminView(false); setScope("homestand"); setLens("calendar");
+      setHomestandKey(homestand); setPeriodKey(null); setMonthKey(null);
     } else if (period) {
       // Any non-empty ?period= means "show this period's workspace."
       // The identifier is the bare period number (e.g. "1"), NOT "P1" -
@@ -937,16 +1028,36 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       // URL but never opened the workspace. An unknown value renders the
       // workspace empty state (graceful), so no format regex is needed.
       // Precedence: ?period= wins if both ?period= and ?month= present.
-      setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period); setMonthKey(null);
+      setIsAdminView(false); setScope("period"); setLens("period"); setPeriodKey(period); setMonthKey(null); setHomestandKey(null);
     } else if (month && /^\d{4}-\d{2}$/.test(month)) {
       // ?month=YYYY-MM opens the month drill-in. Shape guard prevents
       // junk values from creating a scope=month state with no valid
       // month lookup - falls through to the year default instead.
-      setIsAdminView(false); setScope("month"); setLens("calendar"); setPeriodKey(null); setMonthKey(month);
+      setIsAdminView(false); setScope("month"); setLens("calendar"); setPeriodKey(null); setMonthKey(month); setHomestandKey(null);
     } else {
-      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null);
+      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null); setHomestandKey(null);
     }
   }, [searchParams, isAdmin]);
+
+  // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce): if a
+  // non-pilot account lands with `?homestand=<key>` in the URL, strip
+  // the param so the URL matches what the operator sees (year view).
+  // The render layer already falls through to isYearViewEffective so
+  // there is no visual flash; this effect just cleans the URL so a
+  // shared link is honest.
+  //
+  // Deliberately NOT inside the URL-sync effect: that effect's deps
+  // are [searchParams, isAdmin] (#399 shape). Adding selectedAccount
+  // to those deps re-opens the self-refire loop. Instead this effect
+  // owns its own dep set on the account gate and the derived
+  // isHomestandOnNonPilot boolean.
+  useEffect(() => {
+    if (!isHomestandOnNonPilot) return;
+    router.replace(
+      buildScUrl({ account: selectedAccount || undefined }),
+      { scroll: false }
+    );
+  }, [isHomestandOnNonPilot, selectedAccount, router]);
 
   // Floor-role default landing (preserved behavior): a floor user with a
   // clean URL lands on the current period workspace. Fires once
@@ -2547,15 +2658,32 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           viewport-relative positioning is not trapped by the modal's
           backdrop-filter containing block. */}
       <HandoffLayer />
+      {/* M-2 (2026-07-29) scope-ternary audit:
+          These four sites all had shape `scope === "month" ? X : Y`
+          with Y implicitly "period". A third scope value ("homestand")
+          fell into Y. Per scope E3 (MLB does not adopt the Handoff),
+          the HandoffAmbient card firing on a homestand surface is a
+          live path to exactly the thing E3 forbids. Each site now
+          reads three-way and treats "homestand" as an explicit branch
+          that produces null / "" (never a lying "period" label). The
+          MonthCompleteCard scopeLabel is dead cosmetics under the
+          M-2 wiring (HandoffAmbient passes null activeMetrics so the
+          completing-edge guard bails and showMonthComplete never
+          fires), but the label is fixed defensively for the day it
+          becomes reachable. */}
       <MonthCompleteCard
-        scopeLabel={scope === "month" ? "month" : "period"}
+        scopeLabel={scope === "month" ? "month" : scope === "period" ? "period" : ""}
         onBackToSeason={() => router.push(buildScUrl({ account: selectedAccount || undefined }), { scroll: false })}
       />
       {/* P3-B re-gate 5 fix 1 (2026-07-28): scopeName is the DISPLAY
           NAME the card renders inside "Stay in {name}". Month drill
           resolves to the English month word ("June"); period drill
           resolves to "P6" using the same convention the drill header
-          uses. Fallback to the generic word so the card never blanks. */}
+          uses. Fallback to the generic word so the card never blanks.
+          M-2 (2026-07-29): activeMetrics is null on homestand scope
+          so the ambient effect's `total > 0` guard at :419-422 bails
+          without invoking showMonthComplete. This is the load-bearing
+          E3 fence - do NOT pass periodMetrics on homestand scope. */}
       <HandoffAmbient
         selectedAccount={selectedAccount}
         scope={scope}
@@ -2563,11 +2691,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         monthKey={monthKey}
         syncingKeys={syncingKeys}
         showToast={showToast}
-        activeMetrics={scope === "month" ? monthMetrics : periodMetrics}
-        scopeLabel={scope === "month" ? "month" : "period"}
-        scopeName={scope === "month"
-          ? (monthKey ? new Date(`${monthKey}-01T00:00:00`).toLocaleString("en-US", { month: "long" }) : "month")
-          : (periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : "period")}
+        activeMetrics={scope === "month" ? monthMetrics : scope === "period" ? periodMetrics : null}
+        scopeLabel={scope === "month" ? "month" : scope === "period" ? "period" : ""}
+        scopeName={
+          scope === "month"
+            ? (monthKey ? new Date(`${monthKey}-01T00:00:00`).toLocaleString("en-US", { month: "long" }) : "month")
+            : scope === "period"
+              ? (periodKey ? `P${String(periodKey).replace(/^P/i, "")}` : "period")
+              : ""
+        }
       />
       {scV2 && (() => {
         /* Drill P1 PR-A DP1-02: drill-scope controls that ChromeBar
@@ -2797,7 +2929,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       )}
 
       <div className="sc-body">
-        {isYearView && (() => {
+        {/* M-2 defect fix (2026-07-29): isYearViewEffective covers
+            both scope=year AND scope=homestand-on-non-pilot fall-
+            through. A non-pilot deep-linked `?homestand=<key>` URL
+            lands here (immediate render) while the URL-cleanup
+            effect above strips the param. Matches "land them where
+            they would have been" per owner ruling. */}
+        {isYearViewEffective && (() => {
           const seasonShell = (
             <SeasonShell
               account={data?.account}
@@ -2826,6 +2964,18 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               onPeriodClick={(periodLabel) => {
                 router.push(buildScUrl({ account: selectedAccount || undefined, period: periodLabel }), { scroll: false });
               }}
+              /* M-2 (2026-07-29 - owner ruling, prompt §4.3): pilot
+                 accounts route the stepper click to the homestand
+                 scope. Non-pilot accounts get undefined here so the
+                 fallback period-map path runs unchanged. Includes
+                 the three non-pilot MLB accounts (STL-MO, TXR-TX-H,
+                 TXR-TX-V) - they stay on period routing until M-4. */
+              onHomestandClick={M2_HOMESTAND_ACCOUNTS.has(selectedAccount) ? (segmentKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: segmentKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               // Lifted view toggle (the action signal moved to the chrome
               // bar, so the season shell no longer carries jump props).
               view={seasonView}
@@ -3408,6 +3558,34 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             </div>
           );
         })()}
+
+        {/* M-2 (2026-07-29): homestand detail surface. Peer of month
+            and period (scope A3 - "not a modal or a side panel").
+            Mounted only when:
+              - the URL routed us here (scope === "homestand"), AND
+              - the account is in the M-2 pilot set (CIN-OH today).
+            An account-mismatch fall-through renders nothing here;
+            the empty <div className="sc-body"> above handles the
+            visual state (no scope shell) while nav remains available
+            in the Ribbon. A key-mismatch (block not in payload) is
+            handled INSIDE HomestandDetail so the surface can render
+            an empty state instead of blanking. */}
+        {isHomestandOnPilot && (
+          <HomestandDetail
+            account={data?.account}
+            year={year}
+            homestandKey={homestandKey}
+            homestands={yearHomestands}
+            yearData={yearData}
+            todayIso={today}
+            loadState={yearLoadState}
+            onClimbToSeason={handleClimbToSeason}
+            onNavHomestand={(nextKey) => router.push(
+              buildScUrl({ account: selectedAccount || undefined, homestand: nextKey }),
+              { scroll: false }
+            )}
+          />
+        )}
 
         {/* Drill-in state legend as a direct child of .sc-body, matching
             the overview's SeasonShell pattern - the .sc-body >

@@ -49,6 +49,13 @@ export default function SeasonShell({
   // Stage 2 additions:
   periodRanges,             // [{ period, start, end }] from sc-year-summary
   onPeriodClick,            // (periodLabel) => void
+  // M-2 (2026-07-29): homestand-scope routing. When provided, a
+  // stepper block click is routed here (with the segment's stable
+  // key) instead of being mapped to the containing period. The
+  // parent decides per-account whether to pass this - only pilot
+  // accounts (M2_HOMESTAND_ACCOUNTS) do, so non-pilot accounts
+  // preserve pre-M-2 period-map behavior byte-identically.
+  onHomestandClick,         // (segmentKey) => void  (optional)
   // Lifted view toggle (passed from orchestrator). The action signal
   // moved to the ChromeBar, so the shell no longer carries jump props.
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
@@ -140,8 +147,20 @@ export default function SeasonShell({
   // Design Batch 3: the stepper drills into the period that contains
   // the clicked homestand's start date. The mapping happens here so
   // SeasonStepper stays presentational.
+  //
+  // M-2 (2026-07-29 - owner ruling, prompt §4.3): when a homestand
+  // click handler is supplied by the parent (pilot accounts only),
+  // route to the homestand scope using the segment's stable key
+  // instead of mapping to the containing period. Non-pilot accounts
+  // pass no onHomestandClick and preserve the pre-M-2 period-map
+  // behavior byte-identically - Fences 1-4 hold at the click layer.
   const handleSegmentClick = (segment) => {
-    if (!segment || !onPeriodClick) return;
+    if (!segment) return;
+    if (onHomestandClick && segment.key) {
+      onHomestandClick(segment.key);
+      return;
+    }
+    if (!onPeriodClick) return;
     const range = periodRanges?.find(
       (r) => segment.startDate >= r.start && segment.startDate <= r.end
     );

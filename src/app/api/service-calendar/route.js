@@ -539,6 +539,11 @@ export async function GET(request) {
           if (m.homestandSummary) monthOut.homestandSummary = m.homestandSummary;
           return monthOut;
         }),
+        // M-2 (2026-07-29): homestand detail payload for the pilot
+        // account (CIN-OH). Present only when the loader emitted it
+        // - non-pilot accounts get a byte-identical pre-M-2 response.
+        // Copy-through pattern mirrors homestandSummary at :539.
+        ...(summary.homestands ? { homestands: summary.homestands } : {}),
       });
     }
 

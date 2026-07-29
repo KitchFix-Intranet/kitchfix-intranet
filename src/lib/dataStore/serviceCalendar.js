@@ -9,6 +9,20 @@ import {
   deriveHomestandSegments,
   DERIVE_HOMESTANDS_ACCOUNTS,
 } from "@/app/service-calendar/season/homestandDerivation";
+// M-2 (2026-07-29): homestand detail payload build. Pure module,
+// server-safe (no React deps - checked in laborBudgetDerivation.js
+// header). We call deriveLaborBudgets here without touching its math.
+import { deriveLaborBudgets } from "@/app/service-calendar/season/laborBudgetDerivation";
+// M-2 pilot allow-list. Non-hook module; safe to import server-side.
+// The set is the ONLY signal that gates the top-level homestands[]
+// emit. See v2/pilots.js for why this is separate from
+// DERIVE_HOMESTANDS_ACCOUNTS.
+import { M2_HOMESTAND_ACCOUNTS } from "@/app/service-calendar/v2/pilots";
+// M-2: labor budgets live rows for the emit. salary_budget and
+// revenue_forecast are stripped at the boundary here so they never
+// cross the network. Admin fields (changed_by / changed_at /
+// effective_from / reason / id) never enter the M-2 payload path.
+import { readLiveLaborBudgets } from "@/lib/dataStore/laborBudgets";
 
 // ── Schedule-truth fallback (shared) ──────────────────────────────────
 //
@@ -1099,6 +1113,244 @@ export async function loadScheduleOverlay(accountKey, firstDate, lastDate) {
 }
 
 
+// M-2 helpers - local date math for the homestands[] emit.
+// enumerateDatesInclusive("2026-07-03", "2026-07-12") -> 10 ISO
+// strings. Guards on end < start (empty array). Uses noon-anchored
+// local Date to sidestep DST bumping.
+function m2EnumerateDatesInclusive(startISO, endISO) {
+  const out = [];
+  if (!startISO || !endISO || endISO < startISO) return out;
+  const start = new Date(startISO + "T12:00:00");
+  const end = new Date(endISO + "T12:00:00");
+  const cur = new Date(start);
+  while (cur <= end) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, "0");
+    const d = String(cur.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+function m2AddDaysIso(iso, n) {
+  const d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+}
+
+function m2SpanInclusiveDays(startISO, endISO) {
+  const a = new Date(startISO + "T12:00:00");
+  const b = new Date(endISO + "T12:00:00");
+  return Math.round((b - a) / 86400000) + 1;
+}
+
+// M-2 homestands[] payload builder. Assembles the B7 subset from
+// derived blocks + derived envelopes + a date-keyed day lookup.
+// Pure function. Does NOT compute budgets - deriveLaborBudgets is
+// the sole owner of that math per the M-1 acceptance gate.
+//
+// Emits per block:
+//   { key, ordinal, startDate, endDate, dayCount, gameCount,
+//     opponents, periodsTouched, budget, budgetReason, status,
+//     servedDays, exceptionDays, meals, prepDays, windowStart, windowEnd }
+//
+// STATUS enum: upcoming | in-progress | ended. `closed-out` is a
+// close-out concept that arrives in M-3 with sc_homestand_closeout;
+// emitting it here without a source table would state an obligation
+// the product cannot accept. Same missing-vs-zero discipline the
+// M-1 envelope carries.
+//
+// PREP DAYS (per scope B3): the day BEFORE the block's first game,
+// plus each internal off-day inside the block span. This is a
+// derived proposal - no stored adjustments in M-2. The day strip's
+// domain is (startDate - 1) through endDate.
+//
+// WINDOW (per scope B5): from the day AFTER the previous block's
+// last day through THIS block's last day. First block opens 14 days
+// before its first game (season opener onboarding + training). The
+// window is a labor-attribution concept for M-3 close-out and is
+// carried on the payload so the surface can display the range where
+// close-out land.
+function buildM2Homestands(blocks, envelopes, daysByDate, todayIso, accountKey) {
+  if (!Array.isArray(blocks) || blocks.length === 0) return [];
+  const envByKey = new Map(envelopes.map((e) => [e.key, e]));
+
+  return blocks.map((block, i) => {
+    const env = envByKey.get(block.key);
+
+    // Status derivation. `ended` includes every past block until
+    // M-3 gives close-out state a home. No `actuals-due` in M-2 per
+    // owner ruling - it would state an obligation with no surface
+    // for the response.
+    let status;
+    if (block.endDate < todayIso) status = "ended";
+    else if (block.startDate <= todayIso && todayIso <= block.endDate) status = "in-progress";
+    else status = "upcoming";
+
+    const dayCount = m2SpanInclusiveDays(block.startDate, block.endDate);
+
+    // Prep proposal (M-2 Round 2 owner reversal, 2026-07-29).
+    //
+    // The block's own boundaries are the authority. Inside
+    // [block.startDate, block.endDate]:
+    //   - date has a GAME record  -> game day
+    //   - date has NO GAME record -> internal off-day -> prep proposal
+    //
+    // This is derivable from the span itself; the missing-versus-zero
+    // rule governs FACTS you would need a record to know (served
+    // counts, meals, labor) - not DATES the span itself defines.
+    // Post-sc-13's schedule table has no PREP rows by design, which
+    // is exactly why B3 is a derivation rule rather than a lookup.
+    //
+    // Owner ruling verified against every CIN-OH homestand: M20a
+    // shows HS9 = 9 games in 10 days, 1 internal off-day, 2 prep
+    // (leading + 1 internal). The rule matches that count by
+    // construction.
+    //
+    // Leading pre-day (definitional per B3): the day BEFORE the
+    // block's first game. Pushed UNLESS a record for that date shows
+    // EXHIBITION (M27: exhibitions are separately billed catering).
+    // AWAY does NOT block - per B5 the labor attribution window
+    // includes road-trip cleaning and prep "attributed to the
+    // homestand they serve"; the ballpark kitchen is prepping while
+    // the team travels. AWAY on the schedule is orthogonal to
+    // whether the chef is prepping.
+    //
+    // At M-4 the pilot widens to the TXR pair, which carries the
+    // EXHIBITION rows on Mar 23-24 immediately before the opener.
+    // The EXHIBITION guard here handles them without a code change
+    // when M-4 lands.
+    //
+    // Naming note: the M-2 payload's `prepDays` is a derived
+    // proposal per B3. It is a different concept from
+    // `classifyDayStatus`'s `"prep"` return value at ~:314, which is
+    // a per-day operational status enum used by DaySquare CSS. The
+    // classifyDayStatus prep path is dormant post-sc-13 (no PREP-
+    // typed schedule rows exist in the DB anymore). B3 derivation
+    // is authoritative for the M-2 surface.
+    const prepDays = [];
+    const leadingIso = m2AddDaysIso(block.startDate, -1);
+    const leadingRec = daysByDate.get(leadingIso);
+    const leadingBlocked = leadingRec && leadingRec.dayType === "EXHIBITION";
+    if (!leadingBlocked) prepDays.push(leadingIso);
+
+    // Internal walk. Every date inside [startDate, endDate] with no
+    // GAME record is definitionally an internal off-day and becomes
+    // a prep proposal. Count games in the span so we can enforce the
+    // invariant below.
+    let gamesInSpan = 0;
+    let internalOffInSpan = 0;
+    for (const iso of m2EnumerateDatesInclusive(block.startDate, block.endDate)) {
+      const d = daysByDate.get(iso);
+      if (d && d.dayType === "GAME") {
+        gamesInSpan++;
+      } else {
+        internalOffInSpan++;
+        prepDays.push(iso);
+      }
+    }
+
+    // Invariant (owner ruling, trap §11.2 vanishing schedule days):
+    // within a block span, `block.gameCount === gamesInSpan` AND
+    // `gamesInSpan + internalOffInSpan === dayCount` MUST hold by
+    // construction. deriveHomestandSegments and buildM2Homestands
+    // walk the same daysByMonth feed, so a mismatch means a GAME
+    // row went missing between the two walks - the exact class of
+    // silent-defect trap §11.2 exists to catch. Surface it (server
+    // log + payload flag) rather than silently absorb into prep.
+    const gameCountMatches = gamesInSpan === (block.gameCount || 0);
+    const spanBalances = gamesInSpan + internalOffInSpan === dayCount;
+    const hasScheduleGap = !(gameCountMatches && spanBalances);
+    if (hasScheduleGap) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[buildM2Homestands] invariant fail: ${accountKey} ${block.homestandId} `
+        + `${block.startDate}..${block.endDate}: `
+        + `derivation gameCount=${block.gameCount}, gamesInSpan=${gamesInSpan}, `
+        + `internalOff=${internalOffInSpan}, dayCount=${dayCount}. `
+        + `Vanishing GAME row (trap §11.2).`
+      );
+    }
+
+    // Served / exception / meals from the day records inside the
+    // block span. GAME rows only - AWAY / EXHIBITION rows never
+    // appear inside a block (the derivation splits on AWAY, and
+    // EXHIBITION is excluded upstream).
+    let servedDays = 0;
+    let exceptionDays = 0;
+    let meals = 0;
+    for (const iso of m2EnumerateDatesInclusive(block.startDate, block.endDate)) {
+      const d = daysByDate.get(iso);
+      if (!d) continue;
+      if (d.dayType !== "GAME") continue;
+      if (d.status === "entered") servedDays += 1;
+      if (d.status === "no-service") exceptionDays += 1;
+      if (d.actualMeals != null) meals += Number(d.actualMeals) || 0;
+    }
+
+    // Attribution window (B5). First block: 14 days before first
+    // game (season opener onboarding + training). Every other
+    // block: day after previous block's endDate.
+    const prevBlock = i > 0 ? blocks[i - 1] : null;
+    const windowStart = prevBlock
+      ? m2AddDaysIso(prevBlock.endDate, 1)
+      : m2AddDaysIso(block.startDate, -14);
+    const windowEnd = block.endDate;
+
+    // Budget flatten. Missing budget row -> null with reason so the
+    // surface can render an honest "no budget yet" state instead of
+    // "$0" (the missing-vs-zero rule). Present budget carries amount
+    // + cents (for reconciliation) + per-period breakdown.
+    let budget = null;
+    let budgetReason = null;
+    if (env) {
+      if (env.envelope != null) {
+        budget = {
+          amount: env.envelope,
+          cents: env.envelopeCents,
+          breakdown: env.breakdown,
+        };
+      } else {
+        budgetReason = env.reason || null;
+      }
+    }
+
+    return {
+      key: block.key,
+      ordinal: block.homestandId,
+      startDate: block.startDate,
+      endDate: block.endDate,
+      dayCount,
+      gameCount: block.gameCount,
+      opponents: block.opponents,
+      periodsTouched: env ? env.periodsTouched : [],
+      budget,
+      budgetReason,
+      status,
+      servedDays,
+      exceptionDays,
+      meals,
+      prepDays,
+      windowStart,
+      windowEnd,
+      // hasScheduleGap flips to true when the invariant
+      //   block.gameCount === gamesInSpan
+      //   AND gamesInSpan + internalOffInSpan === dayCount
+      // fails. Under normal operation this stays false; a true value
+      // means a GAME row went missing between deriveHomestandSegments
+      // and buildM2Homestands (trap §11.2). Server also logged a
+      // warning; this field lets the client surface a UI hint if
+      // wanted. Only emitted when true so a healthy payload stays
+      // minimal.
+      ...(hasScheduleGap ? { hasScheduleGap: true } : {}),
+    };
+  });
+}
+
 async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   const supa = getServiceClient();
   const { first, last } = yearBounds(year);
@@ -1346,7 +1598,21 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       const yearDataForDerive = [...daysByMonth.entries()].map(
         ([month, days]) => ({ month, days })
       );
-      const todayIso = today.toISOString().slice(0, 10);
+      // M-2 Rider 5 (2026-07-29 owner ruling): the M-0 UTC twin. Same
+      // one-line defect as :1687 - `today.toISOString().slice(0, 10)`
+      // re-applies UTC and, in Cincinnati (UTC-4), flips block status
+      // a day early after 8pm local. This site sets `status` on the
+      // homestand strip for all four MLB accounts and ships in
+      // production today; leaving it in place to protect the
+      // per-M-2 rider cap was the wrong trade.
+      //
+      // The shared `todayStr` at ~:1674 is declared LATER in this
+      // function and is not in scope here (owner authorized a local
+      // computation rather than restructuring the function to reach
+      // it). Same clientToday-aware pattern, verbatim.
+      const todayIso = opts.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(opts.clientToday)
+        ? opts.clientToday
+        : today.toISOString().slice(0, 10);
       derivedBlocks = deriveHomestandSegments(yearDataForDerive, todayIso, { accountKey });
     }
     const useDerived = isDerivedAccount && derivedBlocks.length > 0;
@@ -1484,7 +1750,88 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   }
   const periodRanges = [...periodRangeMap.values()];
 
-  return { year: Number(year), months, today: todayBlock, periodRanges };
+  // M-2 (2026-07-29): homestand detail payload.
+  //
+  // Emit gate is M2_HOMESTAND_ACCOUNTS (CIN-OH today), NOT
+  // DERIVE_HOMESTANDS_ACCOUNTS. The derivation feeds
+  // homestandSummaryByMonth for all four MLB accounts above; only
+  // the top-level homestands[] emit is pilot-scoped. This preserves
+  // the pre-M-2 payload byte-identically for STL-MO, TXR-TX-H,
+  // TXR-TX-V (Fence 5) and for every non-MLB account (Fences 1-4).
+  //
+  // The `homestands` key is ABSENT from the response for non-pilot
+  // accounts, not [] and not null. Mirrors the pattern at :1435 for
+  // homestandSummary and matches the response-shape guarantee the
+  // fence rests on.
+  //
+  // salary_budget and revenue_forecast are stripped at this boundary
+  // per owner ruling ("must never cross the network boundary. Strip
+  // it server-side in the handler, not in the client"). The projected
+  // rows carry only period + hourly_budget - the fields deriveLaborBudgets
+  // reads and nothing else.
+  let m2Homestands;
+  if (M2_HOMESTAND_ACCOUNTS.has(accountKey)) {
+    // Re-derive rather than close over the derivedBlocks scoped inside
+    // the outer flat_fee+hasHomestandData branch above. Pure function,
+    // ~13-block computation, cost negligible. Keeps the pre-M-2 code
+    // path in that branch unchanged.
+    const yearDataForDerive = [...daysByMonth.entries()].map(
+      ([month, days]) => ({ month, days })
+    );
+    // M-2 defect 1 fix (2026-07-29 owner ruling): use the todayStr
+    // that already respects opts.clientToday (built at :1622 above),
+    // NEVER `today.toISOString().slice(0, 10)` - that re-applies UTC
+    // and, in Cincinnati (UTC-4), flips every past-8pm-local block
+    // from `in-progress` to `ended` a day early. Trap §10.12 and the
+    // exact failure the clientToday parameter exists to prevent. The
+    // pre-M-2 fee-account derivation at :1521 has the same latent
+    // bug; NOT fixed here (outside M-2 scope) but flagged in the
+    // build report.
+    const m2Blocks = deriveHomestandSegments(yearDataForDerive, todayStr, { accountKey });
+
+    if (m2Blocks.length > 0) {
+      // Read live budgets and STRIP admin + reporting fields at the
+      // boundary. Only period + hourly_budget cross the wire.
+      const rawBudgets = await readLiveLaborBudgets(accountKey);
+      const strippedBudgets = rawBudgets.map((r) => ({
+        period: r.period,
+        hourly_budget: r.hourly_budget,
+      }));
+
+      const envelopes = deriveLaborBudgets(m2Blocks, strippedBudgets, periodRanges, {
+        accountKey,
+        // laborRatio + soldRevenueByBlockKey deliberately omitted.
+        // Revenue-flex is M-5 (TXR-V). CIN-OH pilot has neither.
+      });
+
+      // Flatten daysByMonth into a date-keyed lookup for per-block
+      // prep / served / exception / meal accumulation. Same day
+      // records already assembled above; no re-query.
+      const daysByDate = new Map();
+      for (const [, days] of daysByMonth.entries()) {
+        for (const d of days) daysByDate.set(d.date, d);
+      }
+
+      // M-2 defect 1 fix (2026-07-29): same today string used for the
+      // derivation status derivation. See :1522-1531 for why.
+      m2Homestands = buildM2Homestands(m2Blocks, envelopes, daysByDate, todayStr, accountKey);
+    } else {
+      // Derivation returned [] (self-guard tripped or no AWAY rows
+      // in this year's stream). Do NOT emit a stub - a surface
+      // consumer treats presence-with-empty as "0 homestands", which
+      // is a lie during regular season. Same discipline as the M-0
+      // "empty is honest, one giant block is a lie" rule.
+      m2Homestands = undefined;
+    }
+  }
+
+  return {
+    year: Number(year),
+    months,
+    today: todayBlock,
+    periodRanges,
+    ...(m2Homestands ? { homestands: m2Homestands } : {}),
+  };
 }
 
 /**
