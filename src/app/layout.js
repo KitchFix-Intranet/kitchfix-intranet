@@ -30,7 +30,7 @@ export default async function RootLayout({ children }) {
   const sousAllowed = await canUseSous(email);
   return (
     <html lang="en">
-      <body className="font-mulish antialiased">
+      <body className="antialiased">
         <Providers>
           <TopNav canViewSousReports={sousReportsAllowed} canUseSous={sousAllowed} />
           {children}

@@ -4,7 +4,7 @@ title: Documentation Format Standard
 doc_class: STD
 shelf: "Brand & Documentation Standards"
 status: Live
-version: "1.3"
+version: "1.4"
 card_line: "The format every internal KitchFix document follows. Typography, color, callouts, tables, page architecture."
 summary: "The Standard that defines format for every KitchFix internal document, across both screen and print/PDF renderings of one MDX source. Covers classification, page architecture (print + screen), typography (Oswald display + Inter body), locked color palette, four callouts (Promise/Anchor/Critical/Note), tables, cross-references, naming/versioning/lifecycle, approval chains, and per-class anatomy. Word/DOCX retired. STD-001 governs format - content is governed by each doc's approval chain."
 keywords:
@@ -188,16 +188,18 @@ The screen and print share **everything below the page-architecture layer** - ty
 - **BulletLabeled** - Bold navy lead-in label, em-dash, body text.
 - **PLabeled** - Same pattern as a paragraph, not a bullet.
 
-## 4.6 Heading Rule Weights
+## 4.6 [CHANGED v1.4] Heading Rule Weights
 
-*(Unchanged - sky-blue rules beneath H1/H2/H3, none under SubHead.)*
+Sky-blue rules beneath H1/H2/H3, none under SubHead. Two renderings; one system.
 
-| Heading | Rule | Purpose |
-|---|---|---|
-| H1 | 1.5pt heavy sky-blue rule beneath | Section opener - strongest anchor |
-| H2 | 0.75pt medium sky-blue rule beneath | Sub-section |
-| H3 | 0.5pt faint sky-blue rule beneath | Theme |
-| SubHead | No rule | Color and weight do the work |
+| Heading | Print rule | Screen rule | Purpose |
+|---|---|---|---|
+| H1 | 1.5pt heavy sky-blue rule beneath | 2px solid sky-blue rule beneath | Section opener - strongest anchor |
+| H2 | 0.75pt medium sky-blue rule beneath | 1px solid sky-blue rule beneath | Sub-section |
+| H3 | 0.5pt faint sky-blue rule beneath | 1px sky-blue rule beneath at 60% opacity | Theme |
+| SubHead | No rule | No rule | Color and weight do the work |
+
+The screen column codifies what Train 2 shipped in the OPD reader. Sky-blue = `#7DB9D5` = `--opd-sky` (STD-001's accent). Implementation detail: the reader's H3 uses `color-mix(in srgb, var(--opd-sky) 60%, transparent)` rather than opacity, which paints the same visual 60% without dragging the whole element into a stacking context. Same intent, different mechanism.
 
 # Color Palette and Usage Rules
 
@@ -343,6 +345,10 @@ The TOC is **generated automatically** from the document's H1 section titles (H1
 # Approval
 
 This Standard is itself an STD-class document. Its approval chain follows Section 11.
+
+## Changes in v1.4
+
+- **[Screen column for heading rules]** Section 4.6 gains a Screen column alongside the existing Print column. H1 = 2px, H2 = 1px, H3 = 1px at 60% opacity, all sky-blue (`#7DB9D5` = `--opd-sky`). Codifies what Train 2 (#551) shipped in the OPD reader (`src/app/playbook/playbook.css:2436, 2460, 2470`). The Standard now describes both renderings.
 
 ## Changes in v1.3
 

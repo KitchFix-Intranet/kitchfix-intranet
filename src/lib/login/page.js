@@ -14,7 +14,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="font-inter text-2xl font-bold text-kf-navy">KitchFix</h1>
-          <p className="font-mulish text-sm text-gray-500 mt-1">Intranet Command Center</p>
+          <p className="text-sm text-gray-500 mt-1">Intranet Command Center</p>
         </div>
 
         {/* Sign In Card */}
@@ -22,7 +22,7 @@ export default function LoginPage() {
           <h2 className="font-inter text-lg font-semibold text-kf-navy text-center mb-2">
             Welcome, Chef.
           </h2>
-          <p className="font-mulish text-sm text-gray-500 text-center mb-8">
+          <p className="text-sm text-gray-500 text-center mb-8">
             Sign in with your KitchFix account to continue.
           </p>
 
@@ -48,7 +48,7 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-400 mt-8 font-mulish">
+        <p className="text-center text-xs text-gray-400 mt-8">
           Every inning, every ingredient, one standard.
         </p>
 
