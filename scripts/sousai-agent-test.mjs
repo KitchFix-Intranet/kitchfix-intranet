@@ -196,7 +196,12 @@ const EXPECTED = {
 
 // ── Grader utilities ─────────────────────────────────────────────────────────
 function has(text, needle) {
-  return text.toLowerCase().includes(needle.toLowerCase());
+  // Account keys can appear in either the compact form (CIN-OH) or the
+  // spaced form (CIN - OH) - the accounts table stores the spaced form,
+  // the corpus and prior grader expectations use the compact form. Normalize
+  // both sides to hyphens-only-no-spaces before comparing.
+  const norm = (s) => s.toLowerCase().replace(/\s*-\s*/g, "-");
+  return norm(text).includes(norm(needle));
 }
 function trajCalls(trajectory, toolName) {
   return trajectory.filter((s) => s.tool === toolName);
@@ -249,32 +254,45 @@ function grade_case1_manager(result) {
   const mentioned = accountKeys.filter((k) => has(answer, k));
   const invented = mentioned.filter((k) => !accountKeys.includes(k));
 
-  // Two admissible enumeration paths:
-  //   Path A (REC batch):  list_documents(REC) + get_document x 11
+  // Three admissible enumeration paths:
+  //   Path A (REC batch): list_documents(REC) + get_document x 11.
   //   Path B (REF-140 §(c) shortcut): agent finds REF-140 via search, its
-  //     §(c) table enumerates the flat-fee accounts, agent cites REF-140
-  //     with all named accounts real and none invented.
+  //     §(c) table enumerates the flat-fee accounts, agent cites REF-140.
+  //   Path C (Phase F data tool): list_accounts returns billing_model per
+  //     account; the accounts table carries flat_fee vs actuals_drive_invoice
+  //     as structured data. Post-Phase-F PR 1 this is the cheapest correct
+  //     path - no doc reads required - and the answer must name only real
+  //     account_keys.
   const pathA_enum = listedREC && recRead.length === 11;
   const searchedDocs = new Set();
   for (const s of trajCalls(trajectory, "search_documents")) {
     for (const d of s.rawResult || []) searchedDocs.add(d.docId);
   }
   const pathB_enum = searchedDocs.has("REF-140") && result.sources.includes("REF-140");
-  const pass_enum = pathA_enum || pathB_enum;
+  const listAccountsCalls = trajCalls(trajectory, "list_accounts");
+  const listAccountsSucceeded = listAccountsCalls.some((s) => (s.rawResult?.total ?? 0) > 0);
+  const pathC_enum = listAccountsSucceeded && mentioned.length > 0;
+  const pass_enum = pathA_enum || pathB_enum || pathC_enum;
 
   const pass_no_invention = invented.length === 0;
+  // Grounding: doc-based (RECs or REF-140) OR data-tool-based (list_accounts
+  // returned rows and status is grounded). Status downgrade for
+  // "grounded_without_sources" no longer fires when a data tool grounded the
+  // answer - see agent.js hadSuccessfulDataToolCall.
   const pass_status = result.status === "grounded" && (
     result.sources.some((s) => /^REC-/.test(s)) ||
-    result.sources.includes("REF-140")
+    result.sources.includes("REF-140") ||
+    pathC_enum
   );
 
   const ok = pass_enum && pass_no_invention && pass_status;
   notes.push(`path A (list_documents(REC) + get_document x 11): ${pathA_enum} (REC read ${recRead.length}/11)`);
   notes.push(`path B (REF-140 §(c) enumeration shortcut): ${pathB_enum} (REF-140 in search=${searchedDocs.has("REF-140")}, cited=${result.sources.includes("REF-140")})`);
+  notes.push(`path C (list_accounts + billing_model, Phase F): ${pathC_enum} (calls=${listAccountsCalls.length}, succeeded=${listAccountsSucceeded})`);
   notes.push(`accounts mentioned in answer: ${mentioned.join(", ") || "(none)"}`);
   notes.push(`accounts invented (not in corpus): ${invented.join(", ") || "(none)"}`);
   notes.push(`status=${result.status} sources=${result.sources.join(",")}`);
-  notes.push(`SEMANTIC CHECK (Kevin review): does the answer's flat-fee list match the actual REC content?`);
+  notes.push(`SEMANTIC CHECK (Kevin review): does the flat-fee list match reality?`);
   return { pass: ok, notes };
 }
 
