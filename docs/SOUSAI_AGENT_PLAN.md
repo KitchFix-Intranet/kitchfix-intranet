@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.53
+**Version:** v2.54
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -53,7 +53,7 @@
 | 2 | Data-access policy | Phase F | **CLOSED 2026-07-25** | All operators may query all accounts' operational data. Carve-out: People Portal PAF wage and reimbursement data is SLT-or-own-records only, and is excluded from the v1 tool surface entirely (enforced by absence; identity-scoped enforcement gets specced if those tools are ever built). Deliberate asymmetry recorded: REC document tiers unchanged - the ruling covers data via tools, not document access. |
 | 3 | Surface | Phase D | **CLOSED 2026-07-25** | v1 = dedicated page. Full rollout target = persistent chat icon opening a corner-overlay helper on all pages (D2 follow-on). Doc-context entry can fold into the overlay later. Renders precede both builds. |
 | 4 | Agent status visibility | Phase A default | **CLOSED 2026-07-25** | Finished (Live) docs only for the agent. Current RPC behavior preserved for non-agent callers. |
-| 5 | Data-half v1 scope | Phase F size | **IN DISCOVERY** | CC data-surface report commissioned 2026-07-25; Kevin + Chat pick the v1 tool set from it. Wishlist recorded: directory, inventory, periods/homestands, all SC projections + actuals, period financial data (in-build - wire only what exists), invoices, vendors. |
+| 5 | Data-half v1 scope | Phase F size | **CLOSED 2026-07-29** | CC data-surface report commissioned 2026-07-25; Kevin + Chat pick the v1 tool set from it. Wishlist recorded: directory, inventory, periods/homestands, all SC projections + actuals, period financial data (in-build - wire only what exists), invoices, vendors. |
 | 6 | Anthropic SDK vs raw fetch | Phase B1 | **CLOSED 2026-07-25** | Official Anthropic SDK, confirmed by Kevin. Vendor client library, not new tooling - the agent loop uses exactly the streaming + tool-block features where hand-rolling breeds bugs. |
 | 7 | Eval pass bar | Phase G | **CLOSED 2026-07-25** | Confirmed by Kevin: 90 percent aggregate on every run, 100 percent on the zero-tolerance subset. Plus a runtime answer-status badge (Grounded / Partial / Declined) on every answer - see §6 item 9. Numeric confidence scores explicitly rejected as false precision. |
 | 8 | Language policy | Prompt, spike, eval | **CLOSED 2026-07-25** | English-only contract: Sous always answers in English (enforced in the prompt). Spanish comprehension is free best-effort behavior - never guaranteed, tested, or gated. No Spanish questions in the gated eval set. Spanish docs remain pointable corpus content; a "mention the ES variant when one exists" prompt line is parked for the next sanctioned prompt revision. Lowers (does not remove) the urgency of parked maintenance item 2. |
@@ -320,6 +320,26 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.54 - 2026-07-29. DECISION 5 CLOSED. PHASE F STARTS.** PR #563 merged (PG data-surface discovery). Kevin reviewed the menu and ruled: **all candidates in, shipped in four domain-grouped PRs rather than ten separate ones or one large one.** The deciding argument was not gradeability but measurement - Sous goes from 3 tools to 13, quadrupling the model's decision space, and wrong tool choice is the plan's named worst failure. Waves let a degradation be attributed; one batch would not.
+
+  **The survey had a method blind spot Chat caught by cross-checking code references against migrations: seven tables were invisible** because they were created Supabase-side rather than through migration files. Two of them were the simplest and highest-value candidates on the whole menu - `contacts` and `accounts`. Recorded as standing practice: any future PG survey cross-checks `.from(...)` references in `src/` against `CREATE TABLE` in migrations, because migration-file enumeration alone under-represents exactly the tables built fastest.
+
+  **Pre-F investigation returned, and it moved the menu:**
+  - **`contacts`** - 30 rows, 12 team_keys, leadership only (Exec Chef, Sous Chef, Hospitality Manager, corporate). Field completeness excellent: name/role/email/slack 30/30, phone 29/30. No duplicates, no account with zero contacts. **Chef Kelsey resolves - Kelsey Atherton, Executive Chef, CIN-OH.** Kevin's example question would have answered on day one.
+  - **`accounts`** - 26 columns, 12 rows, all `active=true`, all `season='2026'`.
+  - **A3 (`work_locations`) DROPPED** on CC's recommendation and Kevin's agreement: strict subset of `accounts`, and 2 of 12 rows have the team_key pasted into the location field.
+  - **A4 and A5 added** by CC unprompted - contacts-by-role ("who are all the Executive Chefs") and account-team-roster ("who's the team at CIN-OH"). A5 is likely the most-asked shape of the three.
+
+  **Two findings that outrank the tool scoping:**
+
+  **(1) `accounts` deletes its own history, and that creates a two-surface contradiction.** Retired accounts are physically removed, not flagged. BGC's term ended 2026-05-21 and it is absent from `accounts`, `contacts`, and `work_locations` entirely - **while appearing in 7 corpus documents including REF-140, REF-141, REF-142.** Once a data tool ships, a BGC question returns documents saying we billed them and a tool saying they are not an account, with nothing reconciling the two. Same failure mode that correctly killed the PG-side P&L candidate, arriving from a table with no history. **Tool ruling: a miss says "not in the current-season account list," never "does not exist."** Wider consequence: no queryable record exists of who we served in any prior season, which makes current-season-only not a design choice but the only option the data permits - retroactively validating v2.50 requirement 5 for a reason we had not anticipated.
+
+  **(2) The directory is a 63-day-old bulk load with no update signal.** Every row in all three tables carries `updated_at = 2026-05-27`; the tables were populated in one event and never touched. **Chat overruled CC on the presentation.** CC recommended suppressing `updated_at` as misleading. Suppressing staleness is worse than mislabeling it - the reader then trusts a two-month-old answer with no signal a chef may have moved. Ruling: present it honestly as a load date ("directory loaded 2026-05-27"), never as "last verified." Fixing the update path is a maintenance item, not tool work.
+
+  **PR 1 issued: foundation + A1, A2, A4, A5.** Four pure lookups with no arithmetic, deliberately - if the data-tool pattern is flawed it should surface on a phone number, not a revenue figure. **The foundation is the real content:** a data-driven tool registry so PRs 2-4 add entries without touching `agent.js`, plus the five binding conventions (result caps with honest truncation, provenance on every answer, no-rows-is-not-zero, explicit temporal parameters declared ahead of PR 2, honest misses that name coverage). **This PR touches agent.js and the system prompt so it carries a full spike re-cert at 7/7 both runs** - paid once here, avoided in PRs 2-4 if the registry refactor is done properly. **Prompt round adds a precedence rule:** for live people, contact, and roster questions the data tool wins over the document, since REC-class account records may name site leadership and both surfaces would otherwise be plausible. Mirrors the parked round-3 money-side precedence candidate (price book supersedes contract digest).
+
+  **Remaining PR sequence:** PR 2 = two small views (current-homestand, current-period) + SC core (B1, B2, B4, B5) including the missing-price trap rule; PR 3 = corrections-resolving view + spend (C1, C2); PR 4 = period pace (B3) alone, with its peer-comparison guard, last because it is the only speculative candidate.
 
 - **v2.53 - 2026-07-29. CLEANUP ARC CLOSED. DECISION 5 REOPENED AFTER FOUR DAYS.** PR #562 merged and the STD-001 + FORM-007 apply run completed. Chat verified independently with the widened H1-or-H2 matcher: **zero Status columns remain anywhere in the corpus**, STD-001 is at v1.4, FORM-007's chunks carry the new text and none of the old. Delete-then-insert confirmed by counts again (FORM-007 6/6, STD-001 36/36).
 

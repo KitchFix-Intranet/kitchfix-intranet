@@ -32,132 +32,21 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { SOUSAI_SYSTEM_PROMPT } from "./agentPrompt.js";
-import { searchDocuments } from "./tools/searchDocuments.js";
-import { getDocument } from "./tools/getDocument.js";
-import { listDocuments } from "./tools/listDocuments.js";
+import { getToolDefinitions, getTool } from "./tools/registry.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
 export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
 export const TOOL_BUDGET = 8;
 export const MAX_OUTPUT_TOKENS = 1024;
-const GET_DOCUMENT_MAX_BATCH = 6;
-
-// ── Tool definitions the model sees ──────────────────────────────────────────
-// accessLevels is intentionally absent - the loop injects it server-side.
-const TOOL_DEFS = [
-  {
-    name: "search_documents",
-    description:
-      "Doc-level semantic search over the KitchFix Playbook corpus. Returns the top matching documents with best-match snippets. Use for topical questions when you do not know which doc holds the answer. Snippets are locators, not the record itself - open the doc with get_document to answer from actual content.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "The natural-language search query." },
-        k: {
-          type: "integer",
-          description: "How many docs to return (default 5, max 10).",
-          minimum: 1,
-          maximum: 10,
-        },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "get_document",
-    description:
-      "Fetch the full SousAI-safe text of a document by its ID, or up to 6 documents in one call. Use once search points you at a doc, or when the user gives an exact doc ID. Use the BATCH form for enumeration questions after listing the class. Refusals carry a `reason` field (not_found, access, archived, not_live) and no content.",
-    input_schema: {
-      type: "object",
-      properties: {
-        docIds: {
-          oneOf: [
-            { type: "string", description: "A single document ID like PB-002." },
-            {
-              type: "array",
-              items: { type: "string" },
-              minItems: 1,
-              maxItems: 6,
-              description: "Up to 6 document IDs in one call for batched reading.",
-            },
-          ],
-          description: "One doc ID (string) or up to 6 doc IDs (array).",
-        },
-      },
-      required: ["docIds"],
-    },
-  },
-  {
-    name: "list_documents",
-    description:
-      "Catalog listing filtered by doc class. Returns Live+visible documents only. Use for enumeration questions BEFORE get_document - list the class first, then batch-read the records. Doc classes include PB, POL, SOP, REC, REF, TPL, STD, FORM, AGR, CHK, POST.",
-    input_schema: {
-      type: "object",
-      properties: {
-        docClass: {
-          type: "string",
-          description:
-            "Optional doc class filter (e.g. REC for account records, SOP for procedures). Omit to list every visible Live doc.",
-        },
-      },
-    },
-  },
-];
 
 // ── Tool dispatch ────────────────────────────────────────────────────────────
+// Every tool ships through the registry. Adding a data tool is one file plus
+// one registry entry - agent.js does not diff.
 
 async function executeTool(name, input, accessLevels) {
-  if (name === "search_documents") {
-    const { query, k } = input || {};
-    const docs = await searchDocuments(query, {
-      accessLevels,
-      k: typeof k === "number" ? k : 5,
-    });
-    // Return a compact shape - full content is what get_document is for.
-    return docs.map((d) => ({
-      docId: d.docId,
-      title: d.title,
-      docClass: d.docClass,
-      bestSimilarity: Number(d.bestSimilarity?.toFixed(4)),
-      snippets: d.snippets.map((s) => ({
-        section: s.section,
-        content: s.content,
-        similarity: Number(s.similarity?.toFixed(4)),
-      })),
-    }));
-  }
-
-  if (name === "get_document") {
-    let ids = input?.docIds;
-    if (typeof ids === "string") ids = [ids];
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return { error: "docIds must be a string or non-empty array" };
-    }
-    if (ids.length > GET_DOCUMENT_MAX_BATCH) {
-      return {
-        error: `get_document accepts at most ${GET_DOCUMENT_MAX_BATCH} ids per call; got ${ids.length}. Split into two calls.`,
-      };
-    }
-    const results = {};
-    for (const id of ids) {
-      const r = await getDocument(id, { accessLevels });
-      results[id] = r;
-    }
-    return results;
-  }
-
-  if (name === "list_documents") {
-    const { docClass } = input || {};
-    const rows = await listDocuments({ docClass, accessLevels });
-    return rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      doc_class: r.doc_class,
-      status: r.status,
-    }));
-  }
-
-  return { error: `unknown tool: ${name}` };
+  const tool = getTool(name);
+  if (!tool) return { error: `unknown tool: ${name}` };
+  return tool.execute(input, { accessLevels });
 }
 
 // ── Answer parsing ───────────────────────────────────────────────────────────
@@ -186,52 +75,23 @@ function parseAnswer(rawText) {
 }
 
 // ── Trajectory helpers ───────────────────────────────────────────────────────
+// Each tool owns its own summarize + collectIds via the registry. Data tools
+// return [] from collectIds (their results are not doc-citations); document
+// tools return the doc ids they retrieved.
+
 function summarizeToolResult(name, result) {
-  if (name === "search_documents") {
-    return {
-      kind: "docs",
-      count: Array.isArray(result) ? result.length : 0,
-      top: Array.isArray(result) ? result.slice(0, 5).map((d) => d.docId) : [],
-    };
-  }
-  if (name === "get_document") {
-    const per = {};
-    for (const [id, r] of Object.entries(result || {})) {
-      per[id] = r.available
-        ? { available: true, tokens: r.tokenTotal, truncated: !!r.truncated }
-        : { available: false, reason: r.reason };
-    }
-    return per;
-  }
-  if (name === "list_documents") {
-    return {
-      kind: "list",
-      count: Array.isArray(result) ? result.length : 0,
-      classes: Array.isArray(result)
-        ? [...new Set(result.map((r) => r.doc_class))]
-        : [],
-    };
-  }
-  return { raw: result };
+  const tool = getTool(name);
+  if (!tool) return { raw: result };
+  return tool.summarize(result);
 }
 
-// Track which ids the trajectory has actually retrieved content for
-// (a doc has to have been successfully returned by get_document, or seen as
-// a search hit, to be a citable source).
 function collectRetrievedIds(trajectory) {
   const ids = new Set();
   for (const step of trajectory) {
-    if (step.tool === "search_documents" && Array.isArray(step.rawResult)) {
-      for (const d of step.rawResult) ids.add(d.docId);
-    }
-    if (step.tool === "get_document" && step.rawResult && typeof step.rawResult === "object") {
-      for (const [id, r] of Object.entries(step.rawResult)) {
-        if (r && r.available) ids.add(id);
-      }
-    }
-    if (step.tool === "list_documents" && Array.isArray(step.rawResult)) {
-      for (const d of step.rawResult) ids.add(d.id);
-    }
+    if (!step.tool) continue;
+    const tool = getTool(step.tool);
+    if (!tool) continue;
+    for (const id of tool.collectIds(step.rawResult)) ids.add(id);
   }
   return ids;
 }
@@ -285,6 +145,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
       cache_control: { type: "ephemeral" },
     },
   ];
+  const TOOL_DEFS = getToolDefinitions();
   const cachedTools = TOOL_DEFS.map((t, i) =>
     i === TOOL_DEFS.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t
   );
@@ -412,13 +273,32 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
   const validSources = cited.filter((id) => retrievedIds.has(id));
   const phantomCitations = cited.filter((id) => !retrievedIds.has(id));
 
-  let status = rawStatus || (validSources.length === 0 ? "declined" : "partial");
+  // Data-tool grounding path: a data tool that returned non-empty results
+  // grounds the answer even when the model cites the data source in prose
+  // (Source: contacts, loaded 2026-05-27) rather than a doc-id shape. Without
+  // this signal, every data-tool answer downgrades to partial for lack of
+  // doc citations - the trap Phase F PR 1 uncovered during re-cert.
+  const hadSuccessfulDataToolCall = trajectory.some((step) => {
+    if (!step.tool) return false;
+    const t = getTool(step.tool);
+    if (!t || t.kind !== "data") return false;
+    if (step.tool_error) return false;
+    const r = step.rawResult;
+    if (!r || r.error) return false;
+    if (typeof r.total === "number") return r.total > 0;
+    if (Array.isArray(r?.matches)) return r.matches.length > 0;
+    if (Array.isArray(r?.accounts)) return r.accounts.length > 0;
+    if (Array.isArray(r?.team)) return r.team.length > 0;
+    return false;
+  });
+
+  let status = rawStatus || ((validSources.length === 0 && !hadSuccessfulDataToolCall) ? "declined" : "partial");
   const flags = [];
   if (phantomCitations.length > 0) {
     flags.push({ phantom_citation: phantomCitations });
     if (status === "grounded") status = "partial";
   }
-  if (status === "grounded" && validSources.length === 0) {
+  if (status === "grounded" && validSources.length === 0 && !hadSuccessfulDataToolCall) {
     flags.push({ grounded_without_sources: true });
     status = "partial";
   }
